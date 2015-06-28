@@ -1,7 +1,7 @@
 #
 # UAVCAN DSDL file parser
 #
-# Copyright (C) 2014 Pavel Kirienko <pavel.kirienko@gmail.com>
+# Copyright (C) 2014-2015 Pavel Kirienko <pavel.kirienko@gmail.com>
 #
 
 from __future__ import division, absolute_import, print_function, unicode_literals
@@ -13,21 +13,18 @@ from .type_limits import get_unsigned_integer_range, get_signed_integer_range, g
 
 # Python 2.7 compatibility
 try:
-    str = unicode
+    str = unicode  # @ReservedAssignment
 except NameError:
     pass
 try:
     long(1)
 except NameError:
-    long = int
+    long = int  # @ReservedAssignment
 
 MAX_FULL_TYPE_NAME_LEN = 80
 
-SERVICE_DATA_TYPE_ID_MAX = 511
-MESSAGE_DATA_TYPE_ID_MAX = 2047
-
-MAX_SERVICE_STRUCT_LEN_BYTES = 439
-MAX_MESSAGE_STRUCT_LEN_BYTES = 126  # Broadcast
+SERVICE_DATA_TYPE_ID_MAX = 255
+MESSAGE_DATA_TYPE_ID_MAX = 65535
 
 class Type:
     '''
@@ -496,7 +493,6 @@ class Parser:
                 max_bytelen = bitlen_to_bytelen(max_bitlen)
 
             validate_data_type_id(t)
-            validate_data_struct_len(t)
             self.log.info('Type [%s], default DTID: %s, signature: %08x, maxbits: %s, maxbytes: %s, DSSD:',
                           full_typename, default_dtid, t.get_dsdl_signature(), max_bitlen, max_bytelen)
             for ln in t.get_dsdl_signature_source_definition().splitlines():
@@ -575,25 +571,6 @@ def validate_data_type_id(t):
                 'Invalid data type ID for service [%s]', t.default_dtid)
     else:
         error('Invalid kind: %s', t.kind)
-
-def validate_data_struct_len(t):
-    enforce(t.category == t.CATEGORY_COMPOUND, 'Data structure length can be enforced only for compound types')
-    # EXtracting sizes
-    if t.kind == t.KIND_MESSAGE:
-        bitlens = [t.get_max_bitlen()]
-    elif t.kind == t.KIND_SERVICE:
-        bitlens = t.get_max_bitlen_request(), t.get_max_bitlen_response()
-    # Detecting the limit
-    if t.kind == t.KIND_MESSAGE and t.default_dtid is not None:
-        max_bytes = MAX_MESSAGE_STRUCT_LEN_BYTES
-    else:
-        max_bytes = MAX_SERVICE_STRUCT_LEN_BYTES
-    # Checking
-    for bitlen in bitlens:
-        bytelen = bitlen_to_bytelen(bitlen)
-        enforce(0 <= bytelen <= max_bytes,
-                 'Max data structure length is invalid: %d bits, %d bytes; limit %d bytes', bitlen, bytelen, max_bytes)
-
 
 def parse_namespaces(source_dirs, search_dirs=None):
     '''
