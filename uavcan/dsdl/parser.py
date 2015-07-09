@@ -467,20 +467,20 @@ class Parser:
             union, resp_union = False, False
             response_part = False
             for num, tokens in numbered_lines:
-                if tokens == ['---']:
-                    enforce(not response_part, 'Duplicate response mark')
-                    response_part = True
-                    all_attributes_names = set()
-                    continue
-                if tokens == ['@union']:
-                    if response_part:
-                        enforce(not resp_union, 'Response data structure has already been declared as union')
-                        resp_union = True
-                    else:
-                        enforce(not union, 'Data structure has already been declared as union')
-                        union = True
-                    continue
                 try:
+                    if tokens == ['---']:
+                        enforce(not response_part, 'Duplicate response mark')
+                        response_part = True
+                        all_attributes_names = set()
+                        continue
+                    if tokens == ['@union']:
+                        if response_part:
+                            enforce(not resp_union, 'Response data structure has already been declared as union')
+                            resp_union = True
+                        else:
+                            enforce(not union, 'Data structure has already been declared as union')
+                            union = True
+                        continue
                     attr = self._parse_line(filename, tokens)
                     if attr.name in all_attributes_names:
                         error('Duplicated attribute name [%s]', attr.name)
