@@ -140,10 +140,13 @@ class CompoundType(Type):
         response_fields     Response struct field list
         request_constants   Request struct constant list, the type of each element is Constant
         response_constants  Response struct constant list
+        request_union       Boolean indicating whether the request struct is a union
+        response_union      Boolean indicating whether the response struct is a union
     
     Fields if kind == KIND_MESSAGE:
         fields              Field list, the type of each element is Field
         constants           Constant list, the type of each element is Constant
+        union               Boolean indicating whether the message struct is a union
     
     Extra methods if kind == KIND_SERVICE:
         get_max_bitlen_request()    Returns maximum total bit length for the serialized request struct
@@ -169,10 +172,13 @@ class CompoundType(Type):
             self.response_constants = []
             self.get_max_bitlen_request = lambda: max_bitlen_sum(self.request_fields)
             self.get_max_bitlen_response = lambda: max_bitlen_sum(self.response_fields)
+            self.request_union = False
+            self.response_union = False
         elif kind == CompoundType.KIND_MESSAGE:
             self.fields = []
             self.constants = []
             self.get_max_bitlen = lambda: max_bitlen_sum(self.fields)
+            self.union = False
         else:
             error('Compound type of unknown kind [%s]', kind)
 
@@ -185,10 +191,16 @@ class CompoundType(Type):
         txt.write(self.full_name + '\n')
         adjoin = lambda attrs: txt.write('\n'.join(x.get_normalized_definition() for x in attrs) + '\n')
         if self.kind == CompoundType.KIND_SERVICE:
+            if self.request_union:
+                txt.write('\n@union\n')
             adjoin(self.request_fields)
             txt.write('\n---\n')
+            if self.response_union:
+                txt.write('\n@union\n')
             adjoin(self.response_fields)
         elif self.kind == CompoundType.KIND_MESSAGE:
+            if self.union:
+                txt.write('\n@union\n')
             adjoin(self.fields)
         else:
             error('Compound type of unknown kind [%s]', self.kind)
@@ -452,11 +464,21 @@ class Parser:
             numbered_lines = list(self._tokenize(source_text))
             all_attributes_names = set()
             fields, constants, resp_fields, resp_constants = [], [], [], []
+            union, resp_union = False, False
             response_part = False
             for num, tokens in numbered_lines:
                 if tokens == ['---']:
+                    enforce(not response_part, 'Duplicate response mark')
                     response_part = True
                     all_attributes_names = set()
+                    continue
+                if tokens == ['@union']:
+                    if response_part:
+                        enforce(not resp_union, 'Response data structure has already been declared as union')
+                        resp_union = True
+                    else:
+                        enforce(not union, 'Data structure has already been declared as union')
+                        union = True
                     continue
                 try:
                     attr = self._parse_line(filename, tokens)
@@ -483,12 +505,15 @@ class Parser:
                 t.request_constants = constants
                 t.response_fields = resp_fields
                 t.response_constants = resp_constants
+                t.request_union = union
+                t.response_union = resp_union
                 max_bitlen = t.get_max_bitlen_request(), t.get_max_bitlen_response()
                 max_bytelen = tuple(map(bitlen_to_bytelen, max_bitlen))
             else:
                 t = CompoundType(full_typename, CompoundType.KIND_MESSAGE, filename, default_dtid, source_text)
                 t.fields = fields
                 t.constants = constants
+                t.union = union
                 max_bitlen = t.get_max_bitlen()
                 max_bytelen = bitlen_to_bytelen(max_bitlen)
 
