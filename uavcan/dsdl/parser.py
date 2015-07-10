@@ -164,20 +164,23 @@ class CompoundType(Type):
         self.default_dtid = default_dtid
         self.kind = kind
         self.source_text = source_text
-        max_bitlen_sum = lambda fields: sum([x.type.get_max_bitlen() for x in fields])
+        def compute_max_bitlen(flds, union):
+            if len(flds) == 0:
+                return 0
+            return (max if union else sum)([x.type.get_max_bitlen() for x in flds])
         if kind == CompoundType.KIND_SERVICE:
             self.request_fields = []
             self.response_fields = []
             self.request_constants = []
             self.response_constants = []
-            self.get_max_bitlen_request = lambda: max_bitlen_sum(self.request_fields)
-            self.get_max_bitlen_response = lambda: max_bitlen_sum(self.response_fields)
+            self.get_max_bitlen_request = lambda: compute_max_bitlen(self.request_fields, self.request_union)
+            self.get_max_bitlen_response = lambda: compute_max_bitlen(self.response_fields, self.response_union)
             self.request_union = False
             self.response_union = False
         elif kind == CompoundType.KIND_MESSAGE:
             self.fields = []
             self.constants = []
-            self.get_max_bitlen = lambda: max_bitlen_sum(self.fields)
+            self.get_max_bitlen = lambda: compute_max_bitlen(self.fields, self.union)
             self.union = False
         else:
             error('Compound type of unknown kind [%s]', kind)
