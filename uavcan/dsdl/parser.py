@@ -167,7 +167,11 @@ class CompoundType(Type):
         def compute_max_bitlen(flds, union):
             if len(flds) == 0:
                 return 0
-            return (max if union else sum)([x.type.get_max_bitlen() for x in flds])
+            lens = [x.type.get_max_bitlen() for x in flds]
+            if union:
+                return max(lens) + max(len(flds) - 1, 1).bit_length()
+            else:
+                return sum(lens)
         if kind == CompoundType.KIND_SERVICE:
             self.request_fields = []
             self.response_fields = []
