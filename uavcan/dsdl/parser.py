@@ -517,6 +517,8 @@ class Parser:
                 max_bitlen = t.get_max_bitlen()
                 max_bytelen = bitlen_to_bytelen(max_bitlen)
 
+            validate_union(t)
+
             validate_data_type_id(t)
             self.log.info('Type [%s], default DTID: %s, signature: %08x, maxbits: %s, maxbytes: %s, DSSD:',
                           full_typename, default_dtid, t.get_dsdl_signature(), max_bitlen, max_bytelen)
@@ -594,6 +596,18 @@ def validate_data_type_id(t):
     elif t.kind == t.KIND_SERVICE:
         enforce(0 <= t.default_dtid <= SERVICE_DATA_TYPE_ID_MAX,
                 'Invalid data type ID for service [%s]', t.default_dtid)
+    else:
+        error('Invalid kind: %s', t.kind)
+
+def validate_union(t):
+    if t.kind == t.KIND_MESSAGE:
+        if t.union:
+            enforce(len(t.fields) > 1, 'Union contains less than 2 fields')
+    elif t.kind == t.KIND_SERVICE:
+        if t.request_union:
+            enforce(len(t.request_fields) > 1, 'Request union contains less than 2 fields')
+        if t.response_union:
+            enforce(len(t.response_fields) > 1, 'Response union contains less than 2 fields')
     else:
         error('Invalid kind: %s', t.kind)
 
