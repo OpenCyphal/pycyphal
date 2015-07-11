@@ -642,14 +642,17 @@ def validate_data_type_id(t):
         error('Invalid kind: %s', t.kind)
 
 def validate_union(t):
+    def check_fields(fields):
+        enforce(len(fields) > 1, 'Union contains less than 2 fields')
+        enforce(not any(_.type.category == _.type.CATEGORY_VOID for _ in fields), 'Union must not contain void fields')
     if t.kind == t.KIND_MESSAGE:
         if t.union:
-            enforce(len(t.fields) > 1, 'Union contains less than 2 fields')
+            check_fields(t.fields)
     elif t.kind == t.KIND_SERVICE:
         if t.request_union:
-            enforce(len(t.request_fields) > 1, 'Request union contains less than 2 fields')
+            check_fields(t.request_fields)
         if t.response_union:
-            enforce(len(t.response_fields) > 1, 'Response union contains less than 2 fields')
+            check_fields(t.response_fields)
     else:
         error('Invalid kind: %s', t.kind)
 
