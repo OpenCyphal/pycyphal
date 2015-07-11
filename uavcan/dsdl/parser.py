@@ -36,6 +36,7 @@ class Type:
     CATEGORY_PRIMITIVE = 0
     CATEGORY_ARRAY = 1
     CATEGORY_COMPOUND = 2
+    CATEGORY_VOID = 3
 
     def __init__(self, full_name, category):
         self.full_name = str(full_name)
@@ -224,6 +225,24 @@ class CompoundType(Type):
         '''Returns full type name string, e.g. "uavcan.protocol.NodeStatus"'''
         return self.full_name
 
+class VoidType(Type):
+    '''
+    Void type description, e.g. void2.
+    Fields:
+        bitlen       Bit length, 1 to 64
+    '''
+    def __init__(self, bitlen):
+        self.bitlen = bitlen
+        Type.__init__(self, self.get_normalized_definition(), Type.CATEGORY_VOID)
+
+    def get_normalized_definition(self):
+        '''Please refer to the specification for details about normalized definitions.'''
+        return 'void' + str(self.bitlen)
+
+    def get_max_bitlen(self):
+        '''Returns type bit length.'''
+        return self.bitlen
+
 
 class Attribute:
     '''
@@ -245,9 +264,13 @@ class Field(Attribute):
     '''
     Field description.
     Does not add new fields to Attribute.
+    If type is void, the name will be None.
     '''
     def get_normalized_definition(self):
-        return '%s %s' % (self.type.get_normalized_definition(), self.name)
+        if self.type.category == self.type.CATEGORY_VOID:
+            return self.type.get_normalized_definition()
+        else:
+            return '%s %s' % (self.type.get_normalized_definition(), self.name)
 
 class Constant(Attribute):
     '''
@@ -339,6 +362,10 @@ class Parser:
                     self.log.debug('Unknown file [%s], skipping... [%s]', pretty_filename(fn), ex)
         error('Type definition not found [%s]', typename)
 
+    def _parse_void_type(self, filename, bitlen):
+        enforce(1 <= bitlen <= 64, 'Invalid void bit length [%d]', bitlen)
+        return VoidType(bitlen)
+
     def _parse_array_type(self, filename, value_typedef, size_spec, cast_mode):
         self.log.debug('Parsing the array value type [%s]...', value_typedef)
         value_type = self._parse_type(filename, value_typedef, cast_mode)
@@ -394,10 +421,14 @@ class Parser:
 
     def _parse_type(self, filename, typedef, cast_mode):
         typedef = typedef.strip()
+        void_match = re.match(r'void(\d{1,2})$', typedef)
         array_match = re.match(r'(.+?)\[([^\]]*)\]$', typedef)
         primitive_match = re.match(r'([a-z]+)(\d{1,2})$|(bool)$', typedef)
 
-        if array_match:
+        if void_match:
+            size_spec = void_match.group(1).strip()
+            return self._parse_void_type(filename, int(size_spec))
+        elif array_match:
             assert not primitive_match
             value_typedef = array_match.group(1).strip()
             size_spec = array_match.group(2).strip()
@@ -414,7 +445,7 @@ class Parser:
             return self._parse_compound_type(filename, typedef)
 
     def _make_constant(self, attrtype, name, init_expression):
-        enforce(attrtype.category == attrtype.CATEGORY_PRIMITIVE, 'Invalid type for constant')
+        enforce(attrtype.category == attrtype.CATEGORY_PRIMITIVE, 'Invalid type for constant [%d]', attrtype.category)
         init_expression = ''.join(init_expression.split())  # Remove spaces
         value = evaluate_expression(init_expression)
 
@@ -439,11 +470,15 @@ class Parser:
         if tokens[0] == 'saturated' or tokens[0] == 'truncated':
             cast_mode, tokens = tokens[0], tokens[1:]
 
-        if len(tokens) < 2:
+        if len(tokens) < 2 and not tokens[0].startswith('void'):
             error('Invalid attribute definition')
 
-        typename, attrname, tokens = tokens[0], tokens[1], tokens[2:]
-        validate_attribute_name(attrname)
+        if len(tokens) == 1:
+            typename, attrname, tokens = tokens[0], None, []
+        else:
+            typename, attrname, tokens = tokens[0], tokens[1], tokens[2:]
+            validate_attribute_name(attrname)
+
         attrtype = self._parse_type(filename, typename, cast_mode)
 
         if len(tokens) > 0:
@@ -489,7 +524,7 @@ class Parser:
                             union = True
                         continue
                     attr = self._parse_line(filename, tokens)
-                    if attr.name in all_attributes_names:
+                    if attr.name and attr.name in all_attributes_names:
                         error('Duplicated attribute name [%s]', attr.name)
                     all_attributes_names.add(attr.name)
                     if isinstance(attr, Constant):
