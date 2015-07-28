@@ -446,5 +446,124 @@ class TestArrayBasic(unittest.TestCase):
         )
 
 
+class TestVoid(unittest.TestCase):
+    def setUp(self):
+        self.custom_type = parser.CompoundType(
+            "CustomType",
+            parser.CompoundType.KIND_MESSAGE,
+            "source.uavcan",
+            0,
+            ""
+        )
+        self.custom_type.fields = [
+            parser.Field(
+                parser.PrimitiveType(
+                    parser.PrimitiveType.KIND_FLOAT,
+                    16,
+                    parser.PrimitiveType.CAST_MODE_SATURATED
+                ),
+                "a"
+            ),
+            parser.Field(parser.VoidType(3), None),
+            parser.Field(
+                parser.PrimitiveType(
+                    parser.PrimitiveType.KIND_UNSIGNED_INT,
+                    1,
+                    parser.PrimitiveType.CAST_MODE_SATURATED
+                ),
+                "b"
+            )
+        ]
+        def custom_type_factory(*args, **kwargs):
+            return transport.CompoundValue(self.custom_type, tao=True, *args,
+                                           **kwargs)
+        self.custom_type.__call__ = custom_type_factory
+
+    def test_size(self):
+        self.assertEqual(self.custom_type.fields[1].type.bitlen, 3)
+        self.assertEqual(self.custom_type.get_max_bitlen(), 20)
+
+    def test_representation(self):
+        c1 = self.custom_type()
+        self.assertEqual(
+            transport.format_bits(c1.pack()),
+            "00000000 00000000 0000"
+        )
+
+        c1.a = 1
+        c1.b = 1
+        self.assertEqual(
+            transport.format_bits(c1.pack()),
+            "00000000 00111100 0001"
+        )
+
+
+class TestMessageUnion(unittest.TestCase):
+    def setUp(self):
+        self.custom_type = parser.CompoundType(
+            "CustomType",
+            parser.CompoundType.KIND_MESSAGE,
+            "source.uavcan",
+            0,
+            ""
+        )
+        self.custom_type.union = True
+        self.custom_type.fields = [
+            parser.Field(
+                parser.PrimitiveType(
+                    parser.PrimitiveType.KIND_FLOAT,
+                    16,
+                    parser.PrimitiveType.CAST_MODE_SATURATED
+                ),
+                "a"
+            ),
+            parser.Field(
+                parser.ArrayType(
+                    parser.PrimitiveType(
+                        parser.PrimitiveType.KIND_UNSIGNED_INT,
+                        8,
+                        parser.PrimitiveType.CAST_MODE_SATURATED
+                    ),
+                    parser.ArrayType.MODE_STATIC,
+                    2
+                ),
+                "b"
+            )
+        ]
+        def custom_type_factory(*args, **kwargs):
+            return transport.CompoundValue(self.custom_type, tao=True, *args,
+                                           **kwargs)
+        self.custom_type.__call__ = custom_type_factory
+
+    def test_size(self):
+        self.assertEqual(self.custom_type.fields[0].type.bitlen, 16)
+        self.assertEqual(self.custom_type.fields[1].type.get_max_bitlen(), 16)
+        self.assertEqual(self.custom_type.get_max_bitlen(), 17)
+
+    def test_representation(self):
+        c1 = self.custom_type()
+        self.assertEqual(
+            transport.format_bits(c1.pack()),
+            "00000000 00000000 0"
+        )
+
+        c2 = self.custom_type()
+        c2.a = 1
+        self.assertEqual(c2.union_field, "a")
+        self.assertEqual(
+            transport.format_bits(c2.pack()),
+            "00000000 00011110 0"
+        )
+
+        c3 = self.custom_type()
+        c3.b[0] = 1
+        c3.b[1] = 3
+        self.assertEqual(c3.union_field, "b")
+        self.assertEqual(
+            transport.format_bits(c3.pack()),
+            "10000000 10000001 1"
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

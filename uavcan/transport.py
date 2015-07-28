@@ -46,6 +46,10 @@ def format_bits(s):
     return " ".join(s[i:i+8] for i in xrange(0, len(s), 8))
 
 
+def union_tag_len(x):
+    return int(math.ceil(math.log(len(x), 2))) or 1
+
+
 # http://davidejones.com/blog/1413-python-precision-floating-point/
 def f16_from_f32(float32):
     F16_EXPONENT_BITS = 0x1F
@@ -113,6 +117,17 @@ def cast(value, dtype):
         return value & ((1 << dtype.bitlen) - 1)
     else:
         raise ValueError("Invalid cast_mode: " + repr(dtype))
+
+
+class Void(object):
+    def __init__(self, bitlen):
+        self.bitlen = bitlen
+
+    def unpack(self, stream):
+        return stream[self.bitlen:]
+
+    def pack(self):
+        return "0" * self.bitlen
 
 
 class BaseValue(object):
@@ -315,26 +330,35 @@ class CompoundValue(BaseValue):
 
         source_fields = None
         source_constants = None
+        is_union = False
         if self.type.kind == dsdl.parser.CompoundType.KIND_SERVICE:
             if self.mode == "request":
                 source_fields = self.type.request_fields
                 source_constants = self.type.request_constants
+                is_union = self.type.request_union
             elif self.mode == "response":
                 source_fields = self.type.response_fields
                 source_constants = self.type.response_constants
+                is_union = self.type.response_union
             else:
                 raise ValueError("mode must be either 'request' or " +
                                  "'response' for service types")
         else:
             source_fields = self.type.fields
             source_constants = self.type.constants
+            is_union = self.type.union
+
+        self.is_union = is_union
+        self.union_field = None
 
         for constant in source_constants:
             self.constants[constant.name] = constant.value
 
-        for field in source_fields:
+        for idx, field in enumerate(source_fields):
             atao = field is source_fields[-1] and tao
-            if isinstance(field.type, dsdl.parser.PrimitiveType):
+            if isinstance(field.type, dsdl.parser.VoidType):
+                self.fields["_void_{0}".format(idx)] = Void(field.type.bitlen)
+            elif isinstance(field.type, dsdl.parser.PrimitiveType):
                 self.fields[field.name] = PrimitiveValue(field.type)
             elif isinstance(field.type, dsdl.parser.ArrayType):
                 self.fields[field.name] = ArrayValue(field.type, tao=atao)
@@ -343,13 +367,20 @@ class CompoundValue(BaseValue):
 
     def __repr__(self):
         fields = ", ".join("{0}={1!r}".format(f, v)
-                           for f, v in self.fields.items())
+                           for f, v in self.fields.items()
+                           if not f.startswith("_void_"))
         return "{0}({1})".format(self.type.full_name, fields)
 
     def __getattr__(self, attr):
         if attr in self.constants:
             return self.constants[attr]
         elif attr in self.fields:
+            if self.is_union:
+                if self.union_field and self.union_field != attr:
+                    raise AttributeError(attr)
+                else:
+                    self.union_field = attr
+
             if isinstance(self.fields[attr], PrimitiveValue):
                 return self.fields[attr].value
             else:
@@ -361,7 +392,14 @@ class CompoundValue(BaseValue):
         if attr in self.constants:
             raise AttributeError(attr + " is read-only")
         elif attr in self.fields:
-            if isinstance(self.fields[attr].type, dsdl.parser.PrimitiveType):
+            if self.is_union:
+                if self.union_field and self.union_field != attr:
+                    raise AttributeError(attr)
+                else:
+                    self.union_field = attr
+
+            if isinstance(self.fields[attr].type,
+                            dsdl.parser.PrimitiveType):
                 self.fields[attr].value = value
             else:
                 raise AttributeError(attr + " cannot be set directly")
@@ -369,12 +407,23 @@ class CompoundValue(BaseValue):
             super(CompoundValue, self).__setattr__(attr, value)
 
     def unpack(self, stream):
-        for field in self.fields.itervalues():
-            stream = field.unpack(stream)
+        if self.is_union:
+            tag_len = union_tag_len(self.fields)
+            self.union_field = self.fields.keys()[int(stream[0:tag_len], 2)]
+            stream = self.fields[self.union_field].unpack(stream[tag_len:])
+        else:
+            for field in self.fields.itervalues():
+                stream = field.unpack(stream)
         return stream
 
     def pack(self):
-        return "".join(field.pack() for field in self.fields.itervalues())
+        if self.is_union:
+            field = self.union_field or self.fields.keys()[0]
+            tag = self.fields.keys().index(field)
+            return format(tag, "0" + str(union_tag_len(self.fields)) + "b") +\
+                   self.fields[field].pack()
+        else:
+            return "".join(field.pack() for field in self.fields.itervalues())
 
 
 class Frame(object):
