@@ -135,7 +135,7 @@ class CompoundType(Type):
         default_dtid        Default Data Type ID, if specified, None otherwise
         kind                Any KIND_*
         source_text         Raw DSDL definition text (as is, with comments and the original formatting)
-    
+
     Fields if kind == KIND_SERVICE:
         request_fields      Request struct field list, the type of each element is Field
         response_fields     Response struct field list
@@ -143,16 +143,16 @@ class CompoundType(Type):
         response_constants  Response struct constant list
         request_union       Boolean indicating whether the request struct is a union
         response_union      Boolean indicating whether the response struct is a union
-    
+
     Fields if kind == KIND_MESSAGE:
         fields              Field list, the type of each element is Field
         constants           Constant list, the type of each element is Constant
         union               Boolean indicating whether the message struct is a union
-    
+
     Extra methods if kind == KIND_SERVICE:
         get_max_bitlen_request()    Returns maximum total bit length for the serialized request struct
         get_max_bitlen_response()   Same for the response struct
-    
+
     Extra methods if kind == KIND_MESSAGE:
         get_max_bitlen()            Returns maximum total bit length for the serialized struct
     '''
@@ -224,6 +224,23 @@ class CompoundType(Type):
     def get_normalized_definition(self):
         '''Returns full type name string, e.g. "uavcan.protocol.NodeStatus"'''
         return self.full_name
+
+    def get_data_type_signature(self):
+        '''
+        Computes data type signature of this type. The data type signature is
+        guaranteed to match only if all nested data structures are compatible.
+        Please refer to the specification for details about signatures.
+        '''
+        sig = Signature(self.get_dsdl_signature())
+        fields = self.request_fields + self.response_fields \
+                 if self.kind == CompoundType.KIND_SERVICE else self.fields
+        for field in fields:
+            field_sig = field.type.get_data_type_signature()
+            if field_sig is not None:
+                sig_value = sig.get_value()
+                sig.add(bytes_from_crc64(field_sig))
+                sig.add(bytes_from_crc64(sig_value))
+        return sig.get_value()
 
 class VoidType(Type):
     '''
@@ -496,12 +513,8 @@ class Parser:
                 tokens = [tk for tk in line.split() if tk]
                 yield idx + 1, tokens
 
-    def parse(self, filename):
+    def parse_source(self, filename, source_text):
         try:
-            filename = os.path.abspath(filename)
-            with open(filename) as f:
-                source_text = f.read()
-
             full_typename, default_dtid = self._full_typename_and_dtid_from_filename(filename)
             numbered_lines = list(self._tokenize(source_text))
             all_attributes_names = set()
@@ -571,6 +584,14 @@ class Parser:
             if not ex.file:
                 ex.file = filename
             raise ex
+
+    def parse(self, filename):
+        try:
+            filename = os.path.abspath(filename)
+            with open(filename) as f:
+                source_text = f.read()
+
+            return self.parse_source(filename, source_text)
         except IOError as ex:
             raise DsdlException('IO error: %s' % str(ex), file=filename)
         except Exception as ex:
@@ -662,9 +683,9 @@ def parse_namespaces(source_dirs, search_dirs=None):
     This function takes a list of root namespace directories (containing DSDL definition files to parse) and an
     optional list of search directories (containing DSDL definition files that can be referenced from the types
     that are going to be parsed).
-    
+
     Returns the list of parsed type definitions, where type of each element is CompoundType.
-    
+
     Args:
         source_dirs    List of root namespace directories to parse.
         search_dirs    List of root namespace directories with referenced types (optional). This list is
