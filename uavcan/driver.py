@@ -8,7 +8,7 @@ import fcntl
 import struct
 import binascii
 import functools
-import logging as log
+import logging
 
 
 # If PySerial isn't available, we can't support SLCAN
@@ -16,8 +16,8 @@ try:
     import serial
 except ImportError:
     serial = None
-    log.info("uavcan.driver cannot import PySerial; SLCAN will not be "+
-             "available.")
+    logging.info("uavcan.driver cannot import PySerial; SLCAN will not be "
+                 "available.")
 
 
 # Python 3.3+'s socket module has support for SocketCAN when running on Linux.
@@ -152,14 +152,16 @@ class SocketCAN(object):
 
         if callback:
             for message in messages:
-                log.debug("CAN.recv(): {!r} data:{}".format(message, binascii.hexlify(message[1])))
+                logging.debug("CAN.recv(): {!r} data:{}".format(
+                              message, binascii.hexlify(message[1])))
                 try:
                     callback(self, message)
                 except Exception:
                     raise
         else:
             for message in messages:
-                log.debug("CAN.recv(): {!r} data:{}".format(message, binascii.hexlify(message[1])))
+                logging.debug("CAN.recv(): {!r} data:{}".format(
+                              message, binascii.hexlify(message[1])))
             return messages
 
     def _recv(self, callback=None):
@@ -178,8 +180,8 @@ class SocketCAN(object):
         self.socket.close()
 
     def send(self, message_id, message, extended=False):
-        log.debug("CAN.send({!r}, {!r}, {!r})".format(message_id, binascii.hexlify(message),
-                                                      extended))
+        logging.debug("CAN.send({!r}, {!r}, {!r})".format(
+                      message_id, binascii.hexlify(message), extended))
 
         message_pad = bytes(message) + b"\x00" * (8 - len(message))
         self.socket.send(struct.pack("=IB3x8s", message_id | CAN_EFF_FLAG,
@@ -216,8 +218,8 @@ class SLCAN(object):
             # Parse the message into a (message ID, data) tuple.
             packet_id = int(message[1:1 + id_len], 16)
             packet_len = int(message[1 + id_len])
-            packet_data = binascii.a2b_hex(message[2 + id_len:
-                                                   2 + id_len + packet_len * 2])
+            packet_data = binascii.a2b_hex(
+                message[2 + id_len:2 + id_len + packet_len * 2])
 
             # ID, data, extended
             return packet_id, packet_data, (id_len == 8)
@@ -256,14 +258,14 @@ class SLCAN(object):
 
         if callback:
             for message in messages:
-                log.debug("CAN.recv(): {!r}".format(message))
+                logging.debug("CAN.recv(): {!r}".format(message))
                 try:
                     callback(self, message)
                 except Exception:
                     raise
         else:
             for message in messages:
-                log.debug("CAN.recv(): {!r}".format(message))
+                logging.debug("CAN.recv(): {!r}".format(message))
             return messages
 
     def add_to_ioloop(self, ioloop, callback=None):
@@ -295,8 +297,8 @@ class SLCAN(object):
         time.sleep(0.1)
 
     def send(self, message_id, message, extended=False):
-        log.debug("CAN.send({!r}, {!r}, {!r})".format(message_id, message,
-                                                      extended))
+        logging.debug("CAN.send({!r}, {!r}, {!r})".format(
+                      message_id, message, extended))
 
         if extended:
             start = "T{0:08X}".format(message_id)
