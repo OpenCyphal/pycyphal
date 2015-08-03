@@ -15,6 +15,9 @@ import uavcan.driver as driver
 import uavcan.transport as transport
 
 
+NODE_STATUS_INVERVAL = 0.5
+
+
 class Node(object):
     def __init__(self, handlers, node_id=127):
         self.can = None
@@ -113,21 +116,38 @@ class Node(object):
         # Send node status every 0.5 sec
         self.start_time = time.time()
         # TODO: make it easier to get constant values from UAVCAN types
-        self.status = uavcan.protocol.NodeStatus().STATUS_OK
+        self.health = uavcan.protocol.NodeStatus().HEALTH_OK
+        self.mode = uavcan.protocol.NodeStatus().MODE_OPERATIONAL
 
         if io_loop:
+            # Run asynchronously on a Tornado ioloop
             import tornado.ioloop
 
             self.can.add_to_ioloop(io_loop, callback=self._recv_frame)
             self.nodestatus_timer = tornado.ioloop.PeriodicCallback(
                 self.send_node_status,
-                500, io_loop=io_loop)
+                NODE_STATUS_INVERVAL * 1000.0, io_loop=io_loop)
             self.nodestatus_timer.start()
+        else:
+            # Run synchronously
+            last_status_t = time.time()
+            while True:
+                messages = can._recv()
+
+                if messages:
+                    for message in messages:
+                        self._recv_frame(self.can, message)
+
+                if time.time() - last_status_t > NODE_STATUS_INVERVAL:
+                    self.send_node_status()
+                    last_status_t = time.time()
 
     def send_node_status(self):
         status = uavcan.protocol.NodeStatus()
         status.uptime_sec = int(time.time() - self.start_time)
-        status.status_code = self.status
+        status.health = self.health
+        status.mode = self.mode
+        status.sub_mode = 0
         status.vendor_specific_status_code = 0
         self.send_message(status)
 
@@ -180,9 +200,9 @@ class Monitor(object):
         pass
 
 
-class Service(MessageHandler):
+class Service(Monitor):
     def __init__(self, *args, **kwargs):
-        super(ServiceHandler, self).__init__(*args, **kwargs)
+        super(Service, self).__init__(*args, **kwargs)
         self.request = self.message
         self.response = transport.CompoundValue(self.request.type, tao=True,
                                                 mode="response")

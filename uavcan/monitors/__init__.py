@@ -32,40 +32,41 @@ class NodeStatusMonitor(uavcan.node.Monitor):
             # The node has timed out, hasn't been seen before, or has
             # restarted, so get the node's hardware and software info
             request = uavcan.protocol.GetNodeInfo(mode="request")
-            response, response_transfer = \
-                yield self.node.send_request(request, node_id)
-            NodeStatusMonitor.NODE_INFO[node_id] = response
+            self.node.send_request(request, node_id,
+                                   callback=self.on_nodeinfo_response)
 
-            hw_unique_id = "".join(format(c, "02X") for c in
-                                   response.hardware_version.unique_id)
-            msg = (
-                "[#{0:03d}:uavcan.protocol.GetNodeInfo] " +
-                "software_version.major={1:d} " +
-                "software_version.minor={2:d} " +
-                "software_version.vcs_commit={3:08x} " +
-                "software_version.image_crc={4:016X} " +
-                "hardware_version.major={5:d} " +
-                "hardware_version.minor={6:d} " +
-                "hardware_version.unique_id={7!s} " +
-                "name={8!r}"
-            ).format(
-                self.transfer.source_node_id,
-                response.software_version.major,
-                response.software_version.minor,
-                response.software_version.vcs_commit,
-                response.software_version.image_crc,
-                response.hardware_version.major,
-                response.hardware_version.minor,
-                hw_unique_id,
-                response.name.decode()
-            )
-            logging.info(msg)
+    def on_nodeinfo_response(self, response, transfer):
+        NodeStatusMonitor.NODE_INFO[transfer.source_node_id] = response
 
-            # If a new-node callback is defined, call it now
-            if self.new_node_callback:
-                yield self.new_node_callback(self.node, node_id, response)
+        hw_unique_id = "".join(format(c, "02X") for c in
+                               response.hardware_version.unique_id)
+        msg = (
+            "[#{0:03d}:uavcan.protocol.GetNodeInfo] " +
+            "software_version.major={1:d} " +
+            "software_version.minor={2:d} " +
+            "software_version.vcs_commit={3:08x} " +
+            "software_version.image_crc={4:016X} " +
+            "hardware_version.major={5:d} " +
+            "hardware_version.minor={6:d} " +
+            "hardware_version.unique_id={7!s} " +
+            "name={8!r}"
+        ).format(
+            transfer.source_node_id,
+            response.software_version.major,
+            response.software_version.minor,
+            response.software_version.vcs_commit,
+            response.software_version.image_crc,
+            response.hardware_version.major,
+            response.hardware_version.minor,
+            hw_unique_id,
+            response.name.decode()
+        )
+        logging.info(msg)
 
-        raise tornado.gen.Return()
+        # If a new-node callback is defined, call it now
+        if self.new_node_callback:
+            self.new_node_callback(self.node, transfer.source_node_id,
+                                   response)
 
 
 class DynamicNodeIDServer(uavcan.node.Monitor):
