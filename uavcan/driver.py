@@ -3,12 +3,12 @@
 import os
 import sys
 import time
-import socket
 import fcntl
+import socket
 import struct
+import logging
 import binascii
 import functools
-import logging
 
 
 # If PySerial isn't available, we can't support SLCAN

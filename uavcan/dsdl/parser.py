@@ -7,8 +7,8 @@
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os, re, logging
 from io import StringIO
-from .signature import compute_signature
-from .common import DsdlException, pretty_filename
+from .signature import Signature, compute_signature
+from .common import DsdlException, pretty_filename, bytes_from_crc64
 from .type_limits import get_unsigned_integer_range, get_signed_integer_range, get_float_range
 
 # Python 2.7 compatibility
@@ -45,7 +45,11 @@ class Type:
     def __str__(self):
         return self.get_normalized_definition()
 
+    def get_data_type_signature(self):
+        return None
+
     __repr__ = __str__
+
 
 class PrimitiveType(Type):
     '''
@@ -97,6 +101,7 @@ class PrimitiveType(Type):
         '''Returns type bit length.'''
         return self.bitlen
 
+
 class ArrayType(Type):
     '''
     Array type description, e.g. float32[8], uint12[<34].
@@ -126,6 +131,10 @@ class ArrayType(Type):
             self.MODE_DYNAMIC: payload_max_bitlen + self.max_size.bit_length(),
             self.MODE_STATIC: payload_max_bitlen
         }[self.mode]
+
+    def get_data_type_signature(self):
+        return self.value_type.get_data_type_signature()
+
 
 class CompoundType(Type):
     '''
@@ -242,6 +251,7 @@ class CompoundType(Type):
                 sig.add(bytes_from_crc64(sig_value))
         return sig.get_value()
 
+
 class VoidType(Type):
     '''
     Void type description, e.g. void2.
@@ -277,6 +287,7 @@ class Attribute:
 
     __repr__ = __str__
 
+
 class Field(Attribute):
     '''
     Field description.
@@ -288,6 +299,7 @@ class Field(Attribute):
             return self.type.get_normalized_definition()
         else:
             return '%s %s' % (self.type.get_normalized_definition(), self.name)
+
 
 class Constant(Attribute):
     '''
@@ -602,12 +614,15 @@ class Parser:
 def error(fmt, *args):
     raise DsdlException(fmt % args)
 
+
 def enforce(cond, fmt, *args):
     if not cond:
         error(fmt, *args)
 
+
 def bitlen_to_bytelen(x):
     return int((x + 7) / 8)
+
 
 def evaluate_expression(expression):
     try:
@@ -622,6 +637,7 @@ def evaluate_expression(expression):
     except Exception as ex:
         error('Cannot evaluate expression: %s', str(ex))
 
+
 def validate_search_directories(dirnames):
     dirnames = set(dirnames)
     dirnames = list(map(os.path.abspath, dirnames))
@@ -634,10 +650,12 @@ def validate_search_directories(dirnames):
                      'Namespace roots must be unique [%s] [%s]', d1, d2)
     return dirnames
 
+
 def validate_namespace_name(name):
     for component in name.split('.'):
         enforce(re.match(r'[a-z][a-z0-9_]*$', component), 'Invalid namespace name [%s]', name)
     enforce(len(name) <= MAX_FULL_TYPE_NAME_LEN, 'Namespace name is too long [%s]', name)
+
 
 def validate_compound_type_full_name(name):
     enforce('.' in name, 'Full type name must explicitly specify its namespace [%s]', name)
@@ -647,8 +665,10 @@ def validate_compound_type_full_name(name):
     enforce(re.match(r'[A-Z][A-Za-z0-9_]*$', short_name), 'Invalid type name [%s]', name)
     enforce(len(name) <= MAX_FULL_TYPE_NAME_LEN, 'Type name is too long [%s]', name)
 
+
 def validate_attribute_name(name):
     enforce(re.match(r'[a-zA-Z][a-zA-Z0-9_]*$', name), 'Invalid attribute name [%s]', name)
+
 
 def validate_data_type_id(t):
     if t.default_dtid is None:
@@ -661,6 +681,7 @@ def validate_data_type_id(t):
                 'Invalid data type ID for service [%s]', t.default_dtid)
     else:
         error('Invalid kind: %s', t.kind)
+
 
 def validate_union(t):
     def check_fields(fields):
@@ -676,6 +697,7 @@ def validate_union(t):
             check_fields(t.response_fields)
     else:
         error('Invalid kind: %s', t.kind)
+
 
 def parse_namespaces(source_dirs, search_dirs=None):
     '''
