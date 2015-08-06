@@ -7,7 +7,7 @@ import uavcan.node
 
 class FileGetInfoService(uavcan.node.Service):
     def __init__(self, *args, **kwargs):
-        super(FileGetInfoHandler, self).__init__(*args, **kwargs)
+        super(FileGetInfoService, self).__init__(*args, **kwargs)
         self.base_path = kwargs.get("path")
 
     def on_request(self):
@@ -35,7 +35,7 @@ class FileGetInfoService(uavcan.node.Service):
 
 class FileReadService(uavcan.node.Service):
     def __init__(self, *args, **kwargs):
-        super(FileReadHandler, self).__init__(*args, **kwargs)
+        super(FileReadService, self).__init__(*args, **kwargs)
         self.base_path = kwargs.get("path")
 
     def on_request(self):

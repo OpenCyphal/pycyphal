@@ -10,6 +10,7 @@ import functools
 import collections
 
 
+import uavcan
 import uavcan.dsdl as dsdl
 import uavcan.dsdl.common as common
 
@@ -156,7 +157,7 @@ class PrimitiveValue(BaseValue):
     @property
     def value(self):
         if not self._bits:
-            raise ValueError("Undefined value")
+            return None
 
         int_value = int(self._bits, 2)
         if self.type.kind == dsdl.parser.PrimitiveType.KIND_BOOLEAN:
@@ -246,6 +247,9 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
     def __len__(self):
         return len(self.__items)
+
+    def new_item(self):
+        return self.__item_ctor()
 
     def insert(self, idx, value):
         if idx >= self.type.max_size:
@@ -366,9 +370,13 @@ class CompoundValue(BaseValue):
                 self.fields[field.name] = CompoundValue(field.type, tao=atao)
 
     def __repr__(self):
-        fields = ", ".join("{0}={1!r}".format(f, v)
-                           for f, v in self.fields.items()
-                           if not f.startswith("_void_"))
+        if self.is_union:
+            field = self.union_field or self.fields.keys()[0]
+            fields = "{0}={1!r}".format(field, self.fields[field])
+        else:
+            fields = ", ".join("{0}={1!r}".format(f, v)
+                               for f, v in self.fields.items()
+                               if not f.startswith("_void_"))
         return "{0}({1})".format(self.type.full_name, fields)
 
     def __getattr__(self, attr):
@@ -480,6 +488,12 @@ class Transfer(object):
 
         self.is_complete = True if self.payload else False
 
+    def __repr__(self):
+        return ("Transfer(id={0}, source_node_id={1}, dest_node_id={2}, "
+                "transfer_priority={3}, payload={4!r})").format(
+                self.transfer_id, self.source_node_id, self.dest_node_id,
+                self.transfer_priority, self.payload)
+
     @property
     def message_id(self):
         # Common fields
@@ -489,19 +503,19 @@ class Transfer(object):
 
         if self.service_not_message:
             assert 0 <= self.data_type_id <= 0xFF
-            assert 1 <= self.destination_node_id <= 0x7F
+            assert 1 <= self.dest_node_id <= 0x7F
             # Service frame format
             id_ |= self.data_type_id << 16
             id_ |= int(self.request_not_response) << 15
-            id_ |= self.destination_node_id << 8
+            id_ |= self.dest_node_id << 8
         elif self.source_node_id == 0:
-            assert self.destination_node_id is None
+            assert self.dest_node_id is None
             assert self.discriminator is not None
             # Anonymous message frame format
             id_ |= self.discriminator << 10
             id_ |= (self.data_type_id & 0x3) << 8
         else:
-            assert 0 <= self.message_type_id <= 0xFFFF
+            assert 0 <= self.data_type_id <= 0xFFFF
             # Message frame format
             id_ |= self.data_type_id << 8
 
@@ -516,7 +530,7 @@ class Transfer(object):
         if self.service_not_message:
             self.data_type_id = (value >> 16) & 0xFF
             self.request_not_response = bool(value & 0x8000)
-            self.destination_node_id = (value >> 8) & 0x7F
+            self.dest_node_id = (value >> 8) & 0x7F
         elif self.source_node_id == 0:
             self.discriminator = (value >> 10) & 0x3FFF
             self.data_type_id = (value >> 8) & 0x3
@@ -541,13 +555,13 @@ class Transfer(object):
         while True:
             # Tail byte contains start-of-transfer, end-of-transfer, toggle,
             # and Transfer ID
-            tail = ((0x80 if not out_frames else 0) |
+            tail = ((0x80 if len(out_frames) == 0 else 0) |
                     (0x40 if len(remaining_payload) <= 7 else 0) |
-                    (tail ^ 0x20) |
+                    ((tail ^ 0x20) & 0x20) |
                     (self.transfer_id & 0x1F))
             out_frames.append(Frame(message_id=self.message_id,
                                     bytes=remaining_payload[0:7] +
-                                          bytearray(tail)))
+                                          bytearray(chr(tail))))
             remaining_payload = remaining_payload[7:]
             if not remaining_payload:
                 break
@@ -566,20 +580,21 @@ class Transfer(object):
                                   tail & 0x1F, expected_transfer_id))
             elif idx == 0 and not (tail & 0x80):
                 raise ValueError("Start of transmission not set on frame 0")
-            elif tail & 0x80:
+            elif idx > 0 and tail & 0x80:
                 raise ValueError(("Start of transmission set unexpectedly " +
                                   "on frame {0}").format(idx))
             elif idx == len(frames) - 1 and not (tail & 0x40):
                 raise ValueError("End of transmission not set on last frame")
-            elif tail & 0x40:
+            elif idx < len(frames) - 1 and (tail & 0x40):
                 raise ValueError(("End of transmission set unexpectedly " +
                                   "on frame {0}").format(idx))
-            elif (tail & 0x20) != last_toggle:
+            elif (tail & 0x20) != expected_toggle:
                 raise ValueError(("Toggle bit value {0} incorrect on frame " +
                                   "{1}").format(tail & 0x20, idx))
 
             expected_toggle ^= 0x20
 
+        self.transfer_id = expected_transfer_id
         self.message_id = frames[0].message_id
         payload_bytes = sum((f.bytes[0:-1] for f in frames), bytearray())
 
@@ -590,7 +605,7 @@ class Transfer(object):
             kind = dsdl.parser.CompoundType.KIND_MESSAGE
         datatype = uavcan.DATATYPES.get((self.data_type_id, kind))
         if not datatype:
-            raise ValueError("Unrecognised {0} type ID {0}".format(
+            raise ValueError("Unrecognised {0} type ID {1}".format(
                              "service" if self.service_not_message
                                        else "message",
                              self.data_type_id))
@@ -613,10 +628,10 @@ class Transfer(object):
 
         if self.service_not_message:
             self.payload = datatype(
-                mode="request" if self.reqeust_not_response else "response")
+                mode="request" if self.request_not_response else "response")
         else:
             self.payload = datatype()
-        self.payload.unpack(transport.bits_from_bytes(payload_bytes))
+        self.payload.unpack(bits_from_bytes(payload_bytes))
 
     @property
     def key(self):
@@ -628,7 +643,6 @@ class Transfer(object):
                 not self.request_not_response and
                 transfer.dest_node_id == self.source_node_id and
                 transfer.source_node_id == self.dest_node_id and
-                transfer.transfer_priority == self.transfer_priority and
                 transfer.data_type_id == self.data_type_id):
             return True
         else:
@@ -641,16 +655,16 @@ class TransferManager(object):
         self.active_transfer_timestamps = {}
 
     def receive_frame(self, frame):
-        key = frame.transfer_key
-        self.active_transfers[key].append(frame)
-        self.active_transfer_timestamps[key] = time.time()
-
-        # If the last frame of a transfer was received, return its frames
         result = None
-        if frame.last_frame:
-            result = self.active_transfers[key]
-            del self.active_transfers[key]
-            del self.active_transfer_timestamps[key]
+        key = frame.transfer_key
+        if key in self.active_transfers or frame.start_of_transfer:
+            self.active_transfers[key].append(frame)
+            self.active_transfer_timestamps[key] = time.time()
+            # If the last frame of a transfer was received, return its frames
+            if frame.end_of_transfer:
+                result = self.active_transfers[key]
+                del self.active_transfers[key]
+                del self.active_transfer_timestamps[key]
 
         return result
 

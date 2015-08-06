@@ -46,6 +46,7 @@ class Namespace(object):
 
 MODULE = Module()
 DATATYPES = {}
+TYPENAMES = {}
 
 
 def load_dsdl(paths):
@@ -55,7 +56,7 @@ def load_dsdl(paths):
     Also adds entries for all datatype (ID, kind)s to the DATATYPES
     dictionary, which maps datatype (ID, kind)s to their respective type
     classes."""
-    global DATATYPES
+    global DATATYPES, TYPENAMES
 
     if isinstance(paths, basestring):
         paths = [paths]
@@ -65,6 +66,8 @@ def load_dsdl(paths):
     for dtype in dtypes:
         namespace, _, typename = dtype.full_name.rpartition(".")
         root_namespace._path(namespace).__dict__[typename] = dtype
+        TYPENAMES[dtype.full_name] = dtype
+
         if dtype.default_dtid:
             DATATYPES[(dtype.default_dtid, dtype.kind)] = dtype
             # Add the base CRC to each data type capable of being transmitted
@@ -93,7 +96,7 @@ def load_dsdl(paths):
                 root_namespace.__dict__[ext_namespace]
 
 
-__all__ = ["dsdl", "transport", "load_dsdl", "DATATYPES"]
+__all__ = ["dsdl", "transport", "load_dsdl", "DATATYPES", "TYPENAMES"]
 
 
 # Hack to support dynamically-generated attributes at the top level of the

@@ -36,6 +36,9 @@ class NodeStatusMonitor(uavcan.node.Monitor):
                                    callback=self.on_nodeinfo_response)
 
     def on_nodeinfo_response(self, response, transfer):
+        if not response or not transfer:
+            return
+
         NodeStatusMonitor.NODE_INFO[transfer.source_node_id] = response
 
         hw_unique_id = "".join(format(c, "02X") for c in
@@ -90,8 +93,8 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
 
             logging.debug(("[MASTER] Got first-stage dynamic ID request " +
                            "for {0!r}").format(DynamicNodeIDServer.QUERY))
-        elif len(message.unique_id) == 7 and \
-                len(DynamicNodeIDServer.QUERY) == 7:
+        elif len(message.unique_id) == 6 and \
+                len(DynamicNodeIDServer.QUERY) == 6:
             # Second-phase messages trigger a third-phase query
             DynamicNodeIDServer.QUERY += message.unique_id.to_bytes()
 
@@ -102,8 +105,8 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
             self.node.send_message(response)
             logging.debug(("[MASTER] Got second-stage dynamic ID request " +
                            "for {0!r}").format(DynamicNodeIDServer.QUERY))
-        elif len(message.unique_id) == 2 and \
-                len(DynamicNodeIDServer.QUERY) == 14:
+        elif len(message.unique_id) == 4 and \
+                len(DynamicNodeIDServer.QUERY) == 12:
             # Third-phase messages trigger an allocation
             DynamicNodeIDServer.QUERY += message.unique_id.to_bytes()
 

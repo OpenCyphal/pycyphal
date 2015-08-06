@@ -27,6 +27,7 @@ class Node(object):
         self.outstanding_requests = {}
         self.outstanding_request_callbacks = {}
         self.outstanding_request_timestamps = {}
+        self.outstanding_request_retries = {}
         self.next_transfer_ids = collections.defaultdict(int)
         self.node_info = {}
 
@@ -42,41 +43,26 @@ class Node(object):
         if not transfer_frames:
             return
 
-        dtid = transfer_frames[0].data_type_id
-        if transfer_frames[0].transfer_priority == \
-                transport.TransferPriority.SERVICE:
-            kind = dsdl.parser.CompoundType.KIND_SERVICE
-        else:
-            kind = dsdl.parser.CompoundType.KIND_MESSAGE
-        datatype = uavcan.DATATYPES.get((dtid, kind))
-        if not datatype:
-            logging.debug(("Node._recv_frame(): unrecognised data type " +
-                           "ID {0:d} for kind {1:d}").format(dtid, kind))
-            return
-
         transfer = transport.Transfer()
-        transfer.from_frames(transfer_frames, datatype_crc=datatype.base_crc)
+        transfer.from_frames(transfer_frames)
 
-        if transfer.is_message():
-            payload = datatype()  # Broadcast or unicast
-        elif transfer.is_request():
-            payload = datatype(mode="request")
-        else:  # transfer.is_response()
-            payload = datatype(mode="response")
-
-        payload.unpack(transport.bits_from_bytes(transfer.payload))
-
-        logging.info("Node._recv_frame(): received {0!r}".format(payload))
+        logging.debug("Node._recv_frame(): received {0!r}".format(transfer))
 
         # If it's a node info request, keep track of the status of each node
-        if payload.type == uavcan.protocol.NodeStatus:
+        if transfer.payload.type == uavcan.protocol.NodeStatus:
             self.node_info[transfer.source_node_id] = {
-                "uptime": payload.uptime_sec,
-                "status": payload.status_code,
+                "uptime": transfer.payload.uptime_sec,
+                "health": transfer.payload.health,
+                "mode": transfer.payload.mode,
+                "sub_mode": transfer.payload.sub_mode,
+                "vendor_specific_status_code":
+                    transfer.payload.vendor_specific_status_code,
                 "timestamp": time.time()
             }
 
-        if transfer.is_response() and transfer.dest_node_id == self.node_id:
+        if (transfer.service_not_message and not
+                transfer.request_not_response) and \
+                transfer.dest_node_id == self.node_id:
             # This is a reply to a request we sent. Look up the original
             # request and call the appropriate callback
             requests = self.outstanding_requests.keys()
@@ -84,20 +70,21 @@ class Node(object):
                 if transfer.is_response_to(self.outstanding_requests[key]):
                     # Call the request's callback and remove it from the
                     # active list
-                    if key in self.outstanding_request_callbacks:
-                        self.outstanding_request_callbacks[key](
-                            (payload, transfer))
-                        del self.outstanding_request_callbacks[key]
+                    self.outstanding_request_callbacks[key](transfer.payload,
+                                                            transfer)
                     del self.outstanding_requests[key]
+                    del self.outstanding_request_callbacks[key]
                     del self.outstanding_request_timestamps[key]
+                    del self.outstanding_request_retries[key]
                     break
-        elif transfer.is_broadcast() or transfer.dest_node_id == self.node_id:
+        elif not transfer.service_not_message or \
+                transfer.dest_node_id == self.node_id:
             # This is a request, a unicast or a broadcast; look up the
             # appropriate handler by data type ID
             for handler in self.handlers:
-                if handler[0] == datatype:
+                if handler[0] == transfer.payload.type:
                     kwargs = handler[2] if len(handler) == 3 else {}
-                    h = handler[1](payload, transfer, self, **kwargs)
+                    h = handler[1](transfer.payload, transfer, self, **kwargs)
                     h._execute()
 
     def _next_transfer_id(self, key):
@@ -143,6 +130,28 @@ class Node(object):
                     last_status_t = time.time()
 
     def send_node_status(self):
+        # Expire any requests more than one second old
+        requests = self.outstanding_requests.keys()
+        for key in requests:
+            if time.time() - self.outstanding_request_timestamps[key] > 1.0:
+                # Retry the request, or time it out if there are no retries
+                # remaining
+                if self.outstanding_request_retries[key]:
+                    self.outstanding_request_retries[key] -= 1
+                    self.outstanding_request_timestamps[key] = time.time()
+
+                    for frame in self.outstanding_requests[key].to_frames():
+                        self.can.send(frame.message_id, frame.bytes,
+                                      extended=True)
+                else:
+                    self.outstanding_request_callbacks[key](None, None)
+
+                    del self.outstanding_requests[key]
+                    del self.outstanding_request_callbacks[key]
+                    del self.outstanding_request_timestamps[key]
+                    del self.outstanding_request_retries[key]
+
+        # Send the node status message
         status = uavcan.protocol.NodeStatus()
         status.uptime_sec = int(time.time() - self.start_time)
         status.health = self.health
@@ -162,14 +171,16 @@ class Node(object):
             service_not_message=True,
             request_not_response=True)
 
-        for frame in transfer.to_frames(datatype_crc=payload.type.base_crc):
-            self.can.send(frame.message_id, frame.to_bytes(), extended=True)
+        for frame in transfer.to_frames():
+            self.can.send(frame.message_id, frame.bytes, extended=True)
 
-        self.outstanding_requests[transfer.key] = transfer
-        self.outstanding_request_callbacks[transfer.key] = callback
-        self.outstanding_request_timestamps[transfer.key] = time.time()
+        if callback:
+            self.outstanding_requests[transfer.key] = transfer
+            self.outstanding_request_callbacks[transfer.key] = callback
+            self.outstanding_request_timestamps[transfer.key] = time.time()
+            self.outstanding_request_retries[transfer.key] = 3
 
-        logging.info(
+        logging.debug(
             "Node.send_request(dest_node_id={0:d}): sent {1!r}".format(
             dest_node_id, payload))
 
@@ -181,10 +192,10 @@ class Node(object):
             transfer_id=transfer_id,
             service_not_message=False)
 
-        for frame in transfer.to_frames(datatype_crc=payload.type.base_crc):
-            self.can.send(frame.message_id, frame.to_bytes(), extended=True)
+        for frame in transfer.to_frames():
+            self.can.send(frame.message_id, frame.bytes, extended=True)
 
-        logging.info("Node.send_message(): sent {0!r}".format(payload))
+        logging.debug("Node.send_message(): sent {0!r}".format(payload))
 
 
 class Monitor(object):
@@ -220,12 +231,11 @@ class Service(Monitor):
             service_not_message=True,
             request_not_response=False
         )
-        for frame in transfer.to_frames(
-                datatype_crc=self.request.type.base_crc):
-            self.node.can.send(frame.message_id, frame.to_bytes(),
+        for frame in transfer.to_frames():
+            self.node.can.send(frame.message_id, frame.bytes,
                                extended=True)
 
-        logging.info(
+        logging.debug(
             "ServiceHandler._execute(dest_node_id={0:d}): sent {1!r}".format(
             self.transfer.source_node_id, self.response))
 

@@ -258,14 +258,14 @@ class SLCAN(object):
 
         if callback:
             for message in messages:
-                logging.debug("CAN.recv(): {!r}".format(message))
+                #logging.debug("CAN.recv(): {!r}".format(message))
                 try:
                     callback(self, message)
                 except Exception:
                     raise
         else:
-            for message in messages:
-                logging.debug("CAN.recv(): {!r}".format(message))
+            #for message in messages:
+            #    logging.debug("CAN.recv(): {!r}".format(message))
             return messages
 
     def add_to_ioloop(self, ioloop, callback=None):
@@ -297,8 +297,8 @@ class SLCAN(object):
         time.sleep(0.1)
 
     def send(self, message_id, message, extended=False):
-        logging.debug("CAN.send({!r}, {!r}, {!r})".format(
-                      message_id, message, extended))
+        #logging.debug("CAN.send({!r}, {!r}, {!r})".format(
+        #              message_id, message, extended))
 
         if extended:
             start = "T{0:08X}".format(message_id)
