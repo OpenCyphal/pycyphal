@@ -443,19 +443,20 @@ class Frame(object):
     def transfer_key(self):
         # The transfer is uniquely identified by the message ID and the 5-bit
         # Transfer ID contained in the last byte of the frame payload.
-        return (self.message_id, self.bytes[-1] & 0x1F)
+        return (self.message_id,
+                (self.bytes[-1] & 0x1F) if self.bytes else None)
 
     @property
     def toggle(self):
-        return bool(self.bytes[-1] & 0x20)
+        return bool(self.bytes[-1] & 0x20) if self.bytes else 0
 
     @property
     def end_of_transfer(self):
-        return bool(self.bytes[-1] & 0x40)
+        return bool(self.bytes[-1] & 0x40) if self.bytes else False
 
     @property
     def start_of_transfer(self):
-        return bool(self.bytes[-1] & 0x80)
+        return bool(self.bytes[-1] & 0x80) if self.bytes else False
 
 
 class Transfer(object):
