@@ -9,8 +9,8 @@ UAVCAN is a lightweight protocol designed for reliable communication in aerospac
 
 * [UAVCAN website](http://uavcan.org)
 * [UAVCAN discussion group](https://groups.google.com/forum/#!forum/uavcan)
-* [Pyuavcan overview](http://uavcan.org/Pyuavcan)
-* [Pyuavcan tutorials](http://uavcan.org/Pyuavcan_tutorials)
+* [Pyuavcan overview](http://uavcan.org/Implementations/Pyuavcan/)
+* [Pyuavcan tutorials](http://uavcan.org/Implementations/Pyuavcan/Tutorials/)
 
 ## Installation
 
@@ -19,3 +19,7 @@ This library is dependency-free. Compatible Python versions are 2.7 and 3.3 and 
 ```bash
 sudo ./setup.py install
 ```
+
+## Development
+
+The code should be formatted in compliance with [PEP8](https://www.python.org/dev/peps/pep-0008/).
