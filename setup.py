@@ -5,7 +5,7 @@ from setuptools import setup
 
 args = dict(
     name='uavcan',
-    version='1.0dev1',
+    version='1.0.0dev3',
     description='UAVCAN for Python',
     packages=['uavcan', 'uavcan.dsdl', 'uavcan.services', 'uavcan.monitors'],
     package_data={
