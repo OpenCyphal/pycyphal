@@ -17,7 +17,7 @@ UAVCAN is a lightweight protocol designed for reliable communication in aerospac
 This library is dependency-free. Compatible Python versions are 2.7 and 3.3 and newer.
 
 ```bash
-sudo ./setup.py install
+pip install uavcan
 ```
 
 ## Development
