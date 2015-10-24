@@ -75,6 +75,8 @@ class NodeStatusMonitor(uavcan.node.Monitor):
 class DynamicNodeIDServer(uavcan.node.Monitor):
     ALLOCATION = {}
     QUERY = ""
+    QUERY_TIME = 0.0
+    QUERY_TIMEOUT = 3.0
 
     def __init__(self, *args, **kwargs):
         super(DynamicNodeIDServer, self).__init__(*args, **kwargs)
@@ -84,6 +86,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
         if message.first_part_of_unique_id:
             # First-phase messages trigger a second-phase query
             DynamicNodeIDServer.QUERY = message.unique_id.to_bytes()
+            DynamicNodeIDServer.QUERY_TIME = time.time()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()
             response.first_part_of_unique_id = 0
@@ -97,6 +100,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
                 len(DynamicNodeIDServer.QUERY) == 6:
             # Second-phase messages trigger a third-phase query
             DynamicNodeIDServer.QUERY += message.unique_id.to_bytes()
+            DynamicNodeIDServer.QUERY_TIME = time.time()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()
             response.first_part_of_unique_id = 0
@@ -109,6 +113,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
                 len(DynamicNodeIDServer.QUERY) == 12:
             # Third-phase messages trigger an allocation
             DynamicNodeIDServer.QUERY += message.unique_id.to_bytes()
+            DynamicNodeIDServer.QUERY_TIME = time.time()
 
             logging.debug(("[MASTER] Got third-stage dynamic ID request " +
                            "for {0!r}").format(DynamicNodeIDServer.QUERY))
@@ -160,10 +165,12 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
                               node_allocated_id, DynamicNodeIDServer.QUERY))
             else:
                 logging.error("[MASTER] Couldn't allocate dynamic node ID")
-        else:
-            # Received mis-sequenced reply, clear out the state
+        elif time.time() - DynamicNodeIDServer.QUERY_TIME > \
+                DynamicNodeIDServer.QUERY_TIMEOUT:
+            # Mis-sequenced reply and no good replies during the timeout
+            # period -- reset the query now.
             DynamicNodeIDServer.QUERY = ""
-            logging.error("[MASTER] Got mis-sequenced reply, resetting query")
+            logging.error("[MASTER] Query timeout, resetting query")
 
 
 class DebugLogMessageMonitor(uavcan.node.Monitor):
