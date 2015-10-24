@@ -119,7 +119,7 @@ class Node(object):
             # Run synchronously
             last_status_t = time.time()
             while True:
-                messages = can._recv()
+                messages = self.can._recv()
 
                 if messages:
                     for message in messages:
