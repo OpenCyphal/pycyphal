@@ -199,6 +199,12 @@ class CompoundType(Type):
         else:
             error('Compound type of unknown kind [%s]', kind)
 
+    def _instantiate(*args, **kwargs):
+        pass
+
+    def __call__(self, *args, **kwargs):
+        return self._instantiate(*args, **kwargs)
+
     def get_dsdl_signature_source_definition(self):
         '''
         Returns normalized DSDL definition text.

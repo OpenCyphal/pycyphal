@@ -15,6 +15,12 @@ import uavcan.dsdl as dsdl
 import uavcan.dsdl.common as common
 
 
+try:
+    xrange(1)
+except:
+    xrange = range
+
+
 def bits_from_bytes(s):
     return "".join(format(c, "08b") for c in s)
 
@@ -203,7 +209,7 @@ class PrimitiveValue(BaseValue):
 class ArrayValue(BaseValue, collections.MutableSequence):
     def __init__(self, uavcan_type, tao=False, *args, **kwargs):
         super(ArrayValue, self).__init__(uavcan_type, *args, **kwargs)
-        value_bitlen = getattr(self.type.value_type, "bitlen", None)
+        value_bitlen = getattr(self.type.value_type, "bitlen", 0)
         self._tao = tao if value_bitlen >= 8 else False
         if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
             self.__item_ctor = functools.partial(PrimitiveValue,
@@ -420,18 +426,19 @@ class CompoundValue(BaseValue):
             self.union_field = self.fields.keys()[int(stream[0:tag_len], 2)]
             stream = self.fields[self.union_field].unpack(stream[tag_len:])
         else:
-            for field in self.fields.itervalues():
+            for field in self.fields.values():
                 stream = field.unpack(stream)
         return stream
 
     def pack(self):
         if self.is_union:
-            field = self.union_field or self.fields.keys()[0]
-            tag = self.fields.keys().index(field)
+            keys = list(self.fields.keys())
+            field = self.union_field or keys[0]
+            tag = keys.index(field)
             return format(tag, "0" + str(union_tag_len(self.fields)) + "b") +\
                    self.fields[field].pack()
         else:
-            return "".join(field.pack() for field in self.fields.itervalues())
+            return "".join(field.pack() for field in self.fields.values())
 
 
 class Frame(object):

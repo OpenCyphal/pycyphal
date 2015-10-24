@@ -7,10 +7,12 @@ Python UAVCAN package.
 Supported Python versions: 3.2+, 2.7.
 '''
 
+import os
 import sys
 import struct
 import logging
 import functools
+import pkg_resources
 import uavcan.dsdl as dsdl
 import uavcan.transport as transport
 
@@ -49,17 +51,28 @@ DATATYPES = {}
 TYPENAMES = {}
 
 
-def load_dsdl(paths):
+def load_dsdl(*paths, **args):
     """Loads the DSDL files under the given directory/directories, and creates
     types for each of them in the current module's namespace.
+
+    If the exclude_dist argument is not present, or False, the DSDL
+    definitions installed with this package will be loaded first.
 
     Also adds entries for all datatype (ID, kind)s to the DATATYPES
     dictionary, which maps datatype (ID, kind)s to their respective type
     classes."""
     global DATATYPES, TYPENAMES
 
-    if isinstance(paths, basestring):
-        paths = [paths]
+    paths = list(paths)
+
+    # Try to prepend the built-in DSDL files
+    try:
+        if not args.get("exclude_dist", None):
+            dsdl_path = pkg_resources.resource_filename(__name__,
+                                                        "dsdl_files")
+            paths = [os.path.join(dsdl_path, "uavcan")] + paths
+    except Exception:
+        pass
 
     root_namespace = Namespace()
     dtypes = dsdl.parse_namespaces(paths, [])
@@ -83,7 +96,7 @@ def load_dsdl(paths):
                                                **kwargs)
             return create_instance
 
-        dtype.__call__ = create_instance_closure(dtype)
+        dtype._instantiate = create_instance_closure(dtype)
 
     namespace = root_namespace._path("uavcan")
     for top_namespace in namespace._namespaces():

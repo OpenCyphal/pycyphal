@@ -5,33 +5,33 @@ from uavcan.dsdl import parser
 
 class TestBitsFromBytes(unittest.TestCase):
     def test_empty(self):
-        bits = transport.bits_from_bytes(bytearray(""))
+        bits = transport.bits_from_bytes(bytearray(b""))
         self.assertEqual(bits, "")
 
     def test_single_byte(self):
-        bits = transport.bits_from_bytes(bytearray("\x00"))
+        bits = transport.bits_from_bytes(bytearray(b"\x00"))
         self.assertEqual(bits, "00000000")
 
-        bits = transport.bits_from_bytes(bytearray("\xA5"))
+        bits = transport.bits_from_bytes(bytearray(b"\xA5"))
         self.assertEqual(bits, "10100101")
 
-        bits = transport.bits_from_bytes(bytearray("\xFF"))
+        bits = transport.bits_from_bytes(bytearray(b"\xFF"))
         self.assertEqual(bits, "11111111")
 
-        bits = transport.bits_from_bytes(bytearray("\x0F"))
+        bits = transport.bits_from_bytes(bytearray(b"\x0F"))
         self.assertEqual(bits, "00001111")
 
-        bits = transport.bits_from_bytes(bytearray("\xF0"))
+        bits = transport.bits_from_bytes(bytearray(b"\xF0"))
         self.assertEqual(bits, "11110000")
 
     def test_multiple_bytes(self):
-        bits = transport.bits_from_bytes(bytearray("\x00\xFF"))
+        bits = transport.bits_from_bytes(bytearray(b"\x00\xFF"))
         self.assertEqual(bits, "0000000011111111")
 
-        bits = transport.bits_from_bytes(bytearray("\xFF\x00"))
+        bits = transport.bits_from_bytes(bytearray(b"\xFF\x00"))
         self.assertEqual(bits, "1111111100000000")
 
-        bits = transport.bits_from_bytes(bytearray("\x00\x00\xAA\x55\xFF\xFF"))
+        bits = transport.bits_from_bytes(bytearray(b"\x00\x00\xAA\x55\xFF\xFF"))
         self.assertEqual(
             bits, "000000000000000010101010010101011111111111111111")
 
@@ -103,22 +103,22 @@ class TestBEFromLEBits(unittest.TestCase):
         #                                     llllllllmmmm
         out_bits = transport.be_from_le_bits("110110101110", 12)
         #                                     mmmmllllllll
-        self.assertEqual(out_bits,          b"111011011010")
+        self.assertEqual(out_bits,           "111011011010")
 
         #                                     llllllllmmmmmmmm
         out_bits = transport.be_from_le_bits("1010010110010110", 16)
         #                                     mmmmmmmmllllllll
-        self.assertEqual(out_bits,          b"1001011010100101")
+        self.assertEqual(out_bits,           "1001011010100101")
 
         #                                     llllllll........m
         out_bits = transport.be_from_le_bits("11010010110010110", 17)
         #                                     m........llllllll
-        self.assertEqual(out_bits,          b"01100101111010010")
+        self.assertEqual(out_bits,           "01100101111010010")
 
         #                                     llllllll........m
         out_bits = transport.be_from_le_bits("10100101100101101", 17)
         #                                     m........llllllll
-        self.assertEqual(out_bits,          b"11001011010100101")
+        self.assertEqual(out_bits,           "11001011010100101")
 
 
 class TestLEFromBEBits(unittest.TestCase):
@@ -137,22 +137,22 @@ class TestLEFromBEBits(unittest.TestCase):
         #                                     mmmmllllllll
         out_bits = transport.le_from_be_bits("111011011010", 12)
         #                                     llllllllmmmm
-        self.assertEqual(out_bits,          b"110110101110")
+        self.assertEqual(out_bits,           "110110101110")
 
         #                                     mmmmmmmmllllllll
         out_bits = transport.le_from_be_bits("1001011010100101", 16)
         #                                     llllllllmmmmmmmm
-        self.assertEqual(out_bits,          b"1010010110010110")
+        self.assertEqual(out_bits,           "1010010110010110")
 
         #                                     m........llllllll
         out_bits = transport.le_from_be_bits("01100101111010010", 17)
         #                                     llllllll........m
-        self.assertEqual(out_bits,          b"11010010110010110")
+        self.assertEqual(out_bits,           "11010010110010110")
 
         #                                     m........llllllll
         out_bits = transport.le_from_be_bits("11001011010100101", 17)
         #                                     llllllll........m
-        self.assertEqual(out_bits,          b"10100101100101101")
+        self.assertEqual(out_bits,           "10100101100101101")
 
 
 class TestCast(unittest.TestCase):
@@ -384,7 +384,7 @@ class TestArrayBasic(unittest.TestCase):
         ]
         def custom_type_factory(*args, **kwargs):
             return transport.CompoundValue(custom_type, tao=True, *args, **kwargs)
-        custom_type.__call__ = custom_type_factory
+        custom_type._instantiate = custom_type_factory
 
         self.a1_type = parser.ArrayType(
             parser.PrimitiveType(
@@ -420,14 +420,14 @@ class TestArrayBasic(unittest.TestCase):
         a1 = transport.ArrayValue(self.a1_type, tao=False)
         a2 = transport.ArrayValue(self.a2_type, tao=False)
         a3 = transport.ArrayValue(self.a3_type, tao=True)
-        for i in xrange(4):
+        for i in range(4):
             a1[i] = i
-        for i in xrange(2):
+        for i in range(2):
             a2[i] = i
-        for i in xrange(2):
+        for i in range(2):
             a3[i].a = i
             a3[i].b = i
-            for i2 in xrange(5):
+            for i2 in range(5):
                 a3[i].c.append(i2 & 1)
             self.assertEqual(len(a3[i].c), 5)
 
@@ -477,7 +477,7 @@ class TestVoid(unittest.TestCase):
         def custom_type_factory(*args, **kwargs):
             return transport.CompoundValue(self.custom_type, tao=True, *args,
                                            **kwargs)
-        self.custom_type.__call__ = custom_type_factory
+        self.custom_type._instantiate = custom_type_factory
 
     def test_size(self):
         self.assertEqual(self.custom_type.fields[1].type.bitlen, 3)
@@ -533,7 +533,7 @@ class TestMessageUnion(unittest.TestCase):
         def custom_type_factory(*args, **kwargs):
             return transport.CompoundValue(self.custom_type, tao=True, *args,
                                            **kwargs)
-        self.custom_type.__call__ = custom_type_factory
+        self.custom_type._instantiate = custom_type_factory
 
     def test_size(self):
         self.assertEqual(self.custom_type.fields[0].type.bitlen, 16)
