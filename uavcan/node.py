@@ -1,16 +1,10 @@
 #encoding=utf-8
 
 import time
-import math
-import ctypes
-import struct
 import logging
-import binascii
-import functools
 import collections
 
 import uavcan
-import uavcan.dsdl as dsdl
 import uavcan.driver as driver
 import uavcan.transport as transport
 
