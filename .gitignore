@@ -65,3 +65,6 @@ target/
 
 # Eclipse
 .settings/
+
+# IntelliJ
+.idea/
