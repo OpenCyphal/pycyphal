@@ -101,6 +101,19 @@ class Scheduler(object):
         return not self._scheduler.empty()
 
 
+class TransferEvent(object):
+    def __init__(self, transfer, node, payload_attr_name):
+        setattr(self, payload_attr_name, transfer.payload)
+        self.transfer = transfer
+        self.node = node
+
+    def __str__(self):
+        return str(self.transfer)
+
+    def __repr__(self):
+        return repr(self.transfer)
+
+
 class HandlerDispatcher(object):
     class Remover:
         def __init__(self, remover):
@@ -115,21 +128,6 @@ class HandlerDispatcher(object):
                 return True
             except ValueError:
                 return False
-
-    class Event(object):
-        def __init__(self, transfer, node, is_service):
-            if is_service:
-                self.request = transfer.payload
-            else:
-                self.message = transfer.payload
-            self.transfer = transfer
-            self.node = node
-
-        def __str__(self):
-            return str(self.transfer)
-
-        def __repr__(self):
-            return repr(self.transfer)
 
     def __init__(self, node):
         self._handlers = []  # type, callable
@@ -155,7 +153,7 @@ class HandlerDispatcher(object):
 
         # At this point process the handler as a regular callback
         def call(transfer):
-            event = self.Event(transfer, self._node, service)
+            event = TransferEvent(transfer, self._node, 'request' if service else 'message')
             result = handler(event, **kwargs)
             if service:
                 if result is None:
@@ -233,7 +231,8 @@ class Node(Scheduler):
             for key in requests:
                 if transfer.is_response_to(self._outstanding_requests[key]):
                     # Call the request's callback and remove it from the active list
-                    self._outstanding_request_callbacks[key](transfer.payload, transfer)
+                    event = TransferEvent(transfer, self, 'response')
+                    self._outstanding_request_callbacks[key](event)
                     del self._outstanding_requests[key]
                     del self._outstanding_request_callbacks[key]
                     del self._outstanding_request_timestamps[key]

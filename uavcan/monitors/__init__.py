@@ -36,14 +36,10 @@ class NodeStatusMonitor(uavcan.node.Monitor):
             request = uavcan.protocol.GetNodeInfo(_mode="request")  # @UndefinedVariable
             self.node.request(request, node_id, callback=self.on_nodeinfo_response)
 
-    def on_nodeinfo_response(self, response, transfer):
-        if not response or not transfer:
-            return
+    def on_nodeinfo_response(self, e):
+        NodeStatusMonitor.NODE_INFO[e.transfer.source_node_id] = e.response
 
-        NodeStatusMonitor.NODE_INFO[transfer.source_node_id] = response
-
-        hw_unique_id = "".join(format(c, "02X") for c in
-                               response.hardware_version.unique_id)
+        hw_unique_id = "".join(format(c, "02X") for c in e.response.hardware_version.unique_id)
         msg = (
             "[#{0:03d}:uavcan.protocol.GetNodeInfo] " +
             "software_version.major={1:d} " +
@@ -55,21 +51,21 @@ class NodeStatusMonitor(uavcan.node.Monitor):
             "hardware_version.unique_id={7!s} " +
             "name={8!r}"
         ).format(
-            transfer.source_node_id,
-            response.software_version.major,
-            response.software_version.minor,
-            response.software_version.vcs_commit,
-            response.software_version.image_crc,
-            response.hardware_version.major,
-            response.hardware_version.minor,
+            e.transfer.source_node_id,
+            e.response.software_version.major,
+            e.response.software_version.minor,
+            e.response.software_version.vcs_commit,
+            e.response.software_version.image_crc,
+            e.response.hardware_version.major,
+            e.response.hardware_version.minor,
             hw_unique_id,
-            response.name.decode()
+            e.response.name.decode()
         )
         logger.info(msg)
 
         # If a new-node callback is defined, call it now
         if self.new_node_callback:
-            self.new_node_callback(self.node, transfer.source_node_id, response)
+            self.new_node_callback(self.node, e.transfer.source_node_id, e.response)
 
 
 class DynamicNodeIDServer(uavcan.node.Monitor):
