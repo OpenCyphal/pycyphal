@@ -7,6 +7,7 @@ Python UAVCAN package.
 Supported Python versions: 3.2+, 2.7.
 '''
 
+from __future__ import division, absolute_import, print_function, unicode_literals
 import os
 import sys
 import struct
