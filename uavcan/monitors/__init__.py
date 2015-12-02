@@ -37,6 +37,9 @@ class NodeStatusMonitor(uavcan.node.Monitor):
             self.node.request(request, node_id, callback=self.on_nodeinfo_response)
 
     def on_nodeinfo_response(self, e):
+        if not e:
+            return
+
         NodeStatusMonitor.NODE_INFO[e.transfer.source_node_id] = e.response
 
         hw_unique_id = "".join(format(c, "02X") for c in e.response.hardware_version.unique_id)

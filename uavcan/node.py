@@ -15,6 +15,7 @@ from uavcan import UAVCANException
 
 
 DEFAULT_NODE_STATUS_INTERVAL = 0.5
+DEFAULT_SERVICE_TIMEOUT = 0.5
 
 
 logger = getLogger(__name__)
@@ -70,15 +71,15 @@ class Scheduler(object):
         next_deadline_at = self._run_scheduler()
         return None if next_deadline_at is None else (next_deadline_at - self._scheduler.timefunc())
 
-    def defer(self, timeout_seconds, callback, *args, **kwargs):
+    def defer(self, timeout_seconds, callback):
         """This method allows to invoke the callback with specified arguments once the specified amount of time.
         :returns: EventHandle object. Call .cancel() on it to cancel the event.
         """
         priority = 1
-        event = self._scheduler.enter(timeout_seconds, priority, callback, args, kwargs)
+        event = self._scheduler.enter(timeout_seconds, priority, callback, ())
         return self._make_sched_handle(lambda: event)
 
-    def periodic(self, period_seconds, callback, *args, **kwargs):
+    def periodic(self, period_seconds, callback):
         """This method allows to invoke the callback periodically, with specified time intervals.
         Note that the scheduler features zero phase drift.
         :returns: EventHandle object. Call .cancel() on it to cancel the event.
@@ -89,7 +90,7 @@ class Scheduler(object):
             # Event MUST be re-registered first in order to ensure that it can be cancelled from the callback
             scheduled_deadline += period_seconds
             event_holder[0] = self._scheduler.enterabs(scheduled_deadline, priority, caller, (scheduled_deadline,))
-            callback(*args, **kwargs)
+            callback()
 
         first_deadline = self._scheduler.timefunc() + period_seconds
         event_holder = [self._scheduler.enterabs(first_deadline, priority, caller, (first_deadline,))]
@@ -195,7 +196,6 @@ class Node(Scheduler):
         self._transfer_manager = transport.TransferManager()
         self._outstanding_requests = {}
         self._outstanding_request_callbacks = {}
-        self._outstanding_request_timestamps = {}
         self._next_transfer_ids = collections.defaultdict(int)
 
         self.start_time_monotonic = time.monotonic()
@@ -235,7 +235,6 @@ class Node(Scheduler):
                     self._outstanding_request_callbacks[key](event)
                     del self._outstanding_requests[key]
                     del self._outstanding_request_callbacks[key]
-                    del self._outstanding_request_timestamps[key]
                     break
         elif not transfer.service_not_message or transfer.dest_node_id == self.node_id:
             # This is a request or a broadcast; look up the appropriate handler by data type ID
@@ -300,7 +299,8 @@ class Node(Scheduler):
         while time.monotonic() < deadline:
             execute_once()
 
-    def request(self, payload, dest_node_id=None, callback=None):
+    def request(self, payload, dest_node_id, callback, timeout=None):
+        # Preparing the transfer
         transfer_id = self._next_transfer_id((payload.type.default_dtid, dest_node_id))
         transfer = transport.Transfer(payload=payload,
                                       source_node_id=self.node_id,
@@ -309,13 +309,27 @@ class Node(Scheduler):
                                       service_not_message=True,
                                       request_not_response=True)
 
+        # Sending the transfer
         for frame in transfer.to_frames():
             self._can_driver.send(frame.message_id, frame.bytes, extended=True)
 
-        if callback:
-            self._outstanding_requests[transfer.key] = transfer
-            self._outstanding_request_callbacks[transfer.key] = callback
-            self._outstanding_request_timestamps[transfer.key] = time.monotonic()
+        # Registering a callback that will be invoked if there was no response after 'timeout' seconds
+        def on_timeout():
+            del self._outstanding_requests[transfer.key]
+            del self._outstanding_request_callbacks[transfer.key]
+            callback(None)
+
+        timeout = timeout or DEFAULT_SERVICE_TIMEOUT
+        timeout_caller_handle = self.defer(timeout, on_timeout)
+
+        # This wrapper will automatically cancel the timeout callback if there was a response
+        def timeout_cancelling_wrapper(event):
+            timeout_caller_handle.try_cancel()
+            callback(event)
+
+        # Registering the pending request using the wrapper above instead of the callback
+        self._outstanding_requests[transfer.key] = transfer
+        self._outstanding_request_callbacks[transfer.key] = timeout_cancelling_wrapper
 
         logger.debug("Node.request(dest_node_id={0:d}): sent {1!r}".format(dest_node_id, payload))
 
