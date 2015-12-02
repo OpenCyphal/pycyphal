@@ -136,8 +136,8 @@ class Void(object):
 
 
 class BaseValue(object):
-    def __init__(self, uavcan_type, *args, **kwargs):
-        self.type = uavcan_type
+    def __init__(self, _uavcan_type, *args, **kwargs):
+        self.type = _uavcan_type
         self._bits = None
 
     def unpack(self, stream):
@@ -204,10 +204,10 @@ class PrimitiveValue(BaseValue):
 
 
 class ArrayValue(BaseValue, collections.MutableSequence):
-    def __init__(self, uavcan_type, tao=False, *args, **kwargs):
-        super(ArrayValue, self).__init__(uavcan_type, *args, **kwargs)
+    def __init__(self, _uavcan_type, _tao=False, *args, **kwargs):
+        super(ArrayValue, self).__init__(_uavcan_type, *args, **kwargs)
         value_bitlen = getattr(self.type.value_type, "bitlen", 0)
-        self._tao = tao if value_bitlen >= 8 else False
+        self._tao = _tao if value_bitlen >= 8 else False
 
         if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
             self.__item_ctor = functools.partial(PrimitiveValue, self.type.value_type)
@@ -319,11 +319,11 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
 
 class CompoundValue(BaseValue):
-    def __init__(self, uavcan_type, mode=None, tao=False, *args, **kwargs):
+    def __init__(self, _uavcan_type, _mode=None, _tao=False, *args, **kwargs):
         self.__dict__["fields"] = collections.OrderedDict()
         self.__dict__["constants"] = {}
-        super(CompoundValue, self).__init__(uavcan_type, *args, **kwargs)
-        self.mode = mode
+        super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
+        self.mode = _mode
         self.data_type_id = self.type.default_dtid
         self.crc_base = ""
 
@@ -353,7 +353,7 @@ class CompoundValue(BaseValue):
             self.constants[constant.name] = constant.value
 
         for idx, field in enumerate(source_fields):
-            atao = field is source_fields[-1] and tao
+            atao = field is source_fields[-1] and _tao
             if isinstance(field.type, dsdl.parser.VoidType):
                 self.fields["_void_{0}".format(idx)] = Void(field.type.bitlen)
             elif isinstance(field.type, dsdl.parser.PrimitiveType):
@@ -428,7 +428,7 @@ class CompoundValue(BaseValue):
 
 
 class Frame(object):
-    def __init__(self, message_id, bytes):
+    def __init__(self, message_id, bytes):  # @ReservedAssignment
         self.message_id = message_id
         self.bytes = bytearray(bytes)
 
@@ -607,7 +607,7 @@ class Transfer(object):
         self.data_type_crc = datatype.base_crc
 
         if self.service_not_message:
-            self.payload = datatype(mode="request" if self.request_not_response else "response")
+            self.payload = datatype(_mode="request" if self.request_not_response else "response")
         else:
             self.payload = datatype()
         self.payload.unpack(bits_from_bytes(payload_bytes))

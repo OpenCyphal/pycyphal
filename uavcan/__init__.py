@@ -107,7 +107,7 @@ def load_dsdl(*paths, **args):
 
         def create_instance_closure(closure_type):
             def create_instance(*args, **kwargs):
-                return transport.CompoundValue(closure_type, tao=True, *args, **kwargs)
+                return transport.CompoundValue(closure_type, _tao=True, *args, **kwargs)
             return create_instance
 
         dtype._instantiate = create_instance_closure(dtype)
