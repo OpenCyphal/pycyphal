@@ -1,5 +1,6 @@
 #encoding=utf-8
 
+import sys
 import time
 import math
 import ctypes
@@ -15,10 +16,10 @@ import uavcan.dsdl as dsdl
 import uavcan.dsdl.common as common
 
 
-try:
-    xrange(1)
-except:
-    xrange = range
+if sys.version_info[0] < 3:
+    bchr = chr
+else:
+    bchr = lambda x: bytes([x])
 
 
 def bits_from_bytes(s):
@@ -26,31 +27,29 @@ def bits_from_bytes(s):
 
 
 def bytes_from_bits(s):
-    return bytearray(int(s[i:i+8], 2) for i in xrange(0, len(s), 8))
+    return bytearray(int(s[i:i+8], 2) for i in range(0, len(s), 8))
 
 
 def be_from_le_bits(s, bitlen):
     if len(s) < bitlen:
-        raise ValueError("Not enough bits; need {0} but got {1}".format(
-                         bitlen, len(s)))
+        raise ValueError("Not enough bits; need {0} but got {1}".format(bitlen, len(s)))
     elif len(s) > bitlen:
         s = s[0:bitlen]
 
-    return "".join([s[i:i + 8] for i in xrange(0, len(s), 8)][::-1])
+    return "".join([s[i:i + 8] for i in range(0, len(s), 8)][::-1])
 
 
 def le_from_be_bits(s, bitlen):
     if len(s) < bitlen:
-        raise ValueError("Not enough bits; need {0} but got {1}".format(
-                         bitlen, len(s)))
+        raise ValueError("Not enough bits; need {0} but got {1}".format(bitlen, len(s)))
     elif len(s) > bitlen:
         s = s[len(s) - bitlen:]
 
-    return "".join([s[max(0, i - 8):i] for i in xrange(len(s), 0, -8)])
+    return "".join([s[max(0, i - 8):i] for i in range(len(s), 0, -8)])
 
 
 def format_bits(s):
-    return " ".join(s[i:i+8] for i in xrange(0, len(s), 8))
+    return " ".join(s[i:i+8] for i in range(0, len(s), 8))
 
 
 def union_tag_len(x):
@@ -193,14 +192,13 @@ class PrimitiveValue(BaseValue):
             self._bits = format(new_value, "0" + str(self.type.bitlen) + "b")
         elif self.type.kind == dsdl.parser.PrimitiveType.KIND_SIGNED_INT:
             new_value = cast(new_value, self.type)
-            self._bits=  format(new_value, "0" + str(self.type.bitlen) + "b")
+            self._bits = format(new_value, "0" + str(self.type.bitlen) + "b")
         elif self.type.kind == dsdl.parser.PrimitiveType.KIND_FLOAT:
             new_value = cast(new_value, self.type)
             if self.type.bitlen == 16:
                 int_value = f16_from_f32(new_value)
             elif self.type.bitlen == 32:
-                int_value = \
-                    struct.unpack("<L", struct.pack("<f", new_value))[0]
+                int_value = struct.unpack("<L", struct.pack("<f", new_value))[0]
             else:
                 raise ValueError("Only 16- or 32-bit floats are supported")
             self._bits = format(int_value, "0" + str(self.type.bitlen) + "b")
@@ -211,24 +209,21 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         super(ArrayValue, self).__init__(uavcan_type, *args, **kwargs)
         value_bitlen = getattr(self.type.value_type, "bitlen", 0)
         self._tao = tao if value_bitlen >= 8 else False
+
         if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
-            self.__item_ctor = functools.partial(PrimitiveValue,
-                                                 self.type.value_type)
+            self.__item_ctor = functools.partial(PrimitiveValue, self.type.value_type)
         elif isinstance(self.type.value_type, dsdl.parser.ArrayType):
-            self.__item_ctor = functools.partial(ArrayValue,
-                                                 self.type.value_type)
+            self.__item_ctor = functools.partial(ArrayValue, self.type.value_type)
         elif isinstance(self.type.value_type, dsdl.parser.CompoundType):
-            self.__item_ctor = functools.partial(CompoundValue,
-                                                 self.type.value_type)
+            self.__item_ctor = functools.partial(CompoundValue, self.type.value_type)
+
         if self.type.mode == dsdl.parser.ArrayType.MODE_STATIC:
-            self.__items = list(self.__item_ctor()
-                                for i in xrange(self.type.max_size))
+            self.__items = list(self.__item_ctor() for i in range(self.type.max_size))
         else:
             self.__items = []
 
     def __repr__(self):
-        return "ArrayValue(type={0!r}, tao={1!r}, items={2!r})".format(
-                self.type, self._tao, self.__items)
+        return "ArrayValue(type={0!r}, tao={1!r}, items={2!r})".format(self.type, self._tao, self.__items)
 
     def __str__(self):
         return self.__repr__()
@@ -241,8 +236,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
     def __setitem__(self, idx, value):
         if idx >= self.type.max_size:
-            raise IndexError(("Index {0} too large (max size " +
-                              "{1})").format(idx, self.type.max_size))
+            raise IndexError("Index {0} too large (max size {1})".format(idx, self.type.max_size))
         if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
             self.__items[idx].value = value
         else:
@@ -259,11 +253,9 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
     def insert(self, idx, value):
         if idx >= self.type.max_size:
-            raise IndexError(("Index {0} too large (max size " +
-                              "{1})").format(idx, self.type.max_size))
+            raise IndexError("Index {0} too large (max size {1})".format(idx, self.type.max_size))
         elif len(self) == self.type.max_size:
-            raise IndexError(("Array already full (max size "
-                              "{0})").format(self.type.max_size))
+            raise IndexError("Array already full (max size {0})".format(self.type.max_size))
         if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
             new_item = self.__item_ctor()
             new_item.value = value
@@ -273,7 +265,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
     def unpack(self, stream):
         if self.type.mode == dsdl.parser.ArrayType.MODE_STATIC:
-            for i in xrange(self.type.max_size):
+            for i in range(self.type.max_size):
                 stream = self.__items[i].unpack(stream)
         elif self._tao:
             del self[:]
@@ -287,7 +279,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             count_width = int(math.ceil(math.log(self.type.max_size, 2))) or 1
             count = int(stream[0:count_width], 2)
             stream = stream[count_width:]
-            for i in xrange(count):
+            for i in range(count):
                 new_item = self.__item_ctor()
                 stream = new_item.unpack(stream)
                 self.__items.append(new_item)
@@ -300,7 +292,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             if len(self) < self.type.max_size:
                 empty_item = self.__item_ctor()
                 items += "".join(empty_item.pack() for i in
-                                 xrange(self.type.max_size - len(self)))
+                                 range(self.type.max_size - len(self)))
             return items
         elif self._tao:
             return "".join(i.pack() for i in self.__items)
@@ -315,8 +307,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             self.append(byte)
 
     def to_bytes(self):
-        return bytes(bytearray(item.value for item in self.__items
-                               if item._bits))
+        return bytes(bytearray(item.value for item in self.__items if item._bits))
 
     def encode(self, value):
         del self[:]
@@ -325,8 +316,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             self.append(byte)
 
     def decode(self, encoding="utf-8"):
-        return bytearray(item.value for item in self.__items
-                         if item._bits).decode(encoding)
+        return bytearray(item.value for item in self.__items if item._bits).decode(encoding)
 
 
 class CompoundValue(BaseValue):
@@ -351,8 +341,7 @@ class CompoundValue(BaseValue):
                 source_constants = self.type.response_constants
                 is_union = self.type.response_union
             else:
-                raise ValueError("mode must be either 'request' or " +
-                                 "'response' for service types")
+                raise ValueError("mode must be either 'request' or 'response' for service types")
         else:
             source_fields = self.type.fields
             source_constants = self.type.constants
@@ -435,8 +424,7 @@ class CompoundValue(BaseValue):
             keys = list(self.fields.keys())
             field = self.union_field or keys[0]
             tag = keys.index(field)
-            return format(tag, "0" + str(union_tag_len(self.fields)) + "b") +\
-                   self.fields[field].pack()
+            return format(tag, "0" + str(union_tag_len(self.fields)) + "b") + self.fields[field].pack()
         else:
             return "".join(field.pack() for field in self.fields.values())
 
@@ -450,8 +438,7 @@ class Frame(object):
     def transfer_key(self):
         # The transfer is uniquely identified by the message ID and the 5-bit
         # Transfer ID contained in the last byte of the frame payload.
-        return (self.message_id,
-                (self.bytes[-1] & 0x1F) if self.bytes else None)
+        return (self.message_id, (self.bytes[-1] & 0x1F) if self.bytes else None)
 
     @property
     def toggle(self):
@@ -497,10 +484,8 @@ class Transfer(object):
         self.is_complete = True if self.payload else False
 
     def __repr__(self):
-        return ("Transfer(id={0}, source_node_id={1}, dest_node_id={2}, "
-                "transfer_priority={3}, payload={4!r})").format(
-                self.transfer_id, self.source_node_id, self.dest_node_id,
-                self.transfer_priority, self.payload)
+        return "Transfer(id={0}, source_node_id={1}, dest_node_id={2}, transfer_priority={3}, payload={4!r})"\
+            .format(self.transfer_id, self.source_node_id, self.dest_node_id, self.transfer_priority, self.payload)
 
     @property
     def message_id(self):
@@ -554,22 +539,17 @@ class Transfer(object):
         if len(remaining_payload) > 7:
             crc = common.crc16_from_bytes(self.payload,
                                           initial=self.data_type_crc)
-            remaining_payload = bytearray([crc & 0xFF, crc >> 8]) + \
-                                remaining_payload
+            remaining_payload = bytearray([crc & 0xFF, crc >> 8]) + remaining_payload
 
         # Generate the frame sequence
-        tail = 0x20  # set toggle bit high so the first frame is emitted with
-                     # it cleared
+        tail = 0x20  # set toggle bit high so the first frame is emitted with it cleared
         while True:
-            # Tail byte contains start-of-transfer, end-of-transfer, toggle,
-            # and Transfer ID
+            # Tail byte contains start-of-transfer, end-of-transfer, toggle, and Transfer ID
             tail = ((0x80 if len(out_frames) == 0 else 0) |
                     (0x40 if len(remaining_payload) <= 7 else 0) |
                     ((tail ^ 0x20) & 0x20) |
                     (self.transfer_id & 0x1F))
-            out_frames.append(Frame(message_id=self.message_id,
-                                    bytes=remaining_payload[0:7] +
-                                          bytearray(chr(tail))))
+            out_frames.append(Frame(message_id=self.message_id, bytes=remaining_payload[0:7] + bchr(tail)))
             remaining_payload = remaining_payload[7:]
             if not remaining_payload:
                 break
@@ -583,28 +563,23 @@ class Transfer(object):
         for idx, f in enumerate(frames):
             tail = f.bytes[-1]
             if (tail & 0x1F) != expected_transfer_id:
-                raise ValueError(("Transfer ID {0} incorrect, expected " +
-                                  "{1}").format(
-                                  tail & 0x1F, expected_transfer_id))
+                raise ValueError("Transfer ID {0} incorrect, expected {1}".format(tail & 0x1F, expected_transfer_id))
             elif idx == 0 and not (tail & 0x80):
                 raise ValueError("Start of transmission not set on frame 0")
             elif idx > 0 and tail & 0x80:
-                raise ValueError(("Start of transmission set unexpectedly " +
-                                  "on frame {0}").format(idx))
+                raise ValueError("Start of transmission set unexpectedly on frame {0}".format(idx))
             elif idx == len(frames) - 1 and not (tail & 0x40):
                 raise ValueError("End of transmission not set on last frame")
             elif idx < len(frames) - 1 and (tail & 0x40):
-                raise ValueError(("End of transmission set unexpectedly " +
-                                  "on frame {0}").format(idx))
+                raise ValueError("End of transmission set unexpectedly on frame {0}".format(idx))
             elif (tail & 0x20) != expected_toggle:
-                raise ValueError(("Toggle bit value {0} incorrect on frame " +
-                                  "{1}").format(tail & 0x20, idx))
+                raise ValueError("Toggle bit value {0} incorrect on frame {1}".format(tail & 0x20, idx))
 
             expected_toggle ^= 0x20
 
         self.transfer_id = expected_transfer_id
         self.message_id = frames[0].message_id
-        payload_bytes = sum((f.bytes[0:-1] for f in frames), bytearray())
+        payload_bytes = bytearray(b''.join(bytes(f.bytes[0:-1]) for f in frames))
 
         # Find the data type
         if self.service_not_message:
@@ -613,30 +588,24 @@ class Transfer(object):
             kind = dsdl.parser.CompoundType.KIND_MESSAGE
         datatype = uavcan.DATATYPES.get((self.data_type_id, kind))
         if not datatype:
-            raise ValueError("Unrecognised {0} type ID {1}".format(
-                             "service" if self.service_not_message
-                                       else "message",
-                             self.data_type_id))
+            raise ValueError("Unrecognised {0} type ID {1}"
+                             .format("service" if self.service_not_message else "message", self.data_type_id))
 
         # For a multi-frame transfer, validate the CRC and frame indexes
         if len(frames) > 1:
             transfer_crc = payload_bytes[0] + (payload_bytes[1] << 8)
             payload_bytes = payload_bytes[2:]
-            crc = common.crc16_from_bytes(payload_bytes,
-                                          initial=datatype.base_crc)
+            crc = common.crc16_from_bytes(payload_bytes, initial=datatype.base_crc)
             if crc != transfer_crc:
-                raise ValueError(("CRC mismatch: expected {0:x}, got {1:x} " +
-                                  "for payload {2!r} (DTID {3:d})").format(
-                                  crc, transfer_crc, payload_bytes,
-                                  self.data_type_id))
+                raise ValueError("CRC mismatch: expected {0:x}, got {1:x} for payload {2!r} (DTID {3:d})"
+                                 .format(crc, transfer_crc, payload_bytes, self.data_type_id))
 
         self.data_type_id = datatype.default_dtid
         self.data_type_signature = datatype.get_data_type_signature()
         self.data_type_crc = datatype.base_crc
 
         if self.service_not_message:
-            self.payload = datatype(
-                mode="request" if self.request_not_response else "response")
+            self.payload = datatype(mode="request" if self.request_not_response else "response")
         else:
             self.payload = datatype()
         self.payload.unpack(bits_from_bytes(payload_bytes))
@@ -667,7 +636,7 @@ class TransferManager(object):
         key = frame.transfer_key
         if key in self.active_transfers or frame.start_of_transfer:
             self.active_transfers[key].append(frame)
-            self.active_transfer_timestamps[key] = time.time()
+            self.active_transfer_timestamps[key] = time.monotonic()
             # If the last frame of a transfer was received, return its frames
             if frame.end_of_transfer:
                 result = self.active_transfers[key]
@@ -677,7 +646,7 @@ class TransferManager(object):
         return result
 
     def remove_inactive_transfers(self, timeout=1.0):
-        t = time.time()
+        t = time.monotonic()
         transfer_keys = self.active_transfers.keys()
         for key in transfer_keys:
             if t - self.active_transfer_timestamps[key] > timeout:

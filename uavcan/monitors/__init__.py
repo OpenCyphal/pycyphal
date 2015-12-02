@@ -25,9 +25,9 @@ class NodeStatusMonitor(uavcan.node.Monitor):
 
         # Update the node status registry
         NodeStatusMonitor.NODE_STATUS[node_id] = message
-        NodeStatusMonitor.NODE_TIMESTAMP[node_id] = time.time()
+        NodeStatusMonitor.NODE_TIMESTAMP[node_id] = time.monotonic()
 
-        if time.time() - last_timestamp > NodeStatusMonitor.TIMEOUT or \
+        if time.monotonic() - last_timestamp > NodeStatusMonitor.TIMEOUT or \
                 message.uptime_sec < last_node_uptime:
             # The node has timed out, hasn't been seen before, or has
             # restarted, so get the node's hardware and software info
@@ -86,7 +86,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
         if message.first_part_of_unique_id:
             # First-phase messages trigger a second-phase query
             DynamicNodeIDServer.QUERY = message.unique_id.to_bytes()
-            DynamicNodeIDServer.QUERY_TIME = time.time()
+            DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()
             response.first_part_of_unique_id = 0
@@ -100,7 +100,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
                 len(DynamicNodeIDServer.QUERY) == 6:
             # Second-phase messages trigger a third-phase query
             DynamicNodeIDServer.QUERY += message.unique_id.to_bytes()
-            DynamicNodeIDServer.QUERY_TIME = time.time()
+            DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()
             response.first_part_of_unique_id = 0
@@ -113,7 +113,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
                 len(DynamicNodeIDServer.QUERY) == 12:
             # Third-phase messages trigger an allocation
             DynamicNodeIDServer.QUERY += message.unique_id.to_bytes()
-            DynamicNodeIDServer.QUERY_TIME = time.time()
+            DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
             logging.debug(("[MASTER] Got third-stage dynamic ID request " +
                            "for {0!r}").format(DynamicNodeIDServer.QUERY))
@@ -165,7 +165,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
                               node_allocated_id, DynamicNodeIDServer.QUERY))
             else:
                 logging.error("[MASTER] Couldn't allocate dynamic node ID")
-        elif time.time() - DynamicNodeIDServer.QUERY_TIME > \
+        elif time.monotonic() - DynamicNodeIDServer.QUERY_TIME > \
                 DynamicNodeIDServer.QUERY_TIMEOUT:
             # Mis-sequenced reply and no good replies during the timeout
             # period -- reset the query now.

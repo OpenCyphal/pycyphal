@@ -8,7 +8,10 @@ import socket
 import struct
 import logging
 import binascii
-import functools
+import select
+
+
+__all__ = ['make_driver']
 
 
 # If PySerial isn't available, we can't support SLCAN
@@ -20,14 +23,14 @@ except ImportError:
                  "available.")
 
 
-# Python 3.3+'s socket module has support for SocketCAN when running on Linux.
-# Use that if possible; otherwise
+# Python 3.3+'s socket module has support for SocketCAN when running on Linux. Use that if possible.
+# noinspection PyBroadException
 try:
     socket.CAN_RAW
+
     def get_socket(ifname):
         s = socket.socket(socket.PF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
         s.bind((ifname, ))
-        s.setblocking(0)
         return s
 
 except Exception:
@@ -131,198 +134,174 @@ CAN_EFF_MASK = 0x1FFFFFFF
 
 
 class SocketCAN(object):
-    def __init__(self, interface):
-        self.interface = interface
-        self.socket = None
+    FRAME_FORMAT = '=IB3x8s'
 
-    def _read(self, fd, events, callback=None):
-        messages = []
-        packet = self.socket.recv(16)
-        while len(packet) == 16:
-            can_id, can_dlc, can_data = \
-                struct.unpack("=IB3x8s", packet)
-            message = (can_id & CAN_EFF_MASK, can_data[0:can_dlc],
-                       True if (can_id & CAN_EFF_FLAG) else False)
-            messages.append(message)
-
-            try:
-                packet = self.socket.recv(16)
-            except Exception:
-                break
-
-        if callback:
-            for message in messages:
-                logging.debug("CAN.recv(): {!r} data:{}".format(
-                              message, binascii.hexlify(message[1])))
-                try:
-                    callback(self, message)
-                except Exception:
-                    raise
-        else:
-            for message in messages:
-                logging.debug("CAN.recv(): {!r} data:{}".format(
-                              message, binascii.hexlify(message[1])))
-            return messages
-
-    def _recv(self, callback=None):
-        return self._read(0, None, callback)
-
-    def add_to_ioloop(self, ioloop, callback=None):
-        ioloop.add_handler(
-            self.socket.fileno(),
-            functools.partial(self._read, callback=callback),
-            ioloop.READ)
-
-    def open(self, callback=None):
-        self.socket = get_socket(self.interface)
+    def __init__(self, interface, **_extras):
+        self.socket = get_socket(interface)
+        self.poll = select.poll()
+        self.poll.register(self.socket.fileno())
 
     def close(self, callback=None):
         self.socket.close()
 
-    def send(self, message_id, message, extended=False):
-        logging.debug("CAN.send({!r}, {!r}, {!r})".format(
-                      message_id, binascii.hexlify(message), extended))
+    def receive(self, timeout=None):
+        timeout = -1 if timeout is None else (timeout * 1000)
 
-        message_pad = bytes(message) + b"\x00" * (8 - len(message))
-        self.socket.send(struct.pack("=IB3x8s", message_id | CAN_EFF_FLAG,
-                                     len(message), message_pad))
+        self.poll.modify(self.socket.fileno(), select.POLLIN | select.POLLPRI)
+        if self.poll.poll(timeout):
+            packet = self.socket.recv(16)
+            assert len(packet) == 16
+            can_id, can_dlc, can_data = struct.unpack(self.FRAME_FORMAT, packet)
+            return can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG)
+
+    def send(self, message_id, message, extended=False):
+        logging.debug("CAN.send({!r}, {!r}, {!r})".format(message_id, binascii.hexlify(message), extended))
+
+        if extended:
+            message_id |= CAN_EFF_FLAG
+
+        message_pad = bytes(message) + b'\x00' * (8 - len(message))
+        self.socket.send(struct.pack(self.FRAME_FORMAT, message_id, len(message), message_pad))
 
 
 class SLCAN(object):
-    def __init__(self, device, baudrate=1000000):
+    DEFAULT_BAUDRATE = 3000000
+    ACK_TIMEOUT = 0.5
+    ACK = b'\r'
+    NACK = b'\x07'
+
+    class ProtocolError(Exception):
+        pass
+
+    def __init__(self, device, bitrate, baudrate=None, **_extras):
         if not serial:
-            raise RuntimeError(
-                "PySerial not imported; SLCAN is not available")
+            raise RuntimeError("PySerial not imported; SLCAN is not available. Please install PySerial.")
 
-        self.conn = serial.Serial(device, 3000000, timeout=0)
-        self._read_handler = self._get_bytes_sync
-        self.partial_message = ""
-        self.baudrate = baudrate
+        baudrate = baudrate or self.DEFAULT_BAUDRATE
 
-    def _get_bytes_sync(self):
-        return self.conn.read(1)
+        self.conn = serial.Serial(device, baudrate)
+        self._read_buffer = bytes()
 
-    def _get_bytes_async(self):
-        return os.read(self.conn.fd, 1024)
-
-    def _ioloop_event_handler(self, fd, events, callback=None):
-        self._recv(callback=callback)
-
-    def _parse(self, message):
-        try:
-            if message[0] == "T":
-                id_len = 8
-            else:
-                id_len = 3
-
-            # Parse the message into a (message ID, data) tuple.
-            packet_id = int(message[1:1 + id_len], 16)
-            packet_len = int(message[1 + id_len])
-            packet_data = binascii.a2b_hex(
-                message[2 + id_len:2 + id_len + packet_len * 2])
-
-            # ID, data, extended
-            return packet_id, packet_data, (id_len == 8)
-        except Exception:
-            return None
-
-    def _recv(self, callback=None):
-        bytes = ""
-        new_bytes = self._read_handler()
-        while new_bytes:
-            bytes += new_bytes
-            new_bytes = self._read_handler()
-
-        if not bytes:
-            if callback:
-                return
-            else:
-                return []
-
-        # Split into messages
-        messages = [self.partial_message]
-        for byte in bytes:
-            if byte in "tT":
-                messages.append(byte)
-            elif messages and byte in "0123456789ABCDEF":
-                messages[-1] += byte
-            elif byte in "\x07\r":
-                messages.append("")
-
-        if messages[-1]:
-            self.partial_message = messages.pop()
-        # Filter, parse and return the messages
-        messages = list(self._parse(m) for m in messages
-                        if m and m[0] in ("t", "T"))
-        messages = filter(lambda x: x and x[0], messages)
-
-        if callback:
-            for message in messages:
-                #logging.debug("CAN.recv(): {!r}".format(message))
-                try:
-                    callback(self, message)
-                except Exception:
-                    raise
-        else:
-            #for message in messages:
-            #    logging.debug("CAN.recv(): {!r}".format(message))
-            return messages
-
-    def add_to_ioloop(self, ioloop, callback=None):
-        self._read_handler = self._get_bytes_async
-        ioloop.add_handler(
-            self.conn.fd,
-            functools.partial(self._ioloop_event_handler, callback=callback),
-            ioloop.READ)
-
-    def open(self, callback=None):
-        self.close()
         speed_code = {
             1000000: 8,
             500000: 6,
             250000: 5,
-            125000: 4
-        }[self.baudrate]
-        self.conn.write("S{0:d}\r".format(speed_code))
+            125000: 4,
+            100000: 3
+        }[bitrate]
+
+        # Discarding all input
+        self.conn.flushInput()
+
+        # Setting speed code
+        self.conn.write('S{0:d}\r'.format(speed_code).encode())
         self.conn.flush()
-        self._recv()
-        self.conn.write("O\r")
+        self._wait_for_ack()
+
+        # Opening the channel
+        self.conn.write(b'O\r')
         self.conn.flush()
-        self._recv()
+        self._wait_for_ack()
+
+        # Doing something I don't know what. Ben, what are we doing here?
         time.sleep(0.1)
 
-    def close(self, callback=None):
-        self.conn.write("C\r")
+        self.conn.flushInput()
+
+    def close(self):
+        self.conn.write(b'C\r')
         self.conn.flush()
-        time.sleep(0.1)
+        time.sleep(0.1)     # TODO: Ben, why?
+        self.conn.close()
+
+    def _wait_for_ack(self):
+        self.conn.timeout = self.ACK_TIMEOUT
+        while True:
+            b = self.conn.read(1)
+            if not b:
+                raise self.ProtocolError('ACK timeout')
+            if b == self.NACK:
+                raise self.ProtocolError('NACK in response')
+            if b == self.ACK:
+                break
+
+    def _parse(self, message):
+        try:
+            id_len = 8 if message[0] == b'T' else 3
+
+            # Parse the message into a (message ID, data) tuple.
+            packet_id = int(message[1:1 + id_len].decode(), 16)
+            packet_len = int(message.decode()[1 + id_len])      # Why .decode()? Try int(b'123'[0]) in Py3 and Py2.
+            packet_data = binascii.a2b_hex(message[2 + id_len:2 + id_len + packet_len * 2])
+
+            # ID, data, extended
+            return packet_id, packet_data, (id_len == 8)
+        except Exception:
+            logging.error('Could not parse SLCAN frame [%r]', message, exc_info=True)
+            return
+
+    def receive(self, timeout=None):
+        self.conn.timeout = timeout
+        deadline = (time.monotonic() + timeout) if timeout is not None else None
+
+        while True:
+            if self._read_buffer and self._read_buffer.endswith(b'\r'):
+                break
+
+            if deadline is not None:
+                to = deadline - time.monotonic()
+                if to <= 0:
+                    return
+                self.conn.timeout = to
+
+            self._read_buffer += self.conn.read(1)
+
+        assert self._read_buffer.endswith(b'\r')
+
+        msg = self._read_buffer
+        self._read_buffer = bytes()
+        return self._parse(msg)
 
     def send(self, message_id, message, extended=False):
-        #logging.debug("CAN.send({!r}, {!r}, {!r})".format(
-        #              message_id, message, extended))
-
-        if extended:
-            start = "T{0:08X}".format(message_id)
-        else:
-            start = "t{0:03X}".format(message_id)
-        line = "{0:s}{1:1d}{2:s}\r".format(start, len(message),
-                                           binascii.b2a_hex(message))
+        start = ('T{0:08X}' if extended else 't{0:03X}').format(message_id).encode()
+        line = '{0:s}{1:1d}{2:s}\r'.format(start, len(message), binascii.b2a_hex(message)).encode()
         self.conn.write(line)
         self.conn.flush()
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: driver.py CAN_DEVICE")
-        sys.exit()
+def make_driver(device_name, **kwargs):
+    """Creates an instance of CAN driver.
+    The right driver class will be selected automatically based on the device_name.
+    :param device_name: This parameter is used to select driver class. E.g. "/dev/ttyACM0", "COM9", "can0".
+    :param args: Passed directly to the constructor.
+    :param kwargs: Passed directly to the constructor.
+    """
+    windows_com_port = device_name.replace('\\', '').replace('.', '').lower().startswith('com')
+    unix_tty = device_name.startswith('/dev/')
 
-    if "tty" in sys.argv[1]:
-        can = SLCAN(sys.argv[1])
+    if windows_com_port or unix_tty:
+        return SLCAN(device_name, **kwargs)
     else:
-        can = SocketCAN(sys.argv[1])
+        return SocketCAN(device_name, **kwargs)
 
-    can.open()
+
+if __name__ == "__main__":
+    if sys.version_info[0] < 3:
+        import monotonic
+        time.monotonic = monotonic.monotonic
+
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
+                        format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+
+    if len(sys.argv) < 2:
+        print("Usage: driver.py <can-device> [param=value ...]")
+        sys.exit(1)
+
+    kw = {}
+    for a in sys.argv[2:]:
+        k, v = a.split('=')
+        kw[k] = int(v)
+
+    can = make_driver(sys.argv[1], **kw)
     while True:
-        messages = can._recv()
-        for message in messages:
-            print(message)
-
+        print(can.receive(2))
