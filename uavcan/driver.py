@@ -11,6 +11,8 @@ import binascii
 import select
 from logging import getLogger
 
+import uavcan
+
 logger = getLogger(__name__)
 
 __all__ = ['make_driver']
@@ -22,6 +24,10 @@ try:
 except ImportError:
     serial = None
     logger.info("uavcan.driver cannot import PySerial; SLCAN will not be available.")
+
+
+class DriverError(uavcan.UAVCANException):
+    pass
 
 
 # Python 3.3+'s socket module has support for SocketCAN when running on Linux. Use that if possible.
@@ -171,9 +177,6 @@ class SLCAN(object):
     ACK = b'\r'
     NACK = b'\x07'
 
-    class ProtocolError(Exception):
-        pass
-
     def __init__(self, device, bitrate, baudrate=None, **_extras):
         if not serial:
             raise RuntimeError("PySerial not imported; SLCAN is not available. Please install PySerial.")
@@ -220,9 +223,9 @@ class SLCAN(object):
         while True:
             b = self.conn.read(1)
             if not b:
-                raise self.ProtocolError('ACK timeout')
+                raise DriverError('SLCAN ACK timeout')
             if b == self.NACK:
-                raise self.ProtocolError('NACK in response')
+                raise DriverError('SLCAN NACK in response')
             if b == self.ACK:
                 break
 

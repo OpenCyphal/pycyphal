@@ -5,8 +5,10 @@
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os
 import struct
+from uavcan import UAVCANException
 
-class DsdlException(Exception):
+
+class DsdlException(UAVCANException):
     '''
     This exception is raised in case of a parser failure.
     Fields:

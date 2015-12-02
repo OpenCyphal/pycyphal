@@ -178,7 +178,7 @@ class PrimitiveValue(BaseValue):
             elif self.type.bitlen == 32:
                 return struct.unpack("<f", struct.pack("<L", int_value))[0]
             else:
-                raise ValueError("Only 16- or 32-bit floats are supported")
+                raise NotImplementedError("Only 16- or 32-bit floats are supported")
 
     @value.setter
     def value(self, new_value):
@@ -199,7 +199,7 @@ class PrimitiveValue(BaseValue):
             elif self.type.bitlen == 32:
                 int_value = struct.unpack("<L", struct.pack("<f", new_value))[0]
             else:
-                raise ValueError("Only 16- or 32-bit floats are supported")
+                raise NotImplementedError("Only 16- or 32-bit floats are supported")
             self._bits = format(int_value, "0" + str(self.type.bitlen) + "b")
 
 
@@ -452,6 +452,10 @@ class Frame(object):
         return bool(self.bytes[-1] & 0x80) if self.bytes else False
 
 
+class TransferError(uavcan.UAVCANException):
+    pass
+
+
 class Transfer(object):
     def __init__(self, transfer_id=0, source_node_id=0, data_type_id=0,
                  dest_node_id=None, payload=0, transfer_priority=31,
@@ -562,17 +566,17 @@ class Transfer(object):
         for idx, f in enumerate(frames):
             tail = f.bytes[-1]
             if (tail & 0x1F) != expected_transfer_id:
-                raise ValueError("Transfer ID {0} incorrect, expected {1}".format(tail & 0x1F, expected_transfer_id))
+                raise TransferError("Transfer ID {0} incorrect, expected {1}".format(tail & 0x1F, expected_transfer_id))
             elif idx == 0 and not (tail & 0x80):
-                raise ValueError("Start of transmission not set on frame 0")
+                raise TransferError("Start of transmission not set on frame 0")
             elif idx > 0 and tail & 0x80:
-                raise ValueError("Start of transmission set unexpectedly on frame {0}".format(idx))
+                raise TransferError("Start of transmission set unexpectedly on frame {0}".format(idx))
             elif idx == len(frames) - 1 and not (tail & 0x40):
-                raise ValueError("End of transmission not set on last frame")
+                raise TransferError("End of transmission not set on last frame")
             elif idx < len(frames) - 1 and (tail & 0x40):
-                raise ValueError("End of transmission set unexpectedly on frame {0}".format(idx))
+                raise TransferError("End of transmission set unexpectedly on frame {0}".format(idx))
             elif (tail & 0x20) != expected_toggle:
-                raise ValueError("Toggle bit value {0} incorrect on frame {1}".format(tail & 0x20, idx))
+                raise TransferError("Toggle bit value {0} incorrect on frame {1}".format(tail & 0x20, idx))
 
             expected_toggle ^= 0x20
 
@@ -587,8 +591,8 @@ class Transfer(object):
             kind = dsdl.parser.CompoundType.KIND_MESSAGE
         datatype = uavcan.DATATYPES.get((self.data_type_id, kind))
         if not datatype:
-            raise ValueError("Unrecognised {0} type ID {1}"
-                             .format("service" if self.service_not_message else "message", self.data_type_id))
+            raise TransferError("Unrecognised {0} type ID {1}"
+                                .format("service" if self.service_not_message else "message", self.data_type_id))
 
         # For a multi-frame transfer, validate the CRC and frame indexes
         if len(frames) > 1:
@@ -596,8 +600,8 @@ class Transfer(object):
             payload_bytes = payload_bytes[2:]
             crc = common.crc16_from_bytes(payload_bytes, initial=datatype.base_crc)
             if crc != transfer_crc:
-                raise ValueError("CRC mismatch: expected {0:x}, got {1:x} for payload {2!r} (DTID {3:d})"
-                                 .format(crc, transfer_crc, payload_bytes, self.data_type_id))
+                raise TransferError("CRC mismatch: expected {0:x}, got {1:x} for payload {2!r} (DTID {3:d})"
+                                    .format(crc, transfer_crc, payload_bytes, self.data_type_id))
 
         self.data_type_id = datatype.default_dtid
         self.data_type_signature = datatype.get_data_type_signature()

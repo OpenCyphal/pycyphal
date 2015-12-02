@@ -29,7 +29,7 @@ class Scheduler(object):
             self._run_scheduler = lambda: self._scheduler.run(blocking=False)
         else:
             # Nightmare inducing hacks
-            class SayNoToBlockingSchedulingException(Exception):
+            class SayNoToBlockingSchedulingException(uavcan.UAVCANException):
                 pass
 
             def delayfunc_impostor(duration):
@@ -222,7 +222,7 @@ class Node(Scheduler):
 
     def send_message(self, payload):
         if not self.node_id:
-            raise Exception('The node is configured in anonymous mode')  # TODO: use custom exception class
+            raise uavcan.UAVCANException('The node is configured in anonymous mode')
 
         transfer_id = self._next_transfer_id(payload.type.default_dtid)
         transfer = transport.Transfer(payload=payload,

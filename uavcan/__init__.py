@@ -21,6 +21,11 @@ except AttributeError:
     import monotonic                        # 3rd party dependency for old versions
     time.monotonic = monotonic.monotonic
 
+
+class UAVCANException(Exception):
+    pass
+
+
 import uavcan.node as node
 from uavcan.node import make_node
 import uavcan.dsdl as dsdl
