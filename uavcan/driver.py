@@ -1,4 +1,4 @@
-#encoding=utf-8
+# encoding=utf-8
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os
@@ -41,7 +41,7 @@ try:
         return s
 
 except Exception:
-    import ctypes
+    import ctypes  # @UnusedImport
     import ctypes.util
     libc = ctypes.CDLL(ctypes.util.find_library("c"))
 
@@ -54,13 +54,13 @@ except Exception:
 
     from socket import SOL_SOCKET
 
-    SOL_CAN_BASE            = 100
-    SOL_CAN_RAW             = SOL_CAN_BASE + CAN_RAW
-    CAN_RAW_FILTER          = 1     # set 0 .. n can_filter(s)
-    CAN_RAW_ERR_FILTER      = 2     # set filter for error frames
-    CAN_RAW_LOOPBACK        = 3     # local loopback (default:on)
-    CAN_RAW_RECV_OWN_MSGS   = 4     # receive my own msgs (default:off)
-    CAN_RAW_FD_FRAMES       = 5     # allow CAN FD frames (default:off)
+    SOL_CAN_BASE = 100
+    SOL_CAN_RAW = SOL_CAN_BASE + CAN_RAW
+    CAN_RAW_FILTER = 1                      # set 0 .. n can_filter(s)
+    CAN_RAW_ERR_FILTER = 2                  # set filter for error frames
+    CAN_RAW_LOOPBACK = 3                    # local loopback (default:on)
+    CAN_RAW_RECV_OWN_MSGS = 4               # receive my own msgs (default:off)
+    CAN_RAW_FD_FRAMES = 5                   # allow CAN FD frames (default:off)
 
     class sockaddr_can(ctypes.Structure):
         """
@@ -291,7 +291,7 @@ def make_driver(device_name, **kwargs):
 
 if __name__ == "__main__":
     if sys.version_info[0] < 3:
-        import monotonic
+        import monotonic  # @UnresolvedImport
         time.monotonic = monotonic.monotonic
 
     import logging

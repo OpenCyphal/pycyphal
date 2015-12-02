@@ -15,9 +15,8 @@ class FileGetInfoService(uavcan.node.Service):
         self.base_path = kwargs.get("path")
 
     def on_request(self):
-        logger.debug("[#{0:03d}:uavcan.protocol.file.GetInfo] {1!r}".format(
-                      self.transfer.source_node_id,
-                      self.request.path.path.decode()))
+        logger.debug("[#{0:03d}:uavcan.protocol.file.GetInfo] {1!r}"
+                     .format(self.transfer.source_node_id, self.request.path.path.decode()))
         try:
             vpath = self.request.path.path.decode()
             with open(os.path.join(self.base_path, vpath), "rb") as fw:
@@ -43,10 +42,8 @@ class FileReadService(uavcan.node.Service):
         self.base_path = kwargs.get("path")
 
     def on_request(self):
-        logger.debug(("[#{0:03d}:uavcan.protocol.file.Read] {1!r} @ " +
-                       "offset {2:d}").format(self.transfer.source_node_id,
-                                              self.request.path.path.decode(),
-                                              self.request.offset))
+        logger.debug("[#{0:03d}:uavcan.protocol.file.Read] {1!r} @ offset {2:d}"
+                     .format(self.transfer.source_node_id, self.request.path.path.decode(), self.request.offset))
         try:
             vpath = self.request.path.path.decode()
             with open(os.path.join(self.base_path, vpath), "rb") as fw:

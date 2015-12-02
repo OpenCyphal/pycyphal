@@ -1,4 +1,4 @@
-#encoding=utf-8
+# encoding=utf-8
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import time
@@ -22,6 +22,7 @@ class Scheduler(object):
     """This class implements a simple non-blocking event scheduler.
     It supports one-shot and periodic events.
     """
+
     def __init__(self):
         if sys.version_info[0] > 2:
             # Nice and easy.
@@ -119,8 +120,8 @@ class Node(Scheduler):
 
         self.start_time_monotonic = time.monotonic()
 
-        self.health = uavcan.protocol.NodeStatus().HEALTH_OK
-        self.mode = uavcan.protocol.NodeStatus().MODE_INITIALIZATION
+        self.health = uavcan.protocol.NodeStatus().HEALTH_OK            # @UndefinedVariable
+        self.mode = uavcan.protocol.NodeStatus().MODE_INITIALIZATION    # @UndefinedVariable
         self.vendor_specific_status_code = 0
 
         node_status_interval = node_status_interval or DEFAULT_NODE_STATUS_INTERVAL
@@ -170,7 +171,7 @@ class Node(Scheduler):
 
     def _send_node_status(self):
         if self.node_id:
-            msg = uavcan.protocol.NodeStatus()
+            msg = uavcan.protocol.NodeStatus()  # @UndefinedVariable
             msg.uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
             msg.health = self.health
             msg.mode = self.mode

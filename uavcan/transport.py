@@ -1,4 +1,4 @@
-#encoding=utf-8
+# encoding=utf-8
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import sys
@@ -26,7 +26,7 @@ def bits_from_bytes(s):
 
 
 def bytes_from_bits(s):
-    return bytearray(int(s[i:i+8], 2) for i in range(0, len(s), 8))
+    return bytearray(int(s[i:i + 8], 2) for i in range(0, len(s), 8))
 
 
 def be_from_le_bits(s, bitlen):
@@ -48,7 +48,7 @@ def le_from_be_bits(s, bitlen):
 
 
 def format_bits(s):
-    return " ".join(s[i:i+8] for i in range(0, len(s), 8))
+    return " ".join(s[i:i + 8] for i in range(0, len(s), 8))
 
 
 def union_tag_len(x):
@@ -61,8 +61,8 @@ def f16_from_f32(float32):
     F16_EXPONENT_SHIFT = 10
     F16_EXPONENT_BIAS = 15
     F16_MANTISSA_BITS = 0x3ff
-    F16_MANTISSA_SHIFT =  (23 - F16_EXPONENT_SHIFT)
-    F16_MAX_EXPONENT =  (F16_EXPONENT_BITS << F16_EXPONENT_SHIFT)
+    F16_MANTISSA_SHIFT = (23 - F16_EXPONENT_SHIFT)
+    F16_MAX_EXPONENT = (F16_EXPONENT_BITS << F16_EXPONENT_SHIFT)
 
     a = struct.pack('>f', float32)
     b = binascii.hexlify(a)
@@ -217,7 +217,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             self.__item_ctor = functools.partial(CompoundValue, self.type.value_type)
 
         if self.type.mode == dsdl.parser.ArrayType.MODE_STATIC:
-            self.__items = list(self.__item_ctor() for i in range(self.type.max_size))
+            self.__items = list(self.__item_ctor() for _ in range(self.type.max_size))
         else:
             self.__items = []
 
@@ -400,8 +400,7 @@ class CompoundValue(BaseValue):
                 else:
                     self.union_field = attr
 
-            if isinstance(self.fields[attr].type,
-                            dsdl.parser.PrimitiveType):
+            if isinstance(self.fields[attr].type, dsdl.parser.PrimitiveType):
                 self.fields[attr].value = value
             else:
                 raise AttributeError(attr + " cannot be set directly")

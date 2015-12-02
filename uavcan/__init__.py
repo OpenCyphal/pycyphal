@@ -18,7 +18,7 @@ from logging import getLogger
 try:
     time.monotonic                          # Works natively in Python 3.3+
 except AttributeError:
-    import monotonic                        # 3rd party dependency for old versions
+    import monotonic                        # 3rd party dependency for old versions @UnresolvedImport
     time.monotonic = monotonic.monotonic
 
 
@@ -86,7 +86,7 @@ def load_dsdl(*paths, **args):
     # Try to prepend the built-in DSDL files
     try:
         if not args.get("exclude_dist", None):
-            dsdl_path = pkg_resources.resource_filename(__name__, "dsdl_files")
+            dsdl_path = pkg_resources.resource_filename(__name__, "dsdl_files")  # @UndefinedVariable
             paths = [os.path.join(dsdl_path, "uavcan")] + paths
     except Exception:
         pass
