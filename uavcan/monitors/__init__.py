@@ -14,7 +14,7 @@ class NodeStatusMonitor(uavcan.node.Monitor):
     NODE_INFO = {}
     NODE_STATUS = {}
     NODE_TIMESTAMP = collections.defaultdict(float)
-    TIMEOUT = 30.0
+    TIMEOUT = uavcan.protocol.NodeStatus().OFFLINE_TIMEOUT_MS / 1000  # @UndefinedVariable
 
     def __init__(self, *args, **kwargs):
         super(NodeStatusMonitor, self).__init__(*args, **kwargs)
