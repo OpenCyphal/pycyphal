@@ -5,11 +5,13 @@ import time
 import collections
 import sched
 import sys
+import inspect
 from logging import getLogger
 
 import uavcan
 import uavcan.driver as driver
 import uavcan.transport as transport
+from uavcan import UAVCANException
 
 
 DEFAULT_NODE_STATUS_INTERVAL = 0.5
@@ -99,6 +101,85 @@ class Scheduler(object):
         return not self._scheduler.empty()
 
 
+class HandlerDispatcher(object):
+    class Remover:
+        def __init__(self, remover):
+            self._remover = remover
+
+        def remove(self):
+            self._remover()
+
+        def try_remove(self):
+            try:
+                self._remover()
+                return True
+            except ValueError:
+                return False
+
+    class Event(object):
+        def __init__(self, transfer, node, is_service):
+            if is_service:
+                self.request = transfer.payload
+            else:
+                self.message = transfer.payload
+            self.transfer = transfer
+            self.node = node
+
+        def __str__(self):
+            return str(self.transfer)
+
+        def __repr__(self):
+            return repr(self.transfer)
+
+    def __init__(self, node):
+        self._handlers = []  # type, callable
+        self._node = node
+
+    def add_handler(self, uavcan_type, handler, **kwargs):
+        service = {
+            uavcan_type.KIND_SERVICE: True,
+            uavcan_type.KIND_MESSAGE: False
+        }[uavcan_type.kind]
+
+        # If handler is a class, create a wrapper function and register it as a regular callback
+        if inspect.isclass(handler):
+            def class_handler_adapter(event):
+                h = handler(event, **kwargs)
+                if service:
+                    h.on_request()
+                    return h.response
+                else:
+                    h.on_message()
+
+            return self.add_handler(uavcan_type, class_handler_adapter)
+
+        # At this point process the handler as a regular callback
+        def call(transfer):
+            event = self.Event(transfer, self._node, service)
+            result = handler(event, **kwargs)
+            if service:
+                if result is None:
+                    raise UAVCANException('Service request handler did not return a response [%r, %r]' %
+                                          (uavcan_type, handler))
+                self.respond(result, transfer.source_node_id, transfer.transfer_id, transfer.priority)
+            else:
+                if result is not None:
+                    raise UAVCANException('Message request handler did not return None [%r, %r]' %
+                                          (uavcan_type, handler))
+
+        entry = uavcan_type, call
+        self._handlers.append(entry)
+        return self.Remover(lambda: self._handlers.remove(entry))
+
+    def remove_handlers(self, uavcan_type):
+        self._handlers = list(filter(lambda x: x[0] != uavcan_type, self._handlers))
+
+    def call_handlers(self, transfer):
+        for uavcan_type, wrapper in self._handlers:
+            if uavcan_type == transfer.payload.type:
+                wrapper(transfer)
+
+
 class Node(Scheduler):
     def __init__(self, can_driver, node_id=None, node_status_interval=None, **_extras):
         """It is recommended to use make_node() rather than instantiating this type directly.
@@ -108,10 +189,11 @@ class Node(Scheduler):
         """
         super(Node, self).__init__()
 
+        self._handler_dispatcher = HandlerDispatcher(self)
+
         self._can_driver = can_driver
         self.node_id = node_id
 
-        self._handlers = []
         self._transfer_manager = transport.TransferManager()
         self._outstanding_requests = {}
         self._outstanding_request_callbacks = {}
@@ -157,12 +239,8 @@ class Node(Scheduler):
                     del self._outstanding_request_timestamps[key]
                     break
         elif not transfer.service_not_message or transfer.dest_node_id == self.node_id:
-            # This is a request, a unicast or a broadcast; look up the appropriate handler by data type ID
-            for handler in self._handlers:
-                if handler[0] == transfer.payload.type:
-                    kwargs = handler[2] if len(handler) == 3 else {}
-                    h = handler[1](transfer.payload, transfer, self, **kwargs)
-                    h._execute()
+            # This is a request or a broadcast; look up the appropriate handler by data type ID
+            self._handler_dispatcher.call_handlers(transfer)
 
     def _next_transfer_id(self, key):
         transfer_id = self._next_transfer_ids[key]
@@ -173,9 +251,31 @@ class Node(Scheduler):
         if self.node_id:
             uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
             self.broadcast(uavcan.protocol.NodeStatus(uptime_sec=uptime_sec,  # @UndefinedVariable
-                                                         health=self.health,
-                                                         mode=self.mode,
-                                                         vendor_specific_status_code=self.vendor_specific_status_code))
+                                                      health=self.health,
+                                                      mode=self.mode,
+                                                      vendor_specific_status_code=self.vendor_specific_status_code))
+
+    def add_handler(self, uavcan_type, handler, **kwargs):
+        """Adds a handler for the specified data type.
+        :param uavcan_type: DSDL data type. Only transfers of this type will be accepted for this handler.
+        :param handler:     The handler. This must be either a callable or a class.
+        :param **kwargs:    Extra arguments for the handler.
+        :return: A remover object that can be used to unregister the handler as follows:
+            x = node.add_handler(...)
+            # Remove the handler like this:
+            x.remove()
+            # Or like this:
+            if x.try_remove():
+                print('The handler has been removed successfully')
+            else:
+                print('There is no such handler')
+        """
+        return self._handler_dispatcher.add_handler(uavcan_type, handler, **kwargs)
+
+    def remove_handlers(self, uavcan_type):
+        """Removes all handlers for the specified DSDL data type.
+        """
+        self._handler_dispatcher.remove_handlers(uavcan_type)
 
     def spin(self, timeout=None):
         """Runs background processes until timeout expires.
@@ -191,6 +291,7 @@ class Node(Scheduler):
 
             read_timeout = min(next_event_at, deadline) - time.monotonic()
             read_timeout = max(read_timeout, 0)
+            read_timeout = min(read_timeout, 1)
 
             frame = self._can_driver.receive(read_timeout)
             if frame:
@@ -218,6 +319,22 @@ class Node(Scheduler):
             self._outstanding_request_timestamps[transfer.key] = time.monotonic()
 
         logger.debug("Node.request(dest_node_id={0:d}): sent {1!r}".format(dest_node_id, payload))
+
+    def respond(self, payload, dest_node_id, transfer_id, priority):
+        transfer = transport.Transfer(
+            payload=payload,
+            source_node_id=self.node_id,
+            dest_node_id=dest_node_id,
+            transfer_id=transfer_id,
+            transfer_priority=priority,
+            service_not_message=True,
+            request_not_response=False
+        )
+        for frame in transfer.to_frames():
+            self.node.can.send(frame.message_id, frame.bytes, extended=True)
+
+        logger.debug("Node.respond(dest_node_id={0:d}, transfer_id={0:d}, priority={0:d}): sent {1!r}"
+                     .format(dest_node_id, transfer_id, priority, payload))
 
     def broadcast(self, payload):
         if not self.node_id:
@@ -248,43 +365,21 @@ def make_node(can_device_name, **kwargs):
 
 
 class Monitor(object):
-    def __init__(self, payload, transfer, node, *args, **kwargs):
-        self.message = payload
-        self.transfer = transfer
-        self.node = node
+    def __init__(self, event):
+        self.message = event.message
+        self.transfer = event.transfer
+        self.node = event.node
 
-    def _execute(self):
-        self.on_message(self.message)
-
-    def on_message(self, message):
+    def on_message(self):
         pass
 
 
-class Service(Monitor):
-    def __init__(self, *args, **kwargs):
-        super(Service, self).__init__(*args, **kwargs)
-        self.request = self.message
-        self.response = transport.CompoundValue(self.request.type, tao=True, mode="response")
-
-    def _execute(self):
-        result = self.on_request()
-
-        # Send the response transfer
-        transfer = transport.Transfer(
-            payload=self.response,
-            source_node_id=self.node.node_id,
-            dest_node_id=self.transfer.source_node_id,
-            transfer_id=self.transfer.transfer_id,
-            transfer_priority=self.transfer.transfer_priority,
-            service_not_message=True,
-            request_not_response=False
-        )
-        for frame in transfer.to_frames():
-            self.node.can.send(frame.message_id, frame.bytes,
-                               extended=True)
-
-        logger.debug("ServiceHandler._execute(dest_node_id={0:d}): sent {1!r}"
-                     .format(self.transfer.source_node_id, self.response))
+class Service(object):
+    def __init__(self, event):
+        self.request = event.request
+        self.transfer = event.transfer
+        self.node = event.node
+        self.response = transport.CompoundValue(self.request.type, _tao=True, _mode="response")
 
     def on_request(self):
         pass
