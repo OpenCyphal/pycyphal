@@ -3,9 +3,7 @@
 import sys
 import time
 import math
-import ctypes
 import struct
-import logging
 import binascii
 import functools
 import collections
