@@ -20,20 +20,20 @@ class NodeStatusMonitor(uavcan.node.Monitor):
         super(NodeStatusMonitor, self).__init__(*args, **kwargs)
         self.new_node_callback = kwargs.get("new_node_callback", None)
 
-    def on_message(self, message):
+    def on_message(self):
         node_id = self.transfer.source_node_id
         last_timestamp = NodeStatusMonitor.NODE_TIMESTAMP[node_id]
         last_node_uptime = NodeStatusMonitor.NODE_STATUS[node_id].uptime_sec \
             if node_id in NodeStatusMonitor.NODE_STATUS else 0
 
         # Update the node status registry
-        NodeStatusMonitor.NODE_STATUS[node_id] = message
+        NodeStatusMonitor.NODE_STATUS[node_id] = self.message
         NodeStatusMonitor.NODE_TIMESTAMP[node_id] = time.monotonic()
 
-        if time.monotonic() - last_timestamp > NodeStatusMonitor.TIMEOUT or message.uptime_sec < last_node_uptime:
+        if time.monotonic() - last_timestamp > NodeStatusMonitor.TIMEOUT or self.message.uptime_sec < last_node_uptime:
             # The node has timed out, hasn't been seen before, or has
             # restarted, so get the node's hardware and software info
-            request = uavcan.protocol.GetNodeInfo(mode="request")  # @UndefinedVariable
+            request = uavcan.protocol.GetNodeInfo(_mode="request")  # @UndefinedVariable
             self.node.request(request, node_id, callback=self.on_nodeinfo_response)
 
     def on_nodeinfo_response(self, response, transfer):
@@ -82,10 +82,10 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
         super(DynamicNodeIDServer, self).__init__(*args, **kwargs)
         self.dynamic_id_range = kwargs.get("dynamic_id_range", (1, 127))
 
-    def on_message(self, message):
-        if message.first_part_of_unique_id:
+    def on_message(self):
+        if self.message.first_part_of_unique_id:
             # First-phase messages trigger a second-phase query
-            DynamicNodeIDServer.QUERY = message.unique_id.to_bytes()
+            DynamicNodeIDServer.QUERY = self.message.unique_id.to_bytes()
             DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
@@ -95,9 +95,9 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
             self.node.broadcast(response)
 
             logger.debug("[MASTER] Got first-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
-        elif len(message.unique_id) == 6 and len(DynamicNodeIDServer.QUERY) == 6:
+        elif len(self.message.unique_id) == 6 and len(DynamicNodeIDServer.QUERY) == 6:
             # Second-phase messages trigger a third-phase query
-            DynamicNodeIDServer.QUERY += message.unique_id.to_bytes()
+            DynamicNodeIDServer.QUERY += self.message.unique_id.to_bytes()
             DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
@@ -106,14 +106,14 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
             response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
             self.node.broadcast(response)
             logger.debug("[MASTER] Got second-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
-        elif len(message.unique_id) == 4 and len(DynamicNodeIDServer.QUERY) == 12:
+        elif len(self.message.unique_id) == 4 and len(DynamicNodeIDServer.QUERY) == 12:
             # Third-phase messages trigger an allocation
-            DynamicNodeIDServer.QUERY += message.unique_id.to_bytes()
+            DynamicNodeIDServer.QUERY += self.message.unique_id.to_bytes()
             DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
             logger.debug("[MASTER] Got third-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
 
-            node_requested_id = message.node_id
+            node_requested_id = self.message.node_id
             node_allocated_id = None
 
             allocated_node_ids = \
@@ -161,7 +161,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
 
 
 class DebugLogMessageMonitor(uavcan.node.Monitor):
-    def on_message(self, message):
+    def on_message(self):
         logmsg = "DebugLogMessageMonitor [#{0:03d}:{1}] {2}"\
-            .format(self.transfer.source_node_id, message.source.decode(), message.text.decode())
-        (logger.debug, logger.info, logger.warning, logger.error)[message.level.value](logmsg)
+            .format(self.transfer.source_node_id, self.message.source.decode(), self.message.text.decode())
+        (logger.debug, logger.info, logger.warning, logger.error)[self.message.level.value](logmsg)
