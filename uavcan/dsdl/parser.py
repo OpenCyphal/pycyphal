@@ -7,7 +7,7 @@
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os
 import re
-import logging
+from logging import getLogger
 from io import StringIO
 from .signature import Signature, compute_signature
 from .common import DsdlException, pretty_filename, bytes_from_crc64
@@ -27,6 +27,9 @@ MAX_FULL_TYPE_NAME_LEN = 80
 
 SERVICE_DATA_TYPE_ID_MAX = 255
 MESSAGE_DATA_TYPE_ID_MAX = 65535
+
+
+logger = getLogger(__name__)
 
 
 class Type:
@@ -339,11 +342,9 @@ class Parser:
     '''
     DSDL parser logic. Do not use this class directly; use the helper function instead.
     '''
-    LOGGER_NAME = 'dsdl_parser'
 
     def __init__(self, search_dirs):
         self.search_dirs = validate_search_directories(search_dirs)
-        self.log = logging.getLogger(Parser.LOGGER_NAME)
 
     def _namespace_from_filename(self, filename):
         search_dirs = sorted(map(os.path.abspath, self.search_dirs))  # Nested last
@@ -392,7 +393,7 @@ class Parser:
             full_typename = typename
         namespace = '.'.join(full_typename.split('.')[:-1])
         directory = locate_namespace_directory(namespace)
-        self.log.debug('Searching for [%s] in [%s]', full_typename, directory)
+        logger.debug('Searching for [%s] in [%s]', full_typename, directory)
 
         for fn in os.listdir(directory):
             fn = os.path.join(directory, fn)
@@ -402,7 +403,7 @@ class Parser:
                     if full_typename == fn_full_typename:
                         return fn
                 except Exception as ex:
-                    self.log.debug('Unknown file [%s], skipping... [%s]', pretty_filename(fn), ex)
+                    logger.debug('Unknown file [%s], skipping... [%s]', pretty_filename(fn), ex)
         error('Type definition not found [%s]', typename)
 
     def _parse_void_type(self, filename, bitlen):
@@ -410,7 +411,7 @@ class Parser:
         return VoidType(bitlen)
 
     def _parse_array_type(self, filename, value_typedef, size_spec, cast_mode):
-        self.log.debug('Parsing the array value type [%s]...', value_typedef)
+        logger.debug('Parsing the array value type [%s]...', value_typedef)
         value_type = self._parse_type(filename, value_typedef, cast_mode)
         enforce(value_type.category != value_type.CATEGORY_ARRAY,
                 'Multidimensional arrays are not allowed (protip: use nested types)')
@@ -456,7 +457,7 @@ class Parser:
 
     def _parse_compound_type(self, filename, typedef):
         definition_filename = self._locate_compound_type_definition(filename, typedef)
-        self.log.debug('Nested type [%s] is defined in [%s], parsing...', typedef, pretty_filename(definition_filename))
+        logger.debug('Nested type [%s] is defined in [%s], parsing...', typedef, pretty_filename(definition_filename))
         t = self.parse(definition_filename)
         if t.kind == t.KIND_SERVICE:
             error('A service type can not be nested into another compound type')
@@ -504,7 +505,7 @@ class Parser:
         else:
             error('Invalid type of constant initialization expression [%s]', type(value).__name__)
 
-        self.log.debug('Constant initialization expression evaluated as: [%s] --> %s', init_expression, repr(value))
+        logger.debug('Constant initialization expression evaluated as: [%s] --> %s', init_expression, repr(value))
         attrtype.validate_value_range(value)
         return Constant(attrtype, name, init_expression, value)
 
@@ -577,7 +578,7 @@ class Parser:
                         ex.line = num
                     raise ex
                 except Exception as ex:
-                    self.log.error('Internal error', exc_info=True)
+                    logger.error('Internal error', exc_info=True)
                     raise DsdlException('Internal error: %s' % str(ex), line=num)
 
             if response_part:
@@ -601,10 +602,10 @@ class Parser:
             validate_union(t)
 
             validate_data_type_id(t)
-            self.log.info('Type [%s], default DTID: %s, signature: %08x, maxbits: %s, maxbytes: %s, DSSD:',
-                          full_typename, default_dtid, t.get_dsdl_signature(), max_bitlen, max_bytelen)
+            logger.debug('Type [%s], default DTID: %s, signature: %08x, maxbits: %s, maxbytes: %s, DSSD:',
+                         full_typename, default_dtid, t.get_dsdl_signature(), max_bitlen, max_bytelen)
             for ln in t.get_dsdl_signature_source_definition().splitlines():
-                self.log.info('    %s', ln)
+                logger.debug('    %s', ln)
             return t
         except DsdlException as ex:
             if not ex.file:
@@ -621,7 +622,7 @@ class Parser:
         except IOError as ex:
             raise DsdlException('IO error: %s' % str(ex), file=filename)
         except Exception as ex:
-            self.log.error('Internal error', exc_info=True)
+            logger.error('Internal error', exc_info=True)
             raise DsdlException('Internal error: %s' % str(ex), file=filename)
 
 
