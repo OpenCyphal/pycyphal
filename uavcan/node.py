@@ -171,13 +171,11 @@ class Node(Scheduler):
 
     def _send_node_status(self):
         if self.node_id:
-            msg = uavcan.protocol.NodeStatus()  # @UndefinedVariable
-            msg.uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
-            msg.health = self.health
-            msg.mode = self.mode
-            msg.sub_mode = 0
-            msg.vendor_specific_status_code = self.vendor_specific_status_code
-            self.send_message(msg)
+            uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
+            self.send_message(uavcan.protocol.NodeStatus(uptime_sec=uptime_sec,  # @UndefinedVariable
+                                                         health=self.health,
+                                                         mode=self.mode,
+                                                         vendor_specific_status_code=self.vendor_specific_status_code))
 
     def spin(self, timeout=None):
         """Runs background processes until timeout expires.

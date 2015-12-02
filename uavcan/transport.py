@@ -363,6 +363,11 @@ class CompoundValue(BaseValue):
             elif isinstance(field.type, dsdl.parser.CompoundType):
                 self.fields[field.name] = CompoundValue(field.type, tao=atao)
 
+        for name, value in kwargs.items():
+            if name.startswith('_'):
+                raise NameError('%r is not a valid field name' % name)
+            setattr(self, name, value)
+
     def __repr__(self):
         if self.is_union:
             field = self.union_field or self.fields.keys()[0]
