@@ -34,7 +34,7 @@ class NodeStatusMonitor(uavcan.node.Monitor):
             # The node has timed out, hasn't been seen before, or has
             # restarted, so get the node's hardware and software info
             request = uavcan.protocol.GetNodeInfo(mode="request")  # @UndefinedVariable
-            self.node.send_request(request, node_id, callback=self.on_nodeinfo_response)
+            self.node.request(request, node_id, callback=self.on_nodeinfo_response)
 
     def on_nodeinfo_response(self, response, transfer):
         if not response or not transfer:
@@ -92,7 +92,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
             response.first_part_of_unique_id = 0
             response.node_id = 0
             response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
-            self.node.send_message(response)
+            self.node.broadcast(response)
 
             logger.debug("[MASTER] Got first-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
         elif len(message.unique_id) == 6 and len(DynamicNodeIDServer.QUERY) == 6:
@@ -104,7 +104,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
             response.first_part_of_unique_id = 0
             response.node_id = 0
             response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
-            self.node.send_message(response)
+            self.node.broadcast(response)
             logger.debug("[MASTER] Got second-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
         elif len(message.unique_id) == 4 and len(DynamicNodeIDServer.QUERY) == 12:
             # Third-phase messages trigger an allocation
@@ -148,7 +148,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
                 response.first_part_of_unique_id = 0
                 response.node_id = node_allocated_id
                 response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
-                self.node.send_message(response)
+                self.node.broadcast(response)
                 logger.info("[MASTER] Allocated node ID #{0:03d} to node with unique ID {1!r}"
                             .format(node_allocated_id, DynamicNodeIDServer.QUERY))
             else:

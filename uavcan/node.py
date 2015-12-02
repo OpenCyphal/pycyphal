@@ -172,7 +172,7 @@ class Node(Scheduler):
     def _send_node_status(self):
         if self.node_id:
             uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
-            self.send_message(uavcan.protocol.NodeStatus(uptime_sec=uptime_sec,  # @UndefinedVariable
+            self.broadcast(uavcan.protocol.NodeStatus(uptime_sec=uptime_sec,  # @UndefinedVariable
                                                          health=self.health,
                                                          mode=self.mode,
                                                          vendor_specific_status_code=self.vendor_specific_status_code))
@@ -200,7 +200,7 @@ class Node(Scheduler):
         while time.monotonic() < deadline:
             execute_once()
 
-    def send_request(self, payload, dest_node_id=None, callback=None):
+    def request(self, payload, dest_node_id=None, callback=None):
         transfer_id = self._next_transfer_id((payload.type.default_dtid, dest_node_id))
         transfer = transport.Transfer(payload=payload,
                                       source_node_id=self.node_id,
@@ -217,9 +217,9 @@ class Node(Scheduler):
             self._outstanding_request_callbacks[transfer.key] = callback
             self._outstanding_request_timestamps[transfer.key] = time.monotonic()
 
-        logger.debug("Node.send_request(dest_node_id={0:d}): sent {1!r}".format(dest_node_id, payload))
+        logger.debug("Node.request(dest_node_id={0:d}): sent {1!r}".format(dest_node_id, payload))
 
-    def send_message(self, payload):
+    def broadcast(self, payload):
         if not self.node_id:
             raise uavcan.UAVCANException('The node is configured in anonymous mode')
 
@@ -232,7 +232,7 @@ class Node(Scheduler):
         for frame in transfer.to_frames():
             self._can_driver.send(frame.message_id, frame.bytes, extended=True)
 
-        logger.debug("Node.send_message(): sent {0!r}".format(payload))
+        logger.debug("Node.broadcast(): sent {0!r}".format(payload))
 
     def close(self):
         self._can_driver.close()
