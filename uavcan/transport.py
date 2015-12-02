@@ -342,6 +342,8 @@ class CompoundValue(BaseValue):
             else:
                 raise ValueError("mode must be either 'request' or 'response' for service types")
         else:
+            if self.mode != None:
+                raise ValueError("mode is not applicable for message types")
             source_fields = self.type.fields
             source_constants = self.type.constants
             is_union = self.type.union
