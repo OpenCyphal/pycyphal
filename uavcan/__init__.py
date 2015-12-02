@@ -18,8 +18,17 @@ from logging import getLogger
 try:
     time.monotonic                          # Works natively in Python 3.3+
 except AttributeError:
-    import monotonic                        # 3rd party dependency for old versions @UnresolvedImport
-    time.monotonic = monotonic.monotonic
+    try:
+        import monotonic                    # 3rd party dependency for old versions @UnresolvedImport
+        time.monotonic = monotonic.monotonic
+    except ImportError:
+        time.monotonic = time.time          # Last resort - using non-monotonic time; this is no good but oh well
+        print('''The package 'monotonic' is not available, the library will use real time instead of monotonic time.
+This implies that the library may misbehave if system clock is adjusted while the library is running.
+In order to fix this problem, consider either option:
+ 1. Switch to Python 3.
+ 2. Install the missing package, e.g. using pip:
+    pip install monotonic''', file=sys.stderr)
 
 
 class UAVCANException(Exception):
