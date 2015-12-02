@@ -2,10 +2,10 @@
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import time
-import logging
 import collections
 import sched
 import sys
+from logging import getLogger
 
 import uavcan
 import uavcan.driver as driver
@@ -13,6 +13,9 @@ import uavcan.transport as transport
 
 
 DEFAULT_NODE_STATUS_INTERVAL = 0.5
+
+
+logger = getLogger(__name__)
 
 
 class Scheduler(object):
@@ -129,7 +132,7 @@ class Node(Scheduler):
             return
 
         frame = transport.Frame(frame_id, frame_data)
-        # logging.debug("Node._recv_frame(): got {0!s}".format(frame))
+        # logger.debug("Node._recv_frame(): got {0!s}".format(frame))
 
         transfer_frames = self._transfer_manager.receive_frame(frame)
         if not transfer_frames:
@@ -138,7 +141,7 @@ class Node(Scheduler):
         transfer = transport.Transfer()
         transfer.from_frames(transfer_frames)
 
-        logging.debug("Node._recv_frame(): received {0!r}".format(transfer))
+        logger.debug("Node._recv_frame(): received {0!r}".format(transfer))
 
         if (transfer.service_not_message and not transfer.request_not_response) and \
                 transfer.dest_node_id == self.node_id:
@@ -215,7 +218,7 @@ class Node(Scheduler):
             self._outstanding_request_callbacks[transfer.key] = callback
             self._outstanding_request_timestamps[transfer.key] = time.monotonic()
 
-        logging.debug("Node.send_request(dest_node_id={0:d}): sent {1!r}".format(dest_node_id, payload))
+        logger.debug("Node.send_request(dest_node_id={0:d}): sent {1!r}".format(dest_node_id, payload))
 
     def send_message(self, payload):
         if not self.node_id:
@@ -230,7 +233,7 @@ class Node(Scheduler):
         for frame in transfer.to_frames():
             self._can_driver.send(frame.message_id, frame.bytes, extended=True)
 
-        logging.debug("Node.send_message(): sent {0!r}".format(payload))
+        logger.debug("Node.send_message(): sent {0!r}".format(payload))
 
     def close(self):
         self._can_driver.close()
@@ -281,8 +284,8 @@ class Service(Monitor):
             self.node.can.send(frame.message_id, frame.bytes,
                                extended=True)
 
-        logging.debug("ServiceHandler._execute(dest_node_id={0:d}): sent {1!r}"
-                      .format(self.transfer.source_node_id, self.response))
+        logger.debug("ServiceHandler._execute(dest_node_id={0:d}): sent {1!r}"
+                     .format(self.transfer.source_node_id, self.response))
 
     def on_request(self):
         pass

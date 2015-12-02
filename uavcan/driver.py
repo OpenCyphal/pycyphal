@@ -7,10 +7,11 @@ import time
 import fcntl
 import socket
 import struct
-import logging
 import binascii
 import select
+from logging import getLogger
 
+logger = getLogger(__name__)
 
 __all__ = ['make_driver']
 
@@ -20,8 +21,7 @@ try:
     import serial
 except ImportError:
     serial = None
-    logging.info("uavcan.driver cannot import PySerial; SLCAN will not be "
-                 "available.")
+    logger.info("uavcan.driver cannot import PySerial; SLCAN will not be available.")
 
 
 # Python 3.3+'s socket module has support for SocketCAN when running on Linux. Use that if possible.
@@ -156,7 +156,7 @@ class SocketCAN(object):
             return can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG)
 
     def send(self, message_id, message, extended=False):
-        logging.debug("CAN.send({!r}, {!r}, {!r})".format(message_id, binascii.hexlify(message), extended))
+        logger.debug("CAN.send({!r}, {!r}, {!r})".format(message_id, binascii.hexlify(message), extended))
 
         if extended:
             message_id |= CAN_EFF_FLAG
@@ -238,7 +238,7 @@ class SLCAN(object):
             # ID, data, extended
             return packet_id, packet_data, (id_len == 8)
         except Exception:
-            logging.error('Could not parse SLCAN frame [%r]', message, exc_info=True)
+            logger.error('Could not parse SLCAN frame [%r]', message, exc_info=True)
             return
 
     def receive(self, timeout=None):
@@ -291,6 +291,7 @@ if __name__ == "__main__":
         import monotonic
         time.monotonic = monotonic.monotonic
 
+    import logging
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
                         format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 

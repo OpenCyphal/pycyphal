@@ -1,10 +1,13 @@
 from __future__ import division, absolute_import, print_function, unicode_literals
 import time
-import logging
 import collections
+from logging import getLogger
 
 import uavcan
 import uavcan.node
+
+
+logger = getLogger(__name__)
 
 
 class NodeStatusMonitor(uavcan.node.Monitor):
@@ -64,7 +67,7 @@ class NodeStatusMonitor(uavcan.node.Monitor):
             hw_unique_id,
             response.name.decode()
         )
-        logging.info(msg)
+        logger.info(msg)
 
         # If a new-node callback is defined, call it now
         if self.new_node_callback:
@@ -94,7 +97,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
             response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
             self.node.send_message(response)
 
-            logging.debug(("[MASTER] Got first-stage dynamic ID request " +
+            logger.debug(("[MASTER] Got first-stage dynamic ID request " +
                            "for {0!r}").format(DynamicNodeIDServer.QUERY))
         elif len(message.unique_id) == 6 and \
                 len(DynamicNodeIDServer.QUERY) == 6:
@@ -107,7 +110,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
             response.node_id = 0
             response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
             self.node.send_message(response)
-            logging.debug(("[MASTER] Got second-stage dynamic ID request " +
+            logger.debug(("[MASTER] Got second-stage dynamic ID request " +
                            "for {0!r}").format(DynamicNodeIDServer.QUERY))
         elif len(message.unique_id) == 4 and \
                 len(DynamicNodeIDServer.QUERY) == 12:
@@ -115,7 +118,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
             DynamicNodeIDServer.QUERY += message.unique_id.to_bytes()
             DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
-            logging.debug(("[MASTER] Got third-stage dynamic ID request " +
+            logger.debug(("[MASTER] Got third-stage dynamic ID request " +
                            "for {0!r}").format(DynamicNodeIDServer.QUERY))
 
             node_requested_id = message.node_id
@@ -160,17 +163,17 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
                 response.unique_id.from_bytes(
                     DynamicNodeIDServer.QUERY)
                 self.node.send_message(response)
-                logging.info(("[MASTER] Allocated node ID #{0:03d} to node " +
+                logger.info(("[MASTER] Allocated node ID #{0:03d} to node " +
                               "with unique ID {1!r}").format(
                               node_allocated_id, DynamicNodeIDServer.QUERY))
             else:
-                logging.error("[MASTER] Couldn't allocate dynamic node ID")
+                logger.error("[MASTER] Couldn't allocate dynamic node ID")
         elif time.monotonic() - DynamicNodeIDServer.QUERY_TIME > \
                 DynamicNodeIDServer.QUERY_TIMEOUT:
             # Mis-sequenced reply and no good replies during the timeout
             # period -- reset the query now.
             DynamicNodeIDServer.QUERY = ""
-            logging.error("[MASTER] Query timeout, resetting query")
+            logger.error("[MASTER] Query timeout, resetting query")
 
 
 class DebugLogMessageMonitor(uavcan.node.Monitor):
@@ -178,5 +181,5 @@ class DebugLogMessageMonitor(uavcan.node.Monitor):
         logmsg = "DebugLogMessageMonitor [#{0:03d}:{1}] {2}".format(
             self.transfer.source_node_id, message.source.decode(),
             message.text.decode())
-        (logging.debug, logging.info,
-            logging.warning, logging.error)[message.level.value](logmsg)
+        (logger.debug, logger.info,
+            logger.warning, logger.error)[message.level.value](logmsg)
