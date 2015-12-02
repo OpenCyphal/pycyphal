@@ -43,7 +43,7 @@ try:
 except Exception:
     import ctypes  # @UnusedImport
     import ctypes.util
-    libc = ctypes.CDLL(ctypes.util.find_library("c"))
+    libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
 
     # from linux/can.h
     CAN_RAW = 1
@@ -98,6 +98,8 @@ except Exception:
 
     class CANSocket(object):
         def __init__(self, fd):
+            if fd < 0:
+                raise DriverError('Invalid socket fd')
             self.fd = fd
 
         def recv(self, bufsize, flags=None):
@@ -122,16 +124,26 @@ except Exception:
 
     def get_socket(ifname):
         on = ctypes.c_int(1)
-        off = ctypes.c_int(1)
+
         socket_fd = libc.socket(AF_CAN, socket.SOCK_RAW, CAN_RAW)
+        if socket_fd < 0:
+            raise DriverError('Could not open socket')
+
         libc.fcntl(socket_fd, fcntl.F_SETFL, os.O_NONBLOCK)
-        error = libc.setsockopt(socket_fd, SOL_SOCKET, SO_TIMESTAMP,
-                                ctypes.byref(on), ctypes.sizeof(on))
-        # error = libc.setsockopt(socket_fd, SOL_CAN_RAW, CAN_RAW_RECV_OWN_MSGS,
-        #                         ctypes.byref(off), ctypes.sizeof(off))
+
+        error = libc.setsockopt(socket_fd, SOL_SOCKET, SO_TIMESTAMP, ctypes.byref(on), ctypes.sizeof(on))
+        if error != 0:
+            raise DriverError('Could not enable timestamping on socket [errno %s]' % ctypes.get_errno())
+
         ifidx = libc.if_nametoindex(ifname)
+        if ctypes.get_errno() != 0:
+            raise DriverError('Could not determine iface index [errno %s]' % ctypes.get_errno())
+
         addr = sockaddr_can(AF_CAN, ifidx)
         error = libc.bind(socket_fd, ctypes.byref(addr), ctypes.sizeof(addr))
+        if error != 0:
+            raise DriverError('Could not bind socket [errno %s]' % ctypes.get_errno())
+
         return CANSocket(socket_fd)
 
 
