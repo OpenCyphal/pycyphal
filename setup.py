@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import sys
 from setuptools import setup
 
 args = dict(
@@ -26,6 +27,9 @@ args = dict(
     ],
     keywords=''
 )
+
+if sys.version_info[0] < 3:
+    args['install_requires'] = ['monotonic']
 
 setup(**args)
 
