@@ -371,7 +371,7 @@ class CompoundValue(BaseValue):
 
     def __repr__(self):
         if self.is_union:
-            field = self.union_field or self.fields.keys()[0]
+            field = self.union_field or list(self.fields.keys())[0]
             fields = "{0}={1!r}".format(field, self.fields[field])
         else:
             fields = ", ".join("{0}={1!r}".format(f, v) for f, v in self.fields.items() if not f.startswith("_void_"))
@@ -414,7 +414,7 @@ class CompoundValue(BaseValue):
     def unpack(self, stream):
         if self.is_union:
             tag_len = union_tag_len(self.fields)
-            self.union_field = self.fields.keys()[int(stream[0:tag_len], 2)]
+            self.union_field = list(self.fields.keys())[int(stream[0:tag_len], 2)]
             stream = self.fields[self.union_field].unpack(stream[tag_len:])
         else:
             for field in self.fields.values():
