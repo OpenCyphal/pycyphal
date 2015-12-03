@@ -324,7 +324,6 @@ class CompoundValue(BaseValue):
         super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
         self.mode = _mode
         self.data_type_id = self.type.default_dtid
-        self.crc_base = ""
 
         source_fields = None
         source_constants = None
