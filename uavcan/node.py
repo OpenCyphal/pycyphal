@@ -184,12 +184,20 @@ class HandlerDispatcher(object):
 
 
 class Node(Scheduler):
-    def __init__(self, can_driver, node_id=None, node_status_interval=None, mode=None, **_extras):
+    def __init__(self, can_driver, node_id=None, node_status_interval=None,
+                 mode=None, node_info=None, **_extras):
         """It is recommended to use make_node() rather than instantiating this type directly.
+
         :param can_driver: CAN bus driver object. Calling close() on a node object closes its driver instance.
+
         :param node_id: Node ID of the current instance. Defaults to None, which enables passive mode.
+
         :param node_status_interval: NodeStatus broadcasting interval. Defaults to DEFAULT_NODE_STATUS_INTERVAL.
+
         :param mode: Initial operating mode (INITIALIZATION, OPERATIONAL, etc.); defaults to INITIALIZATION.
+
+        :param node_info: Structure of type uavcan.protocol.GetNodeInfo.Response, responsed with when the local
+                          node is queried for its node info.
         """
         super(Node, self).__init__()
 
@@ -205,12 +213,17 @@ class Node(Scheduler):
 
         self.start_time_monotonic = time.monotonic()
 
-        self.health = uavcan.protocol.NodeStatus().HEALTH_OK                    # @UndefinedVariable
-        self.mode = mode or uavcan.protocol.NodeStatus().MODE_INITIALIZATION    # @UndefinedVariable
+        # NodeStatus publisher
+        self.health = uavcan.protocol.NodeStatus().HEALTH_OK                     # @UndefinedVariable
+        self.mode = mode or uavcan.protocol.NodeStatus().MODE_INITIALIZATION     # @UndefinedVariable
         self.vendor_specific_status_code = 0
 
         node_status_interval = node_status_interval or DEFAULT_NODE_STATUS_INTERVAL
         self.periodic(node_status_interval, self._send_node_status)
+
+        # GetNodeInfo server
+        self.node_info = node_info or uavcan.protocol.GetNodeInfo.Response()     # @UndefinedVariable
+        self.add_handler(uavcan.protocol.GetNodeInfo, lambda _: self.node_info)  # @UndefinedVariable
 
     def _recv_frame(self, message):
         frame_id, frame_data, ext_id = message
