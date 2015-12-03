@@ -9,7 +9,6 @@ import binascii
 import functools
 import collections
 
-
 import uavcan
 import uavcan.dsdl as dsdl
 import uavcan.dsdl.common as common
@@ -204,7 +203,7 @@ class PrimitiveValue(BaseValue):
 
 
 class ArrayValue(BaseValue, collections.MutableSequence):
-    def __init__(self, _uavcan_type, _tao=False, *args, **kwargs):
+    def __init__(self, _uavcan_type, _tao, *args, **kwargs):
         super(ArrayValue, self).__init__(_uavcan_type, *args, **kwargs)
         value_bitlen = getattr(self.type.value_type, "bitlen", 0)
         self._tao = _tao if value_bitlen >= 8 else False
@@ -319,7 +318,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
 
 class CompoundValue(BaseValue):
-    def __init__(self, _uavcan_type, _mode=None, _tao=False, *args, **kwargs):
+    def __init__(self, _uavcan_type, _mode=None, _tao=True, *args, **kwargs):
         self.__dict__["fields"] = collections.OrderedDict()
         self.__dict__["constants"] = {}
         super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
@@ -361,9 +360,9 @@ class CompoundValue(BaseValue):
             elif isinstance(field.type, dsdl.parser.PrimitiveType):
                 self.fields[field.name] = PrimitiveValue(field.type)
             elif isinstance(field.type, dsdl.parser.ArrayType):
-                self.fields[field.name] = ArrayValue(field.type, tao=atao)
+                self.fields[field.name] = ArrayValue(field.type, _tao=atao)
             elif isinstance(field.type, dsdl.parser.CompoundType):
-                self.fields[field.name] = CompoundValue(field.type, tao=atao)
+                self.fields[field.name] = CompoundValue(field.type, _tao=atao)
 
         for name, value in kwargs.items():
             if name.startswith('_'):
@@ -375,9 +374,7 @@ class CompoundValue(BaseValue):
             field = self.union_field or self.fields.keys()[0]
             fields = "{0}={1!r}".format(field, self.fields[field])
         else:
-            fields = ", ".join("{0}={1!r}".format(f, v)
-                               for f, v in self.fields.items()
-                               if not f.startswith("_void_"))
+            fields = ", ".join("{0}={1!r}".format(f, v) for f, v in self.fields.items() if not f.startswith("_void_"))
         return "{0}({1})".format(self.type.full_name, fields)
 
     def __getattr__(self, attr):
@@ -617,6 +614,7 @@ class Transfer(object):
             self.payload = datatype(_mode="request" if self.request_not_response else "response")
         else:
             self.payload = datatype()
+
         self.payload.unpack(bits_from_bytes(payload_bytes))
 
     @property

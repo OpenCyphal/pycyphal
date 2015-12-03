@@ -392,7 +392,7 @@ class Service(object):
         self.request = event.request
         self.transfer = event.transfer
         self.node = event.node
-        self.response = transport.CompoundValue(self.request.type, _tao=True, _mode="response")
+        self.response = transport.CompoundValue(self.request.type, _mode="response")
 
     def on_request(self):
         pass
