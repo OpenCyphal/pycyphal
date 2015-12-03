@@ -184,11 +184,12 @@ class HandlerDispatcher(object):
 
 
 class Node(Scheduler):
-    def __init__(self, can_driver, node_id=None, node_status_interval=None, **_extras):
+    def __init__(self, can_driver, node_id=None, node_status_interval=None, mode=None, **_extras):
         """It is recommended to use make_node() rather than instantiating this type directly.
         :param can_driver: CAN bus driver object. Calling close() on a node object closes its driver instance.
         :param node_id: Node ID of the current instance. Defaults to None, which enables passive mode.
         :param node_status_interval: NodeStatus broadcasting interval. Defaults to DEFAULT_NODE_STATUS_INTERVAL.
+        :param mode: Initial operating mode (INITIALIZATION, OPERATIONAL, etc.); defaults to INITIALIZATION.
         """
         super(Node, self).__init__()
 
@@ -204,8 +205,8 @@ class Node(Scheduler):
 
         self.start_time_monotonic = time.monotonic()
 
-        self.health = uavcan.protocol.NodeStatus().HEALTH_OK            # @UndefinedVariable
-        self.mode = uavcan.protocol.NodeStatus().MODE_INITIALIZATION    # @UndefinedVariable
+        self.health = uavcan.protocol.NodeStatus().HEALTH_OK                    # @UndefinedVariable
+        self.mode = mode or uavcan.protocol.NodeStatus().MODE_INITIALIZATION    # @UndefinedVariable
         self.vendor_specific_status_code = 0
 
         node_status_interval = node_status_interval or DEFAULT_NODE_STATUS_INTERVAL
