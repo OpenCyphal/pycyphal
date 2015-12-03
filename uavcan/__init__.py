@@ -114,12 +114,19 @@ def load_dsdl(*paths, **args):
             logger.debug("DSDL Load {: >30} DTID: {: >4} base_crc:{: >8}"
                          .format(typename, dtype.default_dtid, hex(dtype.base_crc)))
 
-        def create_instance_closure(closure_type):
+        def create_instance_closure(closure_type, _mode=None):
             def create_instance(*args, **kwargs):
+                if _mode:
+                    assert '_mode' not in kwargs, 'Mode cannot be supplied to service type instantiation helper'
+                    kwargs['_mode'] = _mode
                 return transport.CompoundValue(closure_type, *args, **kwargs)
             return create_instance
 
         dtype._instantiate = create_instance_closure(dtype)
+
+        if dtype.kind == dtype.KIND_SERVICE:
+            dtype.Request = create_instance_closure(dtype, _mode='request')
+            dtype.Response = create_instance_closure(dtype, _mode='response')
 
     namespace = root_namespace._path("uavcan")
     for top_namespace in namespace._namespaces():
