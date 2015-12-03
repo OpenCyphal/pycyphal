@@ -16,6 +16,7 @@ from uavcan import UAVCANException
 
 DEFAULT_NODE_STATUS_INTERVAL = 0.5
 DEFAULT_SERVICE_TIMEOUT = 0.5
+DEFAULT_TRANSFER_PRIORITY = 20
 
 
 logger = getLogger(__name__)
@@ -160,7 +161,10 @@ class HandlerDispatcher(object):
                 if result is None:
                     raise UAVCANException('Service request handler did not return a response [%r, %r]' %
                                           (uavcan_type, handler))
-                self.respond(result, transfer.source_node_id, transfer.transfer_id, transfer.priority)
+                self._node.respond(result,
+                                   transfer.source_node_id,
+                                   transfer.transfer_id,
+                                   transfer.transfer_priority)
             else:
                 if result is not None:
                     raise UAVCANException('Message request handler did not return None [%r, %r]' %
@@ -245,6 +249,10 @@ class Node(Scheduler):
         self._next_transfer_ids[key] = (transfer_id + 1) & 0x1F
         return transfer_id
 
+    def _throw_if_anonymous(self):
+        if not self.node_id:
+            raise uavcan.UAVCANException('The node is configured in anonymous mode')
+
     def _send_node_status(self):
         if self.node_id:
             uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
@@ -299,13 +307,16 @@ class Node(Scheduler):
         while time.monotonic() < deadline:
             execute_once()
 
-    def request(self, payload, dest_node_id, callback, timeout=None):
+    def request(self, payload, dest_node_id, callback, priority=None, timeout=None):
+        self._throw_if_anonymous()
+
         # Preparing the transfer
         transfer_id = self._next_transfer_id((payload.type.default_dtid, dest_node_id))
         transfer = transport.Transfer(payload=payload,
                                       source_node_id=self.node_id,
                                       dest_node_id=dest_node_id,
                                       transfer_id=transfer_id,
+                                      transfer_priority=priority or DEFAULT_TRANSFER_PRIORITY,
                                       service_not_message=True,
                                       request_not_response=True)
 
@@ -334,6 +345,8 @@ class Node(Scheduler):
         logger.debug("Node.request(dest_node_id={0:d}): sent {1!r}".format(dest_node_id, payload))
 
     def respond(self, payload, dest_node_id, transfer_id, priority):
+        self._throw_if_anonymous()
+
         transfer = transport.Transfer(
             payload=payload,
             source_node_id=self.node_id,
@@ -344,19 +357,19 @@ class Node(Scheduler):
             request_not_response=False
         )
         for frame in transfer.to_frames():
-            self.node.can.send(frame.message_id, frame.bytes, extended=True)
+            self._can_driver.send(frame.message_id, frame.bytes, extended=True)
 
         logger.debug("Node.respond(dest_node_id={0:d}, transfer_id={0:d}, priority={0:d}): sent {1!r}"
                      .format(dest_node_id, transfer_id, priority, payload))
 
-    def broadcast(self, payload):
-        if not self.node_id:
-            raise uavcan.UAVCANException('The node is configured in anonymous mode')
+    def broadcast(self, payload, priority=None):
+        self._throw_if_anonymous()
 
         transfer_id = self._next_transfer_id(payload.type.default_dtid)
         transfer = transport.Transfer(payload=payload,
                                       source_node_id=self.node_id,
                                       transfer_id=transfer_id,
+                                      transfer_priority=priority or DEFAULT_TRANSFER_PRIORITY,
                                       service_not_message=False)
 
         for frame in transfer.to_frames():
