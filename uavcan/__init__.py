@@ -41,6 +41,10 @@ import uavcan.dsdl as dsdl
 import uavcan.transport as transport
 
 
+TRANSFER_PRIORITY_LOWEST = 31
+TRANSFER_PRIORITY_HIGHEST = 0
+
+
 logger = getLogger(__name__)
 
 

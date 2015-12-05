@@ -10,37 +10,84 @@ import uavcan.node
 logger = getLogger(__name__)
 
 
-class NodeStatusMonitor(uavcan.node.Monitor):
-    NODE_INFO = {}
-    NODE_STATUS = {}
-    NODE_TIMESTAMP = collections.defaultdict(float)
+class NodeStatusMonitor(object):
     TIMEOUT = uavcan.protocol.NodeStatus().OFFLINE_TIMEOUT_MS / 1000  # @UndefinedVariable
+    TRANSFER_PRIORITY = uavcan.TRANSFER_PRIORITY_LOWEST - 1
+    RETRY_INTERVAL = 1
 
-    def __init__(self, *args, **kwargs):
-        super(NodeStatusMonitor, self).__init__(*args, **kwargs)
-        self.new_node_callback = kwargs.get("new_node_callback", None)
+    class Entry:
+        def __init__(self):
+            self.node_id = None
+            self.status = None
+            self.info = None
+            self.monotonic_timestamp = None
 
-    def on_message(self):
-        node_id = self.transfer.source_node_id
-        last_timestamp = NodeStatusMonitor.NODE_TIMESTAMP[node_id]
-        last_node_uptime = NodeStatusMonitor.NODE_STATUS[node_id].uptime_sec \
-            if node_id in NodeStatusMonitor.NODE_STATUS else 0
+        def _update_from_status(self, e):
+            self.monotonic_timestamp = time.monotonic()
+            self.node_id = e.transfer.source_node_id
+            if self.status and e.message.uptime_sec < self.status.uptime_sec:
+                self.info = None
+            self.status = e.message
+            if self.info:
+                #self.info.status = self.status
+                for fld, _ in self.status.fields.items():  # TODO: This is temporary, until assignment is implemented
+                    self.info.status.fields[fld] = self.status.fields[fld]
 
-        # Update the node status registry
-        NodeStatusMonitor.NODE_STATUS[node_id] = self.message
-        NodeStatusMonitor.NODE_TIMESTAMP[node_id] = time.monotonic()
+        def _update_from_info(self, e):
+            self.monotonic_timestamp = time.monotonic()
+            self.node_id = e.transfer.source_node_id
+            self.status = e.response.status
+            self.info = e.response
 
-        if time.monotonic() - last_timestamp > NodeStatusMonitor.TIMEOUT or self.message.uptime_sec < last_node_uptime:
-            # The node has timed out, hasn't been seen before, or has
-            # restarted, so get the node's hardware and software info
-            request = uavcan.protocol.GetNodeInfo(_mode="request")  # @UndefinedVariable
-            self.node.request(request, node_id, callback=self.on_nodeinfo_response)
+        def __str__(self):
+            return '%d:%s' % (self.node_id, self.info if self.info else self.status)
 
-    def on_nodeinfo_response(self, e):
+        __repr__ = __str__
+
+    def __init__(self, node, on_info_update_callback=None):
+        self.on_info_update_callback = on_info_update_callback
+        self._handle = node.add_handler(uavcan.protocol.NodeStatus, self._on_node_status)  # @UndefinedVariable
+        self._registry = {}
+
+    def exists(self, node_id):
+        return node_id in self._registry
+
+    def get(self, node_id):
+        if (self._registry[node_id].monotonic_timestamp + self.TIMEOUT) < time.monotonic():
+            del self._registry[node_id]
+        return self._registry[node_id]
+
+    def stop(self):
+        self._handle.remove()
+
+    def _on_node_status(self, e):
+        node_id = e.transfer.source_node_id
+
+        try:
+            entry = self.get(node_id)
+        except KeyError:
+            entry = self.Entry()
+            entry._info_requested_at = 0
+            self._registry[node_id] = entry
+
+        entry._update_from_status(e)
+
+        if not entry.info and entry.monotonic_timestamp - entry._info_requested_at > self.RETRY_INTERVAL:
+            entry._info_requested_at = entry.monotonic_timestamp
+            e.node.request(uavcan.protocol.GetNodeInfo.Request(), node_id,  # @UndefinedVariable
+                           priority=self.TRANSFER_PRIORITY, callback=self._on_info_response)
+
+    def _on_info_response(self, e):
         if not e:
             return
 
-        NodeStatusMonitor.NODE_INFO[e.transfer.source_node_id] = e.response
+        try:
+            entry = self.get(e.transfer.source_node_id)
+        except KeyError:
+            entry = self.Entry()
+            self._registry[e.transfer.source_node_id] = entry
+
+        entry._update_from_info(e)
 
         hw_unique_id = "".join(format(c, "02X") for c in e.response.hardware_version.unique_id)
         msg = (
@@ -66,12 +113,11 @@ class NodeStatusMonitor(uavcan.node.Monitor):
         )
         logger.info(msg)
 
-        # If a new-node callback is defined, call it now
-        if self.new_node_callback:
-            self.new_node_callback(self.node, e.transfer.source_node_id, e.response)
+        if self.on_info_update_callback:
+            self.on_info_update_callback(entry)
 
 
-class DynamicNodeIDServer(uavcan.node.Monitor):
+class DynamicNodeIDServer(object):
     ALLOCATION = {}
     QUERY = ""
     QUERY_TIME = 0.0
@@ -81,43 +127,43 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
         super(DynamicNodeIDServer, self).__init__(*args, **kwargs)
         self.dynamic_id_range = kwargs.get("dynamic_id_range", (1, 127))
 
-    def on_message(self):
-        if self.message.first_part_of_unique_id:
+    def on_message(self, e):
+        if e.message.first_part_of_unique_id:
             # First-phase messages trigger a second-phase query
-            DynamicNodeIDServer.QUERY = self.message.unique_id.to_bytes()
+            DynamicNodeIDServer.QUERY = e.message.unique_id.to_bytes()
             DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
             response.first_part_of_unique_id = 0
             response.node_id = 0
             response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
-            self.node.broadcast(response)
+            e.node.broadcast(response)
 
             logger.debug("[MASTER] Got first-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
-        elif len(self.message.unique_id) == 6 and len(DynamicNodeIDServer.QUERY) == 6:
+        elif len(e.message.unique_id) == 6 and len(DynamicNodeIDServer.QUERY) == 6:
             # Second-phase messages trigger a third-phase query
-            DynamicNodeIDServer.QUERY += self.message.unique_id.to_bytes()
+            DynamicNodeIDServer.QUERY += e.message.unique_id.to_bytes()
             DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
             response.first_part_of_unique_id = 0
             response.node_id = 0
             response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
-            self.node.broadcast(response)
+            e.node.broadcast(response)
             logger.debug("[MASTER] Got second-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
-        elif len(self.message.unique_id) == 4 and len(DynamicNodeIDServer.QUERY) == 12:
+        elif len(e.message.unique_id) == 4 and len(DynamicNodeIDServer.QUERY) == 12:
             # Third-phase messages trigger an allocation
-            DynamicNodeIDServer.QUERY += self.message.unique_id.to_bytes()
+            DynamicNodeIDServer.QUERY += e.message.unique_id.to_bytes()
             DynamicNodeIDServer.QUERY_TIME = time.monotonic()
 
             logger.debug("[MASTER] Got third-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
 
-            node_requested_id = self.message.node_id
+            node_requested_id = e.message.node_id
             node_allocated_id = None
 
             allocated_node_ids = \
                 set(DynamicNodeIDServer.ALLOCATION.itervalues()) | set(NodeStatusMonitor.NODE_STATUS.iterkeys())
-            allocated_node_ids.add(self.node.node_id)
+            allocated_node_ids.add(e.node.node_id)
 
             # If we've already allocated a node ID to this device, return the
             # same one
@@ -147,7 +193,7 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
                 response.first_part_of_unique_id = 0
                 response.node_id = node_allocated_id
                 response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
-                self.node.broadcast(response)
+                e.node.broadcast(response)
                 logger.info("[MASTER] Allocated node ID #{0:03d} to node with unique ID {1!r}"
                             .format(node_allocated_id, DynamicNodeIDServer.QUERY))
             else:
@@ -159,8 +205,14 @@ class DynamicNodeIDServer(uavcan.node.Monitor):
             logger.error("[MASTER] Query timeout, resetting query")
 
 
-class DebugLogMessageMonitor(uavcan.node.Monitor):
-    def on_message(self):
+class DebugLogMessageMonitor(object):
+    def __init__(self, node):
+        self._handle = node.add_handler(uavcan.protocol.debug.LogMessage, self._on_message)  # @UndefinedVariable
+
+    def stop(self):
+        self._handle.remove()
+
+    def _on_message(self, e):
         logmsg = "DebugLogMessageMonitor [#{0:03d}:{1}] {2}"\
-            .format(self.transfer.source_node_id, self.message.source.decode(), self.message.text.decode())
-        (logger.debug, logger.info, logger.warning, logger.error)[self.message.level.value](logmsg)
+            .format(e.transfer.source_node_id, e.message.source.decode(), e.message.text.decode())
+        (logger.debug, logger.info, logger.warning, logger.error)[e.message.level.value](logmsg)
