@@ -392,8 +392,6 @@ class Node(Scheduler):
         for frame in transfer.to_frames():
             self._can_driver.send(frame.message_id, frame.bytes, extended=True)
 
-        logger.debug("Node.broadcast(): sent {0!r}".format(payload))
-
     def close(self):
         self._can_driver.close()
 
