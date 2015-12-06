@@ -57,6 +57,8 @@ class NodeStatusMonitor(object):
         def __str__(self):
             return '%d:%s' % (self.node_id, self.info if self.info else self.status)
 
+        __repr__ = __str__
+
     class UpdateEvent:
         EVENT_ID_NEW = 'new'
         EVENT_ID_INFO_UPDATE = 'info_update'
@@ -68,6 +70,8 @@ class NodeStatusMonitor(object):
 
         def __str__(self):
             return self.event_id + ':' + str(self.entry)
+
+        __repr__ = __str__
 
     class UpdateHandlerRemover:
         def __init__(self, remover):
