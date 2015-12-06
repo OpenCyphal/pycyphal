@@ -24,7 +24,7 @@ class NodeStatusMonitor(object):
             self.monotonic_timestamp = None
 
         def _update_from_status(self, e):
-            self.monotonic_timestamp = time.monotonic()
+            self.monotonic_timestamp = e.transfer.ts_monotonic
             self.node_id = e.transfer.source_node_id
             if self.status and e.message.uptime_sec < self.status.uptime_sec:
                 self.info = None
@@ -35,7 +35,7 @@ class NodeStatusMonitor(object):
                     self.info.status.fields[fld] = self.status.fields[fld]
 
         def _update_from_info(self, e):
-            self.monotonic_timestamp = time.monotonic()
+            self.monotonic_timestamp = e.transfer.ts_monotonic
             self.node_id = e.transfer.source_node_id
             self.status = e.response.status
             self.info = e.response
@@ -276,7 +276,7 @@ class DynamicNodeIDServer(object):
         if e.message.first_part_of_unique_id:
             # First-phase messages trigger a second-phase query
             self._query = e.message.unique_id.to_bytes()
-            self._query_timestamp = time.monotonic()
+            self._query_timestamp = e.transfer.ts_monotonic
 
             response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
             response.first_part_of_unique_id = 0
@@ -289,7 +289,7 @@ class DynamicNodeIDServer(object):
         elif len(e.message.unique_id) == 6 and len(self._query) == 6:
             # Second-phase messages trigger a third-phase query
             self._query += e.message.unique_id.to_bytes()
-            self._query_timestamp = time.monotonic()
+            self._query_timestamp = e.transfer.ts_monotonic
 
             response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
             response.first_part_of_unique_id = 0
@@ -301,7 +301,7 @@ class DynamicNodeIDServer(object):
         elif len(e.message.unique_id) == 4 and len(self._query) == 12:
             # Third-phase messages trigger an allocation
             self._query += e.message.unique_id.to_bytes()
-            self._query_timestamp = time.monotonic()
+            self._query_timestamp = e.transfer.ts_monotonic
 
             logger.debug("[DynamicNodeIDServer] Got third-stage dynamic ID request for {0!r}".format(self._query))
 

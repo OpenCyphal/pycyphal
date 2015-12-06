@@ -152,6 +152,15 @@ CAN_EFF_FLAG = 0x80000000
 CAN_EFF_MASK = 0x1FFFFFFF
 
 
+class RxFrame:
+    def __init__(self, can_id, data, extended, ts_monotonic=None, ts_real=None):
+        self.id = can_id
+        self.data = data
+        self.extended = extended
+        self.ts_monotonic = ts_monotonic or time.monotonic()
+        self.ts_real = ts_real or time.monotonic()
+
+
 class SocketCAN(object):
     FRAME_FORMAT = '=IB3x8s'
 
@@ -171,7 +180,8 @@ class SocketCAN(object):
             packet = self.socket.recv(16)
             assert len(packet) == 16
             can_id, can_dlc, can_data = struct.unpack(self.FRAME_FORMAT, packet)
-            return can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG)
+            # TODO: Socket-level timestamping
+            return RxFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG))
 
     def send(self, message_id, message, extended=False):
         logger.debug("CAN.send({!r}, {!r}, {!r})".format(message_id, binascii.hexlify(message), extended))
@@ -251,7 +261,8 @@ class SLCAN(object):
             packet_data = binascii.a2b_hex(message[2 + id_len:2 + id_len + packet_len * 2])
 
             # ID, data, extended
-            return packet_id, packet_data, (id_len == 8)
+            # TODO: SLCAN timestamping support
+            return RxFrame(packet_id, packet_data, (id_len == 8))
         except Exception:
             logger.error('Could not parse SLCAN frame [%r]', message, exc_info=True)
             return

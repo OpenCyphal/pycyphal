@@ -431,9 +431,11 @@ class CompoundValue(BaseValue):
 
 
 class Frame(object):
-    def __init__(self, message_id, bytes):  # @ReservedAssignment
+    def __init__(self, message_id, bytes, ts_monotonic=None, ts_real=None):  # @ReservedAssignment
         self.message_id = message_id
         self.bytes = bytearray(bytes)
+        self.ts_monotonic = ts_monotonic
+        self.ts_real = ts_real
 
     @property
     def transfer_key(self):
@@ -562,6 +564,10 @@ class Transfer(object):
         return out_frames
 
     def from_frames(self, frames):
+        # Initialize transfer timestamps from the first frame
+        self.ts_monotonic = frames[0].ts_monotonic
+        self.ts_real = frames[0].ts_real
+
         # Validate the flags in the tail byte
         expected_toggle = 0
         expected_transfer_id = frames[0].bytes[-1] & 0x1F

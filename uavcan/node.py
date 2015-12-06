@@ -225,12 +225,11 @@ class Node(Scheduler):
         self.node_info = node_info or uavcan.protocol.GetNodeInfo.Response()     # @UndefinedVariable
         self.add_handler(uavcan.protocol.GetNodeInfo, lambda _: self.node_info)  # @UndefinedVariable
 
-    def _recv_frame(self, message):
-        frame_id, frame_data, ext_id = message
-        if not ext_id:
+    def _recv_frame(self, raw_frame):
+        if not raw_frame.extended:
             return
 
-        frame = transport.Frame(frame_id, frame_data)
+        frame = transport.Frame(raw_frame.id, raw_frame.data, raw_frame.ts_monotonic, raw_frame.ts_real)
         # logger.debug("Node._recv_frame(): got {0!s}".format(frame))
 
         transfer_frames = self._transfer_manager.receive_frame(frame)
