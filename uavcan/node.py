@@ -55,11 +55,11 @@ class Scheduler(object):
     def _make_sched_handle(self, get_event):
         class EventHandle(object):
             @staticmethod
-            def cancel():
+            def remove():
                 self._scheduler.cancel(get_event())
 
             @staticmethod
-            def try_cancel():
+            def try_remove():
                 try:
                     self._scheduler.cancel(get_event())
                     return True
@@ -74,7 +74,7 @@ class Scheduler(object):
 
     def defer(self, timeout_seconds, callback):
         """This method allows to invoke the callback with specified arguments once the specified amount of time.
-        :returns: EventHandle object. Call .cancel() on it to cancel the event.
+        :returns: EventHandle object. Call .remove() on it to cancel the event.
         """
         priority = 1
         event = self._scheduler.enter(timeout_seconds, priority, callback, ())
@@ -83,7 +83,7 @@ class Scheduler(object):
     def periodic(self, period_seconds, callback):
         """This method allows to invoke the callback periodically, with specified time intervals.
         Note that the scheduler features zero phase drift.
-        :returns: EventHandle object. Call .cancel() on it to cancel the event.
+        :returns: EventHandle object. Call .remove() on it to cancel the event.
         """
         priority = 0
 
@@ -349,7 +349,7 @@ class Node(Scheduler):
 
         # This wrapper will automatically cancel the timeout callback if there was a response
         def timeout_cancelling_wrapper(event):
-            timeout_caller_handle.try_cancel()
+            timeout_caller_handle.try_remove()
             callback(event)
 
         # Registering the pending request using the wrapper above instead of the callback
