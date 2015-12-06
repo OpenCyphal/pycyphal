@@ -1,7 +1,10 @@
 #
-# UAVCAN DSDL file parser
+# Copyright (C) 2014-2015  UAVCAN Development Team  <uavcan.org>
 #
-# Copyright (C) 2014-2015 Pavel Kirienko <pavel.kirienko@gmail.com>
+# This software is distributed under the terms of the MIT License.
+#
+# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+#         Ben Dyer <ben_dyer@mac.com>
 #
 
 from __future__ import division, absolute_import, print_function, unicode_literals

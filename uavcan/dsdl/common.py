@@ -1,5 +1,10 @@
 #
-# Copyright (C) 2014 Pavel Kirienko <pavel.kirienko@gmail.com>
+# Copyright (C) 2014-2015  UAVCAN Development Team  <uavcan.org>
+#
+# This software is distributed under the terms of the MIT License.
+#
+# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+#         Ben Dyer <ben_dyer@mac.com>
 #
 
 from __future__ import division, absolute_import, print_function, unicode_literals
@@ -15,6 +20,7 @@ class DsdlException(UAVCANException):
         file    Source file path where the error has occurred. Optional, will be None if unknown.
         line    Source file line number where the error has occurred. Optional, will be None if unknown.
     '''
+
     def __init__(self, text, file=None, line=None):
         Exception.__init__(self, text)
         self.file = file

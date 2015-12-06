@@ -1,4 +1,12 @@
 #!/usr/bin/env python
+#
+# Copyright (C) 2014-2015  UAVCAN Development Team  <uavcan.org>
+#
+# This software is distributed under the terms of the MIT License.
+#
+# Author: Ben Dyer <ben_dyer@mac.com>
+#         Pavel Kirienko <pavel.kirienko@zubax.com>
+#
 
 import os
 import sys
@@ -32,4 +40,3 @@ if sys.version_info[0] < 3:
     args['install_requires'] = ['monotonic']
 
 setup(**args)
-
