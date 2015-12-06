@@ -214,8 +214,8 @@ class Node(Scheduler):
         self.start_time_monotonic = time.monotonic()
 
         # NodeStatus publisher
-        self.health = uavcan.protocol.NodeStatus().HEALTH_OK                     # @UndefinedVariable
-        self.mode = mode or uavcan.protocol.NodeStatus().MODE_INITIALIZATION     # @UndefinedVariable
+        self.health = uavcan.protocol.NodeStatus().HEALTH_OK                                    # @UndefinedVariable
+        self.mode = uavcan.protocol.NodeStatus().MODE_INITIALIZATION if mode is None else mode  # @UndefinedVariable
         self.vendor_specific_status_code = 0
 
         node_status_interval = node_status_interval or DEFAULT_NODE_STATUS_INTERVAL
