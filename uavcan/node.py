@@ -237,7 +237,6 @@ class Node(Scheduler):
             return
 
         frame = transport.Frame(raw_frame.id, raw_frame.data, raw_frame.ts_monotonic, raw_frame.ts_real)
-        # logger.debug("Node._recv_frame(): got {0!s}".format(frame))
 
         transfer_frames = self._transfer_manager.receive_frame(frame)
         if not transfer_frames:
@@ -245,8 +244,6 @@ class Node(Scheduler):
 
         transfer = transport.Transfer()
         transfer.from_frames(transfer_frames)
-
-        logger.debug("Node._recv_frame(): received {0!r}".format(transfer))
 
         if (transfer.service_not_message and not transfer.request_not_response) and \
                 transfer.dest_node_id == self.node_id:

@@ -191,8 +191,6 @@ class SocketCAN(object):
             return RxFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG))
 
     def send(self, message_id, message, extended=False):
-        logger.debug("CAN.send({!r}, {!r}, {!r})".format(message_id, binascii.hexlify(message), extended))
-
         if extended:
             message_id |= CAN_EFF_FLAG
 
@@ -323,10 +321,6 @@ if __name__ == "__main__":
     if sys.version_info[0] < 3:
         import monotonic  # @UnresolvedImport
         time.monotonic = monotonic.monotonic
-
-    import logging
-    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
-                        format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 
     if len(sys.argv) < 2:
         print("Usage: driver.py <can-device> [param=value ...]")
