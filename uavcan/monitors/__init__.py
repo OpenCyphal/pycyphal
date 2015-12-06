@@ -47,17 +47,36 @@ class NodeStatusMonitor(object):
     def __init__(self, node, on_info_update_callback=None):
         self.on_info_update_callback = on_info_update_callback
         self._handle = node.add_handler(uavcan.protocol.NodeStatus, self._on_node_status)  # @UndefinedVariable
-        self._registry = {}
+        self._registry = {}  # {node_id: Entry}
 
     def exists(self, node_id):
+        """Returns True if the given node ID exists, false otherwise
+        """
         return node_id in self._registry
 
     def get(self, node_id):
+        """Returns an Entry instance for the given node ID.
+        If the requested node ID does not exist, throws KeyError.
+        """
         if (self._registry[node_id].monotonic_timestamp + self.TIMEOUT) < time.monotonic():
             del self._registry[node_id]
         return self._registry[node_id]
 
+    def get_all_node_id(self):
+        """Returns a generator or an iterable containing all currently active node ID.
+        """
+        return self._registry.keys()
+
+    def find_all(self, predicate):
+        """Returns a generator that produces a sequence of Entry objects for which the predicate returned True.
+        """
+        for _nid, entry in self._registry.items():
+            if predicate(entry):
+                yield entry
+
     def stop(self):
+        """Stops the instance. The registry will not be cleared.
+        """
         self._handle.remove()
 
     def _on_node_status(self, e):
@@ -118,62 +137,82 @@ class NodeStatusMonitor(object):
 
 
 class DynamicNodeIDServer(object):
-    ALLOCATION = {}
-    QUERY = ""
-    QUERY_TIME = 0.0
-    QUERY_TIMEOUT = 3.0
+    QUERY_TIMEOUT = uavcan.protocol.dynamic_node_id.Allocation().FOLLOWUP_TIMEOUT_MS / 1000  # @UndefinedVariable
+    DEFAULT_NODE_ID_RANGE = 1, 125
 
-    def __init__(self, *args, **kwargs):
-        super(DynamicNodeIDServer, self).__init__(*args, **kwargs)
-        self.dynamic_id_range = kwargs.get("dynamic_id_range", (1, 127))
+    def __init__(self, node, node_status_monitor, dynamic_node_id_range=None):
+        """
+        :param node: Node instance
+        :param node_status_monitor: Instance of NodeStatusMonitor
+        :param dynamic_node_id_range: Range of node ID available for dynamic allocation; defaults to [1, 125]
+        """
+        self._allocation_table = {}  # {unique_id: node_id}
+        self._query = bytes()
+        self._query_timestamp = 0
+        self._node_monitor = node_status_monitor
 
-    def on_message(self, e):
+        self._dynamic_node_id_range = dynamic_node_id_range or DynamicNodeIDServer.DEFAULT_NODE_ID_RANGE
+        self._handle = node.add_handler(uavcan.protocol.dynamic_node_id.Allocation,  # @UndefinedVariable
+                                        self._on_allocation_message)
+
+    def stop(self):
+        """Stops the instance.
+        """
+        self._handle.remove()
+
+    def get_allocated_node_id(self):
+        """Returns a generator or an iterable containing all node ID that were allocated by this allocator.
+        """
+        return self._allocation_table.values()
+
+    def _on_allocation_message(self, e):
+        # TODO: request validation
         if e.message.first_part_of_unique_id:
             # First-phase messages trigger a second-phase query
-            DynamicNodeIDServer.QUERY = e.message.unique_id.to_bytes()
-            DynamicNodeIDServer.QUERY_TIME = time.monotonic()
+            self._query = e.message.unique_id.to_bytes()
+            self._query_timestamp = time.monotonic()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
             response.first_part_of_unique_id = 0
             response.node_id = 0
-            response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
+            response.unique_id.from_bytes(self._query)
             e.node.broadcast(response)
 
-            logger.debug("[MASTER] Got first-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
-        elif len(e.message.unique_id) == 6 and len(DynamicNodeIDServer.QUERY) == 6:
+            logger.debug("[DynamicNodeIDServer] Got first-stage dynamic ID request for {0!r}".format(self._query))
+
+        elif len(e.message.unique_id) == 6 and len(self._query) == 6:
             # Second-phase messages trigger a third-phase query
-            DynamicNodeIDServer.QUERY += e.message.unique_id.to_bytes()
-            DynamicNodeIDServer.QUERY_TIME = time.monotonic()
+            self._query += e.message.unique_id.to_bytes()
+            self._query_timestamp = time.monotonic()
 
             response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
             response.first_part_of_unique_id = 0
             response.node_id = 0
-            response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
+            response.unique_id.from_bytes(self._query)
             e.node.broadcast(response)
-            logger.debug("[MASTER] Got second-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
-        elif len(e.message.unique_id) == 4 and len(DynamicNodeIDServer.QUERY) == 12:
-            # Third-phase messages trigger an allocation
-            DynamicNodeIDServer.QUERY += e.message.unique_id.to_bytes()
-            DynamicNodeIDServer.QUERY_TIME = time.monotonic()
+            logger.debug("[DynamicNodeIDServer] Got second-stage dynamic ID request for {0!r}".format(self._query))
 
-            logger.debug("[MASTER] Got third-stage dynamic ID request for {0!r}".format(DynamicNodeIDServer.QUERY))
+        elif len(e.message.unique_id) == 4 and len(self._query) == 12:
+            # Third-phase messages trigger an allocation
+            self._query += e.message.unique_id.to_bytes()
+            self._query_timestamp = time.monotonic()
+
+            logger.debug("[DynamicNodeIDServer] Got third-stage dynamic ID request for {0!r}".format(self._query))
 
             node_requested_id = e.message.node_id
             node_allocated_id = None
 
-            allocated_node_ids = \
-                set(DynamicNodeIDServer.ALLOCATION.itervalues()) | set(NodeStatusMonitor.NODE_STATUS.iterkeys())
+            allocated_node_ids = set(self._allocation_table.values()) | set(self._node_monitor.get_all_node_id())
             allocated_node_ids.add(e.node.node_id)
 
-            # If we've already allocated a node ID to this device, return the
-            # same one
-            if DynamicNodeIDServer.QUERY in DynamicNodeIDServer.ALLOCATION:
-                node_allocated_id = DynamicNodeIDServer.ALLOCATION[DynamicNodeIDServer.QUERY]
+            # If we've already allocated a node ID to this device, return the same one
+            if self._query in self._allocation_table:
+                node_allocated_id = self._allocation_table[self._query]
 
             # If an ID was requested but not allocated yet, allocate the first
             # ID equal to or higher than the one that was requested
             if node_requested_id and not node_allocated_id:
-                for node_id in range(node_requested_id, self.dynamic_id_range[1]):
+                for node_id in range(node_requested_id, self._dynamic_node_id_range[1]):
                     if node_id not in allocated_node_ids:
                         node_allocated_id = node_id
                         break
@@ -181,28 +220,31 @@ class DynamicNodeIDServer(object):
             # If no ID was allocated in the above step (also if the requested
             # ID was zero), allocate the highest unallocated node ID
             if not node_allocated_id:
-                for node_id in range(self.dynamic_id_range[1], self.dynamic_id_range[0], -1):
+                for node_id in range(self._dynamic_node_id_range[1], self._dynamic_node_id_range[0], -1):
                     if node_id not in allocated_node_ids:
                         node_allocated_id = node_id
                         break
 
-            DynamicNodeIDServer.ALLOCATION[DynamicNodeIDServer.QUERY] = node_allocated_id
+            self._allocation_table[self._query] = node_allocated_id
 
             if node_allocated_id:
                 response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
                 response.first_part_of_unique_id = 0
                 response.node_id = node_allocated_id
-                response.unique_id.from_bytes(DynamicNodeIDServer.QUERY)
+                response.unique_id.from_bytes(self._query)
                 e.node.broadcast(response)
-                logger.info("[MASTER] Allocated node ID #{0:03d} to node with unique ID {1!r}"
-                            .format(node_allocated_id, DynamicNodeIDServer.QUERY))
+
+                self._query = bytes()   # Resetting the state
+
+                logger.info("[DynamicNodeIDServer] Allocated node ID #{0:03d} to node with unique ID {1!r}"
+                            .format(node_allocated_id, self._query))
             else:
-                logger.error("[MASTER] Couldn't allocate dynamic node ID")
-        elif time.monotonic() - DynamicNodeIDServer.QUERY_TIME > DynamicNodeIDServer.QUERY_TIMEOUT:
-            # Mis-sequenced reply and no good replies during the timeout
-            # period -- reset the query now.
-            DynamicNodeIDServer.QUERY = ""
-            logger.error("[MASTER] Query timeout, resetting query")
+                logger.error("[DynamicNodeIDServer] Couldn't allocate dynamic node ID")
+
+        elif time.monotonic() - self._query_timestamp > DynamicNodeIDServer.QUERY_TIMEOUT:
+            # Mis-sequenced reply and no good replies during the timeout period -- reset the query now.
+            self._query = bytes()
+            logger.error("[DynamicNodeIDServer] Query timeout, resetting query")
 
 
 class DebugLogMessageMonitor(object):
