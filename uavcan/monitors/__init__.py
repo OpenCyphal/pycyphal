@@ -208,7 +208,6 @@ class DynamicNodeIDServer(object):
 
     class AllocationTable(object):
         def __init__(self, path):
-            assert isinstance(path, str)
             self.db = sqlite3.connect(path)  # @UndefinedVariable
 
             self._modify('''CREATE TABLE IF NOT EXISTS `allocation` (
@@ -228,6 +227,8 @@ class DynamicNodeIDServer(object):
         def set(self, unique_id, node_id):
             if unique_id is not None and unique_id == bytes([0] * len(unique_id)):
                 unique_id = None
+            if unique_id is not None:
+                unique_id = sqlite3.Binary(unique_id)
             logger.debug('[DynamicNodeIDServer] AllocationTable update: #{0:03d} {1!r}'.format(node_id, unique_id))
             self._modify('''insert or replace into allocation (node_id, unique_id) values (?, ?);''',
                          node_id, unique_id)
