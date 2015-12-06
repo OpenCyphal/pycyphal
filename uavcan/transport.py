@@ -329,25 +329,24 @@ class CompoundValue(BaseValue):
         self.__dict__["fields"] = collections.OrderedDict()
         self.__dict__["constants"] = {}
         super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
-        self.mode = _mode
         self.data_type_id = self.type.default_dtid
 
         source_fields = None
         source_constants = None
         is_union = False
         if self.type.kind == dsdl.parser.CompoundType.KIND_SERVICE:
-            if self.mode == "request":
+            if _mode == "request":
                 source_fields = self.type.request_fields
                 source_constants = self.type.request_constants
                 is_union = self.type.request_union
-            elif self.mode == "response":
+            elif _mode == "response":
                 source_fields = self.type.response_fields
                 source_constants = self.type.response_constants
                 is_union = self.type.response_union
             else:
                 raise ValueError("mode must be either 'request' or 'response' for service types")
         else:
-            if self.mode != None:
+            if _mode != None:
                 raise ValueError("mode is not applicable for message types")
             source_fields = self.type.fields
             source_constants = self.type.constants
