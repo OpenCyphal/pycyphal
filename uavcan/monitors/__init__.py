@@ -273,6 +273,13 @@ class DynamicNodeIDServer(object):
 
     def _on_allocation_message(self, e):
         # TODO: request validation
+
+        # The local state must be reset after the specified timeout
+        if len(self._query) and time.monotonic() - self._query_timestamp > DynamicNodeIDServer.QUERY_TIMEOUT:
+            self._query = bytes()
+            logger.error("[DynamicNodeIDServer] Query timeout, resetting query")
+
+        # Handling the message
         if e.message.first_part_of_unique_id:
             # First-phase messages trigger a second-phase query
             self._query = e.message.unique_id.to_bytes()
@@ -339,11 +346,6 @@ class DynamicNodeIDServer(object):
                             .format(node_allocated_id, self._query))
             else:
                 logger.error("[DynamicNodeIDServer] Couldn't allocate dynamic node ID")
-
-        elif time.monotonic() - self._query_timestamp > DynamicNodeIDServer.QUERY_TIMEOUT:
-            # Mis-sequenced reply and no good replies during the timeout period -- reset the query now.
-            self._query = bytes()
-            logger.error("[DynamicNodeIDServer] Query timeout, resetting query")
 
 
 class DebugLogMessageMonitor(object):
