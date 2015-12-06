@@ -212,7 +212,8 @@ class DynamicNodeIDServer(object):
 
     class AllocationTable(object):
         def __init__(self, path):
-            self.db = sqlite3.connect(path)  # @UndefinedVariable
+            # Disabling same thread check on the assumption that the developer knows what they are doing.
+            self.db = sqlite3.connect(path, check_same_thread=False)  # @UndefinedVariable
 
             self._modify('''CREATE TABLE IF NOT EXISTS `allocation` (
             `node_id`   INTEGER NOT NULL UNIQUE,
