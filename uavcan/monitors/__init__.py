@@ -296,7 +296,7 @@ class DynamicNodeIDServer(object):
         # The local state must be reset after the specified timeout
         if len(self._query) and time.monotonic() - self._query_timestamp > DynamicNodeIDServer.QUERY_TIMEOUT:
             self._query = bytes()
-            logger.error("[DynamicNodeIDServer] Query timeout, resetting query")
+            logger.info("[DynamicNodeIDServer] Query timeout, resetting query")
 
         # Handling the message
         if e.message.first_part_of_unique_id:
