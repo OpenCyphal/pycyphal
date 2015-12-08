@@ -30,7 +30,7 @@ try:
     import serial
 except ImportError:
     serial = None
-    logger.info("uavcan.driver cannot import PySerial; SLCAN will not be available.")
+    logger.info("Cannot import PySerial; SLCAN will not be available.")
 
 
 class DriverError(uavcan.UAVCANException):
@@ -167,6 +167,11 @@ class RxFrame:
         self.ts_monotonic = ts_monotonic or time.monotonic()
         self.ts_real = ts_real or time.monotonic()
 
+    def __str__(self):
+        return '%0*x %s' % (8 if self.extended else 3, self.id, binascii.hexlify(self.data).decode())
+
+    __repr__ = __str__
+
 
 class SocketCAN(object):
     FRAME_FORMAT = '=IB3x8s'
@@ -258,7 +263,7 @@ class SLCAN(object):
 
     def _parse(self, message):
         try:
-            id_len = 8 if message[0] == b'T' else 3
+            id_len = 8 if message[0] == serial.to_bytes(b'T')[0] else 3
 
             # Parse the message into a (message ID, data) tuple.
             packet_id = int(message[1:1 + id_len].decode(), 16)
