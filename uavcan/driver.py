@@ -278,11 +278,11 @@ class SLCAN(object):
 
                     # Now, pos points to the beginning of the next message - parse it
                     try:
-                        available_length = buf_len - pos
-                        if available_length < 5:  # Shortest message is 't1230'
-                            break
-
                         id_len = 8 if buf[pos] == b'T'[0] else 3
+
+                        available_length = buf_len - pos
+                        if available_length < id_len + 2:  # Shortest message is 't<ID>0'
+                            break
 
                         # Parse the header
                         packet_id = int(buf[pos + 1:pos + 1 + id_len].decode(), 16)
@@ -337,7 +337,10 @@ class SLCAN(object):
                 break
 
     def receive(self, timeout=None):
-        return self._received_messages.get(block=True, timeout=timeout)
+        try:
+            return self._received_messages.get(block=True, timeout=timeout)
+        except queue.Empty:
+            return
 
     def send(self, message_id, message, extended=False):
         start = ('T{0:08X}' if extended else 't{0:03X}').format(message_id)
