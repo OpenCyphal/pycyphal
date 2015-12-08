@@ -38,7 +38,9 @@ class Scheduler(object):
         if sys.version_info[0] > 2:
             # Nice and easy.
             self._scheduler = sched.scheduler()
-            self._run_scheduler = lambda: self._scheduler.run(blocking=False)
+            # The documentation says that run() returns the next deadline,
+            # but it's not true - it returns the remaining time.
+            self._run_scheduler = lambda: self._scheduler.run(blocking=False) + self._scheduler.timefunc()
         else:
             # Nightmare inducing hacks
             class SayNoToBlockingSchedulingException(uavcan.UAVCANException):
@@ -52,7 +54,7 @@ class Scheduler(object):
 
             def run_scheduler():
                 try:
-                    return self._scheduler.run()
+                    self._scheduler.run()
                 except SayNoToBlockingSchedulingException:
                     q = self._scheduler.queue
                     return q[0][0] if q else None
@@ -75,9 +77,8 @@ class Scheduler(object):
 
         return EventHandle()
 
-    def _poll_scheduler_and_get_remaining_time_to_next_deadline(self):
-        next_deadline_at = self._run_scheduler()
-        return None if next_deadline_at is None else (next_deadline_at - self._scheduler.timefunc())
+    def _poll_scheduler_and_get_next_deadline(self):
+        return self._run_scheduler()
 
     def defer(self, timeout_seconds, callback):
         """This method allows to invoke the callback with specified arguments once the specified amount of time.
@@ -310,7 +311,9 @@ class Node(Scheduler):
         deadline = (time.monotonic() + timeout) if timeout is not None else sys.float_info.max
 
         def execute_once():
-            next_event_at = self._poll_scheduler_and_get_remaining_time_to_next_deadline() or sys.float_info.max
+            next_event_at = self._poll_scheduler_and_get_next_deadline()
+            if next_event_at is None:
+                next_event_at = sys.float_info.max
 
             read_timeout = min(next_event_at, deadline) - time.monotonic()
             read_timeout = max(read_timeout, 0)
