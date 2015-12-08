@@ -1,243 +1,429 @@
-#encoding=utf-8
+#
+# Copyright (C) 2014-2015  UAVCAN Development Team  <uavcan.org>
+#
+# This software is distributed under the terms of the MIT License.
+#
+# Author: Ben Dyer <ben_dyer@mac.com>
+#         Pavel Kirienko <pavel.kirienko@zubax.com>
+#
 
+from __future__ import division, absolute_import, print_function, unicode_literals
 import time
-import math
-import ctypes
-import struct
-import logging
-import binascii
-import functools
 import collections
+import sched
+import sys
+import inspect
+from logging import getLogger
 
 import uavcan
-import uavcan.dsdl as dsdl
 import uavcan.driver as driver
 import uavcan.transport as transport
+from uavcan import UAVCANException
 
 
-NODE_STATUS_INVERVAL = 0.5
+DEFAULT_NODE_STATUS_INTERVAL = 0.5
+DEFAULT_SERVICE_TIMEOUT = 0.5
+DEFAULT_TRANSFER_PRIORITY = 20
 
 
-class Node(object):
-    def __init__(self, handlers, node_id=127):
-        self.can = None
-        self.transfer_manager = transport.TransferManager()
-        self.handlers = handlers
+logger = getLogger(__name__)
+
+
+class Scheduler(object):
+    """This class implements a simple non-blocking event scheduler.
+    It supports one-shot and periodic events.
+    """
+
+    def __init__(self):
+        if sys.version_info[0] > 2:
+            # Nice and easy.
+            self._scheduler = sched.scheduler()
+            # The documentation says that run() returns the next deadline,
+            # but it's not true - it returns the remaining time.
+            self._run_scheduler = lambda: self._scheduler.run(blocking=False) + self._scheduler.timefunc()
+        else:
+            # Nightmare inducing hacks
+            class SayNoToBlockingSchedulingException(uavcan.UAVCANException):
+                pass
+
+            def delayfunc_impostor(duration):
+                if duration > 0:
+                    raise SayNoToBlockingSchedulingException('No!')
+
+            self._scheduler = sched.scheduler(time.monotonic, delayfunc_impostor)
+
+            def run_scheduler():
+                try:
+                    self._scheduler.run()
+                except SayNoToBlockingSchedulingException:
+                    q = self._scheduler.queue
+                    return q[0][0] if q else None
+
+            self._run_scheduler = run_scheduler
+
+    def _make_sched_handle(self, get_event):
+        class EventHandle(object):
+            @staticmethod
+            def remove():
+                self._scheduler.cancel(get_event())
+
+            @staticmethod
+            def try_remove():
+                try:
+                    self._scheduler.cancel(get_event())
+                    return True
+                except ValueError:
+                    return False
+
+        return EventHandle()
+
+    def _poll_scheduler_and_get_next_deadline(self):
+        return self._run_scheduler()
+
+    def defer(self, timeout_seconds, callback):
+        """This method allows to invoke the callback with specified arguments once the specified amount of time.
+        :returns: EventHandle object. Call .remove() on it to cancel the event.
+        """
+        priority = 1
+        event = self._scheduler.enter(timeout_seconds, priority, callback, ())
+        return self._make_sched_handle(lambda: event)
+
+    def periodic(self, period_seconds, callback):
+        """This method allows to invoke the callback periodically, with specified time intervals.
+        Note that the scheduler features zero phase drift.
+        :returns: EventHandle object. Call .remove() on it to cancel the event.
+        """
+        priority = 0
+
+        def caller(scheduled_deadline):
+            # Event MUST be re-registered first in order to ensure that it can be cancelled from the callback
+            scheduled_deadline += period_seconds
+            event_holder[0] = self._scheduler.enterabs(scheduled_deadline, priority, caller, (scheduled_deadline,))
+            callback()
+
+        first_deadline = self._scheduler.timefunc() + period_seconds
+        event_holder = [self._scheduler.enterabs(first_deadline, priority, caller, (first_deadline,))]
+        return self._make_sched_handle(lambda: event_holder[0])
+
+    def has_pending_events(self):
+        """Returns true if there is at least one pending event in the queue.
+        """
+        return not self._scheduler.empty()
+
+
+class TransferEvent(object):
+    def __init__(self, transfer, node, payload_attr_name):
+        setattr(self, payload_attr_name, transfer.payload)
+        self.transfer = transfer
+        self.node = node
+
+    def __str__(self):
+        return str(self.transfer)
+
+    def __repr__(self):
+        return repr(self.transfer)
+
+
+class HandlerDispatcher(object):
+    class Remover:
+        def __init__(self, remover):
+            self._remover = remover
+
+        def remove(self):
+            self._remover()
+
+        def try_remove(self):
+            try:
+                self._remover()
+                return True
+            except ValueError:
+                return False
+
+    def __init__(self, node):
+        self._handlers = []  # type, callable
+        self._node = node
+
+    def add_handler(self, uavcan_type, handler, **kwargs):
+        service = {
+            uavcan_type.KIND_SERVICE: True,
+            uavcan_type.KIND_MESSAGE: False
+        }[uavcan_type.kind]
+
+        # If handler is a class, create a wrapper function and register it as a regular callback
+        if inspect.isclass(handler):
+            def class_handler_adapter(event):
+                h = handler(event, **kwargs)
+                if service:
+                    h.on_request()
+                    return h.response
+                else:
+                    h.on_message()
+
+            return self.add_handler(uavcan_type, class_handler_adapter)
+
+        # At this point process the handler as a regular callback
+        def call(transfer):
+            event = TransferEvent(transfer, self._node, 'request' if service else 'message')
+            result = handler(event, **kwargs)
+            if service:
+                if result is None:
+                    raise UAVCANException('Service request handler did not return a response [%r, %r]' %
+                                          (uavcan_type, handler))
+                self._node.respond(result,
+                                   transfer.source_node_id,
+                                   transfer.transfer_id,
+                                   transfer.transfer_priority)
+            else:
+                if result is not None:
+                    raise UAVCANException('Message request handler did not return None [%r, %r]' %
+                                          (uavcan_type, handler))
+
+        entry = uavcan_type, call
+        self._handlers.append(entry)
+        return self.Remover(lambda: self._handlers.remove(entry))
+
+    def remove_handlers(self, uavcan_type):
+        self._handlers = list(filter(lambda x: x[0] != uavcan_type, self._handlers))
+
+    def call_handlers(self, transfer):
+        for uavcan_type, wrapper in self._handlers:
+            if uavcan_type == transfer.payload.type:
+                wrapper(transfer)
+
+
+class Node(Scheduler):
+    def __init__(self, can_driver, node_id=None, node_status_interval=None,
+                 mode=None, node_info=None, **_extras):
+        """It is recommended to use make_node() rather than instantiating this type directly.
+
+        :param can_driver: CAN bus driver object. Calling close() on a node object closes its driver instance.
+
+        :param node_id: Node ID of the current instance. Defaults to None, which enables passive mode.
+
+        :param node_status_interval: NodeStatus broadcasting interval. Defaults to DEFAULT_NODE_STATUS_INTERVAL.
+
+        :param mode: Initial operating mode (INITIALIZATION, OPERATIONAL, etc.); defaults to INITIALIZATION.
+
+        :param node_info: Structure of type uavcan.protocol.GetNodeInfo.Response, responsed with when the local
+                          node is queried for its node info.
+        """
+        super(Node, self).__init__()
+
+        self._handler_dispatcher = HandlerDispatcher(self)
+
+        self._can_driver = can_driver
         self.node_id = node_id
-        self.outstanding_requests = {}
-        self.outstanding_request_callbacks = {}
-        self.outstanding_request_timestamps = {}
-        self.outstanding_request_retries = {}
-        self.next_transfer_ids = collections.defaultdict(int)
-        self.node_info = {}
 
-    def _recv_frame(self, dev, message):
-        frame_id, frame_data, ext_id = message
-        if not ext_id:
+        self._transfer_manager = transport.TransferManager()
+        self._outstanding_requests = {}
+        self._outstanding_request_callbacks = {}
+        self._next_transfer_ids = collections.defaultdict(int)
+
+        self.start_time_monotonic = time.monotonic()
+
+        # NodeStatus publisher
+        self.health = uavcan.protocol.NodeStatus().HEALTH_OK                                    # @UndefinedVariable
+        self.mode = uavcan.protocol.NodeStatus().MODE_INITIALIZATION if mode is None else mode  # @UndefinedVariable
+        self.vendor_specific_status_code = 0
+
+        node_status_interval = node_status_interval or DEFAULT_NODE_STATUS_INTERVAL
+        self.periodic(node_status_interval, self._send_node_status)
+
+        # GetNodeInfo server
+        self.node_info = node_info or uavcan.protocol.GetNodeInfo.Response()     # @UndefinedVariable
+        self.add_handler(uavcan.protocol.GetNodeInfo, lambda _: self.node_info)  # @UndefinedVariable
+
+    def _recv_frame(self, raw_frame):
+        if not raw_frame.extended:
             return
 
-        frame = transport.Frame(frame_id, frame_data)
-        # logging.debug("Node._recv_frame(): got {0!s}".format(frame))
+        frame = transport.Frame(raw_frame.id, raw_frame.data, raw_frame.ts_monotonic, raw_frame.ts_real)
 
-        transfer_frames = self.transfer_manager.receive_frame(frame)
+        transfer_frames = self._transfer_manager.receive_frame(frame)
         if not transfer_frames:
             return
 
         transfer = transport.Transfer()
         transfer.from_frames(transfer_frames)
 
-        logging.debug("Node._recv_frame(): received {0!r}".format(transfer))
-
-        # If it's a node info request, keep track of the status of each node
-        if transfer.payload.type == uavcan.protocol.NodeStatus:
-            self.node_info[transfer.source_node_id] = {
-                "uptime": transfer.payload.uptime_sec,
-                "health": transfer.payload.health,
-                "mode": transfer.payload.mode,
-                "sub_mode": transfer.payload.sub_mode,
-                "vendor_specific_status_code":
-                    transfer.payload.vendor_specific_status_code,
-                "timestamp": time.time()
-            }
-
-        if (transfer.service_not_message and not
-                transfer.request_not_response) and \
+        if (transfer.service_not_message and not transfer.request_not_response) and \
                 transfer.dest_node_id == self.node_id:
-            # This is a reply to a request we sent. Look up the original
-            # request and call the appropriate callback
-            requests = self.outstanding_requests.keys()
+            # This is a reply to a request we sent. Look up the original request and call the appropriate callback
+            requests = self._outstanding_requests.keys()
             for key in requests:
-                if transfer.is_response_to(self.outstanding_requests[key]):
-                    # Call the request's callback and remove it from the
-                    # active list
-                    self.outstanding_request_callbacks[key](transfer.payload,
-                                                            transfer)
-                    del self.outstanding_requests[key]
-                    del self.outstanding_request_callbacks[key]
-                    del self.outstanding_request_timestamps[key]
-                    del self.outstanding_request_retries[key]
+                if transfer.is_response_to(self._outstanding_requests[key]):
+                    # Call the request's callback and remove it from the active list
+                    event = TransferEvent(transfer, self, 'response')
+                    self._outstanding_request_callbacks[key](event)
+                    del self._outstanding_requests[key]
+                    del self._outstanding_request_callbacks[key]
                     break
-        elif not transfer.service_not_message or \
-                transfer.dest_node_id == self.node_id:
-            # This is a request, a unicast or a broadcast; look up the
-            # appropriate handler by data type ID
-            for handler in self.handlers:
-                if handler[0] == transfer.payload.type:
-                    kwargs = handler[2] if len(handler) == 3 else {}
-                    h = handler[1](transfer.payload, transfer, self, **kwargs)
-                    h._execute()
+        elif not transfer.service_not_message or transfer.dest_node_id == self.node_id:
+            # This is a request or a broadcast; look up the appropriate handler by data type ID
+            self._handler_dispatcher.call_handlers(transfer)
 
     def _next_transfer_id(self, key):
-        transfer_id = self.next_transfer_ids[key]
-        self.next_transfer_ids[key] = (transfer_id + 1) & 0x1F
+        transfer_id = self._next_transfer_ids[key]
+        self._next_transfer_ids[key] = (transfer_id + 1) & 0x1F
         return transfer_id
 
-    def listen(self, device, baudrate=1000000, io_loop=None):
-        if device.startswith("/dev"):
-            self.can = driver.SLCAN(device, baudrate=baudrate)
-        else:
-            self.can = driver.SocketCAN(device)
+    def _throw_if_anonymous(self):
+        if not self.node_id:
+            raise uavcan.UAVCANException('The node is configured in anonymous mode')
 
-        self.can.open()
+    def _send_node_status(self):
+        if self.node_id:
+            uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
+            self.broadcast(uavcan.protocol.NodeStatus(uptime_sec=uptime_sec,  # @UndefinedVariable
+                                                      health=self.health,
+                                                      mode=self.mode,
+                                                      vendor_specific_status_code=self.vendor_specific_status_code))
 
-        # Send node status every 0.5 sec
-        self.start_time = time.time()
-        # TODO: make it easier to get constant values from UAVCAN types
-        self.health = uavcan.protocol.NodeStatus().HEALTH_OK
-        self.mode = uavcan.protocol.NodeStatus().MODE_OPERATIONAL
+    def add_handler(self, uavcan_type, handler, **kwargs):
+        """Adds a handler for the specified data type.
+        :param uavcan_type: DSDL data type. Only transfers of this type will be accepted for this handler.
+        :param handler:     The handler. This must be either a callable or a class.
+        :param **kwargs:    Extra arguments for the handler.
+        :return: A remover object that can be used to unregister the handler as follows:
+            x = node.add_handler(...)
+            # Remove the handler like this:
+            x.remove()
+            # Or like this:
+            if x.try_remove():
+                print('The handler has been removed successfully')
+            else:
+                print('There is no such handler')
+        """
+        return self._handler_dispatcher.add_handler(uavcan_type, handler, **kwargs)
 
-        if io_loop:
-            # Run asynchronously on a Tornado ioloop
-            import tornado.ioloop
+    def remove_handlers(self, uavcan_type):
+        """Removes all handlers for the specified DSDL data type.
+        """
+        self._handler_dispatcher.remove_handlers(uavcan_type)
 
-            self.can.add_to_ioloop(io_loop, callback=self._recv_frame)
-            self.nodestatus_timer = tornado.ioloop.PeriodicCallback(
-                self.send_node_status,
-                NODE_STATUS_INVERVAL * 1000.0, io_loop=io_loop)
-            self.nodestatus_timer.start()
-        else:
-            # Run synchronously
-            last_status_t = time.time()
-            while True:
-                messages = self.can._recv()
+    def spin(self, timeout=None):
+        """Runs background processes until timeout expires.
+        Note that all processing is implemented in one thread.
+        :param timeout: The method will return once this amount of time expires.
+                        If None, the method will never return.
+                        If zero, the method will handle only those events that are ready, then return immediately.
+        """
+        deadline = (time.monotonic() + timeout) if timeout is not None else sys.float_info.max
 
-                if messages:
-                    for message in messages:
-                        self._recv_frame(self.can, message)
+        def execute_once():
+            next_event_at = self._poll_scheduler_and_get_next_deadline()
+            if next_event_at is None:
+                next_event_at = sys.float_info.max
 
-                if time.time() - last_status_t > NODE_STATUS_INVERVAL:
-                    self.send_node_status()
-                    last_status_t = time.time()
+            read_timeout = min(next_event_at, deadline) - time.monotonic()
+            read_timeout = max(read_timeout, 0)
+            read_timeout = min(read_timeout, 1)
 
-    def send_node_status(self):
-        # Expire any requests more than one second old
-        requests = self.outstanding_requests.keys()
-        for key in requests:
-            if time.time() - self.outstanding_request_timestamps[key] > 1.0:
-                # Retry the request, or time it out if there are no retries
-                # remaining
-                if self.outstanding_request_retries[key]:
-                    self.outstanding_request_retries[key] -= 1
-                    self.outstanding_request_timestamps[key] = time.time()
+            frame = self._can_driver.receive(read_timeout)
+            if frame:
+                self._recv_frame(frame)
 
-                    for frame in self.outstanding_requests[key].to_frames():
-                        self.can.send(frame.message_id, frame.bytes,
-                                      extended=True)
-                else:
-                    self.outstanding_request_callbacks[key](None, None)
+        execute_once()
+        while time.monotonic() < deadline:
+            execute_once()
 
-                    del self.outstanding_requests[key]
-                    del self.outstanding_request_callbacks[key]
-                    del self.outstanding_request_timestamps[key]
-                    del self.outstanding_request_retries[key]
+    def request(self, payload, dest_node_id, callback, priority=None, timeout=None):
+        self._throw_if_anonymous()
 
-        # Send the node status message
-        status = uavcan.protocol.NodeStatus()
-        status.uptime_sec = int(time.time() - self.start_time)
-        status.health = self.health
-        status.mode = self.mode
-        status.sub_mode = 0
-        status.vendor_specific_status_code = 0
-        self.send_message(status)
+        # Preparing the transfer
+        transfer_id = self._next_transfer_id((payload.type.default_dtid, dest_node_id))
+        transfer = transport.Transfer(payload=payload,
+                                      source_node_id=self.node_id,
+                                      dest_node_id=dest_node_id,
+                                      transfer_id=transfer_id,
+                                      transfer_priority=priority or DEFAULT_TRANSFER_PRIORITY,
+                                      service_not_message=True,
+                                      request_not_response=True)
 
-    def send_request(self, payload, dest_node_id=None, callback=None):
-        transfer_id = self._next_transfer_id((payload.type.default_dtid,
-                                              dest_node_id))
+        # Sending the transfer
+        for frame in transfer.to_frames():
+            self._can_driver.send(frame.message_id, frame.bytes, extended=True)
+
+        # Registering a callback that will be invoked if there was no response after 'timeout' seconds
+        def on_timeout():
+            del self._outstanding_requests[transfer.key]
+            del self._outstanding_request_callbacks[transfer.key]
+            callback(None)
+
+        timeout = timeout or DEFAULT_SERVICE_TIMEOUT
+        timeout_caller_handle = self.defer(timeout, on_timeout)
+
+        # This wrapper will automatically cancel the timeout callback if there was a response
+        def timeout_cancelling_wrapper(event):
+            timeout_caller_handle.try_remove()
+            callback(event)
+
+        # Registering the pending request using the wrapper above instead of the callback
+        self._outstanding_requests[transfer.key] = transfer
+        self._outstanding_request_callbacks[transfer.key] = timeout_cancelling_wrapper
+
+        logger.debug("Node.request(dest_node_id={0:d}): sent {1!r}".format(dest_node_id, payload))
+
+    def respond(self, payload, dest_node_id, transfer_id, priority):
+        self._throw_if_anonymous()
+
         transfer = transport.Transfer(
             payload=payload,
             source_node_id=self.node_id,
             dest_node_id=dest_node_id,
             transfer_id=transfer_id,
-            service_not_message=True,
-            request_not_response=True)
-
-        for frame in transfer.to_frames():
-            self.can.send(frame.message_id, frame.bytes, extended=True)
-
-        if callback:
-            self.outstanding_requests[transfer.key] = transfer
-            self.outstanding_request_callbacks[transfer.key] = callback
-            self.outstanding_request_timestamps[transfer.key] = time.time()
-            self.outstanding_request_retries[transfer.key] = 3
-
-        logging.debug(
-            "Node.send_request(dest_node_id={0:d}): sent {1!r}".format(
-            dest_node_id, payload))
-
-    def send_message(self, payload):
-        transfer_id = self._next_transfer_id(payload.type.default_dtid)
-        transfer = transport.Transfer(
-            payload=payload,
-            source_node_id=self.node_id,
-            transfer_id=transfer_id,
-            service_not_message=False)
-
-        for frame in transfer.to_frames():
-            self.can.send(frame.message_id, frame.bytes, extended=True)
-
-        logging.debug("Node.send_message(): sent {0!r}".format(payload))
-
-
-class Monitor(object):
-    def __init__(self, payload, transfer, node, *args, **kwargs):
-        self.message = payload
-        self.transfer = transfer
-        self.node = node
-
-    def _execute(self):
-        self.on_message(self.message)
-
-    def on_message(self, message):
-        pass
-
-
-class Service(Monitor):
-    def __init__(self, *args, **kwargs):
-        super(Service, self).__init__(*args, **kwargs)
-        self.request = self.message
-        self.response = transport.CompoundValue(self.request.type, tao=True,
-                                                mode="response")
-
-    def _execute(self):
-        result = self.on_request()
-
-        # Send the response transfer
-        transfer = transport.Transfer(
-            payload=self.response,
-            source_node_id=self.node.node_id,
-            dest_node_id=self.transfer.source_node_id,
-            transfer_id=self.transfer.transfer_id,
-            transfer_priority=self.transfer.transfer_priority,
+            transfer_priority=priority,
             service_not_message=True,
             request_not_response=False
         )
         for frame in transfer.to_frames():
-            self.node.can.send(frame.message_id, frame.bytes,
-                               extended=True)
+            self._can_driver.send(frame.message_id, frame.bytes, extended=True)
 
-        logging.debug(
-            "ServiceHandler._execute(dest_node_id={0:d}): sent {1!r}".format(
-            self.transfer.source_node_id, self.response))
+        logger.debug("Node.respond(dest_node_id={0:d}, transfer_id={0:d}, priority={0:d}): sent {1!r}"
+                     .format(dest_node_id, transfer_id, priority, payload))
+
+    def broadcast(self, payload, priority=None):
+        self._throw_if_anonymous()
+
+        transfer_id = self._next_transfer_id(payload.type.default_dtid)
+        transfer = transport.Transfer(payload=payload,
+                                      source_node_id=self.node_id,
+                                      transfer_id=transfer_id,
+                                      transfer_priority=priority or DEFAULT_TRANSFER_PRIORITY,
+                                      service_not_message=False)
+
+        for frame in transfer.to_frames():
+            self._can_driver.send(frame.message_id, frame.bytes, extended=True)
+
+    def close(self):
+        self._can_driver.close()
+
+
+def make_node(can_device_name, **kwargs):
+    """Constructs a node instance with specified CAN device.
+    :param can_device_name: CAN device name, e.g. "/dev/ttyACM0", "COM9", "can0".
+    :param kwargs: These arguments will be supplied to the CAN driver factory and to the node constructor.
+    """
+    can = driver.make_driver(can_device_name, **kwargs)
+    return Node(can, **kwargs)
+
+
+class Monitor(object):
+    def __init__(self, event):
+        self.message = event.message
+        self.transfer = event.transfer
+        self.node = event.node
+
+    def on_message(self):
+        pass
+
+
+class Service(object):
+    def __init__(self, event):
+        self.request = event.request
+        self.transfer = event.transfer
+        self.node = event.node
+        self.response = self.request.type.Response()
 
     def on_request(self):
         pass

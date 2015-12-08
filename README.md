@@ -14,7 +14,9 @@ UAVCAN is a lightweight protocol designed for reliable communication in aerospac
 
 ## Installation
 
-This library is dependency-free. Compatible Python versions are 2.7 and 3.3 and newer.
+Compatible Python versions are 2.7 and 3.3 and newer.
+If the library is used with Python 3, which is recommended, it does not require any additional dependencies.
+If Python 2.7 is used, additional dependencies are needed - refer to `setup.py` for more info.
 
 ```bash
 pip install uavcan
@@ -22,4 +24,5 @@ pip install uavcan
 
 ## Development
 
-The code should be formatted in compliance with [PEP8](https://www.python.org/dev/peps/pep-0008/).
+The code should be formatted in compliance with [PEP8](https://www.python.org/dev/peps/pep-0008/),
+with one exception: line length must not exceed 120 characters (PEP8 requires 79).

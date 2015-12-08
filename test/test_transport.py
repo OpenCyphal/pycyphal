@@ -1,3 +1,12 @@
+#
+# Copyright (C) 2014-2015  UAVCAN Development Team  <uavcan.org>
+#
+# This software is distributed under the terms of the MIT License.
+#
+# Author: Ben Dyer <ben_dyer@mac.com>
+#         Pavel Kirienko <pavel.kirienko@zubax.com>
+#
+
 import unittest
 from uavcan import transport
 from uavcan.dsdl import parser
@@ -103,22 +112,22 @@ class TestBEFromLEBits(unittest.TestCase):
         #                                     llllllllmmmm
         out_bits = transport.be_from_le_bits("110110101110", 12)
         #                                     mmmmllllllll
-        self.assertEqual(out_bits,           "111011011010")
+        self.assertEqual(out_bits, "111011011010")
 
         #                                     llllllllmmmmmmmm
         out_bits = transport.be_from_le_bits("1010010110010110", 16)
         #                                     mmmmmmmmllllllll
-        self.assertEqual(out_bits,           "1001011010100101")
+        self.assertEqual(out_bits, "1001011010100101")
 
         #                                     llllllll........m
         out_bits = transport.be_from_le_bits("11010010110010110", 17)
         #                                     m........llllllll
-        self.assertEqual(out_bits,           "01100101111010010")
+        self.assertEqual(out_bits, "01100101111010010")
 
         #                                     llllllll........m
         out_bits = transport.be_from_le_bits("10100101100101101", 17)
         #                                     m........llllllll
-        self.assertEqual(out_bits,           "11001011010100101")
+        self.assertEqual(out_bits, "11001011010100101")
 
 
 class TestLEFromBEBits(unittest.TestCase):
@@ -137,22 +146,22 @@ class TestLEFromBEBits(unittest.TestCase):
         #                                     mmmmllllllll
         out_bits = transport.le_from_be_bits("111011011010", 12)
         #                                     llllllllmmmm
-        self.assertEqual(out_bits,           "110110101110")
+        self.assertEqual(out_bits, "110110101110")
 
         #                                     mmmmmmmmllllllll
         out_bits = transport.le_from_be_bits("1001011010100101", 16)
         #                                     llllllllmmmmmmmm
-        self.assertEqual(out_bits,           "1010010110010110")
+        self.assertEqual(out_bits, "1010010110010110")
 
         #                                     m........llllllll
         out_bits = transport.le_from_be_bits("01100101111010010", 17)
         #                                     llllllll........m
-        self.assertEqual(out_bits,           "11010010110010110")
+        self.assertEqual(out_bits, "11010010110010110")
 
         #                                     m........llllllll
         out_bits = transport.le_from_be_bits("11001011010100101", 17)
         #                                     llllllll........m
-        self.assertEqual(out_bits,           "10100101100101101")
+        self.assertEqual(out_bits, "10100101100101101")
 
 
 class TestCast(unittest.TestCase):
@@ -382,8 +391,9 @@ class TestArrayBasic(unittest.TestCase):
                 "c"
             )
         ]
+
         def custom_type_factory(*args, **kwargs):
-            return transport.CompoundValue(custom_type, tao=True, *args, **kwargs)
+            return transport.CompoundValue(custom_type, _tao=True, *args, **kwargs)
         custom_type._instantiate = custom_type_factory
 
         self.a1_type = parser.ArrayType(
@@ -417,9 +427,9 @@ class TestArrayBasic(unittest.TestCase):
         self.assertEqual(self.a3_type.get_max_bitlen(), (8 + 16 + 5 + 3) * 2)
 
     def test_representation(self):
-        a1 = transport.ArrayValue(self.a1_type, tao=False)
-        a2 = transport.ArrayValue(self.a2_type, tao=False)
-        a3 = transport.ArrayValue(self.a3_type, tao=True)
+        a1 = transport.ArrayValue(self.a1_type, _tao=False)
+        a2 = transport.ArrayValue(self.a2_type, _tao=False)
+        a3 = transport.ArrayValue(self.a3_type, _tao=True)
         for i in range(4):
             a1[i] = i
         for i in range(2):
@@ -474,8 +484,9 @@ class TestVoid(unittest.TestCase):
                 "b"
             )
         ]
+
         def custom_type_factory(*args, **kwargs):
-            return transport.CompoundValue(self.custom_type, tao=True, *args,
+            return transport.CompoundValue(self.custom_type, _tao=True, *args,
                                            **kwargs)
         self.custom_type._instantiate = custom_type_factory
 
@@ -530,8 +541,9 @@ class TestMessageUnion(unittest.TestCase):
                 "b"
             )
         ]
+
         def custom_type_factory(*args, **kwargs):
-            return transport.CompoundValue(self.custom_type, tao=True, *args,
+            return transport.CompoundValue(self.custom_type, _tao=True, *args,
                                            **kwargs)
         self.custom_type._instantiate = custom_type_factory
 

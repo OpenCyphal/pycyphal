@@ -62,3 +62,9 @@ target/
 
 # Mac stuff
 .DS_Store
+
+# Eclipse
+.settings/
+
+# IntelliJ
+.idea/

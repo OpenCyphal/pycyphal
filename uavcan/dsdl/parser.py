@@ -1,11 +1,16 @@
 #
-# UAVCAN DSDL file parser
+# Copyright (C) 2014-2015  UAVCAN Development Team  <uavcan.org>
 #
-# Copyright (C) 2014-2015 Pavel Kirienko <pavel.kirienko@gmail.com>
+# This software is distributed under the terms of the MIT License.
+#
+# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+#         Ben Dyer <ben_dyer@mac.com>
 #
 
 from __future__ import division, absolute_import, print_function, unicode_literals
-import os, re, logging
+import os
+import re
+from logging import getLogger
 from io import StringIO
 from .signature import Signature, compute_signature
 from .common import DsdlException, pretty_filename, bytes_from_crc64
@@ -13,11 +18,11 @@ from .type_limits import get_unsigned_integer_range, get_signed_integer_range, g
 
 # Python 2.7 compatibility
 try:
-    str = unicode  # @ReservedAssignment
+    str = unicode  # @ReservedAssignment @UndefinedVariable
 except NameError:
     pass
 try:
-    long(1)
+    long(1)  # @UndefinedVariable
 except NameError:
     long = int  # @ReservedAssignment
 
@@ -25,6 +30,10 @@ MAX_FULL_TYPE_NAME_LEN = 80
 
 SERVICE_DATA_TYPE_ID_MAX = 255
 MESSAGE_DATA_TYPE_ID_MAX = 65535
+
+
+logger = getLogger(__name__)
+
 
 class Type:
     '''
@@ -174,6 +183,7 @@ class CompoundType(Type):
         self.default_dtid = default_dtid
         self.kind = kind
         self.source_text = source_text
+
         def compute_max_bitlen(flds, union):
             if len(flds) == 0:
                 return 0
@@ -199,7 +209,8 @@ class CompoundType(Type):
         else:
             error('Compound type of unknown kind [%s]', kind)
 
-    def _instantiate(*args, **kwargs):
+    def _instantiate(self, *args, **kwargs):
+        # This is a stub
         pass
 
     def __call__(self, *args, **kwargs):
@@ -247,8 +258,7 @@ class CompoundType(Type):
         Please refer to the specification for details about signatures.
         '''
         sig = Signature(self.get_dsdl_signature())
-        fields = self.request_fields + self.response_fields \
-                 if self.kind == CompoundType.KIND_SERVICE else self.fields
+        fields = self.request_fields + self.response_fields if self.kind == CompoundType.KIND_SERVICE else self.fields
         for field in fields:
             field_sig = field.type.get_data_type_signature()
             if field_sig is not None:
@@ -264,6 +274,7 @@ class VoidType(Type):
     Fields:
         bitlen       Bit length, 1 to 64
     '''
+
     def __init__(self, bitlen):
         self.bitlen = bitlen
         Type.__init__(self, self.get_normalized_definition(), Type.CATEGORY_VOID)
@@ -284,6 +295,7 @@ class Attribute:
         type    Attribute type description, the type of this field inherits the class Type, e.g. PrimitiveType
         name    Attribute name string
     '''
+
     def __init__(self, type, name):  # @ReservedAssignment
         self.type = type
         self.name = name
@@ -300,6 +312,7 @@ class Field(Attribute):
     Does not add new fields to Attribute.
     If type is void, the name will be None.
     '''
+
     def get_normalized_definition(self):
         if self.type.category == self.type.CATEGORY_VOID:
             return self.type.get_normalized_definition()
@@ -315,6 +328,7 @@ class Constant(Attribute):
         value              Computed result of the initialization expression in the final type (e.g. int, float)
         string_value       Computed result of the initialization expression as string
     '''
+
     def __init__(self, type, name, init_expression, value):  # @ReservedAssignment
         Attribute.__init__(self, type, name)
         self.init_expression = init_expression
@@ -331,11 +345,9 @@ class Parser:
     '''
     DSDL parser logic. Do not use this class directly; use the helper function instead.
     '''
-    LOGGER_NAME = 'dsdl_parser'
 
     def __init__(self, search_dirs):
         self.search_dirs = validate_search_directories(search_dirs)
-        self.log = logging.getLogger(Parser.LOGGER_NAME)
 
     def _namespace_from_filename(self, filename):
         search_dirs = sorted(map(os.path.abspath, self.search_dirs))  # Nested last
@@ -384,7 +396,7 @@ class Parser:
             full_typename = typename
         namespace = '.'.join(full_typename.split('.')[:-1])
         directory = locate_namespace_directory(namespace)
-        self.log.debug('Searching for [%s] in [%s]', full_typename, directory)
+        logger.debug('Searching for [%s] in [%s]', full_typename, directory)
 
         for fn in os.listdir(directory):
             fn = os.path.join(directory, fn)
@@ -394,7 +406,7 @@ class Parser:
                     if full_typename == fn_full_typename:
                         return fn
                 except Exception as ex:
-                    self.log.debug('Unknown file [%s], skipping... [%s]', pretty_filename(fn), ex)
+                    logger.debug('Unknown file [%s], skipping... [%s]', pretty_filename(fn), ex)
         error('Type definition not found [%s]', typename)
 
     def _parse_void_type(self, filename, bitlen):
@@ -402,10 +414,10 @@ class Parser:
         return VoidType(bitlen)
 
     def _parse_array_type(self, filename, value_typedef, size_spec, cast_mode):
-        self.log.debug('Parsing the array value type [%s]...', value_typedef)
+        logger.debug('Parsing the array value type [%s]...', value_typedef)
         value_type = self._parse_type(filename, value_typedef, cast_mode)
         enforce(value_type.category != value_type.CATEGORY_ARRAY,
-                 'Multidimensional arrays are not allowed (protip: use nested types)')
+                'Multidimensional arrays are not allowed (protip: use nested types)')
         try:
             if size_spec.startswith('<='):
                 max_size = int(size_spec[2:], 0)
@@ -433,8 +445,8 @@ class Parser:
             return PrimitiveType(PrimitiveType.KIND_BOOLEAN, 1, cast_mode)
         try:
             kind = {
-                'uint' : PrimitiveType.KIND_UNSIGNED_INT,
-                'int'  : PrimitiveType.KIND_SIGNED_INT,
+                'uint': PrimitiveType.KIND_UNSIGNED_INT,
+                'int': PrimitiveType.KIND_SIGNED_INT,
                 'float': PrimitiveType.KIND_FLOAT,
             }[base_name]
         except KeyError:
@@ -448,7 +460,7 @@ class Parser:
 
     def _parse_compound_type(self, filename, typedef):
         definition_filename = self._locate_compound_type_definition(filename, typedef)
-        self.log.debug('Nested type [%s] is defined in [%s], parsing...', typedef, pretty_filename(definition_filename))
+        logger.debug('Nested type [%s] is defined in [%s], parsing...', typedef, pretty_filename(definition_filename))
         t = self.parse(definition_filename)
         if t.kind == t.KIND_SERVICE:
             error('A service type can not be nested into another compound type')
@@ -488,15 +500,15 @@ class Parser:
             value = ord(value)
         elif isinstance(value, (float, int, bool, long)):  # Numeric literal
             value = {
-                attrtype.KIND_UNSIGNED_INT : long,
-                attrtype.KIND_SIGNED_INT : long,
-                attrtype.KIND_BOOLEAN : int,  # Not bool because we need to check range
-                attrtype.KIND_FLOAT : float
+                attrtype.KIND_UNSIGNED_INT: long,
+                attrtype.KIND_SIGNED_INT: long,
+                attrtype.KIND_BOOLEAN: int,  # Not bool because we need to check range
+                attrtype.KIND_FLOAT: float
             }[attrtype.kind](value)
         else:
             error('Invalid type of constant initialization expression [%s]', type(value).__name__)
 
-        self.log.debug('Constant initialization expression evaluated as: [%s] --> %s', init_expression, repr(value))
+        logger.debug('Constant initialization expression evaluated as: [%s] --> %s', init_expression, repr(value))
         attrtype.validate_value_range(value)
         return Constant(attrtype, name, init_expression, value)
 
@@ -569,7 +581,7 @@ class Parser:
                         ex.line = num
                     raise ex
                 except Exception as ex:
-                    self.log.error('Internal error', exc_info=True)
+                    logger.error('Internal error', exc_info=True)
                     raise DsdlException('Internal error: %s' % str(ex), line=num)
 
             if response_part:
@@ -593,10 +605,10 @@ class Parser:
             validate_union(t)
 
             validate_data_type_id(t)
-            self.log.info('Type [%s], default DTID: %s, signature: %08x, maxbits: %s, maxbytes: %s, DSSD:',
-                          full_typename, default_dtid, t.get_dsdl_signature(), max_bitlen, max_bytelen)
+            logger.debug('Type [%s], default DTID: %s, signature: %08x, maxbits: %s, maxbytes: %s, DSSD:',
+                         full_typename, default_dtid, t.get_dsdl_signature(), max_bitlen, max_bytelen)
             for ln in t.get_dsdl_signature_source_definition().splitlines():
-                self.log.info('    %s', ln)
+                logger.debug('    %s', ln)
             return t
         except DsdlException as ex:
             if not ex.file:
@@ -613,7 +625,7 @@ class Parser:
         except IOError as ex:
             raise DsdlException('IO error: %s' % str(ex), file=filename)
         except Exception as ex:
-            self.log.error('Internal error', exc_info=True)
+            logger.error('Internal error', exc_info=True)
             raise DsdlException('Internal error: %s' % str(ex), file=filename)
 
 
@@ -653,7 +665,7 @@ def validate_search_directories(dirnames):
                 continue
             enforce(not d1.startswith(d2), 'Nested search directories are not allowed [%s] [%s]', d1, d2)
             enforce(d1.split(os.path.sep)[-1] != d2.split(os.path.sep)[-1],
-                     'Namespace roots must be unique [%s] [%s]', d1, d2)
+                    'Namespace roots must be unique [%s] [%s]', d1, d2)
     return dirnames
 
 
@@ -733,6 +745,7 @@ def parse_namespaces(source_dirs, search_dirs=None):
     def walk():
         import fnmatch
         from functools import partial
+
         def on_walk_error(directory, ex):
             raise DsdlException('OS error in [%s]: %s' % (directory, str(ex)))
         for source_dir in source_dirs:
@@ -743,6 +756,7 @@ def parse_namespaces(source_dirs, search_dirs=None):
                     yield filename
 
     all_default_dtid = {}  # (kind, dtid) : filename
+
     def ensure_unique_dtid(t, filename):
         if t.default_dtid is None:
             return

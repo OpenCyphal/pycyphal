@@ -1,5 +1,10 @@
 #
-# Copyright (C) 2014 Pavel Kirienko <pavel.kirienko@gmail.com>
+# Copyright (C) 2014-2015  UAVCAN Development Team  <uavcan.org>
+#
+# This software is distributed under the terms of the MIT License.
+#
+# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+#         Ben Dyer <ben_dyer@mac.com>
 #
 
 '''
@@ -8,8 +13,8 @@ Please read the specs at http://uavcan.org.
 '''
 
 from .parser import Parser, parse_namespaces, \
-                    Type, PrimitiveType, ArrayType, CompoundType, \
-                    Attribute, Field, Constant
+    Type, PrimitiveType, ArrayType, CompoundType, \
+    Attribute, Field, Constant
 
 from .common import DsdlException
 
