@@ -295,8 +295,8 @@ class SLCAN(object):
         return self._parse(msg)
 
     def send(self, message_id, message, extended=False):
-        start = ('T{0:08X}' if extended else 't{0:03X}').format(message_id).encode()
-        line = '{0:s}{1:1d}{2:s}\r'.format(start, len(message), binascii.b2a_hex(message)).encode()
+        start = ('T{0:08X}' if extended else 't{0:03X}').format(message_id)
+        line = '{0:s}{1:1d}{2:s}\r'.format(start, len(message), binascii.b2a_hex(message).decode()).encode()
         self.conn.write(line)
         self.conn.flush()
 
