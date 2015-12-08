@@ -278,28 +278,30 @@ class SLCAN(object):
             return
 
     def receive(self, timeout=None):
-        self.conn.timeout = timeout
-        deadline = (time.monotonic() + timeout) if timeout is not None else None
+        """If timeout is not provided, it defaults to one second.
+        """
+        deadline = time.monotonic() + (timeout if timeout is not None else 1)
 
         while True:
-            if self._read_buffer and self._read_buffer.endswith(b'\r'):
-                break
+            # The objective here is to get as much data from the RX queue as possible to avoid overrun
+            self.conn.timeout = 0
+            self._read_buffer += self.conn.read(1024 * 1024)   # Arbitrary large number
 
-            if deadline is not None:
-                to = deadline - time.monotonic()
-                if to <= 0:
-                    return
-                self.conn.timeout = to
+            # Parsing the input stream until first valid message is found, then return it
+            # Unparsed data will be kept in the buffer, so it will be parsed next time receive() is called
+            while b'\r' in self._read_buffer:
+                msg, self._read_buffer = self._read_buffer.split(b'\r', 1)
+                msg = self._parse(msg)
+                if msg:
+                    return msg
 
-            b = self.conn.read(1)
-            if b != self.NACK:
-                self._read_buffer += b
-
-        assert self._read_buffer.endswith(b'\r')
-
-        msg = self._read_buffer
-        self._read_buffer = bytes()
-        return self._parse(msg)
+            # If no valid data was received, block until timeout expires or a byte gets received,
+            # then restart the entire loop.
+            to = deadline - time.monotonic()
+            if to <= 0:
+                return
+            self.conn.timeout = to
+            self._read_buffer += self.conn.read(1)
 
     def send(self, message_id, message, extended=False):
         start = ('T{0:08X}' if extended else 't{0:03X}').format(message_id)
@@ -343,4 +345,5 @@ if __name__ == "__main__":
 
     can = make_driver(sys.argv[1], **kw)
     while True:
-        print(can.receive(2))
+        can.receive()
+        # print(can.receive())
