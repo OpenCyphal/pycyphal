@@ -291,7 +291,9 @@ class SLCAN(object):
                     return
                 self.conn.timeout = to
 
-            self._read_buffer += self.conn.read(1)
+            b = self.conn.read(1)
+            if b != self.NACK:
+                self._read_buffer += b
 
         assert self._read_buffer.endswith(b'\r')
 
@@ -324,8 +326,11 @@ def make_driver(device_name, **kwargs):
 
 if __name__ == "__main__":
     if sys.version_info[0] < 3:
-        import monotonic  # @UnresolvedImport
-        time.monotonic = monotonic.monotonic
+        try:
+            import monotonic  # @UnresolvedImport
+            time.monotonic = monotonic.monotonic
+        except ImportError:
+            time.monotonic = time.time
 
     if len(sys.argv) < 2:
         print("Usage: driver.py <can-device> [param=value ...]")
