@@ -16,7 +16,13 @@ import socket
 import struct
 import binascii
 import select
+import threading
 from logging import getLogger
+
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
 import uavcan
 
@@ -209,14 +215,14 @@ class SLCAN(object):
     ACK = b'\r'
     NACK = b'\x07'
 
-    def __init__(self, device, bitrate, baudrate=None, **_extras):
+    def __init__(self, device, bitrate, baudrate=None, rx_buffer_size=None, **_extras):
         if not serial:
             raise RuntimeError("PySerial not imported; SLCAN is not available. Please install PySerial.")
 
         baudrate = baudrate or self.DEFAULT_BAUDRATE
 
         self.conn = serial.Serial(device, baudrate)
-        self._read_buffer = bytes()
+        self._received_messages = queue.Queue(maxsize=rx_buffer_size or 10000)
 
         speed_code = {
             1000000: 8,
@@ -244,7 +250,76 @@ class SLCAN(object):
 
         self.conn.flushInput()
 
+        self._thread_should_exit = False
+        self._thread = threading.Thread(target=self._rx_thread, name='slcan_rx')
+        self._thread.daemon = True
+        self._thread.start()
+
+    def _rx_thread(self):
+        logger.debug('SLCAN RX thread started (%r)', self._thread)
+        py2_compat = sys.version_info[0] < 3
+        buf = bytes()
+        while not self._thread_should_exit:
+            try:
+                # Read as much data as possible in order to avoid RX overrun
+                select.select([self.conn.fileno()], [], [], 0.1)
+                self.conn.timeout = 0
+                buf += self.conn.read(1024 * 1024)  # Arbitrary large number
+
+                # The parsing logic below is heavily optimized for speed
+                pos = 0
+                buf_len = len(buf)
+                while True:
+                    # Looking for start of the next message, break if not found
+                    while pos < buf_len and buf[pos] not in b'Tt':
+                        pos += 1
+                    if pos >= buf_len:
+                        break
+
+                    # Now, pos points to the beginning of the next message - parse it
+                    try:
+                        id_len = 8 if buf[pos] == b'T'[0] else 3
+
+                        available_length = buf_len - pos
+                        if available_length < id_len + 2:  # Shortest message is 't<ID>0'
+                            break
+
+                        # Parse the header
+                        packet_id = int(buf[pos + 1:pos + 1 + id_len].decode(), 16)
+                        if py2_compat:
+                            packet_len = int(buf[pos + 1 + id_len])             # This version is horribly slow
+                        else:
+                            packet_len = buf[pos + 1 + id_len] - 48             # Py3 version is faster
+
+                        if packet_len > 8:
+                            raise DriverError('Invalid packet length')
+
+                        # <type> <id> <dlc> <data>
+                        # 1      3|8  1     packet_len * 2
+                        total_length = 2 + id_len + packet_len * 2
+                        if available_length < total_length:
+                            break
+
+                        # TODO: parse timestamps as well
+                        packet_data = binascii.a2b_hex(buf[pos + 2 + id_len:pos + 2 + id_len + packet_len * 2])
+                        pos += total_length
+                    except Exception:   # Message is malformed
+                        logger.warning('Could not parse SLCAN stream [%r]', buf[pos:], exc_info=True)
+                        pos += 1        # Continue from the next position
+                    else:
+                        self._received_messages.put_nowait(RxFrame(packet_id, packet_data, (id_len == 8)))
+
+                # All data that could be parsed is already parsed - discard everything up to the current pos
+                buf = buf[pos:]
+            except Exception:
+                buf = bytes()
+                logger.error('SLCAN RX thread error (%r), buffer discarded', self._thread, exc_info=True)
+
+        logger.debug('SLCAN RX thread is exiting (%r)', self._thread)
+
     def close(self):
+        self._thread_should_exit = True
+        self._thread.join()
         self.conn.write(b'C\r')
         self.conn.flush()
         time.sleep(0.1)     # TODO: Ben, why?
@@ -261,47 +336,11 @@ class SLCAN(object):
             if b == self.ACK:
                 break
 
-    def _parse(self, message):
-        try:
-            id_len = 8 if message[0] == serial.to_bytes(b'T')[0] else 3
-
-            # Parse the message into a (message ID, data) tuple.
-            packet_id = int(message[1:1 + id_len].decode(), 16)
-            packet_len = int(message.decode()[1 + id_len])      # Why .decode()? Try int(b'123'[0]) in Py3 and Py2.
-            packet_data = binascii.a2b_hex(message[2 + id_len:2 + id_len + packet_len * 2])
-
-            # ID, data, extended
-            # TODO: SLCAN timestamping support
-            return RxFrame(packet_id, packet_data, (id_len == 8))
-        except Exception:
-            logger.error('Could not parse SLCAN frame [%r]', message, exc_info=True)
-            return
-
     def receive(self, timeout=None):
-        """If timeout is not provided, it defaults to one second.
-        """
-        deadline = time.monotonic() + (timeout if timeout is not None else 1)
-
-        while True:
-            # The objective here is to get as much data from the RX queue as possible to avoid overrun
-            self.conn.timeout = 0
-            self._read_buffer += self.conn.read(1024 * 1024)   # Arbitrary large number
-
-            # Parsing the input stream until first valid message is found, then return it
-            # Unparsed data will be kept in the buffer, so it will be parsed next time receive() is called
-            while b'\r' in self._read_buffer:
-                msg, self._read_buffer = self._read_buffer.split(b'\r', 1)
-                msg = self._parse(msg)
-                if msg:
-                    return msg
-
-            # If no valid data was received, block until timeout expires or a byte gets received,
-            # then restart the entire loop.
-            to = deadline - time.monotonic()
-            if to <= 0:
-                return
-            self.conn.timeout = to
-            self._read_buffer += self.conn.read(1)
+        try:
+            return self._received_messages.get(block=True, timeout=timeout)
+        except queue.Empty:
+            return
 
     def send(self, message_id, message, extended=False):
         start = ('T{0:08X}' if extended else 't{0:03X}').format(message_id)
@@ -327,6 +366,9 @@ def make_driver(device_name, **kwargs):
 
 
 if __name__ == "__main__":
+    import logging
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
+
     if sys.version_info[0] < 3:
         try:
             import monotonic  # @UnresolvedImport
@@ -345,5 +387,4 @@ if __name__ == "__main__":
 
     can = make_driver(sys.argv[1], **kw)
     while True:
-        can.receive()
-        # print(can.receive())
+        print(can.receive())
