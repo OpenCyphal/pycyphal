@@ -230,8 +230,12 @@ class Node(Scheduler):
         self.periodic(node_status_interval, self._send_node_status)
 
         # GetNodeInfo server
+        def on_get_node_info(e):
+            logger.debug('GetNodeInfo request from %r', e.transfer.source_node_id)
+            self._fill_node_status(self.node_info.status)
+            return self.node_info
         self.node_info = node_info or uavcan.protocol.GetNodeInfo.Response()     # @UndefinedVariable
-        self.add_handler(uavcan.protocol.GetNodeInfo, lambda _: self.node_info)  # @UndefinedVariable
+        self.add_handler(uavcan.protocol.GetNodeInfo, on_get_node_info)          # @UndefinedVariable
 
     def _recv_frame(self, raw_frame):
         if not raw_frame.extended:
@@ -271,13 +275,19 @@ class Node(Scheduler):
         if not self.node_id:
             raise uavcan.UAVCANException('The node is configured in anonymous mode')
 
+    def _fill_node_status(self, msg):
+        msg.uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
+        msg.health = self.health
+        msg.mode = self.mode
+        msg.vendor_specific_status_code = self.vendor_specific_status_code
+
     def _send_node_status(self):
+        self._fill_node_status(self.node_info.status)
         if self.node_id:
-            uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
-            self.broadcast(uavcan.protocol.NodeStatus(uptime_sec=uptime_sec,  # @UndefinedVariable
-                                                      health=self.health,
-                                                      mode=self.mode,
-                                                      vendor_specific_status_code=self.vendor_specific_status_code))
+            # TODO: transmit self.node_info.status instead of creating a new object
+            msg = uavcan.protocol.NodeStatus()  # @UndefinedVariable
+            self._fill_node_status(msg)
+            self.broadcast(msg)
 
     def add_handler(self, uavcan_type, handler, **kwargs):
         """Adds a handler for the specified data type.
