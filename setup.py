@@ -14,7 +14,7 @@ from setuptools import setup
 
 args = dict(
     name='uavcan',
-    version='1.0.0dev3',
+    version='1.0.0dev5',
     description='Python implementation of the UAVCAN protocol stack',
     packages=['uavcan', 'uavcan.dsdl', 'uavcan.services', 'uavcan.monitors'],
     package_data={
