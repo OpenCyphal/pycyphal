@@ -28,5 +28,15 @@ pip install uavcan
 
 ## Development
 
+### Automatic deployment to PyPI
+
+In order to deploy to PyPI via CI, do this:
+
+1. Update the version number in `setup.py`, e.g. `1.0.0`.
+2. Create a new tag with the same version number, e.g. `git tag -a 1.0.0 -m "My release 1.0.0"`
+3. Push to master.
+
+### Code style
+
 The code should be formatted in compliance with [PEP8](https://www.python.org/dev/peps/pep-0008/),
 with one exception: line length must not exceed 120 characters (PEP8 requires 79).
