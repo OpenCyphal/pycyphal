@@ -17,6 +17,8 @@ class DriverError(UAVCANException):
 
 
 class RxFrame:
+    MAX_DATA_LENGTH = 8
+
     def __init__(self, can_id, data, extended, ts_monotonic=None, ts_real=None):
         self.id = can_id
         self.data = data
@@ -25,6 +27,10 @@ class RxFrame:
         self.ts_real = ts_real or time.monotonic()
 
     def __str__(self):
-        return '%0*x %s' % (8 if self.extended else 3, self.id, binascii.hexlify(self.data).decode())
+        id_str = ('%0*x' % (8 if self.extended else 3, self.id)).rjust(8)
+        hex_data = ' '.join(['%02x' % x for x in self.data]).ljust(3 * self.MAX_DATA_LENGTH)
+        ascii_data = ''.join([(chr(x) if 32 <= x <= 126 else '.') for x in self.data])
+        return "%12.6f %12.6f  %s  %s  '%s'" % \
+               (self.ts_monotonic, self.ts_real, id_str, hex_data, ascii_data)
 
     __repr__ = __str__
