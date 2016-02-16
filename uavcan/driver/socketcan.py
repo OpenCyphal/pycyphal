@@ -19,6 +19,8 @@ from .common import DriverError, RxFrame
 
 logger = getLogger(__name__)
 
+SIOCGSTAMP = 0x8906
+
 # Python 3.3+'s socket module has support for SocketCAN when running on Linux. Use that if possible.
 # noinspection PyBroadException
 try:
@@ -33,6 +35,7 @@ try:
 except Exception:
     import ctypes  # @UnusedImport
     import ctypes.util
+
     libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
 
     # from linux/can.h
@@ -40,7 +43,6 @@ except Exception:
 
     # from linux/socket.h
     AF_CAN = 29
-    SO_TIMESTAMP = 29
 
     from socket import SOL_SOCKET
 
@@ -115,17 +117,11 @@ except Exception:
             libc.close(self.fd)
 
     def get_socket(ifname):
-        on = ctypes.c_int(1)
-
         socket_fd = libc.socket(AF_CAN, socket.SOCK_RAW, CAN_RAW)
         if socket_fd < 0:
             raise DriverError('Could not open socket')
 
         libc.fcntl(socket_fd, fcntl.F_SETFL, os.O_NONBLOCK)
-
-        error = libc.setsockopt(socket_fd, SOL_SOCKET, SO_TIMESTAMP, ctypes.byref(on), ctypes.sizeof(on))
-        if error != 0:
-            raise DriverError('Could not enable timestamping on socket [errno %s]' % ctypes.get_errno())
 
         ifidx = libc.if_nametoindex(ifname)
         if ctypes.get_errno() != 0:
@@ -146,6 +142,8 @@ CAN_EFF_MASK = 0x1FFFFFFF
 
 class SocketCAN(object):
     FRAME_FORMAT = '=IB3x8s'
+    FRAME_SIZE = 16
+    TIMEVAL_FORMAT = '@LL'
 
     def __init__(self, interface, **_extras):
         self.socket = get_socket(interface)
@@ -160,10 +158,18 @@ class SocketCAN(object):
 
         self.poll.modify(self.socket.fileno(), select.POLLIN | select.POLLPRI)
         if self.poll.poll(timeout):
-            packet = self.socket.recv(16)
-            assert len(packet) == 16
-            can_id, can_dlc, can_data = struct.unpack(self.FRAME_FORMAT, packet)
-            # TODO: Socket-level timestamping
+            # Reading the packet itself
+            packet_raw = self.socket.recv(self.FRAME_SIZE)
+            can_id, can_dlc, can_data = struct.unpack(self.FRAME_FORMAT, packet_raw)
+
+            # Reading the timestamp
+            ts_raw = fcntl.ioctl(self.socket, SIOCGSTAMP, struct.pack(self.TIMEVAL_FORMAT, 0, 0))
+            sec, usec = struct.unpack(self.TIMEVAL_FORMAT, ts_raw)
+            timestamp = sec + usec * 1e-6
+
+            # Converting the timestamp into the local time base
+            # TODO: implement the timestamp conversion
+
             return RxFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG))
 
     def send(self, message_id, message, extended=False):
