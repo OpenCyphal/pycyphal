@@ -24,7 +24,7 @@ class RxFrame:
         self.data = data
         self.extended = extended
         self.ts_monotonic = ts_monotonic or time.monotonic()
-        self.ts_real = ts_real or time.monotonic()
+        self.ts_real = ts_real or time.time()
 
     def __str__(self):
         id_str = ('%0*x' % (8 if self.extended else 3, self.id)).rjust(8)

@@ -15,11 +15,10 @@ import socket
 import struct
 import select
 from logging import getLogger
+
 from .common import DriverError, RxFrame
 
 logger = getLogger(__name__)
-
-SIOCGSTAMP = 0x8906
 
 # Python 3.3+'s socket module has support for SocketCAN when running on Linux. Use that if possible.
 # noinspection PyBroadException
@@ -33,7 +32,7 @@ try:
         return s
 
 except Exception:
-    import ctypes  # @UnusedImport
+    import ctypes
     import ctypes.util
 
     libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
@@ -113,6 +112,9 @@ except Exception:
         def fileno(self):
             return self.fd
 
+        def setsockopt(self, level, optname, value):
+            return self.fd.setsockopt(level, optname, value)
+
         def close(self):
             libc.close(self.fd)
 
@@ -139,6 +141,8 @@ except Exception:
 CAN_EFF_FLAG = 0x80000000
 CAN_EFF_MASK = 0x1FFFFFFF
 
+SO_TIMESTAMP = 29
+
 
 class SocketCAN(object):
     FRAME_FORMAT = '=IB3x8s'
@@ -149,6 +153,8 @@ class SocketCAN(object):
         self.socket = get_socket(interface)
         self.poll = select.poll()
         self.poll.register(self.socket.fileno())
+        # Timestamping
+        self.socket.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMP, 1)
 
     def close(self, callback=None):
         self.socket.close()
@@ -158,19 +164,25 @@ class SocketCAN(object):
 
         self.poll.modify(self.socket.fileno(), select.POLLIN | select.POLLPRI)
         if self.poll.poll(timeout):
-            # Reading the packet itself
-            packet_raw = self.socket.recv(self.FRAME_SIZE)
+            # Reading the frame together with timestamps in the ancillary data structures
+            ancillary_len = 64   # Arbitrary value, must be large enough to accommodate all ancillary data
+            packet_raw, ancdata, _flags, _addr = self.socket.recvmsg(self.FRAME_SIZE, socket.CMSG_SPACE(ancillary_len))
+
+            # Parsing the frame
             can_id, can_dlc, can_data = struct.unpack(self.FRAME_FORMAT, packet_raw)
 
-            # Reading the timestamp
-            ts_raw = fcntl.ioctl(self.socket, SIOCGSTAMP, struct.pack(self.TIMEVAL_FORMAT, 0, 0))
-            sec, usec = struct.unpack(self.TIMEVAL_FORMAT, ts_raw)
-            timestamp = sec + usec * 1e-6
+            # Parsing the timestamps
+            ts_real = None
+            for cmsg_level, cmsg_type, cmsg_data in ancdata:
+                    if cmsg_level == socket.SOL_SOCKET and cmsg_type == SO_TIMESTAMP:
+                        sec, usec = struct.unpack(self.TIMEVAL_FORMAT, cmsg_data)
+                        ts_real = sec + usec * 1e-6
 
-            # Converting the timestamp into the local time base
-            # TODO: implement the timestamp conversion
+            # TODO: convert to monotonic
+            # See http://stackoverflow.com/questions/35426864 (at the time of writing the question was unanswered)
 
-            return RxFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG))
+            return RxFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG),
+                           ts_real=ts_real)
 
     def send(self, message_id, message, extended=False):
         if extended:
@@ -178,4 +190,3 @@ class SocketCAN(object):
 
         message_pad = bytes(message) + b'\x00' * (8 - len(message))
         self.socket.send(struct.pack(self.FRAME_FORMAT, message_id, len(message), message_pad))
-
