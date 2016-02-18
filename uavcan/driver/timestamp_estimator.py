@@ -139,14 +139,13 @@ class TimestampEstimator:
             target_clock_sample:    E.g. target time sampled when the data arrived to the local system, in seconds
         Returns: Event timestamp converted to the target time domain.
         """
+        pi = float(self._source_time_resolver.update(source_clock_sample, target_clock_sample))
         qi = target_clock_sample
 
         # Initialization
         if self._p is None:
-            self._p = pi = float(self._source_time_resolver.update(source_clock_sample, target_clock_sample))
+            self._p = pi
             self._q = qi
-        else:
-            pi = float(self._source_time_resolver.update(source_clock_sample, target_clock_sample))
 
         # Sync error - refer to the reference implementation of the algorithm
         self._estimated_delay = abs((pi - self._p) - (qi - self._q))
@@ -189,6 +188,15 @@ if __name__ == '__main__':
     # noinspection PyPackageRequirements
     import numpy
     import time
+
+    if 1:
+        estimator = TimestampEstimator()
+        print(estimator.update(.0, 1000.0))
+        print(estimator.update(.1, 1000.1))
+        print(estimator.update(.2, 1000.1))  # Repeat
+        print(estimator.update(.3, 1000.1))  # Repeat
+        print(estimator.update(.4, 1000.2))
+        print(estimator.update(.5, 1000.3))
 
     if 1:
         # Conversion from Real to Monotonic
