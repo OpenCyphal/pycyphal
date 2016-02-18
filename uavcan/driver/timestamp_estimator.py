@@ -141,14 +141,22 @@ class TimestampEstimator:
         """
         qi = target_clock_sample
 
-        # Initialization or resynchronization (discarding known state)
-        if self._p is None or self._estimated_delay > self.max_phase_error_to_resync:
-            self._source_time_resolver.reset()
+        # Initialization
+        if self._p is None:
             self._p = pi = float(self._source_time_resolver.update(source_clock_sample, target_clock_sample))
             self._q = qi
-            self._resync_count += 1
         else:
             pi = float(self._source_time_resolver.update(source_clock_sample, target_clock_sample))
+
+        # Sync error - refer to the reference implementation of the algorithm
+        self._estimated_delay = abs((pi - self._p) - (qi - self._q))
+
+        # Resynchronization (discarding known state)
+        if self._estimated_delay > self.max_phase_error_to_resync:
+            self._source_time_resolver.reset()
+            self._resync_count += 1
+            self._p = pi = float(self._source_time_resolver.update(source_clock_sample, target_clock_sample))
+            self._q = qi
 
         # Offset options
         assert pi >= self._p
@@ -162,9 +170,6 @@ class TimestampEstimator:
             self._q = qi
 
         ti = pi - offset
-
-        # Sync error - refer to the reference implementation of the algorithm
-        self._estimated_delay = abs((pi - self._p) - (qi - self._q))
 
         return ti
 
