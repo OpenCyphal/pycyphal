@@ -14,9 +14,11 @@ import fcntl
 import socket
 import struct
 import select
+import time
 from logging import getLogger
 
 from .common import DriverError, RxFrame
+from.timestamp_estimator import TimestampEstimator
 
 logger = getLogger(__name__)
 
@@ -153,8 +155,25 @@ class SocketCAN(object):
         self.socket = get_socket(interface)
         self.poll = select.poll()
         self.poll.register(self.socket.fileno())
+
         # Timestamping
         self.socket.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMP, 1)
+
+        ppm = lambda x: x / 1e6
+        milliseconds = lambda x: x * 1e-3
+
+        # We're using this thing to estimate the difference between monotonic and real clocks
+        # See http://stackoverflow.com/questions/35426864 (at the time of writing the question was unanswered)
+        self._mono_to_real_estimator = TimestampEstimator(max_rate_error=ppm(100),
+                                                          fixed_delay=milliseconds(0.001),
+                                                          max_phase_error_to_resync=milliseconds(50))
+
+    def _convert_real_to_monotonic(self, value):
+        mono = time.monotonic()  # est_real is the best guess about real timestamp here
+        real = time.time()
+        est_real = self._mono_to_real_estimator.update(mono, real)
+        mono_to_real_offset = est_real - mono
+        return value - mono_to_real_offset
 
     def close(self, callback=None):
         self.socket.close()
@@ -178,11 +197,12 @@ class SocketCAN(object):
                         sec, usec = struct.unpack(self.TIMEVAL_FORMAT, cmsg_data)
                         ts_real = sec + usec * 1e-6
 
-            # TODO: convert to monotonic
-            # See http://stackoverflow.com/questions/35426864 (at the time of writing the question was unanswered)
+            # TODO: receive timestamps directly from hardware
+            # TODO: ...or at least obtain timestamps from the socket layer in local monotonic domain
+            ts_mono = self._convert_real_to_monotonic(ts_real)
 
             return RxFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG),
-                           ts_real=ts_real)
+                           ts_monotonic=ts_mono, ts_real=ts_real)
 
     def send(self, message_id, message, extended=False):
         if extended:
