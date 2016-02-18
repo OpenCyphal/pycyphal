@@ -177,11 +177,27 @@ class TimestampEstimator:
     def resync_count(self):
         return self._resync_count
 
+
 if __name__ == '__main__':
     # noinspection PyPackageRequirements
     import matplotlib.pyplot as plt
     # noinspection PyPackageRequirements
     import numpy
+    import time
+
+    if 1:
+        # Conversion from Real to Monotonic
+        estimator = TimestampEstimator(max_rate_error=1e-5,
+                                       fixed_delay=1e-6,
+                                       max_phase_error_to_resync=1e-2)
+        print('Initial mono to real:', time.time() - time.monotonic())
+        while True:
+            mono = time.monotonic()
+            real = time.time()
+            est_real = estimator.update(mono, real)
+            mono_to_real_offset = est_real - mono
+            print(mono_to_real_offset)
+            time.sleep(1)
 
     max_rate_error = None
     source_clock_range = 10
