@@ -22,6 +22,7 @@ from.timestamp_estimator import TimestampEstimator
 
 logger = getLogger(__name__)
 
+
 # Python 3.3+'s socket module has support for SocketCAN when running on Linux. Use that if possible.
 # noinspection PyBroadException
 try:
@@ -33,7 +34,10 @@ try:
         s.bind((ifname, ))
         return s
 
+    NATIVE_SOCKETCAN = True
 except Exception:
+    NATIVE_SOCKETCAN = False
+
     import ctypes
     import ctypes.util
 
@@ -91,31 +95,25 @@ except Exception:
             ("data", ctypes.c_uint8 * 8)
         ]
 
+
     class CANSocket(object):
         def __init__(self, fd):
             if fd < 0:
                 raise DriverError('Invalid socket fd')
             self.fd = fd
 
-        def recv(self, bufsize, flags=None):
-            frame = can_frame()
-            nbytes = libc.read(self.fd, ctypes.byref(frame),
-                               sys.getsizeof(frame))
-            return ctypes.string_at(ctypes.byref(frame),
-                                    ctypes.sizeof(frame))[0:nbytes]
+        def recv(self, bufsize):
+            buf = ctypes.create_string_buffer(bufsize)
+            nbytes = libc.read(self.fd, ctypes.byref(buf), bufsize)
+            return buf[0:nbytes]
 
-        def send(self, data, flags=None):
+        def send(self, data):
             frame = can_frame()
-            ctypes.memmove(ctypes.byref(frame), data,
-                           ctypes.sizeof(frame))
-            return libc.write(self.fd, ctypes.byref(frame),
-                              ctypes.sizeof(frame))
+            ctypes.memmove(ctypes.byref(frame), data, ctypes.sizeof(frame))
+            return libc.write(self.fd, ctypes.byref(frame), ctypes.sizeof(frame))
 
         def fileno(self):
             return self.fd
-
-        def setsockopt(self, level, optname, value):
-            return self.fd.setsockopt(level, optname, value)
 
         def close(self):
             libc.close(self.fd)
@@ -157,7 +155,8 @@ class SocketCAN(object):
         self.poll.register(self.socket.fileno())
 
         # Timestamping
-        self.socket.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMP, 1)
+        if NATIVE_SOCKETCAN:
+            self.socket.setsockopt(socket.SOL_SOCKET, SO_TIMESTAMP, 1)
 
         ppm = lambda x: x / 1e6
         milliseconds = lambda x: x * 1e-3
@@ -183,23 +182,30 @@ class SocketCAN(object):
 
         self.poll.modify(self.socket.fileno(), select.POLLIN | select.POLLPRI)
         if self.poll.poll(timeout):
-            # Reading the frame together with timestamps in the ancillary data structures
-            ancillary_len = 64   # Arbitrary value, must be large enough to accommodate all ancillary data
-            packet_raw, ancdata, _flags, _addr = self.socket.recvmsg(self.FRAME_SIZE, socket.CMSG_SPACE(ancillary_len))
+            ts_real = None
+            ts_mono = None
+
+            if NATIVE_SOCKETCAN:
+                # Reading the frame together with timestamps in the ancillary data structures
+                ancillary_len = 64   # Arbitrary value, must be large enough to accommodate all ancillary data
+                packet_raw, ancdata, _flags, _addr = self.socket.recvmsg(self.FRAME_SIZE,
+                                                                         socket.CMSG_SPACE(ancillary_len))
+
+                # Parsing the timestamps
+                for cmsg_level, cmsg_type, cmsg_data in ancdata:
+                        if cmsg_level == socket.SOL_SOCKET and cmsg_type == SO_TIMESTAMP:
+                            sec, usec = struct.unpack(self.TIMEVAL_FORMAT, cmsg_data)
+                            ts_real = sec + usec * 1e-6
+            else:
+                packet_raw = self.socket.recv(self.FRAME_SIZE)
 
             # Parsing the frame
             can_id, can_dlc, can_data = struct.unpack(self.FRAME_FORMAT, packet_raw)
 
-            # Parsing the timestamps
-            ts_real = None
-            for cmsg_level, cmsg_type, cmsg_data in ancdata:
-                    if cmsg_level == socket.SOL_SOCKET and cmsg_type == SO_TIMESTAMP:
-                        sec, usec = struct.unpack(self.TIMEVAL_FORMAT, cmsg_data)
-                        ts_real = sec + usec * 1e-6
-
             # TODO: receive timestamps directly from hardware
             # TODO: ...or at least obtain timestamps from the socket layer in local monotonic domain
-            ts_mono = self._convert_real_to_monotonic(ts_real)
+            if ts_real and not ts_mono:
+                ts_mono = self._convert_real_to_monotonic(ts_real)
 
             return RxFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG),
                            ts_monotonic=ts_mono, ts_real=ts_real)

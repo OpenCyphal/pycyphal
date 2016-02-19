@@ -8,7 +8,7 @@
 #
 
 import time
-import binascii
+import sys
 from .. import UAVCANException
 
 
@@ -27,9 +27,15 @@ class RxFrame:
         self.ts_real = ts_real or time.time()
 
     def __str__(self):
+        if sys.version_info[0] > 2:
+            b2int = lambda x: x
+        else:
+            b2int = ord
+
         id_str = ('%0*x' % (8 if self.extended else 3, self.id)).rjust(8)
-        hex_data = ' '.join(['%02x' % x for x in self.data]).ljust(3 * self.MAX_DATA_LENGTH)
+        hex_data = ' '.join(['%02x' % b2int(x) for x in self.data]).ljust(3 * self.MAX_DATA_LENGTH)
         ascii_data = ''.join([(chr(x) if 32 <= x <= 126 else '.') for x in self.data])
+
         return "%12.6f %12.6f  %s  %s  '%s'" % \
                (self.ts_monotonic, self.ts_real, id_str, hex_data, ascii_data)
 
