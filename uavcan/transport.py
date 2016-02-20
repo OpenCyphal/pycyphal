@@ -29,8 +29,29 @@ else:
 
 
 def get_uavcan_data_type(obj):
+    if not isinstance(obj, CompoundValue):
+        raise ValueError('UAVCAN type is not defined for this object')
     # noinspection PyProtectedMember
     return obj._type
+
+
+def is_union(obj):
+    # noinspection PyProtectedMember
+    return obj._is_union
+
+
+def get_active_union_field(obj):
+    if not is_union(obj):
+        raise ValueError('Object is not a union')
+    # noinspection PyProtectedMember
+    return obj._union_field
+
+
+def select_union_field(obj, value):
+    if not is_union(obj):
+        raise ValueError('Object is not a union')
+    # noinspection PyProtectedMember
+    obj._union_field = value
 
 
 def bits_from_bytes(s):
@@ -340,11 +361,11 @@ class CompoundValue(BaseValue):
             if _mode == "request":
                 source_fields = self._type.request_fields
                 source_constants = self._type.request_constants
-                is_union = self._type.request_union
+                self._is_union = self._type.request_union
             elif _mode == "response":
                 source_fields = self._type.response_fields
                 source_constants = self._type.response_constants
-                is_union = self._type.response_union
+                self._is_union = self._type.response_union
             else:
                 raise ValueError("mode must be either 'request' or 'response' for service types")
         else:
@@ -352,10 +373,9 @@ class CompoundValue(BaseValue):
                 raise ValueError("mode is not applicable for message types")
             source_fields = self._type.fields
             source_constants = self._type.constants
-            is_union = self._type.union
+            self._is_union = self._type.union
 
-        self.is_union = is_union
-        self.union_field = None
+        self._union_field = None
 
         for constant in source_constants:
             self.constants[constant.name] = constant.value
@@ -377,8 +397,8 @@ class CompoundValue(BaseValue):
             setattr(self, name, value)
 
     def __repr__(self):
-        if self.is_union:
-            field = self.union_field or list(self.fields.keys())[0]
+        if self._is_union:
+            field = self._union_field or list(self.fields.keys())[0]
             fields = "{0}={1!r}".format(field, self.fields[field])
         else:
             fields = ", ".join("{0}={1!r}".format(f, v) for f, v in self.fields.items() if not f.startswith("_void_"))
@@ -388,11 +408,11 @@ class CompoundValue(BaseValue):
         if attr in self.constants:
             return self.constants[attr]
         elif attr in self.fields:
-            if self.is_union:
-                if self.union_field and self.union_field != attr:
+            if self._is_union:
+                if self._union_field and self._union_field != attr:
                     raise AttributeError(attr)
                 else:
-                    self.union_field = attr
+                    self._union_field = attr
 
             if isinstance(self.fields[attr], PrimitiveValue):
                 return self.fields[attr].value
@@ -405,12 +425,13 @@ class CompoundValue(BaseValue):
         if attr in self.constants:
             raise AttributeError(attr + " is read-only")
         elif attr in self.fields:
-            if self.is_union:
-                if self.union_field and self.union_field != attr:
+            if self._is_union:
+                if self._union_field and self._union_field != attr:
                     raise AttributeError(attr)
                 else:
-                    self.union_field = attr
+                    self._union_field = attr
 
+            # noinspection PyProtectedMember
             if isinstance(self.fields[attr]._type, dsdl.PrimitiveType):
                 self.fields[attr].value = value
             else:
@@ -419,19 +440,19 @@ class CompoundValue(BaseValue):
             super(CompoundValue, self).__setattr__(attr, value)
 
     def unpack(self, stream):
-        if self.is_union:
+        if self._is_union:
             tag_len = union_tag_len(self.fields)
-            self.union_field = list(self.fields.keys())[int(stream[0:tag_len], 2)]
-            stream = self.fields[self.union_field].unpack(stream[tag_len:])
+            self._union_field = list(self.fields.keys())[int(stream[0:tag_len], 2)]
+            stream = self.fields[self._union_field].unpack(stream[tag_len:])
         else:
             for field in self.fields.values():
                 stream = field.unpack(stream)
         return stream
 
     def pack(self):
-        if self.is_union:
+        if self._is_union:
             keys = list(self.fields.keys())
-            field = self.union_field or keys[0]
+            field = self._union_field or keys[0]
             tag = keys.index(field)
             return format(tag, "0" + str(union_tag_len(self.fields)) + "b") + self.fields[field].pack()
         else:

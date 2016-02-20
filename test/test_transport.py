@@ -561,7 +561,7 @@ class TestMessageUnion(unittest.TestCase):
 
         c2 = self.custom_type()
         c2.a = 1
-        self.assertEqual(c2.union_field, "a")
+        self.assertEqual(transport.get_active_union_field(c2), "a")
         self.assertEqual(
             transport.format_bits(c2.pack()),
             "00000000 00011110 0"
@@ -570,7 +570,7 @@ class TestMessageUnion(unittest.TestCase):
         c3 = self.custom_type()
         c3.b[0] = 1
         c3.b[1] = 3
-        self.assertEqual(c3.union_field, "b")
+        self.assertEqual(transport.get_active_union_field(c3), "b")
         self.assertEqual(
             transport.format_bits(c3.pack()),
             "10000000 10000001 1"
