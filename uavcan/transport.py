@@ -172,17 +172,6 @@ def cast(value, dtype):
         raise ValueError("Invalid cast_mode: " + repr(dtype))
 
 
-class Void(object):
-    def __init__(self, bitlen):
-        self.bitlen = bitlen
-
-    def _unpack(self, stream):
-        return stream[self.bitlen:]
-
-    def _pack(self):
-        return "0" * self.bitlen
-
-
 class BaseValue(object):
     # noinspection PyUnusedLocal
     def __init__(self, _uavcan_type, *_args, **_kwargs):
@@ -201,6 +190,14 @@ class BaseValue(object):
             return le_from_be_bits(self._bits, self._type.bitlen)
         else:
             return "0" * self._type.bitlen
+
+
+class VoidValue(BaseValue):
+    def _unpack(self, stream):
+        return stream[self._type.bitlen:]
+
+    def _pack(self):
+        return "0" * self._type.bitlen
 
 
 class PrimitiveValue(BaseValue):
@@ -400,7 +397,7 @@ class CompoundValue(BaseValue):
         for idx, field in enumerate(source_fields):
             atao = field is source_fields[-1] and _tao
             if isinstance(field.type, dsdl.VoidType):
-                self._fields["_void_{0}".format(idx)] = Void(field.type.bitlen)
+                self._fields["_void_{0}".format(idx)] = VoidValue(field.type)
             elif isinstance(field.type, dsdl.PrimitiveType):
                 self._fields[field.name] = PrimitiveValue(field.type)
             elif isinstance(field.type, dsdl.ArrayType):
