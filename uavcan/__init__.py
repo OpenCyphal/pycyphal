@@ -7,10 +7,10 @@
 #         Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-'''
+"""
 Python UAVCAN package.
 Supported Python versions: 3.2+, 2.7.
-'''
+"""
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os
@@ -44,6 +44,7 @@ import uavcan.node as node
 from uavcan.node import make_node
 import uavcan.dsdl as dsdl
 import uavcan.transport as transport
+from uavcan.transport import get_uavcan_data_type
 
 
 TRANSFER_PRIORITY_LOWEST = 31
@@ -58,7 +59,7 @@ class Module(object):
 
 
 class Namespace(object):
-    "Provides a nice object-based way to look up UAVCAN data types."
+    """Provides a nice object-based way to look up UAVCAN data types."""
 
     def __init__(self):
         self.__namespaces = set()
@@ -78,7 +79,7 @@ class Namespace(object):
             return self.__dict__[attr]
 
     def _namespaces(self):
-        "Returns the top-level namespaces in this object"
+        """Returns the top-level namespaces in this object"""
         return set(self.__namespaces)
 
 

@@ -28,6 +28,11 @@ else:
         return bytes([x])
 
 
+def get_uavcan_data_type(obj):
+    # noinspection PyProtectedMember
+    return obj._type
+
+
 def bits_from_bytes(s):
     return "".join(format(c, "08b") for c in s)
 
@@ -144,21 +149,21 @@ class Void(object):
 class BaseValue(object):
     # noinspection PyUnusedLocal
     def __init__(self, _uavcan_type, *_args, **_kwargs):
-        self.type = _uavcan_type
+        self._type = _uavcan_type
         self._bits = None
 
     def unpack(self, stream):
-        if self.type.bitlen:
-            self._bits = be_from_le_bits(stream, self.type.bitlen)
-            return stream[self.type.bitlen:]
+        if self._type.bitlen:
+            self._bits = be_from_le_bits(stream, self._type.bitlen)
+            return stream[self._type.bitlen:]
         else:
             return stream
 
     def pack(self):
         if self._bits:
-            return le_from_be_bits(self._bits, self.type.bitlen)
+            return le_from_be_bits(self._bits, self._type.bitlen)
         else:
-            return "0" * self.type.bitlen
+            return "0" * self._type.bitlen
 
 
 class PrimitiveValue(BaseValue):
@@ -171,18 +176,18 @@ class PrimitiveValue(BaseValue):
             return None
 
         int_value = int(self._bits, 2)
-        if self.type.kind == dsdl.PrimitiveType.KIND_BOOLEAN:
+        if self._type.kind == dsdl.PrimitiveType.KIND_BOOLEAN:
             return int_value
-        elif self.type.kind == dsdl.PrimitiveType.KIND_UNSIGNED_INT:
+        elif self._type.kind == dsdl.PrimitiveType.KIND_UNSIGNED_INT:
             return int_value
-        elif self.type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:
-            if int_value >= (1 << (self.type.bitlen - 1)):
-                int_value = -((1 << self.type.bitlen) - int_value)
+        elif self._type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:
+            if int_value >= (1 << (self._type.bitlen - 1)):
+                int_value = -((1 << self._type.bitlen) - int_value)
             return int_value
-        elif self.type.kind == dsdl.PrimitiveType.KIND_FLOAT:
-            if self.type.bitlen == 16:
+        elif self._type.kind == dsdl.PrimitiveType.KIND_FLOAT:
+            if self._type.bitlen == 16:
                 return f32_from_f16(int_value)
-            elif self.type.bitlen == 32:
+            elif self._type.bitlen == 32:
                 return struct.unpack("<f", struct.pack("<L", int_value))[0]
             else:
                 raise NotImplementedError("Only 16- or 32-bit floats are supported")
@@ -191,46 +196,46 @@ class PrimitiveValue(BaseValue):
     def value(self, new_value):
         if new_value is None:
             raise ValueError("Can't serialize a None value")
-        elif self.type.kind == dsdl.PrimitiveType.KIND_BOOLEAN:
+        elif self._type.kind == dsdl.PrimitiveType.KIND_BOOLEAN:
             self._bits = "1" if new_value else "0"
-        elif self.type.kind == dsdl.PrimitiveType.KIND_UNSIGNED_INT:
-            new_value = cast(new_value, self.type)
-            self._bits = format(new_value, "0" + str(self.type.bitlen) + "b")
-        elif self.type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:
-            new_value = cast(new_value, self.type)
-            self._bits = format(new_value, "0" + str(self.type.bitlen) + "b")
-        elif self.type.kind == dsdl.PrimitiveType.KIND_FLOAT:
-            new_value = cast(new_value, self.type)
-            if self.type.bitlen == 16:
+        elif self._type.kind == dsdl.PrimitiveType.KIND_UNSIGNED_INT:
+            new_value = cast(new_value, self._type)
+            self._bits = format(new_value, "0" + str(self._type.bitlen) + "b")
+        elif self._type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:
+            new_value = cast(new_value, self._type)
+            self._bits = format(new_value, "0" + str(self._type.bitlen) + "b")
+        elif self._type.kind == dsdl.PrimitiveType.KIND_FLOAT:
+            new_value = cast(new_value, self._type)
+            if self._type.bitlen == 16:
                 int_value = f16_from_f32(new_value)
-            elif self.type.bitlen == 32:
+            elif self._type.bitlen == 32:
                 int_value = struct.unpack("<L", struct.pack("<f", new_value))[0]
             else:
                 raise NotImplementedError("Only 16- or 32-bit floats are supported")
-            self._bits = format(int_value, "0" + str(self.type.bitlen) + "b")
+            self._bits = format(int_value, "0" + str(self._type.bitlen) + "b")
 
 
 # noinspection PyProtectedMember
 class ArrayValue(BaseValue, collections.MutableSequence):
     def __init__(self, _uavcan_type, _tao, *args, **kwargs):
         super(ArrayValue, self).__init__(_uavcan_type, *args, **kwargs)
-        value_bitlen = getattr(self.type.value_type, "bitlen", 0)
+        value_bitlen = getattr(self._type.value_type, "bitlen", 0)
         self._tao = _tao if value_bitlen >= 8 else False
 
-        if isinstance(self.type.value_type, dsdl.PrimitiveType):
-            self.__item_ctor = functools.partial(PrimitiveValue, self.type.value_type)
-        elif isinstance(self.type.value_type, dsdl.ArrayType):
-            self.__item_ctor = functools.partial(ArrayValue, self.type.value_type)
-        elif isinstance(self.type.value_type, dsdl.CompoundType):
-            self.__item_ctor = functools.partial(CompoundValue, self.type.value_type)
+        if isinstance(self._type.value_type, dsdl.PrimitiveType):
+            self.__item_ctor = functools.partial(PrimitiveValue, self._type.value_type)
+        elif isinstance(self._type.value_type, dsdl.ArrayType):
+            self.__item_ctor = functools.partial(ArrayValue, self._type.value_type)
+        elif isinstance(self._type.value_type, dsdl.CompoundType):
+            self.__item_ctor = functools.partial(CompoundValue, self._type.value_type)
 
-        if self.type.mode == dsdl.ArrayType.MODE_STATIC:
-            self.__items = list(self.__item_ctor() for _ in range(self.type.max_size))
+        if self._type.mode == dsdl.ArrayType.MODE_STATIC:
+            self.__items = list(self.__item_ctor() for _ in range(self._type.max_size))
         else:
             self.__items = []
 
     def __repr__(self):
-        return "ArrayValue(type={0!r}, tao={1!r}, items={2!r})".format(self.type, self._tao, self.__items)
+        return "ArrayValue(type={0!r}, tao={1!r}, items={2!r})".format(self._type, self._tao, self.__items)
 
     def __str__(self):
         return self.__repr__()
@@ -242,9 +247,9 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             return self.__items[idx]
 
     def __setitem__(self, idx, value):
-        if idx >= self.type.max_size:
-            raise IndexError("Index {0} too large (max size {1})".format(idx, self.type.max_size))
-        if isinstance(self.type.value_type, dsdl.PrimitiveType):
+        if idx >= self._type.max_size:
+            raise IndexError("Index {0} too large (max size {1})".format(idx, self._type.max_size))
+        if isinstance(self._type.value_type, dsdl.PrimitiveType):
             self.__items[idx].value = value
         else:
             self.__items[idx] = value
@@ -259,11 +264,11 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         return self.__item_ctor()
 
     def insert(self, idx, value):
-        if idx >= self.type.max_size:
-            raise IndexError("Index {0} too large (max size {1})".format(idx, self.type.max_size))
-        elif len(self) == self.type.max_size:
-            raise IndexError("Array already full (max size {0})".format(self.type.max_size))
-        if isinstance(self.type.value_type, dsdl.PrimitiveType):
+        if idx >= self._type.max_size:
+            raise IndexError("Index {0} too large (max size {1})".format(idx, self._type.max_size))
+        elif len(self) == self._type.max_size:
+            raise IndexError("Array already full (max size {0})".format(self._type.max_size))
+        if isinstance(self._type.value_type, dsdl.PrimitiveType):
             new_item = self.__item_ctor()
             new_item.value = value
             self.__items.insert(idx, new_item)
@@ -271,8 +276,8 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             self.__items.insert(idx, value)
 
     def unpack(self, stream):
-        if self.type.mode == dsdl.ArrayType.MODE_STATIC:
-            for i in range(self.type.max_size):
+        if self._type.mode == dsdl.ArrayType.MODE_STATIC:
+            for i in range(self._type.max_size):
                 stream = self.__items[i].unpack(stream)
         elif self._tao:
             del self[:]
@@ -283,7 +288,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             stream = ""
         else:
             del self[:]
-            count_width = int(math.ceil(math.log(self.type.max_size, 2))) or 1
+            count_width = int(math.ceil(math.log(self._type.max_size, 2))) or 1
             count = int(stream[0:count_width], 2)
             stream = stream[count_width:]
             for i in range(count):
@@ -294,16 +299,16 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         return stream
 
     def pack(self):
-        if self.type.mode == dsdl.ArrayType.MODE_STATIC:
+        if self._type.mode == dsdl.ArrayType.MODE_STATIC:
             items = "".join(i.pack() for i in self.__items)
-            if len(self) < self.type.max_size:
+            if len(self) < self._type.max_size:
                 empty_item = self.__item_ctor()
-                items += "".join(empty_item.pack() for _ in range(self.type.max_size - len(self)))
+                items += "".join(empty_item.pack() for _ in range(self._type.max_size - len(self)))
             return items
         elif self._tao:
             return "".join(i.pack() for i in self.__items)
         else:
-            count_width = int(math.ceil(math.log(self.type.max_size, 2))) or 1
+            count_width = int(math.ceil(math.log(self._type.max_size, 2))) or 1
             count = format(len(self), "0{0:1d}b".format(count_width))
             return count + "".join(i.pack() for i in self.__items)
 
@@ -330,25 +335,25 @@ class CompoundValue(BaseValue):
         self.__dict__["fields"] = collections.OrderedDict()
         self.__dict__["constants"] = {}
         super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
-        self.data_type_id = self.type.default_dtid
+        self.data_type_id = self._type.default_dtid
 
-        if self.type.kind == dsdl.CompoundType.KIND_SERVICE:
+        if self._type.kind == dsdl.CompoundType.KIND_SERVICE:
             if _mode == "request":
-                source_fields = self.type.request_fields
-                source_constants = self.type.request_constants
-                is_union = self.type.request_union
+                source_fields = self._type.request_fields
+                source_constants = self._type.request_constants
+                is_union = self._type.request_union
             elif _mode == "response":
-                source_fields = self.type.response_fields
-                source_constants = self.type.response_constants
-                is_union = self.type.response_union
+                source_fields = self._type.response_fields
+                source_constants = self._type.response_constants
+                is_union = self._type.response_union
             else:
                 raise ValueError("mode must be either 'request' or 'response' for service types")
         else:
             if _mode is not None:
                 raise ValueError("mode is not applicable for message types")
-            source_fields = self.type.fields
-            source_constants = self.type.constants
-            is_union = self.type.union
+            source_fields = self._type.fields
+            source_constants = self._type.constants
+            is_union = self._type.union
 
         self.is_union = is_union
         self.union_field = None
@@ -378,7 +383,7 @@ class CompoundValue(BaseValue):
             fields = "{0}={1!r}".format(field, self.fields[field])
         else:
             fields = ", ".join("{0}={1!r}".format(f, v) for f, v in self.fields.items() if not f.startswith("_void_"))
-        return "{0}({1})".format(self.type.full_name, fields)
+        return "{0}({1})".format(self._type.full_name, fields)
 
     def __getattr__(self, attr):
         if attr in self.constants:
@@ -407,7 +412,7 @@ class CompoundValue(BaseValue):
                 else:
                     self.union_field = attr
 
-            if isinstance(self.fields[attr].type, dsdl.PrimitiveType):
+            if isinstance(self.fields[attr]._type, dsdl.PrimitiveType):
                 self.fields[attr].value = value
             else:
                 raise AttributeError(attr + " cannot be set directly")
@@ -486,9 +491,9 @@ class Transfer(object):
             if len(payload_bits) & 7:
                 payload_bits += "0" * (8 - (len(payload_bits) & 7))
             self.payload = bytes_from_bits(payload_bits)
-            self.data_type_id = payload.type.default_dtid
-            self.data_type_signature = payload.type.get_data_type_signature()
-            self.data_type_crc = payload.type.base_crc
+            self.data_type_id = get_uavcan_data_type(payload).default_dtid
+            self.data_type_signature = get_uavcan_data_type(payload).get_data_type_signature()
+            self.data_type_crc = get_uavcan_data_type(payload).base_crc
         else:
             self.payload = None
             self.data_type_id = None

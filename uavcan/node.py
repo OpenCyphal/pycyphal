@@ -18,6 +18,7 @@ from logging import getLogger
 import uavcan
 import uavcan.driver as driver
 import uavcan.transport as transport
+from uavcan.transport import get_uavcan_data_type
 from uavcan import UAVCANException
 
 
@@ -187,7 +188,7 @@ class HandlerDispatcher(object):
 
     def call_handlers(self, transfer):
         for uavcan_type, wrapper in self._handlers:
-            if uavcan_type == transfer.payload.type:
+            if uavcan_type == get_uavcan_data_type(transfer.payload):
                 wrapper(transfer)
 
 
@@ -341,7 +342,7 @@ class Node(Scheduler):
         self._throw_if_anonymous()
 
         # Preparing the transfer
-        transfer_id = self._next_transfer_id((payload.type.default_dtid, dest_node_id))
+        transfer_id = self._next_transfer_id((get_uavcan_data_type(payload).default_dtid, dest_node_id))
         transfer = transport.Transfer(payload=payload,
                                       source_node_id=self.node_id,
                                       dest_node_id=dest_node_id,
@@ -395,7 +396,7 @@ class Node(Scheduler):
     def broadcast(self, payload, priority=None):
         self._throw_if_anonymous()
 
-        transfer_id = self._next_transfer_id(payload.type.default_dtid)
+        transfer_id = self._next_transfer_id(get_uavcan_data_type(payload).default_dtid)
         transfer = transport.Transfer(payload=payload,
                                       source_node_id=self.node_id,
                                       transfer_id=transfer_id,
@@ -433,7 +434,7 @@ class Service(object):
         self.request = event.request
         self.transfer = event.transfer
         self.node = event.node
-        self.response = self.request.type.Response()
+        self.response = get_uavcan_data_type(self.request).Response()
 
     def on_request(self):
         pass
