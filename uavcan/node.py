@@ -125,21 +125,22 @@ class TransferEvent(object):
         return repr(self.transfer)
 
 
-class HandlerDispatcher(object):
-    class Remover:
-        def __init__(self, remover):
-            self._remover = remover
+class HandleRemover:
+    def __init__(self, remover):
+        self._remover = remover
 
-        def remove(self):
+    def remove(self):
+        self._remover()
+
+    def try_remove(self):
+        try:
             self._remover()
+            return True
+        except ValueError:
+            return False
 
-        def try_remove(self):
-            try:
-                self._remover()
-                return True
-            except ValueError:
-                return False
 
+class HandlerDispatcher(object):
     def __init__(self, node):
         self._handlers = []  # type, callable
         self._node = node
@@ -181,7 +182,7 @@ class HandlerDispatcher(object):
 
         entry = uavcan_type, call
         self._handlers.append(entry)
-        return self.Remover(lambda: self._handlers.remove(entry))
+        return HandleRemover(lambda: self._handlers.remove(entry))
 
     def remove_handlers(self, uavcan_type):
         self._handlers = list(filter(lambda x: x[0] != uavcan_type, self._handlers))
@@ -189,13 +190,41 @@ class HandlerDispatcher(object):
     def call_handlers(self, transfer):
         for uavcan_type, wrapper in self._handlers:
             if uavcan_type == get_uavcan_data_type(transfer.payload):
-                wrapper(transfer)
+                # noinspection PyBroadException
+                try:
+                    wrapper(transfer)
+                except Exception:
+                    logger.error('Transfer handler exception', exc_info=True)
+
+
+class TransferHookDispatcher(object):
+    TRANSFER_DIRECTION_INCOMING = 'rx'
+    TRANSFER_DIRECTION_OUTGOING = 'tx'
+
+    def __init__(self):
+        self._hooks = []
+
+    def add_hook(self, hook, **kwargs):
+        def proxy(transfer):
+            hook(transfer, **kwargs)
+        self._hooks.append(proxy)
+        return HandleRemover(lambda: self._hooks.remove(proxy))
+
+    def call_hooks(self, direction, transfer):
+        setattr(transfer, 'direction', direction)
+        for hook in self._hooks:
+            # noinspection PyBroadException
+            try:
+                hook(transfer)
+            except Exception:
+                logger.error('Transfer hook exception', exc_info=True)
 
 
 class Node(Scheduler):
     def __init__(self, can_driver, node_id=None, node_status_interval=None,
                  mode=None, node_info=None, **_extras):
-        """It is recommended to use make_node() rather than instantiating this type directly.
+        """
+        It is recommended to use make_node() rather than instantiating this type directly.
 
         :param can_driver: CAN bus driver object. Calling close() on a node object closes its driver instance.
 
@@ -205,7 +234,7 @@ class Node(Scheduler):
 
         :param mode: Initial operating mode (INITIALIZATION, OPERATIONAL, etc.); defaults to INITIALIZATION.
 
-        :param node_info: Structure of type uavcan.protocol.GetNodeInfo.Response, responsed with when the local
+        :param node_info: Structure of type uavcan.protocol.GetNodeInfo.Response, responded with when the local
                           node is queried for its node info.
         """
         super(Node, self).__init__()
@@ -221,6 +250,9 @@ class Node(Scheduler):
         self._next_transfer_ids = collections.defaultdict(int)
 
         self.start_time_monotonic = time.monotonic()
+
+        # Hooks
+        self._transfer_hook_dispatcher = TransferHookDispatcher()
 
         # NodeStatus publisher
         self.health = uavcan.protocol.NodeStatus().HEALTH_OK                                    # @UndefinedVariable
@@ -250,6 +282,8 @@ class Node(Scheduler):
 
         transfer = transport.Transfer()
         transfer.from_frames(transfer_frames)
+
+        self._transfer_hook_dispatcher.call_hooks(self._transfer_hook_dispatcher.TRANSFER_DIRECTION_INCOMING, transfer)
 
         if (transfer.service_not_message and not transfer.request_not_response) and \
                 transfer.dest_node_id == self.node_id:
@@ -290,8 +324,17 @@ class Node(Scheduler):
             self._fill_node_status(msg)
             self.broadcast(msg)
 
+    def add_transfer_hook(self, hook, **kwargs):
+        """
+        :param hook:    Callable hook; expected signature: hook(transfer).
+        :param kwargs:  Extra arguments for the hook.
+        :return:        A handle object that can be used to unregister the hook by calling remove() on it.
+        """
+        return self._transfer_hook_dispatcher.add_hook(hook, **kwargs)
+
     def add_handler(self, uavcan_type, handler, **kwargs):
-        """Adds a handler for the specified data type.
+        """
+        Adds a handler for the specified data type.
         :param uavcan_type: DSDL data type. Only transfers of this type will be accepted for this handler.
         :param handler:     The handler. This must be either a callable or a class.
         :param **kwargs:    Extra arguments for the handler.
@@ -351,6 +394,9 @@ class Node(Scheduler):
                                       service_not_message=True,
                                       request_not_response=True)
 
+        # Calling hooks
+        self._transfer_hook_dispatcher.call_hooks(self._transfer_hook_dispatcher.TRANSFER_DIRECTION_OUTGOING, transfer)
+
         # Sending the transfer
         for frame in transfer.to_frames():
             self._can_driver.send(frame.message_id, frame.bytes, extended=True)
@@ -387,6 +433,9 @@ class Node(Scheduler):
             service_not_message=True,
             request_not_response=False
         )
+
+        self._transfer_hook_dispatcher.call_hooks(self._transfer_hook_dispatcher.TRANSFER_DIRECTION_OUTGOING, transfer)
+
         for frame in transfer.to_frames():
             self._can_driver.send(frame.message_id, frame.bytes, extended=True)
 
@@ -402,6 +451,8 @@ class Node(Scheduler):
                                       transfer_id=transfer_id,
                                       transfer_priority=priority or DEFAULT_TRANSFER_PRIORITY,
                                       service_not_message=False)
+
+        self._transfer_hook_dispatcher.call_hooks(self._transfer_hook_dispatcher.TRANSFER_DIRECTION_OUTGOING, transfer)
 
         for frame in transfer.to_frames():
             self._can_driver.send(frame.message_id, frame.bytes, extended=True)
