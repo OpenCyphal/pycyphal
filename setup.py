@@ -14,9 +14,15 @@ from setuptools import setup
 
 args = dict(
     name='uavcan',
-    version='1.0.0dev7',
+    version='1.0.0dev8',
     description='Python implementation of the UAVCAN protocol stack',
-    packages=['uavcan', 'uavcan.dsdl', 'uavcan.services', 'uavcan.monitors'],
+    packages=[
+        'uavcan',
+        'uavcan.dsdl',
+        'uavcan.services',
+        'uavcan.monitors',
+        'uavcan.driver'
+    ],
     package_data={
         'uavcan': [os.path.join(root[len('uavcan/'):], fname)
                    for root, dirs, files in os.walk('uavcan/dsdl_files')
