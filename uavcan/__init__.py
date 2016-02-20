@@ -46,7 +46,9 @@ import uavcan.node as node
 from uavcan.node import make_node
 import uavcan.dsdl as dsdl
 import uavcan.transport as transport
-from uavcan.transport import get_uavcan_data_type
+from uavcan.transport import get_uavcan_data_type, \
+    get_active_union_field, select_union_field, is_union, \
+    get_constants, get_fields
 
 
 TRANSFER_PRIORITY_LOWEST = 31

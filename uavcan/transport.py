@@ -36,6 +36,8 @@ def get_uavcan_data_type(obj):
 
 
 def is_union(obj):
+    if not isinstance(obj, CompoundValue):
+        raise ValueError('Only CompoundValue can be union')
     # noinspection PyProtectedMember
     return obj._is_union
 
@@ -52,6 +54,20 @@ def select_union_field(obj, value):
         raise ValueError('Object is not a union')
     # noinspection PyProtectedMember
     obj._union_field = value
+
+
+def get_fields(obj):
+    if not isinstance(obj, CompoundValue):
+        raise ValueError('Only CompoundValue can have fields')
+    # noinspection PyProtectedMember
+    return obj._fields
+
+
+def get_constants(obj):
+    if not isinstance(obj, CompoundValue):
+        raise ValueError('Only CompoundValue can have constants')
+    # noinspection PyProtectedMember
+    return obj._constants
 
 
 def bits_from_bytes(s):
@@ -353,8 +369,8 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
 class CompoundValue(BaseValue):
     def __init__(self, _uavcan_type, _mode=None, _tao=True, *args, **kwargs):
-        self.__dict__["fields"] = collections.OrderedDict()
-        self.__dict__["constants"] = {}
+        self.__dict__["_fields"] = collections.OrderedDict()
+        self.__dict__["_constants"] = {}
         super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
 
         if self._type.kind == dsdl.CompoundType.KIND_SERVICE:
@@ -378,18 +394,18 @@ class CompoundValue(BaseValue):
         self._union_field = None
 
         for constant in source_constants:
-            self.constants[constant.name] = constant.value
+            self._constants[constant.name] = constant.value
 
         for idx, field in enumerate(source_fields):
             atao = field is source_fields[-1] and _tao
             if isinstance(field.type, dsdl.VoidType):
-                self.fields["_void_{0}".format(idx)] = Void(field.type.bitlen)
+                self._fields["_void_{0}".format(idx)] = Void(field.type.bitlen)
             elif isinstance(field.type, dsdl.PrimitiveType):
-                self.fields[field.name] = PrimitiveValue(field.type)
+                self._fields[field.name] = PrimitiveValue(field.type)
             elif isinstance(field.type, dsdl.ArrayType):
-                self.fields[field.name] = ArrayValue(field.type, _tao=atao)
+                self._fields[field.name] = ArrayValue(field.type, _tao=atao)
             elif isinstance(field.type, dsdl.CompoundType):
-                self.fields[field.name] = CompoundValue(field.type, _tao=atao)
+                self._fields[field.name] = CompoundValue(field.type, _tao=atao)
 
         for name, value in kwargs.items():
             if name.startswith('_'):
@@ -398,33 +414,33 @@ class CompoundValue(BaseValue):
 
     def __repr__(self):
         if self._is_union:
-            field = self._union_field or list(self.fields.keys())[0]
-            fields = "{0}={1!r}".format(field, self.fields[field])
+            field = self._union_field or list(self._fields.keys())[0]
+            fields = "{0}={1!r}".format(field, self._fields[field])
         else:
-            fields = ", ".join("{0}={1!r}".format(f, v) for f, v in self.fields.items() if not f.startswith("_void_"))
+            fields = ", ".join("{0}={1!r}".format(f, v) for f, v in self._fields.items() if not f.startswith("_void_"))
         return "{0}({1})".format(self._type.full_name, fields)
 
     def __getattr__(self, attr):
-        if attr in self.constants:
-            return self.constants[attr]
-        elif attr in self.fields:
+        if attr in self._constants:
+            return self._constants[attr]
+        elif attr in self._fields:
             if self._is_union:
                 if self._union_field and self._union_field != attr:
                     raise AttributeError(attr)
                 else:
                     self._union_field = attr
 
-            if isinstance(self.fields[attr], PrimitiveValue):
-                return self.fields[attr].value
+            if isinstance(self._fields[attr], PrimitiveValue):
+                return self._fields[attr].value
             else:
-                return self.fields[attr]
+                return self._fields[attr]
         else:
             raise AttributeError(attr)
 
     def __setattr__(self, attr, value):
-        if attr in self.constants:
+        if attr in self._constants:
             raise AttributeError(attr + " is read-only")
-        elif attr in self.fields:
+        elif attr in self._fields:
             if self._is_union:
                 if self._union_field and self._union_field != attr:
                     raise AttributeError(attr)
@@ -432,8 +448,8 @@ class CompoundValue(BaseValue):
                     self._union_field = attr
 
             # noinspection PyProtectedMember
-            if isinstance(self.fields[attr]._type, dsdl.PrimitiveType):
-                self.fields[attr].value = value
+            if isinstance(self._fields[attr]._type, dsdl.PrimitiveType):
+                self._fields[attr].value = value
             else:
                 raise AttributeError(attr + " cannot be set directly")
         else:
@@ -441,22 +457,22 @@ class CompoundValue(BaseValue):
 
     def unpack(self, stream):
         if self._is_union:
-            tag_len = union_tag_len(self.fields)
-            self._union_field = list(self.fields.keys())[int(stream[0:tag_len], 2)]
-            stream = self.fields[self._union_field].unpack(stream[tag_len:])
+            tag_len = union_tag_len(self._fields)
+            self._union_field = list(self._fields.keys())[int(stream[0:tag_len], 2)]
+            stream = self._fields[self._union_field].unpack(stream[tag_len:])
         else:
-            for field in self.fields.values():
+            for field in self._fields.values():
                 stream = field.unpack(stream)
         return stream
 
     def pack(self):
         if self._is_union:
-            keys = list(self.fields.keys())
+            keys = list(self._fields.keys())
             field = self._union_field or keys[0]
             tag = keys.index(field)
-            return format(tag, "0" + str(union_tag_len(self.fields)) + "b") + self.fields[field].pack()
+            return format(tag, "0" + str(union_tag_len(self._fields)) + "b") + self._fields[field].pack()
         else:
-            return "".join(field.pack() for field in self.fields.values())
+            return "".join(field.pack() for field in self._fields.values())
 
 
 class Frame(object):
