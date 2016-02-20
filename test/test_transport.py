@@ -442,15 +442,15 @@ class TestArrayBasic(unittest.TestCase):
             self.assertEqual(len(a3[i].c), 5)
 
         self.assertEqual(
-            transport.format_bits(a1.pack()),
+            transport.format_bits(a1._pack()),
             "00000000 00000001 00000010 00000011"
         )
         self.assertEqual(
-            transport.format_bits(a2.pack()),
+            transport.format_bits(a2._pack()),
             "00000000 00000000 00000000 00111100"
         )
         self.assertEqual(
-            transport.format_bits(a3.pack()),
+            transport.format_bits(a3._pack()),
             "00000000 00000000 00000000 10101010 " +
             "00000001 00000000 00111100 10101010"
         )
@@ -497,14 +497,14 @@ class TestVoid(unittest.TestCase):
     def test_representation(self):
         c1 = self.custom_type()
         self.assertEqual(
-            transport.format_bits(c1.pack()),
+            transport.format_bits(c1._pack()),
             "00000000 00000000 0000"
         )
 
         c1.a = 1
         c1.b = 1
         self.assertEqual(
-            transport.format_bits(c1.pack()),
+            transport.format_bits(c1._pack()),
             "00000000 00111100 0001"
         )
 
@@ -555,7 +555,7 @@ class TestMessageUnion(unittest.TestCase):
     def test_representation(self):
         c1 = self.custom_type()
         self.assertEqual(
-            transport.format_bits(c1.pack()),
+            transport.format_bits(c1._pack()),
             "00000000 00000000 0"
         )
 
@@ -563,7 +563,7 @@ class TestMessageUnion(unittest.TestCase):
         c2.a = 1
         self.assertEqual(transport.get_active_union_field(c2), "a")
         self.assertEqual(
-            transport.format_bits(c2.pack()),
+            transport.format_bits(c2._pack()),
             "00000000 00011110 0"
         )
 
@@ -572,7 +572,7 @@ class TestMessageUnion(unittest.TestCase):
         c3.b[1] = 3
         self.assertEqual(transport.get_active_union_field(c3), "b")
         self.assertEqual(
-            transport.format_bits(c3.pack()),
+            transport.format_bits(c3._pack()),
             "10000000 10000001 1"
         )
 

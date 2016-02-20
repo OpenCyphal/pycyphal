@@ -176,10 +176,10 @@ class Void(object):
     def __init__(self, bitlen):
         self.bitlen = bitlen
 
-    def unpack(self, stream):
+    def _unpack(self, stream):
         return stream[self.bitlen:]
 
-    def pack(self):
+    def _pack(self):
         return "0" * self.bitlen
 
 
@@ -189,14 +189,14 @@ class BaseValue(object):
         self._type = _uavcan_type
         self._bits = None
 
-    def unpack(self, stream):
+    def _unpack(self, stream):
         if self._type.bitlen:
             self._bits = be_from_le_bits(stream, self._type.bitlen)
             return stream[self._type.bitlen:]
         else:
             return stream
 
-    def pack(self):
+    def _pack(self):
         if self._bits:
             return le_from_be_bits(self._bits, self._type.bitlen)
         else:
@@ -312,15 +312,15 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         else:
             self.__items.insert(idx, value)
 
-    def unpack(self, stream):
+    def _unpack(self, stream):
         if self._type.mode == dsdl.ArrayType.MODE_STATIC:
             for i in range(self._type.max_size):
-                stream = self.__items[i].unpack(stream)
+                stream = self.__items[i]._unpack(stream)
         elif self._tao:
             del self[:]
             while len(stream) >= 8:
                 new_item = self.__item_ctor()
-                stream = new_item.unpack(stream)
+                stream = new_item._unpack(stream)
                 self.__items.append(new_item)
             stream = ""
         else:
@@ -330,24 +330,24 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             stream = stream[count_width:]
             for i in range(count):
                 new_item = self.__item_ctor()
-                stream = new_item.unpack(stream)
+                stream = new_item._unpack(stream)
                 self.__items.append(new_item)
 
         return stream
 
-    def pack(self):
+    def _pack(self):
         if self._type.mode == dsdl.ArrayType.MODE_STATIC:
-            items = "".join(i.pack() for i in self.__items)
+            items = "".join(i._pack() for i in self.__items)
             if len(self) < self._type.max_size:
                 empty_item = self.__item_ctor()
-                items += "".join(empty_item.pack() for _ in range(self._type.max_size - len(self)))
+                items += "".join(empty_item._pack() for _ in range(self._type.max_size - len(self)))
             return items
         elif self._tao:
-            return "".join(i.pack() for i in self.__items)
+            return "".join(i._pack() for i in self.__items)
         else:
             count_width = int(math.ceil(math.log(self._type.max_size, 2))) or 1
             count = format(len(self), "0{0:1d}b".format(count_width))
-            return count + "".join(i.pack() for i in self.__items)
+            return count + "".join(i._pack() for i in self.__items)
 
     def from_bytes(self, value):
         del self[:]
@@ -367,6 +367,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         return bytearray(item.value for item in self.__items if item._bits).decode(encoding)
 
 
+# noinspection PyProtectedMember
 class CompoundValue(BaseValue):
     def __init__(self, _uavcan_type, _mode=None, _tao=True, *args, **kwargs):
         self.__dict__["_fields"] = collections.OrderedDict()
@@ -455,24 +456,24 @@ class CompoundValue(BaseValue):
         else:
             super(CompoundValue, self).__setattr__(attr, value)
 
-    def unpack(self, stream):
+    def _unpack(self, stream):
         if self._is_union:
             tag_len = union_tag_len(self._fields)
             self._union_field = list(self._fields.keys())[int(stream[0:tag_len], 2)]
-            stream = self._fields[self._union_field].unpack(stream[tag_len:])
+            stream = self._fields[self._union_field]._unpack(stream[tag_len:])
         else:
             for field in self._fields.values():
-                stream = field.unpack(stream)
+                stream = field._unpack(stream)
         return stream
 
-    def pack(self):
+    def _pack(self):
         if self._is_union:
             keys = list(self._fields.keys())
             field = self._union_field or keys[0]
             tag = keys.index(field)
-            return format(tag, "0" + str(union_tag_len(self._fields)) + "b") + self._fields[field].pack()
+            return format(tag, "0" + str(union_tag_len(self._fields)) + "b") + self._fields[field]._pack()
         else:
-            return "".join(field.pack() for field in self._fields.values())
+            return "".join(field._pack() for field in self._fields.values())
 
 
 class Frame(object):
@@ -522,7 +523,8 @@ class Transfer(object):
         self.ts_real = None
 
         if payload:
-            payload_bits = payload.pack()
+            # noinspection PyProtectedMember
+            payload_bits = payload._pack()
             if len(payload_bits) & 7:
                 payload_bits += "0" * (8 - (len(payload_bits) & 7))
             self.payload = bytes_from_bits(payload_bits)
@@ -667,7 +669,8 @@ class Transfer(object):
         else:
             self.payload = datatype()
 
-        self.payload.unpack(bits_from_bytes(payload_bytes))
+        # noinspection PyProtectedMember
+        self.payload._unpack(bits_from_bytes(payload_bytes))
 
     @property
     def key(self):
