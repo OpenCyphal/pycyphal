@@ -24,7 +24,8 @@ import uavcan.dsdl.common as common
 if sys.version_info[0] < 3:
     bchr = chr
 else:
-    bchr = lambda x: bytes([x])
+    def bchr(x):
+        return bytes([x])
 
 
 def bits_from_bytes(s):
@@ -62,6 +63,7 @@ def union_tag_len(x):
 
 
 # http://davidejones.com/blog/1413-python-precision-floating-point/
+# noinspection PyPep8Naming
 def f16_from_f32(float32):
     F16_EXPONENT_BITS = 0x1F
     F16_EXPONENT_SHIFT = 10
@@ -74,7 +76,6 @@ def f16_from_f32(float32):
     b = binascii.hexlify(a)
 
     f32 = int(b, 16)
-    f16 = 0
     sign = (f32 >> 16) & 0x8000
     exponent = ((f32 >> 23) & 0xff) - 127
     mantissa = f32 & 0x007fffff
@@ -111,20 +112,19 @@ def f32_from_f16(float16):
 
 
 def cast(value, dtype):
-    if dtype.cast_mode == dsdl.parser.PrimitiveType.CAST_MODE_SATURATED:
+    if dtype.cast_mode == dsdl.PrimitiveType.CAST_MODE_SATURATED:
         if value > dtype.value_range[1]:
             value = dtype.value_range[1]
         elif value < dtype.value_range[0]:
             value = dtype.value_range[0]
         return value
-    elif (dtype.cast_mode == dsdl.parser.PrimitiveType.CAST_MODE_TRUNCATED and
-            dtype.kind == dsdl.parser.PrimitiveType.KIND_FLOAT):
-        if not isnan(value) and value > dtype.value_range[1]:
+    elif dtype.cast_mode == dsdl.PrimitiveType.CAST_MODE_TRUNCATED and dtype.kind == dsdl.PrimitiveType.KIND_FLOAT:
+        if not math.isnan(value) and value > dtype.value_range[1]:
             value = float("+inf")
-        elif not isnan(value) and value < dtype.value_range[0]:
+        elif not math.isnan(value) and value < dtype.value_range[0]:
             value = float("-inf")
         return value
-    elif dtype.cast_mode == dsdl.parser.PrimitiveType.CAST_MODE_TRUNCATED:
+    elif dtype.cast_mode == dsdl.PrimitiveType.CAST_MODE_TRUNCATED:
         return value & ((1 << dtype.bitlen) - 1)
     else:
         raise ValueError("Invalid cast_mode: " + repr(dtype))
@@ -142,7 +142,7 @@ class Void(object):
 
 
 class BaseValue(object):
-    def __init__(self, _uavcan_type, *args, **kwargs):
+    def __init__(self, _uavcan_type, *_args, **_kwargs):
         self.type = _uavcan_type
         self._bits = None
 
@@ -170,15 +170,15 @@ class PrimitiveValue(BaseValue):
             return None
 
         int_value = int(self._bits, 2)
-        if self.type.kind == dsdl.parser.PrimitiveType.KIND_BOOLEAN:
+        if self.type.kind == dsdl.PrimitiveType.KIND_BOOLEAN:
             return int_value
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_UNSIGNED_INT:
+        elif self.type.kind == dsdl.PrimitiveType.KIND_UNSIGNED_INT:
             return int_value
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_SIGNED_INT:
+        elif self.type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:
             if int_value >= (1 << (self.type.bitlen - 1)):
                 int_value = -((1 << self.type.bitlen) - int_value)
             return int_value
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_FLOAT:
+        elif self.type.kind == dsdl.PrimitiveType.KIND_FLOAT:
             if self.type.bitlen == 16:
                 return f32_from_f16(int_value)
             elif self.type.bitlen == 32:
@@ -190,15 +190,15 @@ class PrimitiveValue(BaseValue):
     def value(self, new_value):
         if new_value is None:
             raise ValueError("Can't serialize a None value")
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_BOOLEAN:
+        elif self.type.kind == dsdl.PrimitiveType.KIND_BOOLEAN:
             self._bits = "1" if new_value else "0"
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_UNSIGNED_INT:
+        elif self.type.kind == dsdl.PrimitiveType.KIND_UNSIGNED_INT:
             new_value = cast(new_value, self.type)
             self._bits = format(new_value, "0" + str(self.type.bitlen) + "b")
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_SIGNED_INT:
+        elif self.type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:
             new_value = cast(new_value, self.type)
             self._bits = format(new_value, "0" + str(self.type.bitlen) + "b")
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_FLOAT:
+        elif self.type.kind == dsdl.PrimitiveType.KIND_FLOAT:
             new_value = cast(new_value, self.type)
             if self.type.bitlen == 16:
                 int_value = f16_from_f32(new_value)
@@ -215,14 +215,14 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         value_bitlen = getattr(self.type.value_type, "bitlen", 0)
         self._tao = _tao if value_bitlen >= 8 else False
 
-        if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
+        if isinstance(self.type.value_type, dsdl.PrimitiveType):
             self.__item_ctor = functools.partial(PrimitiveValue, self.type.value_type)
-        elif isinstance(self.type.value_type, dsdl.parser.ArrayType):
+        elif isinstance(self.type.value_type, dsdl.ArrayType):
             self.__item_ctor = functools.partial(ArrayValue, self.type.value_type)
-        elif isinstance(self.type.value_type, dsdl.parser.CompoundType):
+        elif isinstance(self.type.value_type, dsdl.CompoundType):
             self.__item_ctor = functools.partial(CompoundValue, self.type.value_type)
 
-        if self.type.mode == dsdl.parser.ArrayType.MODE_STATIC:
+        if self.type.mode == dsdl.ArrayType.MODE_STATIC:
             self.__items = list(self.__item_ctor() for _ in range(self.type.max_size))
         else:
             self.__items = []
@@ -242,7 +242,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
     def __setitem__(self, idx, value):
         if idx >= self.type.max_size:
             raise IndexError("Index {0} too large (max size {1})".format(idx, self.type.max_size))
-        if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
+        if isinstance(self.type.value_type, dsdl.PrimitiveType):
             self.__items[idx].value = value
         else:
             self.__items[idx] = value
@@ -261,7 +261,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             raise IndexError("Index {0} too large (max size {1})".format(idx, self.type.max_size))
         elif len(self) == self.type.max_size:
             raise IndexError("Array already full (max size {0})".format(self.type.max_size))
-        if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
+        if isinstance(self.type.value_type, dsdl.PrimitiveType):
             new_item = self.__item_ctor()
             new_item.value = value
             self.__items.insert(idx, new_item)
@@ -269,7 +269,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             self.__items.insert(idx, value)
 
     def unpack(self, stream):
-        if self.type.mode == dsdl.parser.ArrayType.MODE_STATIC:
+        if self.type.mode == dsdl.ArrayType.MODE_STATIC:
             for i in range(self.type.max_size):
                 stream = self.__items[i].unpack(stream)
         elif self._tao:
@@ -292,12 +292,11 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         return stream
 
     def pack(self):
-        if self.type.mode == dsdl.parser.ArrayType.MODE_STATIC:
+        if self.type.mode == dsdl.ArrayType.MODE_STATIC:
             items = "".join(i.pack() for i in self.__items)
             if len(self) < self.type.max_size:
                 empty_item = self.__item_ctor()
-                items += "".join(empty_item.pack() for i in
-                                 range(self.type.max_size - len(self)))
+                items += "".join(empty_item.pack() for _ in range(self.type.max_size - len(self)))
             return items
         elif self._tao:
             return "".join(i.pack() for i in self.__items)
@@ -331,10 +330,7 @@ class CompoundValue(BaseValue):
         super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
         self.data_type_id = self.type.default_dtid
 
-        source_fields = None
-        source_constants = None
-        is_union = False
-        if self.type.kind == dsdl.parser.CompoundType.KIND_SERVICE:
+        if self.type.kind == dsdl.CompoundType.KIND_SERVICE:
             if _mode == "request":
                 source_fields = self.type.request_fields
                 source_constants = self.type.request_constants
@@ -346,7 +342,7 @@ class CompoundValue(BaseValue):
             else:
                 raise ValueError("mode must be either 'request' or 'response' for service types")
         else:
-            if _mode != None:
+            if _mode is not None:
                 raise ValueError("mode is not applicable for message types")
             source_fields = self.type.fields
             source_constants = self.type.constants
@@ -360,13 +356,13 @@ class CompoundValue(BaseValue):
 
         for idx, field in enumerate(source_fields):
             atao = field is source_fields[-1] and _tao
-            if isinstance(field.type, dsdl.parser.VoidType):
+            if isinstance(field.type, dsdl.VoidType):
                 self.fields["_void_{0}".format(idx)] = Void(field.type.bitlen)
-            elif isinstance(field.type, dsdl.parser.PrimitiveType):
+            elif isinstance(field.type, dsdl.PrimitiveType):
                 self.fields[field.name] = PrimitiveValue(field.type)
-            elif isinstance(field.type, dsdl.parser.ArrayType):
+            elif isinstance(field.type, dsdl.ArrayType):
                 self.fields[field.name] = ArrayValue(field.type, _tao=atao)
-            elif isinstance(field.type, dsdl.parser.CompoundType):
+            elif isinstance(field.type, dsdl.CompoundType):
                 self.fields[field.name] = CompoundValue(field.type, _tao=atao)
 
         for name, value in kwargs.items():
@@ -409,7 +405,7 @@ class CompoundValue(BaseValue):
                 else:
                     self.union_field = attr
 
-            if isinstance(self.fields[attr].type, dsdl.parser.PrimitiveType):
+            if isinstance(self.fields[attr].type, dsdl.PrimitiveType):
                 self.fields[attr].value = value
             else:
                 raise AttributeError(attr + " cannot be set directly")
@@ -437,9 +433,9 @@ class CompoundValue(BaseValue):
 
 
 class Frame(object):
-    def __init__(self, message_id, bytes, ts_monotonic=None, ts_real=None):  # @ReservedAssignment
+    def __init__(self, message_id, data, ts_monotonic=None, ts_real=None):  # @ReservedAssignment
         self.message_id = message_id
-        self.bytes = bytearray(bytes)
+        self.bytes = bytearray(data)
         self.ts_monotonic = ts_monotonic
         self.ts_real = ts_real
 
@@ -447,7 +443,7 @@ class Frame(object):
     def transfer_key(self):
         # The transfer is uniquely identified by the message ID and the 5-bit
         # Transfer ID contained in the last byte of the frame payload.
-        return (self.message_id, (self.bytes[-1] & 0x1F) if self.bytes else None)
+        return self.message_id, (self.bytes[-1] & 0x1F) if self.bytes else None
 
     @property
     def toggle(self):
@@ -468,7 +464,7 @@ class TransferError(uavcan.UAVCANException):
 
 class Transfer(object):
     def __init__(self, transfer_id=0, source_node_id=0, data_type_id=0,
-                 dest_node_id=None, payload=0, transfer_priority=31,
+                 dest_node_id=None, payload=None, transfer_priority=31,
                  request_not_response=False, service_not_message=False,
                  discriminator=None):
         self.transfer_priority = transfer_priority
@@ -479,6 +475,9 @@ class Transfer(object):
         self.data_type_signature = 0
         self.request_not_response = request_not_response
         self.service_not_message = service_not_message
+        self.discriminator = discriminator
+        self.ts_monotonic = None
+        self.ts_real = None
 
         if payload:
             payload_bits = payload.pack()
@@ -562,7 +561,7 @@ class Transfer(object):
                     (0x40 if len(remaining_payload) <= 7 else 0) |
                     ((tail ^ 0x20) & 0x20) |
                     (self.transfer_id & 0x1F))
-            out_frames.append(Frame(message_id=self.message_id, bytes=remaining_payload[0:7] + bchr(tail)))
+            out_frames.append(Frame(message_id=self.message_id, data=remaining_payload[0:7] + bchr(tail)))
             remaining_payload = remaining_payload[7:]
             if not remaining_payload:
                 break
@@ -600,9 +599,9 @@ class Transfer(object):
 
         # Find the data type
         if self.service_not_message:
-            kind = dsdl.parser.CompoundType.KIND_SERVICE
+            kind = dsdl.CompoundType.KIND_SERVICE
         else:
-            kind = dsdl.parser.CompoundType.KIND_MESSAGE
+            kind = dsdl.CompoundType.KIND_MESSAGE
         datatype = uavcan.DATATYPES.get((self.data_type_id, kind))
         if not datatype:
             raise TransferError("Unrecognised {0} type ID {1}"
@@ -630,7 +629,7 @@ class Transfer(object):
 
     @property
     def key(self):
-        return (self.message_id, self.transfer_id)
+        return self.message_id, self.transfer_id
 
     def is_response_to(self, transfer):
         if (transfer.service_not_message and self.service_not_message and
