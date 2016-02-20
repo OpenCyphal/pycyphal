@@ -49,7 +49,7 @@ def get_active_union_field(obj):
     return obj._union_field
 
 
-def select_union_field(obj, value):
+def switch_union_field(obj, value):
     if not is_union(obj):
         raise ValueError('Object is not a union')
     # noinspection PyProtectedMember

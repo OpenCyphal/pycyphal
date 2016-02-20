@@ -47,7 +47,7 @@ from uavcan.node import make_node
 import uavcan.dsdl as dsdl
 import uavcan.transport as transport
 from uavcan.transport import get_uavcan_data_type, \
-    get_active_union_field, select_union_field, is_union, \
+    get_active_union_field, switch_union_field, is_union, \
     get_constants, get_fields
 
 
