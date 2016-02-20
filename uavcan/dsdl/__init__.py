@@ -16,9 +16,9 @@ from .parser import Parser, parse_namespaces, \
     Type, PrimitiveType, ArrayType, CompoundType, VoidType, \
     Attribute, Field, Constant
 
-from .common import DsdlException
+from .common import DsdlException, crc16_from_bytes
 
 __all__ = ['Parser', 'parse_namespaces',
            'Type', 'PrimitiveType', 'ArrayType', 'CompoundType', 'VoidType',
            'Attribute', 'Field', 'Constant',
-           'DsdlException']
+           'DsdlException', 'crc16_from_bytes']
