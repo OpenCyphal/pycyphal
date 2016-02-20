@@ -312,6 +312,13 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         else:
             return list(self) == other
 
+    def clear(self):
+        try:
+            while True:
+                self.pop()
+        except IndexError:
+            pass
+
     def new_item(self):
         return self.__item_ctor()
 
