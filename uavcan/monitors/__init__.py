@@ -44,9 +44,7 @@ class NodeStatusMonitor(object):
                 self.info = None
             self.status = e.message
             if self.info:
-                #self.info.status = self.status
-                for fld, _ in self.status.fields.items():  # TODO: This is temporary, until assignment is implemented
-                    self.info.status.fields[fld] = self.status.fields[fld]
+                self.info.status = self.status
 
         def _update_from_info(self, e):
             self.monotonic_timestamp = e.transfer.ts_monotonic

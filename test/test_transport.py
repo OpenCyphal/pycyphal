@@ -442,15 +442,15 @@ class TestArrayBasic(unittest.TestCase):
             self.assertEqual(len(a3[i].c), 5)
 
         self.assertEqual(
-            transport.format_bits(a1.pack()),
+            transport.format_bits(a1._pack()),
             "00000000 00000001 00000010 00000011"
         )
         self.assertEqual(
-            transport.format_bits(a2.pack()),
+            transport.format_bits(a2._pack()),
             "00000000 00000000 00000000 00111100"
         )
         self.assertEqual(
-            transport.format_bits(a3.pack()),
+            transport.format_bits(a3._pack()),
             "00000000 00000000 00000000 10101010 " +
             "00000001 00000000 00111100 10101010"
         )
@@ -497,14 +497,14 @@ class TestVoid(unittest.TestCase):
     def test_representation(self):
         c1 = self.custom_type()
         self.assertEqual(
-            transport.format_bits(c1.pack()),
+            transport.format_bits(c1._pack()),
             "00000000 00000000 0000"
         )
 
         c1.a = 1
         c1.b = 1
         self.assertEqual(
-            transport.format_bits(c1.pack()),
+            transport.format_bits(c1._pack()),
             "00000000 00111100 0001"
         )
 
@@ -555,26 +555,93 @@ class TestMessageUnion(unittest.TestCase):
     def test_representation(self):
         c1 = self.custom_type()
         self.assertEqual(
-            transport.format_bits(c1.pack()),
+            transport.format_bits(c1._pack()),
             "00000000 00000000 0"
         )
 
         c2 = self.custom_type()
         c2.a = 1
-        self.assertEqual(c2.union_field, "a")
+        self.assertEqual(transport.get_active_union_field(c2), "a")
         self.assertEqual(
-            transport.format_bits(c2.pack()),
+            transport.format_bits(c2._pack()),
             "00000000 00011110 0"
         )
 
         c3 = self.custom_type()
         c3.b[0] = 1
         c3.b[1] = 3
-        self.assertEqual(c3.union_field, "b")
+        self.assertEqual(transport.get_active_union_field(c3), "b")
         self.assertEqual(
-            transport.format_bits(c3.pack()),
+            transport.format_bits(c3._pack()),
             "10000000 10000001 1"
         )
+
+
+class TestAssignment(unittest.TestCase):
+    def setUp(self):
+        import uavcan
+        self.a = uavcan.protocol.GetNodeInfo.Response()
+
+    def test_compound_assignment(self):
+        import uavcan
+
+        orig_status = self.a.status
+        print(orig_status)
+        self.assertEqual(orig_status.mode, 0)
+        self.assertEqual(orig_status.uptime_sec, 0)
+
+        self.a.status = uavcan.protocol.NodeStatus(mode=3, uptime_sec=12345)
+
+        new_status = self.a.status
+        print(new_status)
+        self.assertEqual(new_status.mode, 3)
+        self.assertEqual(new_status.uptime_sec, 12345)
+
+    def test_array_assignment(self):
+        print(repr(self.a.name))
+        print(str(self.a.name))
+        self.assertEqual(self.a.name, [])
+        self.assertEqual(self.a.name, '')
+        self.a.name = '123'
+        self.assertEqual(self.a.name, [49, 50, 51])
+        self.assertEqual(self.a.name, '123')
+        self.a.name = [52, 53, 54]
+        self.assertEqual(self.a.name, [52, 53, 54])
+        self.assertEqual(self.a.name, '456')
+        print(repr(self.a.name))
+        print(str(self.a.name))
+
+
+class TestFloats(unittest.TestCase):
+    def test_basic(self):
+        def make_float(bitlen):
+            return parser.PrimitiveType(parser.PrimitiveType.KIND_FLOAT, bitlen,
+                                        parser.PrimitiveType.CAST_MODE_TRUNCATED)
+
+        # 64 bit
+        a = transport.PrimitiveValue(make_float(64))
+        print(a.value)
+        self.assertEqual(a.value, 0)
+        a.value = 123.456
+        print(a.value)
+        self.assertEqual(a.value, 123.456)
+
+        # 16 bit
+        a = transport.PrimitiveValue(make_float(16))
+        print(a.value)
+        self.assertEqual(a.value, 0)
+        # nan
+        a.value = float('nan')
+        print(a.value)
+        self.assertEqual(str(a.value), 'nan')
+        # positive infinity
+        a.value = float('inf')
+        print(a.value)
+        self.assertEqual(str(a.value), 'inf')
+        # negative infinity
+        a.value = float('-inf')
+        print(a.value)
+        self.assertEqual(str(a.value), '-inf')
 
 
 if __name__ == '__main__':

@@ -11,6 +11,7 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 import sys
 import time
 import math
+import copy
 import struct
 import binascii
 import functools
@@ -24,7 +25,50 @@ import uavcan.dsdl.common as common
 if sys.version_info[0] < 3:
     bchr = chr
 else:
-    bchr = lambda x: bytes([x])
+    def bchr(x):
+        return bytes([x])
+
+
+def get_uavcan_data_type(obj):
+    if not isinstance(obj, CompoundValue):
+        raise ValueError('UAVCAN type is not defined for this object')
+    # noinspection PyProtectedMember
+    return obj._type
+
+
+def is_union(obj):
+    if not isinstance(obj, CompoundValue):
+        raise ValueError('Only CompoundValue can be union')
+    # noinspection PyProtectedMember
+    return obj._is_union
+
+
+def get_active_union_field(obj):
+    if not is_union(obj):
+        raise ValueError('Object is not a union')
+    # noinspection PyProtectedMember
+    return obj._union_field
+
+
+def switch_union_field(obj, value):
+    if not is_union(obj):
+        raise ValueError('Object is not a union')
+    # noinspection PyProtectedMember
+    obj._union_field = value
+
+
+def get_fields(obj):
+    if not isinstance(obj, CompoundValue):
+        raise ValueError('Only CompoundValue can have fields')
+    # noinspection PyProtectedMember
+    return obj._fields
+
+
+def get_constants(obj):
+    if not isinstance(obj, CompoundValue):
+        raise ValueError('Only CompoundValue can have constants')
+    # noinspection PyProtectedMember
+    return obj._constants
 
 
 def bits_from_bytes(s):
@@ -61,106 +105,136 @@ def union_tag_len(x):
     return int(math.ceil(math.log(len(x), 2))) or 1
 
 
-# http://davidejones.com/blog/1413-python-precision-floating-point/
+class Float32IntegerUnion(object):
+    """
+    Yes we've got ourselves a tiny little union here:
+        union FloatIntegerUnion
+        {
+            std::uint32_t u;
+            float f;
+        };
+    This is madness.
+    """
+
+    def __init__(self, integer=None, floating_point=None):
+        self._bytes = struct.pack("=L", 0)
+        if integer is not None:
+            assert floating_point is None
+            self.u = int(integer)
+        if floating_point is not None:
+            self.f = float(floating_point)
+
+    @property
+    def f(self):
+        return struct.unpack("=f", self._bytes)[0]
+
+    @f.setter
+    def f(self, value):
+        assert isinstance(value, float)
+        self._bytes = struct.pack("=f", value)
+
+    @property
+    def u(self):
+        return struct.unpack("=L", self._bytes)[0]
+
+    @u.setter
+    def u(self, value):
+        assert isinstance(value, int)
+        self._bytes = struct.pack("=L", value)
+
+
 def f16_from_f32(float32):
-    F16_EXPONENT_BITS = 0x1F
-    F16_EXPONENT_SHIFT = 10
-    F16_EXPONENT_BIAS = 15
-    F16_MANTISSA_BITS = 0x3ff
-    F16_MANTISSA_SHIFT = (23 - F16_EXPONENT_SHIFT)
-    F16_MAX_EXPONENT = (F16_EXPONENT_BITS << F16_EXPONENT_SHIFT)
+    # Directly translated from libuavcan's implementation in C++
+    f32infty = Float32IntegerUnion(integer=255 << 23)
+    f16infty = Float32IntegerUnion(integer=31 << 23)
+    magic = Float32IntegerUnion(integer=15 << 23)
+    inval = Float32IntegerUnion(floating_point=float32)
+    sign_mask = 0x80000000
+    round_mask = ~0xFFF
 
-    a = struct.pack('>f', float32)
-    b = binascii.hexlify(a)
+    sign = inval.u & sign_mask
+    inval.u ^= sign
 
-    f32 = int(b, 16)
-    f16 = 0
-    sign = (f32 >> 16) & 0x8000
-    exponent = ((f32 >> 23) & 0xff) - 127
-    mantissa = f32 & 0x007fffff
-
-    if exponent == 128:
-        f16 = sign | F16_MAX_EXPONENT
-        if mantissa:
-            f16 |= (mantissa & F16_MANTISSA_BITS)
-    elif exponent > 15:
-        f16 = sign | F16_MAX_EXPONENT
-    elif exponent > -15:
-        exponent += F16_EXPONENT_BIAS
-        mantissa >>= F16_MANTISSA_SHIFT
-        f16 = sign | exponent << F16_EXPONENT_SHIFT | mantissa
+    if inval.u >= f32infty.u:                           # Inf or NaN (all exponent bits set)
+        out = 0x7FFF if inval.u > f32infty.u else 0x7C00
     else:
-        f16 = sign
-    return f16
+        inval.u &= round_mask
+        inval.f *= magic.f
+        inval.u -= round_mask
+        if inval.u > f16infty.u:
+            inval.u = f16infty.u                        # Clamp to signed infinity if overflowed
+        out = (inval.u >> 13) & 0xFFFF                  # Take the bits!
+
+    return out | (sign >> 16) & 0xFFFF
 
 
-# http://davidejones.com/blog/1413-python-precision-floating-point/
 def f32_from_f16(float16):
-    t1 = float16 & 0x7FFF
-    t2 = float16 & 0x8000
-    t3 = float16 & 0x7C00
+    # Directly translated from libuavcan's implementation in C++
+    magic = Float32IntegerUnion(integer=(254 - 15) << 23)
+    was_inf_nan = Float32IntegerUnion(integer=(127 + 16) << 23)
 
-    t1 <<= 13
-    t2 <<= 16
+    out = Float32IntegerUnion(integer=(float16 & 0x7FFF) << 13)     # exponent/mantissa bits
+    out.f *= magic.f                                                # exponent adjust
+    if out.f >= was_inf_nan.f:                                      # make sure Inf/NaN survive
+        out.u |= 255 << 23
+    out.u |= (float16 & 0x8000) << 16                               # sign bit
 
-    t1 += 0x38000000
-    t1 = 0 if t3 == 0 else t1
-    t1 |= t2
-
-    return struct.unpack("<f", struct.pack("<L", t1))[0]
+    return out.f
 
 
 def cast(value, dtype):
-    if dtype.cast_mode == dsdl.parser.PrimitiveType.CAST_MODE_SATURATED:
+    if dtype.cast_mode == dsdl.PrimitiveType.CAST_MODE_SATURATED:
         if value > dtype.value_range[1]:
             value = dtype.value_range[1]
         elif value < dtype.value_range[0]:
             value = dtype.value_range[0]
         return value
-    elif (dtype.cast_mode == dsdl.parser.PrimitiveType.CAST_MODE_TRUNCATED and
-            dtype.kind == dsdl.parser.PrimitiveType.KIND_FLOAT):
-        if not isnan(value) and value > dtype.value_range[1]:
+    elif dtype.cast_mode == dsdl.PrimitiveType.CAST_MODE_TRUNCATED and dtype.kind == dsdl.PrimitiveType.KIND_FLOAT:
+        if not math.isnan(value) and value > dtype.value_range[1]:
             value = float("+inf")
-        elif not isnan(value) and value < dtype.value_range[0]:
+        elif not math.isnan(value) and value < dtype.value_range[0]:
             value = float("-inf")
         return value
-    elif dtype.cast_mode == dsdl.parser.PrimitiveType.CAST_MODE_TRUNCATED:
+    elif dtype.cast_mode == dsdl.PrimitiveType.CAST_MODE_TRUNCATED:
         return value & ((1 << dtype.bitlen) - 1)
     else:
         raise ValueError("Invalid cast_mode: " + repr(dtype))
 
 
-class Void(object):
-    def __init__(self, bitlen):
-        self.bitlen = bitlen
-
-    def unpack(self, stream):
-        return stream[self.bitlen:]
-
-    def pack(self):
-        return "0" * self.bitlen
-
-
 class BaseValue(object):
-    def __init__(self, _uavcan_type, *args, **kwargs):
-        self.type = _uavcan_type
+    # noinspection PyUnusedLocal
+    def __init__(self, _uavcan_type, *_args, **_kwargs):
+        self._type = _uavcan_type
         self._bits = None
 
-    def unpack(self, stream):
-        if self.type.bitlen:
-            self._bits = be_from_le_bits(stream, self.type.bitlen)
-            return stream[self.type.bitlen:]
+    def _unpack(self, stream):
+        if self._type.bitlen:
+            self._bits = be_from_le_bits(stream, self._type.bitlen)
+            return stream[self._type.bitlen:]
         else:
             return stream
 
-    def pack(self):
+    def _pack(self):
         if self._bits:
-            return le_from_be_bits(self._bits, self.type.bitlen)
+            return le_from_be_bits(self._bits, self._type.bitlen)
         else:
-            return "0" * self.type.bitlen
+            return "0" * self._type.bitlen
+
+
+class VoidValue(BaseValue):
+    def _unpack(self, stream):
+        return stream[self._type.bitlen:]
+
+    def _pack(self):
+        return "0" * self._type.bitlen
 
 
 class PrimitiveValue(BaseValue):
+    def __init__(self, _uavcan_type, *args, **kwargs):
+        super(PrimitiveValue, self).__init__(_uavcan_type, *args, **kwargs)
+        # Default initialization
+        self.value = 0
+
     def __repr__(self):
         return repr(self.value)
 
@@ -170,67 +244,78 @@ class PrimitiveValue(BaseValue):
             return None
 
         int_value = int(self._bits, 2)
-        if self.type.kind == dsdl.parser.PrimitiveType.KIND_BOOLEAN:
+        if self._type.kind == dsdl.PrimitiveType.KIND_BOOLEAN:
             return int_value
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_UNSIGNED_INT:
+        elif self._type.kind == dsdl.PrimitiveType.KIND_UNSIGNED_INT:
             return int_value
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_SIGNED_INT:
-            if int_value >= (1 << (self.type.bitlen - 1)):
-                int_value = -((1 << self.type.bitlen) - int_value)
+        elif self._type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:
+            if int_value >= (1 << (self._type.bitlen - 1)):
+                int_value = -((1 << self._type.bitlen) - int_value)
             return int_value
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_FLOAT:
-            if self.type.bitlen == 16:
+        elif self._type.kind == dsdl.PrimitiveType.KIND_FLOAT:
+            if self._type.bitlen == 16:
                 return f32_from_f16(int_value)
-            elif self.type.bitlen == 32:
+            elif self._type.bitlen == 32:
                 return struct.unpack("<f", struct.pack("<L", int_value))[0]
+            elif self._type.bitlen == 64:
+                return struct.unpack("<d", struct.pack("<Q", int_value))[0]
             else:
-                raise NotImplementedError("Only 16- or 32-bit floats are supported")
+                raise ValueError('Bad float')
 
     @value.setter
     def value(self, new_value):
         if new_value is None:
             raise ValueError("Can't serialize a None value")
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_BOOLEAN:
+        elif self._type.kind == dsdl.PrimitiveType.KIND_BOOLEAN:
             self._bits = "1" if new_value else "0"
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_UNSIGNED_INT:
-            new_value = cast(new_value, self.type)
-            self._bits = format(new_value, "0" + str(self.type.bitlen) + "b")
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_SIGNED_INT:
-            new_value = cast(new_value, self.type)
-            self._bits = format(new_value, "0" + str(self.type.bitlen) + "b")
-        elif self.type.kind == dsdl.parser.PrimitiveType.KIND_FLOAT:
-            new_value = cast(new_value, self.type)
-            if self.type.bitlen == 16:
+        elif self._type.kind == dsdl.PrimitiveType.KIND_UNSIGNED_INT:
+            new_value = cast(new_value, self._type)
+            self._bits = format(new_value, "0" + str(self._type.bitlen) + "b")
+        elif self._type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:
+            new_value = cast(new_value, self._type)
+            self._bits = format(new_value, "0" + str(self._type.bitlen) + "b")
+        elif self._type.kind == dsdl.PrimitiveType.KIND_FLOAT:
+            new_value = cast(new_value, self._type)
+            if self._type.bitlen == 16:
                 int_value = f16_from_f32(new_value)
-            elif self.type.bitlen == 32:
+            elif self._type.bitlen == 32:
                 int_value = struct.unpack("<L", struct.pack("<f", new_value))[0]
+            elif self._type.bitlen == 64:
+                int_value = struct.unpack("<Q", struct.pack("<d", new_value))[0]
             else:
-                raise NotImplementedError("Only 16- or 32-bit floats are supported")
-            self._bits = format(int_value, "0" + str(self.type.bitlen) + "b")
+                raise ValueError('Bad float, no donut')
+            self._bits = format(int_value, "0" + str(self._type.bitlen) + "b")
 
 
+# noinspection PyProtectedMember
 class ArrayValue(BaseValue, collections.MutableSequence):
     def __init__(self, _uavcan_type, _tao, *args, **kwargs):
         super(ArrayValue, self).__init__(_uavcan_type, *args, **kwargs)
-        value_bitlen = getattr(self.type.value_type, "bitlen", 0)
+        value_bitlen = getattr(self._type.value_type, "bitlen", 0)
         self._tao = _tao if value_bitlen >= 8 else False
 
-        if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
-            self.__item_ctor = functools.partial(PrimitiveValue, self.type.value_type)
-        elif isinstance(self.type.value_type, dsdl.parser.ArrayType):
-            self.__item_ctor = functools.partial(ArrayValue, self.type.value_type)
-        elif isinstance(self.type.value_type, dsdl.parser.CompoundType):
-            self.__item_ctor = functools.partial(CompoundValue, self.type.value_type)
+        if isinstance(self._type.value_type, dsdl.PrimitiveType):
+            self.__item_ctor = functools.partial(PrimitiveValue, self._type.value_type)
+        elif isinstance(self._type.value_type, dsdl.ArrayType):
+            self.__item_ctor = functools.partial(ArrayValue, self._type.value_type)
+        elif isinstance(self._type.value_type, dsdl.CompoundType):
+            self.__item_ctor = functools.partial(CompoundValue, self._type.value_type)
 
-        if self.type.mode == dsdl.parser.ArrayType.MODE_STATIC:
-            self.__items = list(self.__item_ctor() for _ in range(self.type.max_size))
+        if self._type.mode == dsdl.ArrayType.MODE_STATIC:
+            self.__items = list(self.__item_ctor() for _ in range(self._type.max_size))
         else:
             self.__items = []
 
     def __repr__(self):
-        return "ArrayValue(type={0!r}, tao={1!r}, items={2!r})".format(self.type, self._tao, self.__items)
+        return "ArrayValue(type={0!r}, tao={1!r}, items={2!r})".format(self._type, self._tao, self.__items)
 
     def __str__(self):
+        if self._type.is_string_like:
+            # noinspection PyBroadException
+            try:
+                return self.decode()
+            except Exception:
+                pass
         return self.__repr__()
 
     def __getitem__(self, idx):
@@ -240,9 +325,9 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             return self.__items[idx]
 
     def __setitem__(self, idx, value):
-        if idx >= self.type.max_size:
-            raise IndexError("Index {0} too large (max size {1})".format(idx, self.type.max_size))
-        if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
+        if idx >= self._type.max_size:
+            raise IndexError("Index {0} too large (max size {1})".format(idx, self._type.max_size))
+        if isinstance(self._type.value_type, dsdl.PrimitiveType):
             self.__items[idx].value = value
         else:
             self.__items[idx] = value
@@ -253,58 +338,70 @@ class ArrayValue(BaseValue, collections.MutableSequence):
     def __len__(self):
         return len(self.__items)
 
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.decode() == other
+        else:
+            return list(self) == other
+
+    def clear(self):
+        try:
+            while True:
+                self.pop()
+        except IndexError:
+            pass
+
     def new_item(self):
         return self.__item_ctor()
 
     def insert(self, idx, value):
-        if idx >= self.type.max_size:
-            raise IndexError("Index {0} too large (max size {1})".format(idx, self.type.max_size))
-        elif len(self) == self.type.max_size:
-            raise IndexError("Array already full (max size {0})".format(self.type.max_size))
-        if isinstance(self.type.value_type, dsdl.parser.PrimitiveType):
+        if idx >= self._type.max_size:
+            raise IndexError("Index {0} too large (max size {1})".format(idx, self._type.max_size))
+        elif len(self) == self._type.max_size:
+            raise IndexError("Array already full (max size {0})".format(self._type.max_size))
+        if isinstance(self._type.value_type, dsdl.PrimitiveType):
             new_item = self.__item_ctor()
             new_item.value = value
             self.__items.insert(idx, new_item)
         else:
             self.__items.insert(idx, value)
 
-    def unpack(self, stream):
-        if self.type.mode == dsdl.parser.ArrayType.MODE_STATIC:
-            for i in range(self.type.max_size):
-                stream = self.__items[i].unpack(stream)
+    def _unpack(self, stream):
+        if self._type.mode == dsdl.ArrayType.MODE_STATIC:
+            for i in range(self._type.max_size):
+                stream = self.__items[i]._unpack(stream)
         elif self._tao:
             del self[:]
             while len(stream) >= 8:
                 new_item = self.__item_ctor()
-                stream = new_item.unpack(stream)
+                stream = new_item._unpack(stream)
                 self.__items.append(new_item)
             stream = ""
         else:
             del self[:]
-            count_width = int(math.ceil(math.log(self.type.max_size, 2))) or 1
+            count_width = int(math.ceil(math.log(self._type.max_size, 2))) or 1
             count = int(stream[0:count_width], 2)
             stream = stream[count_width:]
             for i in range(count):
                 new_item = self.__item_ctor()
-                stream = new_item.unpack(stream)
+                stream = new_item._unpack(stream)
                 self.__items.append(new_item)
 
         return stream
 
-    def pack(self):
-        if self.type.mode == dsdl.parser.ArrayType.MODE_STATIC:
-            items = "".join(i.pack() for i in self.__items)
-            if len(self) < self.type.max_size:
+    def _pack(self):
+        if self._type.mode == dsdl.ArrayType.MODE_STATIC:
+            items = "".join(i._pack() for i in self.__items)
+            if len(self) < self._type.max_size:
                 empty_item = self.__item_ctor()
-                items += "".join(empty_item.pack() for i in
-                                 range(self.type.max_size - len(self)))
+                items += "".join(empty_item._pack() for _ in range(self._type.max_size - len(self)))
             return items
         elif self._tao:
-            return "".join(i.pack() for i in self.__items)
+            return "".join(i._pack() for i in self.__items)
         else:
-            count_width = int(math.ceil(math.log(self.type.max_size, 2))) or 1
+            count_width = int(math.ceil(math.log(self._type.max_size, 2))) or 1
             count = format(len(self), "0{0:1d}b".format(count_width))
-            return count + "".join(i.pack() for i in self.__items)
+            return count + "".join(i._pack() for i in self.__items)
 
     def from_bytes(self, value):
         del self[:]
@@ -314,60 +411,60 @@ class ArrayValue(BaseValue, collections.MutableSequence):
     def to_bytes(self):
         return bytes(bytearray(item.value for item in self.__items if item._bits))
 
-    def encode(self, value):
+    def encode(self, value, errors='strict'):
+        if not self._type.is_string_like:
+            raise ValueError('encode() can be used only with string-like arrays')
         del self[:]
-        value = bytearray(value, encoding="utf-8")
+        value = bytearray(value, encoding="utf-8", errors=errors)
         for byte in value:
             self.append(byte)
 
     def decode(self, encoding="utf-8"):
+        if not self._type.is_string_like:
+            raise ValueError('decode() can be used only with string-like arrays')
         return bytearray(item.value for item in self.__items if item._bits).decode(encoding)
 
 
+# noinspection PyProtectedMember
 class CompoundValue(BaseValue):
     def __init__(self, _uavcan_type, _mode=None, _tao=True, *args, **kwargs):
-        self.__dict__["fields"] = collections.OrderedDict()
-        self.__dict__["constants"] = {}
+        self.__dict__["_fields"] = collections.OrderedDict()
+        self.__dict__["_constants"] = {}
         super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
-        self.data_type_id = self.type.default_dtid
 
-        source_fields = None
-        source_constants = None
-        is_union = False
-        if self.type.kind == dsdl.parser.CompoundType.KIND_SERVICE:
+        if self._type.kind == dsdl.CompoundType.KIND_SERVICE:
             if _mode == "request":
-                source_fields = self.type.request_fields
-                source_constants = self.type.request_constants
-                is_union = self.type.request_union
+                source_fields = self._type.request_fields
+                source_constants = self._type.request_constants
+                self._is_union = self._type.request_union
             elif _mode == "response":
-                source_fields = self.type.response_fields
-                source_constants = self.type.response_constants
-                is_union = self.type.response_union
+                source_fields = self._type.response_fields
+                source_constants = self._type.response_constants
+                self._is_union = self._type.response_union
             else:
                 raise ValueError("mode must be either 'request' or 'response' for service types")
         else:
-            if _mode != None:
+            if _mode is not None:
                 raise ValueError("mode is not applicable for message types")
-            source_fields = self.type.fields
-            source_constants = self.type.constants
-            is_union = self.type.union
+            source_fields = self._type.fields
+            source_constants = self._type.constants
+            self._is_union = self._type.union
 
-        self.is_union = is_union
-        self.union_field = None
+        self._union_field = None
 
         for constant in source_constants:
-            self.constants[constant.name] = constant.value
+            self._constants[constant.name] = constant.value
 
         for idx, field in enumerate(source_fields):
             atao = field is source_fields[-1] and _tao
-            if isinstance(field.type, dsdl.parser.VoidType):
-                self.fields["_void_{0}".format(idx)] = Void(field.type.bitlen)
-            elif isinstance(field.type, dsdl.parser.PrimitiveType):
-                self.fields[field.name] = PrimitiveValue(field.type)
-            elif isinstance(field.type, dsdl.parser.ArrayType):
-                self.fields[field.name] = ArrayValue(field.type, _tao=atao)
-            elif isinstance(field.type, dsdl.parser.CompoundType):
-                self.fields[field.name] = CompoundValue(field.type, _tao=atao)
+            if isinstance(field.type, dsdl.VoidType):
+                self._fields["_void_{0}".format(idx)] = VoidValue(field.type)
+            elif isinstance(field.type, dsdl.PrimitiveType):
+                self._fields[field.name] = PrimitiveValue(field.type)
+            elif isinstance(field.type, dsdl.ArrayType):
+                self._fields[field.name] = ArrayValue(field.type, _tao=atao)
+            elif isinstance(field.type, dsdl.CompoundType):
+                self._fields[field.name] = CompoundValue(field.type, _tao=atao)
 
         for name, value in kwargs.items():
             if name.startswith('_'):
@@ -375,71 +472,111 @@ class CompoundValue(BaseValue):
             setattr(self, name, value)
 
     def __repr__(self):
-        if self.is_union:
-            field = self.union_field or list(self.fields.keys())[0]
-            fields = "{0}={1!r}".format(field, self.fields[field])
+        if self._is_union:
+            field = self._union_field or list(self._fields.keys())[0]
+            fields = "{0}={1!r}".format(field, self._fields[field])
         else:
-            fields = ", ".join("{0}={1!r}".format(f, v) for f, v in self.fields.items() if not f.startswith("_void_"))
-        return "{0}({1})".format(self.type.full_name, fields)
+            fields = ", ".join("{0}={1!r}".format(f, v) for f, v in self._fields.items() if not f.startswith("_void_"))
+        return "{0}({1})".format(self._type.full_name, fields)
+
+    def __copy__(self):
+        # http://stackoverflow.com/a/15774013/1007777
+        cls = self.__class__
+        result = cls.__new__(cls)
+        result.__dict__.update(self.__dict__)
+        return result
+
+    def __deepcopy__(self, memo):
+        # http://stackoverflow.com/a/15774013/1007777
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            result.__dict__[k] = copy.deepcopy(v, memo)
+        return result
 
     def __getattr__(self, attr):
-        if attr in self.constants:
-            return self.constants[attr]
-        elif attr in self.fields:
-            if self.is_union:
-                if self.union_field and self.union_field != attr:
+        if attr in self._constants:
+            return self._constants[attr]
+        elif attr in self._fields:
+            if self._is_union:
+                if self._union_field and self._union_field != attr:
                     raise AttributeError(attr)
                 else:
-                    self.union_field = attr
+                    self._union_field = attr
 
-            if isinstance(self.fields[attr], PrimitiveValue):
-                return self.fields[attr].value
+            if isinstance(self._fields[attr], PrimitiveValue):
+                return self._fields[attr].value
             else:
-                return self.fields[attr]
+                return self._fields[attr]
         else:
             raise AttributeError(attr)
 
     def __setattr__(self, attr, value):
-        if attr in self.constants:
+        if attr in self._constants:
             raise AttributeError(attr + " is read-only")
-        elif attr in self.fields:
-            if self.is_union:
-                if self.union_field and self.union_field != attr:
+        elif attr in self._fields:
+            if self._is_union:
+                if self._union_field and self._union_field != attr:
                     raise AttributeError(attr)
                 else:
-                    self.union_field = attr
+                    self._union_field = attr
 
-            if isinstance(self.fields[attr].type, dsdl.parser.PrimitiveType):
-                self.fields[attr].value = value
+            # noinspection PyProtectedMember
+            attr_type = self._fields[attr]._type
+
+            if isinstance(attr_type, dsdl.PrimitiveType):
+                self._fields[attr].value = value
+
+            elif isinstance(attr_type, dsdl.CompoundType):
+                if not isinstance(value, CompoundValue):
+                    raise AttributeError('Invalid type of the value, expected CompoundValue, got %r' % type(value))
+                if attr_type.full_name != get_uavcan_data_type(value).full_name:
+                    raise AttributeError('Incompatible type of the value, expected %r, got %r' %
+                                         (attr_type.full_name, get_uavcan_data_type(value).full_name))
+                self._fields[attr] = copy.copy(value)
+
+            elif isinstance(attr_type, dsdl.ArrayType):
+                self._fields[attr].clear()
+                try:
+                    if isinstance(value, str):
+                        self._fields[attr].encode(value)
+                    else:
+                        for item in value:
+                            self._fields[attr].append(item)
+                except Exception as ex:
+                    # We should be using 'raise from' here, but unfortunately we have to be compatible with 2.7
+                    raise AttributeError('Array field could not be constructed from the provided value', ex)
+
             else:
                 raise AttributeError(attr + " cannot be set directly")
         else:
             super(CompoundValue, self).__setattr__(attr, value)
 
-    def unpack(self, stream):
-        if self.is_union:
-            tag_len = union_tag_len(self.fields)
-            self.union_field = list(self.fields.keys())[int(stream[0:tag_len], 2)]
-            stream = self.fields[self.union_field].unpack(stream[tag_len:])
+    def _unpack(self, stream):
+        if self._is_union:
+            tag_len = union_tag_len(self._fields)
+            self._union_field = list(self._fields.keys())[int(stream[0:tag_len], 2)]
+            stream = self._fields[self._union_field]._unpack(stream[tag_len:])
         else:
-            for field in self.fields.values():
-                stream = field.unpack(stream)
+            for field in self._fields.values():
+                stream = field._unpack(stream)
         return stream
 
-    def pack(self):
-        if self.is_union:
-            keys = list(self.fields.keys())
-            field = self.union_field or keys[0]
+    def _pack(self):
+        if self._is_union:
+            keys = list(self._fields.keys())
+            field = self._union_field or keys[0]
             tag = keys.index(field)
-            return format(tag, "0" + str(union_tag_len(self.fields)) + "b") + self.fields[field].pack()
+            return format(tag, "0" + str(union_tag_len(self._fields)) + "b") + self._fields[field]._pack()
         else:
-            return "".join(field.pack() for field in self.fields.values())
+            return "".join(field._pack() for field in self._fields.values())
 
 
 class Frame(object):
-    def __init__(self, message_id, bytes, ts_monotonic=None, ts_real=None):  # @ReservedAssignment
+    def __init__(self, message_id, data, ts_monotonic=None, ts_real=None):  # @ReservedAssignment
         self.message_id = message_id
-        self.bytes = bytearray(bytes)
+        self.bytes = bytearray(data)
         self.ts_monotonic = ts_monotonic
         self.ts_real = ts_real
 
@@ -447,7 +584,7 @@ class Frame(object):
     def transfer_key(self):
         # The transfer is uniquely identified by the message ID and the 5-bit
         # Transfer ID contained in the last byte of the frame payload.
-        return (self.message_id, (self.bytes[-1] & 0x1F) if self.bytes else None)
+        return self.message_id, (self.bytes[-1] & 0x1F) if self.bytes else None
 
     @property
     def toggle(self):
@@ -467,27 +604,37 @@ class TransferError(uavcan.UAVCANException):
 
 
 class Transfer(object):
-    def __init__(self, transfer_id=0, source_node_id=0, data_type_id=0,
-                 dest_node_id=None, payload=0, transfer_priority=31,
-                 request_not_response=False, service_not_message=False,
+    DEFAULT_TRANSFER_PRIORITY = 31
+
+    def __init__(self,
+                 transfer_id=0,
+                 source_node_id=0,
+                 dest_node_id=None,
+                 payload=None,
+                 transfer_priority=None,
+                 request_not_response=False,
+                 service_not_message=False,
                  discriminator=None):
-        self.transfer_priority = transfer_priority
+        self.transfer_priority = transfer_priority if transfer_priority is not None else self.DEFAULT_TRANSFER_PRIORITY
         self.transfer_id = transfer_id
         self.source_node_id = source_node_id
-        self.data_type_id = data_type_id
         self.dest_node_id = dest_node_id
         self.data_type_signature = 0
         self.request_not_response = request_not_response
         self.service_not_message = service_not_message
+        self.discriminator = discriminator
+        self.ts_monotonic = None
+        self.ts_real = None
 
         if payload:
-            payload_bits = payload.pack()
+            # noinspection PyProtectedMember
+            payload_bits = payload._pack()
             if len(payload_bits) & 7:
                 payload_bits += "0" * (8 - (len(payload_bits) & 7))
             self.payload = bytes_from_bits(payload_bits)
-            self.data_type_id = payload.type.default_dtid
-            self.data_type_signature = payload.type.get_data_type_signature()
-            self.data_type_crc = payload.type.base_crc
+            self.data_type_id = get_uavcan_data_type(payload).default_dtid
+            self.data_type_signature = get_uavcan_data_type(payload).get_data_type_signature()
+            self.data_type_crc = get_uavcan_data_type(payload).base_crc
         else:
             self.payload = None
             self.data_type_id = None
@@ -562,7 +709,7 @@ class Transfer(object):
                     (0x40 if len(remaining_payload) <= 7 else 0) |
                     ((tail ^ 0x20) & 0x20) |
                     (self.transfer_id & 0x1F))
-            out_frames.append(Frame(message_id=self.message_id, bytes=remaining_payload[0:7] + bchr(tail)))
+            out_frames.append(Frame(message_id=self.message_id, data=remaining_payload[0:7] + bchr(tail)))
             remaining_payload = remaining_payload[7:]
             if not remaining_payload:
                 break
@@ -600,9 +747,9 @@ class Transfer(object):
 
         # Find the data type
         if self.service_not_message:
-            kind = dsdl.parser.CompoundType.KIND_SERVICE
+            kind = dsdl.CompoundType.KIND_SERVICE
         else:
-            kind = dsdl.parser.CompoundType.KIND_MESSAGE
+            kind = dsdl.CompoundType.KIND_MESSAGE
         datatype = uavcan.DATATYPES.get((self.data_type_id, kind))
         if not datatype:
             raise TransferError("Unrecognised {0} type ID {1}"
@@ -626,11 +773,12 @@ class Transfer(object):
         else:
             self.payload = datatype()
 
-        self.payload.unpack(bits_from_bytes(payload_bytes))
+        # noinspection PyProtectedMember
+        self.payload._unpack(bits_from_bytes(payload_bytes))
 
     @property
     def key(self):
-        return (self.message_id, self.transfer_id)
+        return self.message_id, self.transfer_id
 
     def is_response_to(self, transfer):
         if (transfer.service_not_message and self.service_not_message and

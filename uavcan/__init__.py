@@ -7,10 +7,10 @@
 #         Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-'''
+"""
 Python UAVCAN package.
 Supported Python versions: 3.2+, 2.7.
-'''
+"""
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os
@@ -21,9 +21,11 @@ import time
 from logging import getLogger
 
 try:
+    # noinspection PyStatementEffect
     time.monotonic                          # Works natively in Python 3.3+
 except AttributeError:
     try:
+        # noinspection PyPackageRequirements,PyUnresolvedReferences
         import monotonic                    # 3rd party dependency for old versions @UnresolvedImport
         time.monotonic = monotonic.monotonic
     except ImportError:
@@ -44,6 +46,9 @@ import uavcan.node as node
 from uavcan.node import make_node
 import uavcan.dsdl as dsdl
 import uavcan.transport as transport
+from uavcan.transport import get_uavcan_data_type, \
+    get_active_union_field, switch_union_field, is_union, \
+    get_constants, get_fields
 
 
 TRANSFER_PRIORITY_LOWEST = 31
@@ -58,11 +63,12 @@ class Module(object):
 
 
 class Namespace(object):
-    "Provides a nice object-based way to look up UAVCAN data types."
+    """Provides a nice object-based way to look up UAVCAN data types."""
 
     def __init__(self):
         self.__namespaces = set()
 
+    # noinspection PyProtectedMember
     def _path(self, attrpath):
         """Returns the namespace object at the given .-separated path,
         creating any namespaces in the path that don't already exist."""
@@ -78,7 +84,7 @@ class Namespace(object):
             return self.__dict__[attr]
 
     def _namespaces(self):
-        "Returns the top-level namespaces in this object"
+        """Returns the top-level namespaces in this object"""
         return set(self.__namespaces)
 
 
@@ -87,8 +93,10 @@ DATATYPES = {}
 TYPENAMES = {}
 
 
+# noinspection PyProtectedMember
 def load_dsdl(*paths, **args):
-    """Loads the DSDL files under the given directory/directories, and creates
+    """
+    Loads the DSDL files under the given directory/directories, and creates
     types for each of them in the current module's namespace.
 
     If the exclude_dist argument is not present, or False, the DSDL
@@ -96,12 +104,15 @@ def load_dsdl(*paths, **args):
 
     Also adds entries for all datatype (ID, kind)s to the DATATYPES
     dictionary, which maps datatype (ID, kind)s to their respective type
-    classes."""
+    classes.
+    """
     global DATATYPES, TYPENAMES
 
     paths = list(paths)
 
     # Try to prepend the built-in DSDL files
+    # TODO: why do we need try/except here?
+    # noinspection PyBroadException
     try:
         if not args.get("exclude_dist", None):
             dsdl_path = pkg_resources.resource_filename(__name__, "dsdl_files")  # @UndefinedVariable
@@ -119,11 +130,12 @@ def load_dsdl(*paths, **args):
         if dtype.default_dtid:
             DATATYPES[(dtype.default_dtid, dtype.kind)] = dtype
             # Add the base CRC to each data type capable of being transmitted
-            dtype.base_crc = dsdl.common.crc16_from_bytes(struct.pack("<Q", dtype.get_data_type_signature()))
+            dtype.base_crc = dsdl.crc16_from_bytes(struct.pack("<Q", dtype.get_data_type_signature()))
             logger.debug("DSDL Load {: >30} DTID: {: >4} base_crc:{: >8}"
                          .format(typename, dtype.default_dtid, hex(dtype.base_crc)))
 
         def create_instance_closure(closure_type, _mode=None):
+            # noinspection PyShadowingNames
             def create_instance(*args, **kwargs):
                 if _mode:
                     assert '_mode' not in kwargs, 'Mode cannot be supplied to service type instantiation helper'
@@ -144,6 +156,7 @@ def load_dsdl(*paths, **args):
     MODULE.__dict__["thirdparty"] = Namespace()
     for ext_namespace in root_namespace._namespaces():
         if str(ext_namespace) != "uavcan":
+            # noinspection PyUnresolvedReferences
             MODULE.thirdparty.__dict__[str(ext_namespace)] = root_namespace.__dict__[ext_namespace]
 
 
