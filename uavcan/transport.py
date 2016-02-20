@@ -142,6 +142,7 @@ class Void(object):
 
 
 class BaseValue(object):
+    # noinspection PyUnusedLocal
     def __init__(self, _uavcan_type, *_args, **_kwargs):
         self.type = _uavcan_type
         self._bits = None
@@ -209,6 +210,7 @@ class PrimitiveValue(BaseValue):
             self._bits = format(int_value, "0" + str(self.type.bitlen) + "b")
 
 
+# noinspection PyProtectedMember
 class ArrayValue(BaseValue, collections.MutableSequence):
     def __init__(self, _uavcan_type, _tao, *args, **kwargs):
         super(ArrayValue, self).__init__(_uavcan_type, *args, **kwargs)
