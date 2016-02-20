@@ -105,7 +105,7 @@ def union_tag_len(x):
     return int(math.ceil(math.log(len(x), 2))) or 1
 
 
-class Float32IntegerUnion:
+class Float32IntegerUnion(object):
     """
     Yes we've got ourselves a tiny little union here:
         union FloatIntegerUnion
