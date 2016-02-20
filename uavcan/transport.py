@@ -507,11 +507,18 @@ class TransferError(uavcan.UAVCANException):
 
 
 class Transfer(object):
-    def __init__(self, transfer_id=0, source_node_id=0,
-                 dest_node_id=None, payload=None, transfer_priority=31,
-                 request_not_response=False, service_not_message=False,
+    DEFAULT_TRANSFER_PRIORITY = 31
+
+    def __init__(self,
+                 transfer_id=0,
+                 source_node_id=0,
+                 dest_node_id=None,
+                 payload=None,
+                 transfer_priority=None,
+                 request_not_response=False,
+                 service_not_message=False,
                  discriminator=None):
-        self.transfer_priority = transfer_priority
+        self.transfer_priority = transfer_priority if transfer_priority is not None else self.DEFAULT_TRANSFER_PRIORITY
         self.transfer_id = transfer_id
         self.source_node_id = source_node_id
         self.dest_node_id = dest_node_id
