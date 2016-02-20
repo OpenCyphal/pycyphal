@@ -616,14 +616,32 @@ class TestFloats(unittest.TestCase):
     def test_basic(self):
         def make_float(bitlen):
             return parser.PrimitiveType(parser.PrimitiveType.KIND_FLOAT, bitlen,
-                                        parser.PrimitiveType.CAST_MODE_SATURATED)
+                                        parser.PrimitiveType.CAST_MODE_TRUNCATED)
 
+        # 64 bit
         a = transport.PrimitiveValue(make_float(64))
         print(a.value)
         self.assertEqual(a.value, 0)
         a.value = 123.456
         print(a.value)
         self.assertEqual(a.value, 123.456)
+
+        # 16 bit
+        a = transport.PrimitiveValue(make_float(16))
+        print(a.value)
+        self.assertEqual(a.value, 0)
+        # nan
+        a.value = float('nan')
+        print(a.value)
+        self.assertEqual(str(a.value), 'nan')
+        # positive infinity
+        a.value = float('inf')
+        print(a.value)
+        self.assertEqual(str(a.value), 'inf')
+        # negative infinity
+        a.value = float('-inf')
+        print(a.value)
+        self.assertEqual(str(a.value), '-inf')
 
 
 if __name__ == '__main__':

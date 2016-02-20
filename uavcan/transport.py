@@ -105,53 +105,81 @@ def union_tag_len(x):
     return int(math.ceil(math.log(len(x), 2))) or 1
 
 
-# http://davidejones.com/blog/1413-python-precision-floating-point/
-# noinspection PyPep8Naming
+class Float32IntegerUnion:
+    """
+    Yes we've got ourselves a tiny little union here:
+        union FloatIntegerUnion
+        {
+            std::uint32_t u;
+            float f;
+        };
+    This is madness.
+    """
+
+    def __init__(self, integer=None, floating_point=None):
+        self._bytes = struct.pack("<L", 0)
+        if integer is not None:
+            assert floating_point is None
+            self.u = int(integer)
+        if floating_point is not None:
+            self.f = float(floating_point)
+
+    @property
+    def f(self):
+        return struct.unpack("<f", self._bytes)[0]
+
+    @f.setter
+    def f(self, value):
+        assert isinstance(value, float)
+        self._bytes = struct.pack("<f", value)
+
+    @property
+    def u(self):
+        return struct.unpack("<L", self._bytes)[0]
+
+    @u.setter
+    def u(self, value):
+        assert isinstance(value, int)
+        self._bytes = struct.pack("<L", value)
+
+
 def f16_from_f32(float32):
-    F16_EXPONENT_BITS = 0x1F
-    F16_EXPONENT_SHIFT = 10
-    F16_EXPONENT_BIAS = 15
-    F16_MANTISSA_BITS = 0x3ff
-    F16_MANTISSA_SHIFT = (23 - F16_EXPONENT_SHIFT)
-    F16_MAX_EXPONENT = (F16_EXPONENT_BITS << F16_EXPONENT_SHIFT)
+    # Directly translated from libuavcan's implementation in C++
+    f32infty = Float32IntegerUnion(integer=255 << 23)
+    f16infty = Float32IntegerUnion(integer=31 << 23)
+    magic = Float32IntegerUnion(integer=15 << 23)
+    inval = Float32IntegerUnion(floating_point=float32)
+    sign_mask = 0x80000000
+    round_mask = ~0xFFF
 
-    a = struct.pack('>f', float32)
-    b = binascii.hexlify(a)
+    sign = inval.u & sign_mask
+    inval.u ^= sign
 
-    f32 = int(b, 16)
-    sign = (f32 >> 16) & 0x8000
-    exponent = ((f32 >> 23) & 0xff) - 127
-    mantissa = f32 & 0x007fffff
-
-    if exponent == 128:
-        f16 = sign | F16_MAX_EXPONENT
-        if mantissa:
-            f16 |= (mantissa & F16_MANTISSA_BITS)
-    elif exponent > 15:
-        f16 = sign | F16_MAX_EXPONENT
-    elif exponent > -15:
-        exponent += F16_EXPONENT_BIAS
-        mantissa >>= F16_MANTISSA_SHIFT
-        f16 = sign | exponent << F16_EXPONENT_SHIFT | mantissa
+    if inval.u >= f32infty.u:                           # Inf or NaN (all exponent bits set)
+        out = 0x7FFF if inval.u > f32infty.u else 0x7C00
     else:
-        f16 = sign
-    return f16
+        inval.u &= round_mask
+        inval.f *= magic.f
+        inval.u -= round_mask
+        if inval.u > f16infty.u:
+            inval.u = f16infty.u                        # Clamp to signed infinity if overflowed
+        out = (inval.u >> 13) & 0xFFFF                  # Take the bits!
+
+    return out | (sign >> 16) & 0xFFFF
 
 
-# http://davidejones.com/blog/1413-python-precision-floating-point/
 def f32_from_f16(float16):
-    t1 = float16 & 0x7FFF
-    t2 = float16 & 0x8000
-    t3 = float16 & 0x7C00
+    # Directly translated from libuavcan's implementation in C++
+    magic = Float32IntegerUnion(integer=(254 - 15) << 23)
+    was_inf_nan = Float32IntegerUnion(integer=(127 + 16) << 23)
 
-    t1 <<= 13
-    t2 <<= 16
+    out = Float32IntegerUnion(integer=(float16 & 0x7FFF) << 13)     # exponent/mantissa bits
+    out.f *= magic.f                                                # exponent adjust
+    if out.f >= was_inf_nan.f:                                      # make sure Inf/NaN survive
+        out.u |= 255 << 23
+    out.u |= (float16 & 0x8000) << 16                               # sign bit
 
-    t1 += 0x38000000
-    t1 = 0 if t3 == 0 else t1
-    t1 |= t2
-
-    return struct.unpack("<f", struct.pack("<L", t1))[0]
+    return out.f
 
 
 def cast(value, dtype):
