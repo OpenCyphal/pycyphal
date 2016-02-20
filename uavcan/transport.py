@@ -335,7 +335,6 @@ class CompoundValue(BaseValue):
         self.__dict__["fields"] = collections.OrderedDict()
         self.__dict__["constants"] = {}
         super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
-        self.data_type_id = self._type.default_dtid
 
         if self._type.kind == dsdl.CompoundType.KIND_SERVICE:
             if _mode == "request":
@@ -470,14 +469,13 @@ class TransferError(uavcan.UAVCANException):
 
 
 class Transfer(object):
-    def __init__(self, transfer_id=0, source_node_id=0, data_type_id=0,
+    def __init__(self, transfer_id=0, source_node_id=0,
                  dest_node_id=None, payload=None, transfer_priority=31,
                  request_not_response=False, service_not_message=False,
                  discriminator=None):
         self.transfer_priority = transfer_priority
         self.transfer_id = transfer_id
         self.source_node_id = source_node_id
-        self.data_type_id = data_type_id
         self.dest_node_id = dest_node_id
         self.data_type_signature = 0
         self.request_not_response = request_not_response
