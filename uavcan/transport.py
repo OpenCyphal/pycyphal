@@ -117,7 +117,7 @@ class Float32IntegerUnion:
     """
 
     def __init__(self, integer=None, floating_point=None):
-        self._bytes = struct.pack("<L", 0)
+        self._bytes = struct.pack("=L", 0)
         if integer is not None:
             assert floating_point is None
             self.u = int(integer)
@@ -126,21 +126,21 @@ class Float32IntegerUnion:
 
     @property
     def f(self):
-        return struct.unpack("<f", self._bytes)[0]
+        return struct.unpack("=f", self._bytes)[0]
 
     @f.setter
     def f(self, value):
         assert isinstance(value, float)
-        self._bytes = struct.pack("<f", value)
+        self._bytes = struct.pack("=f", value)
 
     @property
     def u(self):
-        return struct.unpack("<L", self._bytes)[0]
+        return struct.unpack("=L", self._bytes)[0]
 
     @u.setter
     def u(self, value):
         assert isinstance(value, int)
-        self._bytes = struct.pack("<L", value)
+        self._bytes = struct.pack("=L", value)
 
 
 def f16_from_f32(float32):
