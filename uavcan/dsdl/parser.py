@@ -152,6 +152,12 @@ class ArrayType(Type):
     def get_data_type_signature(self):
         return self.value_type.get_data_type_signature()
 
+    @property
+    def is_string_like(self):
+        return self.mode == self.MODE_DYNAMIC and \
+               self.value_type.category == Type.CATEGORY_PRIMITIVE and \
+               self.value_type.bitlen == 8
+
 
 class CompoundType(Type):
     """

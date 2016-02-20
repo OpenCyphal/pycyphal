@@ -278,6 +278,12 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         return "ArrayValue(type={0!r}, tao={1!r}, items={2!r})".format(self._type, self._tao, self.__items)
 
     def __str__(self):
+        if self._type.is_string_like:
+            # noinspection PyBroadException
+            try:
+                return self.decode()
+            except Exception:
+                pass
         return self.__repr__()
 
     def __getitem__(self, idx):
@@ -299,6 +305,12 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
     def __len__(self):
         return len(self.__items)
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.decode() == other
+        else:
+            return list(self) == other
 
     def new_item(self):
         return self.__item_ctor()
@@ -360,13 +372,17 @@ class ArrayValue(BaseValue, collections.MutableSequence):
     def to_bytes(self):
         return bytes(bytearray(item.value for item in self.__items if item._bits))
 
-    def encode(self, value):
+    def encode(self, value, errors='strict'):
+        if not self._type.is_string_like:
+            raise ValueError('encode() can be used only with string-like arrays')
         del self[:]
-        value = bytearray(value, encoding="utf-8")
+        value = bytearray(value, encoding="utf-8", errors=errors)
         for byte in value:
             self.append(byte)
 
     def decode(self, encoding="utf-8"):
+        if not self._type.is_string_like:
+            raise ValueError('decode() can be used only with string-like arrays')
         return bytearray(item.value for item in self.__items if item._bits).decode(encoding)
 
 
@@ -469,8 +485,10 @@ class CompoundValue(BaseValue):
 
             # noinspection PyProtectedMember
             attr_type = self._fields[attr]._type
+
             if isinstance(attr_type, dsdl.PrimitiveType):
                 self._fields[attr].value = value
+
             elif isinstance(attr_type, dsdl.CompoundType):
                 if not isinstance(value, CompoundValue):
                     raise AttributeError('Invalid type of the value, expected CompoundValue, got %r' % type(value))
@@ -478,6 +496,19 @@ class CompoundValue(BaseValue):
                     raise AttributeError('Incompatible type of the value, expected %r, got %r' %
                                          (attr_type.full_name, get_uavcan_data_type(value).full_name))
                 self._fields[attr] = copy.copy(value)
+
+            elif isinstance(attr_type, dsdl.ArrayType):
+                self._fields[attr].clear()
+                try:
+                    if isinstance(value, str):
+                        self._fields[attr].encode(value)
+                    else:
+                        for item in value:
+                            self._fields[attr].append(item)
+                except Exception as ex:
+                    # We should be using 'raise from' here, but unfortunately we have to be compatible with 2.7
+                    raise AttributeError('Array field could not be constructed from the provided value', ex)
+
             else:
                 raise AttributeError(attr + " cannot be set directly")
         else:

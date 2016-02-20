@@ -597,6 +597,20 @@ class TestAssignment(unittest.TestCase):
         self.assertEqual(new_status.mode, 3)
         self.assertEqual(new_status.uptime_sec, 12345)
 
+    def test_array_assignment(self):
+        print(repr(self.a.name))
+        print(str(self.a.name))
+        self.assertEqual(self.a.name, [])
+        self.assertEqual(self.a.name, '')
+        self.a.name = '123'
+        self.assertEqual(self.a.name, [49, 50, 51])
+        self.assertEqual(self.a.name, '123')
+        self.a.name = [52, 53, 54]
+        self.assertEqual(self.a.name, [52, 53, 54])
+        self.assertEqual(self.a.name, '456')
+        print(repr(self.a.name))
+        print(str(self.a.name))
+
 
 if __name__ == '__main__':
     unittest.main()
