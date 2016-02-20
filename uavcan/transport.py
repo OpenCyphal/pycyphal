@@ -11,6 +11,7 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 import sys
 import time
 import math
+import copy
 import struct
 import binascii
 import functools
@@ -201,6 +202,11 @@ class VoidValue(BaseValue):
 
 
 class PrimitiveValue(BaseValue):
+    def __init__(self, _uavcan_type, *args, **kwargs):
+        super(PrimitiveValue, self).__init__(_uavcan_type, *args, **kwargs)
+        # Default initialization
+        self.value = 0
+
     def __repr__(self):
         return repr(self.value)
 
@@ -418,6 +424,22 @@ class CompoundValue(BaseValue):
             fields = ", ".join("{0}={1!r}".format(f, v) for f, v in self._fields.items() if not f.startswith("_void_"))
         return "{0}({1})".format(self._type.full_name, fields)
 
+    def __copy__(self):
+        # http://stackoverflow.com/a/15774013/1007777
+        cls = self.__class__
+        result = cls.__new__(cls)
+        result.__dict__.update(self.__dict__)
+        return result
+
+    def __deepcopy__(self, memo):
+        # http://stackoverflow.com/a/15774013/1007777
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            result.__dict__[k] = copy.deepcopy(v, memo)
+        return result
+
     def __getattr__(self, attr):
         if attr in self._constants:
             return self._constants[attr]
@@ -446,8 +468,16 @@ class CompoundValue(BaseValue):
                     self._union_field = attr
 
             # noinspection PyProtectedMember
-            if isinstance(self._fields[attr]._type, dsdl.PrimitiveType):
+            attr_type = self._fields[attr]._type
+            if isinstance(attr_type, dsdl.PrimitiveType):
                 self._fields[attr].value = value
+            elif isinstance(attr_type, dsdl.CompoundType):
+                if not isinstance(value, CompoundValue):
+                    raise AttributeError('Invalid type of the value, expected CompoundValue, got %r' % type(value))
+                if attr_type.full_name != get_uavcan_data_type(value).full_name:
+                    raise AttributeError('Incompatible type of the value, expected %r, got %r' %
+                                         (attr_type.full_name, get_uavcan_data_type(value).full_name))
+                self._fields[attr] = copy.copy(value)
             else:
                 raise AttributeError(attr + " cannot be set directly")
         else:

@@ -577,5 +577,26 @@ class TestMessageUnion(unittest.TestCase):
         )
 
 
+class TestAssignment(unittest.TestCase):
+    def setUp(self):
+        import uavcan
+        self.a = uavcan.protocol.GetNodeInfo.Response()
+
+    def test_compound_assignment(self):
+        import uavcan
+
+        orig_status = self.a.status
+        print(orig_status)
+        self.assertEqual(orig_status.mode, 0)
+        self.assertEqual(orig_status.uptime_sec, 0)
+
+        self.a.status = uavcan.protocol.NodeStatus(mode=3, uptime_sec=12345)
+
+        new_status = self.a.status
+        print(new_status)
+        self.assertEqual(new_status.mode, 3)
+        self.assertEqual(new_status.uptime_sec, 12345)
+
+
 if __name__ == '__main__':
     unittest.main()

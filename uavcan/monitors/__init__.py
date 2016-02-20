@@ -20,7 +20,6 @@ except AttributeError:
 
 import uavcan
 import uavcan.node
-from uavcan.transport import get_fields
 
 
 logger = getLogger(__name__)
@@ -45,9 +44,7 @@ class NodeStatusMonitor(object):
                 self.info = None
             self.status = e.message
             if self.info:
-                #self.info.status = self.status
-                for fld, _ in get_fields(self.status).items():  # TODO: This is temporary, until assignment is implemented
-                    get_fields(self.info.status)[fld] = get_fields(self.status)[fld]
+                self.info.status = self.status
 
         def _update_from_info(self, e):
             self.monotonic_timestamp = e.transfer.ts_monotonic
