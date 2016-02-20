@@ -229,8 +229,10 @@ class PrimitiveValue(BaseValue):
                 return f32_from_f16(int_value)
             elif self._type.bitlen == 32:
                 return struct.unpack("<f", struct.pack("<L", int_value))[0]
+            elif self._type.bitlen == 64:
+                return struct.unpack("<d", struct.pack("<Q", int_value))[0]
             else:
-                raise NotImplementedError("Only 16- or 32-bit floats are supported")
+                raise ValueError('Bad float')
 
     @value.setter
     def value(self, new_value):
@@ -250,8 +252,10 @@ class PrimitiveValue(BaseValue):
                 int_value = f16_from_f32(new_value)
             elif self._type.bitlen == 32:
                 int_value = struct.unpack("<L", struct.pack("<f", new_value))[0]
+            elif self._type.bitlen == 64:
+                int_value = struct.unpack("<Q", struct.pack("<d", new_value))[0]
             else:
-                raise NotImplementedError("Only 16- or 32-bit floats are supported")
+                raise ValueError('Bad float, no donut')
             self._bits = format(int_value, "0" + str(self._type.bitlen) + "b")
 
 

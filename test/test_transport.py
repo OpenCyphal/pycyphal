@@ -612,5 +612,19 @@ class TestAssignment(unittest.TestCase):
         print(str(self.a.name))
 
 
+class TestFloats(unittest.TestCase):
+    def test_basic(self):
+        def make_float(bitlen):
+            return parser.PrimitiveType(parser.PrimitiveType.KIND_FLOAT, bitlen,
+                                        parser.PrimitiveType.CAST_MODE_SATURATED)
+
+        a = transport.PrimitiveValue(make_float(64))
+        print(a.value)
+        self.assertEqual(a.value, 0)
+        a.value = 123.456
+        print(a.value)
+        self.assertEqual(a.value, 123.456)
+
+
 if __name__ == '__main__':
     unittest.main()
