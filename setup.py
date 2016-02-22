@@ -19,9 +19,8 @@ args = dict(
     packages=[
         'uavcan',
         'uavcan.dsdl',
-        'uavcan.services',
-        'uavcan.monitors',
-        'uavcan.driver'
+        'uavcan.driver',
+        'uavcan.app',
     ],
     package_data={
         'uavcan': [os.path.join(root[len('uavcan/'):], fname)

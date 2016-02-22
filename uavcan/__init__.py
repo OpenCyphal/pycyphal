@@ -174,3 +174,7 @@ sys.modules[MODULE.__name__] = MODULE
 
 # Completing package initialization with loading default DSDL definitions
 load_dsdl()
+
+
+# Importing modules that may be dependent on the standard DSDL types
+import uavcan.app as app
