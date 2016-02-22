@@ -30,8 +30,6 @@ else:
 
 
 def get_uavcan_data_type(obj):
-    if not isinstance(obj, CompoundValue):
-        raise ValueError('UAVCAN type is not defined for this object')
     # noinspection PyProtectedMember
     return obj._type
 
