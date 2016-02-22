@@ -13,7 +13,6 @@ import time
 import math
 import copy
 import struct
-import binascii
 import functools
 import collections
 
