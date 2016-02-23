@@ -411,6 +411,7 @@ class Node(Scheduler):
                     self._recv_frame(frame)
                 else:
                     break
+            self._poll_scheduler_and_get_next_deadline()
 
     def request(self, payload, dest_node_id, callback, priority=None, timeout=None):
         self._throw_if_anonymous()
