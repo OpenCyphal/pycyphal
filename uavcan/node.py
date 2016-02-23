@@ -324,6 +324,10 @@ class Node(Scheduler):
             self._fill_node_status(msg)
             self.broadcast(msg)
 
+    @property
+    def can_driver(self):
+        return self._can_driver
+
     def add_transfer_hook(self, hook, **kwargs):
         """
         :param hook:    Callable hook; expected signature: hook(transfer).
