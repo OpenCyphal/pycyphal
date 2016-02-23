@@ -272,7 +272,7 @@ class Node(Scheduler):
 
     @property
     def is_anonymous(self):
-        return self._node_id != 0
+        return (self._node_id or 0) == 0
 
     @property
     def node_id(self):
