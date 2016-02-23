@@ -242,7 +242,7 @@ class Node(Scheduler):
         self._handler_dispatcher = HandlerDispatcher(self)
 
         self._can_driver = can_driver
-        self.node_id = node_id
+        self._node_id = node_id
 
         self._transfer_manager = transport.TransferManager()
         self._outstanding_requests = {}
@@ -270,6 +270,28 @@ class Node(Scheduler):
         self.node_info = node_info or uavcan.protocol.GetNodeInfo.Response()     # @UndefinedVariable
         self.add_handler(uavcan.protocol.GetNodeInfo, on_get_node_info)          # @UndefinedVariable
 
+    @property
+    def is_anonymous(self):
+        return self._node_id != 0
+
+    @property
+    def node_id(self):
+        return self._node_id
+
+    @node_id.setter
+    def node_id(self, value):
+        if self.is_anonymous:
+            value = int(value)
+            if not (1 <= value <= 127):
+                raise ValueError('Invalid Node ID [%d]' % value)
+            self._node_id = value
+        else:
+            raise UAVCANException('Node ID can be set only once')
+
+    @property
+    def can_driver(self):
+        return self._can_driver
+
     def _recv_frame(self, raw_frame):
         if not raw_frame.extended:
             return
@@ -286,7 +308,7 @@ class Node(Scheduler):
         self._transfer_hook_dispatcher.call_hooks(self._transfer_hook_dispatcher.TRANSFER_DIRECTION_INCOMING, transfer)
 
         if (transfer.service_not_message and not transfer.request_not_response) and \
-                transfer.dest_node_id == self.node_id:
+                transfer.dest_node_id == self._node_id:
             # This is a reply to a request we sent. Look up the original request and call the appropriate callback
             requests = self._outstanding_requests.keys()
             for key in requests:
@@ -297,7 +319,7 @@ class Node(Scheduler):
                     del self._outstanding_requests[key]
                     del self._outstanding_request_callbacks[key]
                     break
-        elif not transfer.service_not_message or transfer.dest_node_id == self.node_id:
+        elif not transfer.service_not_message or transfer.dest_node_id == self._node_id:
             # This is a request or a broadcast; look up the appropriate handler by data type ID
             self._handler_dispatcher.call_handlers(transfer)
 
@@ -307,7 +329,7 @@ class Node(Scheduler):
         return transfer_id
 
     def _throw_if_anonymous(self):
-        if not self.node_id:
+        if not self._node_id:
             raise uavcan.UAVCANException('The node is configured in anonymous mode')
 
     def _fill_node_status(self, msg):
@@ -318,15 +340,11 @@ class Node(Scheduler):
 
     def _send_node_status(self):
         self._fill_node_status(self.node_info.status)
-        if self.node_id:
+        if self._node_id:
             # TODO: transmit self.node_info.status instead of creating a new object
             msg = uavcan.protocol.NodeStatus()  # @UndefinedVariable
             self._fill_node_status(msg)
             self.broadcast(msg)
-
-    @property
-    def can_driver(self):
-        return self._can_driver
 
     def add_transfer_hook(self, hook, **kwargs):
         """
@@ -400,7 +418,7 @@ class Node(Scheduler):
         # Preparing the transfer
         transfer_id = self._next_transfer_id((get_uavcan_data_type(payload).default_dtid, dest_node_id))
         transfer = transport.Transfer(payload=payload,
-                                      source_node_id=self.node_id,
+                                      source_node_id=self._node_id,
                                       dest_node_id=dest_node_id,
                                       transfer_id=transfer_id,
                                       transfer_priority=priority or DEFAULT_TRANSFER_PRIORITY,
@@ -439,7 +457,7 @@ class Node(Scheduler):
 
         transfer = transport.Transfer(
             payload=payload,
-            source_node_id=self.node_id,
+            source_node_id=self._node_id,
             dest_node_id=dest_node_id,
             transfer_id=transfer_id,
             transfer_priority=priority,
@@ -460,7 +478,7 @@ class Node(Scheduler):
 
         transfer_id = self._next_transfer_id(get_uavcan_data_type(payload).default_dtid)
         transfer = transport.Transfer(payload=payload,
-                                      source_node_id=self.node_id,
+                                      source_node_id=self._node_id,
                                       transfer_id=transfer_id,
                                       transfer_priority=priority or DEFAULT_TRANSFER_PRIORITY,
                                       service_not_message=False)

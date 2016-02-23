@@ -148,7 +148,8 @@ class NodeMonitor(object):
         if new_entry:
             self._call_event_handlers(self.UpdateEvent(entry, self.UpdateEvent.EVENT_ID_NEW))
 
-        if not entry.info and entry.monotonic_timestamp - entry._info_requested_at > self.RETRY_INTERVAL:
+        if not entry.info and not e.node.is_anonymous and \
+                entry.monotonic_timestamp - entry._info_requested_at > self.RETRY_INTERVAL:
             entry._info_requested_at = entry.monotonic_timestamp
             e.node.request(uavcan.protocol.GetNodeInfo.Request(), node_id,  # @UndefinedVariable
                            priority=self.TRANSFER_PRIORITY, callback=self._on_info_response)
