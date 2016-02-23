@@ -360,30 +360,39 @@ class Node(Scheduler):
         self._handler_dispatcher.remove_handlers(uavcan_type)
 
     def spin(self, timeout=None):
-        """Runs background processes until timeout expires.
+        """
+        Runs background processes until timeout expires.
         Note that all processing is implemented in one thread.
         :param timeout: The method will return once this amount of time expires.
                         If None, the method will never return.
                         If zero, the method will handle only those events that are ready, then return immediately.
         """
-        deadline = (time.monotonic() + timeout) if timeout is not None else sys.float_info.max
+        if timeout != 0:
+            deadline = (time.monotonic() + timeout) if timeout is not None else sys.float_info.max
 
-        def execute_once():
-            next_event_at = self._poll_scheduler_and_get_next_deadline()
-            if next_event_at is None:
-                next_event_at = sys.float_info.max
+            def execute_once():
+                next_event_at = self._poll_scheduler_and_get_next_deadline()
+                if next_event_at is None:
+                    next_event_at = sys.float_info.max
 
-            read_timeout = min(next_event_at, deadline) - time.monotonic()
-            read_timeout = max(read_timeout, 0)
-            read_timeout = min(read_timeout, 1)
+                read_timeout = min(next_event_at, deadline) - time.monotonic()
+                read_timeout = max(read_timeout, 0)
+                read_timeout = min(read_timeout, 1)
 
-            frame = self._can_driver.receive(read_timeout)
-            if frame:
-                self._recv_frame(frame)
+                frame = self._can_driver.receive(read_timeout)
+                if frame:
+                    self._recv_frame(frame)
 
-        execute_once()
-        while time.monotonic() < deadline:
             execute_once()
+            while time.monotonic() < deadline:
+                execute_once()
+        else:
+            while True:
+                frame = self._can_driver.receive(0)
+                if frame:
+                    self._recv_frame(frame)
+                else:
+                    break
 
     def request(self, payload, dest_node_id, callback, priority=None, timeout=None):
         self._throw_if_anonymous()
