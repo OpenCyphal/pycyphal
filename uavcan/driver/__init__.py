@@ -10,9 +10,9 @@
 from __future__ import division, absolute_import, print_function, unicode_literals
 from .socketcan import SocketCAN
 from .slcan import SLCAN
-from .common import DriverError, RxFrame
+from .common import DriverError, CANFrame
 
-__all__ = ['make_driver', 'DriverError', 'RxFrame']
+__all__ = ['make_driver', 'DriverError', 'CANFrame']
 
 
 def make_driver(device_name, **kwargs):

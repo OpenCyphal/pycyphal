@@ -15,7 +15,7 @@ import select
 import threading
 import copy
 from logging import getLogger
-from .common import DriverError, RxFrame
+from .common import DriverError, CANFrame
 from.timestamp_estimator import TimestampEstimator
 
 try:
@@ -193,8 +193,8 @@ class SLCAN(object):
                             ts_mono = local_ts_mono
                             ts_real = local_ts_real
 
-                        self._received_messages.put_nowait(RxFrame(packet_id, packet_data, (id_len == 8),
-                                                                   ts_monotonic=ts_mono, ts_real=ts_real))
+                        self._received_messages.put_nowait(CANFrame(packet_id, packet_data, (id_len == 8),
+                                                                    ts_monotonic=ts_mono, ts_real=ts_real))
 
                 # All data that could be parsed is already parsed - discard everything up to the current pos
                 buf = buf[pos:]

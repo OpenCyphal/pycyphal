@@ -16,7 +16,7 @@ class DriverError(UAVCANException):
     pass
 
 
-class RxFrame:
+class CANFrame:
     MAX_DATA_LENGTH = 8
 
     def __init__(self, can_id, data, extended, ts_monotonic=None, ts_real=None):

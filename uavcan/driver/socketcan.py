@@ -17,7 +17,7 @@ import select
 import time
 from logging import getLogger
 
-from .common import DriverError, RxFrame
+from .common import DriverError, CANFrame
 from.timestamp_estimator import TimestampEstimator
 
 logger = getLogger(__name__)
@@ -207,8 +207,8 @@ class SocketCAN(object):
             if ts_real and not ts_mono:
                 ts_mono = self._convert_real_to_monotonic(ts_real)
 
-            return RxFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG),
-                           ts_monotonic=ts_mono, ts_real=ts_real)
+            return CANFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG),
+                            ts_monotonic=ts_mono, ts_real=ts_real)
 
     def send(self, message_id, message, extended=False):
         if extended:
