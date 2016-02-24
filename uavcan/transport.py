@@ -68,6 +68,16 @@ def get_constants(obj):
     return obj._constants
 
 
+def is_request(obj):
+    # noinspection PyProtectedMember
+    return obj._mode == 'request'
+
+
+def is_response(obj):
+    # noinspection PyProtectedMember
+    return obj._mode == 'response'
+
+
 def bits_from_bytes(s):
     return "".join(format(c, "08b") for c in s)
 
@@ -447,6 +457,7 @@ class CompoundValue(BaseValue):
             source_constants = self._type.constants
             self._is_union = self._type.union
 
+        self._mode = _mode
         self._union_field = None
 
         for constant in source_constants:
