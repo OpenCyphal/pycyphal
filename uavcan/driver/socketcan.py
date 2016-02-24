@@ -17,7 +17,7 @@ import select
 import time
 from logging import getLogger
 
-from .common import DriverError, CANFrame
+from .common import DriverError, CANFrame, AbstractDriver
 from.timestamp_estimator import TimestampEstimator
 
 logger = getLogger(__name__)
@@ -144,12 +144,14 @@ CAN_EFF_MASK = 0x1FFFFFFF
 SO_TIMESTAMP = 29
 
 
-class SocketCAN(object):
+class SocketCAN(AbstractDriver):
     FRAME_FORMAT = '=IB3x8s'
     FRAME_SIZE = 16
     TIMEVAL_FORMAT = '@LL'
 
     def __init__(self, interface, **_extras):
+        super(SocketCAN, self).__init__()
+
         self.socket = get_socket(interface)
         self.poll = select.poll()
         self.poll.register(self.socket.fileno())
@@ -207,8 +209,10 @@ class SocketCAN(object):
             if ts_real and not ts_mono:
                 ts_mono = self._convert_real_to_monotonic(ts_real)
 
-            return CANFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG),
-                            ts_monotonic=ts_mono, ts_real=ts_real)
+            frame = CANFrame(can_id & CAN_EFF_MASK, can_data[0:can_dlc], bool(can_id & CAN_EFF_FLAG),
+                             ts_monotonic=ts_mono, ts_real=ts_real)
+            self._rx_hook(frame)
+            return frame
 
     def send(self, message_id, message, extended=False):
         if extended:
@@ -216,3 +220,5 @@ class SocketCAN(object):
 
         message_pad = bytes(message) + b'\x00' * (8 - len(message))
         self.socket.send(struct.pack(self.FRAME_FORMAT, message_id, len(message), message_pad))
+
+        self._tx_hook(CANFrame(message_id, message, extended))

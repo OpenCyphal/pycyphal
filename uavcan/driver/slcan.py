@@ -15,8 +15,8 @@ import select
 import threading
 import copy
 from logging import getLogger
-from .common import DriverError, CANFrame
-from.timestamp_estimator import TimestampEstimator
+from .common import DriverError, CANFrame, AbstractDriver
+from .timestamp_estimator import TimestampEstimator
 
 try:
     import queue
@@ -34,7 +34,7 @@ except ImportError:
     logger.info("Cannot import PySerial; SLCAN will not be available.")
 
 
-class SLCAN(object):
+class SLCAN(AbstractDriver):
     DEFAULT_BITRATE = 1000000
     DEFAULT_BAUDRATE = 3000000
     ACK_TIMEOUT = 0.5
@@ -57,6 +57,8 @@ class SLCAN(object):
                  **_extras):
         if not serial:
             raise RuntimeError("PySerial not imported; SLCAN is not available. Please install PySerial.")
+
+        super(SLCAN, self).__init__()
 
         baudrate = baudrate or self.DEFAULT_BAUDRATE
 
@@ -225,12 +227,17 @@ class SLCAN(object):
 
     def receive(self, timeout=None):
         try:
-            return self._received_messages.get(block=True, timeout=timeout)
+            frame = self._received_messages.get(block=True, timeout=timeout)
+            self._rx_hook(frame)
+            return frame
         except queue.Empty:
             return
 
     def send(self, message_id, message, extended=False):
         start = ('T{0:08X}' if extended else 't{0:03X}').format(message_id)
         line = '{0:s}{1:1d}{2:s}\r'.format(start, len(message), binascii.b2a_hex(message).decode()).encode()
+
         self.conn.write(line)
         self.conn.flush()
+
+        self._tx_hook(CANFrame(message_id, message, extended))
