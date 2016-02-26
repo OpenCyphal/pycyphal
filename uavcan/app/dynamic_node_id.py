@@ -12,9 +12,14 @@ import time
 import sqlite3
 from logging import getLogger
 import uavcan
+from uavcan import UAVCANException
 
 
 logger = getLogger(__name__)
+
+
+def _unique_id_to_string(uid):
+    return ' '.join(['%02X' % x for x in uid]) if uid else None
 
 
 class CentralizedServer(object):
@@ -46,7 +51,7 @@ class CentralizedServer(object):
                 unique_id = None
             if unique_id is not None:
                 unique_id = sqlite3.Binary(unique_id)
-            logger.debug('[CentralizedServer] AllocationTable update: #{0:03d} {1!r}'.format(node_id, unique_id))
+            logger.debug('[CentralizedServer] AllocationTable update: %d %s', node_id, _unique_id_to_string(unique_id))
             self._modify('''insert or replace into allocation (node_id, unique_id) values (?, ?);''',
                          node_id, unique_id)
 
@@ -65,10 +70,10 @@ class CentralizedServer(object):
             res = c.fetchone()
             return res[0] if res else None
 
-        def get_all_node_id(self):
+        def get_entries(self):
             c = self.db.cursor()
-            c.execute('''select node_id from allocation order by ts desc''')
-            return [x for x, in c.fetchall()]
+            c.execute('''select unique_id, node_id from allocation order by ts desc''')
+            return list(c.fetchall())
 
     def __init__(self, node, node_monitor, database_storage=None, dynamic_node_id_range=None):
         """
@@ -81,6 +86,9 @@ class CentralizedServer(object):
 
         :param dynamic_node_id_range: Range of node ID available for dynamic allocation; defaults to [1, 125].
         """
+        if node.is_anonymous:
+            raise UAVCANException('Dynamic node ID server cannot be launched on an anonymous node')
+
         self._allocation_table = CentralizedServer.AllocationTable(database_storage or self.DATABASE_STORAGE_MEMORY)
         self._query = bytes()
         self._query_timestamp = 0
@@ -91,6 +99,14 @@ class CentralizedServer(object):
                                         self._on_allocation_message)
 
         self._allocation_table.set(node.node_info.hardware_version.unique_id.to_bytes(), node.node_id)
+
+        # Initializing the table
+        for entry in node_monitor.find_all(lambda _: True):
+            unique_id = entry.info.hardware_version.unique_id.to_bytes() if entry.info else None
+            self._allocation_table.set(unique_id, entry.node_id)
+
+    def get_allocation_table(self):
+        return self._allocation_table.get_entries()
 
     def _handle_monitor_event(self, event):
         unique_id = event.entry.info.hardware_version.unique_id.to_bytes() if event.entry.info else None
@@ -123,7 +139,8 @@ class CentralizedServer(object):
             response.unique_id.from_bytes(self._query)
             e.node.broadcast(response)
 
-            logger.debug("[CentralizedServer] Got first-stage dynamic ID request for {0!r}".format(self._query))
+            logger.debug("[CentralizedServer] Got first-stage dynamic ID request for %s",
+                         _unique_id_to_string(self._query))
 
         elif len(e.message.unique_id) == 6 and len(self._query) == 6:
             # Second-phase messages trigger a third-phase query
@@ -135,14 +152,16 @@ class CentralizedServer(object):
             response.node_id = 0
             response.unique_id.from_bytes(self._query)
             e.node.broadcast(response)
-            logger.debug("[CentralizedServer] Got second-stage dynamic ID request for {0!r}".format(self._query))
+            logger.debug("[CentralizedServer] Got second-stage dynamic ID request for %s",
+                         _unique_id_to_string(self._query))
 
         elif len(e.message.unique_id) == 4 and len(self._query) == 12:
             # Third-phase messages trigger an allocation
             self._query += e.message.unique_id.to_bytes()
             self._query_timestamp = e.transfer.ts_monotonic
 
-            logger.debug("[CentralizedServer] Got third-stage dynamic ID request for {0!r}".format(self._query))
+            logger.debug("[CentralizedServer] Got third-stage dynamic ID request for %s",
+                         _unique_id_to_string(self._query))
 
             node_requested_id = e.message.node_id
             node_allocated_id = self._allocation_table.get_node_id(self._query)
@@ -172,9 +191,9 @@ class CentralizedServer(object):
                 response.unique_id.from_bytes(self._query)
                 e.node.broadcast(response)
 
-                self._query = bytes()   # Resetting the state
+                logger.info("[CentralizedServer] Allocated node ID %d to node with unique ID %s",
+                            node_allocated_id, _unique_id_to_string(self._query))
 
-                logger.info("[CentralizedServer] Allocated node ID #{0:03d} to node with unique ID {1!r}"
-                            .format(node_allocated_id, self._query))
+                self._query = bytes()   # Resetting the state
             else:
                 logger.error("[CentralizedServer] Couldn't allocate dynamic node ID")
