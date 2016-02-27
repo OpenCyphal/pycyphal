@@ -11,15 +11,27 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 import os
 from logging import getLogger
 import uavcan
+import errno
 
 
 logger = getLogger(__name__)
 
 
+def _try_resolve_relative_path(search_in, rel_path):
+    rel_path = os.path.normcase(os.path.normpath(rel_path))
+    for p in search_in:
+        p = os.path.normcase(os.path.abspath(p))
+        if p.endswith(rel_path) and os.path.isfile(p):
+            return p
+        joined = os.path.join(p, rel_path)
+        if os.path.isfile(joined):
+            return joined
+
+
 # noinspection PyBroadException
 class FileServer(object):
-    def __init__(self, node, base_path=None):
-        self._base_path = base_path or os.getcwd()
+    def __init__(self, node, search_pathes=None):
+        self.search_pathes = search_pathes or []
         self._handles = []
 
         def add_handler(datatype, callback):
@@ -35,7 +47,10 @@ class FileServer(object):
 
     def _resolve_path(self, relative):
         rel = relative.path.decode().replace(relative.SEPARATOR, os.path.sep)
-        return os.path.join(self._base_path, rel)
+        out = _try_resolve_relative_path(self.search_pathes, rel)
+        if not out:
+            raise OSError(errno.ENOENT)
+        return out
 
     def _get_info(self, e):
         logger.debug("[#{0:03d}:uavcan.protocol.file.GetInfo] {1!r}"
