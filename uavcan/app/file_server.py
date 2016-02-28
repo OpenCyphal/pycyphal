@@ -9,6 +9,7 @@
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os
+from collections import defaultdict
 from logging import getLogger
 import uavcan
 import errno
@@ -31,7 +32,12 @@ def _try_resolve_relative_path(search_in, rel_path):
 # noinspection PyBroadException
 class FileServer(object):
     def __init__(self, node, lookup_paths=None):
+        if node.is_anonymous:
+            raise uavcan.UAVCANException('File server cannot be launched on an anonymous node')
+
         self.lookup_paths = lookup_paths or []
+
+        self._path_hit_counters = defaultdict(int)
         self._handles = []
 
         def add_handler(datatype, callback):
@@ -43,13 +49,19 @@ class FileServer(object):
 
     def close(self):
         for x in self._handles:
-            x.close()
+            x.remove()
+
+    @property
+    def path_hit_counters(self):
+        return dict(self._path_hit_counters)
 
     def _resolve_path(self, relative):
-        rel = relative.path.decode().replace(relative.SEPARATOR, os.path.sep)
+        rel = relative.path.decode().replace(chr(relative.SEPARATOR), os.path.sep)
         out = _try_resolve_relative_path(self.lookup_paths, rel)
         if not out:
             raise OSError(errno.ENOENT)
+
+        self._path_hit_counters[out] += 1
         return out
 
     def _get_info(self, e):
