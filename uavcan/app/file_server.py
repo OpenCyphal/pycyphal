@@ -30,8 +30,8 @@ def _try_resolve_relative_path(search_in, rel_path):
 
 # noinspection PyBroadException
 class FileServer(object):
-    def __init__(self, node, search_pathes=None):
-        self.search_pathes = search_pathes or []
+    def __init__(self, node, lookup_paths=None):
+        self.lookup_paths = lookup_paths or []
         self._handles = []
 
         def add_handler(datatype, callback):
@@ -47,7 +47,7 @@ class FileServer(object):
 
     def _resolve_path(self, relative):
         rel = relative.path.decode().replace(relative.SEPARATOR, os.path.sep)
-        out = _try_resolve_relative_path(self.search_pathes, rel)
+        out = _try_resolve_relative_path(self.lookup_paths, rel)
         if not out:
             raise OSError(errno.ENOENT)
         return out
