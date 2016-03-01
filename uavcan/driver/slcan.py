@@ -249,7 +249,7 @@ def _send_frame(conn, frame):
 def _tx_thread(conn, rx_queue, tx_queue, termination_condition):
     queue_block_timeout = 0.1
 
-    while not termination_condition():
+    while True:
         try:
             command = tx_queue.get(True, queue_block_timeout)
 
@@ -260,7 +260,9 @@ def _tx_thread(conn, rx_queue, tx_queue, termination_condition):
             else:
                 raise DriverError('IO process received unknown IPC command: %r' % command)
         except queue.Empty:
-            continue
+            # Checking in this handler in order to avoid interference with traffic
+            if termination_condition():
+                break
         except Exception as ex:
             logger.error('TX thread exception', exc_info=True)
             # Propagating the exception to the parent process
@@ -281,6 +283,12 @@ def _io_process(device,
                 max_estimated_rx_delay_to_resync=None,
                 **_extras):
     logger.info('IO process started with PID %r', os.getpid())
+
+    if RUNNING_ON_WINDOWS:
+        is_parent_process_alive = lambda: True  # TODO: How do we detect if the parent process is alright on Windows?
+    else:
+        parent_pid = os.getppid()
+        is_parent_process_alive = lambda: os.getppid() == parent_pid
 
     try:
         _raise_self_process_priority()
@@ -333,7 +341,8 @@ def _io_process(device,
         logger.info('IO process initialization complete')
         rx_queue.put(IPC_SIGNAL_INIT_OK)
 
-        _tx_thread(conn, rx_queue, tx_queue, lambda: (should_exit or not rxthd.is_alive()))
+        _tx_thread(conn, rx_queue, tx_queue,
+                   lambda: (should_exit or not rxthd.is_alive() or not is_parent_process_alive()))
     finally:
         logger.info('IO process is terminating...')
         should_exit = True
