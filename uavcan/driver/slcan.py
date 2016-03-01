@@ -35,6 +35,14 @@ except ImportError:
     serial = None
     logger.info("Cannot import PySerial; SLCAN will not be available.")
 
+try:
+    # noinspection PyUnresolvedReferences
+    sys.getwindowsversion()
+    RUNNING_ON_WINDOWS = True
+except AttributeError:
+    RUNNING_ON_WINDOWS = False
+
+
 #
 # Constants and defaults
 #
@@ -55,6 +63,7 @@ DEFAULT_FIXED_RX_DELAY = 0.0002                     # Good for USB, could be hig
 DEFAULT_MAX_ESTIMATED_RX_DELAY_TO_RESYNC = 0.1      # When clock divergence exceeds this value, resync
 
 IO_PROCESS_INIT_TIMEOUT = 5
+IO_PROCESS_NICENESS_INCREMENT = -18
 
 
 #
@@ -67,6 +76,19 @@ IPC_COMMAND_STOP = 'stop'                          # Sent from parent process to
 #
 # Logic of the IO process
 #
+# noinspection PyUnresolvedReferences
+def _raise_self_process_priority():
+    if RUNNING_ON_WINDOWS:
+        import win32api
+        import win32process
+        import win32con
+        handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, win32api.GetCurrentProcessId())
+        win32process.SetPriorityClass(handle, win32process.REALTIME_PRIORITY_CLASS)
+    else:
+        import os
+        os.nice(IO_PROCESS_NICENESS_INCREMENT)
+
+
 def _wait_for_ack(conn):
     conn.timeout = ACK_TIMEOUT
     while True:
@@ -260,6 +282,11 @@ def _io_process(device,
                 **_extras):
     logger.info('IO process started with PID %r', os.getpid())
 
+    try:
+        _raise_self_process_priority()
+    except Exception as ex:
+        logger.warning('Could not adjust priority of the IO process: %r', ex)
+
     #
     # This is needed to convert timestamps from hardware clock to local clocks
     #
@@ -368,7 +395,8 @@ class SLCAN(AbstractDriver):
         self._check_alive()
         try:
             # TODO this is a workaround. Zero timeout causes the IPC queue to ALWAYS throw queue.Empty!
-            timeout = max(timeout, 0.001)
+            if timeout is not None:
+                timeout = max(timeout, 0.001)
             obj = self._rx_queue.get(timeout=timeout)
         except queue.Empty:
             return
