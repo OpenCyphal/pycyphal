@@ -139,6 +139,7 @@ def _init_adapter(conn, bitrate):
                 logger.error('Could not init SLCAN adapter, will retry; error was: %s', ex, exc_info=True)
             else:
                 raise ex
+            num_retries -= 1
         else:
             break
 
