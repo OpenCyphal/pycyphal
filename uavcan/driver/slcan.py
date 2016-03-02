@@ -89,19 +89,18 @@ def _raise_self_process_priority():
         os.nice(IO_PROCESS_NICENESS_INCREMENT)
 
 
-def _wait_for_ack(conn):
-    conn.timeout = ACK_TIMEOUT
-    while True:
-        b = conn.read(1)
-        if not b:
-            raise DriverError('SLCAN ACK timeout')
-        if b == NACK:
-            raise DriverError('SLCAN NACK in response')
-        if b == ACK:
-            break
-
-
 def _init_adapter(conn, bitrate):
+    def _wait_for_ack():
+        conn.timeout = ACK_TIMEOUT
+        while True:
+            b = conn.read(1)
+            if not b:
+                raise DriverError('SLCAN ACK timeout')
+            if b == NACK:
+                raise DriverError('SLCAN NACK in response')
+            if b == ACK:
+                break
+
     speed_code = {
         1000000: 8,
         8000000: 7,
@@ -114,19 +113,34 @@ def _init_adapter(conn, bitrate):
         10000: 0
     }[bitrate if bitrate is not None else DEFAULT_BITRATE]
 
-    # Discarding all input
-    time.sleep(0.1)
-    conn.flushInput()
+    num_retries = 3
+    while True:
+        try:
+            # Sending an empty command in order to reset the adapter's command parser, then discarding all output
+            conn.write(b'\r')
+            try:
+                _wait_for_ack()
+            except DriverError:
+                pass
+            time.sleep(0.1)
+            conn.flushInput()
 
-    # Setting speed code
-    conn.write('S{0:d}\r'.format(speed_code).encode())
-    conn.flush()
-    _wait_for_ack(conn)
+            # Setting speed code
+            conn.write(('S%d\r' % speed_code).encode())
+            conn.flush()
+            _wait_for_ack()
 
-    # Opening the channel
-    conn.write(b'O\r')
-    conn.flush()
-    _wait_for_ack(conn)
+            # Opening the channel
+            conn.write(b'O\r')
+            conn.flush()
+            _wait_for_ack()
+        except Exception as ex:
+            if num_retries > 0:
+                logger.error('Could not init SLCAN adapter, will retry; error was: %s', ex, exc_info=True)
+            else:
+                raise ex
+        else:
+            break
 
     # Discarding all input again
     time.sleep(0.1)
@@ -380,6 +394,9 @@ class SLCAN(AbstractDriver):
                 sig = self._rx_queue.get(timeout=IO_PROCESS_INIT_TIMEOUT)
                 if sig == IPC_SIGNAL_INIT_OK:
                     break
+                if isinstance(sig, Exception):
+                    self._tx_queue.put_nowait(IPC_COMMAND_STOP)
+                    raise sig
             except queue.Empty:
                 pass
             if time.monotonic() > deadline:
