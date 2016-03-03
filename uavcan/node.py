@@ -330,7 +330,7 @@ class Node(Scheduler):
 
     def _throw_if_anonymous(self):
         if not self._node_id:
-            raise uavcan.UAVCANException('The node is configured in anonymous mode')
+            raise uavcan.UAVCANException('The local node is configured in anonymous mode')
 
     def _fill_node_status(self, msg):
         msg.uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
