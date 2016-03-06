@@ -50,6 +50,7 @@ from uavcan.transport import get_uavcan_data_type, \
     get_active_union_field, switch_union_field, is_union, \
     get_constants, get_fields, \
     is_request, is_response
+from uavcan.introspect import value_to_constant_name
 
 
 TRANSFER_PRIORITY_LOWEST = 31
