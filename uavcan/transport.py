@@ -252,7 +252,7 @@ class PrimitiveValue(BaseValue):
 
         int_value = int(self._bits, 2)
         if self._type.kind == dsdl.PrimitiveType.KIND_BOOLEAN:
-            return int_value
+            return bool(int_value)
         elif self._type.kind == dsdl.PrimitiveType.KIND_UNSIGNED_INT:
             return int_value
         elif self._type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:

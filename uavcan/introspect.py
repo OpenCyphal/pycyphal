@@ -7,7 +7,94 @@
 #         Ben Dyer <ben_dyer@mac.com>
 #
 
+import os
 import uavcan
+from uavcan.transport import CompoundValue, PrimitiveValue, ArrayValue
+try:
+    from io import StringIO
+except ImportError:
+    # noinspection PyUnresolvedReferences
+    from StringIO import StringIO
+
+
+def _to_yaml_impl(obj, indent_level=0, parent=None, name=None, uavcan_type=None):
+    buf = StringIO()
+
+    def write(fmt, *args):
+        buf.write((fmt % args) if len(args) else fmt)
+
+    def indent_newline():
+        buf.write(os.linesep + ' ' * 2 * indent_level)
+
+    # Decomposing PrimitiveValue to value and type. This is ugly but it's by design...
+    if isinstance(obj, PrimitiveValue):
+        uavcan_type = uavcan.get_uavcan_data_type(obj)
+        obj = obj.value
+
+    # CompoundValue
+    if isinstance(obj, CompoundValue):
+        for idx, (field_name, field) in enumerate(uavcan.get_fields(obj).items()):
+            if (idx == 0 and indent_level > 0) or (idx > 0):
+                indent_newline()
+            write('%s: ', field_name)
+            write(_to_yaml_impl(field, indent_level=indent_level + 1, parent=obj, name=field_name))
+
+    # ArrayValue
+    elif isinstance(obj, ArrayValue):
+        t = uavcan.get_uavcan_data_type(obj)
+        if t.value_type.category == t.value_type.CATEGORY_PRIMITIVE:
+            def is_nice_character(ch):
+                if 32 <= ch <= 126:
+                    return True
+                if ch in b'\n\r\t':
+                    return True
+                return False
+
+            treat_as_string = t.is_string_like and all(map(is_nice_character, obj))
+            if treat_as_string:
+                write('%r', obj.decode())
+            else:
+                write('[%s]', ', '.join([_to_yaml_impl(x, indent_level=indent_level + 1, uavcan_type=t.value_type)
+                                         for x in obj]))
+        else:
+            if len(obj) == 0:
+                write('[]')
+            else:
+                for x in obj:
+                    indent_newline()
+                    write('- %s', _to_yaml_impl(x, indent_level=indent_level + 1, uavcan_type=t.value_type))
+
+    # Primitive types
+    elif isinstance(obj, float):
+        assert uavcan_type is not None
+        float_fmt = {
+            16: '%.4f',
+            32: '%.6f',
+            64: '%.9f',
+        }[uavcan_type.bitlen]
+        write(float_fmt, obj)
+    elif isinstance(obj, bool):
+        write('%s', 'true' if obj else 'false')
+    elif isinstance(obj, int):
+        write('%s', obj)
+        if parent is not None and name is not None:
+            resolved_name = value_to_constant_name(parent, name)
+            if isinstance(resolved_name, str):
+                write(' # %s', resolved_name)
+
+    return buf.getvalue()
+
+
+def to_yaml(obj):
+    """
+    This function returns correct YAML representation of a UAVCAN structure (message, request, or response), or
+    a DSDL entity (array or primitive), with comments for human benefit.
+    Args:
+        obj:            Object to convert.
+
+    Returns: Unicode string containing YAML representation of the object.
+    """
+    return _to_yaml_impl(obj)
 
 
 def value_to_constant_name(struct, field_name, keep_literal=False):
@@ -104,6 +191,26 @@ def value_to_constant_name(struct, field_name, keep_literal=False):
 
 
 if __name__ == '__main__':
+    # to_yaml()
+    print(to_yaml(uavcan.protocol.NodeStatus()))
+
+    info = uavcan.protocol.GetNodeInfo.Response(name='legion')
+    info.hardware_version.certificate_of_authenticity = b'\x01\x02\x03\xff'
+    print(to_yaml(info))
+
+    lights = uavcan.equipment.indication.LightsCommand()
+    lcmd = uavcan.equipment.indication.SingleLightCommand(light_id=123)
+    lcmd.color.red = 1
+    lcmd.color.green = 2
+    lcmd.color.blue = 3
+    lights.commands.append(lcmd)
+    lcmd.light_id += 1
+    lights.commands.append(lcmd)
+    print(to_yaml(lights))
+
+    print(to_yaml(uavcan.equipment.power.BatteryInfo()))
+
+    # value_to_constant_name()
     print(value_to_constant_name(
         uavcan.protocol.NodeStatus(mode=uavcan.protocol.NodeStatus().MODE_OPERATIONAL),
         'mode'
