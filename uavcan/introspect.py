@@ -9,7 +9,7 @@
 
 import os
 import uavcan
-from uavcan.transport import CompoundValue, PrimitiveValue, ArrayValue
+from uavcan.transport import CompoundValue, PrimitiveValue, ArrayValue, VoidValue
 try:
     from io import StringIO
 except ImportError:
@@ -82,19 +82,48 @@ def _to_yaml_impl(obj, indent_level=0, parent=None, name=None, uavcan_type=None)
             if isinstance(resolved_name, str):
                 write(' # %s', resolved_name)
 
+    # Non-printable types
+    elif isinstance(obj, VoidValue):
+        pass
+
+    # Unknown types
+    else:
+        raise ValueError('Cannot generate YAML representation for %r' % type(obj))
+
     return buf.getvalue()
 
 
 def to_yaml(obj):
     """
     This function returns correct YAML representation of a UAVCAN structure (message, request, or response), or
-    a DSDL entity (array or primitive), with comments for human benefit.
+    a DSDL entity (array or primitive), or a UAVCAN transfer, with comments for human benefit.
     Args:
         obj:            Object to convert.
 
     Returns: Unicode string containing YAML representation of the object.
     """
-    return _to_yaml_impl(obj)
+    if not isinstance(obj, CompoundValue) and hasattr(obj, 'transfer'):
+        if hasattr(obj, 'message'):
+            payload = obj.message
+            header = 'Message'
+        elif hasattr(obj, 'request'):
+            payload = obj.request
+            header = 'Request'
+        elif hasattr(obj, 'response'):
+            payload = obj.response
+            header = 'Response'
+        else:
+            raise ValueError('Cannot generate YAML representation for %r' % type(obj))
+
+        prefix = '### %s from %s to %s  ts_mono=%.6f  ts_real=%.6f\n' % \
+                 (header,
+                  obj.transfer.source_node_id,
+                  obj.transfer.dest_node_id if obj.transfer.dest_node_id else 'all',
+                  obj.transfer.ts_monotonic, obj.transfer.ts_real)
+
+        return prefix + _to_yaml_impl(payload)
+    else:
+        return _to_yaml_impl(obj)
 
 
 def value_to_constant_name(struct, field_name, keep_literal=False):
@@ -251,3 +280,9 @@ if __name__ == '__main__':
                                                     FLAG_HAS_PENDING_STDOUT),
         'flags'
     ))
+
+    # Printing transfers
+    node = uavcan.make_node('vcan0', node_id=42)
+    node.request(uavcan.protocol.GetNodeInfo.Request(), 100, lambda e: print(to_yaml(e)))
+    node.add_handler(uavcan.protocol.NodeStatus, lambda e: print(to_yaml(e)))
+    node.spin()
