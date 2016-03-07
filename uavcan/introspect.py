@@ -7,6 +7,7 @@
 #         Ben Dyer <ben_dyer@mac.com>
 #
 
+from __future__ import division, absolute_import, print_function, unicode_literals
 import os
 import uavcan
 from uavcan.transport import CompoundValue, PrimitiveValue, ArrayValue, VoidValue
