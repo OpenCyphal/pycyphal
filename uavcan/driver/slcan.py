@@ -11,6 +11,7 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 import os
 import sys
 import time
+import inspect
 import binascii
 import select
 import multiprocessing
@@ -295,8 +296,7 @@ def _io_process(device,
                 baudrate=None,
                 max_adapter_clock_rate_error_ppm=None,
                 fixed_rx_delay=None,
-                max_estimated_rx_delay_to_resync=None,
-                **_extras):
+                max_estimated_rx_delay_to_resync=None):
     logger.info('IO process started with PID %r', os.getpid())
 
     if RUNNING_ON_WINDOWS:
@@ -373,7 +373,7 @@ def _io_process(device,
 # Logic of the main process
 #
 class SLCAN(AbstractDriver):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, device_name, **kwargs):
         if not serial:
             raise RuntimeError("PySerial not imported; SLCAN is not available. Please install PySerial.")
 
@@ -382,10 +382,18 @@ class SLCAN(AbstractDriver):
         self._rx_queue = multiprocessing.Queue(maxsize=RX_QUEUE_SIZE)
         self._tx_queue = multiprocessing.Queue(maxsize=TX_QUEUE_SIZE)
 
+        # Removing all unused stuff, because it breaks inter process communications.
+        kwargs = copy.copy(kwargs)
+        keep_keys = inspect.getargspec(_io_process).args
+        for key in list(kwargs.keys()):
+            if key not in keep_keys:
+                del kwargs[key]
+
         kwargs['rx_queue'] = self._rx_queue
         kwargs['tx_queue'] = self._tx_queue
 
-        self._proc = multiprocessing.Process(target=_io_process, name='slcan_io_process', args=args, kwargs=kwargs)
+        self._proc = multiprocessing.Process(target=_io_process, name='slcan_io_process',
+                                             args=(device_name,), kwargs=kwargs)
         self._proc.daemon = True
         self._proc.start()
 
