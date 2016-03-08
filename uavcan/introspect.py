@@ -132,8 +132,8 @@ def to_yaml(obj):
 
         prefix = '### %s from %s to %s  ts_mono=%.6f  ts_real=%.6f\n' % \
                  (header,
-                  obj.transfer.source_node_id,
-                  obj.transfer.dest_node_id if obj.transfer.dest_node_id else 'all',
+                  obj.transfer.source_node_id or 'Anon',
+                  obj.transfer.dest_node_id or 'All',
                   obj.transfer.ts_monotonic, obj.transfer.ts_real)
 
         return prefix + _to_yaml_impl(payload)
