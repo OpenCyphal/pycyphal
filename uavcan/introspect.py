@@ -65,12 +65,11 @@ def _to_yaml_impl(obj, indent_level=0, parent=None, name=None, uavcan_type=None)
                     return True
                 return False
 
-            treat_as_string = t.is_string_like and all(map(is_nice_character, obj))
-            if treat_as_string:
-                write('%r', obj.decode())
-            else:
-                write('[%s]', ', '.join([_to_yaml_impl(x, indent_level=indent_level + 1, uavcan_type=t.value_type)
-                                         for x in obj]))
+            as_bytes = '[%s]' % ', '.join([_to_yaml_impl(x, indent_level=indent_level + 1, uavcan_type=t.value_type)
+                                          for x in obj])
+            if t.is_string_like and all(map(is_nice_character, obj)):
+                write('%r # ', obj.decode())
+            write(as_bytes)
         else:
             if len(obj) == 0:
                 write('[]')
