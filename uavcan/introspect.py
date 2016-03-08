@@ -34,11 +34,25 @@ def _to_yaml_impl(obj, indent_level=0, parent=None, name=None, uavcan_type=None)
 
     # CompoundValue
     if isinstance(obj, CompoundValue):
-        for idx, (field_name, field) in enumerate(uavcan.get_fields(obj).items()):
-            if (idx == 0 and indent_level > 0) or (idx > 0):
+        first_field = True
+
+        # Rendering all fields than can be rendered
+        for field_name, field in uavcan.get_fields(obj).items():
+            if uavcan.is_union(obj) and uavcan.get_active_union_field(obj) != field_name:
+                continue
+            if isinstance(field, VoidValue):
+                continue
+            if (first_field and indent_level > 0) or not first_field:
                 indent_newline()
-            write('%s: ', field_name)
-            write(_to_yaml_impl(field, indent_level=indent_level + 1, parent=obj, name=field_name))
+            first_field = False
+            rendered_field = _to_yaml_impl(field, indent_level=indent_level + 1, parent=obj, name=field_name)
+            write('%s: %s', field_name, rendered_field)
+
+        # Special case - empty non-union struct is rendered as empty map
+        if first_field and not uavcan.is_union(obj):
+            if indent_level > 0:
+                indent_newline()
+            write('{}')
 
     # ArrayValue
     elif isinstance(obj, ArrayValue):
@@ -239,6 +253,12 @@ if __name__ == '__main__':
     print(to_yaml(lights))
 
     print(to_yaml(uavcan.equipment.power.BatteryInfo()))
+    print(to_yaml(uavcan.protocol.param.Empty()))
+
+    getset = uavcan.protocol.param.GetSet.Response()
+    print(to_yaml(getset))
+    uavcan.switch_union_field(getset.value, 'empty')
+    print(to_yaml(getset))
 
     # value_to_constant_name()
     print(value_to_constant_name(
