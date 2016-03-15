@@ -8,9 +8,14 @@
 #
 
 from __future__ import division, absolute_import, print_function, unicode_literals
-from .socketcan import SocketCAN
+import sys
 from .slcan import SLCAN
 from .common import DriverError, CANFrame
+
+if sys.platform.startswith('linux'):
+    from .socketcan import SocketCAN
+else:
+    SocketCAN = None
 
 __all__ = ['make_driver', 'DriverError', 'CANFrame']
 
@@ -26,5 +31,7 @@ def make_driver(device_name, **kwargs):
 
     if windows_com_port or unix_tty:
         return SLCAN(device_name, **kwargs)
-    else:
+    elif SocketCAN is not None:
         return SocketCAN(device_name, **kwargs)
+    else:
+        raise DriverError('Unrecognized device name: %r' % device_name)
