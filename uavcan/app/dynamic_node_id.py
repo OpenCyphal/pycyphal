@@ -89,6 +89,8 @@ class CentralizedServer(object):
         if node.is_anonymous:
             raise UAVCANException('Dynamic node ID server cannot be launched on an anonymous node')
 
+        self._node_monitor = node_monitor
+
         self._allocation_table = CentralizedServer.AllocationTable(database_storage or self.DATABASE_STORAGE_MEMORY)
         self._query = bytes()
         self._query_timestamp = 0
@@ -121,6 +123,16 @@ class CentralizedServer(object):
 
     def _on_allocation_message(self, e):
         # TODO: request validation
+
+        # Centralized allocator cannot co-exist with other allocators; this is a network configuration error.
+        if e.transfer.source_node_id != 0:
+            logger.warning('[CentralizedServer] Message from another allocator ignored: %r', e)
+            return
+
+        # We can't grant allocations as long as there are undiscovered nodes - see specification
+        if not self._node_monitor.are_all_nodes_discovered():
+            logger.info('[CentralizedServer] Request ignored: not all nodes are discovered')
+            return
 
         # The local state must be reset after the specified timeout
         if len(self._query) and time.monotonic() - self._query_timestamp > CentralizedServer.QUERY_TIMEOUT:
