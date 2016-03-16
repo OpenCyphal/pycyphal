@@ -372,7 +372,12 @@ def _io_process(device,
     rxthd = threading.Thread(target=rx_thread_wrapper, name='slcan_rx')
     rxthd.daemon = True
 
-    conn = serial.Serial(device, baudrate or DEFAULT_BAUDRATE)
+    try:
+        conn = serial.Serial(device, baudrate or DEFAULT_BAUDRATE)
+    except Exception as ex:
+        logger.error('Could not open port', exc_info=True)
+        rx_queue.put_nowait(ex)
+        return
 
     #
     # Actual work is here
