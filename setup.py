@@ -12,9 +12,14 @@ import os
 import sys
 from setuptools import setup
 
+__version__ = None
+VERSION_FILE = os.path.join(os.path.dirname(__file__), 'uavcan', 'version.py')
+exec(open(VERSION_FILE).read())         # Adds __version__ to globals
+
+
 args = dict(
     name='uavcan',
-    version='1.0.0dev10',
+    version=__version__,
     description='Python implementation of the UAVCAN protocol stack',
     packages=[
         'uavcan',

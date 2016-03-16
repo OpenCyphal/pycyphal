@@ -42,6 +42,7 @@ class UAVCANException(Exception):
     pass
 
 
+from .version import __version__
 import uavcan.node as node
 from uavcan.node import make_node
 import uavcan.dsdl as dsdl
