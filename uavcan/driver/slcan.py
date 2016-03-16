@@ -305,6 +305,14 @@ def _io_process(device,
                 max_estimated_rx_delay_to_resync=None):
     logger.info('IO process started with PID %r', os.getpid())
 
+    # We don't need stdin
+    try:
+        stdin_fileno = sys.stdin.fileno()
+        sys.stdin.close()
+        os.close(stdin_fileno)
+    except Exception:
+        pass
+
     if RUNNING_ON_WINDOWS:
         is_parent_process_alive = lambda: True  # TODO: How do we detect if the parent process is alright on Windows?
     else:
