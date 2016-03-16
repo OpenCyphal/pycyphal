@@ -160,20 +160,26 @@ def _rx_thread(conn, rx_queue, ts_estimator_mono, ts_estimator_real, termination
 
     py2_compat = sys.version_info[0] < 3
     select_timeout = 0.1
-    read_buffer_size = 1024 * 1024      # Arbitrary large number
+    read_buffer_size = 1024 * 8      # Arbitrary large number
 
     buf = bytes()
     while not termination_condition():
         try:
-            select.select([conn.fileno()], [], [], select_timeout)
-
-            # Timestamping as soon as possible after unblocking
-            local_ts_mono = time.monotonic()
-            local_ts_real = time.time()
-
-            # Read as much data as possible in order to avoid RX overrun
-            conn.timeout = 0
-            buf += conn.read(read_buffer_size)
+            if RUNNING_ON_WINDOWS:
+                # select() doesn't work on serial ports under Windows, so we have to resort to workarounds. :(
+                conn.timeout = select_timeout
+                buf += conn.read(max(1, conn.inWaiting()))
+                # Timestamping as soon as possible after unblocking
+                local_ts_mono = time.monotonic()
+                local_ts_real = time.time()
+            else:
+                select.select([conn.fileno()], [], [], select_timeout)
+                # Timestamping as soon as possible after unblocking
+                local_ts_mono = time.monotonic()
+                local_ts_real = time.time()
+                # Read as much data as possible in order to avoid RX overrun
+                conn.timeout = 0
+                buf += conn.read(read_buffer_size)
 
             # The parsing logic below is heavily optimized for speed
             pos = 0
