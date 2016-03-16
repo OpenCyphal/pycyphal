@@ -801,15 +801,20 @@ class Transfer(object):
 
 class TransferManager(object):
     def __init__(self):
-        self.active_transfers = collections.defaultdict(list)
+        self.active_transfers = {}
         self.active_transfer_timestamps = {}
 
     def receive_frame(self, frame):
         result = None
         key = frame.transfer_key
         if key in self.active_transfers or frame.start_of_transfer:
+            # If the first frame was received, restart this transfer from scratch
+            if frame.start_of_transfer:
+                self.active_transfers[key] = []
+
             self.active_transfers[key].append(frame)
             self.active_transfer_timestamps[key] = time.monotonic()
+
             # If the last frame of a transfer was received, return its frames
             if frame.end_of_transfer:
                 result = self.active_transfers[key]
