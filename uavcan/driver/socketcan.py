@@ -215,6 +215,9 @@ class SocketCAN(AbstractDriver):
             return frame
 
     def send(self, message_id, message, extended=False):
+        # TODO:
+        # Socket's buffer may be quite small. Writing to the socket when its buffer is full causes send() to throw.
+        # We should add a feeder thread to work around this problem.
         if extended:
             message_id |= CAN_EFF_FLAG
 
