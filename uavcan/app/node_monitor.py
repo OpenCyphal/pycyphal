@@ -19,7 +19,8 @@ logger = getLogger(__name__)
 class NodeMonitor(object):
     TIMEOUT = uavcan.protocol.NodeStatus().OFFLINE_TIMEOUT_MS / 1000  # @UndefinedVariable
     TRANSFER_PRIORITY = uavcan.TRANSFER_PRIORITY_LOWEST - 1
-    RETRY_INTERVAL = 1
+    MIN_RETRY_INTERVAL = 0.5
+    MAX_RETRIES = 10
 
     class Entry:
         def __init__(self):
@@ -27,21 +28,32 @@ class NodeMonitor(object):
             self.status = None
             self.info = None
             self.monotonic_timestamp = None
+            self._remaining_retries = NodeMonitor.MAX_RETRIES
+
+        @property
+        def discovered(self):
+            return self.info is not None or self._remaining_retries <= 0
 
         def _update_from_status(self, e):
             self.monotonic_timestamp = e.transfer.ts_monotonic
             self.node_id = e.transfer.source_node_id
             if self.status and e.message.uptime_sec < self.status.uptime_sec:
+                self._remaining_retries = NodeMonitor.MAX_RETRIES
                 self.info = None
             self.status = e.message
             if self.info:
                 self.info.status = self.status
 
         def _update_from_info(self, e):
+            self._remaining_retries = NodeMonitor.MAX_RETRIES
             self.monotonic_timestamp = e.transfer.ts_monotonic
             self.node_id = e.transfer.source_node_id
             self.status = e.response.status
             self.info = e.response
+
+        def _register_retry(self):
+            assert self._remaining_retries > 0
+            self._remaining_retries -= 1
 
         def __str__(self):
             return '%d:%s' % (self.node_id, self.info if self.info else self.status)
@@ -83,11 +95,12 @@ class NodeMonitor(object):
 
     def add_update_handler(self, callback):
         """
-        The specified callback will be invoked when:
-        - A new node appears
-        - Node info for an existing node gets updated
-        - Node goes offline
-        Call remove() or try_remove() on the returned object to unregister the handler.
+        Args:
+            callback:   The specified callback will be invoked when:
+                        - A new node appears
+                        - Node info for an existing node gets updated
+                        - Node goes offline
+        Returns:    Call remove() or try_remove() on the returned object to unregister the handler.
         """
         self._update_callbacks.append(callback)
         return self.UpdateHandlerRemover(lambda: self._update_callbacks.remove(callback))
@@ -97,13 +110,17 @@ class NodeMonitor(object):
             cb(event)
 
     def exists(self, node_id):
-        """Returns True if the given node ID exists, false otherwise"""
+        """
+        Args:
+            node_id:    Returns True if the given node ID exists, false otherwise
+        """
         return node_id in self._registry
 
     def get(self, node_id):
         """
-        Returns an Entry instance for the given node ID.
-        If the requested node ID does not exist, throws KeyError.
+        Args:
+            node_id:    Returns an Entry instance for the given node ID.
+                        If the requested node ID does not exist, throws KeyError.
         """
         if (self._registry[node_id].monotonic_timestamp + self.TIMEOUT) < time.monotonic():
             self._call_event_handlers(self.UpdateEvent(self._registry[node_id],
@@ -116,10 +133,18 @@ class NodeMonitor(object):
         return self._registry.keys()
 
     def find_all(self, predicate):
-        """Returns a generator that produces a sequence of Entry objects for which the predicate returned True."""
+        """Returns a generator that produces a sequence of Entry objects for which the predicate returned True.
+        Args:
+            predicate:  A callable that returns a value coercible to bool.
+        """
         for _nid, entry in self._registry.items():
             if predicate(entry):
                 yield entry
+
+    def are_all_nodes_discovered(self):
+        """Reports whether there are nodes whose node info is still unknown."""
+        undiscovered = self.find_all(lambda e: not e.discovered)
+        return len(list(undiscovered)) == 0
 
     def close(self):
         """Stops the instance. The registry will not be cleared."""
@@ -144,13 +169,17 @@ class NodeMonitor(object):
             self._registry[node_id] = entry
             new_entry = True
 
+        # noinspection PyProtectedMember
         entry._update_from_status(e)
         if new_entry:
             self._call_event_handlers(self.UpdateEvent(entry, self.UpdateEvent.EVENT_ID_NEW))
 
-        if not entry.info and not e.node.is_anonymous and \
-                entry.monotonic_timestamp - entry._info_requested_at > self.RETRY_INTERVAL:
+        should_retry_now = entry.monotonic_timestamp - entry._info_requested_at > self.MIN_RETRY_INTERVAL
+
+        if not entry.discovered and should_retry_now and not e.node.is_anonymous:
             entry._info_requested_at = entry.monotonic_timestamp
+            # noinspection PyProtectedMember
+            entry._register_retry()
             e.node.request(uavcan.protocol.GetNodeInfo.Request(), node_id,  # @UndefinedVariable
                            priority=self.TRANSFER_PRIORITY, callback=self._on_info_response)
 
@@ -164,6 +193,7 @@ class NodeMonitor(object):
             entry = self.Entry()
             self._registry[e.transfer.source_node_id] = entry
 
+        # noinspection PyProtectedMember
         entry._update_from_info(e)
 
         hw_unique_id = "".join(format(c, "02X") for c in e.response.hardware_version.unique_id)
