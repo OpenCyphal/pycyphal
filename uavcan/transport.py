@@ -298,8 +298,7 @@ class PrimitiveValue(BaseValue):
 class ArrayValue(BaseValue, collections.MutableSequence):
     def __init__(self, _uavcan_type, _tao, *args, **kwargs):
         super(ArrayValue, self).__init__(_uavcan_type, *args, **kwargs)
-        value_bitlen = getattr(self._type.value_type, "bitlen", 0)
-        self._tao = _tao if value_bitlen >= 8 else False
+        self._tao = _tao if self._type.value_type.get_min_bitlen() >= 8 else False
 
         if isinstance(self._type.value_type, dsdl.PrimitiveType):
             self.__item_ctor = functools.partial(PrimitiveValue, self._type.value_type)

@@ -62,6 +62,12 @@ class Type:
     def get_normalized_definition(self):
         raise NotImplementedError('Pure virtual method')
 
+    def get_max_bitlen(self):
+        raise NotImplementedError('Pure virtual method')
+
+    def get_min_bitlen(self):
+        raise NotImplementedError('Pure virtual method')
+
     __repr__ = __str__
 
 
@@ -118,6 +124,10 @@ class PrimitiveType(Type):
         """Returns type bit length."""
         return self.bitlen
 
+    def get_min_bitlen(self):
+        """Returns type bit length."""
+        return self.bitlen
+
 
 class ArrayType(Type):
     """
@@ -149,6 +159,12 @@ class ArrayType(Type):
             self.MODE_STATIC: payload_max_bitlen
         }[self.mode]
 
+    def get_min_bitlen(self):
+        if self.mode == self.MODE_STATIC:
+            return self.value_type.get_min_bitlen() * self.max_size
+        else:
+            return 0    # Considering TAO
+
     def get_data_type_signature(self):
         return self.value_type.get_data_type_signature()
 
@@ -159,6 +175,7 @@ class ArrayType(Type):
                self.value_type.bitlen == 8
 
 
+# noinspection PyAbstractClass
 class CompoundType(Type):
     """
     Compound type description, e.g. uavcan.protocol.NodeStatus.
@@ -182,11 +199,14 @@ class CompoundType(Type):
         union               Boolean indicating whether the message struct is a union
 
     Extra methods if kind == KIND_SERVICE:
-        get_max_bitlen_request()    Returns maximum total bit length for the serialized request struct
+        get_max_bitlen_request()    Returns maximum total bit length of the serialized request struct
         get_max_bitlen_response()   Same for the response struct
+        get_min_bitlen_request()    Returns minimum total bit length of the serialized request struct
+        get_min_bitlen_response()   Same for the response struct
 
     Extra methods if kind == KIND_MESSAGE:
-        get_max_bitlen()            Returns maximum total bit length for the serialized struct
+        get_max_bitlen()            Returns maximum total bit length of the serialized struct
+        get_min_bitlen()            Returns minimum total bit length of the serialized struct
     """
     KIND_SERVICE = 0
     KIND_MESSAGE = 1
@@ -206,6 +226,16 @@ class CompoundType(Type):
                 return max(lens) + max(len(flds) - 1, 1).bit_length()
             else:
                 return sum(lens)
+
+        def compute_min_bitlen(flds, union):
+            if len(flds) == 0:
+                return 0
+            lens = [x.type.get_min_bitlen() for x in flds]
+            if union:
+                return min(lens) + max(len(flds) - 1, 1).bit_length()
+            else:
+                return sum(lens)
+
         if kind == CompoundType.KIND_SERVICE:
             self.request_fields = []
             self.response_fields = []
@@ -213,12 +243,15 @@ class CompoundType(Type):
             self.response_constants = []
             self.get_max_bitlen_request = lambda: compute_max_bitlen(self.request_fields, self.request_union)
             self.get_max_bitlen_response = lambda: compute_max_bitlen(self.response_fields, self.response_union)
+            self.get_min_bitlen_request = lambda: compute_min_bitlen(self.request_fields, self.request_union)
+            self.get_min_bitlen_response = lambda: compute_min_bitlen(self.response_fields, self.response_union)
             self.request_union = False
             self.response_union = False
         elif kind == CompoundType.KIND_MESSAGE:
             self.fields = []
             self.constants = []
             self.get_max_bitlen = lambda: compute_max_bitlen(self.fields, self.union)
+            self.get_min_bitlen = lambda: compute_min_bitlen(self.fields, self.union)
             self.union = False
         else:
             error('Compound type of unknown kind [%s]', kind)
@@ -301,6 +334,10 @@ class VoidType(Type):
         return 'void' + str(self.bitlen)
 
     def get_max_bitlen(self):
+        """Returns type bit length."""
+        return self.bitlen
+
+    def get_min_bitlen(self):
         """Returns type bit length."""
         return self.bitlen
 
