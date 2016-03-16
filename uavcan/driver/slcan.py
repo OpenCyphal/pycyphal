@@ -66,6 +66,8 @@ DEFAULT_MAX_ESTIMATED_RX_DELAY_TO_RESYNC = 0.1      # When clock divergence exce
 IO_PROCESS_INIT_TIMEOUT = 5
 IO_PROCESS_NICENESS_INCREMENT = -18
 
+MAX_SUCCESSIVE_ERRORS_TO_GIVE_UP = 1000
+
 
 #
 # IPC constants
@@ -162,6 +164,8 @@ def _rx_thread(conn, rx_queue, ts_estimator_mono, ts_estimator_real, termination
     select_timeout = 0.1
     read_buffer_size = 1024 * 8      # Arbitrary large number
 
+    successive_errors = 0
+
     buf = bytes()
     while not termination_condition():
         try:
@@ -245,16 +249,27 @@ def _rx_thread(conn, rx_queue, ts_estimator_mono, ts_estimator_real, termination
 
             # All data that could be parsed is already parsed - discard everything up to the current pos
             buf = buf[pos:]
+
+            # Resetting error counter on a successful iteration
+            successive_errors = 0
         except Exception as ex:
             # TODO: handle the case when the port is closed
-            logger.error('RX thread error, buffer discarded', exc_info=True)
+            logger.error('RX thread error, buffer discarded; error count: %d of %d',
+                         successive_errors, MAX_SUCCESSIVE_ERRORS_TO_GIVE_UP, exc_info=True)
+
             # Discarding the buffer
             buf = bytes()
+
             # Propagating the exception to the parent process
             try:
                 rx_queue.put_nowait(ex)
             except Exception:
                 pass
+
+            # Termination condition - bail if too many errors
+            successive_errors += 1
+            if successive_errors >= MAX_SUCCESSIVE_ERRORS_TO_GIVE_UP:
+                break
 
     logger.info('RX thread is exiting')
 
