@@ -142,12 +142,12 @@ class Float32IntegerUnion(object):
 
     @property
     def u(self):
-        return struct.unpack("=L", self._bytes)[0]
+        return struct.unpack("=I", self._bytes)[0]
 
     @u.setter
     def u(self, value):
-        assert isinstance(value, int)
-        self._bytes = struct.pack("=L", value)
+        assert isinstance(value, int) or isinstance(value, long)
+        self._bytes = struct.pack("=I", value)
 
 
 def f16_from_f32(float32):
