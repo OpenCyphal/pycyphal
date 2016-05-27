@@ -209,7 +209,7 @@ class RxWorker:
             try:
                 self._process_slcan_line(slc, local_ts_mono=ts_mono, local_ts_real=ts_real)
             except Exception:
-                logger.warning('Could not process SLCAN line %r', slc, exc_info=True)
+                logger.error('Could not process SLCAN line %r', slc, exc_info=True)
 
     # noinspection PyBroadException
     def run(self):
