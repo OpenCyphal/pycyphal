@@ -687,6 +687,7 @@ class SLCAN(AbstractDriver):
         """
         Executes an arbitrary CLI command on the SLCAN adapter, assuming that the adapter supports CLI commands.
         The callback will be invoked from the method receive() using same thread.
+        If the command times out, the callback will be invoked anyway, with 'expired' flag set.
         Args:
             command:    Command as unicode string or bytes
             callback:   A callable that accepts one argument.
