@@ -437,6 +437,7 @@ def _stop_adapter(conn):
 def _io_process(device,
                 tx_queue,
                 rx_queue,
+                parent_pid,
                 bitrate=None,
                 baudrate=None,
                 max_adapter_clock_rate_error_ppm=None,
@@ -452,11 +453,14 @@ def _io_process(device,
     except Exception:
         pass
 
-    if RUNNING_ON_WINDOWS:
-        is_parent_process_alive = lambda: True  # TODO: How do we detect if the parent process is alright on Windows?
-    else:
-        parent_pid = os.getppid()
-        is_parent_process_alive = lambda: os.getppid() == parent_pid
+    def is_parent_process_alive():
+        # Works on any platform
+        try:
+            os.kill(parent_pid, 0)
+            return True
+        except OSError:
+            logger.info('Parent process is dead')
+            return False
 
     try:
         _raise_self_process_priority()
@@ -561,6 +565,7 @@ class SLCAN(AbstractDriver):
 
         kwargs['rx_queue'] = self._rx_queue
         kwargs['tx_queue'] = self._tx_queue
+        kwargs['parent_pid'] = os.getpid()
 
         self._proc = multiprocessing.Process(target=_io_process, name='slcan_io_process',
                                              args=(device_name,), kwargs=kwargs)
