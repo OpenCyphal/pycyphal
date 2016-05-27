@@ -383,48 +383,54 @@ class RxWorker:
         logger.info('RX worker is stopping')
 
 
-def _send_frame(conn, frame):
-    line = '%s%d%s\r' % (('T%08X' if frame.extended else 't%03X') % frame.id,
-                         len(frame.data),
-                         binascii.b2a_hex(frame.data).decode('ascii'))
+class TxWorker:
+    QUEUE_BLOCK_TIMEOUT = 0.1
 
-    conn.write(line.encode('ascii'))
-    conn.flush()
+    def __init__(self, conn, rx_queue, tx_queue, termination_condition):
+        self._conn = conn
+        self._rx_queue = rx_queue
+        self._tx_queue = tx_queue
+        self._termination_condition = termination_condition
 
+    def _send_frame(self, frame):
+        line = '%s%d%s\r' % (('T%08X' if frame.extended else 't%03X') % frame.id,
+                             len(frame.data),
+                             binascii.b2a_hex(frame.data).decode('ascii'))
 
-def _execute_command(conn, command):
-    logger.debug('Executing command line %r', command.command)
-    conn.write(command.command.encode('ascii') + CLI_END_OF_LINE)
-    conn.flush()
-    _pending_command_line_execution_requests.put(command)
+        self._conn.write(line.encode('ascii'))
+        self._conn.flush()
 
+    def _execute_command(self, command):
+        logger.debug('Executing command line %r', command.command)
+        self._conn.write(command.command.encode('ascii') + CLI_END_OF_LINE)
+        self._conn.flush()
+        _pending_command_line_execution_requests.put(command)
 
-def _tx_thread(conn, rx_queue, tx_queue, termination_condition):
-    queue_block_timeout = 0.1
-
-    while True:
-        try:
-            command = tx_queue.get(True, queue_block_timeout)
-
-            if isinstance(command, CANFrame):
-                _send_frame(conn, command)
-            elif isinstance(command, IPCCommandLineExecutionRequest):
-                _execute_command(conn, command)
-            elif command == IPC_COMMAND_STOP:
-                break
-            else:
-                raise DriverError('IO process received unknown IPC command: %r' % command)
-        except queue.Empty:
-            # Checking in this handler in order to avoid interference with traffic
-            if termination_condition():
-                break
-        except Exception as ex:
-            logger.error('TX thread exception', exc_info=True)
-            # Propagating the exception to the parent process
+    def run(self):
+        while True:
             try:
-                rx_queue.put_nowait(ex)
-            except Exception:
-                pass
+                command = self._tx_queue.get(True, self.QUEUE_BLOCK_TIMEOUT)
+
+                if isinstance(command, CANFrame):
+                    self._send_frame(command)
+                elif isinstance(command, IPCCommandLineExecutionRequest):
+                    self._execute_command(command)
+                elif command == IPC_COMMAND_STOP:
+                    break
+                else:
+                    raise DriverError('IO process received unknown IPC command: %r' % command)
+            except queue.Empty:
+                # Checking in this handler in order to avoid interference with traffic
+                if self._termination_condition():
+                    break
+            except Exception as ex:
+                logger.error('TX thread exception', exc_info=True)
+                # Propagating the exception to the parent process
+                # noinspection PyBroadException
+                try:
+                    self._rx_queue.put_nowait(ex)
+                except Exception:
+                    pass
 
 
 # noinspection PyBroadException
@@ -480,8 +486,10 @@ def _io_process(device,
     should_exit = False
 
     def rx_thread_wrapper():
-        rx_worker = RxWorker(conn=conn, rx_queue=rx_queue,
-                             ts_estimator_mono=ts_estimator_mono, ts_estimator_real=ts_estimator_real,
+        rx_worker = RxWorker(conn=conn,
+                             rx_queue=rx_queue,
+                             ts_estimator_mono=ts_estimator_mono,
+                             ts_estimator_real=ts_estimator_real,
                              termination_condition=lambda: should_exit)
         try:
             rx_worker.run()
@@ -511,8 +519,13 @@ def _io_process(device,
         logger.info('IO process initialization complete')
         rx_queue.put(IPC_SIGNAL_INIT_OK)
 
-        _tx_thread(conn, rx_queue, tx_queue,
-                   lambda: (should_exit or not rxthd.is_alive() or not is_parent_process_alive()))
+        tx_worker = TxWorker(conn=conn,
+                             rx_queue=rx_queue,
+                             tx_queue=tx_queue,
+                             termination_condition=lambda: (should_exit or not
+                                                            rxthd.is_alive() or not
+                                                            is_parent_process_alive()))
+        tx_worker.run()
     finally:
         logger.info('IO process is terminating...')
         should_exit = True
