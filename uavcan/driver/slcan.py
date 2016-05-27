@@ -100,7 +100,7 @@ class IPCCommandLineExecutionResponse:
             return what
 
         self.command = try_decode(command).strip()
-        self.lines = [try_decode(ln) for ln in lines] or []
+        self.lines = [try_decode(ln) for ln in (lines or [])]
         self.expired = expired
 
     def __str__(self):
@@ -149,7 +149,6 @@ class RxWorker:
             ts_real = time.time()
             # Read as much data as possible in order to avoid RX overrun
             data = self._conn.read(self.READ_BUFFER_SIZE)
-        print('PORT READ', data)
         return data, ts_mono, ts_real
 
     def _process_slcan_line(self, line, local_ts_mono, local_ts_real):
@@ -204,6 +203,14 @@ class RxWorker:
         frame = CANFrame(packet_id, packet_data, (id_len == 8), ts_monotonic=ts_mono, ts_real=ts_real)
         self._output_queue.put_nowait(frame)
 
+    def _process_many_slcan_lines(self, lines, ts_mono, ts_real):
+        for slc in lines:
+            # noinspection PyBroadException
+            try:
+                self._process_slcan_line(slc, local_ts_mono=ts_mono, local_ts_real=ts_real)
+            except Exception:
+                logger.warning('Could not process SLCAN line %r', slc, exc_info=True)
+
     # noinspection PyBroadException
     def run(self):
         logger.info('RX worker started')
@@ -239,26 +246,20 @@ class RxWorker:
                 if outstanding_command is None:
                     slcan_lines = data.split(ACK)
                     slcan_lines, data = slcan_lines[:-1], slcan_lines[-1]
-                    for slc in slcan_lines:
-                        try:
-                            self._process_slcan_line(slc, local_ts_mono=ts_mono, local_ts_real=ts_real)
-                        except Exception:
-                            logger.warning('Could not process SLCAN line in SLCAN mode %r', slc, exc_info=True)
+
+                    self._process_many_slcan_lines(slcan_lines, ts_mono=ts_mono, ts_real=ts_real)
+                    del slcan_lines
                 else:
                     # TODO This branch contains dirty and poorly tested code. Refactor once the protocol matures.
                     split_lines = data.split(CLI_END_OF_LINE)
                     split_lines, data = split_lines[:-1], split_lines[-1]
 
+                    # Processing the mix of SLCAN and CLI lines
                     for ln in split_lines:
                         tmp = ln.split(ACK)
                         slcan_lines, cli_line = tmp[:-1], tmp[-1].strip()
 
-                        # Processing the SLCAN lines immediately
-                        for slc in slcan_lines:
-                            try:
-                                self._process_slcan_line(slc, local_ts_mono=ts_mono, local_ts_real=ts_real)
-                            except Exception:
-                                logger.warning('Could not process SLCAN line in CLI mode %r', slc, exc_info=True)
+                        self._process_many_slcan_lines(slcan_lines, ts_mono=ts_mono, ts_real=ts_real)
 
                         # Processing the CLI line
                         logger.debug('Processing CLI response line %r as...', cli_line)
@@ -287,6 +288,17 @@ class RxWorker:
                             else:
                                 logger.debug('...mid response')
                                 outstanding_command_response_lines.append(cli_line)
+
+                    del split_lines
+
+                    # The remainder may contain SLCAN and CLI lines as well;
+                    # there is no reason not to process SLCAN ones immediately.
+                    # The last byte could be beginning of an \r\n sequence, so it's excluded from parsing.
+                    data, last_byte = data[:-1], data[-1:]
+                    slcan_lines = data.split(ACK)
+                    slcan_lines, data = slcan_lines[:-1], slcan_lines[-1] + last_byte
+
+                    self._process_many_slcan_lines(slcan_lines, ts_mono=ts_mono, ts_real=ts_real)
 
                 successive_errors = 0
             except Exception as ex:
@@ -404,6 +416,13 @@ def _init_adapter(conn, bitrate):
                 pass
             time.sleep(0.1)
             conn.flushInput()
+
+            # Making sure the channel is closed - some adapters may refuse to re-open if the channel is already open
+            conn.write(b'C\r')
+            try:
+                _wait_for_ack()
+            except DriverError:
+                pass
 
             # Setting speed code
             conn.write(('S%d\r' % speed_code).encode())
