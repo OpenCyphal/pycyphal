@@ -20,6 +20,10 @@ class DriverError(UAVCANException):
     pass
 
 
+class TxQueueFullError(DriverError):
+    pass
+
+
 class CANFrame:
     MAX_DATA_LENGTH = 8
 

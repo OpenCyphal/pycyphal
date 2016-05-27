@@ -18,7 +18,7 @@ import multiprocessing
 import threading
 import copy
 from logging import getLogger
-from .common import DriverError, CANFrame, AbstractDriver
+from .common import DriverError, TxQueueFullError, CANFrame, AbstractDriver
 from .timestamp_estimator import TimestampEstimator
 
 try:
@@ -703,7 +703,10 @@ class SLCAN(AbstractDriver):
     def send(self, message_id, message, extended=False):
         self._check_alive()
         frame = CANFrame(message_id, message, extended)
-        self._tx_queue.put(frame)
+        try:
+            self._tx_queue.put_nowait(frame)
+        except queue.Full:
+            raise TxQueueFullError()
         self._tx_hook(frame)
 
     def execute_cli_command(self, command, callback, timeout=None):
@@ -719,5 +722,8 @@ class SLCAN(AbstractDriver):
         """
         self._check_alive()
         request = IPCCommandLineExecutionRequest(command, timeout)
-        self._tx_queue.put(request)
+        try:
+            self._tx_queue.put(request, timeout=timeout)
+        except queue.Full:
+            raise TxQueueFullError()
         self._cli_command_requests.append((command, callback))
