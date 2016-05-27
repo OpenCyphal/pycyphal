@@ -58,6 +58,8 @@ DEFAULT_BAUDRATE = 3000000
 ACK_TIMEOUT = 0.5
 ACK = b'\r'
 NACK = b'\x07'
+CLI_END_OF_LINE = b'\r\n'
+CLI_END_OF_TEXT = b'\x03'
 
 DEFAULT_MAX_ADAPTER_CLOCK_RATE_ERROR_PPM = 200      # Suits virtually all adapters
 DEFAULT_FIXED_RX_DELAY = 0.0002                     # Good for USB, could be higher for UART
@@ -70,10 +72,47 @@ MAX_SUCCESSIVE_ERRORS_TO_GIVE_UP = 1000
 
 
 #
-# IPC constants
+# IPC entities
 #
 IPC_SIGNAL_INIT_OK = 'init_ok'                     # Sent from IO process to the parent process when init is done
 IPC_COMMAND_STOP = 'stop'                          # Sent from parent process to the IO process when it's time to exit
+
+
+class IPCCommandLineExecutionRequest:
+    DEFAULT_TIMEOUT = 1
+
+    def __init__(self, command, timeout=None):
+        if isinstance(command, bytes):
+            command = command.decode('utf8')
+        self.command = command.strip()
+        self.monotonic_deadline = time.monotonic() + (timeout or self.DEFAULT_TIMEOUT)
+
+    @property
+    def expired(self):
+        return time.monotonic() >= self.monotonic_deadline
+
+
+class IPCCommandLineExecutionResponse:
+    def __init__(self, command, lines=None, expired=False):
+        def try_decode(what):
+            if isinstance(what, bytes):
+                return what.decode('utf8')
+            return what
+
+        self.command = try_decode(command).strip()
+        self.lines = [try_decode(ln) for ln in lines] or []
+        self.expired = expired
+
+    def __str__(self):
+        if not self.expired:
+            return '%r %r' % (self.command, self.lines)
+        else:
+            return '%r EXPIRED' % self.command
+
+    __repr__ = __str__
+
+
+_pending_command_line_execution_requests = queue.Queue()
 
 
 #
@@ -106,7 +145,7 @@ def _init_adapter(conn, bitrate):
 
     speed_code = {
         1000000: 8,
-        8000000: 7,
+        800000: 7,
         500000: 6,
         250000: 5,
         125000: 4,
@@ -156,122 +195,192 @@ def _stop_adapter(conn):
     conn.flush()
 
 
-# noinspection PyBroadException
-def _rx_thread(conn, rx_queue, ts_estimator_mono, ts_estimator_real, termination_condition):
-    logger.info('RX thread started')
+class RxWorker:
+    PY2_COMPAT = sys.version_info[0] < 3
+    SELECT_TIMEOUT = 0.1
+    READ_BUFFER_SIZE = 1024 * 8             # Arbitrary large number
 
-    py2_compat = sys.version_info[0] < 3
-    select_timeout = 0.1
-    read_buffer_size = 1024 * 8      # Arbitrary large number
+    def __init__(self, conn, rx_queue, ts_estimator_mono, ts_estimator_real, termination_condition):
+        self._conn = conn
+        self._output_queue = rx_queue
+        self._ts_estimator_mono = ts_estimator_mono
+        self._ts_estimator_real = ts_estimator_real
+        self._termination_condition = termination_condition
 
-    successive_errors = 0
+        if RUNNING_ON_WINDOWS:
+            # select() doesn't work on serial ports under Windows, so we have to resort to workarounds. :(
+            self._conn.timeout = self.SELECT_TIMEOUT
+        else:
+            self._conn.timeout = 0
 
-    buf = bytes()
-    while not termination_condition():
-        try:
-            if RUNNING_ON_WINDOWS:
-                # select() doesn't work on serial ports under Windows, so we have to resort to workarounds. :(
-                conn.timeout = select_timeout
-                buf += conn.read(max(1, conn.inWaiting()))
-                # Timestamping as soon as possible after unblocking
-                local_ts_mono = time.monotonic()
-                local_ts_real = time.time()
-            else:
-                select.select([conn.fileno()], [], [], select_timeout)
-                # Timestamping as soon as possible after unblocking
-                local_ts_mono = time.monotonic()
-                local_ts_real = time.time()
-                # Read as much data as possible in order to avoid RX overrun
-                conn.timeout = 0
-                buf += conn.read(read_buffer_size)
+    def _read_port(self):
+        if RUNNING_ON_WINDOWS:
+            data = self._conn.read(max(1, self._conn.inWaiting()))
+            # Timestamping as soon as possible after unblocking
+            ts_mono = time.monotonic()
+            ts_real = time.time()
+        else:
+            select.select([self._conn.fileno()], [], [], self.SELECT_TIMEOUT)
+            # Timestamping as soon as possible after unblocking
+            ts_mono = time.monotonic()
+            ts_real = time.time()
+            # Read as much data as possible in order to avoid RX overrun
+            data = self._conn.read(self.READ_BUFFER_SIZE)
+        print('PORT READ', data)
+        return data, ts_mono, ts_real
 
-            # The parsing logic below is heavily optimized for speed
-            pos = 0
-            buf_len = len(buf)
-            while True:
-                # Looking for start of the next message, break if not found
-                while pos < buf_len and buf[pos] not in b'Tt':
-                    pos += 1
-                if pos >= buf_len:
+    def _process_slcan_line(self, line, local_ts_mono, local_ts_real):
+        line = line.strip()
+        line_len = len(line)
+
+        if line_len < 1:
+            return
+
+        # Checking the header, ignore all irrelevant lines
+        if line[0] == b'T'[0]:
+            id_len = 8
+        elif line[0] == b't'[0]:
+            id_len = 3
+        else:
+            return
+
+        # Parsing ID and DLC
+        packet_id = int(line[1:1 + id_len], 16)
+        if self.PY2_COMPAT:
+            packet_len = int(line[1 + id_len])              # This version is horribly slow
+        else:
+            packet_len = line[1 + id_len] - 48              # Py3 version is faster
+
+        if packet_len > 8 or packet_len < 0:
+            raise DriverError('Invalid packet length')
+
+        # Parsing the payload, detecting timestamp
+        # <type> <id> <dlc> <data>         [timestamp]
+        # 1      3|8  1     packet_len * 2 [4]
+        total_length = 2 + id_len + packet_len * 2
+        if line_len > total_length:
+            with_timestamp = True
+            total_length += 4
+        else:
+            with_timestamp = False
+
+        if line_len != total_length:
+            raise DriverError('Unexpected length of SLCAN line')
+
+        packet_data = binascii.a2b_hex(line[2 + id_len:2 + id_len + packet_len * 2])
+
+        # Handling the timestamp, if present
+        if with_timestamp:
+            ts_hardware = int(line[-4:], 16) * 1e-3
+            ts_mono = self._ts_estimator_mono.update(ts_hardware, local_ts_mono)
+            ts_real = self._ts_estimator_real.update(ts_hardware, local_ts_real)
+        else:
+            ts_mono = local_ts_mono
+            ts_real = local_ts_real
+
+        frame = CANFrame(packet_id, packet_data, (id_len == 8), ts_monotonic=ts_mono, ts_real=ts_real)
+        self._output_queue.put_nowait(frame)
+
+    # noinspection PyBroadException
+    def run(self):
+        logger.info('RX worker started')
+
+        successive_errors = 0
+        data = bytes()
+
+        outstanding_command = None
+        outstanding_command_response_lines = []
+
+        while not self._termination_condition():
+            try:
+                new_data, ts_mono, ts_real = self._read_port()
+                data += new_data
+
+                # Checking the command queue and handling command timeouts
+                if outstanding_command is None:
+                    try:
+                        outstanding_command = _pending_command_line_execution_requests.get_nowait()
+                        outstanding_command_response_lines = []
+                    except queue.Empty:
+                        pass
+
+                if outstanding_command is not None:
+                    if outstanding_command.expired:
+                        response = IPCCommandLineExecutionResponse(outstanding_command.command, expired=True)
+                        self._output_queue.put_nowait(response)
+                        # Next command will be fetched on the next iteration
+                        outstanding_command = None
+                        outstanding_command_response_lines = []
+
+                # Processing in normal mode if there's no outstanding command; using much slower CLI mode otherwise
+                if outstanding_command is None:
+                    slcan_lines = data.split(ACK)
+                    slcan_lines, data = slcan_lines[:-1], slcan_lines[-1]
+                    for slc in slcan_lines:
+                        try:
+                            self._process_slcan_line(slc, local_ts_mono=ts_mono, local_ts_real=ts_real)
+                        except Exception:
+                            logger.warning('Could not process SLCAN line in SLCAN mode %r', slc, exc_info=True)
+                else:
+                    # TODO This branch contains dirty and poorly tested code. Refactor once the protocol matures.
+                    split_lines = data.split(CLI_END_OF_LINE)
+                    split_lines, data = split_lines[:-1], split_lines[-1]
+
+                    for ln in split_lines:
+                        tmp = ln.split(ACK)
+                        slcan_lines, cli_line = tmp[:-1], tmp[-1].strip()
+
+                        # Processing the SLCAN lines immediately
+                        for slc in slcan_lines:
+                            try:
+                                self._process_slcan_line(slc, local_ts_mono=ts_mono, local_ts_real=ts_real)
+                            except Exception:
+                                logger.warning('Could not process SLCAN line in CLI mode %r', slc, exc_info=True)
+
+                        # Processing the CLI line
+                        logger.debug('Processing CLI response line %r as...', cli_line)
+                        if len(outstanding_command_response_lines) == 0:
+                            if outstanding_command is not None and \
+                                    cli_line == outstanding_command.command.encode('utf8'):
+                                logger.debug('...echo')
+                                outstanding_command_response_lines.append(cli_line)
+                            else:
+                                # Otherwise we're receiving some CLI garbage before or after the command output, e.g.
+                                # end of the previous command output if it was missed
+                                logger.debug('...garbage')
+                        else:
+                            if cli_line == CLI_END_OF_TEXT:
+                                logger.debug('...end-of-text')
+                                # Shipping
+                                response = IPCCommandLineExecutionResponse(outstanding_command.command,
+                                                                           lines=outstanding_command_response_lines)
+                                self._output_queue.put_nowait(response)
+                                # Immediately fetching the next command, expiration is not checked
+                                try:
+                                    outstanding_command = _pending_command_line_execution_requests.get_nowait()
+                                except queue.Empty:
+                                    outstanding_command = None
+                                outstanding_command_response_lines = []
+                            else:
+                                logger.debug('...mid response')
+                                outstanding_command_response_lines.append(cli_line)
+
+                successive_errors = 0
+            except Exception as ex:
+                # TODO: handle the case when the port is closed
+                logger.error('RX thread error %d of %d',
+                             successive_errors, MAX_SUCCESSIVE_ERRORS_TO_GIVE_UP, exc_info=True)
+
+                try:
+                    self._output_queue.put_nowait(ex)
+                except Exception:
+                    pass
+
+                successive_errors += 1
+                if successive_errors >= MAX_SUCCESSIVE_ERRORS_TO_GIVE_UP:
                     break
 
-                # Now, pos points to the beginning of the next message - parse it
-                try:
-                    id_len = 8 if buf[pos] == b'T'[0] else 3
-
-                    available_length = buf_len - pos
-                    if available_length < id_len + 2:  # Shortest message is 't<ID>0'
-                        break
-
-                    # Parse the header
-                    packet_id = int(buf[pos + 1:pos + 1 + id_len].decode(), 16)
-                    if py2_compat:
-                        packet_len = int(buf[pos + 1 + id_len])             # This version is horribly slow
-                    else:
-                        packet_len = buf[pos + 1 + id_len] - 48             # Py3 version is faster
-
-                    if packet_len > 8:
-                        raise DriverError('Invalid packet length')
-
-                    # All kinds of weird and wonderful stuff
-                    # <type> <id> <dlc> <data>         [timestamp] \r
-                    # 1      3|8  1     packet_len * 2 [4]         1
-                    total_length = 2 + id_len + packet_len * 2 + 1
-                    if available_length < total_length:
-                        break
-                    with_timestamp = buf[pos + total_length - 1] in b'0123456789ABCDEF'
-                    if with_timestamp:
-                        total_length += 3                                   # 3 not 4 because we don't need \r
-                        if available_length < total_length:
-                            break
-
-                    packet_data = binascii.a2b_hex(buf[pos + 2 + id_len:pos + 2 + id_len + packet_len * 2])
-                    pos += total_length
-
-                    if with_timestamp:
-                        ts_hardware = int(buf[pos - 4:pos], 16) * 1e-3
-                    else:
-                        ts_hardware = None
-                except Exception:   # Message is malformed
-                    logger.warning('Could not parse SLCAN stream [%r]', buf[pos:], exc_info=True)
-                    pos += 1        # Continue from the next position
-                else:
-                    # Converting the hardware timestamp into the local clock domains
-                    if ts_hardware is not None:
-                        ts_mono = ts_estimator_mono.update(ts_hardware, local_ts_mono)
-                        ts_real = ts_estimator_real.update(ts_hardware, local_ts_real)
-                    else:
-                        ts_mono = local_ts_mono
-                        ts_real = local_ts_real
-
-                    frame = CANFrame(packet_id, packet_data, (id_len == 8), ts_monotonic=ts_mono, ts_real=ts_real)
-                    rx_queue.put_nowait(frame)
-
-            # All data that could be parsed is already parsed - discard everything up to the current pos
-            buf = buf[pos:]
-
-            # Resetting error counter on a successful iteration
-            successive_errors = 0
-        except Exception as ex:
-            # TODO: handle the case when the port is closed
-            logger.error('RX thread error, buffer discarded; error count: %d of %d',
-                         successive_errors, MAX_SUCCESSIVE_ERRORS_TO_GIVE_UP, exc_info=True)
-
-            # Discarding the buffer
-            buf = bytes()
-
-            # Propagating the exception to the parent process
-            try:
-                rx_queue.put_nowait(ex)
-            except Exception:
-                pass
-
-            # Termination condition - bail if too many errors
-            successive_errors += 1
-            if successive_errors >= MAX_SUCCESSIVE_ERRORS_TO_GIVE_UP:
-                break
-
-    logger.info('RX thread is exiting')
+        logger.info('RX worker is stopping')
 
 
 def _send_frame(conn, frame):
@@ -283,6 +392,13 @@ def _send_frame(conn, frame):
     conn.flush()
 
 
+def _execute_command(conn, command):
+    logger.debug('Executing command line %r', command.command)
+    conn.write(command.command.encode('ascii') + CLI_END_OF_LINE)
+    conn.flush()
+    _pending_command_line_execution_requests.put(command)
+
+
 def _tx_thread(conn, rx_queue, tx_queue, termination_condition):
     queue_block_timeout = 0.1
 
@@ -292,6 +408,8 @@ def _tx_thread(conn, rx_queue, tx_queue, termination_condition):
 
             if isinstance(command, CANFrame):
                 _send_frame(conn, command)
+            elif isinstance(command, IPCCommandLineExecutionRequest):
+                _execute_command(conn, command)
             elif command == IPC_COMMAND_STOP:
                 break
             else:
@@ -362,8 +480,11 @@ def _io_process(device,
     should_exit = False
 
     def rx_thread_wrapper():
+        rx_worker = RxWorker(conn=conn, rx_queue=rx_queue,
+                             ts_estimator_mono=ts_estimator_mono, ts_estimator_real=ts_estimator_real,
+                             termination_condition=lambda: should_exit)
         try:
-            _rx_thread(conn, rx_queue, ts_estimator_mono, ts_estimator_real, lambda: should_exit)
+            rx_worker.run()
         except Exception as ex:
             logger.error('RX thread failed, exiting', exc_info=True)
             # Propagating the exception to the parent process
@@ -416,6 +537,8 @@ class SLCAN(AbstractDriver):
         self._rx_queue = multiprocessing.Queue(maxsize=RX_QUEUE_SIZE)
         self._tx_queue = multiprocessing.Queue(maxsize=TX_QUEUE_SIZE)
 
+        self._cli_command_requests = []     # List of tuples: (command, callback)
+
         # Removing all unused stuff, because it breaks inter process communications.
         kwargs = copy.copy(kwargs)
         keep_keys = inspect.getargspec(_io_process).args
@@ -462,24 +585,73 @@ class SLCAN(AbstractDriver):
 
     def receive(self, timeout=None):
         self._check_alive()
-        try:
-            # TODO this is a workaround. Zero timeout causes the IPC queue to ALWAYS throw queue.Empty!
-            if timeout is not None:
-                timeout = max(timeout, 0.001)
-            obj = self._rx_queue.get(timeout=timeout)
-        except queue.Empty:
-            return
 
-        if isinstance(obj, CANFrame):
-            self._rx_hook(obj)
-            return obj
-        elif isinstance(obj, Exception):    # Propagating exceptions from the IO process to the main process
-            raise obj
+        if timeout is None:
+            deadline = None
+        elif timeout == 0:
+            deadline = 0
         else:
-            raise DriverError('Unexpected entity in IPC channel: %r' % obj)
+            deadline = time.monotonic() + timeout
+
+        while True:
+            # Blockingly reading the queue
+            try:
+                if deadline is None:
+                    get_timeout = None
+                elif deadline == 0:
+                    # TODO this is a workaround. Zero timeout causes the IPC queue to ALWAYS throw queue.Empty!
+                    get_timeout = 1e-3
+                else:
+                    # TODO this is a workaround. Zero timeout causes the IPC queue to ALWAYS throw queue.Empty!
+                    get_timeout = max(1e-3, deadline - time.monotonic())
+
+                obj = self._rx_queue.get(timeout=get_timeout)
+            except queue.Empty:
+                return
+
+            # Handling the received thing
+            if isinstance(obj, CANFrame):
+                self._rx_hook(obj)
+                return obj
+
+            elif isinstance(obj, Exception):    # Propagating exceptions from the IO process to the main process
+                raise obj
+
+            elif isinstance(obj, IPCCommandLineExecutionResponse):
+                while len(self._cli_command_requests):
+                    (stored_command, stored_callback), self._cli_command_requests = \
+                        self._cli_command_requests[0], self._cli_command_requests[1:]
+                    if stored_command == obj.command:
+                        stored_callback(obj)
+                        break
+
+            else:
+                raise DriverError('Unexpected entity in IPC channel: %r' % obj)
+
+            # Termination condition
+            if deadline == 0:
+                break
+            elif deadline is not None:
+                if time.monotonic() >= deadline:
+                    return
 
     def send(self, message_id, message, extended=False):
         self._check_alive()
         frame = CANFrame(message_id, message, extended)
         self._tx_queue.put(frame)
         self._tx_hook(frame)
+
+    def execute_cli_command(self, command, callback, timeout=None):
+        """
+        Executes an arbitrary CLI command on the SLCAN adapter, assuming that the adapter supports CLI commands.
+        The callback will be invoked from the method receive() using same thread.
+        Args:
+            command:    Command as unicode string or bytes
+            callback:   A callable that accepts one argument.
+                        The argument is an instance of IPCCommandLineExecutionResponse
+            timeout:    Timeout in seconds. None to use default timeout.
+        """
+        self._check_alive()
+        request = IPCCommandLineExecutionRequest(command, timeout)
+        self._tx_queue.put(request)
+        self._cli_command_requests.append((command, callback))
