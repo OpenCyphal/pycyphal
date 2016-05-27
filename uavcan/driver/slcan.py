@@ -569,6 +569,29 @@ def _io_process(device,
 # Logic of the main process
 #
 class SLCAN(AbstractDriver):
+    """
+    Driver for SLCAN-compatible CAN bus adapters, with extension to support CLI commands.
+
+    Some info on SLCAN can be found here:
+        - Linux tree: drivers/net/can/slcan.c (http://lxr.free-electrons.com/source/drivers/net/can/slcan.c)
+        - https://files.zubax.com/docs/Generic_SLCAN_API.pdf
+        - http://www.can232.com/docs/canusb_manual.pdf
+        - http://www.fischl.de/usbtin/
+
+    The CLI extension allows to execute arbitrary CLI commands on the adapter. The commands differ from regular SLCAN
+    exchange in the following ways:
+        - CLI commands are echoed back.
+        - Every output line of a CLI command, including echo, is terminated with CR LF (\r\n).
+        - After the last line follows the ASCII End Of Text character (ETX, ^C, ASCII code 0x03) on a separate
+          line (terminated with CR LF).
+    Example:
+        Input command "stat\r\n" may produce the following output lines:
+        - Echo: "stat\r\n"
+        - Data: "First line\r\n", "Second line\r\n", ...
+        - End Of Text marker: "\x03\r\n"
+    Refer to https://docs.zubax.com for more info.
+    """
+
     def __init__(self, device_name, **kwargs):
         if not serial:
             raise RuntimeError("PySerial not imported; SLCAN is not available. Please install PySerial.")
