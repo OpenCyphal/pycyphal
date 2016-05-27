@@ -433,6 +433,11 @@ def _init_adapter(conn, bitrate):
             conn.write(b'O\r')
             conn.flush()
             _wait_for_ack()
+
+            # Clearing error flags
+            conn.write(b'F\r')
+            conn.flush()
+            _wait_for_ack()
         except Exception as ex:
             if num_retries > 0:
                 logger.error('Could not init SLCAN adapter, will retry; error was: %s', ex, exc_info=True)
@@ -448,7 +453,7 @@ def _init_adapter(conn, bitrate):
 
 
 def _stop_adapter(conn):
-    conn.write(b'C\r')
+    conn.write(b'C\r' * 10)
     conn.flush()
 
 
