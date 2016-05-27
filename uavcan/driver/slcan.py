@@ -118,83 +118,6 @@ _pending_command_line_execution_requests = queue.Queue()
 #
 # Logic of the IO process
 #
-# noinspection PyUnresolvedReferences
-def _raise_self_process_priority():
-    if RUNNING_ON_WINDOWS:
-        import win32api
-        import win32process
-        import win32con
-        handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, win32api.GetCurrentProcessId())
-        win32process.SetPriorityClass(handle, win32process.REALTIME_PRIORITY_CLASS)
-    else:
-        import os
-        os.nice(IO_PROCESS_NICENESS_INCREMENT)
-
-
-def _init_adapter(conn, bitrate):
-    def _wait_for_ack():
-        conn.timeout = ACK_TIMEOUT
-        while True:
-            b = conn.read(1)
-            if not b:
-                raise DriverError('SLCAN ACK timeout')
-            if b == NACK:
-                raise DriverError('SLCAN NACK in response')
-            if b == ACK:
-                break
-
-    speed_code = {
-        1000000: 8,
-        800000: 7,
-        500000: 6,
-        250000: 5,
-        125000: 4,
-        100000: 3,
-        50000: 2,
-        20000: 1,
-        10000: 0
-    }[bitrate if bitrate is not None else DEFAULT_BITRATE]
-
-    num_retries = 3
-    while True:
-        try:
-            # Sending an empty command in order to reset the adapter's command parser, then discarding all output
-            conn.write(b'\r')
-            try:
-                _wait_for_ack()
-            except DriverError:
-                pass
-            time.sleep(0.1)
-            conn.flushInput()
-
-            # Setting speed code
-            conn.write(('S%d\r' % speed_code).encode())
-            conn.flush()
-            _wait_for_ack()
-
-            # Opening the channel
-            conn.write(b'O\r')
-            conn.flush()
-            _wait_for_ack()
-        except Exception as ex:
-            if num_retries > 0:
-                logger.error('Could not init SLCAN adapter, will retry; error was: %s', ex, exc_info=True)
-            else:
-                raise ex
-            num_retries -= 1
-        else:
-            break
-
-    # Discarding all input again
-    time.sleep(0.1)
-    conn.flushInput()
-
-
-def _stop_adapter(conn):
-    conn.write(b'C\r')
-    conn.flush()
-
-
 class RxWorker:
     PY2_COMPAT = sys.version_info[0] < 3
     SELECT_TIMEOUT = 0.1
@@ -431,6 +354,83 @@ class TxWorker:
                     self._rx_queue.put_nowait(ex)
                 except Exception:
                     pass
+
+
+# noinspection PyUnresolvedReferences
+def _raise_self_process_priority():
+    if RUNNING_ON_WINDOWS:
+        import win32api
+        import win32process
+        import win32con
+        handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, True, win32api.GetCurrentProcessId())
+        win32process.SetPriorityClass(handle, win32process.REALTIME_PRIORITY_CLASS)
+    else:
+        import os
+        os.nice(IO_PROCESS_NICENESS_INCREMENT)
+
+
+def _init_adapter(conn, bitrate):
+    def _wait_for_ack():
+        conn.timeout = ACK_TIMEOUT
+        while True:
+            b = conn.read(1)
+            if not b:
+                raise DriverError('SLCAN ACK timeout')
+            if b == NACK:
+                raise DriverError('SLCAN NACK in response')
+            if b == ACK:
+                break
+
+    speed_code = {
+        1000000: 8,
+        800000: 7,
+        500000: 6,
+        250000: 5,
+        125000: 4,
+        100000: 3,
+        50000: 2,
+        20000: 1,
+        10000: 0
+    }[bitrate if bitrate is not None else DEFAULT_BITRATE]
+
+    num_retries = 3
+    while True:
+        try:
+            # Sending an empty command in order to reset the adapter's command parser, then discarding all output
+            conn.write(b'\r')
+            try:
+                _wait_for_ack()
+            except DriverError:
+                pass
+            time.sleep(0.1)
+            conn.flushInput()
+
+            # Setting speed code
+            conn.write(('S%d\r' % speed_code).encode())
+            conn.flush()
+            _wait_for_ack()
+
+            # Opening the channel
+            conn.write(b'O\r')
+            conn.flush()
+            _wait_for_ack()
+        except Exception as ex:
+            if num_retries > 0:
+                logger.error('Could not init SLCAN adapter, will retry; error was: %s', ex, exc_info=True)
+            else:
+                raise ex
+            num_retries -= 1
+        else:
+            break
+
+    # Discarding all input again
+    time.sleep(0.1)
+    conn.flushInput()
+
+
+def _stop_adapter(conn):
+    conn.write(b'C\r')
+    conn.flush()
 
 
 # noinspection PyBroadException
