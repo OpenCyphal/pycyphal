@@ -9,16 +9,23 @@
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os
-import sys
+import errno
 import fcntl
 import socket
 import struct
 import select
 import time
+import threading
 from logging import getLogger
 
-from .common import DriverError, CANFrame, AbstractDriver
-from.timestamp_estimator import TimestampEstimator
+from .common import DriverError, TxQueueFullError, CANFrame, AbstractDriver
+from .timestamp_estimator import TimestampEstimator
+
+try:
+    import queue
+except ImportError:
+    # noinspection PyPep8Naming,PyUnresolvedReferences
+    import Queue as queue
 
 logger = getLogger(__name__)
 
@@ -148,13 +155,23 @@ class SocketCAN(AbstractDriver):
     FRAME_FORMAT = '=IB3x8s'
     FRAME_SIZE = 16
     TIMEVAL_FORMAT = '@LL'
+    TX_QUEUE_SIZE = 1000
 
     def __init__(self, interface, **_extras):
         super(SocketCAN, self).__init__()
 
         self.socket = get_socket(interface)
-        self.poll = select.poll()
-        self.poll.register(self.socket.fileno())
+
+        self._poll_rx = select.poll()
+        self._poll_rx.register(self.socket.fileno(), select.POLLIN | select.POLLPRI | select.POLLERR)
+
+        self._writer_thread_should_stop = False
+        self._write_queue = queue.Queue(self.TX_QUEUE_SIZE)
+        self._write_feedback_queue = queue.Queue()
+
+        self._writer_thread = threading.Thread(target=self._writer_thread_loop, name='socketcan_writer')
+        self._writer_thread.daemon = True
+        self._writer_thread.start()
 
         # Timestamping
         if NATIVE_SOCKETCAN:
@@ -176,14 +193,60 @@ class SocketCAN(AbstractDriver):
         mono_to_real_offset = est_real - mono
         return value - mono_to_real_offset
 
-    def close(self, callback=None):
+    def _writer_thread_loop(self):
+        while not self._writer_thread_should_stop:
+            try:
+                frame = self._write_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            try:
+                while not self._writer_thread_should_stop:
+                    try:
+                        message_id = frame.id | (CAN_EFF_FLAG if frame.extended else 0)
+                        message_pad = bytes(frame.data) + b'\x00' * (8 - len(frame.data))
+                        raw_message = struct.pack(self.FRAME_FORMAT, message_id, len(frame.data), message_pad)
+
+                        self.socket.send(raw_message)
+
+                        frame.ts_monotonic = time.monotonic()
+                        frame.ts_real = time.time()
+                        self._write_feedback_queue.put(frame)
+                    except OSError as ex:
+                        if ex.errno == errno.ENOBUFS:
+                            time.sleep(0.0002)
+                        else:
+                            raise
+                    else:
+                        break
+            except Exception as ex:
+                self._write_feedback_queue.put(ex)
+
+    def _check_write_feedback(self):
+        try:
+            item = self._write_feedback_queue.get_nowait()
+        except queue.Empty:
+            return
+
+        if isinstance(item, Exception):
+            raise item
+
+        if isinstance(item, CANFrame):
+            self._tx_hook(item)
+        else:
+            raise DriverError('Unexpected item in write feedback queue: %r' % item)
+
+    def close(self):
+        self._writer_thread_should_stop = True
+        self._writer_thread.join()
         self.socket.close()
 
     def receive(self, timeout=None):
+        self._check_write_feedback()
+
         timeout = -1 if timeout is None else (timeout * 1000)
 
-        self.poll.modify(self.socket.fileno(), select.POLLIN | select.POLLPRI)
-        if self.poll.poll(timeout):
+        if self._poll_rx.poll(timeout):
             ts_real = None
             ts_mono = None
 
@@ -215,13 +278,8 @@ class SocketCAN(AbstractDriver):
             return frame
 
     def send(self, message_id, message, extended=False):
-        # TODO:
-        # Socket's buffer may be quite small. Writing to the socket when its buffer is full causes send() to throw.
-        # We should add a feeder thread to work around this problem.
-        if extended:
-            message_id |= CAN_EFF_FLAG
-
-        message_pad = bytes(message) + b'\x00' * (8 - len(message))
-        self.socket.send(struct.pack(self.FRAME_FORMAT, message_id, len(message), message_pad))
-
-        self._tx_hook(CANFrame(message_id, message, extended))
+        self._check_write_feedback()
+        try:
+            self._write_queue.put_nowait(CANFrame(message_id, message, extended))
+        except queue.Full:
+            raise TxQueueFullError()
