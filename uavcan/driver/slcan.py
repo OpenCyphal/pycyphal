@@ -277,7 +277,7 @@ class RxWorker:
                                 logger.debug('...end-of-text')
                                 # Shipping
                                 response = IPCCommandLineExecutionResponse(outstanding_command.command,
-                                                                           lines=outstanding_command_response_lines)
+                                                                           lines=outstanding_command_response_lines[1:])
                                 self._output_queue.put_nowait(response)
                                 # Immediately fetching the next command, expiration is not checked
                                 try:
