@@ -84,7 +84,7 @@ class IPCCommandLineExecutionRequest:
     def __init__(self, command, timeout=None):
         if isinstance(command, bytes):
             command = command.decode('utf8')
-        self.command = command.strip()
+        self.command = command.lstrip()
         self.monotonic_deadline = time.monotonic() + (timeout or self.DEFAULT_TIMEOUT)
 
     @property
@@ -99,7 +99,7 @@ class IPCCommandLineExecutionResponse:
                 return what.decode('utf8')
             return what
 
-        self.command = try_decode(command).strip()
+        self.command = try_decode(command)
         self.lines = [try_decode(ln) for ln in (lines or [])]
         self.expired = expired
 
@@ -257,7 +257,7 @@ class RxWorker:
                     # Processing the mix of SLCAN and CLI lines
                     for ln in split_lines:
                         tmp = ln.split(ACK)
-                        slcan_lines, cli_line = tmp[:-1], tmp[-1].strip()
+                        slcan_lines, cli_line = tmp[:-1], tmp[-1]
 
                         self._process_many_slcan_lines(slcan_lines, ts_mono=ts_mono, ts_real=ts_real)
 
@@ -584,6 +584,7 @@ class SLCAN(AbstractDriver):
         - Every output line of a CLI command, including echo, is terminated with CR LF (\r\n).
         - After the last line follows the ASCII End Of Text character (ETX, ^C, ASCII code 0x03) on a separate
           line (terminated with CR LF).
+        - CLI commands must not begin with whitespace characters.
     Example:
         Input command "stat\r\n" may produce the following output lines:
         - Echo: "stat\r\n"
@@ -726,4 +727,5 @@ class SLCAN(AbstractDriver):
             self._tx_queue.put(request, timeout=timeout)
         except queue.Full:
             raise TxQueueFullError()
-        self._cli_command_requests.append((command, callback))
+        # The command could be modified by the IPCCommandLineExecutionRequest
+        self._cli_command_requests.append((request.command, callback))
