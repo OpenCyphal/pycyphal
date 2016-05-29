@@ -334,7 +334,7 @@ class TxWorker:
         self._conn.flush()
 
     def _execute_command(self, command):
-        logger.debug('Executing command line %r', command.command)
+        logger.info('Executing command line %r', command.command)
         # It is extremely important to write into the queue first, in order to make the RX worker expect the response!
         _pending_command_line_execution_requests.put(command)
         self._conn.write(command.command.encode('ascii') + CLI_END_OF_LINE)
@@ -460,12 +460,22 @@ def _stop_adapter(conn):
 def _io_process(device,
                 tx_queue,
                 rx_queue,
+                log_queue,
                 parent_pid,
                 bitrate=None,
                 baudrate=None,
                 max_adapter_clock_rate_error_ppm=None,
                 fixed_rx_delay=None,
                 max_estimated_rx_delay_to_resync=None):
+    try:
+        # noinspection PyUnresolvedReferences
+        from logging.handlers import QueueHandler
+    except ImportError:
+        pass                                    # Python 2.7, no logging for you
+    else:
+        getLogger().addHandler(QueueHandler(log_queue))
+        getLogger().setLevel('INFO')
+
     logger.info('IO process started with PID %r', os.getpid())
 
     # We don't need stdin
@@ -598,8 +608,11 @@ class SLCAN(AbstractDriver):
 
         super(SLCAN, self).__init__()
 
+        self._stopping = False
+
         self._rx_queue = multiprocessing.Queue(maxsize=RX_QUEUE_SIZE)
         self._tx_queue = multiprocessing.Queue(maxsize=TX_QUEUE_SIZE)
+        self._log_queue = multiprocessing.Queue()
 
         self._cli_command_requests = []     # List of tuples: (command, callback)
 
@@ -612,6 +625,7 @@ class SLCAN(AbstractDriver):
 
         kwargs['rx_queue'] = self._rx_queue
         kwargs['tx_queue'] = self._tx_queue
+        kwargs['log_queue'] = self._log_queue
         kwargs['parent_pid'] = os.getpid()
 
         self._proc = multiprocessing.Process(target=_io_process, name='slcan_io_process',
@@ -636,10 +650,35 @@ class SLCAN(AbstractDriver):
 
         self._check_alive()
 
+        # https://docs.python.org/3/howto/logging-cookbook.html
+        self._logging_thread = threading.Thread(target=self._logging_proxy_loop, name='slcan_log_proxy')
+        self._logging_thread.daemon = True
+        self._logging_thread.start()
+
+    # noinspection PyBroadException
+    def _logging_proxy_loop(self):
+        while self._proc.is_alive() and not self._stopping:
+            try:
+                try:
+                    record = self._log_queue.get(timeout=0.5)
+                except queue.Empty:
+                    continue
+                getLogger(record.name).handle(record)
+            except Exception as ex:
+                try:
+                    print('SLCAN logging proxy failed:', ex, file=sys.stderr)
+                except Exception:
+                    pass
+
+        logger.info('Logging proxy thread is stopping')
+
     def close(self):
         if self._proc.is_alive():
             self._tx_queue.put(IPC_COMMAND_STOP)
             self._proc.join()
+
+        self._stopping = True
+        self._logging_thread.join()
 
     def __del__(self):
         self.close()
@@ -689,6 +728,8 @@ class SLCAN(AbstractDriver):
                     if stored_command == obj.command:
                         stored_callback(obj)
                         break
+                    else:
+                        logger.error('Mismatched CLI response: expected %r, got %r', stored_command, obj.command)
 
             else:
                 raise DriverError('Unexpected entity in IPC channel: %r' % obj)
