@@ -227,20 +227,17 @@ class RxWorker:
                 data += new_data
 
                 # Checking the command queue and handling command timeouts
-                if outstanding_command is None:
+                while outstanding_command is None:
                     try:
                         outstanding_command = _pending_command_line_execution_requests.get_nowait()
                         outstanding_command_response_lines = []
                     except queue.Empty:
-                        pass
+                        break
 
-                if outstanding_command is not None:
                     if outstanding_command.expired:
                         response = IPCCommandLineExecutionResponse(outstanding_command.command, expired=True)
                         self._output_queue.put_nowait(response)
-                        # Next command will be fetched on the next iteration
                         outstanding_command = None
-                        outstanding_command_response_lines = []
 
                 # Processing in normal mode if there's no outstanding command; using much slower CLI mode otherwise
                 if outstanding_command is None:
@@ -248,6 +245,7 @@ class RxWorker:
                     slcan_lines, data = slcan_lines[:-1], slcan_lines[-1]
 
                     self._process_many_slcan_lines(slcan_lines, ts_mono=ts_mono, ts_real=ts_real)
+
                     del slcan_lines
                 else:
                     # TODO This branch contains dirty and poorly tested code. Refactor once the protocol matures.
@@ -337,9 +335,10 @@ class TxWorker:
 
     def _execute_command(self, command):
         logger.debug('Executing command line %r', command.command)
+        # It is extremely important to write into the queue first, in order to make the RX worker expect the response!
+        _pending_command_line_execution_requests.put(command)
         self._conn.write(command.command.encode('ascii') + CLI_END_OF_LINE)
         self._conn.flush()
-        _pending_command_line_execution_requests.put(command)
 
     def run(self):
         while True:
