@@ -490,13 +490,10 @@ def _io_process(device,
         pass
 
     def is_parent_process_alive():
-        # Works on any platform
-        try:
-            os.kill(parent_pid, 0)
-            return True
-        except OSError:
-            logger.info('Parent process is dead')
-            return False
+        if RUNNING_ON_WINDOWS:
+            return True             # TODO: Find a working solution for Windows (os.kill(ppid, 0) doesn't work)
+        else:
+            return os.getppid() == parent_pid
 
     try:
         _raise_self_process_priority()
@@ -562,9 +559,9 @@ def _io_process(device,
         tx_worker = TxWorker(conn=conn,
                              rx_queue=rx_queue,
                              tx_queue=tx_queue,
-                             termination_condition=lambda: (should_exit or not
-                                                            rxthd.is_alive() or not
-                                                            is_parent_process_alive()))
+                             termination_condition=lambda: (should_exit or
+                                                            not rxthd.is_alive() or
+                                                            not is_parent_process_alive()))
         tx_worker.run()
     finally:
         logger.info('IO process is terminating...')
