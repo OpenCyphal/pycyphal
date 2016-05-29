@@ -227,17 +227,20 @@ class RxWorker:
                 data += new_data
 
                 # Checking the command queue and handling command timeouts
-                while outstanding_command is None:
-                    try:
-                        outstanding_command = _pending_command_line_execution_requests.get_nowait()
-                        outstanding_command_response_lines = []
-                    except queue.Empty:
-                        break
+                while True:
+                    if outstanding_command is None:
+                        try:
+                            outstanding_command = _pending_command_line_execution_requests.get_nowait()
+                            outstanding_command_response_lines = []
+                        except queue.Empty:
+                            break
 
                     if outstanding_command.expired:
-                        response = IPCCommandLineExecutionResponse(outstanding_command.command, expired=True)
-                        self._output_queue.put_nowait(response)
+                        self._output_queue.put_nowait(IPCCommandLineExecutionResponse(outstanding_command.command,
+                                                                                      expired=True))
                         outstanding_command = None
+                    else:
+                        break
 
                 # Processing in normal mode if there's no outstanding command; using much slower CLI mode otherwise
                 if outstanding_command is None:
