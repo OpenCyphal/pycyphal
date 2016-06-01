@@ -47,7 +47,7 @@ except AttributeError:
 #
 # Constants and defaults
 #
-RX_QUEUE_SIZE = 100000
+RX_QUEUE_SIZE = 32767   # http://stackoverflow.com/questions/5900985/multiprocessing-queue-maxsize-limit-is-32767
 TX_QUEUE_SIZE = 1000
 
 TIMESTAMP_OVERFLOW_PERIOD = 60          # Defined by SLCAN protocol
