@@ -65,7 +65,7 @@ DEFAULT_MAX_ADAPTER_CLOCK_RATE_ERROR_PPM = 200      # Suits virtually all adapte
 DEFAULT_FIXED_RX_DELAY = 0.0002                     # Good for USB, could be higher for UART
 DEFAULT_MAX_ESTIMATED_RX_DELAY_TO_RESYNC = 0.1      # When clock divergence exceeds this value, resync
 
-IO_PROCESS_INIT_TIMEOUT = 5
+IO_PROCESS_INIT_TIMEOUT = 10
 IO_PROCESS_NICENESS_INCREMENT = -18
 
 MAX_SUCCESSIVE_ERRORS_TO_GIVE_UP = 1000
@@ -236,8 +236,8 @@ class RxWorker:
                             break
 
                     if outstanding_command.expired:
-                        self._output_queue.put_nowait(IPCCommandLineExecutionResponse(outstanding_command.command,
-                                                                                      expired=True))
+                        self._output_queue.put(IPCCommandLineExecutionResponse(outstanding_command.command,
+                                                                               expired=True))
                         outstanding_command = None
                     else:
                         break
@@ -279,7 +279,7 @@ class RxWorker:
                                 # Shipping
                                 response = IPCCommandLineExecutionResponse(outstanding_command.command,
                                                                            lines=outstanding_command_response_lines[1:])
-                                self._output_queue.put_nowait(response)
+                                self._output_queue.put(response)
                                 # Immediately fetching the next command, expiration is not checked
                                 try:
                                     outstanding_command = _pending_command_line_execution_requests.get_nowait()
@@ -533,7 +533,7 @@ def _io_process(device,
         except Exception as ex:
             logger.error('RX thread failed, exiting', exc_info=True)
             # Propagating the exception to the parent process
-            rx_queue.put_nowait(ex)
+            rx_queue.put(ex)
 
     rxthd = threading.Thread(target=rx_thread_wrapper, name='slcan_rx')
     rxthd.daemon = True
@@ -542,7 +542,7 @@ def _io_process(device,
         conn = serial.Serial(device, baudrate or DEFAULT_BAUDRATE)
     except Exception as ex:
         logger.error('Could not open port', exc_info=True)
-        rx_queue.put_nowait(ex)
+        rx_queue.put(ex)
         return
 
     #
@@ -563,6 +563,9 @@ def _io_process(device,
                                                             not rxthd.is_alive() or
                                                             not is_parent_process_alive()))
         tx_worker.run()
+    except Exception as ex:
+        logger.error('IO process failed', exc_info=True)
+        rx_queue.put(ex)
     finally:
         logger.info('IO process is terminating...')
         should_exit = True
@@ -616,6 +619,10 @@ class SLCAN(AbstractDriver):
 
         self._cli_command_requests = []     # List of tuples: (command, callback)
 
+        # https://docs.python.org/3/howto/logging-cookbook.html
+        self._logging_thread = threading.Thread(target=self._logging_proxy_loop, name='slcan_log_proxy')
+        self._logging_thread.daemon = True
+
         # Removing all unused stuff, because it breaks inter process communications.
         kwargs = copy.copy(kwargs)
         keep_keys = inspect.getargspec(_io_process).args
@@ -633,6 +640,9 @@ class SLCAN(AbstractDriver):
         self._proc.daemon = True
         self._proc.start()
 
+        # The logging thread should be started immediately AFTER the IO process is started
+        self._logging_thread.start()
+
         deadline = time.monotonic() + IO_PROCESS_INIT_TIMEOUT
         while True:
             try:
@@ -640,20 +650,15 @@ class SLCAN(AbstractDriver):
                 if sig == IPC_SIGNAL_INIT_OK:
                     break
                 if isinstance(sig, Exception):
-                    self._tx_queue.put_nowait(IPC_COMMAND_STOP)
+                    self._tx_queue.put(IPC_COMMAND_STOP, timeout=IO_PROCESS_INIT_TIMEOUT)
                     raise sig
             except queue.Empty:
                 pass
             if time.monotonic() > deadline:
-                self._tx_queue.put_nowait(IPC_COMMAND_STOP)
+                self._tx_queue.put(IPC_COMMAND_STOP, timeout=IO_PROCESS_INIT_TIMEOUT)
                 raise DriverError('IO process did not confirm initialization')
 
         self._check_alive()
-
-        # https://docs.python.org/3/howto/logging-cookbook.html
-        self._logging_thread = threading.Thread(target=self._logging_proxy_loop, name='slcan_log_proxy')
-        self._logging_thread.daemon = True
-        self._logging_thread.start()
 
     # noinspection PyBroadException
     def _logging_proxy_loop(self):
