@@ -179,15 +179,7 @@ class RxWorker:
         # Parsing the payload, detecting timestamp
         # <type> <id> <dlc> <data>         [timestamp]
         # 1      3|8  1     packet_len * 2 [4]
-        total_length = 2 + id_len + packet_len * 2
-        if line_len > total_length:
-            with_timestamp = True
-            total_length += 4
-        else:
-            with_timestamp = False
-
-        if line_len != total_length:
-            raise DriverError('Unexpected length of SLCAN line')
+        with_timestamp = line_len > (2 + id_len + packet_len * 2)
 
         packet_data = binascii.a2b_hex(line[2 + id_len:2 + id_len + packet_len * 2])
 
