@@ -437,7 +437,10 @@ def _init_adapter(conn, bitrate):
             # Clearing error flags
             send_command(b'F')
             conn.flush()
-            wait_for_ack()
+            try:
+                wait_for_ack()
+            except DriverError as ex:
+                logger.warning('Init: Could not clear error flags (command not supported by the CAN adapter?): %s', ex)
         except Exception as ex:
             if num_retries > 0:
                 logger.error('Could not init SLCAN adapter, will retry; error was: %s', ex, exc_info=True)
