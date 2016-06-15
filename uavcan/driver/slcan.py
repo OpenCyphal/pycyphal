@@ -376,7 +376,8 @@ def _raise_self_process_priority():
 
 
 def _init_adapter(conn, bitrate):
-    def _wait_for_ack():
+    def wait_for_ack():
+        logger.info('Init: Waiting for ACK...')
         conn.timeout = ACK_TIMEOUT
         while True:
             b = conn.read(1)
@@ -386,6 +387,11 @@ def _init_adapter(conn, bitrate):
                 raise DriverError('SLCAN NACK in response')
             if b == ACK:
                 break
+            logger.info('Init: Ignoring byte %r while waiting for ACK', b)
+
+    def send_command(cmd):
+        logger.info('Init: Sending command %r', cmd)
+        conn.write(cmd + b'\r')
 
     speed_code = {
         1000000: 8,
@@ -403,35 +409,35 @@ def _init_adapter(conn, bitrate):
     while True:
         try:
             # Sending an empty command in order to reset the adapter's command parser, then discarding all output
-            conn.write(b'\r')
+            send_command(b'')
             try:
-                _wait_for_ack()
+                wait_for_ack()
             except DriverError:
                 pass
             time.sleep(0.1)
             conn.flushInput()
 
             # Making sure the channel is closed - some adapters may refuse to re-open if the channel is already open
-            conn.write(b'C\r')
+            send_command(b'C')
             try:
-                _wait_for_ack()
+                wait_for_ack()
             except DriverError:
                 pass
 
             # Setting speed code
-            conn.write(('S%d\r' % speed_code).encode())
+            send_command(('S%d' % speed_code).encode())
             conn.flush()
-            _wait_for_ack()
+            wait_for_ack()
 
             # Opening the channel
-            conn.write(b'O\r')
+            send_command(b'O')
             conn.flush()
-            _wait_for_ack()
+            wait_for_ack()
 
             # Clearing error flags
-            conn.write(b'F\r')
+            send_command(b'F')
             conn.flush()
-            _wait_for_ack()
+            wait_for_ack()
         except Exception as ex:
             if num_retries > 0:
                 logger.error('Could not init SLCAN adapter, will retry; error was: %s', ex, exc_info=True)
