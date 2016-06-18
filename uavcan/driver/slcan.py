@@ -152,7 +152,7 @@ class RxWorker:
         return data, ts_mono, ts_real
 
     def _process_slcan_line(self, line, local_ts_mono, local_ts_real):
-        line = line.strip()
+        line = line.strip().strip(NACK).strip(CLI_END_OF_TEXT)
         line_len = len(line)
 
         if line_len < 1:
