@@ -70,6 +70,12 @@ class CentralizedServer(object):
             res = c.fetchone()
             return res[0] if res else None
 
+        def is_known_node_id(self, node_id):
+            assert isinstance(node_id, int)
+            c = self.db.cursor()
+            c.execute('''select count(*) from allocation where node_id = ?''', (node_id,))
+            return c.fetchone()[0] > 0
+
         def get_entries(self):
             c = self.db.cursor()
             c.execute('''select unique_id, node_id from allocation order by ts desc''')
@@ -182,7 +188,7 @@ class CentralizedServer(object):
             # ID equal to or higher than the one that was requested
             if node_requested_id and not node_allocated_id:
                 for node_id in range(node_requested_id, self._dynamic_node_id_range[1]):
-                    if not self._allocation_table.get_unique_id(node_id):
+                    if not self._allocation_table.is_known_node_id(node_id):
                         node_allocated_id = node_id
                         break
 
@@ -190,13 +196,13 @@ class CentralizedServer(object):
             # ID was zero), allocate the highest unallocated node ID
             if not node_allocated_id:
                 for node_id in range(self._dynamic_node_id_range[1], self._dynamic_node_id_range[0], -1):
-                    if not self._allocation_table.get_unique_id(node_id):
+                    if not self._allocation_table.is_known_node_id(node_id):
                         node_allocated_id = node_id
                         break
 
-            self._allocation_table.set(self._query, node_allocated_id)
-
             if node_allocated_id:
+                self._allocation_table.set(self._query, node_allocated_id)
+
                 response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
                 response.first_part_of_unique_id = 0
                 response.node_id = node_allocated_id
