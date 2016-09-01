@@ -120,10 +120,10 @@ def load_dsdl(*paths, **args):
         if not args.get("exclude_dist", None):
             dsdl_path = pkg_resources.resource_filename(__name__, "dsdl_files")  # @UndefinedVariable
             paths = [os.path.join(dsdl_path, "uavcan")] + paths
-            custom_path = os.path.join(os.path.expanduser("~"),"uavcan_custom_types")
+            custom_path = os.path.join(os.path.expanduser("~"), "uavcan_vendor_specific_types")
             if os.path.isdir(custom_path):
-                paths = [f for f in [os.path.join(custom_path,f) for f in os.listdir(custom_path)] 
-                            if os.path.isdir(f)] + paths
+                paths += [f for f in [os.path.join(custom_path, f) for f in os.listdir(custom_path)]
+                          if os.path.isdir(f)]
     except Exception:
         pass
 
