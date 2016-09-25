@@ -280,6 +280,8 @@ class PrimitiveValue(BaseValue):
             self._bits = format(new_value, "0" + str(self._type.bitlen) + "b")
         elif self._type.kind == dsdl.PrimitiveType.KIND_SIGNED_INT:
             new_value = cast(new_value, self._type)
+            if new_value < 0:                       # Computing two's complement for negatives
+                new_value += 2 ** self._type.bitlen
             self._bits = format(new_value, "0" + str(self._type.bitlen) + "b")
         elif self._type.kind == dsdl.PrimitiveType.KIND_FLOAT:
             new_value = cast(new_value, self._type)
