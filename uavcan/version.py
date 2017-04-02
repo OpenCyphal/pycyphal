@@ -7,4 +7,4 @@
 #         Ben Dyer <ben_dyer@mac.com>
 #
 
-__version__ = '1.0.0.dev25'
+__version__ = '1.0.0.dev26'
