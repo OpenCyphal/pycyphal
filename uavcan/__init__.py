@@ -45,6 +45,7 @@ class UAVCANException(Exception):
 from .version import __version__
 import uavcan.node as node
 from uavcan.node import make_node
+from uavcan.driver import make_driver
 import uavcan.dsdl as dsdl
 import uavcan.transport as transport
 from uavcan.transport import get_uavcan_data_type, \
