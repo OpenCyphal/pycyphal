@@ -112,6 +112,24 @@ def union_tag_len(x):
     return int(math.ceil(math.log(len(x), 2))) or 1
 
 
+def enum_mark_last(iterable, start=0):
+    """
+    Returns a generator over iterable that tells whether the current item is the last one.
+    Usage:
+        >>> iterable = range(10)
+        >>> for index, is_last, item in enum_mark_last(iterable):
+        >>>     print(index, item, end='\n' if is_last else ', ')
+    """
+    it = iter(iterable)
+    count = start
+    last = next(it)
+    for val in it:
+        yield count, False, last
+        last = val
+        count += 1
+    yield count, True, last
+
+
 class Float32IntegerUnion(object):
     """
     Yes we've got ourselves a tiny little union here:
@@ -214,14 +232,14 @@ class BaseValue(object):
         self._type = _uavcan_type
         self._bits = None
 
-    def _unpack(self, stream):
+    def _unpack(self, stream, tao):
         if self._type.bitlen:
             self._bits = be_from_le_bits(stream, self._type.bitlen)
             return stream[self._type.bitlen:]
         else:
             return stream
 
-    def _pack(self):
+    def _pack(self, tao):
         if self._bits:
             return le_from_be_bits(self._bits, self._type.bitlen)
         else:
@@ -229,10 +247,10 @@ class BaseValue(object):
 
 
 class VoidValue(BaseValue):
-    def _unpack(self, stream):
+    def _unpack(self, stream, tao):
         return stream[self._type.bitlen:]
 
-    def _pack(self):
+    def _pack(self, tao):
         return "0" * self._type.bitlen
 
 
@@ -298,9 +316,8 @@ class PrimitiveValue(BaseValue):
 
 # noinspection PyProtectedMember
 class ArrayValue(BaseValue, collections.MutableSequence):
-    def __init__(self, _uavcan_type, _tao, *args, **kwargs):
+    def __init__(self, _uavcan_type, *args, **kwargs):
         super(ArrayValue, self).__init__(_uavcan_type, *args, **kwargs)
-        self._tao = _tao if self._type.value_type.get_min_bitlen() >= 8 else False
 
         if isinstance(self._type.value_type, dsdl.PrimitiveType):
             self.__item_ctor = functools.partial(PrimitiveValue, self._type.value_type)
@@ -315,7 +332,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             self.__items = []
 
     def __repr__(self):
-        return "ArrayValue(type={0!r}, tao={1!r}, items={2!r})".format(self._type, self._tao, self.__items)
+        return "ArrayValue(type={0!r}, items={1!r})".format(self._type, self.__items)
 
     def __str__(self):
         if self._type.is_string_like:
@@ -374,42 +391,46 @@ class ArrayValue(BaseValue, collections.MutableSequence):
         else:
             self.__items.insert(idx, value)
 
-    def _unpack(self, stream):
+    def _unpack(self, stream, tao):
         if self._type.mode == dsdl.ArrayType.MODE_STATIC:
-            for i in range(self._type.max_size):
-                stream = self.__items[i]._unpack(stream)
-        elif self._tao:
+            for _, last, i in enum_mark_last(range(self._type.max_size)):
+                stream = self.__items[i]._unpack(stream, tao and last)
+
+        elif tao and self._type.value_type.get_min_bitlen() >= 8:
             del self[:]
             while len(stream) >= 8:
                 new_item = self.__item_ctor()
-                stream = new_item._unpack(stream)
+                stream = new_item._unpack(stream, False)
                 self.__items.append(new_item)
-            stream = ""
+            stream = ''
+
         else:
             del self[:]
             count_width = int(math.ceil(math.log(self._type.max_size, 2))) or 1
             count = int(stream[0:count_width], 2)
             stream = stream[count_width:]
-            for i in range(count):
+            for _, last, i in enum_mark_last(range(count)):
                 new_item = self.__item_ctor()
-                stream = new_item._unpack(stream)
+                stream = new_item._unpack(stream, tao and last)
                 self.__items.append(new_item)
 
         return stream
 
-    def _pack(self):
+    def _pack(self, tao):
+        self.__items = self.__items[:self._type.max_size]   # Constrain max len
+
         if self._type.mode == dsdl.ArrayType.MODE_STATIC:
-            items = "".join(i._pack() for i in self.__items)
-            if len(self) < self._type.max_size:
-                empty_item = self.__item_ctor()
-                items += "".join(empty_item._pack() for _ in range(self._type.max_size - len(self)))
-            return items
-        elif self._tao:
-            return "".join(i._pack() for i in self.__items)
+            while len(self) < self._type.max_size:              # Constrain min len
+                self.__items.append(self.new_item())
+            return ''.join(i._pack(tao and last) for _, last, i in enum_mark_last(self.__items))
+
+        elif tao and self._type.value_type.get_min_bitlen() >= 8:
+            return ''.join(i._pack(False) for i in self.__items)
+
         else:
             count_width = int(math.ceil(math.log(self._type.max_size, 2))) or 1
-            count = format(len(self), "0{0:1d}b".format(count_width))
-            return count + "".join(i._pack() for i in self.__items)
+            count = format(len(self), '0{0:1d}b'.format(count_width))
+            return count + ''.join(i._pack(tao and last) for _, last, i in enum_mark_last(self.__items))
 
     def from_bytes(self, value):
         del self[:]
@@ -435,7 +456,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
 # noinspection PyProtectedMember
 class CompoundValue(BaseValue):
-    def __init__(self, _uavcan_type, _mode=None, _tao=True, *args, **kwargs):
+    def __init__(self, _uavcan_type, _mode=None, *args, **kwargs):
         self.__dict__["_fields"] = collections.OrderedDict()
         self.__dict__["_constants"] = {}
         super(CompoundValue, self).__init__(_uavcan_type, *args, **kwargs)
@@ -465,15 +486,14 @@ class CompoundValue(BaseValue):
             self._constants[constant.name] = constant.value
 
         for idx, field in enumerate(source_fields):
-            atao = field is source_fields[-1] and _tao
             if isinstance(field.type, dsdl.VoidType):
                 self._fields["_void_{0}".format(idx)] = VoidValue(field.type)
             elif isinstance(field.type, dsdl.PrimitiveType):
                 self._fields[field.name] = PrimitiveValue(field.type)
             elif isinstance(field.type, dsdl.ArrayType):
-                self._fields[field.name] = ArrayValue(field.type, _tao=atao)
+                self._fields[field.name] = ArrayValue(field.type)
             elif isinstance(field.type, dsdl.CompoundType):
-                self._fields[field.name] = CompoundValue(field.type, _tao=atao)
+                self._fields[field.name] = CompoundValue(field.type)
 
         for name, value in kwargs.items():
             if name.startswith('_'):
@@ -501,6 +521,7 @@ class CompoundValue(BaseValue):
         result = cls.__new__(cls)
         memo[id(self)] = result
         for k, v in self.__dict__.items():
+            # noinspection PyArgumentList
             result.__dict__[k] = copy.deepcopy(v, memo)
         return result
 
@@ -562,24 +583,24 @@ class CompoundValue(BaseValue):
         else:
             super(CompoundValue, self).__setattr__(attr, value)
 
-    def _unpack(self, stream):
+    def _unpack(self, stream, tao=True):
         if self._is_union:
             tag_len = union_tag_len(self._fields)
             self._union_field = list(self._fields.keys())[int(stream[0:tag_len], 2)]
-            stream = self._fields[self._union_field]._unpack(stream[tag_len:])
+            stream = self._fields[self._union_field]._unpack(stream[tag_len:], tao)
         else:
-            for field in self._fields.values():
-                stream = field._unpack(stream)
+            for _, last, field in enum_mark_last(self._fields.values()):
+                stream = field._unpack(stream, tao and last)
         return stream
 
-    def _pack(self):
+    def _pack(self, tao=True):
         if self._is_union:
             keys = list(self._fields.keys())
             field = self._union_field or keys[0]
             tag = keys.index(field)
-            return format(tag, "0" + str(union_tag_len(self._fields)) + "b") + self._fields[field]._pack()
+            return format(tag, '0' + str(union_tag_len(self._fields)) + 'b') + self._fields[field]._pack(tao)
         else:
-            return "".join(field._pack() for field in self._fields.values())
+            return ''.join(field._pack(tao and last) for _, last, field in enum_mark_last(self._fields.values()))
 
 
 class Frame(object):
@@ -597,7 +618,7 @@ class Frame(object):
 
     @property
     def toggle(self):
-        return bool(self.bytes[-1] & 0x20) if self.bytes else 0
+        return bool(self.bytes[-1] & 0x20) if self.bytes else False
 
     @property
     def end_of_transfer(self):
