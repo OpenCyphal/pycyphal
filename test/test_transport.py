@@ -393,7 +393,7 @@ class TestArrayBasic(unittest.TestCase):
         ]
 
         def custom_type_factory(*args, **kwargs):
-            return transport.CompoundValue(custom_type, _tao=True, *args, **kwargs)
+            return transport.CompoundValue(custom_type, *args, **kwargs)
         custom_type._instantiate = custom_type_factory
 
         self.a1_type = parser.ArrayType(
@@ -427,9 +427,9 @@ class TestArrayBasic(unittest.TestCase):
         self.assertEqual(self.a3_type.get_max_bitlen(), (8 + 16 + 5 + 3) * 2)
 
     def test_representation(self):
-        a1 = transport.ArrayValue(self.a1_type, _tao=False)
-        a2 = transport.ArrayValue(self.a2_type, _tao=False)
-        a3 = transport.ArrayValue(self.a3_type, _tao=True)
+        a1 = transport.ArrayValue(self.a1_type)
+        a2 = transport.ArrayValue(self.a2_type)
+        a3 = transport.ArrayValue(self.a3_type)
         for i in range(4):
             a1[i] = i
         for i in range(2):
@@ -442,15 +442,15 @@ class TestArrayBasic(unittest.TestCase):
             self.assertEqual(len(a3[i].c), 5)
 
         self.assertEqual(
-            transport.format_bits(a1._pack()),
+            transport.format_bits(a1._pack(False)),
             "00000000 00000001 00000010 00000011"
         )
         self.assertEqual(
-            transport.format_bits(a2._pack()),
+            transport.format_bits(a2._pack(False)),
             "00000000 00000000 00000000 00111100"
         )
         self.assertEqual(
-            transport.format_bits(a3._pack()),
+            transport.format_bits(a3._pack(True)),
             "00000000 00000000 00000000 10101010 " +
             "00000001 00000000 00111100 10101010"
         )
@@ -486,7 +486,7 @@ class TestVoid(unittest.TestCase):
         ]
 
         def custom_type_factory(*args, **kwargs):
-            return transport.CompoundValue(self.custom_type, _tao=True, *args,
+            return transport.CompoundValue(self.custom_type, *args,
                                            **kwargs)
         self.custom_type._instantiate = custom_type_factory
 
@@ -497,14 +497,14 @@ class TestVoid(unittest.TestCase):
     def test_representation(self):
         c1 = self.custom_type()
         self.assertEqual(
-            transport.format_bits(c1._pack()),
+            transport.format_bits(c1._pack(False)),
             "00000000 00000000 0000"
         )
 
         c1.a = 1
         c1.b = 1
         self.assertEqual(
-            transport.format_bits(c1._pack()),
+            transport.format_bits(c1._pack(False)),
             "00000000 00111100 0001"
         )
 
@@ -543,7 +543,7 @@ class TestMessageUnion(unittest.TestCase):
         ]
 
         def custom_type_factory(*args, **kwargs):
-            return transport.CompoundValue(self.custom_type, _tao=True, *args,
+            return transport.CompoundValue(self.custom_type, *args,
                                            **kwargs)
         self.custom_type._instantiate = custom_type_factory
 
@@ -555,7 +555,7 @@ class TestMessageUnion(unittest.TestCase):
     def test_representation(self):
         c1 = self.custom_type()
         self.assertEqual(
-            transport.format_bits(c1._pack()),
+            transport.format_bits(c1._pack(True)),
             "00000000 00000000 0"
         )
 
@@ -563,7 +563,7 @@ class TestMessageUnion(unittest.TestCase):
         c2.a = 1
         self.assertEqual(transport.get_active_union_field(c2), "a")
         self.assertEqual(
-            transport.format_bits(c2._pack()),
+            transport.format_bits(c2._pack(True)),
             "00000000 00011110 0"
         )
 
@@ -572,7 +572,7 @@ class TestMessageUnion(unittest.TestCase):
         c3.b[1] = 3
         self.assertEqual(transport.get_active_union_field(c3), "b")
         self.assertEqual(
-            transport.format_bits(c3._pack()),
+            transport.format_bits(c3._pack(False)),
             "10000000 10000001 1"
         )
 
