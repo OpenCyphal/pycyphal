@@ -22,8 +22,8 @@ from uavcan.transport import get_uavcan_data_type
 from uavcan import UAVCANException
 
 
-DEFAULT_NODE_STATUS_INTERVAL = 0.5
-DEFAULT_SERVICE_TIMEOUT = 0.5
+DEFAULT_NODE_STATUS_INTERVAL = 1.0
+DEFAULT_SERVICE_TIMEOUT = 1.0
 DEFAULT_TRANSFER_PRIORITY = 20
 
 
