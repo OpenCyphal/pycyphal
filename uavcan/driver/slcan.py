@@ -681,7 +681,21 @@ class SLCAN(AbstractDriver):
     def close(self):
         if self._proc.is_alive():
             self._tx_queue.put(IPC_COMMAND_STOP)
-            self._proc.join()
+            self._proc.join(10)
+            # Sometimes the child process stucks at exit, this is a workaround
+            if self._proc.is_alive() or self._proc.exitcode is None:
+                logger.warning('IO process refused to exit and will be terminated')
+                try:
+                    self._proc.terminate()
+                except Exception as ex:
+                    logger.error('Failed to terminate the IO process [%r]', ex, exc_info=True)
+                try:
+                    if self._proc.is_alive():
+                        logger.error('IO process refused to terminate, escalating to SIGKILL')
+                        import signal
+                        os.kill(self._proc.pid, signal.SIGKILL)
+                except Exception as ex:
+                    logger.critical('Failed to kill the IO process [%r]', ex, exc_info=True)
 
         self._stopping = True
         self._logging_thread.join()
