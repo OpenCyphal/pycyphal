@@ -27,7 +27,11 @@ except AttributeError:
     try:
         # noinspection PyPackageRequirements,PyUnresolvedReferences
         import monotonic                    # 3rd party dependency for old versions @UnresolvedImport
-        time.monotonic = monotonic.monotonic
+        # monotonic_wrapper is a temporary work around for https://github.com/UAVCAN/pyuavcan/issues/22
+        # monotonic_wrapper stops arguments being passed to monotonic.monotonic
+        def monotonic_wrapper(*args, **kwargs):
+            return monotonic.monotonic()
+        time.monotonic = monotonic_wrapper
     except ImportError:
         time.monotonic = time.time          # Last resort - using non-monotonic time; this is no good but oh well
         print('''The package 'monotonic' is not available, the library will use real time instead of monotonic time.
