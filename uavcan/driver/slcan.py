@@ -603,7 +603,7 @@ class SLCAN(AbstractDriver):
         - Echo: "stat\r\n"
         - Data: "First line\r\n", "Second line\r\n", ...
         - End Of Text marker: "\x03\r\n"
-    Refer to https://docs.zubax.com for more info.
+    Refer to https://kb.zubax.com for more info.
     """
 
     def __init__(self, device_name, **kwargs):
