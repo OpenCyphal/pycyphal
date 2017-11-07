@@ -109,7 +109,7 @@ def format_bits(s):
 
 
 def union_tag_bits_from_num_elements(num_elements):
-    return int(math.ceil(math.log(num_elements+1, 2)))
+    return int(math.ceil(math.log(num_elements, 2)))
 
 def array_len_bits_from_max_size(max_size):
     return int(math.ceil(math.log(max_size+1, 2)))
