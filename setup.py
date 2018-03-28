@@ -43,10 +43,11 @@ args = dict(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
     ],
+    install_requires=['crcmod'],
     keywords=''
 )
 
 if sys.version_info[0] < 3:
-    args['install_requires'] = ['monotonic']
+    args['install_requires'].append('monotonic')
 
 setup(**args)
