@@ -9,6 +9,10 @@
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 
+import sys
+
+import crcmod.predefined
+
 #
 # CRC-64-WE
 # Description: http://reveng.sourceforge.net/crc-catalogue/17plus.htm#crc.cat-bits.64
@@ -19,6 +23,7 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 # Check: 0x62EC59E3F1A4F00A
 #
 
+crcfun = crcmod.predefined.mkPredefinedCrcFun('crc-64-we')
 
 class Signature:
     '''
@@ -32,30 +37,26 @@ class Signature:
         extend_from    Initial value (optional)
         '''
         if extend_from is not None:
-            self._crc = (int(extend_from) & Signature.MASK64) ^ Signature.MASK64
+            self._crc = int(extend_from)
         else:
-            self._crc = Signature.MASK64
+            self._crc = 0
 
     def add(self, data_bytes):
         '''Feed ASCII string or bytes to the signature function'''
-        try:
-            if isinstance(data_bytes, basestring):  # Python 2.7 compatibility
-                data_bytes = map(ord, data_bytes)
-        except NameError:
-            if isinstance(data_bytes, str):  # This branch will be taken on Python 3
-                data_bytes = map(ord, data_bytes)
+        global crcfun
 
-        for b in data_bytes:
-            self._crc ^= (b << 56) & Signature.MASK64
-            for _ in range(8):
-                if self._crc & (1 << 63):
-                    self._crc = ((self._crc << 1) & Signature.MASK64) ^ Signature.POLY
-                else:
-                    self._crc <<= 1
+        if sys.version_info < (3, 0):
+            if isinstance(data_bytes, basestring):
+                data_bytes = bytes(data_bytes)
+        else:
+            if isinstance(data_bytes, str):
+                data_bytes = bytes(data_bytes, 'utf8')
+
+        self._crc = crcfun(data_bytes, self._crc)
 
     def get_value(self):
         '''Returns integer signature value'''
-        return (self._crc & Signature.MASK64) ^ Signature.MASK64
+        return self._crc
 
 
 def compute_signature(data):
