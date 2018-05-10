@@ -429,10 +429,6 @@ class Node(Scheduler):
         # Calling hooks
         self._transfer_hook_dispatcher.call_hooks(self._transfer_hook_dispatcher.TRANSFER_DIRECTION_OUTGOING, transfer)
 
-        # Sending the transfer
-        for frame in transfer.to_frames():
-            self._can_driver.send(frame.message_id, frame.bytes, extended=True)
-
         # Registering a callback that will be invoked if there was no response after 'timeout' seconds
         def on_timeout():
             del self._outstanding_requests[transfer.key]
@@ -450,6 +446,10 @@ class Node(Scheduler):
         # Registering the pending request using the wrapper above instead of the callback
         self._outstanding_requests[transfer.key] = transfer
         self._outstanding_request_callbacks[transfer.key] = timeout_cancelling_wrapper
+
+        # Sending the transfer
+        for frame in transfer.to_frames():
+            self._can_driver.send(frame.message_id, frame.bytes, extended=True)
 
         logger.debug("Node.request(dest_node_id={0:d}): sent {1!r}".format(dest_node_id, payload))
 
