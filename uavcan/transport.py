@@ -108,11 +108,9 @@ def format_bits(s):
     return " ".join(s[i:i + 8] for i in range(0, len(s), 8))
 
 
-def union_tag_bits_from_num_elements(num_elements):
-    return int(math.ceil(math.log(num_elements, 2)))
+def union_tag_len(x):
+    return int(math.ceil(math.log(len(x), 2))) or 1
 
-def array_len_bits_from_max_size(max_size):
-    return int(math.ceil(math.log(max_size+1, 2)))
 
 def enum_mark_last(iterable, start=0):
     """
@@ -408,7 +406,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
 
         else:
             del self[:]
-            count_width = array_len_bits_from_max_size(self._type.max_size)
+            count_width = int(math.ceil(math.log(self._type.max_size, 2))) or 1
             count = int(stream[0:count_width], 2)
             stream = stream[count_width:]
             for _, last, i in enum_mark_last(range(count)):
@@ -430,7 +428,7 @@ class ArrayValue(BaseValue, collections.MutableSequence):
             return ''.join(i._pack(False) for i in self.__items)
 
         else:
-            count_width = array_len_bits_from_max_size(self._type.max_size)
+            count_width = int(math.ceil(math.log(self._type.max_size, 2))) or 1
             count = format(len(self), '0{0:1d}b'.format(count_width))
             return count + ''.join(i._pack(tao and last) for _, last, i in enum_mark_last(self.__items))
 
@@ -587,7 +585,7 @@ class CompoundValue(BaseValue):
 
     def _unpack(self, stream, tao=True):
         if self._is_union:
-            tag_len = union_tag_bits_from_num_elements(len(self._fields))
+            tag_len = union_tag_len(self._fields)
             self._union_field = list(self._fields.keys())[int(stream[0:tag_len], 2)]
             stream = self._fields[self._union_field]._unpack(stream[tag_len:], tao)
         else:
@@ -600,8 +598,7 @@ class CompoundValue(BaseValue):
             keys = list(self._fields.keys())
             field = self._union_field or keys[0]
             tag = keys.index(field)
-            tag_len = union_tag_bits_from_num_elements(len(self._fields))
-            return format(tag, '0' + str(tag_len) + 'b') + self._fields[field]._pack(tao)
+            return format(tag, '0' + str(union_tag_len(self._fields)) + 'b') + self._fields[field]._pack(tao)
         else:
             return ''.join(field._pack(tao and last) for _, last, field in enum_mark_last(self._fields.values()))
 

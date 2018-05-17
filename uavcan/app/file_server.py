@@ -90,7 +90,7 @@ class FileServer(object):
                 f.seek(e.request.offset)
                 resp = uavcan.protocol.file.Read.Response()
                 read_size = uavcan.get_uavcan_data_type(uavcan.get_fields(resp)['data']).max_size
-                resp.data = bytearray(f.read(read_size))
+                resp.data = f.read(read_size)
                 resp.error.value = resp.error.OK
         except Exception:
             logger.exception("[#{0:03d}:uavcan.protocol.file.Read] error")
