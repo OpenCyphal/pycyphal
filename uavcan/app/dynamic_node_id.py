@@ -19,7 +19,7 @@ logger = getLogger(__name__)
 
 
 def _unique_id_to_string(uid):
-    return ' '.join(['%02X' % x for x in bytearray(uid)]) if uid else None
+    return ' '.join(['%02X' % x for x in uid]) if uid else None
 
 
 class CentralizedServer(object):
