@@ -19,7 +19,7 @@ logger = getLogger(__name__)
 
 
 def _unique_id_to_string(uid):
-    return ' '.join(['%02X' % x for x in bytearray(uid)]) if uid else None
+    return ' '.join(['%02X' % x for x in uid]) if uid else None
 
 
 class CentralizedServer(object):
@@ -31,6 +31,7 @@ class CentralizedServer(object):
         def __init__(self, path):
             # Disabling same thread check on the assumption that the developer knows what they are doing.
             self.db = sqlite3.connect(path, check_same_thread=False)  # @UndefinedVariable
+            self.lock = threading.Lock()
 
             self._modify('''CREATE TABLE IF NOT EXISTS `allocation` (
             `node_id`   INTEGER NOT NULL UNIQUE,
@@ -39,9 +40,10 @@ class CentralizedServer(object):
             PRIMARY KEY(node_id));''')
 
         def _modify(self, what, *args):
-            c = self.db.cursor()
-            c.execute(what, args)   # Tuple!
-            self.db.commit()
+            with self.lock:
+                c = self.db.cursor()
+                c.execute(what, args)   # Tuple!
+                self.db.commit()
 
         def close(self):
             self.db.close()
@@ -57,29 +59,33 @@ class CentralizedServer(object):
 
         def get_node_id(self, unique_id):
             assert isinstance(unique_id, bytes)
-            c = self.db.cursor()
-            c.execute('''select node_id from allocation where unique_id = ? order by ts desc limit 1''',
-                      (unique_id,))
-            res = c.fetchone()
-            return res[0] if res else None
+            with self.lock:
+                c = self.db.cursor()
+                c.execute('''select node_id from allocation where unique_id = ? order by ts desc limit 1''',
+                          (unique_id,))
+                res = c.fetchone()
+                return res[0] if res else None
 
         def get_unique_id(self, node_id):
             assert isinstance(node_id, int)
-            c = self.db.cursor()
-            c.execute('''select unique_id from allocation where node_id = ?''', (node_id,))
-            res = c.fetchone()
-            return res[0] if res else None
+            with self.lock:
+                c = self.db.cursor()
+                c.execute('''select unique_id from allocation where node_id = ?''', (node_id,))
+                res = c.fetchone()
+                return res[0] if res else None
 
         def is_known_node_id(self, node_id):
             assert isinstance(node_id, int)
-            c = self.db.cursor()
-            c.execute('''select count(*) from allocation where node_id = ?''', (node_id,))
-            return c.fetchone()[0] > 0
+            with self.lock:
+                c = self.db.cursor()
+                c.execute('''select count(*) from allocation where node_id = ?''', (node_id,))
+                return c.fetchone()[0] > 0
 
         def get_entries(self):
-            c = self.db.cursor()
-            c.execute('''select unique_id, node_id from allocation order by ts desc''')
-            return list(c.fetchall())
+            with self.lock:
+                c = self.db.cursor()
+                c.execute('''select unique_id, node_id from allocation order by ts desc''')
+                return list(c.fetchall())
 
     def __init__(self, node, node_monitor, database_storage=None, dynamic_node_id_range=None):
         """
