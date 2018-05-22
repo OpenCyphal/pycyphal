@@ -435,8 +435,14 @@ class Node(Scheduler):
 
         # Registering a callback that will be invoked if there was no response after 'timeout' seconds
         def on_timeout():
-            del self._outstanding_requests[transfer.key]
-            del self._outstanding_request_callbacks[transfer.key]
+            try:
+               del self._outstanding_requests[transfer.key]
+            except KeyError:
+                pass
+            try:
+                del self._outstanding_request_callbacks[transfer.key]
+            except KeyError:
+                pass
             callback(None)
 
         timeout = timeout or DEFAULT_SERVICE_TIMEOUT
