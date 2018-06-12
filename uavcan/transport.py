@@ -19,6 +19,7 @@ import collections
 import uavcan
 import uavcan.dsdl as dsdl
 import uavcan.dsdl.common as common
+from uavcan import CanBus
 
 
 if sys.version_info[0] < 3:
@@ -640,6 +641,7 @@ class Transfer(object):
     DEFAULT_TRANSFER_PRIORITY = 31
 
     def __init__(self,
+                 bus,
                  transfer_id=0,
                  source_node_id=0,
                  dest_node_id=None,
@@ -648,6 +650,9 @@ class Transfer(object):
                  request_not_response=False,
                  service_not_message=False,
                  discriminator=None):
+        if not isinstance(bus, CanBus):
+            raise Exception("bus type is not a CanBus object?")
+        self._bus = bus
         self.transfer_priority = transfer_priority if transfer_priority is not None else self.DEFAULT_TRANSFER_PRIORITY
         self.transfer_id = transfer_id
         self.source_node_id = source_node_id
@@ -727,9 +732,10 @@ class Transfer(object):
         out_frames = []
         remaining_payload = self.payload
 
+        data_payload_len = self._bus.max_payload_len - 1
         # Prepend the transfer CRC to the payload if the transfer requires
         # multiple frames
-        if len(remaining_payload) > 7:
+        if len(remaining_payload) > data_payload_len:
             crc = common.crc16_from_bytes(self.payload,
                                           initial=self.data_type_crc)
             remaining_payload = bytearray([crc & 0xFF, crc >> 8]) + remaining_payload
@@ -739,11 +745,11 @@ class Transfer(object):
         while True:
             # Tail byte contains start-of-transfer, end-of-transfer, toggle, and Transfer ID
             tail = ((0x80 if len(out_frames) == 0 else 0) |
-                    (0x40 if len(remaining_payload) <= 7 else 0) |
+                    (0x40 if len(remaining_payload) <= data_payload_len else 0) |
                     ((tail ^ 0x20) & 0x20) |
                     (self.transfer_id & 0x1F))
-            out_frames.append(Frame(message_id=self.message_id, data=remaining_payload[0:7] + bchr(tail)))
-            remaining_payload = remaining_payload[7:]
+            out_frames.append(Frame(message_id=self.message_id, data=remaining_payload[0:data_payload_len] + bchr(tail)))
+            remaining_payload = remaining_payload[data_payload_len:]
             if not remaining_payload:
                 break
 

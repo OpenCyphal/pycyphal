@@ -14,13 +14,14 @@ import sched
 import sys
 import inspect
 from logging import getLogger
+from abc import ABCMeta
 
 import uavcan
 import uavcan.driver as driver
 import uavcan.transport as transport
 from uavcan.transport import get_uavcan_data_type
 from uavcan import UAVCANException
-
+from uavcan import CanBus2, CanBusFD
 
 DEFAULT_NODE_STATUS_INTERVAL = 1.0
 DEFAULT_SERVICE_TIMEOUT = 1.0
@@ -28,7 +29,6 @@ DEFAULT_TRANSFER_PRIORITY = 20
 
 
 logger = getLogger(__name__)
-
 
 class Scheduler(object):
     """This class implements a simple non-blocking event scheduler.
@@ -239,6 +239,11 @@ class Node(Scheduler):
         """
         super(Node, self).__init__()
 
+        if "fd" in _extras and _extras["fd"]:
+            self._bus = CanBusFD()
+        else:
+            self._bus = CanBus2()
+                
         self._handler_dispatcher = HandlerDispatcher(self)
 
         self._can_driver = can_driver
@@ -302,7 +307,7 @@ class Node(Scheduler):
         if not transfer_frames:
             return
 
-        transfer = transport.Transfer()
+        transfer = transport.Transfer(self._bus)
         transfer.from_frames(transfer_frames)
 
         self._transfer_hook_dispatcher.call_hooks(self._transfer_hook_dispatcher.TRANSFER_DIRECTION_INCOMING, transfer)
@@ -418,7 +423,8 @@ class Node(Scheduler):
 
         # Preparing the transfer
         transfer_id = self._next_transfer_id((get_uavcan_data_type(payload).default_dtid, dest_node_id))
-        transfer = transport.Transfer(payload=payload,
+        transfer = transport.Transfer(bus=self._bus,
+                                      payload=payload,
                                       source_node_id=self._node_id,
                                       dest_node_id=dest_node_id,
                                       transfer_id=transfer_id,
@@ -436,7 +442,7 @@ class Node(Scheduler):
         # Registering a callback that will be invoked if there was no response after 'timeout' seconds
         def on_timeout():
             try:
-               del self._outstanding_requests[transfer.key]
+                del self._outstanding_requests[transfer.key]
             except KeyError:
                 pass
             try:
@@ -463,6 +469,7 @@ class Node(Scheduler):
         self._throw_if_anonymous()
 
         transfer = transport.Transfer(
+            bus=self._bus,
             payload=payload,
             source_node_id=self._node_id,
             dest_node_id=dest_node_id,
@@ -484,7 +491,8 @@ class Node(Scheduler):
         self._throw_if_anonymous()
 
         transfer_id = self._next_transfer_id(get_uavcan_data_type(payload).default_dtid)
-        transfer = transport.Transfer(payload=payload,
+        transfer = transport.Transfer(bus=self._bus,
+                                      payload=payload,
                                       source_node_id=self._node_id,
                                       transfer_id=transfer_id,
                                       transfer_priority=priority or DEFAULT_TRANSFER_PRIORITY,

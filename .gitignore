@@ -68,3 +68,6 @@ target/
 
 # IntelliJ
 .idea/
+
+# VSCode (We welcome our new Microsoft overlords!)
+.vscode
