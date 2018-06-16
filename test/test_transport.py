@@ -359,6 +359,7 @@ class TestArrayBasic(unittest.TestCase):
             parser.CompoundType.KIND_MESSAGE,
             "source.uavcan",
             0,
+            (0,0),
             ""
         )
         custom_type.fields = [
@@ -463,6 +464,7 @@ class TestVoid(unittest.TestCase):
             parser.CompoundType.KIND_MESSAGE,
             "source.uavcan",
             0,
+            (0,0),
             ""
         )
         self.custom_type.fields = [
@@ -516,6 +518,7 @@ class TestMessageUnion(unittest.TestCase):
             parser.CompoundType.KIND_MESSAGE,
             "source.uavcan",
             0,
+            (0,0),
             ""
         )
         self.custom_type.union = True
