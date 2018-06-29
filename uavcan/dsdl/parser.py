@@ -217,7 +217,7 @@ class CompoundType(Type):
         self.default_dtid = default_dtid
         self.kind = kind
         self.source_text = source_text
-        self.data_type_signature = None
+        self._data_type_signature = None
 
         def compute_max_bitlen(flds, union):
             if len(flds) == 0:
@@ -308,7 +308,7 @@ class CompoundType(Type):
         guaranteed to match only if all nested data structures are compatible.
         Please refer to the specification for details about signatures.
         """
-        if self.data_type_signature is None:
+        if self._data_type_signature is None:
             sig = Signature(self.get_dsdl_signature())
             fields = self.request_fields + self.response_fields if self.kind == CompoundType.KIND_SERVICE else self.fields
             for field in fields:
@@ -317,8 +317,8 @@ class CompoundType(Type):
                     sig_value = sig.get_value()
                     sig.add(bytes_from_crc64(field_sig))
                     sig.add(bytes_from_crc64(sig_value))
-            self.data_type_signature = sig.get_value()
-        return self.data_type_signature
+            self._data_type_signature = sig.get_value()
+        return self._data_type_signature
 
 
 class VoidType(Type):
