@@ -124,7 +124,10 @@ def enum_mark_last(iterable, start=0):
     """
     it = iter(iterable)
     count = start
-    last = next(it)
+    try:
+        last = next(it)
+    except StopIteration:
+        return
     for val in it:
         yield count, False, last
         last = val
