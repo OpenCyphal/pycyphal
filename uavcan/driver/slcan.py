@@ -705,7 +705,8 @@ class SLCAN(AbstractDriver):
         self._logging_thread.join()
 
     def __del__(self):
-        self.close()
+        if not self._stopping:
+            self.close()
 
     def _check_alive(self):
         if not self._proc.is_alive():
