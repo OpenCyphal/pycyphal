@@ -182,6 +182,7 @@ class CompoundType(Type):
     Fields:
         source_file         Path to the DSDL definition file for this type
         default_dtid        Default Data Type ID, if specified, None otherwise
+        version             The version number of the dsdl definition as a tuple (e.g. (1,7))
         kind                Any KIND_*
         source_text         Raw DSDL definition text (as is, with comments and the original formatting)
 
@@ -211,10 +212,11 @@ class CompoundType(Type):
     KIND_SERVICE = 0
     KIND_MESSAGE = 1
 
-    def __init__(self, full_name, kind, source_file, default_dtid, source_text):
+    def __init__(self, full_name, kind, source_file, default_dtid, version, source_text):
         Type.__init__(self, full_name, Type.CATEGORY_COMPOUND)
         self.source_file = source_file
         self.default_dtid = default_dtid
+        self.version = version
         self.kind = kind
         self.source_text = source_text
         self._data_type_signature = None
@@ -425,12 +427,14 @@ class Parser:
                 return ns
         error('File [%s] was not found in search directories', filename)
 
-    def _full_typename_and_dtid_from_filename(self, filename):
+    def _full_typename_version_and_dtid_from_filename(self, filename):
         basename = os.path.basename(filename)
         items = basename.split('.')
-        if (len(items) != 2 and len(items) != 3) or items[-1] != 'uavcan':
-            error('Invalid file name [%s]; expected pattern: [<default-dtid>.]<short-type-name>.uavcan', basename)
-        if len(items) == 2:
+
+        if (len(items) != 2 and len(items) != 3 and len(items) != 4 and len(items) != 5) or items[-1] != 'uavcan':
+            error('Invalid file name [%s]; expected pattern: [<default-dtid>.]<short-type-name>.[<major-version>.<minor-version>.]uavcan', basename)
+
+        if len(items) == 2 or len(items) == 4:
             default_dtid, name = None, items[0]
         else:
             default_dtid, name = items[0], items[1]
@@ -438,9 +442,19 @@ class Parser:
                 default_dtid = int(default_dtid)
             except ValueError:
                 error('Invalid default data type ID [%s]', default_dtid)
+
+        if len(items) == 2 or len(items) == 3:
+            version = None
+        else:
+            major_version, minor_version = items[-3], items[-2]
+            try:
+                version = (int(major_version), int(minor_version))
+            except ValueError:
+                error('Invalid version number [%s]', major_version, minor_version)
+
         full_name = self._namespace_from_filename(filename) + '.' + name
         validate_compound_type_full_name(full_name)
-        return full_name, default_dtid
+        return full_name, version, default_dtid
 
     def _locate_compound_type_definition(self, referencing_filename, typename):
         def locate_namespace_directory(ns):
@@ -464,7 +478,7 @@ class Parser:
             fn = os.path.join(directory, fn)
             if os.path.isfile(fn):
                 try:
-                    fn_full_typename, _dtid = self._full_typename_and_dtid_from_filename(fn)
+                    fn_full_typename, _version, _dtid = self._full_typename_version_and_dtid_from_filename(fn)
                     if full_typename == fn_full_typename:
                         return fn
                 except Exception as ex:
@@ -615,7 +629,7 @@ class Parser:
 
     def parse_source(self, filename, source_text):
         try:
-            full_typename, default_dtid = self._full_typename_and_dtid_from_filename(filename)
+            full_typename, version, default_dtid = self._full_typename_version_and_dtid_from_filename(filename)
             numbered_lines = list(self._tokenize(source_text))
             all_attributes_names = set()
             fields, constants, resp_fields, resp_constants = [], [], [], []
@@ -655,7 +669,7 @@ class Parser:
                     raise DsdlException('Internal error: %s' % str(ex), line=num)
 
             if response_part:
-                t = CompoundType(full_typename, CompoundType.KIND_SERVICE, filename, default_dtid, source_text)
+                t = CompoundType(full_typename, CompoundType.KIND_SERVICE, filename, default_dtid, version, source_text)
                 t.request_fields = fields
                 t.request_constants = constants
                 t.response_fields = resp_fields
@@ -665,7 +679,7 @@ class Parser:
                 max_bitlen = t.get_max_bitlen_request(), t.get_max_bitlen_response()
                 max_bytelen = tuple(map(bitlen_to_bytelen, max_bitlen))
             else:
-                t = CompoundType(full_typename, CompoundType.KIND_MESSAGE, filename, default_dtid, source_text)
+                t = CompoundType(full_typename, CompoundType.KIND_MESSAGE, filename, default_dtid, version, source_text)
                 t.fields = fields
                 t.constants = constants
                 t.union = union
