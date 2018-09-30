@@ -37,8 +37,13 @@ class DsdlException(UAVCANException):
 
 def pretty_filename(filename):
     '''Returns a nice human readable path to 'filename'.'''
-    a = os.path.abspath(filename)
-    r = os.path.relpath(filename)
+    try:
+        a = os.path.abspath(filename)
+        r = os.path.relpath(filename)
+    except ValueError:
+        # Catch relpath exception. Happens, because it can not produce relative path
+        # if wroking directory is on different drive.
+        a = r = filename
     return a if '..' in r else r
 
 
