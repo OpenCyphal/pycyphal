@@ -141,9 +141,10 @@ class HandleRemover:
 
 
 class HandlerDispatcher(object):
-    def __init__(self, node):
+    def __init__(self, node, catch_exceptions):
         self._handlers = []  # type, callable
         self._node = node
+        self._catch_exceptions = catch_exceptions
 
     def add_handler(self, uavcan_type, handler, **kwargs):
         service = {
@@ -190,11 +191,13 @@ class HandlerDispatcher(object):
     def call_handlers(self, transfer):
         for uavcan_type, wrapper in self._handlers:
             if uavcan_type == get_uavcan_data_type(transfer.payload):
-                # noinspection PyBroadException
                 try:
                     wrapper(transfer)
-                except Exception:
+                # noinspection PyBroadException
+                except Exception as e:
                     logger.error('Transfer handler exception', exc_info=True)
+                    if not self._catch_exceptions:
+                        raise e
 
 
 class TransferHookDispatcher(object):
@@ -222,7 +225,8 @@ class TransferHookDispatcher(object):
 
 class Node(Scheduler):
     def __init__(self, can_driver, node_id=None, node_status_interval=None,
-                 mode=None, node_info=None, **_extras):
+                 mode=None, node_info=None, catch_handler_exceptions=True,
+                 **_extras):
         """
         It is recommended to use make_node() rather than instantiating this type directly.
 
@@ -236,10 +240,14 @@ class Node(Scheduler):
 
         :param node_info: Structure of type uavcan.protocol.GetNodeInfo.Response, responded with when the local
                           node is queried for its node info.
+        :param catch_handler_exceptions: If true, exceptions raised from message
+                                         handlers will be caught and logged. If
+                                         False, spin() will raise exceptions
+                                         raised from callbacks.
         """
         super(Node, self).__init__()
 
-        self._handler_dispatcher = HandlerDispatcher(self)
+        self._handler_dispatcher = HandlerDispatcher(self, catch_handler_exceptions)
 
         self._can_driver = can_driver
         self._node_id = node_id
