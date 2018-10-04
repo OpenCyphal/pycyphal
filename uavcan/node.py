@@ -190,11 +190,7 @@ class HandlerDispatcher(object):
     def call_handlers(self, transfer):
         for uavcan_type, wrapper in self._handlers:
             if uavcan_type == get_uavcan_data_type(transfer.payload):
-                # noinspection PyBroadException
-                try:
-                    wrapper(transfer)
-                except Exception:
-                    logger.error('Transfer handler exception', exc_info=True)
+                wrapper(transfer)
 
 
 class TransferHookDispatcher(object):
@@ -222,7 +218,8 @@ class TransferHookDispatcher(object):
 
 class Node(Scheduler):
     def __init__(self, can_driver, node_id=None, node_status_interval=None,
-                 mode=None, node_info=None, **_extras):
+                 mode=None, node_info=None, catch_handler_exceptions=True,
+                 **_extras):
         """
         It is recommended to use make_node() rather than instantiating this type directly.
 
@@ -236,6 +233,10 @@ class Node(Scheduler):
 
         :param node_info: Structure of type uavcan.protocol.GetNodeInfo.Response, responded with when the local
                           node is queried for its node info.
+        :param catch_handler_exceptions: If true, exceptions raised from message
+                                         handlers will be caught and logged. If
+                                         False, spin() will raise exceptions
+                                         raised from callbacks.
         """
         super(Node, self).__init__()
 
@@ -243,6 +244,7 @@ class Node(Scheduler):
 
         self._can_driver = can_driver
         self._node_id = node_id
+        self._catch_handler_exceptions = catch_handler_exceptions
 
         self._transfer_manager = transport.TransferManager()
         self._outstanding_requests = {}
@@ -321,7 +323,13 @@ class Node(Scheduler):
                     break
         elif not transfer.service_not_message or transfer.dest_node_id == self._node_id:
             # This is a request or a broadcast; look up the appropriate handler by data type ID
-            self._handler_dispatcher.call_handlers(transfer)
+            try:
+                self._handler_dispatcher.call_handlers(transfer)
+            # noinspection PyBroadException
+            except Exception as e:
+                logger.error('Transfer handler exception', exc_info=True)
+                if not self._catch_handler_exceptions:
+                    raise e
 
     def _next_transfer_id(self, key):
         transfer_id = self._next_transfer_ids[key]

@@ -8,10 +8,63 @@
 #
 
 import unittest
-from uavcan import node
+from unittest.mock import Mock
+import uavcan
+from uavcan.node import Node
+import uavcan.transport as transport
+from uavcan.driver.common import CANFrame
+
+import os.path
+
+DEFAULT_TRANSFER_PRIORITY = 20
+
+class TestException(RuntimeError):
+    pass
 
 
-# TODO
+class HandlerExceptionHandling(unittest.TestCase):
+    def setUp(self):
+        msg = uavcan.protocol.debug.KeyValue()
+        msg.key = 'foo'
+        msg.value = 42
+
+        transfer = transport.Transfer(
+            payload=msg,
+            source_node_id=42,
+            transfer_id=10,
+            transfer_priority=DEFAULT_TRANSFER_PRIORITY,
+            service_not_message=False)
+
+        self.frames = [
+            CANFrame(can_id=f.message_id, data=f.bytes, extended=True)
+            for f in transfer.to_frames()
+        ]
+        self.driver = Mock()
+        self.driver.receive.side_effect = self.frames + [None]
+
+    def _raise_callback(self, event):
+        raise TestException("test exception")
+
+    def _spin(self):
+        try:
+            self.node.spin()
+        except StopIteration:  # due to using mocks for can frames
+            pass
+
+    def test_exceptions_are_caught_by_spin(self):
+        self.node = Node(self.driver)
+        self.node.add_handler(uavcan.protocol.debug.KeyValue,
+                              self._raise_callback)
+
+        self._spin()
+
+    def test_exceptions_are_not_caught_by_spin(self):
+        self.node = Node(self.driver, catch_handler_exceptions=False)
+        self.node.add_handler(uavcan.protocol.debug.KeyValue,
+                              self._raise_callback)
+
+        with self.assertRaises(RuntimeError):
+            self._spin()
 
 
 if __name__ == '__main__':
