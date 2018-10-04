@@ -8,7 +8,11 @@
 #
 
 import unittest
-from unittest.mock import Mock, ANY
+try:
+    from unittest.mock import Mock, ANY
+except ImportError:
+    from mock import Mock, ANY
+
 import uavcan
 from uavcan.node import Node
 import uavcan.transport as transport

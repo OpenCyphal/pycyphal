@@ -5,7 +5,9 @@ python:
   - "3.3"
   - "3.4"
   - "3.5"
-install: pip install .
+install:
+  - pip install .
+  - pip install mock
 script: python -m unittest discover test
 deploy:
   provider: pypi
