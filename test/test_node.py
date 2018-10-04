@@ -8,7 +8,7 @@
 #
 
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, ANY
 import uavcan
 from uavcan.node import Node
 import uavcan.transport as transport
@@ -65,6 +65,18 @@ class HandlerExceptionHandling(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             self._spin()
+
+    def test_second_handler_is_called_after_first_one_raises(self):
+        mock_cb = Mock(return_value=None)
+        self.node = Node(self.driver)
+        self.node.add_handler(uavcan.protocol.debug.KeyValue,
+                              self._raise_callback)
+        self.node.add_handler(uavcan.protocol.debug.KeyValue,
+                              mock_cb)
+
+        self._spin()
+        mock_cb.assert_any_call(ANY)
+
 
 
 if __name__ == '__main__':

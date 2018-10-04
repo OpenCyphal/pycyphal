@@ -141,9 +141,10 @@ class HandleRemover:
 
 
 class HandlerDispatcher(object):
-    def __init__(self, node):
+    def __init__(self, node, catch_exceptions):
         self._handlers = []  # type, callable
         self._node = node
+        self._catch_exceptions = catch_exceptions
 
     def add_handler(self, uavcan_type, handler, **kwargs):
         service = {
@@ -190,7 +191,13 @@ class HandlerDispatcher(object):
     def call_handlers(self, transfer):
         for uavcan_type, wrapper in self._handlers:
             if uavcan_type == get_uavcan_data_type(transfer.payload):
-                wrapper(transfer)
+                try:
+                    wrapper(transfer)
+                # noinspection PyBroadException
+                except Exception as e:
+                    logger.error('Transfer handler exception', exc_info=True)
+                    if not self._catch_exceptions:
+                        raise e
 
 
 class TransferHookDispatcher(object):
@@ -240,11 +247,10 @@ class Node(Scheduler):
         """
         super(Node, self).__init__()
 
-        self._handler_dispatcher = HandlerDispatcher(self)
+        self._handler_dispatcher = HandlerDispatcher(self, catch_handler_exceptions)
 
         self._can_driver = can_driver
         self._node_id = node_id
-        self._catch_handler_exceptions = catch_handler_exceptions
 
         self._transfer_manager = transport.TransferManager()
         self._outstanding_requests = {}
@@ -323,13 +329,7 @@ class Node(Scheduler):
                     break
         elif not transfer.service_not_message or transfer.dest_node_id == self._node_id:
             # This is a request or a broadcast; look up the appropriate handler by data type ID
-            try:
-                self._handler_dispatcher.call_handlers(transfer)
-            # noinspection PyBroadException
-            except Exception as e:
-                logger.error('Transfer handler exception', exc_info=True)
-                if not self._catch_handler_exceptions:
-                    raise e
+            self._handler_dispatcher.call_handlers(transfer)
 
     def _next_transfer_id(self, key):
         transfer_id = self._next_transfer_ids[key]
