@@ -12,9 +12,8 @@ UAVCAN is a lightweight protocol designed for reliable communication in aerospac
 ## Documentation
 
 * [UAVCAN website](http://uavcan.org)
-* [UAVCAN discussion group](https://groups.google.com/forum/#!forum/uavcan)
-* [Pyuavcan overview](http://uavcan.org/Implementations/Pyuavcan/)
-* [Pyuavcan tutorials](http://uavcan.org/Implementations/Pyuavcan/Tutorials/)
+* [UAVCAN forum](https://forum.uavcan.org)
+* [Pyuavcan documentation and tutorials](http://uavcan.org/Implementations/Pyuavcan/)
 
 ## Installation
 
