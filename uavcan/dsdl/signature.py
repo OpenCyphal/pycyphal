@@ -8,6 +8,7 @@
 #
 
 from __future__ import division, absolute_import, print_function, unicode_literals
+import functools
 
 #
 # CRC-64-WE
@@ -58,6 +59,7 @@ class Signature:
         return (self._crc & Signature.MASK64) ^ Signature.MASK64
 
 
+@functools.lru_cache()
 def compute_signature(data):
     '''
     One-shot signature computation for ASCII string or bytes.
