@@ -21,6 +21,11 @@ import uavcan.dsdl as dsdl
 import uavcan.dsdl.common as common
 
 
+try:
+    long        # Python 2
+except NameError:
+    long = int  # Python 3
+
 if sys.version_info[0] < 3:
     bchr = chr
 else:
@@ -169,7 +174,7 @@ class Float32IntegerUnion(object):
 
     @u.setter
     def u(self, value):
-        assert isinstance(value, int) or isinstance(value, long)
+        assert isinstance(value, (int, long))
         self._bytes = struct.pack("=I", value)
 
 
