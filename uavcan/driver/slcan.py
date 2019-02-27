@@ -503,7 +503,7 @@ def _io_process(device,
     try:
         _raise_self_process_priority()
     except Exception as ex:
-        logger.warning('Could not adjust priority of the IO process: %r', ex)
+        logger.info('Could not adjust priority of the IO process: %r', ex)
 
     #
     # This is needed to convert timestamps from hardware clock to local clocks
