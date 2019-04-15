@@ -4,10 +4,13 @@
 #
 
 import typing
+import pickle
+import binascii
 import pathlib
 import logging
 import keyword
 import builtins
+import itertools
 
 import pydsdl
 import pydsdlgen
@@ -50,6 +53,7 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
 
     env.filters['type_annotation'] = _dsdl_type_to_annotation
     env.filters['id'] = _make_identifier
+    env.filters['pickle'] = _pickle_object
 
     generator.generate_all()
 
@@ -77,6 +81,12 @@ def _dsdl_type_to_annotation(t: pydsdl.Any) -> str:
 
 def _make_identifier(a: pydsdl.Attribute) -> str:
     return (a.name + '_') if a.name in _ILLEGAL_IDENTIFIERS else a.name
+
+
+def _pickle_object(x: typing.Any) -> str:
+    pck: str = binascii.b2a_base64(pickle.dumps(x)).decode().strip()
+    segment_gen = map(''.join, itertools.zip_longest(*([iter(pck)] * 100), fillvalue=''))
+    return '\n'.join(repr(x) for x in segment_gen)
 
 
 def _unittest_dsdl_compiler() -> None:
