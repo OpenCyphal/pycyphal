@@ -1,0 +1,6 @@
+#
+# Runtime dependencies
+#
+
+pydsdlgen < 2.0.0
+pydsdl    < 2.0.0
