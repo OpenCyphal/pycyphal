@@ -9,4 +9,8 @@
 # Version:       {{ T.version.major }}.{{ T.version.minor }}
 #
 
+from warnings import warn as _warn_
+from typing import Optional as _Optional_, List as _List_
+from pyuavcan.dsdl import CompositeObject as _CompositeObject_
+
 {%- block contents %}{% endblock -%}

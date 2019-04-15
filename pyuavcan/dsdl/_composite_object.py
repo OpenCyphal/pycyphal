@@ -40,5 +40,8 @@ def deserialize(cls: typing.Type[CompositeObject], sr: SerializedRepresentation)
 
 
 def get_type(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> pydsdl.CompositeType:
-    # noinspection PyProtectedMember
-    return class_or_instance._TYPE_
+    if isinstance(class_or_instance, CompositeObject) or issubclass(class_or_instance, CompositeObject):
+        # noinspection PyProtectedMember
+        return class_or_instance._TYPE_
+    else:
+        raise TypeError(f'Expected a DSDL object or its type, got {class_or_instance!r}')
