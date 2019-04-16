@@ -18,7 +18,9 @@ import numpy as _np_
 from typing import Optional as _Optional_, List as _List_, Union as _Union_
 from pyuavcan.dsdl import CompositeObject as _CompositeObject_
 from pydsdl import StructureType as _StructureType_, UnionType as _UnionType_
-{% block imports %}{% endblock %}
+{%- for n in T|imports %}
+import {{ n }}
+{%- endfor %}
 
 
 {# #}
@@ -138,8 +140,9 @@ class {{ name }}(_CompositeObject_):
 
         {%- else -%}{%- assert False -%}
         {%- endif %}
-    {%- else %}
+    {% else %}
         pass
+{# #}
     {%- endfor %}
 {%- else %}  {#- IS UNION (guaranteed to contain at least 2 fields none of which are padding) #}
         """
@@ -190,8 +193,9 @@ class {{ name }}(_CompositeObject_):
             pass  # A value is already assigned, nothing to do
         else:
             raise ValueError(f'Union cannot hold values of more than one field')
+{# #}
 {%- endif %}
-{% for f in type.fields if f is not padding %}
+{%- for f in type.fields if f is not padding %}
     @property
     def {{ f|id }}(self) -> {# #}
     {%- if type is union -%}

@@ -60,6 +60,7 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
     env.filters['pickle']               = _pickle_object
     env.filters['numpy_scalar_type']    = _numpy_scalar_type
     env.filters['longest_name_length']  = lambda c: max(map(len, map(lambda x: x.name, c)))
+    env.filters['imports']              = _list_imports
 
     generator.generate_all()
 
@@ -94,6 +95,15 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
     else:
         assert not isinstance(t, pydsdl.PrimitiveType), 'Forgot to handle some primitive types'
         return f'_np_.object_'
+
+
+def _list_imports(t: pydsdl.CompositeType) -> typing.List[str]:
+    if isinstance(t, pydsdl.ServiceType):
+        atr = t.request_type.attributes + t.response_type.attributes
+    else:
+        atr = t.attributes
+    # noinspection PyUnresolvedReferences
+    return list(sorted(set(x.data_type.full_namespace for x in atr if isinstance(x.data_type, pydsdl.CompositeType))))
 
 
 def _unittest_dsdl_compiler() -> None:

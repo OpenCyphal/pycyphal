@@ -1,15 +1,8 @@
-{% extends "base.j2" %}
-
-{%- block imports -%}
-from pydsdl import ServiceType as _ServiceType_
-{%- for a in (T.request_type.attributes + T.response_type.attributes) if a.data_type is composite %}
-import {{ a.data_type.full_namespace }}
-{%- else -%}
-# This type does not depend on other DSDL types.
-{%- endfor %}
-{%- endblock -%}
-
+{% extends "base.j2" -%}
 {%- block contents -%}
+
+from pydsdl import ServiceType as _ServiceType_
+
 
 # noinspection PyPep8Naming, SpellCheckingInspection
 class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_CompositeObject_):
