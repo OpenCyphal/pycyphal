@@ -37,3 +37,4 @@ coverage.xml
 .idea/
 
 *.log
+.*_generated

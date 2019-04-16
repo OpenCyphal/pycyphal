@@ -2,20 +2,22 @@
 
 {%- block imports -%}
 from pydsdl import ServiceType as _ServiceType_
-{%- for a in T.request_type.attributes if a.data_type is composite %}
+{%- for a in (T.request_type.attributes + T.response_type.attributes) if a.data_type is composite %}
 import {{ a.data_type.full_namespace }}
-{%- endfor %}
-{%- for a in T.response_type.attributes if a.data_type is composite %}
-import {{ a.data_type.full_namespace }}
+{%- else -%}
+# This type does not depend on other DSDL types.
 {%- endfor %}
 {%- endblock -%}
 
 {%- block contents -%}
 
+# noinspection PyPep8Naming, SpellCheckingInspection
 class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_CompositeObject_):
-    {{- data_schema('Request',  T.request_type)|indent }}
-    {{- data_schema('Response', T.response_type)|indent }}
-    _TYPE_: _ServiceType_ = _decode_object_(
+    {{ data_schema('Request',  T.request_type)|indent }}
+
+    {{ data_schema('Response', T.response_type)|indent }}
+
+    _TYPE_: _ServiceType_ = _CompositeObject_._restore_object_(
         {{ T | pickle | indent(8) }}
     )
     assert isinstance(_TYPE_, _ServiceType_)

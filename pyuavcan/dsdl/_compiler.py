@@ -58,6 +58,7 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
     env.filters['id']                   = _make_identifier
     env.filters['pickle']               = _pickle_object
     env.filters['numpy_scalar_type']    = _numpy_scalar_type
+    env.filters['longest_name_length']  = lambda c: max(map(len, map(lambda x: x.name, c)))
 
     generator.generate_all()
 
@@ -95,7 +96,6 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
 
 
 def _unittest_dsdl_compiler() -> None:
-    import tempfile
     import shutil
 
     # Suppress debug logging from PyDSDL, there's too much of it and we don't want it to interfere
@@ -103,7 +103,7 @@ def _unittest_dsdl_compiler() -> None:
 
     root_ns = _SOURCE_DIRECTORY.parent / pathlib.Path('public_regulated_data_types') / pathlib.Path('uavcan')
 
-    parent_dir = pathlib.Path(tempfile.gettempdir()) / pathlib.Path('pyuavcan_dsdl_compiler_test_output')
+    parent_dir = _SOURCE_DIRECTORY.parent / pathlib.Path('.dsdl_generated')
     if parent_dir.exists():
         shutil.rmtree(parent_dir, ignore_errors=True)
     parent_dir.mkdir(parents=True, exist_ok=True)

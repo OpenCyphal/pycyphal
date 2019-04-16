@@ -3,7 +3,9 @@
 {%- block imports -%}
 {%- for a in T.attributes if a.data_type is composite %}
 import {{ a.data_type.full_namespace }}
-{%- endfor %}
+{%- else -%}
+# This type does not depend on other DSDL types.
+{%- endfor -%}
 {%- endblock -%}
 
 {%- block contents -%}

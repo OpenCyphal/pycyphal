@@ -5,6 +5,9 @@
 
 import typing
 import pydsdl
+import pickle
+import gzip
+import base64
 from ._serialized_representation import SerializedRepresentation
 
 
@@ -21,6 +24,11 @@ class CompositeObject:
     @staticmethod
     def _deserialize_(sr: SerializedRepresentation) -> 'CompositeObject':
         raise NotImplementedError
+
+    @staticmethod
+    def _restore_object_(encoded_string: str) -> object:
+        """Recovers a pickled gzipped object from base85 string representation."""
+        return pickle.loads(gzip.decompress(base64.b85decode(encoded_string)))
 
 
 def serialize(o: CompositeObject) -> SerializedRepresentation:
