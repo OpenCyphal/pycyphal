@@ -244,10 +244,11 @@ class {{ name }}(_CompositeObject_):
     {%- endfor %}
 {#  #}
 {%- endif %}
-    _TYPE_: _StructureType_ = _CompositeObject_._restore_constant_(
+    {%- set meta_type = '_UnionType_' if type is union else '_StructureType_' %}
+    _TYPE_: {{ meta_type }} = _CompositeObject_._restore_constant_(
         {{ type | pickle | indent(8) }}
     )
-    assert isinstance(_TYPE_, _StructureType_)
+    assert isinstance(_TYPE_, {{ meta_type }})
 {%- endmacro -%}
 
 {% block contents %}{% endblock %}
