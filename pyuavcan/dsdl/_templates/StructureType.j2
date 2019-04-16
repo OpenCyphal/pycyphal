@@ -1,9 +1,11 @@
 {% extends "base.j2" %}
-{%- block contents %}
-{% for a in T.attributes if a.data_type is composite %}
+
+{%- block imports -%}
+{%- for a in T.attributes if a.data_type is composite %}
 import {{ a.data_type.full_namespace }}
 {%- endfor %}
+{%- endblock -%}
 
+{%- block contents -%}
 {{ data_schema('%s_%s_%s'|format(T.short_name, T.version.major, T.version.minor), T) }}
-
 {%- endblock -%}
