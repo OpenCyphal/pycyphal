@@ -3,9 +3,10 @@
 # This software is distributed under the terms of the MIT License.
 #
 
+import gzip
 import typing
 import pickle
-import binascii
+import base64
 import pathlib
 import logging
 import keyword
@@ -84,7 +85,7 @@ def _make_identifier(a: pydsdl.Attribute) -> str:
 
 
 def _pickle_object(x: typing.Any) -> str:
-    pck: str = binascii.b2a_base64(pickle.dumps(x)).decode().strip()
+    pck: str = base64.b85encode(gzip.compress(pickle.dumps(x, protocol=4))).decode().strip()
     segment_gen = map(''.join, itertools.zip_longest(*([iter(pck)] * 100), fillvalue=''))
     return '\n'.join(repr(x) for x in segment_gen)
 

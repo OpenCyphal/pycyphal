@@ -13,8 +13,8 @@ import {{ a.data_type.full_namespace }}
 class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_CompositeObject_):
     {{- data_schema('Request',  T.request_type)|indent }}
     {{- data_schema('Response', T.response_type)|indent }}
-    _TYPE_: _ServiceType_ = _unpickle_(
+    _TYPE_: _ServiceType_ = _unpickle_(_decompress_(_base85_decode_(
         {{ T | pickle | indent(8) }}
-    )
+    )))
     assert isinstance(_TYPE_, _ServiceType_)
 {% endblock -%}
