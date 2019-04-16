@@ -88,6 +88,7 @@ class {{ name }}(_CompositeObject_):
     {{- '\n' if loop.last else '' -}}
 {%- endfor %}
     def __init__(self
+                 {%- if type is union -%}, *{%- endif -%}
                  {%- for f in type.fields if f is not padding -%}
                  ,
                  {{ f|id }}: {{ ''.ljust(type.fields|longest_name_length - f|id|length) -}}
@@ -97,36 +98,37 @@ class {{ name }}(_CompositeObject_):
 {%- if type.deprecated %}
         _warn_('Data type {{ type }} is deprecated', DeprecationWarning)
 {% endif -%}
-{% for f in type.fields if f is not padding %}
-    {%- if f.data_type is boolean %}
+{%- if type is not union -%}
+    {% for f in type.fields if f is not padding %}
+        {%- if f.data_type is boolean %}
         {{ new_field(f) }} = bool({{ f|id }}) if {{ f|id }} is not None else False
 
-    {%- elif f.data_type is integer %}
+        {%- elif f.data_type is integer %}
         {{ new_field(f) }} = int({{ f|id }}) if {{ f|id }} is not None else 0
 
-    {%- elif f.data_type is float %}
+        {%- elif f.data_type is float %}
         {{ new_field(f) }} = float({{ f|id }}) if {{ f|id }} is not None else 0.0
 
-    {%- elif f.data_type is fixed_array %}
+        {%- elif f.data_type is fixed_array %}
         if {{ f|id }} is None:
-        {%- if f.data_type.element_type is composite %}
+            {%- if f.data_type.element_type is composite %}
             {{ new_field(f) }} = _np_.array([{{ composite_ref(f.data_type.element_type) }}() {# -#}
                                              for _ in range({{ f.data_type.capacity }})], {#  -#}
                                             {{ f.data_type.element_type|numpy_scalar_type }})
-        {%- else %}
+            {%- else %}
             {{ new_field(f) }} = _np_.zeros({{ f.data_type.capacity }}, {# -#}
                                             {{ f.data_type.element_type|numpy_scalar_type }})
-        {%- endif %}
+            {%- endif %}
         else:
             {{ assign_array(f.data_type, new_field(f), (f|id)) | indent(8) }}
 
-    {%- elif f.data_type is variable_array %}
+        {%- elif f.data_type is variable_array %}
         if {{ f|id }} is None:
             {{ new_field(f) }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
         else:
             {{ assign_array(f.data_type, new_field(f), (f|id)) | indent(8) }}
 
-    {%- elif f.data_type is composite %}
+        {%- elif f.data_type is composite %}
         if {{ f|id }} is None:
             {{ new_field(f) }} = {{ composite_ref(f.data_type) }}()
         elif isinstance({{ f|id }}, {{ composite_ref(f.data_type) }}):
@@ -134,19 +136,79 @@ class {{ name }}(_CompositeObject_):
         else:
             raise ValueError(f'{{ f|id }}: expected {{ composite_ref(f.data_type) }} got {type({{ f|id }}).__name__}')
 
-    {%- else -%}{%- assert False -%}
-    {%- endif %}
-{% else %}
+        {%- else -%}{%- assert False -%}
+        {%- endif %}
+    {%- else %}
         pass
-{% endfor %}
-{%- for f in type.fields if f is not padding %}
+    {%- endfor %}
+{%- else %}  {#- IS UNION (guaranteed to contain at least 2 fields none of which are padding) #}
+        """
+        If no parameters are provided, the first field will be default-initialized and selected.
+        If one parameter is provided, it will be used to initialize and select the field under the same name.
+        If more than one parameter is provided, a ValueError will be raised.
+        """
+    {%- for f in type.fields %}
+        self._{{ f|id }}: {{ ''.ljust(type.fields|longest_name_length - f|id|length) -}}
+            _Optional_[{{ strict_type_annotation(f.data_type) }}] = None
+    {%- endfor %}
+        _init_cnt_: int = 0
+    {% for f in type.fields %}
+        if {{ f|id }} is not None:
+            _init_cnt_ += 1
+            self.{{ f|id }} = {{ f|id }}
+    {% endfor %}
+        if _init_cnt_ == 0:
+    {%- set f = type.fields[0] -%}
+    {%- if f.data_type is boolean %}
+            self.{{ f|id }} = False
+
+    {%- elif f.data_type is integer %}
+            self.{{ f|id }} = 0
+
+    {%- elif f.data_type is float %}
+            self.{{ f|id }} = 0.0
+
+    {%- elif f.data_type is fixed_array %}
+        {%- if f.data_type.element_type is composite %}
+            self.{{ f|id }} = _np_.array([{{ composite_ref(f.data_type.element_type) }}() {# -#}
+                                             for _ in range({{ f.data_type.capacity }})], {#  -#}
+                                            {{ f.data_type.element_type|numpy_scalar_type }})
+        {%- else %}
+            self.{{ f|id }} = _np_.zeros({{ f.data_type.capacity }}, {# -#}
+                                            {{ f.data_type.element_type|numpy_scalar_type }})
+        {%- endif %}
+
+    {%- elif f.data_type is variable_array %}
+            self.{{ f|id }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
+
+    {%- elif f.data_type is composite %}
+            self.{{ f|id }} = {{ composite_ref(f.data_type) }}()
+
+    {%- else -%}{%- assert False -%}
+    {%- endif %}  # Default initialization
+        elif _init_cnt_ == 1:
+            pass  # A value is already assigned, nothing to do
+        else:
+            raise ValueError(f'Union cannot hold values of more than one field')
+{%- endif %}
+{% for f in type.fields if f is not padding %}
     @property
-    def {{ f|id }}(self) -> {{ strict_type_annotation(f.data_type) }}:
+    def {{ f|id }}(self) -> {# #}
+    {%- if type is union -%}
+        _Optional_[
+    {%- endif -%}
+        {{ strict_type_annotation(f.data_type) }}
+    {%- if type is union -%}
+        ]
+    {%- endif -%}:
         """{{ f }}"""
         return self._{{ f|id }}
 
     @{{ f|id }}.setter
     def {{ f|id }}(self, x: {{ relaxed_type_annotation(f.data_type) }}) -> None:
+    {%- if type is union %}
+        self._reset_()
+    {%- endif -%}
     {%- if f.data_type is boolean %}
         self._{{ f|id }} = bool(x)
 
@@ -171,6 +233,13 @@ class {{ name }}(_CompositeObject_):
     {%- else -%}{%- assert False -%}
     {%- endif %}
 {% endfor %}
+{%- if type is union %}
+    def _reset_(self) -> None:
+    {%- for f in type.fields %}
+        self._{{ f|id }} = None
+    {%- endfor %}
+{#  #}
+{%- endif %}
     _TYPE_: _StructureType_ = _CompositeObject_._restore_constant_(
         {{ type | pickle | indent(8) }}
     )
