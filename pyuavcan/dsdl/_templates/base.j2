@@ -92,6 +92,14 @@ class {{ name }}(_CompositeObject_):
                      _Optional_[{{ relaxed_type_annotation(f.data_type) }}] = None
                  {%- endfor -%}
     ):
+        """
+        {{ type.full_name }}.{{ type.version.major }}.{{ type.version.minor }}
+        {%- if type is union %}
+        If no parameters are provided, the first field will be default-initialized and selected.
+        If one parameter is provided, it will be used to initialize and select the field under the same name.
+        If more than one parameter is provided, a ValueError will be raised.
+        {%- endif %}
+        """
 {%- if type.deprecated %}
         _warn_('Data type {{ type }} is deprecated', DeprecationWarning)
 {% endif -%}
@@ -140,11 +148,6 @@ class {{ name }}(_CompositeObject_):
 {# #}
     {%- endfor %}
 {%- else %}  {#- IS UNION (guaranteed to contain at least 2 fields none of which are padding) #}
-        """
-        If no parameters are provided, the first field will be default-initialized and selected.
-        If one parameter is provided, it will be used to initialize and select the field under the same name.
-        If more than one parameter is provided, a ValueError will be raised.
-        """
     {%- for f in type.fields %}
         self._{{ f|id }}: {{ ''.ljust(type.fields|longest_name_length - f|id|length) -}}
             _Optional_[{{ strict_type_annotation(f.data_type) }}] = None
