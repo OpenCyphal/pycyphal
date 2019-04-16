@@ -142,6 +142,7 @@ class {{ name }}(_CompositeObject_):
 {%- for f in type.fields if f is not padding %}
     @property
     def {{ f|id }}(self) -> {{ strict_type_annotation(f.data_type) }}:
+        """{{ f }}"""
         return self._{{ f|id }}
 
     @{{ f|id }}.setter
@@ -170,7 +171,7 @@ class {{ name }}(_CompositeObject_):
     {%- else -%}{%- assert False -%}
     {%- endif %}
 {% endfor %}
-    _TYPE_: _StructureType_ = _CompositeObject_._restore_object_(
+    _TYPE_: _StructureType_ = _CompositeObject_._restore_constant_(
         {{ type | pickle | indent(8) }}
     )
     assert isinstance(_TYPE_, _StructureType_)

@@ -17,7 +17,7 @@ class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_CompositeO
 
     {{ data_schema('Response', T.response_type)|indent }}
 
-    _TYPE_: _ServiceType_ = _CompositeObject_._restore_object_(
+    _TYPE_: _ServiceType_ = _CompositeObject_._restore_constant_(
         {{ T | pickle | indent(8) }}
     )
     assert isinstance(_TYPE_, _ServiceType_)

@@ -26,8 +26,8 @@ class CompositeObject:
         raise NotImplementedError
 
     @staticmethod
-    def _restore_object_(encoded_string: str) -> object:
-        """Recovers a pickled gzipped object from base85 string representation."""
+    def _restore_constant_(encoded_string: str) -> object:
+        """Recovers a pickled gzipped constant object from base85 string representation."""
         return pickle.loads(gzip.decompress(base64.b85decode(encoded_string)))
 
 

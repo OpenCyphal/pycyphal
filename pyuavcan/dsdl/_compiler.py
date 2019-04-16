@@ -103,7 +103,7 @@ def _unittest_dsdl_compiler() -> None:
 
     root_ns = _SOURCE_DIRECTORY.parent / pathlib.Path('public_regulated_data_types') / pathlib.Path('uavcan')
 
-    parent_dir = _SOURCE_DIRECTORY.parent / pathlib.Path('.dsdl_generated')
+    parent_dir = _SOURCE_DIRECTORY.parent.parent / pathlib.Path('.dsdl_generated')
     if parent_dir.exists():
         shutil.rmtree(parent_dir, ignore_errors=True)
     parent_dir.mkdir(parents=True, exist_ok=True)
