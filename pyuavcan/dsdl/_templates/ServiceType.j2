@@ -1,7 +1,16 @@
 {% extends "base.j2" -%}
 {%- block contents -%}
 
-from pydsdl import ServiceType as _ServiceType_
+{%- if (T.request_type is union) != (T.response_type is union) %}
+from pydsdl import ServiceType as _ServiceType_, StructureType as _StructureType_, UnionType as _UnionType_
+{%- elif T.request_type is union %}
+from pydsdl import ServiceType as _ServiceType_, UnionType as _UnionType_
+{%- else %}
+from pydsdl import ServiceType as _ServiceType_, StructureType as _StructureType_
+{%- endif %}
+{%- for n in T|imports %}
+import {{ n }}
+{%- endfor %}
 
 
 # noinspection PyPep8Naming, SpellCheckingInspection

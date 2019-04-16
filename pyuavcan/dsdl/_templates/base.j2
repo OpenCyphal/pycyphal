@@ -11,19 +11,14 @@
 # Version:       {{ T.version.major }}.{{ T.version.minor }}
 #
 
-{% if T.deprecated -%}
-from warnings import warn as _warn_
-{%- endif %}
 import numpy as _np_
 from typing import Optional as _Optional_, List as _List_, Union as _Union_
 from pyuavcan.dsdl import CompositeObject as _CompositeObject_
-from pydsdl import StructureType as _StructureType_, UnionType as _UnionType_
-{%- for n in T|imports %}
-import {{ n }}
-{%- endfor %}
+{%- if T.deprecated %}
+from warnings import warn as _warn_
+{%- endif -%}
 
 
-{# #}
 {%- macro composite_ref(t) -%}
     {{ t.full_name }}_{{ t.version.major }}_{{ t.version.minor }}
 {%- endmacro -%}
