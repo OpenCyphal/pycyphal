@@ -46,6 +46,7 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
 
     env.tests['boolean']        = lambda x: isinstance(x, pydsdl.BooleanType)
     env.tests['integer']        = lambda x: isinstance(x, pydsdl.IntegerType)
+    env.tests['uint']           = lambda x: isinstance(x, pydsdl.UnsignedIntegerType)
     env.tests['float']          = lambda x: isinstance(x, pydsdl.FloatType)
     env.tests['array']          = lambda x: isinstance(x, pydsdl.ArrayType)
     env.tests['fixed_array']    = lambda x: isinstance(x, pydsdl.FixedLengthArrayType)
@@ -54,7 +55,6 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
     env.tests['union']          = lambda x: isinstance(x, pydsdl.UnionType)
 
     env.tests['padding']    = lambda x: isinstance(x, pydsdl.PaddingField)
-    env.tests['uint8']      = lambda x: isinstance(x, pydsdl.UnsignedIntegerType) and x.bit_length == 8
 
     env.filters['id']                   = _make_identifier
     env.filters['pickle']               = _pickle_object

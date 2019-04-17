@@ -43,9 +43,10 @@ import {{ n }}
     {%- elif t is float     -%} _ty_.Union[int, float, {{ t|numpy_scalar_type }}]
     {%- elif t is composite -%} {{ composite_ref(t) }}
     {%- elif t is array -%}
-        {%- if t.element_type is uint8 -%}  _ty_.Union[_np_.ndarray, _ty_.List[int], bytes, bytearray]
-        {%- else -%}                        _ty_.Union[_np_.ndarray, {# -#}
-                                                       _ty_.List[{{ strict_type_annotation(t.element_type) }}]]
+        {%- if (t.element_type is uint) and t.element_type.bit_length <= 8 -%}
+            _ty_.Union[_np_.ndarray, _ty_.List[int], bytes, bytearray]
+        {%- else -%}
+            _ty_.Union[_np_.ndarray, _ty_.List[{{ strict_type_annotation(t.element_type) }}]]
         {%- endif -%}
     {%- else -%}{% assert False %}
     {%- endif -%}
