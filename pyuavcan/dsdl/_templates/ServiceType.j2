@@ -1,27 +1,22 @@
 {% extends "base.j2" -%}
 {%- block contents -%}
 
-{%- if (T.request_type is union) != (T.response_type is union) %}
-from pydsdl import ServiceType as _ServiceType_, StructureType as _StructureType_, UnionType as _UnionType_
-{%- elif T.request_type is union %}
-from pydsdl import ServiceType as _ServiceType_, UnionType as _UnionType_
-{%- else %}
-from pydsdl import ServiceType as _ServiceType_, StructureType as _StructureType_
-{%- endif %}
-{%- for n in T|imports %}
-import {{ n }}
-{%- endfor %}
-
-
 # noinspection PyPep8Naming, SpellCheckingInspection
-class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_CompositeObject_):
+class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_dsdl_.CompositeObject):
     {{ data_schema('Request',  T.request_type)|indent }}
 
     {{ data_schema('Response', T.response_type)|indent }}
 
-    _TYPE_: _ServiceType_ = _CompositeObject_._restore_constant_(
+    def _serialize_(self, destination: _dsdl_.SerializedRepresentation) -> None:
+        raise TypeError('Service type {{ T }} cannot be serialized')
+
+    @staticmethod
+    def _deserialize_(source: _dsdl_.SerializedRepresentation) -> _dsdl_.CompositeObject:
+        raise TypeError('Service type {{ T }} cannot be deserialized')
+
+    _TYPE_: _pydsdl_.ServiceType = _dsdl_.CompositeObject._restore_constant_(
         {{ T | pickle | indent(8) }}
     )
-    assert isinstance(_TYPE_, _ServiceType_)
+    assert isinstance(_TYPE_, _pydsdl_.ServiceType)
 
 {%- endblock -%}

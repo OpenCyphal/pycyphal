@@ -12,11 +12,15 @@
 #
 
 import numpy as _np_
-from typing import Optional as _Optional_, List as _List_, Union as _Union_
-from pyuavcan.dsdl import CompositeObject as _CompositeObject_
+import typing as _ty_
+import pydsdl as _pydsdl_
+import pyuavcan.dsdl as _dsdl_
 {%- if T.deprecated %}
-from warnings import warn as _warn_
+import warnings as _warnings_
 {%- endif -%}
+{%- for n in T|imports %}
+import {{ n }}
+{%- endfor %}
 
 
 {%- macro composite_ref(t) -%}
@@ -35,12 +39,13 @@ from warnings import warn as _warn_
 
 {%- macro relaxed_type_annotation(t) -%}
     {%-   if t is boolean   -%} bool
-    {%- elif t is integer   -%} _Union_[int, {{ t|numpy_scalar_type }}]
-    {%- elif t is float     -%} _Union_[int, float, {{ t|numpy_scalar_type }}]
+    {%- elif t is integer   -%} _ty_.Union[int, {{ t|numpy_scalar_type }}]
+    {%- elif t is float     -%} _ty_.Union[int, float, {{ t|numpy_scalar_type }}]
     {%- elif t is composite -%} {{ composite_ref(t) }}
     {%- elif t is array -%}
-        {%- if t.element_type is uint8 -%}  _Union_[_np_.ndarray, _List_[int], bytes, bytearray]
-        {%- else -%}                        _Union_[_np_.ndarray, _List_[{{ strict_type_annotation(t.element_type) }}]]
+        {%- if t.element_type is uint8 -%}  _ty_.Union[_np_.ndarray, _ty_.List[int], bytes, bytearray]
+        {%- else -%}                        _ty_.Union[_np_.ndarray, {# -#}
+                                                       _ty_.List[{{ strict_type_annotation(t.element_type) }}]]
         {%- endif -%}
     {%- else -%}{% assert False %}
     {%- endif -%}
@@ -54,13 +59,13 @@ from warnings import warn as _warn_
     {{ c|id }}: {{ ''.ljust(siblings|longest_name_length - c|id|length) }}{{ strict_type_annotation(c.data_type) }}
 {%- endmacro -%}
 
-{%- macro assign_array(t, dst, src) -%}
+{%- macro assign_array(t, dst, src, field_name) -%}
     {%- if t is fixed_array -%}         {%- set cmp = '!=' -%}
     {%- elif t is variable_array -%}    {%- set cmp = '>' -%}
     {%- else -%}                        {%- assert False -%}
     {%- endif -%}
     if len({{ src }}) {{ cmp }} {{ t.capacity }}:
-        raise ValueError(f'{{ src }}: invalid array length: {len({{ src }})} {{ cmp }} {{ t.capacity }}')
+        raise ValueError(f'{{ field_name }}: invalid array length: {len({{ src }})} {{ cmp }} {{ t.capacity }}')
     elif isinstance({{ src }}, _np_.ndarray) and {{ src }}.dtype == {{ t.element_type|numpy_scalar_type }}:
         {{ dst }} = {{ src }}  # Fast binding if type matches
     else:
@@ -69,7 +74,7 @@ from warnings import warn as _warn_
 
 {%- macro data_schema(name, type) -%}
 # noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection
-class {{ name }}(_CompositeObject_):
+class {{ name }}(_dsdl_.CompositeObject):
 {%- for c in type.constants %}
     {%- if c.data_type is boolean %}
     {{ new_const(c, type.constants) }} = {{ c.value.native_value }}
@@ -89,7 +94,7 @@ class {{ name }}(_CompositeObject_):
                  {%- for f in type.fields if f is not padding -%}
                  ,
                  {{ f|id }}: {{ ''.ljust(type.fields|longest_name_length - f|id|length) -}}
-                     _Optional_[{{ relaxed_type_annotation(f.data_type) }}] = None
+                     _ty_.Optional[{{ relaxed_type_annotation(f.data_type) }}] = None
                  {%- endfor -%}
     ):
         """
@@ -99,9 +104,12 @@ class {{ name }}(_CompositeObject_):
         If one parameter is provided, it will be used to initialize and select the field under the same name.
         If more than one parameter is provided, a ValueError will be raised.
         {%- endif %}
+{%- for f in type.fields if f is not padding %}
+        :param {{ f|id }}: {{ ''.ljust(type.fields|longest_name_length - f|id|length) }}{{ f }}
+{%- endfor %}
         """
 {%- if type.deprecated %}
-        _warn_('Data type {{ type }} is deprecated', DeprecationWarning)
+        _warnings_.warn('Data type {{ type }} is deprecated', DeprecationWarning)
 {% endif -%}
 {%- if type is not union -%}
     {% for f in type.fields if f is not padding %}
@@ -125,13 +133,13 @@ class {{ name }}(_CompositeObject_):
                                             {{ f.data_type.element_type|numpy_scalar_type }})
             {%- endif %}
         else:
-            {{ assign_array(f.data_type, new_field(f), (f|id)) | indent(8) }}
+            {{ assign_array(f.data_type, new_field(f), (f|id), f.name) | indent(8) }}
 
         {%- elif f.data_type is variable_array %}
         if {{ f|id }} is None:
             {{ new_field(f) }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
         else:
-            {{ assign_array(f.data_type, new_field(f), (f|id)) | indent(8) }}
+            {{ assign_array(f.data_type, new_field(f), (f|id), f.name) | indent(8) }}
 
         {%- elif f.data_type is composite %}
         if {{ f|id }} is None:
@@ -150,7 +158,7 @@ class {{ name }}(_CompositeObject_):
 {%- else %}  {#- IS UNION (guaranteed to contain at least 2 fields none of which are padding) #}
     {%- for f in type.fields %}
         self._{{ f|id }}: {{ ''.ljust(type.fields|longest_name_length - f|id|length) -}}
-            _Optional_[{{ strict_type_annotation(f.data_type) }}] = None
+            _ty_.Optional[{{ strict_type_annotation(f.data_type) }}] = None
     {%- endfor %}
         _init_cnt_: int = 0
     {% for f in type.fields %}
@@ -197,7 +205,7 @@ class {{ name }}(_CompositeObject_):
     @property
     def {{ f|id }}(self) -> {# #}
     {%- if type is union -%}
-        _Optional_[
+        _ty_.Optional[
     {%- endif -%}
         {{ strict_type_annotation(f.data_type) }}
     {%- if type is union -%}
@@ -221,7 +229,7 @@ class {{ name }}(_CompositeObject_):
         self._{{ f|id }} = float(x)
 
     {%- elif f.data_type is array %}
-        {{ assign_array(f.data_type, ('self._' + (f|id)), 'x') | indent(4) }}
+        {{ assign_array(f.data_type, ('self._' + (f|id)), 'x', f.name) | indent(4) }}
         assert isinstance(self._{{ f|id }}, _np_.ndarray)
         assert self._{{ f|id }}.dtype == {{ f.data_type.element_type|numpy_scalar_type }}
         assert len(self._{{ f|id }}) {{ '<=' if f.data_type is variable_array else '==' }} {{ f.data_type.capacity }}
@@ -242,11 +250,27 @@ class {{ name }}(_CompositeObject_):
     {%- endfor %}
 {#  #}
 {%- endif %}
-    {%- set meta_type = '_UnionType_' if type is union else '_StructureType_' %}
-    _TYPE_: {{ meta_type }} = _CompositeObject_._restore_constant_(
+    def _serialize_(self, destination: _dsdl_.SerializedRepresentation) -> None:
+        raise NotImplementedError
+
+    @staticmethod
+    def _deserialize_(source: _dsdl_.SerializedRepresentation) -> _dsdl_.CompositeObject:
+        raise NotImplementedError
+
+    {% set meta_type = '_pydsdl_.UnionType' if type is union else '_pydsdl_.StructureType' -%}
+    _TYPE_: {{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
         {{ type | pickle | indent(8) }}
     )
     assert isinstance(_TYPE_, {{ meta_type }})
+
+    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_BYTES_: int = {{ (type.bit_length_range.max + 7) // 8 }}  {# -#}
+        # {{ type.bit_length_range.max }} bits
 {%- endmacro -%}
+
+{#-
+ # The position of this comment defines the number of blank lines between imports and class definition.
+ # Do not put any definitions below.
+ #}
+
 
 {% block contents %}{% endblock %}

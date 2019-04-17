@@ -16,13 +16,18 @@ class CompositeObject:
     Base class of an instance of a DSDL composite type.
     The entities follow the naming pattern "_.*_" to avoid collisions with DSDL attributes.
     """
+    # Type definition as provided by PyDSDL.
     _TYPE_: pydsdl.CompositeType = None
 
-    def _serialize_(self) -> SerializedRepresentation:
+    # The number of bytes that are necessary for holding a serialized representation of an instance of this type.
+    # Undefined for service types.
+    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_BYTES_: typing.Optional[int] = None
+
+    def _serialize_(self, destination: SerializedRepresentation) -> None:
         raise NotImplementedError
 
     @staticmethod
-    def _deserialize_(sr: SerializedRepresentation) -> 'CompositeObject':
+    def _deserialize_(source: SerializedRepresentation) -> 'CompositeObject':
         raise NotImplementedError
 
     @staticmethod
@@ -31,25 +36,38 @@ class CompositeObject:
         return pickle.loads(gzip.decompress(base64.b85decode(encoded_string)))
 
 
+_ClassOrInstance = typing.Union[typing.Type[CompositeObject], CompositeObject]
+
+
 def serialize(o: CompositeObject) -> SerializedRepresentation:
     if isinstance(o, CompositeObject):
+        destination = SerializedRepresentation()
         # noinspection PyProtectedMember
-        return o._serialize_()
+        o._serialize_(destination)
+        return destination
     else:
         raise TypeError(f'Cannot serialize an instance of {type(o).__name__}')
 
 
-def deserialize(cls: typing.Type[CompositeObject], sr: SerializedRepresentation) -> CompositeObject:
-    if issubclass(cls, CompositeObject) and isinstance(sr, SerializedRepresentation):
+def deserialize(cls: typing.Type[CompositeObject], source: SerializedRepresentation) -> CompositeObject:
+    if issubclass(cls, CompositeObject) and isinstance(source, SerializedRepresentation):
         # noinspection PyProtectedMember
-        return cls._deserialize_(sr)
+        return cls._deserialize_(source)
     else:
-        raise TypeError(f'Cannot deserialize an instance of {cls} from {type(sr).__name__}')
+        raise TypeError(f'Cannot deserialize an instance of {cls} from {type(source).__name__}')
 
 
-def get_type(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> pydsdl.CompositeType:
-    if isinstance(class_or_instance, CompositeObject) or issubclass(class_or_instance, CompositeObject):
-        # noinspection PyProtectedMember
-        return class_or_instance._TYPE_
+def get_type(class_or_instance: _ClassOrInstance) -> pydsdl.CompositeType:
+    # noinspection PyProtectedMember
+    out = class_or_instance._TYPE_
+    assert isinstance(out, pydsdl.CompositeType)
+    return out
+
+
+def get_serialized_representation_buffer_size_in_bytes(class_or_instance: _ClassOrInstance) -> int:
+    # noinspection PyProtectedMember
+    out = class_or_instance._SERIALIZED_REPRESENTATION_BUFFER_SIZE_BYTES_
+    if isinstance(out, int):
+        return out
     else:
-        raise TypeError(f'Expected a DSDL object or its type, got {class_or_instance!r}')
+        raise TypeError(f'Type {get_type(class_or_instance)} cannot be directly serialized or deserialized')

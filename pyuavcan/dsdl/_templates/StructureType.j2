@@ -1,16 +1,6 @@
 {% extends "base.j2" %}
 {%- block contents -%}
 
-{%- if T is union %}
-from pydsdl import UnionType as _UnionType_
-{%- else %}
-from pydsdl import StructureType as _StructureType_
-{%- endif %}
-{%- for n in T|imports %}
-import {{ n }}
-{%- endfor %}
-
-
 {{ data_schema('%s_%s_%s'|format(T.short_name, T.version.major, T.version.minor), T) }}
 
 {%- endblock -%}
