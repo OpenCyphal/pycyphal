@@ -59,7 +59,7 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
     env.filters['id']                   = _make_identifier
     env.filters['pickle']               = _pickle_object
     env.filters['numpy_scalar_type']    = _numpy_scalar_type
-    env.filters['longest_name_length']  = lambda c: max(map(len, map(lambda x: x.name, c)))
+    env.filters['longest_id_length']    = lambda c: max(map(len, map(lambda x: _make_identifier(x), c)))
     env.filters['imports']              = _list_imports
 
     generator.generate_all()
@@ -98,12 +98,20 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
 
 
 def _list_imports(t: pydsdl.CompositeType) -> typing.List[str]:
+    # Make a list of all attributes defined by this type
     if isinstance(t, pydsdl.ServiceType):
         atr = t.request_type.attributes + t.response_type.attributes
     else:
         atr = t.attributes
-    # noinspection PyUnresolvedReferences
-    return list(sorted(set(x.data_type.full_namespace for x in atr if isinstance(x.data_type, pydsdl.CompositeType))))
+
+    # Extract data types of said attributes; for type constructors such as arrays extract the element type
+    dep_types = list(map(lambda x: x.data_type, atr))
+    for t in dep_types[:]:
+        if isinstance(t, pydsdl.ArrayType):
+            dep_types.append(t.element_type)
+
+    # Make a list of unique full namespaces of referenced composites
+    return list(sorted(set(x.full_namespace for x in dep_types if isinstance(x, pydsdl.CompositeType))))
 
 
 def _unittest_dsdl_compiler() -> None:

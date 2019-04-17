@@ -56,7 +56,7 @@ import {{ n }}
 {%- endmacro -%}
 
 {%- macro new_const(c, siblings) -%}
-    {{ c|id }}: {{ ''.ljust(siblings|longest_name_length - c|id|length) }}{{ strict_type_annotation(c.data_type) }}
+    {{ c|id }}: {{ ''.ljust(siblings|longest_id_length - c|id|length) }}{{ strict_type_annotation(c.data_type) }}
 {%- endmacro -%}
 
 {%- macro assign_array(t, dst, src, field_name) -%}
@@ -93,7 +93,7 @@ class {{ name }}(_dsdl_.CompositeObject):
                  {%- if type is union -%}, *{%- endif -%}
                  {%- for f in type.fields if f is not padding -%}
                  ,
-                 {{ f|id }}: {{ ''.ljust(type.fields|longest_name_length - f|id|length) -}}
+                 {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
                      _ty_.Optional[{{ relaxed_type_annotation(f.data_type) }}] = None
                  {%- endfor -%}
     ):
@@ -105,7 +105,7 @@ class {{ name }}(_dsdl_.CompositeObject):
         If more than one parameter is provided, a ValueError will be raised.
         {%- endif %}
 {%- for f in type.fields if f is not padding %}
-        :param {{ f|id }}: {{ ''.ljust(type.fields|longest_name_length - f|id|length) }}{{ f }}
+        :param {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) }}{{ f }}
 {%- endfor %}
         """
 {%- if type.deprecated %}
@@ -157,7 +157,7 @@ class {{ name }}(_dsdl_.CompositeObject):
     {%- endfor %}
 {%- else %}  {#- IS UNION (guaranteed to contain at least 2 fields none of which are padding) #}
     {%- for f in type.fields %}
-        self._{{ f|id }}: {{ ''.ljust(type.fields|longest_name_length - f|id|length) -}}
+        self._{{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
             _ty_.Optional[{{ strict_type_annotation(f.data_type) }}] = None
     {%- endfor %}
         _init_cnt_: int = 0
@@ -216,9 +216,6 @@ class {{ name }}(_dsdl_.CompositeObject):
 
     @{{ f|id }}.setter
     def {{ f|id }}(self, x: {{ relaxed_type_annotation(f.data_type) }}) -> None:
-    {%- if type is union %}
-        self._reset_()
-    {%- endif -%}
     {%- if f.data_type is boolean %}
         self._{{ f|id }} = bool(x)
 
@@ -242,14 +239,12 @@ class {{ name }}(_dsdl_.CompositeObject):
 
     {%- else -%}{%- assert False -%}
     {%- endif %}
+    {%- if type is union %}
+        {%- for z in type.fields if z.name != f.name %}
+        self._{{ z|id }} = None
+        {%- endfor %}
+    {%- endif %}
 {% endfor %}
-{%- if type is union %}
-    def _reset_(self) -> None:
-    {%- for f in type.fields %}
-        self._{{ f|id }} = None
-    {%- endfor %}
-{#  #}
-{%- endif %}
     def _serialize_(self, destination: _dsdl_.SerializedRepresentation) -> None:
         raise NotImplementedError
 
@@ -257,11 +252,11 @@ class {{ name }}(_dsdl_.CompositeObject):
     def _deserialize_(source: _dsdl_.SerializedRepresentation) -> _dsdl_.CompositeObject:
         raise NotImplementedError
 
-    {% set meta_type = '_pydsdl_.UnionType' if type is union else '_pydsdl_.StructureType' -%}
-    _TYPE_: {{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
+    {% set meta_type = 'UnionType' if type is union else 'StructureType' -%}
+    _TYPE_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
         {{ type | pickle | indent(8) }}
     )
-    assert isinstance(_TYPE_, {{ meta_type }})
+    assert isinstance(_TYPE_, _pydsdl_.{{ meta_type }})
 
     _SERIALIZED_REPRESENTATION_BUFFER_SIZE_BYTES_: int = {{ (type.bit_length_range.max + 7) // 8 }}  {# -#}
         # {{ type.bit_length_range.max }} bits
