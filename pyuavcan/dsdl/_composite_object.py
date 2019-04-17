@@ -8,7 +8,7 @@ import pydsdl
 import pickle
 import gzip
 import base64
-from ._serialized_representation import SerializedRepresentation
+from ._serialized_representation import Serializer, Deserializer
 
 
 class CompositeObject:
@@ -23,11 +23,11 @@ class CompositeObject:
     # Undefined for service types.
     _SERIALIZED_REPRESENTATION_BUFFER_SIZE_BYTES_: typing.Optional[int] = None
 
-    def _serialize_(self, destination: SerializedRepresentation) -> None:
+    def _serialize_(self, destination: Serializer) -> None:
         raise NotImplementedError
 
     @staticmethod
-    def _deserialize_(source: SerializedRepresentation) -> 'CompositeObject':
+    def _deserialize_(source: Deserializer) -> 'CompositeObject':
         raise NotImplementedError
 
     @staticmethod
@@ -39,9 +39,9 @@ class CompositeObject:
 _ClassOrInstance = typing.Union[typing.Type[CompositeObject], CompositeObject]
 
 
-def serialize(o: CompositeObject) -> SerializedRepresentation:
+def serialize(o: CompositeObject) -> Serializer:
     if isinstance(o, CompositeObject):
-        destination = SerializedRepresentation()
+        destination = Serializer()
         # noinspection PyProtectedMember
         o._serialize_(destination)
         return destination
@@ -49,8 +49,8 @@ def serialize(o: CompositeObject) -> SerializedRepresentation:
         raise TypeError(f'Cannot serialize an instance of {type(o).__name__}')
 
 
-def deserialize(cls: typing.Type[CompositeObject], source: SerializedRepresentation) -> CompositeObject:
-    if issubclass(cls, CompositeObject) and isinstance(source, SerializedRepresentation):
+def deserialize(cls: typing.Type[CompositeObject], source: Deserializer) -> CompositeObject:
+    if issubclass(cls, CompositeObject) and isinstance(source, Deserializer):
         # noinspection PyProtectedMember
         return cls._deserialize_(source)
     else:
