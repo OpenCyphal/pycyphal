@@ -27,6 +27,7 @@ import warnings as _warnings_
 import {{ n }}
 {%- endfor %}
 
+{%- from 'serialization.j2' import serialize, deserialize -%}
 
 {%- macro composite_ref(t) -%}
     {{ t.full_name }}_{{ t.version.major }}_{{ t.version.minor }}
@@ -252,19 +253,11 @@ class {{ name }}(_dsdl_.CompositeObject):
     {%- endif %}
 {% endfor %}
     def _serialize_(self) -> _dsdl_.Serializer:
-        _ser_ = _dsdl_.Serializer(buffer_size_in_bytes={{ (type.bit_length_range.max + 7) // 8 }})  {# -#}
-                                       # Maximum length {{ type.bit_length_range.max }} bits
-{%- for f in type.fields %}
-    {%- if f is padding %}
-        _ser_.skip_bits({{ f.data_type.bit_length }})
-    {%- else %}
-    {%- endif %}
-{%- endfor %}
-        return _ser_
+        {{ serialize(type, 'self')|indent }}
 
     @staticmethod
     def _deserialize_(source: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
-        raise NotImplementedError
+        {{ deserialize(type, 'self')|indent }}
 
     {% set meta_type = 'UnionType' if type is union else 'StructureType' -%}
     _TYPE_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(

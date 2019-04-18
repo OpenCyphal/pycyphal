@@ -54,7 +54,7 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
     env.tests['variable_array'] = lambda x: isinstance(x, pydsdl.VariableLengthArrayType)
     env.tests['composite']      = lambda x: isinstance(x, pydsdl.CompositeType)
     env.tests['union']          = lambda x: isinstance(x, pydsdl.UnionType)
-    env.tests['padding']        = lambda x: isinstance(x, pydsdl.PaddingField)
+    env.tests['padding']        = lambda x: isinstance(x, pydsdl.PaddingField) or isinstance(x, pydsdl.VoidType)
 
     env.filters['id']                   = _make_identifier
     env.filters['pickle']               = _pickle_object

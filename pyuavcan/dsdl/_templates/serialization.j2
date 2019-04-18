@@ -5,3 +5,27 @@
 -#}
 
 
+{%- macro serialize(type, ref) -%}
+    _ser_ = _dsdl_.Serializer(buffer_size_in_bytes={{ (type.bit_length_range.max + 7) // 8 }})  {# -#}
+                                   # Maximum length {{ type.bit_length_range.max }} bits
+    {{ _serialize_field(type, ref) }}
+    return _ser_
+{%- endmacro -%}
+
+{%- macro _serialize_field(t, ref) -%}
+    {%- if t is padding %}
+    _ser_.skip_bits({{ t.bit_length }})
+
+    {%- elif t is composite -%}
+        {%- for f in t.fields %}
+    {{ _serialize_field(f.data_type, ref + '.' + (f|id)) }}
+        {%- endfor %}
+
+    {%- else -%}
+    {%- endif -%}
+{%- endmacro -%}
+
+
+{%- macro deserialize(type, ref) -%}
+    raise NotImplementedError
+{%- endmacro -%}
