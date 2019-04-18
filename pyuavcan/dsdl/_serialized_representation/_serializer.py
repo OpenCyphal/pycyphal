@@ -50,7 +50,7 @@ class SerializerBase:
         return f'{type(self).__name__}({self})'
 
     #
-    # Fast methods optimized for aligned primitive fields; they are byte order invariant.
+    # Fast methods optimized for aligned primitive fields.
     # The most specialized methods must be used whenever possible for best performance.
     #
     def add_aligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:
@@ -131,7 +131,7 @@ class SerializerBase:
         self.add_aligned_unsigned((2 ** bit_length + value) if value < 0 else value, bit_length)
 
     #
-    # Least specialized methods: no assumptions about alignment or element size are made.
+    # Least specialized methods: no assumptions about alignment is made.
     # These are the slowest and may be used only if none of the above (specialized) methods are suitable.
     #
     def add_unaligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:
