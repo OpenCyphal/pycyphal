@@ -227,6 +227,9 @@ class BigEndianSerializer(SerializerBase):
     def add_aligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:  # pragma: no cover
         raise NotImplementedError('Pull requests are welcome')
 
+    def add_unaligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:
+        raise NotImplementedError('Pull requests are welcome')
+
 
 def _byte_as_bit_string(x: int) -> str:
     return bin(x)[2:].zfill(8)
@@ -339,9 +342,19 @@ def _unittest_serializer_unaligned() -> None:                   # Tricky cases w
     ], numpy.bool))
     validate_addition('10100 11101')
 
+    ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=numpy.ubyte))
+    validate_addition(_byte_as_bit_string(0x12) +
+                      _byte_as_bit_string(0x34) +
+                      _byte_as_bit_string(0x56))
+
     ser.add_unaligned_array_of_bits(numpy.array([False, True, True], numpy.bool))
     validate_addition('011')
     assert ser._bit_offset % 8 == 0, 'Byte alignment is not restored'
+
+    ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=numpy.ubyte))     # We're actually aligned here
+    validate_addition(_byte_as_bit_string(0x12) +
+                      _byte_as_bit_string(0x34) +
+                      _byte_as_bit_string(0x56))
 
     ser.add_unaligned_bit(True)
     ser.add_unaligned_bit(False)
