@@ -16,7 +16,10 @@ class SerializerBase:
     """
 
     def __init__(self, buffer_size_in_bytes: int):
-        self._buf: numpy.ndarray = numpy.zeros(int(buffer_size_in_bytes), dtype=numpy.ubyte)
+        # We extend the requested buffer size by one because some of the non-byte-aligned write operations
+        # require us to temporarily use one extra byte after the current byte.
+        buffer_size_in_bytes = int(buffer_size_in_bytes) + 1
+        self._buf: numpy.ndarray = numpy.zeros(buffer_size_in_bytes, dtype=numpy.ubyte)
         self._bit_offset = 0
 
     @property
@@ -36,7 +39,7 @@ class SerializerBase:
         self._bit_offset += bit_length
 
     def __str__(self) -> str:
-        s = ' '.join(map(lambda b: bin(b)[2:].zfill(8), self.buffer))
+        s = ' '.join(map(_byte_as_bit_string, self.buffer))
         if self._bit_offset % 8 != 0:
             bits_to_cut_off = 8 - self._bit_offset % 8
             return s[:-bits_to_cut_off]
@@ -58,6 +61,10 @@ class SerializerBase:
         raise NotImplementedError
 
     def add_aligned_array_of_bits(self, x: numpy.ndarray) -> None:
+        """
+        Accepts an array of bool's and encodes it into the destination using fast native serialization routine
+        implemented in numpy. The current bit offset must be byte-aligned.
+        """
         assert self._bit_offset % 8 == 0
         packed = numpy.packbits(x)  # Fortunately, numpy uses same bit ordering as DSDL, no additional transforms needed
         assert len(packed) * 8 >= len(x)
@@ -95,10 +102,10 @@ class SerializerBase:
         self.add_aligned_u16((65536 + x) if x < 0 else x)
 
     def add_aligned_i32(self, x: int) -> None:
-        self.add_aligned_u32((2**32 + x) if x < 0 else x)
+        self.add_aligned_u32((2 ** 32 + x) if x < 0 else x)
 
     def add_aligned_i64(self, x: int) -> None:
-        self.add_aligned_u64((2**64 + x) if x < 0 else x)
+        self.add_aligned_u64((2 ** 64 + x) if x < 0 else x)
 
     def add_aligned_f16(self, x: float) -> None:
         self.add_aligned_bytes(self._float_to_bytes('e', x))
@@ -119,18 +126,28 @@ class SerializerBase:
         bs = self._unsigned_to_bytes(value, bit_length)
         self._buf[self._byte_offset:self._byte_offset + len(bs)] = bs
         self._bit_offset += bit_length
-        self._buf[self._byte_offset] <<= (8 - bit_length % 8) & 0b111  # Most significant bit has index zero
 
     def add_aligned_signed(self, value: int, bit_length: int) -> None:
-        self.add_aligned_unsigned((2**bit_length + value) if value < 0 else value, bit_length)
+        self.add_aligned_unsigned((2 ** bit_length + value) if value < 0 else value, bit_length)
 
     #
     # Least specialized methods: no assumptions about alignment or element size are made.
     # These are the slowest and may be used only if none of the above (specialized) methods are suitable.
     #
+    def add_unaligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:
+        """See the aligned counterpart."""
+        raise NotImplementedError
+
+    def add_unaligned_array_of_bits(self, x: numpy.ndarray) -> None:
+        packed = numpy.packbits(x)  # Fortunately, numpy uses same bit ordering as DSDL, no additional transforms needed
+        backtrack = len(packed) * 8 - len(x)
+        assert backtrack >= 0
+        self.add_unaligned_bytes(packed)
+        self._bit_offset -= backtrack
+
     def add_unaligned_bytes(self, value: numpy.ndarray) -> None:
         assert value.dtype == numpy.ubyte
-        # This is a faster alternative of the Ben Dyer's unaligned bit copy algorithm:
+        # This is a faster variation of the Ben Dyer's unaligned bit copy algorithm:
         # https://github.com/UAVCAN/libuavcan/blob/fd8ba19bc9c09c05a/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12
         # It is faster because here we are aware that the source is always aligned, which we take advantage of.
         right = self._bit_offset % 8
@@ -142,11 +159,13 @@ class SerializerBase:
 
     def add_unaligned_unsigned(self, value: int, bit_length: int) -> None:
         bs = self._unsigned_to_bytes(value, bit_length)
+        backtrack = len(bs) * 8 - bit_length
+        assert backtrack >= 0
         self.add_unaligned_bytes(bs)
-        # TODO self._buf[self._byte_offset] <<= 8 - bit_length % 8
+        self._bit_offset -= backtrack
 
     def add_unaligned_signed(self, value: int, bit_length: int) -> None:
-        self.add_unaligned_unsigned((2**bit_length + value) if value < 0 else value, bit_length)
+        self.add_unaligned_unsigned((2 ** bit_length + value) if value < 0 else value, bit_length)
 
     def add_unaligned_f16(self, x: float) -> None:
         self.add_unaligned_bytes(self._float_to_bytes('e', x))
@@ -158,12 +177,8 @@ class SerializerBase:
         self.add_unaligned_bytes(self._float_to_bytes('d', x))
 
     def add_unaligned_bit(self, x: bool) -> None:
-        self._buf[self._byte_offset] |= bool(x) << ((8 - self._bit_offset % 8) & 0b111)
+        self._buf[self._byte_offset] |= bool(x) << (7 - self._bit_offset % 8)
         self._bit_offset += 1
-
-    def add_unaligned_array_of_bits(self, x: numpy.ndarray) -> None:
-        packed = numpy.packbits(x)  # Fortunately, numpy uses same bit ordering as DSDL
-        raise NotImplementedError
 
     #
     # Internal primitive conversion methods.
@@ -171,8 +186,17 @@ class SerializerBase:
     @staticmethod
     def _unsigned_to_bytes(value: int, bit_length: int) -> numpy.ndarray:
         assert bit_length >= 1
-        return numpy.frombuffer(struct.pack('<Q', value & (2 ** bit_length - 1))[:(bit_length + 7) // 8],
-                                dtype=numpy.ubyte)
+        assert value >= 0, 'This operation is undefined for negative integers'
+        value &= 2 ** bit_length - 1
+        num_bytes = (bit_length + 7) // 8
+        out = numpy.zeros(num_bytes, dtype=numpy.ubyte)
+        for i in range(num_bytes):      # Oh, why is my life like this?
+            out[i] = value & 0xFF
+            value >>= 8
+        # The trailing bits must be shifted left because the most significant bit has index zero. If the bit length
+        # is an integer multiple of eight, this won't be necessary and the operation will have no effect.
+        out[-1] <<= (8 - bit_length % 8) & 0b111
+        return out
 
     @staticmethod
     def _float_to_bytes(format_char: str, x: float) -> numpy.ndarray:
@@ -181,73 +205,94 @@ class SerializerBase:
             out = struct.pack(f, x)
         except OverflowError:  # Oops, let's truncate (saturation must be implemented by the caller if needed)
             out = struct.pack(f, numpy.inf if x > 0 else -numpy.inf)
-        return numpy.frombuffer(out, dtype=numpy.ubyte)
+        return numpy.frombuffer(out, dtype=numpy.ubyte)  # Note: this operation does not copy the underlying bytes
+
+
+class LittleEndianSerializer(SerializerBase):
+    # noinspection PyUnresolvedReferences
+    def add_aligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:
+        # This is close to direct memcpy() from the source memory into the destination memory, which is very fast.
+        # We assume that the local platform uses IEEE 754-compliant floating point representation; otherwise,
+        # the generated serialized representation may be incorrect. NumPy seems to only support IEEE-754 compliant
+        # platforms though so I don't expect any compatibility issues.
+        self.add_aligned_bytes(x.view(numpy.ubyte))
+
+    def add_unaligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:
+        # This is much slower than the aligned version because we have to manually copy and shift each byte,
+        # but still better than manual elementwise serialization.
+        self.add_unaligned_bytes(x.view(numpy.ubyte))
+
+
+class BigEndianSerializer(SerializerBase):
+    def add_aligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:  # pragma: no cover
+        raise NotImplementedError('Pull requests are welcome')
+
+
+def _byte_as_bit_string(x: int) -> str:
+    return bin(x)[2:].zfill(8)
 
 
 def _unittest_serializer_aligned() -> None:
-    import sys
-
-    def new(buffer_size_in_bytes: int) -> SerializerBase:
-        return {
-            'little': LittleEndianSerializer,
-            'big': BigEndianSerializer,
-        }[sys.byteorder](buffer_size_in_bytes)
+    from pytest import raises
+    from . import Serializer
 
     def unseparate(s: typing.Any) -> str:
-        return str(s).replace(' ', '').replace('_', '')
+        return str(s).replace(' ', '')
 
-    def bit_str(s: int) -> str:
-        return bin(s)[2:].zfill(8)
-
-    ser = new(50)
+    bs = _byte_as_bit_string
+    ser = Serializer(50)
     expected = ''
     assert str(ser) == ''
 
     ser.add_aligned_u8(0b1010_0111)
-    expected += '1010_0111'
+    expected += '1010 0111'
     assert unseparate(ser) == unseparate(expected)
 
     ser.add_aligned_i64(0x1234_5678_90ab_cdef)
-    expected += bit_str(0xef) + bit_str(0xcd) + bit_str(0xab) + bit_str(0x90)
-    expected += bit_str(0x78) + bit_str(0x56) + bit_str(0x34) + bit_str(0x12)
+    expected += bs(0xef) + bs(0xcd) + bs(0xab) + bs(0x90)
+    expected += bs(0x78) + bs(0x56) + bs(0x34) + bs(0x12)
     assert unseparate(ser) == unseparate(expected)
 
-    ser.add_aligned_i32(-0x1234_5678)  # two's complement: 0xedcb_a988
-    expected += bit_str(0x88) + bit_str(0xa9) + bit_str(0xcb) + bit_str(0xed)
+    ser.add_aligned_i32(-0x1234_5678)                           # Two's complement: 0xedcb_a988
+    expected += bs(0x88) + bs(0xa9) + bs(0xcb) + bs(0xed)
     assert unseparate(ser) == unseparate(expected)
 
-    ser.add_aligned_i16(-2)  # two's complement: 0xfffe
+    ser.add_aligned_i16(-2)                                     # Two's complement: 0xfffe
     ser.skip_bits(8)
     ser.add_aligned_i8(127)
-    expected += bit_str(0xfe) + bit_str(0xff) + bit_str(0x00) + bit_str(0x7f)
+    expected += bs(0xfe) + bs(0xff) + bs(0x00) + bs(0x7f)
     assert unseparate(ser) == unseparate(expected)
 
-    ser.add_aligned_f64(1)                              # IEEE 754: 0x3ff0_0000_0000_0000
-    expected += bit_str(0x00) * 6 + bit_str(0xf0) + bit_str(0x3f)
-    ser.add_aligned_f32(1)                              # IEEE 754: 0x3f80_0000
-    expected += bit_str(0x00) * 2 + bit_str(0x80) + bit_str(0x3f)
-    ser.add_aligned_f16(99999.9)                        # IEEE 754: overflow, degenerates to positive infinity: 0x7c00
-    expected += bit_str(0x00) * 1 + bit_str(0x7c)
+    ser.add_aligned_f64(1)                                      # IEEE 754: 0x3ff0_0000_0000_0000
+    expected += bs(0x00) * 6 + bs(0xf0) + bs(0x3f)
+    ser.add_aligned_f32(1)                                      # IEEE 754: 0x3f80_0000
+    expected += bs(0x00) * 2 + bs(0x80) + bs(0x3f)
+    ser.add_aligned_f16(99999.9)                                # IEEE 754: overflow, degenerates to +inf: 0x7c00
+    expected += bs(0x00) * 1 + bs(0x7c)
     assert unseparate(ser) == unseparate(expected)
 
-    ser.add_aligned_unsigned(0xBEDA, 12)        # 0xBxxx will be truncated away
-    expected += '1101 1010 1110'                # This case is from the examples from the specification
+    ser.add_aligned_unsigned(0xBEDA, 12)                        # 0xBxxx will be truncated away
+    expected += '1101 1010 1110'                                # This case is from the examples from the specification
     assert unseparate(ser) == unseparate(expected)
 
-    ser.skip_bits(4)                            # Bring back into alignment
+    ser.skip_bits(4)                                            # Bring back into alignment
     expected += '0000'
     assert unseparate(ser) == unseparate(expected)
 
-    ser.add_aligned_signed(-2, 9)               # Two's complement: 510 = 0b1_1111_1110
-    expected += '11111110 1'                    # MSB is at the end
+    ser.add_aligned_unsigned(0xBEDA, 16)                        # Making sure byte-size-aligned are handled well, too
+    expected += bs(0xda) + bs(0xbe)
     assert unseparate(ser) == unseparate(expected)
 
-    ser.skip_bits(7)                            # Bring back into alignment
+    ser.add_aligned_signed(-2, 9)                               # Two's complement: 510 = 0b1_1111_1110
+    expected += '11111110 1'                                    # MSB is at the end
+    assert unseparate(ser) == unseparate(expected)
+
+    ser.skip_bits(7)                                            # Bring back into alignment
     expected += '0' * 7
     assert unseparate(ser) == unseparate(expected)
 
     ser.add_aligned_array_of_standard_size_primitives(numpy.array([0xdead, 0xbeef], numpy.uint16))
-    expected += bit_str(0xad) + bit_str(0xde) + bit_str(0xef) + bit_str(0xbe)
+    expected += bs(0xad) + bs(0xde) + bs(0xef) + bs(0xbe)
     assert unseparate(ser) == unseparate(expected)
 
     ser.add_aligned_array_of_bits(numpy.array([
@@ -266,17 +311,70 @@ def _unittest_serializer_aligned() -> None:
 
     print('repr(serializer):', repr(ser))
 
-
-class LittleEndianSerializer(SerializerBase):
-    # noinspection PyUnresolvedReferences
-    def add_aligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:
-        # This is close to raw memcpy() from the source memory into the destination memory, which is very fast.
-        # We assume that the target platform uses IEEE 754-compliant floating point representation; otherwise,
-        # the generated serialized representation may be incorrect. NumPy seems to only support IEEE-754 compliant
-        # platforms though so I don't expect any compatibility issues.
-        self.add_aligned_bytes(x.view(numpy.ubyte))
+    with raises(ValueError, match='.*read-only.*'):
+        ser.buffer[0] = 123                                     # The buffer is read-only for safety reasons
 
 
-class BigEndianSerializer(SerializerBase):
-    def add_aligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:
-        raise NotImplementedError('Pull requests are welcome')
+# noinspection PyProtectedMember
+def _unittest_serializer_unaligned() -> None:                   # Tricky cases with unaligned fields (very tricky)
+    from . import Serializer
+
+    ser = Serializer(40)
+    expected = ''
+
+    def validate_addition(bit_string: str) -> None:
+        nonlocal expected
+        expected += bit_string
+        assert str(ser).replace(' ', '') == str(expected).replace(' ', '')
+
+    ser.add_unaligned_array_of_bits(numpy.array([
+        True, False, True, False, False, False, True, True,     # 10100011
+        True, True, True,                                       # 111
+    ], numpy.bool))
+    validate_addition('10100011 111')
+
+    ser.add_unaligned_array_of_bits(numpy.array([
+        True, False, True, False, False,                        # ???10100 (byte alignment restored here)
+        True, True, True, False, True,                          # 11101 (byte alignment lost, three bits short)
+    ], numpy.bool))
+    validate_addition('10100 11101')
+
+    ser.add_unaligned_array_of_bits(numpy.array([False, True, True], numpy.bool))
+    validate_addition('011')
+    assert ser._bit_offset % 8 == 0, 'Byte alignment is not restored'
+
+    ser.add_unaligned_bit(True)
+    ser.add_unaligned_bit(False)
+    ser.add_unaligned_bit(False)
+    ser.add_unaligned_bit(True)
+    ser.add_unaligned_bit(True)
+    validate_addition('10011')                                  # Three bits short until alignment
+
+    ser.add_unaligned_signed(-2, 8)                             # Two's complement: 254 = 1111 1110
+    validate_addition('1111 1110')
+
+    ser.add_unaligned_unsigned(0b111_0110_0101, 11)             # Tricky, eh? Eleven bits, unaligned write
+    validate_addition('0110 0101 111')                          # We are aligned now
+    assert ser._bit_offset % 8 == 0, 'Byte alignment is not restored'
+
+    ser.add_unaligned_unsigned(0b1110, 3)                       # MSB truncated away
+    validate_addition('110')
+
+    ser.add_unaligned_f64(1)
+    validate_addition('00000000 00000000 00000000 00000000 00000000 00000000 11110000 00111111')
+
+    ser.add_unaligned_f32(1)
+    validate_addition('00000000 00000000 10000000 00111111')
+
+    ser.add_unaligned_f16(-99999.9)
+    validate_addition('00000000 11111100')
+
+    ser.add_unaligned_array_of_standard_size_primitives(numpy.array([0xdead, 0xbeef], numpy.uint16))
+    validate_addition('10101101 11011110'   # dead :(
+                      '11101111 10111110')  # beef
+
+    ser.skip_bits(5)
+    validate_addition('00000')
+    assert ser._bit_offset % 8 == 0, 'Byte alignment is not restored'
+
+    print('repr(serializer):', repr(ser))
