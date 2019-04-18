@@ -9,9 +9,17 @@ import struct
 
 
 class DeserializerBase:
-    def __init__(self, serialized_representation: numpy.ndarray):
-        if not isinstance(serialized_representation, numpy.ndarray) or serialized_representation.dtype != numpy.ubyte:
-            raise ValueError(f'Unsupported buffer: {type(serialized_representation)}')
+    def __init__(self, source_bytes: numpy.ndarray):
+        if not isinstance(source_bytes, numpy.ndarray) or source_bytes.dtype != numpy.ubyte:
+            raise ValueError(f'Unsupported buffer: {type(source_bytes)}')
 
-        self._buf = serialized_representation
+        self._buf = source_bytes
         self._bit_offset = 0
+
+
+class LittleEndianDeserializer(DeserializerBase):
+    pass
+
+
+class BigEndianDeserializer(DeserializerBase):
+    pass

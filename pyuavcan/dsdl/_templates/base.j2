@@ -246,11 +246,13 @@ class {{ name }}(_dsdl_.CompositeObject):
         {%- endfor %}
     {%- endif %}
 {% endfor %}
-    def _serialize_(self, destination: _dsdl_.SerializedRepresentation) -> None:
-        raise NotImplementedError
+    def _serialize_(self) -> _dsdl_.Serializer:
+        _ser_ = _dsdl_.Serializer(buffer_size_in_bytes={{ (type.bit_length_range.max + 7) // 8 }})  {# -#}
+                                       # Maximum length {{ type.bit_length_range.max }} bits
+        return _ser_
 
     @staticmethod
-    def _deserialize_(source: _dsdl_.SerializedRepresentation) -> _dsdl_.CompositeObject:
+    def _deserialize_(source: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
         raise NotImplementedError
 
     {% set meta_type = 'UnionType' if type is union else 'StructureType' -%}
@@ -258,9 +260,6 @@ class {{ name }}(_dsdl_.CompositeObject):
         {{ type | pickle | indent(8) }}
     )
     assert isinstance(_TYPE_, _pydsdl_.{{ meta_type }})
-
-    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_BYTES_: int = {{ (type.bit_length_range.max + 7) // 8 }}  {# -#}
-        # {{ type.bit_length_range.max }} bits
 {%- endmacro -%}
 
 {#-

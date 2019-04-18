@@ -5,4 +5,4 @@
 
 from ._compiler import generate_python_package_from_dsdl_namespace
 from ._composite_object import CompositeObject, serialize, deserialize, get_type
-from ._serialized_representation import SerializedRepresentation
+from ._serialized_representation import Serializer, Deserializer

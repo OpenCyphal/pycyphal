@@ -15,8 +15,10 @@ Deserializer: typing.Type['_DeserializerBase']
 
 if sys.byteorder == 'little':
     from ._serializer import LittleEndianSerializer as Serializer
+    from ._deserializer import LittleEndianDeserializer as Deserializer
 elif sys.byteorder == 'big':
     from ._serializer import BigEndianSerializer as Serializer
+    from ._deserializer import BigEndianDeserializer as Deserializer
     raise RuntimeError(
         'BIG-ENDIAN PLATFORMS ARE NOT YET SUPPORTED. '
         'The current serialization code assumes that the native byte order is little-endian. Since UAVCAN uses '

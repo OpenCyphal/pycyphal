@@ -7,11 +7,11 @@ class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_dsdl_.Comp
 
     {{ data_schema('Response', T.response_type)|indent }}
 
-    def _serialize_(self, destination: _dsdl_.SerializedRepresentation) -> None:
+    def _serialize_(self) -> _dsdl_.Serializer:
         raise TypeError('Service type {{ T }} cannot be serialized')
 
     @staticmethod
-    def _deserialize_(source: _dsdl_.SerializedRepresentation) -> _dsdl_.CompositeObject:
+    def _deserialize_(source: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
         raise TypeError('Service type {{ T }} cannot be deserialized')
 
     _TYPE_: _pydsdl_.ServiceType = _dsdl_.CompositeObject._restore_constant_(

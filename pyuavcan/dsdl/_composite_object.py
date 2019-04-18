@@ -3,10 +3,11 @@
 # This software is distributed under the terms of the MIT License.
 #
 
+import gzip
+import numpy
 import typing
 import pydsdl
 import pickle
-import gzip
 import base64
 from ._serialized_representation import Serializer, Deserializer
 
@@ -19,11 +20,7 @@ class CompositeObject:
     # Type definition as provided by PyDSDL.
     _TYPE_: pydsdl.CompositeType = None
 
-    # The number of bytes that are necessary for holding a serialized representation of an instance of this type.
-    # Undefined for service types.
-    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_BYTES_: typing.Optional[int] = None
-
-    def _serialize_(self, destination: Serializer) -> None:
+    def _serialize_(self) -> Serializer:
         raise NotImplementedError
 
     @staticmethod
@@ -39,22 +36,20 @@ class CompositeObject:
 _ClassOrInstance = typing.Union[typing.Type[CompositeObject], CompositeObject]
 
 
-def serialize(o: CompositeObject) -> Serializer:
+def serialize(o: CompositeObject) -> numpy.ndarray:
     if isinstance(o, CompositeObject):
-        destination = Serializer()
         # noinspection PyProtectedMember
-        o._serialize_(destination)
-        return destination
+        return o._serialize_().buffer
     else:
         raise TypeError(f'Cannot serialize an instance of {type(o).__name__}')
 
 
-def deserialize(cls: typing.Type[CompositeObject], source: Deserializer) -> CompositeObject:
-    if issubclass(cls, CompositeObject) and isinstance(source, Deserializer):
+def deserialize(cls: typing.Type[CompositeObject], source_bytes: numpy.ndarray) -> CompositeObject:
+    if issubclass(cls, CompositeObject) and isinstance(source_bytes, numpy.ndarray):
         # noinspection PyProtectedMember
-        return cls._deserialize_(source)
+        return cls._deserialize_(Deserializer(source_bytes))
     else:
-        raise TypeError(f'Cannot deserialize an instance of {cls} from {type(source).__name__}')
+        raise TypeError(f'Cannot deserialize an instance of {cls} from {type(source_bytes).__name__}')
 
 
 def get_type(class_or_instance: _ClassOrInstance) -> pydsdl.CompositeType:
@@ -62,12 +57,3 @@ def get_type(class_or_instance: _ClassOrInstance) -> pydsdl.CompositeType:
     out = class_or_instance._TYPE_
     assert isinstance(out, pydsdl.CompositeType)
     return out
-
-
-def get_serialized_representation_buffer_size_in_bytes(class_or_instance: _ClassOrInstance) -> int:
-    # noinspection PyProtectedMember
-    out = class_or_instance._SERIALIZED_REPRESENTATION_BUFFER_SIZE_BYTES_
-    if isinstance(out, int):
-        return out
-    else:
-        raise TypeError(f'Type {get_type(class_or_instance)} cannot be directly serialized or deserialized')
