@@ -46,22 +46,22 @@ import {{ n }}
  # FIELD TYPE ANNOTATIONS.
 -#}
 {%- macro strict_type_annotation(t) -%}
-    {%-   if t is boolean   -%} bool
-    {%- elif t is integer   -%} int
-    {%- elif t is float     -%} float
-    {%- elif t is array     -%} _np_.ndarray
-    {%- elif t is composite -%} {{ composite_ref(t) }}
+    {%-   if t is BooleanType   -%} bool
+    {%- elif t is IntegerType   -%} int
+    {%- elif t is FloatType     -%} float
+    {%- elif t is ArrayType     -%} _np_.ndarray
+    {%- elif t is CompositeType -%} {{ composite_ref(t) }}
     {%- else -%}{% assert False %}
     {%- endif -%}
 {%- endmacro -%}
 
 {%- macro relaxed_type_annotation(t) -%}
-    {%-   if t is boolean   -%} bool
-    {%- elif t is integer   -%} _ty_.Union[int, {{ t|numpy_scalar_type }}]
-    {%- elif t is float     -%} _ty_.Union[int, float, {{ t|numpy_scalar_type }}]
-    {%- elif t is composite -%} {{ composite_ref(t) }}
-    {%- elif t is array -%}
-        {%- if (t.element_type is uint) and t.element_type.bit_length <= 8 -%}
+    {%-   if t is BooleanType   -%} bool
+    {%- elif t is IntegerType   -%} _ty_.Union[int, {{ t|numpy_scalar_type }}]
+    {%- elif t is FloatType     -%} _ty_.Union[int, float, {{ t|numpy_scalar_type }}]
+    {%- elif t is CompositeType -%} {{ composite_ref(t) }}
+    {%- elif t is ArrayType -%}
+        {%- if (t.element_type is UnsignedIntegerType) and t.element_type.bit_length <= 8 -%}
             _ty_.Union[_np_.ndarray, _ty_.List[int], bytes, bytearray{%- if t.string_like -%}, str{%- endif -%}]
         {%- else -%}
             _ty_.Union[_np_.ndarray, _ty_.List[{{ strict_type_annotation(t.element_type) }}]]
@@ -78,16 +78,16 @@ import {{ n }}
 -#}
 {%- macro assign_array(f, src) -%}
     {%- set t = f.data_type -%}
-    {%- if t is fixed_array -%}         {%- set cmp = '!=' -%}
-    {%- elif t is variable_array -%}    {%- set cmp = '>' -%}
-    {%- else -%}                        {%- assert False -%}
+    {%- if t is FixedLengthArrayType      -%} {%- set cmp = '!=' -%}
+    {%- elif t is VariableLengthArrayType -%} {%- set cmp = '>' -%}
+    {%- else -%}                              {%- assert False -%}
     {%- endif -%}
 
     {%- if t.string_like -%}
     {#- Python uses UTF-8 by default, just like DSDL. -#}
     {{ src }} = {{ src }}.encode() if isinstance({{ src }}, str) else {{ src }}
     {% endif -%}
-    {%- if t.element_type is uint and t.element_type.bit_length <= 8 -%}
+    {%- if t.element_type is UnsignedIntegerType and t.element_type.bit_length <= 8 -%}
     {#- We must convert bytes into bytearray because NumPy treats bytes as string, trying to parse it and failing. -#}
     {{ src }} = bytearray({{ src }}) if isinstance({{ src }}, bytes) else {{ src }}
     {% endif -%}
@@ -102,7 +102,7 @@ import {{ n }}
     assert isinstance(self._{{ f|id }}, _np_.ndarray)
     assert self._{{ f|id }}.dtype == {{ t.element_type|numpy_scalar_type }}
     assert self._{{ f|id }}.ndim == 1
-    assert len(self._{{ f|id }}) {{ '<=' if t is variable_array else '==' }} {{ t.capacity }}
+    assert len(self._{{ f|id }}) {{ '<=' if t is VariableLengthArrayType else '==' }} {{ t.capacity }}
 {%- endmacro -%}
 
 {#-
@@ -116,13 +116,13 @@ class {{ name }}(_dsdl_.CompositeObject):
  # CONSTANTS
 -#}
 {%- for c in type.constants %}
-    {%- if c.data_type is boolean %}
+    {%- if c.data_type is BooleanType %}
     {{ new_const(c, type.constants) }} = {{ c.value.native_value }}
 
-    {%- elif c.data_type is integer %}
+    {%- elif c.data_type is IntegerType %}
     {{ new_const(c, type.constants) }} = {{ c.value.as_native_integer() }}
 
-    {%- elif c.data_type is float %}
+    {%- elif c.data_type is FloatType %}
     {{ new_const(c, type.constants) }} = {{ c.value.native_value.numerator }} / {{ c.value.native_value.denominator }}
 
     {%- else -%}{%- assert False -%}
@@ -130,8 +130,8 @@ class {{ name }}(_dsdl_.CompositeObject):
     {{- '\n' if loop.last else '' -}}
 {%- endfor %}
     def __init__(self
-                 {%- if type is union -%}, *{%- endif -%}
-                 {%- for f in type.fields if f is not padding -%}
+                 {%- if type is UnionType -%}, *{%- endif -%}
+                 {%- for f in type.fields if f is not PaddingField -%}
                  ,
                  {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
                      _ty_.Optional[{{ relaxed_type_annotation(f.data_type) }}] = None
@@ -139,12 +139,12 @@ class {{ name }}(_dsdl_.CompositeObject):
     ):
         """
         {{ type.full_name }}.{{ type.version.major }}.{{ type.version.minor }}
-        {%- if type is union %}
+        {%- if type is UnionType %}
         If no parameters are provided, the first field will be default-initialized and selected.
         If one parameter is provided, it will be used to initialize and select the field under the same name.
         If more than one parameter is provided, a ValueError will be raised.
         {%- endif %}
-{%- for f in type.fields if f is not padding %}
+{%- for f in type.fields if f is not PaddingField %}
         :param {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) }}{{ f }}
 {%- endfor %}
         """
@@ -155,25 +155,25 @@ class {{ name }}(_dsdl_.CompositeObject):
 {#-
  # FIELD INITIALIZATION
 -#}
-{%- if type is not union -%}
-    {%- for f in type.fields if f is not padding %}
+{%- if type is not UnionType -%}
+    {%- for f in type.fields if f is not PaddingField %}
         self._{{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
                           {{- strict_type_annotation(f.data_type) }}
         {{- '\n' if loop.last else '' -}}
     {%- endfor %}
-    {%- for f in type.fields if f is not padding %}
-        {%- if f.data_type is boolean %}
+    {%- for f in type.fields if f is not PaddingField %}
+        {%- if f.data_type is BooleanType %}
         self._{{ f|id }} = bool({{ f|id }}) if {{ f|id }} is not None else False
 
-        {%- elif f.data_type is integer %}
+        {%- elif f.data_type is IntegerType %}
         self._{{ f|id }} = int({{ f|id }}) if {{ f|id }} is not None else 0
 
-        {%- elif f.data_type is float %}
+        {%- elif f.data_type is FloatType %}
         self._{{ f|id }} = float({{ f|id }}) if {{ f|id }} is not None else 0.0
 
-        {%- elif f.data_type is fixed_array %}
+        {%- elif f.data_type is FixedLengthArrayType %}
         if {{ f|id }} is None:
-            {%- if f.data_type.element_type is composite %}
+            {%- if f.data_type.element_type is CompositeType %}
             self._{{ f|id }} = _np_.array([{{ composite_ref(f.data_type.element_type) }}() {# -#}
                                            for _ in range({{ f.data_type.capacity }})], {#  -#}
                                           {{ f.data_type.element_type|numpy_scalar_type }})
@@ -184,13 +184,13 @@ class {{ name }}(_dsdl_.CompositeObject):
         else:
             {{ assign_array(f, f|id) | indent(8) }}
 
-        {%- elif f.data_type is variable_array %}
+        {%- elif f.data_type is VariableLengthArrayType %}
         if {{ f|id }} is None:
             self._{{ f|id }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
         else:
             {{ assign_array(f, f|id) | indent(8) }}
 
-        {%- elif f.data_type is composite %}
+        {%- elif f.data_type is CompositeType %}
         if {{ f|id }} is None:
             self._{{ f|id }} = {{ composite_ref(f.data_type) }}()
         elif isinstance({{ f|id }}, {{ composite_ref(f.data_type) }}):
@@ -217,17 +217,17 @@ class {{ name }}(_dsdl_.CompositeObject):
     {% endfor %}
         if _init_cnt_ == 0:
     {%- set f = type.fields[0] -%}
-    {%- if f.data_type is boolean %}
+    {%- if f.data_type is BooleanType %}
             self.{{ f|id }} = False
 
-    {%- elif f.data_type is integer %}
+    {%- elif f.data_type is IntegerType %}
             self.{{ f|id }} = 0
 
-    {%- elif f.data_type is float %}
+    {%- elif f.data_type is FloatType %}
             self.{{ f|id }} = 0.0
 
-    {%- elif f.data_type is fixed_array %}
-        {%- if f.data_type.element_type is composite %}
+    {%- elif f.data_type is FixedLengthArrayType %}
+        {%- if f.data_type.element_type is CompositeType %}
             self.{{ f|id }} = _np_.array([{{ composite_ref(f.data_type.element_type) }}() {# -#}
                                              for _ in range({{ f.data_type.capacity }})], {#  -#}
                                             {{ f.data_type.element_type|numpy_scalar_type }})
@@ -236,10 +236,10 @@ class {{ name }}(_dsdl_.CompositeObject):
                                             {{ f.data_type.element_type|numpy_scalar_type }})
         {%- endif %}
 
-    {%- elif f.data_type is variable_array %}
+    {%- elif f.data_type is VariableLengthArrayType %}
             self.{{ f|id }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
 
-    {%- elif f.data_type is composite %}
+    {%- elif f.data_type is CompositeType %}
             self.{{ f|id }} = {{ composite_ref(f.data_type) }}()
 
     {%- else -%}{%- assert False -%}
@@ -253,14 +253,14 @@ class {{ name }}(_dsdl_.CompositeObject):
 {#-
  # FIELD ACCESSORS AND MUTATORS
 -#}
-{%- for f in type.fields if f is not padding %}
+{%- for f in type.fields if f is not PaddingField %}
     @property
     def {{ f|id }}(self) -> {# #}
-    {%- if type is union -%}
+    {%- if type is UnionType -%}
         _ty_.Optional[
     {%- endif -%}
         {{ strict_type_annotation(f.data_type) }}
-    {%- if type is union -%}
+    {%- if type is UnionType -%}
         ]
     {%- endif -%}:
         """{{ f }}"""
@@ -268,19 +268,19 @@ class {{ name }}(_dsdl_.CompositeObject):
 
     @{{ f|id }}.setter
     def {{ f|id }}(self, x: {{ relaxed_type_annotation(f.data_type) }}) -> None:
-    {%- if f.data_type is boolean %}
+    {%- if f.data_type is BooleanType %}
         self._{{ f|id }} = bool(x)
 
-    {%- elif f.data_type is integer %}
+    {%- elif f.data_type is IntegerType %}
         self._{{ f|id }} = int(x)
 
-    {%- elif f.data_type is float %}
+    {%- elif f.data_type is FloatType %}
         self._{{ f|id }} = float(x)
 
-    {%- elif f.data_type is array %}
+    {%- elif f.data_type is ArrayType %}
         {{ assign_array(f, 'x') | indent(4) }}
 
-    {%- elif f.data_type is composite %}
+    {%- elif f.data_type is CompositeType %}
         if isinstance(x, {{ composite_ref(f.data_type) }}):
             self._{{ f|id }} = x
         else:
@@ -288,7 +288,7 @@ class {{ name }}(_dsdl_.CompositeObject):
 
     {%- else -%}{%- assert False -%}
     {%- endif %}
-    {%- if type is union %}
+    {%- if type is UnionType %}
         {%- for z in type.fields if z.name != f.name %}
         self._{{ z|id }} = None
         {%- endfor %}
@@ -298,7 +298,7 @@ class {{ name }}(_dsdl_.CompositeObject):
  # SERIALIZATION METHODS
  #}
     def _serialize_(self) -> _dsdl_.Serializer:
-        {{ serialize(type, 'self')|indent }}
+        {#{ serialize(type, 'self')|indent }#}
 
     @staticmethod
     def _deserialize_(source: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
@@ -306,7 +306,7 @@ class {{ name }}(_dsdl_.CompositeObject):
 {#
  # PYDSDL TYPE DESCRIPTOR
  #}
-    {% set meta_type = 'UnionType' if type is union else 'StructureType' -%}
+    {% set meta_type = 'UnionType' if type is UnionType else 'StructureType' -%}
     _TYPE_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
         {{ type | pickle | indent(8) }}
     )

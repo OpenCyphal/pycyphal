@@ -9,7 +9,6 @@ import typing
 import pickle
 import base64
 import pathlib
-import logging
 import keyword
 import builtins
 import itertools
@@ -21,7 +20,7 @@ import pydsdlgen.jinja
 
 _AnyPath = typing.Union[str, pathlib.Path]
 
-_ILLEGAL_IDENTIFIERS: typing.Set[str] = set(map(str, keyword.kwlist + dir(builtins)))
+_ILLEGAL_IDENTIFIERS: typing.Set[str] = set(map(str, list(keyword.kwlist) + dir(builtins)))
 
 _SOURCE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).parent
 
@@ -38,37 +37,40 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
                                             allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
     root_namespace_name, = set(map(lambda x: x.root_namespace, composite_types))  # type: str,
 
+    # Template primitives
+    filters = {
+        'id':                _make_identifier,
+        'pickle':            _pickle_object,
+        'numpy_scalar_type': _numpy_scalar_type,
+        'longest_id_length': lambda c: max(map(len, map(lambda x: _make_identifier(x), c))),
+        'imports':           _list_imports,
+    }
+
+    tests = _construct_instance_tests_from_root(pydsdl.SerializableType)
+    tests['PaddingField'] = lambda x: isinstance(x, pydsdl.PaddingField)
+
     # Generate code
-    type_to_file_map = pydsdlgen.create_type_map(composite_types, str(package_parent_directory), '.py')
+    root_ns = pydsdlgen.build_namespace_tree(types=composite_types,
+                                             root_namespace_dir=root_namespace_directory,
+                                             output_dir=str(package_parent_directory),
+                                             extension='.py',
+                                             namespace_output_stem='__init__')
 
-    generator = pydsdlgen.jinja.Generator(type_to_file_map, _TEMPLATE_DIRECTORY, followlinks=True)
-
-    env = generator._env        # https://github.com/UAVCAN/pydsdlgen/issues/20
-
-    env.tests['boolean']        = lambda x: isinstance(x, pydsdl.BooleanType)
-    env.tests['integer']        = lambda x: isinstance(x, pydsdl.IntegerType)
-    env.tests['uint']           = lambda x: isinstance(x, pydsdl.UnsignedIntegerType)
-    env.tests['float']          = lambda x: isinstance(x, pydsdl.FloatType)
-    env.tests['array']          = lambda x: isinstance(x, pydsdl.ArrayType)
-    env.tests['fixed_array']    = lambda x: isinstance(x, pydsdl.FixedLengthArrayType)
-    env.tests['variable_array'] = lambda x: isinstance(x, pydsdl.VariableLengthArrayType)
-    env.tests['composite']      = lambda x: isinstance(x, pydsdl.CompositeType)
-    env.tests['union']          = lambda x: isinstance(x, pydsdl.UnionType)
-    env.tests['padding']        = lambda x: isinstance(x, pydsdl.PaddingField) or isinstance(x, pydsdl.VoidType)
-
-    env.filters['id']                   = _make_identifier
-    env.filters['pickle']               = _pickle_object
-    env.filters['numpy_scalar_type']    = _numpy_scalar_type
-    env.filters['longest_id_length']    = lambda c: max(map(len, map(lambda x: _make_identifier(x), c)))
-    env.filters['imports']              = _list_imports
-
+    generator = pydsdlgen.jinja.Generator(namespace=root_ns,
+                                          generate_namespace_types=True,
+                                          templates_dir=_TEMPLATE_DIRECTORY,
+                                          followlinks=True,
+                                          additional_filters=filters,
+                                          additional_tests=tests)
     generator.generate_all()
 
     return pathlib.Path(package_parent_directory) / pathlib.Path(root_namespace_name)
 
 
 def _make_identifier(a: pydsdl.Attribute) -> str:
-    return (a.name + '_') if a.name in _ILLEGAL_IDENTIFIERS else a.name
+    out = (a.name + '_') if a.name in _ILLEGAL_IDENTIFIERS else a.name
+    assert isinstance(out, str)
+    return out
 
 
 def _pickle_object(x: typing.Any) -> str:
@@ -105,7 +107,7 @@ def _list_imports(t: pydsdl.CompositeType) -> typing.List[str]:
         atr = t.attributes
 
     # Extract data types of said attributes; for type constructors such as arrays extract the element type
-    dep_types = list(map(lambda x: x.data_type, atr))
+    dep_types = list(map(lambda x: x.data_type, atr))  # type: ignore
     for t in dep_types[:]:
         if isinstance(t, pydsdl.ArrayType):
             dep_types.append(t.element_type)
@@ -114,19 +116,29 @@ def _list_imports(t: pydsdl.CompositeType) -> typing.List[str]:
     return list(sorted(set(x.full_namespace for x in dep_types if isinstance(x, pydsdl.CompositeType))))
 
 
-def _unittest_dsdl_compiler() -> None:
-    import shutil
+def _construct_instance_tests_from_root(root: typing.Type[object]) \
+        -> typing.Dict[str, typing.Callable[[typing.Any], bool]]:
+    out = {
+        root.__name__: lambda x: isinstance(x, root)
+    }
+    # noinspection PyArgumentList
+    for derived in root.__subclasses__():
+        out.update(_construct_instance_tests_from_root(derived))
+    return out
 
-    # Suppress debug logging from PyDSDL, there's too much of it and we don't want it to interfere
-    logging.getLogger('pydsdl').setLevel('INFO')
 
-    root_ns = _SOURCE_DIRECTORY.parent / pathlib.Path('public_regulated_data_types') / pathlib.Path('uavcan')
+# noinspection PyUnusedLocal
+def _unittest_instance_tests_from_root() -> None:
+    class A:
+        pass
 
-    parent_dir = _SOURCE_DIRECTORY.parent.parent / pathlib.Path('.dsdl_generated')
-    if parent_dir.exists():
-        shutil.rmtree(parent_dir, ignore_errors=True)
-    parent_dir.mkdir(parents=True, exist_ok=True)
+    class B(A):
+        pass
 
-    pkg_dir = generate_python_package_from_dsdl_namespace(parent_dir, root_ns, [])
+    class C(B):
+        pass
 
-    assert pkg_dir.name.endswith('uavcan')
+    class D(A):
+        pass
+
+    assert set(_construct_instance_tests_from_root(A).keys()) == {'A', 'B', 'C', 'D'}

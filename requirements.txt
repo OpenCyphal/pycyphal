@@ -2,6 +2,6 @@
 # Runtime dependencies
 #
 
-pydsdlgen < 2.0.0
-pydsdl    < 2.0.0
+pydsdlgen < 2.0
+pydsdl   ~= 1.0
 numpy    ~= 1.16

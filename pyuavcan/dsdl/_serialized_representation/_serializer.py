@@ -4,12 +4,13 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import sys
 import numpy
 import typing
 import struct
 
 
-class SerializerBase:
+class Serializer:
     """
     All methods operating on scalars implicitly truncate the value if it exceeds the range,
     excepting signed integers, for which overflow handling is not implemented (DSDL does not permit truncation
@@ -17,11 +18,21 @@ class SerializerBase:
     """
 
     def __init__(self, buffer_size_in_bytes: int):
+        if issubclass(Serializer, type(self)):
+            raise TypeError('Serializer cannot be instantiated directly; use the new() factory instead')
+
         # We extend the requested buffer size by one because some of the non-byte-aligned write operations
         # require us to temporarily use one extra byte after the current byte.
         buffer_size_in_bytes = int(buffer_size_in_bytes) + 1
         self._buf: numpy.ndarray = numpy.zeros(buffer_size_in_bytes, dtype=numpy.ubyte)
         self._bit_offset = 0
+
+    @staticmethod
+    def new(buffer_size_in_bytes: int) -> 'Serializer':
+        return {
+            'little': _LittleEndianSerializer,
+            'big':       _BigEndianSerializer,
+        }[sys.byteorder](buffer_size_in_bytes)
 
     @property
     def _byte_offset(self) -> int:
@@ -209,7 +220,7 @@ class SerializerBase:
         return numpy.frombuffer(out, dtype=numpy.ubyte)  # Note: this operation does not copy the underlying bytes
 
 
-class LittleEndianSerializer(SerializerBase):
+class _LittleEndianSerializer(Serializer):
     # noinspection PyUnresolvedReferences
     def add_aligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:
         # This is close to direct memcpy() from the source memory into the destination memory, which is very fast.
@@ -224,7 +235,7 @@ class LittleEndianSerializer(SerializerBase):
         self.add_unaligned_bytes(x.view(numpy.ubyte))
 
 
-class BigEndianSerializer(SerializerBase):
+class _BigEndianSerializer(Serializer):
     def add_aligned_array_of_standard_size_primitives(self, x: numpy.ndarray) -> None:  # pragma: no cover
         raise NotImplementedError('Pull requests are welcome')
 
@@ -238,13 +249,12 @@ def _byte_as_bit_string(x: int) -> str:
 
 def _unittest_serializer_aligned() -> None:
     from pytest import raises
-    from . import Serializer
 
     def unseparate(s: typing.Any) -> str:
         return str(s).replace(' ', '')
 
     bs = _byte_as_bit_string
-    ser = Serializer(50)
+    ser = Serializer.new(50)
     expected = ''
     assert str(ser) == ''
 
@@ -321,9 +331,7 @@ def _unittest_serializer_aligned() -> None:
 
 # noinspection PyProtectedMember
 def _unittest_serializer_unaligned() -> None:                   # Tricky cases with unaligned fields (very tricky)
-    from . import Serializer
-
-    ser = Serializer(40)
+    ser = Serializer.new(40)
     expected = ''
 
     def validate_addition(bit_string: str) -> None:
@@ -344,18 +352,14 @@ def _unittest_serializer_unaligned() -> None:                   # Tricky cases w
     validate_addition('10100 11101')
 
     ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=numpy.ubyte))
-    validate_addition(_byte_as_bit_string(0x12) +
-                      _byte_as_bit_string(0x34) +
-                      _byte_as_bit_string(0x56))
+    validate_addition(_byte_as_bit_string(0x12) + _byte_as_bit_string(0x34) + _byte_as_bit_string(0x56))
 
     ser.add_unaligned_array_of_bits(numpy.array([False, True, True], numpy.bool))
     validate_addition('011')
     assert ser._bit_offset % 8 == 0, 'Byte alignment is not restored'
 
     ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=numpy.ubyte))     # We're actually aligned here
-    validate_addition(_byte_as_bit_string(0x12) +
-                      _byte_as_bit_string(0x34) +
-                      _byte_as_bit_string(0x56))
+    validate_addition(_byte_as_bit_string(0x12) + _byte_as_bit_string(0x34) + _byte_as_bit_string(0x56))
 
     ser.add_unaligned_bit(True)
     ser.add_unaligned_bit(False)

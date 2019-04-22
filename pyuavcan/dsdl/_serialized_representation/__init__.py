@@ -5,21 +5,10 @@
 #
 
 import sys
-import typing
-from ._serializer import SerializerBase as _SerializerBase
-from ._deserializer import DeserializerBase as _DeserializerBase
+from ._serializer import Serializer
+from ._deserializer import Deserializer
 
-
-Serializer:   typing.Type[_SerializerBase]
-Deserializer: typing.Type[_DeserializerBase]
-
-
-if sys.byteorder == 'little':   # pragma: no cover
-    from ._serializer import LittleEndianSerializer as Serializer
-    from ._deserializer import LittleEndianDeserializer as Deserializer
-elif sys.byteorder == 'big':    # pragma: no cover
-    from ._serializer import BigEndianSerializer as Serializer
-    from ._deserializer import BigEndianDeserializer as Deserializer
+if sys.byteorder != 'little':    # pragma: no cover
     raise RuntimeError(
         'BIG-ENDIAN PLATFORMS ARE NOT YET SUPPORTED. '
         'The current serialization code assumes that the native byte order is little-endian. Since UAVCAN uses '
@@ -27,7 +16,5 @@ elif sys.byteorder == 'big':    # pragma: no cover
         'transformation in many cases, resulting in zero-cost serialization and deserialization. '
         'Big-endian platforms are unable to take advantage of that, requiring byte swapping for multi-byte entities; '
         'fortunately, nowadays such platforms are uncommon. If you need to use this library on a big-endian platform, '
-        'please implement the missing code and submit a pull request to the upstream.'
+        'please implement the missing code and submit a pull request to the upstream, then remove this exception.'
     )
-else:                           # pragma: no cover
-    raise RuntimeError(f'Unexpected endianness: {sys.byteorder}')

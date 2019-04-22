@@ -31,7 +31,9 @@ class CompositeObject:
     @staticmethod
     def _restore_constant_(encoded_string: str) -> object:
         """Recovers a pickled gzipped constant object from base85 string representation."""
-        return pickle.loads(gzip.decompress(base64.b85decode(encoded_string)))
+        out = pickle.loads(gzip.decompress(base64.b85decode(encoded_string)))
+        assert isinstance(out, object)
+        return out
 
 
 _ClassOrInstance = typing.Union[typing.Type[CompositeObject], CompositeObject]
