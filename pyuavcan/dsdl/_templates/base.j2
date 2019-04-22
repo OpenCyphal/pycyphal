@@ -297,12 +297,16 @@ class {{ name }}(_dsdl_.CompositeObject):
 {#
  # SERIALIZATION METHODS
  #}
-    def _serialize_(self) -> _dsdl_.Serializer:
+    def _serialize_(self, _ser_: _dsdl_.Serializer) -> None:
         {#{ serialize(type, 'self')|indent }#}
+        pass
 
     @staticmethod
-    def _deserialize_(source: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
+    def _deserialize_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
         {{ deserialize(type, 'self')|indent }}
+
+    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int = {{ ((type.bit_length_set|max) + 7) // 8 }}  {# -#}
+                                                            # {{ type.bit_length_set|max }} bits
 {#
  # PYDSDL TYPE DESCRIPTOR
  #}

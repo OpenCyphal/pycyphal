@@ -6,10 +6,7 @@
 
 
 {%- macro serialize(type, ref) -%}
-    _ser_ = _dsdl_.Serializer.new(buffer_size_in_bytes={{ ((type.bit_length_set|max) + 7) // 8 }})  {# -#}
-                                        # Maximum length {{ type.bit_length_set|max }} bits
     {{ _serialize_field(type, ref) }}
-    return _ser_
 {%- endmacro -%}
 
 {%- macro _serialize_field(t, ref) -%}
