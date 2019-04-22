@@ -31,7 +31,7 @@ import {{ n }}
 
 
 {#-
- # BASIC CONSTRUCTS
+ # BASIC CONSTRUCTS.
 -#}
 {%- macro composite_ref(t) -%}
     {{ t.full_name }}_{{ t.version.major }}_{{ t.version.minor }}
@@ -107,8 +107,9 @@ import {{ n }}
     assert len(self._{{ f|id }}) {{ '<=' if t is VariableLengthArrayType else '==' }} {{ t.capacity }}
 {%- endmacro -%}
 
+
 {#-
- # FIELD TO STRING CONVERSION
+ # FIELD TO STRING CONVERSION.
  # Emits an expression that constructs a string-printable representation of the field.
  # The resulting expression shall be wrapped into str() or fed into '%s'.
 -#}
@@ -121,6 +122,7 @@ import {{ n }}
     {%- else -%}                                             self.{{ f|id }}
     {%- endif -%}
 {%- endmacro -%}
+
 
 {#-
  # MAIN CODE GENERATION MACRO.
@@ -331,7 +333,7 @@ class {{ name }}(_dsdl_.CompositeObject):
             '{{ f.name }}=%s' % {{ printable_field_representation(f) }},
     {%- endfor %}
         ])
-{%- else %}  {# UNION #}
+{%- else %}  {#- UNION #}
         _o_0_ = '(MALFORMED UNION)'
     {%- for f in type.fields %}
         if self.{{ f|id }} is not None:
