@@ -106,6 +106,25 @@ import {{ n }}
 {%- endmacro -%}
 
 {#-
+ # FIELD TO STRING CONVERSION
+ # Emits an expression that constructs a string-printable representation of the field.
+ # The resulting expression shall be wrapped into str() or fed into '%s'.
+-#}
+{%- macro printable_field_representation(f) -%}
+    {%- if f.data_type is ArrayType -%}
+        {%- if f.data_type.string_like -%}
+        repr(bytes(_x_ for _x_ in self.{{ f|id }}))
+        {%- else -%}
+        list(map({%- if f.data_type.element_type is BooleanType -%} int
+                 {%- else -%}                                       str
+                 {%- endif -%}, self.{{ f|id }}))
+        {%- endif -%}
+    {%- else -%}
+        self.{{ f|id }}
+    {%- endif -%}
+{%- endmacro -%}
+
+{#-
  # MAIN CODE GENERATION MACRO.
  # Accepts the name of the generated type and its DSDL type descriptor object of type pydsdl.CompositeType.
 -#}
@@ -304,9 +323,26 @@ class {{ name }}(_dsdl_.CompositeObject):
     @staticmethod
     def _deserialize_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
         {{ deserialize(type, 'self')|indent }}
+{#
+ # PYTHON DATA MODEL
+ #}
+    def __str__(self) -> str:
+{%- if type is not UnionType %}
+        _o_0_ = ', '.join([
+    {%- for f in type.fields if f is not PaddingField %}
+            '{{ f.name }}=%s' % {{ printable_field_representation(f) }},
+    {%- endfor %}
+        ])
+{%- else %}  {# UNION #}
+        _o_0_ = '(MALFORMED UNION)'
+    {%- for f in type.fields %}
+        if self.{{ f|id }} is not None:
+            _o_0_ = '{{ f.name }}=%s' % {{ printable_field_representation(f) }}
+    {%- endfor %}
+{%- endif %}
+        return f'{{ type.full_name }}_{{ type.version.major }}_{{ type.version.minor }}({_o_0_})'
 
-    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int = {{ ((type.bit_length_set|max) + 7) // 8 }}  {# -#}
-                                                            # {{ type.bit_length_set|max }} bits
+    __repr__ = __str__
 {#
  # PYDSDL TYPE DESCRIPTOR
  #}
@@ -315,6 +351,9 @@ class {{ name }}(_dsdl_.CompositeObject):
         {{ type | pickle | indent(8) }}
     )
     assert isinstance(_TYPE_, _pydsdl_.{{ meta_type }})
+
+    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int = {{ ((type.bit_length_set|max) + 7) // 8 }}  {# -#}
+                                                            # {{ type.bit_length_set|max }} bits
 {%- endmacro -%}
 
 {#-

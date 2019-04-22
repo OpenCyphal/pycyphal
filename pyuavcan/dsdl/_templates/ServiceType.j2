@@ -20,6 +20,11 @@ class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_dsdl_.Comp
     def _deserialize_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
         raise TypeError('Service type {{ T }} cannot be deserialized')
 
+    def __str__(self) -> str:
+        return '{{ T.full_name }}_{{ T.version.major }}_{{ T.version.minor }}()'
+
+    __repr__ = __str__
+
     _TYPE_: _pydsdl_.ServiceType = _dsdl_.CompositeObject._restore_constant_(
         {{ T | pickle | indent(8) }}
     )
