@@ -21,7 +21,7 @@ class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_dsdl_.Comp
         raise TypeError('Service type {{ T }} cannot be deserialized')
 
     def __str__(self) -> str:
-        return '{{ T.full_name }}_{{ T.version.major }}_{{ T.version.minor }}()'
+        return '{{ T.full_name }}.{{ T.version.major }}.{{ T.version.minor }}()'
 
     __repr__ = __str__
 

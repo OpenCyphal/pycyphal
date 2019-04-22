@@ -44,13 +44,15 @@ import {{ n }}
 
 {#-
  # FIELD TYPE ANNOTATIONS.
+ # Observe that for composite types we use forward references (wrapping into string literals).
+ # This is required to break circular dependency when external composite types are referenced from top-level entities.
 -#}
 {%- macro strict_type_annotation(t) -%}
     {%-   if t is BooleanType   -%} bool
     {%- elif t is IntegerType   -%} int
     {%- elif t is FloatType     -%} float
     {%- elif t is ArrayType     -%} _np_.ndarray
-    {%- elif t is CompositeType -%} {{ composite_ref(t) }}
+    {%- elif t is CompositeType -%} '{{ composite_ref(t) }}'
     {%- else -%}{% assert False %}
     {%- endif -%}
 {%- endmacro -%}
@@ -59,7 +61,7 @@ import {{ n }}
     {%-   if t is BooleanType   -%} bool
     {%- elif t is IntegerType   -%} _ty_.Union[int, {{ t|numpy_scalar_type }}]
     {%- elif t is FloatType     -%} _ty_.Union[int, float, {{ t|numpy_scalar_type }}]
-    {%- elif t is CompositeType -%} {{ composite_ref(t) }}
+    {%- elif t is CompositeType -%} '{{ composite_ref(t) }}'
     {%- elif t is ArrayType -%}
         {%- if (t.element_type is UnsignedIntegerType) and t.element_type.bit_length <= 8 -%}
             _ty_.Union[_np_.ndarray, _ty_.List[int], bytes, bytearray{%- if t.string_like -%}, str{%- endif -%}]
@@ -112,15 +114,11 @@ import {{ n }}
 -#}
 {%- macro printable_field_representation(f) -%}
     {%- if f.data_type is ArrayType -%}
-        {%- if f.data_type.string_like -%}
-        repr(bytes(_x_ for _x_ in self.{{ f|id }}))
-        {%- else -%}
-        list(map({%- if f.data_type.element_type is BooleanType -%} int
-                 {%- else -%}                                       str
-                 {%- endif -%}, self.{{ f|id }}))
+        {%- if f.data_type.string_like -%}                   repr(bytes(_x_ for _x_ in self.{{ f|id }}))
+        {%- elif f.data_type.element_type is BooleanType -%} list(map(int, self.{{ f|id }}))
+        {%- else -%}                                         list(self.{{ f|id }})
         {%- endif -%}
-    {%- else -%}
-        self.{{ f|id }}
+    {%- else -%}                                             self.{{ f|id }}
     {%- endif -%}
 {%- endmacro -%}
 
@@ -340,7 +338,7 @@ class {{ name }}(_dsdl_.CompositeObject):
             _o_0_ = '{{ f.name }}=%s' % {{ printable_field_representation(f) }}
     {%- endfor %}
 {%- endif %}
-        return f'{{ type.full_name }}_{{ type.version.major }}_{{ type.version.minor }}({_o_0_})'
+        return f'{{ type.full_name }}.{{ type.version.major }}.{{ type.version.minor }}({_o_0_})'
 
     __repr__ = __str__
 {#
