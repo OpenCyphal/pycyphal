@@ -9,3 +9,10 @@
 # Generated at:  {{ now_utc }} UTC
 # Namespace:     {{ T.full_name }}
 #
+
+{% for t, _ in T.get_nested_types() -%}
+{% set suffix = '%s_%s'|format(t.version.major, t.version.minor) -%}
+from {{ t.full_name }}_{{ suffix }} import {{ t.short_name }}_{{ suffix }}
+{% else -%}
+# There are no data types in this namespace. There may be data types in nested namespaces.
+{% endfor -%}

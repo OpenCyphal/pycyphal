@@ -136,7 +136,7 @@ class {{ name }}(_dsdl_.CompositeObject):
                  {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
                      _ty_.Optional[{{ relaxed_type_annotation(f.data_type) }}] = None
                  {%- endfor -%}
-    ):
+    ) -> None:
         """
         {{ type.full_name }}.{{ type.version.major }}.{{ type.version.minor }}
         {%- if type is UnionType %}
