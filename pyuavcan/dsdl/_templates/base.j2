@@ -248,8 +248,7 @@ class {{ name }}(_dsdl_.CompositeObject):
             pass  # A value is already assigned, nothing to do
         else:
             raise ValueError(f'Union cannot hold values of more than one field')
-{# #}
-{%- endif %}
+{% endif %}
 
 {#-
  # FIELD ACCESSORS AND MUTATORS
