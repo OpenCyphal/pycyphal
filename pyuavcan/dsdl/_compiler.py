@@ -45,6 +45,7 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
         'numpy_scalar_type': _numpy_scalar_type,
         'longest_id_length': lambda c: max(map(len, map(lambda x: _make_identifier(x), c))),
         'imports':           _list_imports,
+        'bit_length_set':    pydsdl.BitLengthSet,
     }
 
     tests = _construct_instance_tests_from_root(pydsdl.SerializableType)

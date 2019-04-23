@@ -6,20 +6,20 @@
 
 
 {%- macro serialize(t) -%}
-    {{ _serialize_composite(t, 'self', None) }}
+    {{ _serialize_composite(t, 'self', 0|bit_length_set) }}
 {%- endmacro -%}
 
 
 {%- macro _serialize_integer(t, ref, offset) -%}
-{% if t is saturated -%}  {# Note that value ranges are internally represented as rationals. -#}
-    {% set ref = 'max(min(%s, %s), %s)'|format(ref, t.inclusive_value_range.max, t.inclusive_value_range.min) -%}
-{% endif -%}
-{% if t.standard_bit_length and offset.is_aligned_at_byte() -%}  {#- The fastest serialization method -#}
+{%- if t is saturated -%}  {# Note that value ranges are internally represented as rationals. -#}
+    {%- set ref = 'max(min(%s, %s), %s)'|format(ref, t.inclusive_value_range.max, t.inclusive_value_range.min) -%}
+{%- endif -%}
+{%- if t.standard_bit_length and offset.is_aligned_at_byte() -%}
     _ser_.add_aligned_{{ 'i' if t is SignedIntegerType else 'u' }}{{ t.bit_length }}({{ ref }})
-{% else -%}
-    {% set signedness = 'signed' if t is SignedIntegerType else 'unsigned' -%}
+{%- else -%}
+    {%- set signedness = 'signed' if t is SignedIntegerType else 'unsigned' -%}
     _ser_.add_{{ offset|alignment_prefix }}_{{ signedness }}({{ ref }}, {{ t.bit_length }})
-{% endif -%}
+{%- endif -%}
 {%- endmacro -%}
 
 
@@ -27,7 +27,7 @@
 {%- set fun -%}
     _ser_.add_{{ offset|alignment_prefix }}_f{{ t.bit_length }}
 {%- endset -%}
-{% if t is saturated -%}  {# Note that value ranges are internally represented as rationals. -#}
+{%- if t is saturated -%}  {# Note that value ranges are internally represented as rationals. -#}
     if _np_.isfinite({{ ref }}):
         if {{ ref }} > {{ t.inclusive_value_range.max }}.0:
             {{ fun }}({{ t.inclusive_value_range.max }}.0)
@@ -37,17 +37,30 @@
             {{ fun }}({{ ref }})
     else:
         {{ fun }}({{ ref }})
-{% else -%}
+{%- else -%}
     {{ fun }}({{ ref }})
-{% endif -%}
+{%- endif -%}
+{%- endmacro -%}
 
+
+{%- macro _serialize_fixed_length_array(t, ref, offset) -%}
+{%- if t.element_type is BooleanType -%}
+    _ser_.add_{{ offset|alignment_prefix }}_array_of_bits({{ ref }})
+{%- elif t.element_type is PrimitiveType and t.element_type.standard_bit_length -%}
+    _ser_.add_{{ offset|alignment_prefix -}}_array_of_standard_bit_length_primitives({{ ref }})
+{%- else -%}
+    # Unrolled fixed-length array: {{ t }}
+    {% for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
+    {{ _serialize_any(t.element_type, '%s[%d]'|format(ref, index), element_offset) }}
+    {%- endfor -%}
+{%- endif -%}
 {%- endmacro -%}
 
 
 {%- macro _serialize_variable_length_array(t, ref, offset) -%}
-    # Implicit length field is byte-aligned:      {{ offset.is_aligned_at_byte() }}
-    # First element of the array is byte-aligned: {{ (offset + t.length_field_type.bit_length).is_aligned_at_byte() }}
-    # All elements of the array are byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}
+    # Length field is byte-aligned:  {{ offset.is_aligned_at_byte() }}
+    # First element is byte-aligned: {{ (offset + t.length_field_type.bit_length).is_aligned_at_byte() }}
+    # All elements are byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}
     {{ _serialize_integer(t.length_field_type, 'len(%s)'|format(ref), offset) }}
 
 {%- if t.element_type is BooleanType %}
@@ -59,22 +72,8 @@
 
 {%- else %}
     for _element_ in {{ ref }}:
-        {{ _serialize_object(t.element_type, '_element_', offset + t.bit_length_set)|indent }}
+        {{ _serialize_any(t.element_type, '_element_', offset + t.bit_length_set)|indent }}
 
-{%- endif %}
-{%- endmacro -%}
-
-
-{%- macro _serialize_fixed_length_array(t, ref, offset) -%}
-{%- if t.element_type is BooleanType %}
-    _ser_.add_{{ offset|alignment_prefix }}_array_of_bits({{ ref }})
-{%- elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
-    _ser_.add_{{ offset|alignment_prefix -}}_array_of_standard_bit_length_primitives({{ ref }})
-{%- else %}
-    # Unrolled fixed-length array: {{ t }}
-    {%- for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
-    {{ _serialize_object(t.element_type, '%s[%d]'|format(ref, index), element_offset) }}
-    {%- endfor -%}
 {%- endif %}
 {%- endmacro -%}
 
@@ -82,35 +81,48 @@
 {%- macro _serialize_composite(t, ref, base_offset) -%}
 {%- if t is StructureType -%}
     {%- for f, offset in t.iterate_fields_with_offsets(base_offset) -%}
-    {{ _serialize_object(f.data_type, ref + '.' + (f|id), offset) }}
+    # {{ f }}
+    {{ _serialize_any(f.data_type, ref + '.' + (f|id), offset) }}
     {% endfor -%}
+
 {%- elif t is UnionType -%}
+    # Tag field is byte-aligned: {{ base_offset.is_aligned_at_byte() }}
+    # Values are byte-aligned:   {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
+    {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
+        {%- set field_ref = ref + '.' + (f|id) %}
+    {{ 'if' if loop.first else 'elif' }} {{ field_ref }} is not None:
+        {{ _serialize_integer(t.tag_field_type, loop.index0|string, base_offset)|indent }}
+        {{ _serialize_any(f.data_type, field_ref, offset)|indent }}
+    {%- endfor %}
+    else:
+        raise RuntimeError('Malformed union {{ t }}')
+
 {%- else -%}{%- assert False -%}
 {%- endif -%}
 {%- endmacro -%}
 
 
-{%- macro _serialize_object(t, ref, offset) -%}
-    {% if offset.is_aligned_at_byte() -%}
+{%- macro _serialize_any(t, ref, offset) -%}
+    {%- if offset.is_aligned_at_byte() -%}
     assert _ser_.current_bit_length % 8 == 0, '{{ ref }}: {{ t }}'
     {% endif -%}
-    {% if t is VoidType -%}                    _ser_.skip_bits({{ t.bit_length }})
-    {% elif t is BooleanType -%}               _ser_.add_unaligned_bit({{ ref }})
-    {% elif t is IntegerType -%}               {{ _serialize_integer(t, ref, offset) }}
-    {% elif t is FloatType -%}                 {{ _serialize_float(t, ref, offset) }}
-    {# Despite the apparent similarities, fixed and variable arrays are very different when it comes to serialization,
-     # mostly because of the different logic of offset computation. -#}
-    {% elif t is FixedLengthArrayType -%}      {{ _serialize_fixed_length_array(t, ref, offset) }}
-    {% elif t is VariableLengthArrayType -%}   {{ _serialize_variable_length_array(t, ref, offset) }}
-    {% elif t is CompositeType -%}
+    {%- if t is VoidType -%}                    _ser_.skip_bits({{ t.bit_length }})
+    {%- elif t is BooleanType -%}               _ser_.add_unaligned_bit({{ ref }})
+    {%- elif t is IntegerType -%}               {{ _serialize_integer(t, ref, offset) }}
+    {%- elif t is FloatType -%}                 {{ _serialize_float(t, ref, offset) }}
+    {#- Despite the apparent similarities, fixed and variable arrays are very different when it comes to serialization,
+     #- mostly because of the different logic of offset computation. -#}
+    {%- elif t is FixedLengthArrayType -%}      {{ _serialize_fixed_length_array(t, ref, offset) }}
+    {%- elif t is VariableLengthArrayType -%}   {{ _serialize_variable_length_array(t, ref, offset) }}
+    {%- elif t is CompositeType -%}
         {%- if offset.is_aligned_at_byte() -%}
     {{ ref }}._serialize_(_ser_)  # Delegating because this object is always byte-aligned.
         {%- else -%}
     # Object {{ ref }} is not always byte-aligned, serializing in-place.
     {{ _serialize_composite(t, ref, offset) }}
         {%- endif -%}
-    {% else -%}{%- assert False -%}
-    {% endif -%}
+    {%- else -%}{%- assert False -%}
+    {%- endif -%}
 {%- endmacro -%}
 
 

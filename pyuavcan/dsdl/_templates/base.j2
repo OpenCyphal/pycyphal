@@ -322,7 +322,8 @@ class {{ name }}(_dsdl_.CompositeObject):
         _orig_bit_length_ = _ser_.current_bit_length
         {{ serialize(type)|indent }}
         assert {{ type.bit_length_set|min }} <= (_ser_.current_bit_length - _orig_bit_length_) {# -#}
-                                             <= {{ type.bit_length_set|max }}, 'Bad serialization of {{ type }}'
+                                             <= {{ type.bit_length_set|max }}, \
+            'Bad serialization of {{ type }}'
     {%- else %}
         pass
     {%- endif %}
