@@ -40,6 +40,7 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
     # Template primitives
     filters = {
         'id':                _make_identifier,
+        'alignment_prefix':  _make_serialization_alignment_prefix,
         'pickle':            _pickle_object,
         'numpy_scalar_type': _numpy_scalar_type,
         'longest_id_length': lambda c: max(map(len, map(lambda x: _make_identifier(x), c))),
@@ -48,6 +49,7 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
 
     tests = _construct_instance_tests_from_root(pydsdl.SerializableType)
     tests['PaddingField'] = lambda x: isinstance(x, pydsdl.PaddingField)
+    tests['saturated'] = _test_if_saturated
 
     # Generate code
     root_ns = pydsdlgen.build_namespace_tree(types=composite_types,
@@ -71,6 +73,13 @@ def _make_identifier(a: pydsdl.Attribute) -> str:
     out = (a.name + '_') if a.name in _ILLEGAL_IDENTIFIERS else a.name
     assert isinstance(out, str)
     return out
+
+
+def _make_serialization_alignment_prefix(offset: pydsdl.BitLengthSet) -> str:
+    if isinstance(offset, pydsdl.BitLengthSet):
+        return 'aligned' if offset.is_aligned_at_byte() else 'unaligned'
+    else:
+        raise ValueError(f'Expected BitLengthSet, got {type(offset).__name__}')
 
 
 def _pickle_object(x: typing.Any) -> str:
@@ -114,6 +123,16 @@ def _list_imports(t: pydsdl.CompositeType) -> typing.List[str]:
 
     # Make a list of unique full namespaces of referenced composites
     return list(sorted(set(x.full_namespace for x in dep_types if isinstance(x, pydsdl.CompositeType))))
+
+
+def _test_if_saturated(t: pydsdl.PrimitiveType) -> bool:
+    if isinstance(t, pydsdl.PrimitiveType):
+        return {
+            pydsdl.PrimitiveType.CastMode.SATURATED: True,
+            pydsdl.PrimitiveType.CastMode.TRUNCATED: False,
+        }[t.cast_mode]
+    else:
+        raise ValueError(f'Cast mode is not defined for {type(t).__name__}')
 
 
 def _construct_instance_tests_from_root(root: typing.Type[object]) \

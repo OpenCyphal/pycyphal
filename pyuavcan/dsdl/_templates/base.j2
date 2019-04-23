@@ -316,10 +316,18 @@ class {{ name }}(_dsdl_.CompositeObject):
 {#
  # SERIALIZATION METHODS
  #}
+    # noinspection PyProtectedMember
     def _serialize_(self, _ser_: _dsdl_.Serializer) -> None:
-        {#{ serialize(type, 'self')|indent }#}
+    {%- if type.fields %}
+        _orig_bit_length_ = _ser_.current_bit_length
+        {{ serialize(type)|indent }}
+        assert {{ type.bit_length_set|min }} <= (_ser_.current_bit_length - _orig_bit_length_) {# -#}
+                                             <= {{ type.bit_length_set|max }}, 'Bad serialization of {{ type }}'
+    {%- else %}
         pass
+    {%- endif %}
 
+    # noinspection PyProtectedMember
     @staticmethod
     def _deserialize_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
         {{ deserialize(type, 'self')|indent }}
