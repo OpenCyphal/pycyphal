@@ -96,7 +96,7 @@
     {%- endfor %}
     else:
         raise RuntimeError('Malformed union {{ t }}')
-
+{# -#}
 {%- else -%}{%- assert False -%}
 {%- endif -%}
 {%- endmacro -%}
