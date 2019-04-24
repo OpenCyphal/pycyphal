@@ -13,11 +13,11 @@ class {{ T.short_name }}_{{ T.version.major }}_{{ T.version.minor }}(_dsdl_.Comp
 
     {{ data_schema('Response', T.response_type)|indent }}
 
-    def _serialize_(self, _ser_: _dsdl_.Serializer) -> None:
+    def _serialize_aligned_(self, _ser_: _dsdl_.Serializer) -> None:
         raise TypeError('Service type {{ T }} cannot be serialized')
 
     @staticmethod
-    def _deserialize_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
+    def _deserialize_aligned_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
         raise TypeError('Service type {{ T }} cannot be deserialized')
 
     def __str__(self) -> str:

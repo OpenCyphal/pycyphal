@@ -24,11 +24,11 @@ class CompositeObject:
     # Defined for serializable types only.
     _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: typing.Optional[int] = None
 
-    def _serialize_(self, _ser_: Serializer) -> None:
+    def _serialize_aligned_(self, _ser_: Serializer) -> None:
         raise NotImplementedError
 
     @staticmethod
-    def _deserialize_(_des_: Deserializer) -> 'CompositeObject':
+    def _deserialize_aligned_(_des_: Deserializer) -> 'CompositeObject':
         raise NotImplementedError
 
     @staticmethod
@@ -46,7 +46,7 @@ _ClassOrInstance = typing.Union[typing.Type[CompositeObject], CompositeObject]
 def serialize(o: CompositeObject) -> numpy.ndarray:
     if isinstance(o, CompositeObject) and isinstance(o._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_, int):
         ser = Serializer.new(o._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
-        o._serialize_(ser)
+        o._serialize_aligned_(ser)
         return ser.buffer
     else:
         raise TypeError(f'Cannot serialize an instance of {type(o).__name__}')
@@ -55,7 +55,7 @@ def serialize(o: CompositeObject) -> numpy.ndarray:
 def deserialize(cls: typing.Type[CompositeObject], source_bytes: numpy.ndarray) -> CompositeObject:
     if issubclass(cls, CompositeObject) and isinstance(source_bytes, numpy.ndarray):
         # noinspection PyProtectedMember
-        return cls._deserialize_(Deserializer.new(source_bytes))
+        return cls._deserialize_aligned_(Deserializer.new(source_bytes))
     else:
         raise TypeError(f'Cannot deserialize an instance of {cls} from {type(source_bytes).__name__}')
 

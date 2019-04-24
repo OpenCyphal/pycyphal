@@ -317,7 +317,7 @@ class {{ name }}(_dsdl_.CompositeObject):
  # SERIALIZATION METHODS
  #}
     # noinspection PyProtectedMember
-    def _serialize_(self, _ser_: _dsdl_.Serializer) -> None:
+    def _serialize_aligned_(self, _ser_: _dsdl_.Serializer) -> None:
     {%- if type.fields %}
         _orig_bit_length_ = _ser_.current_bit_length
         {{ serialize(type)|indent }}
@@ -330,7 +330,7 @@ class {{ name }}(_dsdl_.CompositeObject):
 
     # noinspection PyProtectedMember
     @staticmethod
-    def _deserialize_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
+    def _deserialize_aligned_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
         {{ deserialize(type, 'self')|indent }}
 {#
  # PYTHON DATA MODEL

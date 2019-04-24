@@ -27,7 +27,10 @@
 {%- set fun -%}
     _ser_.add_{{ offset|alignment_prefix }}_f{{ t.bit_length }}
 {%- endset -%}
-{%- if t is saturated -%}  {# Note that value ranges are internally represented as rationals. -#}
+{#- Note that value ranges are internally represented as rationals. -#}
+{%- if t is saturated -%}
+    {#- We do not emit saturation code for float64 because its range matches that of the native Python's float. -#}
+    {%- if t.bit_length < 64 -%}
     if _np_.isfinite({{ ref }}):
         if {{ ref }} > {{ t.inclusive_value_range.max }}.0:
             {{ fun }}({{ t.inclusive_value_range.max }}.0)
@@ -37,6 +40,10 @@
             {{ fun }}({{ ref }})
     else:
         {{ fun }}({{ ref }})
+    {%- else -%}
+    # Saturation not required due to compatible native representation of "{{ t }}"
+    {{ fun }}({{ ref }})
+    {%- endif -%}
 {%- else -%}
     {{ fun }}({{ ref }})
 {%- endif -%}
@@ -44,11 +51,16 @@
 
 
 {%- macro _serialize_fixed_length_array(t, ref, offset) -%}
-{%- if t.element_type is BooleanType -%}
+    assert len({{ ref }}) == {{ t.capacity }}, '{{ ref }}: {{ t }}'
+
+{#- Saturation of bool[] or standard-bit-length primitive arrays is not needed because the range of native
+ #- representations matches that of the final serialized value. Saturation is only needed in the case of elementwise
+ #- serialization, which is implemented in the corresponding type serialization macros. -#}
+{%- if t.element_type is BooleanType %}
     _ser_.add_{{ offset|alignment_prefix }}_array_of_bits({{ ref }})
-{%- elif t.element_type is PrimitiveType and t.element_type.standard_bit_length -%}
+{%- elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
     _ser_.add_{{ offset|alignment_prefix -}}_array_of_standard_bit_length_primitives({{ ref }})
-{%- else -%}
+{%- else %}
     # Unrolled fixed-length array: {{ t }}
     {% for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
     {{ _serialize_any(t.element_type, '%s[%d]'|format(ref, index), element_offset) }}
@@ -58,11 +70,15 @@
 
 
 {%- macro _serialize_variable_length_array(t, ref, offset) -%}
-    # Length field is byte-aligned:  {{ offset.is_aligned_at_byte() }}
-    # First element is byte-aligned: {{ (offset + t.length_field_type.bit_length).is_aligned_at_byte() }}
-    # All elements are byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}
+    # Length field byte-aligned: {{ offset.is_aligned_at_byte() }}; {# -#}
+     first element byte-aligned: {{ (offset + t.length_field_type.bit_length).is_aligned_at_byte() }}; {# -#}
+      all elements byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}.
+    assert len({{ ref }}) <= {{ t.capacity }}, '{{ ref }}: {{ t }}'
     {{ _serialize_integer(t.length_field_type, 'len(%s)'|format(ref), offset) }}
 
+{#- Saturation of bool[] or standard-bit-length primitive arrays is not needed because the range of native
+ #- representations matches that of the final serialized value. Saturation is only needed in the case of elementwise
+ #- serialization, which is implemented in the corresponding type serialization macros. -#}
 {%- if t.element_type is BooleanType %}
     _ser_.add_{{ (offset + t.length_field_type.bit_length)|alignment_prefix }}_array_of_bits({{ ref }})
 
@@ -79,26 +95,32 @@
 
 
 {%- macro _serialize_composite(t, ref, base_offset) -%}
-{%- if t is StructureType -%}
-    {%- for f, offset in t.iterate_fields_with_offsets(base_offset) -%}
-    # {{ f }}
+    {#- The begin/end markers are emitted to facilitate automatic testing. -#}
+    # BEGIN COMPOSITE SERIALIZATION: {{ t }}
+{%- if t is StructureType %}
+    {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
+    # BEGIN STRUCTURE FIELD SERIALIZATION: {{ f }}
     {{ _serialize_any(f.data_type, ref + '.' + (f|id), offset) }}
-    {% endfor -%}
+    # END STRUCTURE FIELD SERIALIZATION: {{ f }}
+    {%- endfor -%}
 
-{%- elif t is UnionType -%}
-    # Tag field is byte-aligned: {{ base_offset.is_aligned_at_byte() }}
-    # Values are byte-aligned:   {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
+{%- elif t is UnionType %}
+    # Tag field byte-aligned: {{ base_offset.is_aligned_at_byte() }}; {# -#}
+      values byte-aligned: {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
     {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
         {%- set field_ref = ref + '.' + (f|id) %}
+    # BEGIN UNION FIELD SERIALIZATION: {{ f }}
     {{ 'if' if loop.first else 'elif' }} {{ field_ref }} is not None:
-        {{ _serialize_integer(t.tag_field_type, loop.index0|string, base_offset)|indent }}
+        {{ _serialize_integer(t.tag_field_type, loop.index0|string, base_offset)|indent }}  # Tag {{ loop.index0 }}
         {{ _serialize_any(f.data_type, field_ref, offset)|indent }}
+    # END UNION FIELD SERIALIZATION: {{ f }}
     {%- endfor %}
     else:
         raise RuntimeError('Malformed union {{ t }}')
-{# -#}
+
 {%- else -%}{%- assert False -%}
-{%- endif -%}
+{%- endif %}
+    # END COMPOSITE SERIALIZATION: {{ t }}
 {%- endmacro -%}
 
 
@@ -116,7 +138,7 @@
     {%- elif t is VariableLengthArrayType -%}   {{ _serialize_variable_length_array(t, ref, offset) }}
     {%- elif t is CompositeType -%}
         {%- if offset.is_aligned_at_byte() -%}
-    {{ ref }}._serialize_(_ser_)  # Delegating because this object is always byte-aligned.
+    {{ ref }}._serialize_aligned_(_ser_)  # Delegating because this object is always byte-aligned.
         {%- else -%}
     # Object {{ ref }} is not always byte-aligned, serializing in-place.
     {{ _serialize_composite(t, ref, offset) }}
