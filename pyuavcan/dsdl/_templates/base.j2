@@ -319,6 +319,7 @@ class {{ name }}(_dsdl_.CompositeObject):
  #}
     # noinspection PyProtectedMember
     def _serialize_aligned_(self, _ser_: _dsdl_.Serializer) -> None:
+        assert _ser_.current_bit_length % 8 == 0, 'Serializer is not byte-aligned'
     {%- if type.fields %}
         _orig_bit_length_ = _ser_.current_bit_length
         {{ serialize(type)|indent }}

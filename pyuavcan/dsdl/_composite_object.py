@@ -10,7 +10,11 @@ import typing
 import pydsdl
 import pickle
 import base64
+import logging
 from ._serialized_representation import Serializer, Deserializer
+
+
+_logger = logging.getLogger(__name__)
 
 
 class CompositeObject:
@@ -25,10 +29,23 @@ class CompositeObject:
     _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: typing.Optional[int] = None
 
     def _serialize_aligned_(self, _ser_: Serializer) -> None:
+        """
+        Auto-generated serialization method.
+        Appends the serialized representation of its object to the supplied Serializer instance.
+        The current bit offset of the Serializer instance MUST be byte-aligned.
+        This is not a part of the API.
+        """
         raise NotImplementedError
 
     @staticmethod
     def _deserialize_aligned_(_des_: Deserializer) -> 'CompositeObject':
+        """
+        Auto-generated deserialization method. Consumes (some) data from the supplied Deserializer instance.
+        Raises a _DeserializationError_ if the supplied serialized representation is invalid.
+        Always returns a valid object unless an exception is raised.
+        The current bit offset of the Deserializer instance MUST be byte-aligned.
+        This is not a part of the API.
+        """
         raise NotImplementedError
 
     @staticmethod
@@ -38,12 +55,26 @@ class CompositeObject:
         assert isinstance(out, object)
         return out
 
+    # noinspection PyPep8Naming
+    class _DeserializationError_(ValueError):
+        """
+        This exception class is used when an auto-generated deserialization routine is supplied with invalid input data;
+        in other words, input that is not a valid serialized representation of its data type.
+        This exception is never visible to the user, it is not part of the API.
+        """
+        pass
+
 
 _ClassOrInstance = typing.Union[typing.Type[CompositeObject], CompositeObject]
 
 
 # noinspection PyProtectedMember
 def serialize(o: CompositeObject) -> numpy.ndarray:
+    """
+    Constructs a serialized representation of the provided top-level object.
+    The returned serialized representation is padded to one byte in accordance with the Specification.
+    The type of the returned array is numpy.array(dtype=numpy.uint8) with the WRITEABLE flag set to False.
+    """
     if isinstance(o, CompositeObject) and isinstance(o._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_, int):
         ser = Serializer.new(o._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
         o._serialize_aligned_(ser)
@@ -52,10 +83,25 @@ def serialize(o: CompositeObject) -> numpy.ndarray:
         raise TypeError(f'Cannot serialize an instance of {type(o).__name__}')
 
 
-def deserialize(cls: typing.Type[CompositeObject], source_bytes: numpy.ndarray) -> CompositeObject:
-    if issubclass(cls, CompositeObject) and isinstance(source_bytes, numpy.ndarray):
-        # noinspection PyProtectedMember
-        return cls._deserialize_aligned_(Deserializer.new(source_bytes))
+# noinspection PyProtectedMember
+def try_deserialize(cls: typing.Type[CompositeObject], source_bytes: numpy.ndarray) -> typing.Optional[CompositeObject]:
+    """
+    Constructs a Python object representing an instance of the supplied data type from its serialized representation.
+    Returns None if the provided serialized representation is invalid.
+    This function will never raise an exception for invalid input data; the only possible outcome of an invalid data
+    being supplied is None at the output. A raised exception can only indicate an error in the deserialization logic.
+    """
+    if issubclass(cls, CompositeObject) and isinstance(source_bytes, numpy.ndarray) \
+            and source_bytes.dtype == numpy.uint8:
+        try:
+            return cls._deserialize_aligned_(Deserializer.new(source_bytes))
+        except CompositeObject._DeserializationError_:
+            # Use explicit level check to avoid unnecessary load in production.
+            # This is necessary because we perform complex data transformations before invoking the logger.
+            if _logger.isEnabledFor(logging.INFO):
+                _logger.info('Invalid serialized representation of %s (in Base64): %s',
+                             get_type(cls), base64.b64encode(source_bytes).decode(), exc_info=True)
+            return None
     else:
         raise TypeError(f'Cannot deserialize an instance of {cls} from {type(source_bytes).__name__}')
 

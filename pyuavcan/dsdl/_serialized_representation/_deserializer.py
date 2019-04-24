@@ -9,13 +9,16 @@ import numpy
 import typing
 import struct
 
+# We must use uint8 instead of ubyte because uint8 is platform-invariant whereas (u)byte is platform-dependent.
+_Byte = numpy.uint8
+
 
 class Deserializer:
     def __init__(self, source_bytes: numpy.ndarray):
         if issubclass(Deserializer, type(self)):
             raise TypeError('Deserializer cannot be instantiated directly; use the new() factory instead')
 
-        if not isinstance(source_bytes, numpy.ndarray) or source_bytes.dtype != numpy.ubyte:
+        if not isinstance(source_bytes, numpy.ndarray) or source_bytes.dtype != _Byte:
             raise ValueError(f'Unsupported buffer: {type(source_bytes)}')
 
         self._buf = source_bytes
