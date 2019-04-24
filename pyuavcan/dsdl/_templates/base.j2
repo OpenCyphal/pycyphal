@@ -27,7 +27,8 @@ import warnings as _warnings_
 import {{ n }}
 {%- endfor %}
 
-{%- from 'serialization.j2' import serialize, deserialize -%}
+{%- from 'serialization.j2' import serialize -%}
+{%- from 'deserialization.j2' import deserialize -%}
 
 
 {#-
