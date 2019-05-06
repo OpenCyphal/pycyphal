@@ -33,9 +33,9 @@ def make_driver(device_name, **kwargs):
 
     if windows_com_port or unix_tty:
         return SLCAN(device_name, **kwargs)
-    elif SocketCAN is not None:
-        return SocketCAN(device_name, **kwargs)
     elif pythoncan is not None:
         return PythonCan(device_name, **kwargs)
+    elif SocketCAN is not None:
+        return SocketCAN(device_name, **kwargs)
     else:
         raise DriverError('Unrecognized device name: %r' % device_name)

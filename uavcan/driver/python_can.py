@@ -38,18 +38,17 @@ class PythonCan(AbstractDriver):
         super(PythonCan, self).__init__()
 
         if can is None:
-            logger.error("To use this drive, make sure the module python-can is installed")
+            logger.error("To use this driver, make sure the module python-can is installed")
             raise ValueError("python-can must be installed.")
 
         # get bus from default config
         try:
             self._bus = can.Bus()
-            self._bus.state = can.bus.BusState.ACTIVE
+            # self._bus.state = can.bus.BusState.ACTIVE
         except Exception as ex:
-            logger.info("To use this drive, make sure the module python-can is installed")
-            logger.info("Also make sure you have a valid can.ini file located in the current working directory.")
+            logger.info("Please make sure you have a valid can.ini file located in the current working directory.")
             logger.info("See also: https://python-can.readthedocs.io/en/master/configuration.html#configuration-file")
-            logger.error("Got an exception", exc_info=True)
+            logger.exception("Could not instantiate a python-can driver")
             raise
 
         self._writer_thread_should_stop = False
