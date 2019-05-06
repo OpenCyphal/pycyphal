@@ -43,7 +43,10 @@ class PythonCan(AbstractDriver):
 
         # get bus from default config
         try:
-            self._bus = can.Bus()
+            if interface is None:
+                self._bus = can.Bus()
+            else:
+                self._bus = can.interface.Bus(channel=interface, bustype=_extras['bustype'], bitrate=_extras['bitrate'])
             # self._bus.state = can.bus.BusState.ACTIVE
         except Exception as ex:
             logger.info("Please make sure you have a valid can.ini file located in the current working directory.")
