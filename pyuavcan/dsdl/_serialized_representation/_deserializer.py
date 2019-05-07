@@ -8,6 +8,7 @@ import sys
 import numpy
 import typing
 import struct
+import base64
 
 # We must use uint8 instead of ubyte because uint8 is platform-invariant whereas (u)byte is platform-dependent.
 _Byte = numpy.uint8
@@ -92,24 +93,23 @@ class Deserializer:
         A new array is always created (the memory cannot be shared with the buffer due to the layout transformation).
         The returned array is of dtype numpy.bool.
         """
-        if count <= 0:
-            raise ValueError('The number of elements in the bit array must be positive')
+        if count < 0:
+            raise ValueError('The number of elements in the bit array cannot be negative')
         assert self._bit_offset % 8 == 0
         bs = self._buf[self._byte_offset:self._byte_offset + (count + 7) // 8]
         out = numpy.unpackbits(bs)[:count]
-        if len(out) != count:
-            raise self.FormatError(f'Requested {count} bits, only {len(out)} are available')
+        if len(out) != count:   # Explicit check is required because numpy silently truncates slices
+            raise IndexError(f'Requested {count} bits, only {len(out)} are available')
         self._bit_offset += count
         return out.astype(dtype=numpy.bool)
 
     def fetch_aligned_bytes(self, count: int) -> numpy.ndarray:
         assert self._bit_offset % 8 == 0
-        if count <= 0:
-            raise ValueError('The number of elements in the byte array must be positive')
+        if count < 0:
+            raise ValueError('The number of elements in the byte array cannot be negative')
         out = self._buf[self._byte_offset:self._byte_offset + count]
-        if len(out) != count:
-            raise self.FormatError(
-                f'Could not fetch {count} bytes from the buffer, only {len(out)} are available')
+        if len(out) != count:   # Explicit check is required because numpy silently truncates slices
+            raise IndexError(f'Could not fetch {count} bytes from the buffer, only {len(out)} are available')
         self._bit_offset += count * 8
         return out
 
@@ -150,14 +150,20 @@ class Deserializer:
         x = self.fetch_aligned_u64()
         return (x - 2 ** 64) if x >= 2 ** 63 else x
 
-    def fetch_aligned_f16(self) -> float:
-        return self._float_from_bytes(self.fetch_aligned_bytes(2))
+    def fetch_aligned_f16(self) -> float:  # noinspection PyTypeChecker
+        out, = struct.unpack('<e', self.fetch_aligned_bytes(2))  # type: ignore
+        assert isinstance(out, float)
+        return out
 
-    def fetch_aligned_f32(self) -> float:
-        return self._float_from_bytes(self.fetch_aligned_bytes(4))
+    def fetch_aligned_f32(self) -> float:  # noinspection PyTypeChecker
+        out, = struct.unpack('<f', self.fetch_aligned_bytes(4))  # type: ignore
+        assert isinstance(out, float)
+        return out
 
-    def fetch_aligned_f64(self) -> float:
-        return self._float_from_bytes(self.fetch_aligned_bytes(8))
+    def fetch_aligned_f64(self) -> float:  # noinspection PyTypeChecker
+        out, = struct.unpack('<d', self.fetch_aligned_bytes(8))  # type: ignore
+        assert isinstance(out, float)
+        return out
 
     #
     # Less specialized methods: assuming that the value is aligned at the beginning, but its bit length
@@ -167,8 +173,8 @@ class Deserializer:
     def fetch_aligned_unsigned(self, bit_length: int) -> int:
         assert self._bit_offset % 8 == 0
         bs = self._buf[self._byte_offset:self._byte_offset + (bit_length + 7) // 8]
-        if len(bs) * 8 < bit_length:
-            raise self.FormatError(f'Could not fetch {bit_length} bits from the buffer')
+        if len(bs) * 8 < bit_length:   # Explicit check is required because numpy silently truncates slices
+            raise IndexError(f'Could not fetch {bit_length} bits from the buffer')
         self._bit_offset += bit_length
         return self._unsigned_from_bytes(bs, bit_length)
 
@@ -176,6 +182,55 @@ class Deserializer:
         assert bit_length >= 2
         u = self.fetch_aligned_unsigned(bit_length)
         return (u - 2 ** bit_length) if u >= 2 ** (bit_length - 1) else u
+
+    #
+    # Least specialized methods: no assumptions about alignment are made.
+    # These are the slowest and may be used only if none of the above (specialized) methods are suitable.
+    #
+    def fetch_unaligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) \
+            -> numpy.ndarray:
+        """See the aligned counterpart."""
+        raise NotImplementedError
+
+    def fetch_unaligned_array_of_bits(self, count: int) -> numpy.ndarray:
+        pass
+
+    def fetch_unaligned_bytes(self, count: int) -> numpy.ndarray:
+        # This is a faster variation of the Ben Dyer's unaligned bit copy algorithm:
+        # https://github.com/UAVCAN/libuavcan/blob/fd8ba19bc9c09c05a/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12
+        # It is faster because here we are aware that the destination is always aligned, which we take advantage of.
+        # This algorithm breaks for byte-aligned offset, so we have to delegate the aligned case (it's also faster):
+        if self._bit_offset % 8 == 0:
+            return self.fetch_aligned_bytes(count)
+        else:
+            out = numpy.zeros(count, dtype=_Byte)
+            left = self._bit_offset % 8
+            right = 8 - left
+            assert (1 <= right <= 7) and (1 <= left <= 7)
+            for i in range(count):
+                x = (self._buf[self._byte_offset] << left) & 0xFF
+                self._bit_offset += 8
+                out[i] = x | (self._buf[self._byte_offset] >> right)
+            assert len(out) == count
+            return out
+
+    def fetch_unaligned_unsigned(self, bit_length: int) -> int:
+        pass
+
+    def fetch_unaligned_signed(self, bit_length: int) -> int:
+        pass
+
+    def fetch_unaligned_f16(self) -> float:
+        pass
+
+    def fetch_unaligned_f32(self) -> float:
+        pass
+
+    def fetch_unaligned_f64(self) -> float:
+        pass
+
+    def fetch_unaligned_bit(self) -> bool:
+        pass
 
     #
     # Private methods.
@@ -192,22 +247,22 @@ class Deserializer:
             out |= int(x[i]) << (i * 8)
         # The trailing bits must be shifted right because the most significant bit has index zero. If the bit length
         # is an integer multiple of eight, this won't be necessary and the operation will have no effect.
-        backtrack = (8 - bit_length % 8) & 0b111
-        out |= (int(x[last_byte_index]) >> backtrack) << (last_byte_index * 8)
+        shift = (8 - bit_length % 8) & 0b111
+        out |= (int(x[last_byte_index]) >> shift) << (last_byte_index * 8)
         assert 0 <= out < (2 ** bit_length)
-        return out
-
-    @staticmethod
-    def _float_from_bytes(x: numpy.ndarray) -> float:
-        assert x.dtype == _Byte
-        # noinspection PyTypeChecker
-        out, = struct.unpack({2: '<e', 4: '<f', 8: '<d'}[len(x)], x)  # type: ignore
-        assert isinstance(out, float)
         return out
 
     @property
     def _byte_offset(self) -> int:
         return self._bit_offset // 8
+
+    def __str__(self) -> str:
+        return f'{type(self).__name__}(' \
+            f'current_bit_offset={self._bit_offset}, ' \
+            f'remaining_bit_length={self.remaining_bit_length}, ' \
+            f'serialized_representation_base64={base64.b64encode(self._buf.tobytes()).decode()!r})'
+
+    __repr__ = __str__
 
 
 class _LittleEndianDeserializer(Deserializer):
@@ -313,19 +368,72 @@ def _unittest_deserializer_aligned() -> None:
         True, False, True, False, False, False, True, True, True, True, False, True, False,
     ])
 
+    print('repr(deserializer):', repr(des))
+
     des = Deserializer.new(numpy.array([1, 2, 3], dtype=_Byte))
 
-    with raises(ValueError):
-        des.fetch_aligned_array_of_bits(0)
+    assert list(des.fetch_aligned_array_of_bits(0)) == []
+    assert list(des.fetch_aligned_bytes(0)) == []
+    assert des.remaining_bit_length == 3 * 8
 
     with raises(ValueError):
-        des.fetch_aligned_bytes(0)
+        des.fetch_aligned_array_of_bits(-1)
 
-    with raises(Deserializer.FormatError):
+    with raises(ValueError):
+        des.fetch_aligned_bytes(-1)
+
+    with raises(IndexError):
         des.fetch_aligned_array_of_bits(100)
 
-    with raises(Deserializer.FormatError):
+    with raises(IndexError):
         des.fetch_aligned_bytes(10)
 
-    with raises(Deserializer.FormatError):
+    with raises(IndexError):
         des.fetch_aligned_unsigned(64)
+
+    print('repr(deserializer):', repr(des))
+
+
+def _unittest_deserializer_unaligned() -> None:
+    from pytest import raises, approx
+
+    des = Deserializer.new(numpy.array([0b10101010, 0b01011101, 0b11001100, 0b10010001], dtype=_Byte))
+    assert list(des.fetch_aligned_array_of_bits(3)) == [True, False, True]
+    assert list(des.fetch_unaligned_bytes(0)) == []
+    assert list(des.fetch_unaligned_bytes(2)) == [0b01010_010, 0b11101_110]
+    assert list(des.fetch_unaligned_bytes(1)) == [0b01100_100]
+    assert des.remaining_bit_length == 5
+    with raises(IndexError):
+        des.fetch_unaligned_bytes(1)
+
+    des = Deserializer.new(numpy.array([0b10101010, 0b01011101, 0b11001100, 0b10010001], dtype=_Byte))
+    assert list(des.fetch_unaligned_bytes(0)) == []
+    assert list(des.fetch_unaligned_bytes(2)) == [0b10101010, 0b01011101]  # Actually aligned
+    assert list(des.fetch_unaligned_bytes(1)) == [0b11001100]
+    assert des.remaining_bit_length == 8
+    with raises(IndexError):
+        des.fetch_unaligned_bytes(2)
+
+    # The buffer is constructed from the corresponding serialization test.
+    sample = bytes(map(
+        lambda x: int(x, 2),
+        '10100011 111'                          # 11 bits
+        '10100 11101'                           # 10 bits
+        '000 10010001 10100010 10110'           # u8 [0x12, 0x34, 0x56]
+        '011 '                                  # 3 bits
+        '00010010 00110100 01010110 '           # u8 [0x12, 0x34, 0x56]
+        '10011'                                 # 5 bits
+        '111 11110'                             # u8 = -2
+        '011 00101111 '                         # u11 = 0b111_0110_0101
+        '110'                                   # u3 = 0b110
+        '00000 00000000 00000000 00000000 00000000 00000000 00011110 00000111 111'  # f64 = 1.0
+        '00000 00000000 00010000 00000111 111'                                      # f32 = 1.0
+        '00000 00011111 100'                                                        # f16 = -inf
+        '10101 10111011 11011101 11110111 110'                                      # u16 [0xdead, 0xbeef]
+        '00000'                                                                     # padding
+        ''.split()))
+    assert len(sample) == 31
+
+    des = Deserializer.new(numpy.frombuffer(sample, dtype=_Byte))       # Operating on the read-only buffer
+    assert des.remaining_bit_length == 31 * 8
+    des.require_remaining_bit_length(31 * 8)

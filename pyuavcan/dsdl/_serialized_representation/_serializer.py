@@ -141,7 +141,7 @@ class Serializer:
         self.add_aligned_unsigned((2 ** bit_length + value) if value < 0 else value, bit_length)
 
     #
-    # Least specialized methods: no assumptions about alignment is made.
+    # Least specialized methods: no assumptions about alignment are made.
     # These are the slowest and may be used only if none of the above (specialized) methods are suitable.
     #
     def add_unaligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
