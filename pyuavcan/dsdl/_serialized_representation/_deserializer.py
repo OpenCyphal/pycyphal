@@ -17,7 +17,7 @@ _PrimitiveType = typing.Union[typing.Type[numpy.integer], typing.Type[numpy.inex
 
 
 class Deserializer:
-    class InvalidSerializedRepresentationError(ValueError):
+    class FormatError(ValueError):
         """
         This exception class is used when an auto-generated deserialization routine is supplied with invalid input data;
         in other words, input that is not a valid serialized representation of its data type.
@@ -47,20 +47,20 @@ class Deserializer:
 
     def require_remaining_bit_length(self, inclusive_minimum: int) -> None:
         """
-        Raises Deserializer.InvalidSerializedRepresentationError if the remaining bit length is
+        Raises Deserializer.FormatError if the remaining bit length is
         strictly less than the specified minimum. Users must invoke this method before beginning deserialization.
         Failure to invoke this method beforehand may result in IndexError being thrown later during
         deserialization if the serialized representation is shorter than expected.
         """
         if self.remaining_bit_length < inclusive_minimum:
-            raise self.InvalidSerializedRepresentationError(
+            raise self.FormatError(
                 f'The serialized representation is {len(self._buf)} bytes long ({len(self._buf) * 8} bits), '
                 f'which is shorter than the expected minimum of {inclusive_minimum} bits.')
 
     @staticmethod
     def require_value_in_range(value: _T, closed_interval_min_max: typing.Tuple[_T, _T]) -> _T:
         """
-        Raises Deserializer.InvalidSerializedRepresentationError if the value is outside of the range.
+        Raises Deserializer.FormatError if the value is outside of the range.
         Returns the value unmodified if the value is inside the range.
         """
         low, high = closed_interval_min_max
@@ -68,8 +68,7 @@ class Deserializer:
         if low <= value <= high:
             return value
         else:
-            raise Deserializer.InvalidSerializedRepresentationError(
-                f'Value {value} is outside of the expected range [{low}, {high}]')
+            raise Deserializer.FormatError(f'Value {value} is outside of the expected range [{low}, {high}]')
 
     def skip_bits(self, bit_length: int) -> None:
         """This is used for padding bits."""
@@ -99,17 +98,19 @@ class Deserializer:
         bs = self._buf[self._byte_offset:self._byte_offset + (count + 7) // 8]
         out = numpy.unpackbits(bs)[:count]
         if len(out) != count:
-            raise self.InvalidSerializedRepresentationError(f'Requested {count} bits, only {len(out)} are available')
+            raise self.FormatError(f'Requested {count} bits, only {len(out)} are available')
         self._bit_offset += count
         return out.astype(dtype=numpy.bool)
 
-    def fetch_aligned_bytes(self, how_many: int) -> numpy.ndarray:
+    def fetch_aligned_bytes(self, count: int) -> numpy.ndarray:
         assert self._bit_offset % 8 == 0
-        out = self._buf[self._byte_offset:self._byte_offset + how_many]
-        if len(out) != how_many:
-            raise self.InvalidSerializedRepresentationError(
-                f'Could not fetch {how_many} bytes from the buffer, only {len(out)} are available')
-        self._bit_offset += how_many * 8
+        if count <= 0:
+            raise ValueError('The number of elements in the byte array must be positive')
+        out = self._buf[self._byte_offset:self._byte_offset + count]
+        if len(out) != count:
+            raise self.FormatError(
+                f'Could not fetch {count} bytes from the buffer, only {len(out)} are available')
+        self._bit_offset += count * 8
         return out
 
     def fetch_aligned_u8(self) -> int:
@@ -167,7 +168,7 @@ class Deserializer:
         assert self._bit_offset % 8 == 0
         bs = self._buf[self._byte_offset:self._byte_offset + (bit_length + 7) // 8]
         if len(bs) * 8 < bit_length:
-            raise self.InvalidSerializedRepresentationError(f'Could not fetch {bit_length} bits from the buffer')
+            raise self.FormatError(f'Could not fetch {bit_length} bits from the buffer')
         self._bit_offset += bit_length
         return self._unsigned_from_bytes(bs, bit_length)
 
@@ -240,27 +241,46 @@ class _BigEndianDeserializer(Deserializer):
 
 def _unittest_deserializer_aligned() -> None:
     from pytest import raises, approx
-
     # The buffer is constructed from the corresponding serialization test.
-    sample = bytes(map(lambda x: int(x, 2),
-                       '10100111 11101111 11001101 10101011 10010000 01111000 01010110 00110100 00010010 10001000 '
-                       '10101001 11001011 11101101 11111110 11111111 00000000 01111111 00000000 00000000 00000000 '
-                       '00000000 00000000 00000000 11110000 00111111 00000000 00000000 10000000 00111111 00000000 '
-                       '01111100 11011010 11100000 11011010 10111110 11111110 10000000 10101101 11011110 11101111 '
-                       '10111110 10100011 11100110 10100011 11010000'.split()))
+    sample = bytes(map(
+        lambda x: int(x, 2),
+        '10100111 '                                                                 # u8
+        '11101111 11001101 10101011 10010000 01111000 01010110 00110100 00010010 '  # i64
+        '10001000 10101001 11001011 11101101 '                                      # i32 = -0x1234_5678
+        '11111110 11111111 '                                                        # i16 = -2
+        '00000000 '                                                                 # padding
+        '01111111 '                                                                 # i8 = 127
+        '00000000 00000000 00000000 00000000 00000000 00000000 11110000 00111111 '  # f64 = 1.0
+        '00000000 00000000 10000000 00111111 '                                      # f32 = 1.0
+        '00000000 01111100 '                                                        # f16 = +inf
+        '11011010 1110'                                                             # u12 = 0xEDA
+        '0000 '                                                                     # padding
+        '11011010 10111110 '                                                        # u16 = 0xBEDA
+        '11111110 1'                                                                # i9 = -2
+        '0000000 '                                                                  # padding
+        '10101101 11011110 11101111 10111110 '                                      # u16 [0xdead 0xbeef]
+        '10100011 11100110 '                                                        # 16 bits
+        '10100011 11010'                                                            # 13 bits
+        '000'.split()))                                                             # auto trailing padding
     assert len(sample) == 45
+
+    with raises(TypeError):
+        Deserializer(numpy.array([1, 2, 3], dtype=_Byte))
+
+    with raises(ValueError):
+        Deserializer.new(numpy.array([1, 2, 3], dtype=numpy.int8))
 
     des = Deserializer.new(numpy.frombuffer(sample, dtype=_Byte).copy())
     assert des.remaining_bit_length == 45 * 8
     des.require_remaining_bit_length(0)
     des.require_remaining_bit_length(45 * 8)
-    with raises(Deserializer.InvalidSerializedRepresentationError):
+    with raises(Deserializer.FormatError):
         des.require_remaining_bit_length(45 * 8 + 1)
 
     assert 1 == des.require_value_in_range(1, (0, 2))
     assert 0 == des.require_value_in_range(0, (0, 1))
     assert 1 == des.require_value_in_range(1, (0, 1))
-    with raises(Deserializer.InvalidSerializedRepresentationError):
+    with raises(Deserializer.FormatError):
         des.require_value_in_range(2, (0, 1))
 
     assert des.fetch_aligned_u8() == 0b1010_0111
@@ -292,3 +312,20 @@ def _unittest_deserializer_aligned() -> None:
     assert all(des.fetch_aligned_array_of_bits(13) == [
         True, False, True, False, False, False, True, True, True, True, False, True, False,
     ])
+
+    des = Deserializer.new(numpy.array([1, 2, 3], dtype=_Byte))
+
+    with raises(ValueError):
+        des.fetch_aligned_array_of_bits(0)
+
+    with raises(ValueError):
+        des.fetch_aligned_bytes(0)
+
+    with raises(Deserializer.FormatError):
+        des.fetch_aligned_array_of_bits(100)
+
+    with raises(Deserializer.FormatError):
+        des.fetch_aligned_bytes(10)
+
+    with raises(Deserializer.FormatError):
+        des.fetch_aligned_unsigned(64)

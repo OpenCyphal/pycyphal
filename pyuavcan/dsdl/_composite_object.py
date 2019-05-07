@@ -41,7 +41,7 @@ class CompositeObject:
     def _deserialize_aligned_(_des_: Deserializer) -> 'CompositeObject':
         """
         Auto-generated deserialization method. Consumes (some) data from the supplied Deserializer instance.
-        Raises a Deserializer.InvalidSerializedRepresentationError if the supplied serialized representation is invalid.
+        Raises a Deserializer.FormatError if the supplied serialized representation is invalid.
         Always returns a valid object unless an exception is raised.
         The current bit offset of the Deserializer instance MUST be byte-aligned.
         This is not a part of the API.
@@ -93,7 +93,7 @@ def try_deserialize(cls: typing.Type[CompositeObject], source_bytes: numpy.ndarr
             and source_bytes.dtype == numpy.uint8:
         try:
             return cls._deserialize_aligned_(Deserializer.new(source_bytes))
-        except Deserializer.InvalidSerializedRepresentationError:
+        except Deserializer.FormatError:
             # Use explicit level check to avoid unnecessary load in production.
             # This is necessary because we perform complex data transformations before invoking the logger.
             if _logger.isEnabledFor(logging.INFO):
