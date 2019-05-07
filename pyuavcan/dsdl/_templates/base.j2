@@ -159,6 +159,7 @@ class {{ name }}(_dsdl_.CompositeObject):
     ) -> None:
         """
         {{ type.full_name }}.{{ type.version.major }}.{{ type.version.minor }}
+        Raises ValueError if any of the primitive values are outside the permitted range, regardless of the cast mode.
         {%- if type is UnionType %}
         If no parameters are provided, the first field will be default-initialized and selected.
         If one parameter is provided, it will be used to initialize and select the field under the same name.
@@ -183,38 +184,38 @@ class {{ name }}(_dsdl_.CompositeObject):
     {%- endfor %}
     {%- for f in type.fields if f is not PaddingField %}
         {%- if f.data_type is BooleanType %}
-        self._{{ f|id }} = bool({{ f|id }}) if {{ f|id }} is not None else False
+        self.{{ f|id }} = {{ f|id }} if {{ f|id }} is not None else False
 
         {%- elif f.data_type is IntegerType %}
-        self._{{ f|id }} = int({{ f|id }}) if {{ f|id }} is not None else 0
+        self.{{ f|id }} = {{ f|id }} if {{ f|id }} is not None else 0
 
         {%- elif f.data_type is FloatType %}
-        self._{{ f|id }} = float({{ f|id }}) if {{ f|id }} is not None else 0.0
+        self.{{ f|id }} = {{ f|id }} if {{ f|id }} is not None else 0.0
 
         {%- elif f.data_type is FixedLengthArrayType %}
         if {{ f|id }} is None:
             {%- if f.data_type.element_type is CompositeType %}
-            self._{{ f|id }} = _np_.array([{{ composite_ref(f.data_type.element_type) }}() {# -#}
-                                           for _ in range({{ f.data_type.capacity }})], {#  -#}
-                                          {{ f.data_type.element_type|numpy_scalar_type }})
+            self.{{ f|id }} = _np_.array([{{ composite_ref(f.data_type.element_type) }}() {# -#}
+                                          for _ in range({{ f.data_type.capacity }})], {#  -#}
+                                         {{ f.data_type.element_type|numpy_scalar_type }})
             {%- else %}
-            self._{{ f|id }} = _np_.zeros({{ f.data_type.capacity }}, {# -#}
-                                          {{ f.data_type.element_type|numpy_scalar_type }})
+            self.{{ f|id }} = _np_.zeros({{ f.data_type.capacity }}, {# -#}
+                                         {{ f.data_type.element_type|numpy_scalar_type }})
             {%- endif %}
         else:
             {{ assign_array(f, f|id) | indent(8) }}
 
         {%- elif f.data_type is VariableLengthArrayType %}
         if {{ f|id }} is None:
-            self._{{ f|id }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
+            self.{{ f|id }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
         else:
             {{ assign_array(f, f|id) | indent(8) }}
 
         {%- elif f.data_type is CompositeType %}
         if {{ f|id }} is None:
-            self._{{ f|id }} = {{ composite_ref(f.data_type) }}()
+            self.{{ f|id }} = {{ composite_ref(f.data_type) }}()
         elif isinstance({{ f|id }}, {{ composite_ref(f.data_type) }}):
-            self._{{ f|id }} = {{ f|id }}
+            self.{{ f|id }} = {{ f|id }}
         else:
             raise ValueError(f'{{ f|id }}: expected {{ composite_ref(f.data_type) }} got {type({{ f|id }}).__name__}')
 
@@ -289,13 +290,31 @@ class {{ name }}(_dsdl_.CompositeObject):
     @{{ f|id }}.setter
     def {{ f|id }}(self, x: {{ relaxed_type_annotation(f.data_type) }}) -> None:
     {%- if f.data_type is BooleanType %}
-        self._{{ f|id }} = bool(x)
+        self._{{ f|id }} = bool(x)  # Cast to bool implements saturation
 
     {%- elif f.data_type is IntegerType %}
-        self._{{ f|id }} = int(x)
+        """Raises ValueError if the value is outside of the permitted range, regardless of the cast mode."""
+        x = int(x)
+        if {{ f.data_type.inclusive_value_range.min }} <= x <= {{ f.data_type.inclusive_value_range.max }}:
+            self._{{ f|id }} = x
+        else:
+            raise ValueError(f'{{ f|id }}: value {x} is not in [{{ f.data_type.inclusive_value_range.min }}, {# -#}
+                                                                {{ f.data_type.inclusive_value_range.max }}]')
 
     {%- elif f.data_type is FloatType %}
-        self._{{ f|id }} = float(x)
+        """Raises ValueError if the value is finite and outside of the permitted range, regardless of the cast mode."""
+        {#- We do not emit range check for float64 because its range matches that of the native Python's float. #}
+        {%- if f.data_type.bit_length < 64 %}
+        x = float(x)
+        in_range = {{ f.data_type.inclusive_value_range.min }}.0 <= x <= {{ f.data_type.inclusive_value_range.max }}.0
+        if in_range or not _np_.isfinite(x):
+            self._{{ f|id }} = x
+        else:
+            raise ValueError(f'{{ f|id }}: value {x} is not in [{{ f.data_type.inclusive_value_range.min }}, {# -#}
+                                                                {{ f.data_type.inclusive_value_range.max }}]')
+        {%- else %}
+        self._{{ f|id }} = float(x)  # Range check not required
+        {%- endif %}
 
     {%- elif f.data_type is ArrayType %}
         {{ assign_array(f, 'x') | indent(4) }}

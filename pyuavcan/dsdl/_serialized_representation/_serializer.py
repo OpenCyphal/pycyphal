@@ -18,6 +18,7 @@ class Serializer:
     All methods operating on scalars implicitly truncate the value if it exceeds the range,
     excepting signed integers, for which overflow handling is not implemented (DSDL does not permit truncation
     of signed integers anyway so it doesn't matter). Saturation must be implemented externally.
+    Methods that expect an unsigned integer will raise ValueError if the supplied integer is negative.
     """
 
     def __init__(self, buffer_size_in_bytes: int):
@@ -85,18 +86,22 @@ class Serializer:
 
     def add_aligned_u8(self, x: int) -> None:
         assert self._bit_offset % 8 == 0
+        self._ensure_not_negative(x)
         self._buf[self._byte_offset] = x
         self._bit_offset += 8
 
     def add_aligned_u16(self, x: int) -> None:
+        self._ensure_not_negative(x)
         self.add_aligned_u8(x & 0xFF)
         self.add_aligned_u8((x >> 8) & 0xFF)
 
     def add_aligned_u32(self, x: int) -> None:
+        self._ensure_not_negative(x)
         self.add_aligned_u16(x)
         self.add_aligned_u16(x >> 16)
 
     def add_aligned_u64(self, x: int) -> None:
+        self._ensure_not_negative(x)
         self.add_aligned_u32(x)
         self.add_aligned_u32(x >> 32)
 
@@ -128,6 +133,7 @@ class Serializer:
     #
     def add_aligned_unsigned(self, value: int, bit_length: int) -> None:
         assert self._bit_offset % 8 == 0
+        self._ensure_not_negative(value)
         bs = self._unsigned_to_bytes(value, bit_length)
         self._buf[self._byte_offset:self._byte_offset + len(bs)] = bs
         self._bit_offset += bit_length
@@ -164,6 +170,7 @@ class Serializer:
             self._buf[self._byte_offset] = (b << left) & 0xFF  # Does nothing if aligned
 
     def add_unaligned_unsigned(self, value: int, bit_length: int) -> None:
+        self._ensure_not_negative(value)
         bs = self._unsigned_to_bytes(value, bit_length)
         backtrack = len(bs) * 8 - bit_length
         assert backtrack >= 0
@@ -212,6 +219,11 @@ class Serializer:
         except OverflowError:  # Oops, let's truncate (saturation must be implemented by the caller if needed)
             out = struct.pack(f, numpy.inf if x > 0 else -numpy.inf)
         return numpy.frombuffer(out, dtype=_Byte)  # Note: this operation does not copy the underlying bytes
+
+    @staticmethod
+    def _ensure_not_negative(x: int) -> None:
+        if x < 0:
+            raise ValueError(f'The requested serialization method is not defined on negative integers ({x})')
 
     @property
     def _byte_offset(self) -> int:
