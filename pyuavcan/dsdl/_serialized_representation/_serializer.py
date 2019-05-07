@@ -96,12 +96,10 @@ class Serializer:
         self.add_aligned_u8((x >> 8) & 0xFF)
 
     def add_aligned_u32(self, x: int) -> None:
-        self._ensure_not_negative(x)
         self.add_aligned_u16(x)
         self.add_aligned_u16(x >> 16)
 
     def add_aligned_u64(self, x: int) -> None:
-        self._ensure_not_negative(x)
         self.add_aligned_u32(x)
         self.add_aligned_u32(x >> 32)
 
@@ -139,6 +137,7 @@ class Serializer:
         self._bit_offset += bit_length
 
     def add_aligned_signed(self, value: int, bit_length: int) -> None:
+        assert bit_length >= 2
         self.add_aligned_unsigned((2 ** bit_length + value) if value < 0 else value, bit_length)
 
     #
@@ -178,6 +177,7 @@ class Serializer:
         self._bit_offset -= backtrack
 
     def add_unaligned_signed(self, value: int, bit_length: int) -> None:
+        assert bit_length >= 2
         self.add_unaligned_unsigned((2 ** bit_length + value) if value < 0 else value, bit_length)
 
     def add_unaligned_f16(self, x: float) -> None:
@@ -248,6 +248,7 @@ class _LittleEndianSerializer(Serializer):
         # We assume that the local platform uses IEEE 754-compliant floating point representation; otherwise,
         # the generated serialized representation may be incorrect. NumPy seems to only support IEEE-754 compliant
         # platforms though so I don't expect any compatibility issues.
+        assert x.dtype not in (numpy.bool, numpy.bool_, numpy.object)
         self.add_aligned_bytes(x.view(_Byte))
 
     def add_unaligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:

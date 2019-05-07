@@ -41,7 +41,7 @@ class CompositeObject:
     def _deserialize_aligned_(_des_: Deserializer) -> 'CompositeObject':
         """
         Auto-generated deserialization method. Consumes (some) data from the supplied Deserializer instance.
-        Raises a _DeserializationError_ if the supplied serialized representation is invalid.
+        Raises a Deserializer.InvalidSerializedRepresentationError if the supplied serialized representation is invalid.
         Always returns a valid object unless an exception is raised.
         The current bit offset of the Deserializer instance MUST be byte-aligned.
         This is not a part of the API.
@@ -54,15 +54,6 @@ class CompositeObject:
         out = pickle.loads(gzip.decompress(base64.b85decode(encoded_string)))
         assert isinstance(out, object)
         return out
-
-    # noinspection PyPep8Naming
-    class _DeserializationError_(ValueError):
-        """
-        This exception class is used when an auto-generated deserialization routine is supplied with invalid input data;
-        in other words, input that is not a valid serialized representation of its data type.
-        This exception is never visible to the user, it is not part of the API.
-        """
-        pass
 
 
 _ClassOrInstance = typing.Union[typing.Type[CompositeObject], CompositeObject]
@@ -90,17 +81,24 @@ def try_deserialize(cls: typing.Type[CompositeObject], source_bytes: numpy.ndarr
     Returns None if the provided serialized representation is invalid.
     This function will never raise an exception for invalid input data; the only possible outcome of an invalid data
     being supplied is None at the output. A raised exception can only indicate an error in the deserialization logic.
+
+    SAFETY WARNING: THE CONSTRUCTED OBJECT MAY CONTAIN ARRAYS REFERENCING THE MEMORY ALLOCATED FOR THE SERIALIZED
+                    REPRESENTATION. THEREFORE, IN ORDER TO AVOID UNINTENDED DATA CORRUPTION, THE CALLER MUST DESTROY
+                    ALL REFERENCES TO THE SERIALIZED REPRESENTATION IMMEDIATELY AFTER THE INVOCATION.
+
+    PERFORMANCE WARNING: The supplied array containing the serialized representation should be writeable. If it is not,
+                         the deserialization routine will be unable to implement zero-copy array deserialization.
     """
     if issubclass(cls, CompositeObject) and isinstance(source_bytes, numpy.ndarray) \
             and source_bytes.dtype == numpy.uint8:
         try:
             return cls._deserialize_aligned_(Deserializer.new(source_bytes))
-        except CompositeObject._DeserializationError_:
+        except Deserializer.InvalidSerializedRepresentationError:
             # Use explicit level check to avoid unnecessary load in production.
             # This is necessary because we perform complex data transformations before invoking the logger.
             if _logger.isEnabledFor(logging.INFO):
                 _logger.info('Invalid serialized representation of %s (in Base64): %s',
-                             get_type(cls), base64.b64encode(source_bytes).decode(), exc_info=True)
+                             get_type(cls), base64.b64encode(source_bytes.tobytes()).decode(), exc_info=True)
             return None
     else:
         raise TypeError(f'Cannot deserialize an instance of {cls} from {type(source_bytes).__name__}')
