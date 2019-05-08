@@ -43,6 +43,10 @@ class Deserializer:
         }[sys.byteorder](source_bytes)
 
     @property
+    def consumed_bit_length(self) -> int:
+        return self._bit_offset
+
+    @property
     def remaining_bit_length(self) -> int:
         return len(self._buf) * 8 - self._bit_offset
 
@@ -216,29 +220,47 @@ class Deserializer:
             right = 8 - left
             assert (1 <= right <= 7) and (1 <= left <= 7)
             for i in range(count):
-                x = (self._buf[self._byte_offset] << left) & 0xFF
+                byte_offset = self._byte_offset
+                out[i] = ((self._buf[byte_offset] << left) & 0xFF) | (self._buf[byte_offset + 1] >> right)
                 self._bit_offset += 8
-                out[i] = x | (self._buf[self._byte_offset] >> right)
             assert len(out) == count
             return out
 
     def fetch_unaligned_unsigned(self, bit_length: int) -> int:
-        pass
+        byte_length = (bit_length + 7) // 8
+        bs = self.fetch_unaligned_bytes(byte_length)
+        assert len(bs) == byte_length
+        backtrack = byte_length * 8 - bit_length
+        assert 0 <= backtrack < 8
+        self._bit_offset -= backtrack
+        return self._unsigned_from_bytes(bs, bit_length)
 
     def fetch_unaligned_signed(self, bit_length: int) -> int:
-        pass
+        assert bit_length >= 2
+        u = self.fetch_unaligned_unsigned(bit_length)
+        return (u - 2 ** bit_length) if u >= 2 ** (bit_length - 1) else u
 
-    def fetch_unaligned_f16(self) -> float:
-        pass
+    def fetch_unaligned_f16(self) -> float:  # noinspection PyTypeChecker
+        out, = struct.unpack('<e', self.fetch_unaligned_bytes(2))  # type: ignore
+        assert isinstance(out, float)
+        return out
 
-    def fetch_unaligned_f32(self) -> float:
-        pass
+    def fetch_unaligned_f32(self) -> float:  # noinspection PyTypeChecker
+        out, = struct.unpack('<f', self.fetch_unaligned_bytes(4))  # type: ignore
+        assert isinstance(out, float)
+        return out
 
-    def fetch_unaligned_f64(self) -> float:
-        pass
+    def fetch_unaligned_f64(self) -> float:  # noinspection PyTypeChecker
+        out, = struct.unpack('<d', self.fetch_unaligned_bytes(8))  # type: ignore
+        assert isinstance(out, float)
+        return out
 
     def fetch_unaligned_bit(self) -> bool:
-        pass
+        mask = 1 << (7 - self._bit_offset % 8)
+        assert 1 <= mask <= 128
+        out = self._buf[self._byte_offset] & mask == mask
+        self._bit_offset += 1
+        return out
 
     #
     # Private methods.
@@ -289,7 +311,15 @@ class _LittleEndianDeserializer(Deserializer):
 
     def fetch_unaligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) \
             -> numpy.ndarray:
-        pass
+        assert dtype not in (numpy.bool, numpy.bool_, numpy.object), 'Invalid usage'
+        bs = self.fetch_unaligned_bytes(numpy.dtype(dtype).itemsize * count)
+        assert len(bs) >= count
+        out: numpy.ndarray = numpy.frombuffer(bs, dtype=dtype, count=count)
+        # The returned array must be writeable, which is possible only if the underlying buffer is writeable.
+        # If not, we will have to clone the output array. Perhaps we should escalate this to error?
+        out = out if out.flags.writeable else out.copy()
+        assert out.flags.writeable
+        return out
 
 
 class _BigEndianDeserializer(Deserializer):
@@ -406,13 +436,20 @@ def _unittest_deserializer_unaligned() -> None:
     from pytest import raises, approx
 
     des = Deserializer.new(numpy.array([0b10101010, 0b01011101, 0b11001100, 0b10010001], dtype=_Byte))
+    assert des.consumed_bit_length == 0
+    assert des.consumed_bit_length % 8 == 0
     assert list(des.fetch_aligned_array_of_bits(3)) == [True, False, True]
+    assert des.consumed_bit_length == 3
+    assert des.consumed_bit_length % 8 == 3
     assert list(des.fetch_unaligned_bytes(0)) == []
     assert list(des.fetch_unaligned_bytes(2)) == [0b01010_010, 0b11101_110]
     assert list(des.fetch_unaligned_bytes(1)) == [0b01100_100]
+    assert des.consumed_bit_length == 27
+    assert des.consumed_bit_length % 8 == 3
     assert des.remaining_bit_length == 5
     with raises(IndexError):
         des.fetch_unaligned_bytes(1)
+    assert des.consumed_bit_length == 27
 
     des = Deserializer.new(numpy.array([0b10101010, 0b01011101, 0b11001100, 0b10010001], dtype=_Byte))
     assert list(des.fetch_unaligned_bytes(0)) == []
@@ -458,3 +495,25 @@ def _unittest_deserializer_unaligned() -> None:
     assert list(des.fetch_unaligned_bytes(3)) == [0x12, 0x34, 0x56]
     assert list(des.fetch_unaligned_array_of_bits(3)) == [False, True, True]
     assert list(des.fetch_unaligned_bytes(3)) == [0x12, 0x34, 0x56]
+
+    assert des.fetch_unaligned_bit()
+    assert not des.fetch_unaligned_bit()
+    assert not des.fetch_unaligned_bit()
+    assert des.fetch_unaligned_bit()
+    assert des.fetch_unaligned_bit()
+
+    assert des.fetch_unaligned_signed(8) == -2
+    assert des.fetch_unaligned_unsigned(11) == 0b111_0110_0101
+    assert des.fetch_unaligned_unsigned(3) == 0b110
+
+    assert des.consumed_bit_length % 8 > 0             # not aligned
+    assert des.fetch_unaligned_f64() == approx(1.0)
+    assert des.fetch_unaligned_f32() == approx(1.0)
+    assert des.fetch_unaligned_f16() == -numpy.inf
+
+    assert list(des.fetch_unaligned_array_of_standard_bit_length_primitives(numpy.uint16, 2)) == [0xdead, 0xbeef]
+    des.skip_bits(5)
+    assert des.consumed_bit_length % 8 == 0
+    assert des.remaining_bit_length == 0
+
+    print('repr(deserializer):', repr(des))
