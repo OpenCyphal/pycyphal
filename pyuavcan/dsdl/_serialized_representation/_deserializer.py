@@ -69,8 +69,8 @@ class Deserializer:
         Returns the value unmodified if the value is inside the range.
         """
         low, high = closed_interval_min_max
-        assert low <= high
-        if low <= value <= high:
+        assert low <= high          # type: ignore
+        if low <= value <= high:    # type: ignore
             return value
         else:
             raise Deserializer.FormatError(f'Value {value} is outside of the expected range [{low}, {high}]')
@@ -155,17 +155,17 @@ class Deserializer:
         return (x - 2 ** 64) if x >= 2 ** 63 else x
 
     def fetch_aligned_f16(self) -> float:  # noinspection PyTypeChecker
-        out, = struct.unpack('<e', self.fetch_aligned_bytes(2))  # type: ignore
+        out, = struct.unpack('<e', self.fetch_aligned_bytes(2))
         assert isinstance(out, float)
         return out
 
     def fetch_aligned_f32(self) -> float:  # noinspection PyTypeChecker
-        out, = struct.unpack('<f', self.fetch_aligned_bytes(4))  # type: ignore
+        out, = struct.unpack('<f', self.fetch_aligned_bytes(4))
         assert isinstance(out, float)
         return out
 
     def fetch_aligned_f64(self) -> float:  # noinspection PyTypeChecker
-        out, = struct.unpack('<d', self.fetch_aligned_bytes(8))  # type: ignore
+        out, = struct.unpack('<d', self.fetch_aligned_bytes(8))
         assert isinstance(out, float)
         return out
 
@@ -185,7 +185,9 @@ class Deserializer:
     def fetch_aligned_signed(self, bit_length: int) -> int:
         assert bit_length >= 2
         u = self.fetch_aligned_unsigned(bit_length)
-        return (u - 2 ** bit_length) if u >= 2 ** (bit_length - 1) else u
+        out = (u - 2 ** bit_length) if u >= 2 ** (bit_length - 1) else u
+        assert isinstance(out, int)     # MyPy pls
+        return out
 
     #
     # Least specialized methods: no assumptions about alignment are made.
@@ -215,7 +217,7 @@ class Deserializer:
         if self._bit_offset % 8 == 0:
             return self.fetch_aligned_bytes(count)
         else:
-            out = numpy.zeros(count, dtype=_Byte)
+            out = numpy.empty(count, dtype=_Byte)
             left = self._bit_offset % 8
             right = 8 - left
             assert (1 <= right <= 7) and (1 <= left <= 7)
@@ -238,20 +240,22 @@ class Deserializer:
     def fetch_unaligned_signed(self, bit_length: int) -> int:
         assert bit_length >= 2
         u = self.fetch_unaligned_unsigned(bit_length)
-        return (u - 2 ** bit_length) if u >= 2 ** (bit_length - 1) else u
+        out = (u - 2 ** bit_length) if u >= 2 ** (bit_length - 1) else u
+        assert isinstance(out, int)     # MyPy pls
+        return out
 
     def fetch_unaligned_f16(self) -> float:  # noinspection PyTypeChecker
-        out, = struct.unpack('<e', self.fetch_unaligned_bytes(2))  # type: ignore
+        out, = struct.unpack('<e', self.fetch_unaligned_bytes(2))
         assert isinstance(out, float)
         return out
 
     def fetch_unaligned_f32(self) -> float:  # noinspection PyTypeChecker
-        out, = struct.unpack('<f', self.fetch_unaligned_bytes(4))  # type: ignore
+        out, = struct.unpack('<f', self.fetch_unaligned_bytes(4))
         assert isinstance(out, float)
         return out
 
     def fetch_unaligned_f64(self) -> float:  # noinspection PyTypeChecker
-        out, = struct.unpack('<d', self.fetch_unaligned_bytes(8))  # type: ignore
+        out, = struct.unpack('<d', self.fetch_unaligned_bytes(8))
         assert isinstance(out, float)
         return out
 
@@ -260,7 +264,7 @@ class Deserializer:
         assert 1 <= mask <= 128
         out = self._buf[self._byte_offset] & mask == mask
         self._bit_offset += 1
-        return out
+        return bool(out)
 
     #
     # Private methods.
@@ -300,6 +304,8 @@ class _LittleEndianDeserializer(Deserializer):
             -> numpy.ndarray:
         assert dtype not in (numpy.bool, numpy.bool_, numpy.object), 'Invalid usage'
         assert self._bit_offset % 8 == 0
+        # Interestingly, numpy doesn't care about alignment. If the source buffer is not properly aligned, it will
+        # work anyway but slower.
         out: numpy.ndarray = numpy.frombuffer(self._buf, dtype=dtype, count=count, offset=self._byte_offset)
         assert len(out) == count                # numpy should throw if there is not enough bytes in the source buffer
         self._bit_offset += out.nbytes * 8
