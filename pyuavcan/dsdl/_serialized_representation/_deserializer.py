@@ -193,7 +193,15 @@ class Deserializer:
         raise NotImplementedError
 
     def fetch_unaligned_array_of_bits(self, count: int) -> numpy.ndarray:
-        pass
+        byte_count = (count + 7) // 8
+        bs = self.fetch_unaligned_bytes(byte_count)
+        assert len(bs) == byte_count
+        backtrack = byte_count * 8 - count
+        assert 0 <= backtrack < 8
+        self._bit_offset -= backtrack
+        out: numpy.ndarray = numpy.unpackbits(bs)[:count].astype(dtype=numpy.bool)
+        assert len(out) == count
+        return out
 
     def fetch_unaligned_bytes(self, count: int) -> numpy.ndarray:
         # This is a faster variation of the Ben Dyer's unaligned bit copy algorithm:
@@ -437,3 +445,16 @@ def _unittest_deserializer_unaligned() -> None:
     des = Deserializer.new(numpy.frombuffer(sample, dtype=_Byte))       # Operating on the read-only buffer
     assert des.remaining_bit_length == 31 * 8
     des.require_remaining_bit_length(31 * 8)
+
+    assert list(des.fetch_unaligned_array_of_bits(11)) == [
+        True, False, True, False, False, False, True, True,     # 10100011
+        True, True, True,                                       # 111
+    ]
+    assert list(des.fetch_unaligned_array_of_bits(10)) == [
+        True, False, True, False, False,                        # ???10100 (byte alignment restored here)
+        True, True, True, False, True,                          # 11101 (byte alignment lost, three bits short)
+    ]
+
+    assert list(des.fetch_unaligned_bytes(3)) == [0x12, 0x34, 0x56]
+    assert list(des.fetch_unaligned_array_of_bits(3)) == [False, True, True]
+    assert list(des.fetch_unaligned_bytes(3)) == [0x12, 0x34, 0x56]
