@@ -303,11 +303,7 @@ class _LittleEndianDeserializer(Deserializer):
         out: numpy.ndarray = numpy.frombuffer(self._buf, dtype=dtype, count=count, offset=self._byte_offset)
         assert len(out) == count                # numpy should throw if there is not enough bytes in the source buffer
         self._bit_offset += out.nbytes * 8
-        # The returned array must be writeable, which is possible only if the underlying buffer is writeable.
-        # If not, we will have to clone the output array. Perhaps we should escalate this to error?
-        out = out if out.flags.writeable else out.copy()
-        assert out.flags.writeable
-        return out
+        return self._ensure_writeable(out)
 
     def fetch_unaligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) \
             -> numpy.ndarray:
@@ -315,11 +311,15 @@ class _LittleEndianDeserializer(Deserializer):
         bs = self.fetch_unaligned_bytes(numpy.dtype(dtype).itemsize * count)
         assert len(bs) >= count
         out: numpy.ndarray = numpy.frombuffer(bs, dtype=dtype, count=count)
+        return self._ensure_writeable(out)
+
+    @staticmethod
+    def _ensure_writeable(array: numpy.ndarray) -> numpy.ndarray:
         # The returned array must be writeable, which is possible only if the underlying buffer is writeable.
         # If not, we will have to clone the output array. Perhaps we should escalate this to error?
-        out = out if out.flags.writeable else out.copy()
-        assert out.flags.writeable
-        return out
+        array = array if array.flags.writeable else array.copy()
+        assert array.flags.writeable
+        return array
 
 
 class _BigEndianDeserializer(Deserializer):
