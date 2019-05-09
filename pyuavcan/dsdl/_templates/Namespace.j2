@@ -11,8 +11,7 @@
 #
 
 {% for t, _ in T.get_nested_types() -%}
-{% set suffix = '%s_%s'|format(t.version.major, t.version.minor) -%}
-from {{ t.full_name }}_{{ suffix }} import {{ t.short_name }}_{{ suffix }}
+from {{ t|full_reference }} import {{ t|short_reference }}
 {% else -%}
 # There are no data types in this namespace. There may be data types in nested namespaces.
 {% endfor -%}

@@ -60,18 +60,10 @@ class Deserializer:
         assert self.consumed_bit_length + self.remaining_bit_length == len(self._buf) * 8
         if self.remaining_bit_length < inclusive_minimum:
             raise self.FormatError(
-                f'The remaining fragment of the serialized representation is {self.remaining_bit_length} bits, '
+                f'The remaining fragment of the serialized representation is {self.remaining_bit_length} bits long, '
                 f'which is shorter than the expected minimum of {inclusive_minimum} bits. '
                 f'The total length of the serialized representation is {len(self._buf) * 8} bits, '
                 f'and the current total offset from the beginning is {self.consumed_bit_length} bits.')
-
-    @staticmethod
-    def abort(text: str) -> None:
-        """
-        Raises Deserializer.FormatError with the specified error text.
-        This method is designed to report incorrect serialized representations that cannot be deserialized.
-        """
-        raise Deserializer.FormatError(text)
 
     def skip_bits(self, bit_length: int) -> None:
         """This is used for padding bits."""
@@ -376,9 +368,6 @@ def _unittest_deserializer_aligned() -> None:
     des.require_remaining_bit_length(45 * 8)
     with raises(Deserializer.FormatError):
         des.require_remaining_bit_length(45 * 8 + 1)
-
-    with raises(Deserializer.FormatError):
-        des.abort('Fgsfds')
 
     assert des.fetch_aligned_u8() == 0b1010_0111
     assert des.fetch_aligned_i64() == 0x1234_5678_90ab_cdef

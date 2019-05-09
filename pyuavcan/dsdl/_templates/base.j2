@@ -32,18 +32,6 @@ import {{ n }}
 
 
 {#-
- # BASIC CONSTRUCTS.
--#}
-{%- macro composite_ref(t) -%}
-    {{ t.full_name }}_{{ t.version.major }}_{{ t.version.minor }}
-{%- endmacro -%}
-
-{%- macro new_const(c, siblings) -%}
-    {{ c|id }}: {{ ''.ljust(siblings|longest_id_length - c|id|length) }}{{ strict_type_annotation(c.data_type) }}
-{%- endmacro -%}
-
-
-{#-
  # FIELD TYPE ANNOTATIONS.
  # Observe that for composite types we use forward references (wrapping into string literals).
  # This is required to break circular dependency when external composite types are referenced from top-level entities.
@@ -53,7 +41,7 @@ import {{ n }}
     {%- elif t is IntegerType   -%} int
     {%- elif t is FloatType     -%} float
     {%- elif t is ArrayType     -%} _np_.ndarray
-    {%- elif t is CompositeType -%} '{{ composite_ref(t) }}'
+    {%- elif t is CompositeType -%} '{{ t|full_reference }}'
     {%- else -%}{% assert False %}
     {%- endif -%}
 {%- endmacro -%}
@@ -62,7 +50,7 @@ import {{ n }}
     {%-   if t is BooleanType   -%} bool
     {%- elif t is IntegerType   -%} _ty_.Union[int, {{ t|numpy_scalar_type }}]
     {%- elif t is FloatType     -%} _ty_.Union[int, float, {{ t|numpy_scalar_type }}]
-    {%- elif t is CompositeType -%} '{{ composite_ref(t) }}'
+    {%- elif t is CompositeType -%} '{{ t|full_reference }}'
     {%- elif t is ArrayType -%}
         {%- if (t.element_type is UnsignedIntegerType) and t.element_type.bit_length <= 8 -%}
             _ty_.Union[_np_.ndarray, _ty_.List[int], bytes, bytearray{%- if t.string_like -%}, str{%- endif -%}]
@@ -130,21 +118,24 @@ import {{ n }}
  # Accepts the name of the generated type and its DSDL type descriptor object of type pydsdl.CompositeType.
 -#}
 {%- macro data_schema(name, type, parent_class_name=None) -%}
-{%- set full_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
+{%- set full_class_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
 # noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection
 class {{ name }}(_dsdl_.CompositeObject):
 {#-
  # CONSTANTS
 -#}
 {%- for c in type.constants %}
+    {%- set target -%}
+    {{ c|id }}: {{ ''.ljust(type.constants|longest_id_length - c|id|length) }}{{ strict_type_annotation(c.data_type) }}
+    {%- endset %}
     {%- if c.data_type is BooleanType %}
-    {{ new_const(c, type.constants) }} = {{ c.value.native_value }}
+    {{ target }} = {{ c.value.native_value }}
 
     {%- elif c.data_type is IntegerType %}
-    {{ new_const(c, type.constants) }} = {{ c.value.as_native_integer() }}
+    {{ target }} = {{ c.value.as_native_integer() }}
 
     {%- elif c.data_type is FloatType %}
-    {{ new_const(c, type.constants) }} = {{ c.value.native_value.numerator }} / {{ c.value.native_value.denominator }}
+    {{ target }} = {{ c.value.native_value.numerator }} / {{ c.value.native_value.denominator }}
 
     {%- else -%}{%- assert False -%}
     {%- endif %}
@@ -196,7 +187,7 @@ class {{ name }}(_dsdl_.CompositeObject):
         {%- elif f.data_type is FixedLengthArrayType %}
         if {{ f|id }} is None:
             {%- if f.data_type.element_type is CompositeType %}
-            self.{{ f|id }} = _np_.array([{{ composite_ref(f.data_type.element_type) }}() {# -#}
+            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference }}() {# -#}
                                           for _ in range({{ f.data_type.capacity }})], {#  -#}
                                          {{ f.data_type.element_type|numpy_scalar_type }})
             {%- else %}
@@ -214,11 +205,11 @@ class {{ name }}(_dsdl_.CompositeObject):
 
         {%- elif f.data_type is CompositeType %}
         if {{ f|id }} is None:
-            self.{{ f|id }} = {{ composite_ref(f.data_type) }}()
-        elif isinstance({{ f|id }}, {{ composite_ref(f.data_type) }}):
+            self.{{ f|id }} = {{ f.data_type|full_reference }}()
+        elif isinstance({{ f|id }}, {{ f.data_type|full_reference }}):
             self.{{ f|id }} = {{ f|id }}
         else:
-            raise ValueError(f'{{ f|id }}: expected {{ composite_ref(f.data_type) }} got {type({{ f|id }}).__name__}')
+            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference }} got {type({{ f|id }}).__name__}')
 
         {%- else -%}{%- assert False -%}
         {%- endif %}
@@ -250,7 +241,7 @@ class {{ name }}(_dsdl_.CompositeObject):
 
     {%- elif f.data_type is FixedLengthArrayType %}
         {%- if f.data_type.element_type is CompositeType %}
-            self.{{ f|id }} = _np_.array([{{ composite_ref(f.data_type.element_type) }}() {# -#}
+            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference }}() {# -#}
                                              for _ in range({{ f.data_type.capacity }})], {#  -#}
                                             {{ f.data_type.element_type|numpy_scalar_type }})
         {%- else %}
@@ -262,7 +253,7 @@ class {{ name }}(_dsdl_.CompositeObject):
             self.{{ f|id }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
 
     {%- elif f.data_type is CompositeType %}
-            self.{{ f|id }} = {{ composite_ref(f.data_type) }}()
+            self.{{ f|id }} = {{ f.data_type|full_reference }}()
 
     {%- else -%}{%- assert False -%}
     {%- endif %}  # Default initialization
@@ -321,10 +312,10 @@ class {{ name }}(_dsdl_.CompositeObject):
         {{ assign_array(f, 'x') | indent(4) }}
 
     {%- elif f.data_type is CompositeType %}
-        if isinstance(x, {{ composite_ref(f.data_type) }}):
+        if isinstance(x, {{ f.data_type|full_reference }}):
             self._{{ f|id }} = x
         else:
-            raise ValueError(f'{{ f|id }}: expected {{ composite_ref(f.data_type) }} got {type(x).__name__}')
+            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference }} got {type(x).__name__}')
 
     {%- else -%}{%- assert False -%}
     {%- endif %}
@@ -352,13 +343,19 @@ class {{ name }}(_dsdl_.CompositeObject):
 
     # noinspection PyProtectedMember
     @staticmethod
-    def _deserialize_aligned_(_des_: _dsdl_.Deserializer) -> '{{ full_name }}':
-        {{ deserialize(type)|indent }}
-        return {{ full_name }}(
-    {%- for f in type.fields if f is not PaddingField %}
-            {{ f|id }}={{ f|id }},
-    {%- endfor %}
-        )
+    def _deserialize_aligned_(_des_: _dsdl_.Deserializer) -> '{{ full_class_name }}':
+        assert _des_.consumed_bit_length % 8 == 0, 'Deserializer is not byte-aligned'
+    {%- if type.fields %}
+        _bit_length_base_ = _des_.consumed_bit_length
+        {{ deserialize(type, full_class_name)|indent }}
+        assert {{ type.bit_length_set|min }} <= (_des_.consumed_bit_length - _bit_length_base_) {# -#}
+                                             <= {{ type.bit_length_set|max }}, \
+            'Bad deserialization of {{ type }}'
+        assert isinstance(self, {{ full_class_name }})
+        return self
+    {%- else %}
+        return {{ full_class_name }}()  # No fields to deserialize.
+    {% endif %}
 {#
  # PYTHON DATA MODEL
  #}
