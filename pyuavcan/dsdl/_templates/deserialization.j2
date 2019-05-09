@@ -34,7 +34,7 @@
 {%- else -%}
     # Unrolled fixed-length array: {{ t }}
     {{ ref }} = _np_.empty({{ t.capacity }}, {{ t.element_type|numpy_scalar_type }})
-    {% for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
+    {%- for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
     {{ _deserialize_any(t.element_type, '_element_', element_offset) }}
     {{ ref }}[{{ index }}] = _element_
     {%- endfor -%}

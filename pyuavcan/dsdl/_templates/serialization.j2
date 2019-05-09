@@ -62,7 +62,7 @@
     _ser_.add_{{ offset|alignment_prefix -}}_array_of_standard_bit_length_primitives({{ ref }})
 {%- else %}
     # Unrolled fixed-length array: {{ t }}
-    {% for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
+    {%- for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
     {{ _serialize_any(t.element_type, '%s[%d]'|format(ref, index), element_offset) }}
     {%- endfor -%}
 {%- endif -%}
