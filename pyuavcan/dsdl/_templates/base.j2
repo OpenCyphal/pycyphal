@@ -129,7 +129,8 @@ import {{ n }}
  # MAIN CODE GENERATION MACRO.
  # Accepts the name of the generated type and its DSDL type descriptor object of type pydsdl.CompositeType.
 -#}
-{%- macro data_schema(name, type) -%}
+{%- macro data_schema(name, type, parent_class_name=None) -%}
+{%- set full_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
 # noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection
 class {{ name }}(_dsdl_.CompositeObject):
 {#-
@@ -351,8 +352,13 @@ class {{ name }}(_dsdl_.CompositeObject):
 
     # noinspection PyProtectedMember
     @staticmethod
-    def _deserialize_aligned_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
-        {{ deserialize(type, 'self')|indent }}
+    def _deserialize_aligned_(_des_: _dsdl_.Deserializer) -> '{{ full_name }}':
+        {{ deserialize(type)|indent }}
+        return {{ full_name }}(
+    {%- for f in type.fields if f is not PaddingField %}
+            {{ f|id }}={{ f|id }},
+    {%- endfor %}
+        )
 {#
  # PYTHON DATA MODEL
  #}

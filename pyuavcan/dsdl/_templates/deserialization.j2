@@ -5,6 +5,116 @@
 -#}
 
 
-{%- macro deserialize(type, ref, offset=None) -%}
-    raise NotImplementedError
+{%- macro deserialize(t) -%}
+    {{ _deserialize_composite(t, '', 0|bit_length_set) }}
+{%- endmacro -%}
+
+{%- macro _deserialize_integer(t, ref, offset) -%}
+{%- if t.standard_bit_length and offset.is_aligned_at_byte() -%}
+    {{ ref }} = _des_.fetch_aligned_{{ 'i' if t is SignedIntegerType else 'u' }}{{ t.bit_length }}()
+{%- else -%}
+    {%- set signedness = 'signed' if t is SignedIntegerType else 'unsigned' -%}
+    {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_{{ signedness }}({{ t.bit_length }})
+{%- endif -%}
+{%- endmacro -%}
+
+
+{%- macro _deserialize_float(t, ref, offset) -%}
+    {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_f{{ t.bit_length }}()
+{%- endmacro -%}
+
+
+{%- macro _deserialize_fixed_length_array(t, ref, offset) -%}
+{%- if t.element_type is BooleanType %}
+    {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_array_of_bits({{ t.capacity }})
+{%- elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
+    {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_array_of_standard_bit_length_primitives({{ t.capacity }})
+{%- else %}
+    # Unrolled fixed-length array: {{ t }}
+    {{ ref }} = _np_.empty({{ t.capacity }}, {{ t.element_type|numpy_scalar_type }})
+    {% for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
+    {{ _deserialize_any(t.element_type, '%s[%d]'|format(ref, index), element_offset) }}
+    {%- endfor -%}
+{%- endif %}
+    assert len({{ ref }}) == {{ t.capacity }}, '{{ ref }}: {{ t }}'
+{%- endmacro -%}
+
+
+{%- macro _deserialize_variable_length_array(t, ref, offset) -%}
+    # Length field byte-aligned: {{ offset.is_aligned_at_byte() }}; {# -#}
+     first element byte-aligned: {{ (offset + t.length_field_type.bit_length).is_aligned_at_byte() }}; {# -#}
+      all elements byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}.
+    {{ _deserialize_integer(t.length_field_type, '_length_', offset) }}
+    assert _length_ >= 0
+    if _length_ > {{ t.capacity }}:
+        _des_.abort(f'Variable array length prefix {_length_} exceeds its capacity of {{ t.capacity }} elements')
+
+{%- if t.element_type is BooleanType %}
+    {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix }}_array_of_bits(_length_)
+
+{%- elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
+    {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
+                      _array_of_standard_bit_length_primitives(_length_)
+
+{%- else %}
+    {{ ref }} = _np_.empty(_length_, {{ t.element_type|numpy_scalar_type }})
+    for _index_ in range(_length_):
+        {{ _deserialize_any(t.element_type, ref + '[_index_]', offset + t.bit_length_set)|indent }}
+
+{%- endif %}
+    assert len({{ ref }}) <= {{ t.capacity }}, '{{ ref }}: {{ t }}'
+{%- endmacro -%}
+
+
+{%- macro _deserialize_composite(t, ref, base_offset) -%}
+    {#- The begin/end markers are emitted to facilitate automatic testing. -#}
+    # BEGIN COMPOSITE DESERIALIZATION: {{ t }}
+    _des_.require_remaining_bit_length({{ t.bit_length_set|max }})
+{%- if t is StructureType %}
+    {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
+    # BEGIN STRUCTURE FIELD DESERIALIZATION: {{ f }}
+    {{ _deserialize_any(f.data_type, ref + ('.' if ref else '') + (f|id), offset) }}
+    # END STRUCTURE FIELD DESERIALIZATION: {{ f }}
+    {%- endfor -%}
+
+{%- elif t is UnionType %}
+    # Tag field byte-aligned: {{ base_offset.is_aligned_at_byte() }}; {# -#}
+      values byte-aligned: {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
+    {{ _deserialize_integer(t.tag_field_type, '_tag_', base_offset) }}
+    {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
+    # BEGIN UNION FIELD DESERIALIZATION: {{ f }}
+    {{ 'if' if loop.first else 'elif' }} _tag_ == {{ loop.index0 }}:
+        {{ _deserialize_any(f.data_type, ref + ('.' if ref else '') + (f|id), offset)|indent }}
+    # END UNION FIELD DESERIALIZATION: {{ f }}
+    {%- endfor %}
+    else:
+        _des_.abort(f'{{ t }}: Union tag value {_tag_} is invalid')
+
+{%- else -%}{%- assert False -%}
+{%- endif %}
+    # END COMPOSITE DESERIALIZATION: {{ t }}
+{%- endmacro -%}
+
+
+{%- macro _deserialize_any(t, ref, offset) -%}
+    {%- if offset.is_aligned_at_byte() -%}
+    assert _des_.consumed_bit_length % 8 == 0, '{{ ref }}: {{ t }}'
+    {% endif -%}
+    {%- if t is VoidType -%}                    _des_.skip_bits({{ t.bit_length }})
+    {%- elif t is BooleanType -%}               {{ ref }} = _des_.fetch_unaligned_bit()
+    {%- elif t is IntegerType -%}               {{ _deserialize_integer(t, ref, offset) }}
+    {%- elif t is FloatType -%}                 {{ _deserialize_float(t, ref, offset) }}
+    {#- Despite the apparent similarities, fixed and variable arrays are very different when it comes to serialization,
+     #- mostly because of the different logic of offset computation. -#}
+    {%- elif t is FixedLengthArrayType -%}      {{ _deserialize_fixed_length_array(t, ref, offset) }}
+    {%- elif t is VariableLengthArrayType -%}   {{ _deserialize_variable_length_array(t, ref, offset) }}
+    {%- elif t is CompositeType -%}
+        {%- if offset.is_aligned_at_byte() -%}
+    {{ ref }}._deserialize_aligned_(_des_)  # Delegating because this object is always byte-aligned.
+        {%- else -%}
+    # Object {{ ref }} is not always byte-aligned, deserializing in-place.
+    {{ _deserialize_composite(t, ref, offset) }}
+        {%- endif -%}
+    {%- else -%}{%- assert False -%}
+    {%- endif -%}
 {%- endmacro -%}

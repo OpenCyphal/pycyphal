@@ -52,32 +52,33 @@ class Deserializer:
 
     def require_remaining_bit_length(self, inclusive_minimum: int) -> None:
         """
-        Raises Deserializer.FormatError if the remaining bit length is
-        strictly less than the specified minimum. Users must invoke this method before beginning deserialization.
-        Failure to invoke this method beforehand may result in IndexError being thrown later during
-        deserialization if the serialized representation is shorter than expected.
+        Raises Deserializer.FormatError if the remaining bit length is strictly less than the specified minimum.
+        Users must invoke this method before beginning deserialization. Failure to invoke this method beforehand
+        may result in IndexError being thrown later during deserialization if the serialized representation is
+        shorter than expected.
         """
+        assert self.consumed_bit_length + self.remaining_bit_length == len(self._buf) * 8
         if self.remaining_bit_length < inclusive_minimum:
             raise self.FormatError(
-                f'The serialized representation is {len(self._buf)} bytes long ({len(self._buf) * 8} bits), '
-                f'which is shorter than the expected minimum of {inclusive_minimum} bits.')
+                f'The remaining fragment of the serialized representation is {self.remaining_bit_length} bits, '
+                f'which is shorter than the expected minimum of {inclusive_minimum} bits. '
+                f'The total length of the serialized representation is {len(self._buf) * 8} bits, '
+                f'and the current total offset from the beginning is {self.consumed_bit_length} bits.')
 
     @staticmethod
-    def require_value_in_range(value: _T, closed_interval_min_max: typing.Tuple[_T, _T]) -> _T:
+    def abort(text: str) -> None:
         """
-        Raises Deserializer.FormatError if the value is outside of the range.
-        Returns the value unmodified if the value is inside the range.
+        Raises Deserializer.FormatError with the specified error text.
+        This method is designed to report incorrect serialized representations that cannot be deserialized.
         """
-        low, high = closed_interval_min_max
-        assert low <= high          # type: ignore
-        if low <= value <= high:    # type: ignore
-            return value
-        else:
-            raise Deserializer.FormatError(f'Value {value} is outside of the expected range [{low}, {high}]')
+        raise Deserializer.FormatError(text)
 
     def skip_bits(self, bit_length: int) -> None:
         """This is used for padding bits."""
-        self._bit_offset += bit_length
+        if self.remaining_bit_length >= bit_length:
+            self._bit_offset += bit_length
+        else:
+            raise IndexError(f'Can\'t skip {bit_length} bits because only {self.remaining_bit_length} are left')
 
     #
     # Fast methods optimized for aligned primitive fields.
@@ -275,7 +276,7 @@ class Deserializer:
         num_bytes = (bit_length + 7) // 8
         assert num_bytes > 0
         last_byte_index = num_bytes - 1
-        assert len(x) >= num_bytes, f'The source array {x} is not long enough to deserialize uint{bit_length}'
+        assert len(x) >= num_bytes
         out = 0
         for i in range(last_byte_index):
             out |= int(x[i]) << (i * 8)
@@ -292,7 +293,7 @@ class Deserializer:
 
     def __str__(self) -> str:
         return f'{type(self).__name__}(' \
-            f'current_bit_offset={self._bit_offset}, ' \
+            f'consumed_bit_length={self.consumed_bit_length}, ' \
             f'remaining_bit_length={self.remaining_bit_length}, ' \
             f'serialized_representation_base64={base64.b64encode(self._buf.tobytes()).decode()!r})'
 
@@ -376,11 +377,8 @@ def _unittest_deserializer_aligned() -> None:
     with raises(Deserializer.FormatError):
         des.require_remaining_bit_length(45 * 8 + 1)
 
-    assert 1 == des.require_value_in_range(1, (0, 2))
-    assert 0 == des.require_value_in_range(0, (0, 1))
-    assert 1 == des.require_value_in_range(1, (0, 1))
     with raises(Deserializer.FormatError):
-        des.require_value_in_range(2, (0, 1))
+        des.abort('Fgsfds')
 
     assert des.fetch_aligned_u8() == 0b1010_0111
     assert des.fetch_aligned_i64() == 0x1234_5678_90ab_cdef
@@ -434,6 +432,9 @@ def _unittest_deserializer_aligned() -> None:
 
     with raises(IndexError):
         des.fetch_aligned_unsigned(64)
+
+    with raises(IndexError):
+        des.skip_bits(64)
 
     print('repr(deserializer):', repr(des))
 
