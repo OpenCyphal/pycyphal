@@ -5,6 +5,7 @@
 #
 
 import gzip
+import numpy
 import typing
 import pickle
 import base64
@@ -16,6 +17,8 @@ import itertools
 import pydsdl
 import pydsdlgen
 import pydsdlgen.jinja
+
+import pydsdlgen.jinja.jinja2.ext
 
 
 _AnyPath = typing.Union[str, pathlib.Path]
@@ -67,6 +70,8 @@ def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPa
                                           followlinks=True,
                                           additional_filters=filters,
                                           additional_tests=tests)
+    # noinspection PyProtectedMember
+    generator._env.add_extension(pydsdlgen.jinja.jinja2.ext.do)
     generator.generate_all()
 
     return pathlib.Path(package_parent_directory) / pathlib.Path(root_namespace_name)

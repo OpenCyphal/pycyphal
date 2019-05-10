@@ -1,0 +1,21 @@
+{#-
+ # Copyright (c) 2019 UAVCAN Development Team
+ # This software is distributed under the terms of the MIT License.
+ # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+-#}
+
+{#- TODO: get rid of the global state -#}
+{%- set _state = [] -%}
+
+{%- macro reset_unique_ref() -%}
+    {%- do _state.clear() -%}
+{%- endmacro -%}
+
+{#-
+ # The "base_name" must be a literal. Never generate unique references with dynamically computed base name
+ # because that may lead (under certain unlikely circumstances) to non-unique references being generated.
+-#}
+{%- macro make_unique_ref(base_name=None) -%}
+    _{{ base_name or 'tmp' }}{{- _state|length -}}_
+    {%- do _state.append(_state|length) -%}
+{%- endmacro -%}

@@ -29,6 +29,7 @@ import {{ n }}
 
 {%- from 'serialization.j2' import serialize -%}
 {%- from 'deserialization.j2' import deserialize -%}
+{%- from 'unique_reference.j2' import reset_unique_ref -%}
 
 
 {#-
@@ -118,6 +119,7 @@ import {{ n }}
  # Accepts the name of the generated type and its DSDL type descriptor object of type pydsdl.CompositeType.
 -#}
 {%- macro data_schema(name, type, parent_class_name=None) -%}
+{%- do reset_unique_ref() -%}
 {%- set full_class_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
 # noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection
 class {{ name }}(_dsdl_.CompositeObject):

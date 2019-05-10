@@ -4,11 +4,14 @@
  # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 -#}
 
+{%- from 'unique_reference.j2' import make_unique_ref -%}
+
 
 {%- macro deserialize(t, self_type_name) -%}
     {#- "self" is a reserved keyword in DSDL, conflicts are not possible. -#}
     {{ _deserialize_composite(t, 'self', 0|bit_length_set, self_type_name) }}
 {%- endmacro -%}
+
 
 {%- macro _deserialize_integer(t, ref, offset) -%}
 {%- if t.standard_bit_length and offset.is_aligned_at_byte() -%}
@@ -32,14 +35,15 @@
     {{ ref }} = _des_.fetch_{{ offset|alignment_prefix -}}
                       _array_of_standard_bit_length_primitives({{ t.element_type|numpy_scalar_type }}, {{ t.capacity }})
 {%- else -%}
-    # Unrolled fixed-length array: {{ t }}
+    {%- set element_ref = make_unique_ref('e') -%}
+    # Unrolled fixed-length array: {{ t }}; the temporary {{ element_ref }} is used for element storage.
     {{ ref }} = _np_.empty({{ t.capacity }}, {{ t.element_type|numpy_scalar_type }})
     {%- for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
-    {{ _deserialize_any(t.element_type, '_element_', element_offset) }}
-    {{ ref }}[{{ index }}] = _element_
+    {{ _deserialize_any(t.element_type, element_ref, element_offset) }}
+    {{ ref }}[{{ index }}] = {{ element_ref }}
     {%- endfor -%}
 {%- endif %}
-    assert len({{ ref }}) == {{ t.capacity }}, '{{ ref }}: {{ t }}'
+    assert len({{ ref }}) == {{ t.capacity }}, '{{ t }}'
 {%- endmacro -%}
 
 
@@ -47,26 +51,30 @@
     # Length field byte-aligned: {{ offset.is_aligned_at_byte() }}; {# -#}
      first element byte-aligned: {{ (offset + t.length_field_type.bit_length).is_aligned_at_byte() }}; {# -#}
       all elements byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}.
-    {{ _deserialize_integer(t.length_field_type, '_length_', offset) }}
-    assert _length_ >= 0
-    if _length_ > {{ t.capacity }}:
-        raise _des_.FormatError(f'Variable array length prefix {_length_} > {{ t.capacity }}')
+    {%- set length_ref = make_unique_ref('len') %}
+    {{ _deserialize_integer(t.length_field_type, length_ref, offset) }}
+    assert {{ length_ref }} >= 0
+    if {{ length_ref }} > {{ t.capacity }}:
+        raise _des_.FormatError(f'Variable array length prefix { {{- length_ref -}} } > {{ t.capacity }}')
 
 {%- if t.element_type is BooleanType %}
-    {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix }}_array_of_bits(_length_)
+    {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
+                      _array_of_bits({{ length_ref }})
 
 {%- elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
     {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
-                      _array_of_standard_bit_length_primitives({{ t.element_type|numpy_scalar_type }}, _length_)
+                      _array_of_standard_bit_length_primitives({{ t.element_type|numpy_scalar_type }}, {{ length_ref }})
 
 {%- else %}
-    {{ ref }} = _np_.empty(_length_, {{ t.element_type|numpy_scalar_type }})
-    for _index_ in range(_length_):
-        {{ _deserialize_any(t.element_type, '_element_', offset + t.bit_length_set)|indent }}
-        {{ ref }}[_index_] = _element_
+    {%- set element_ref = make_unique_ref('e') %}
+    {%- set index_ref = make_unique_ref('i') %}
+    {{ ref }} = _np_.empty({{ length_ref }}, {{ t.element_type|numpy_scalar_type }})
+    for {{ index_ref }} in range({{ length_ref }}):
+        {{ _deserialize_any(t.element_type, element_ref, offset + t.bit_length_set)|indent }}
+        {{ ref }}[{{ index_ref }}] = {{ element_ref }}
 
 {%- endif %}
-    assert len({{ ref }}) <= {{ t.capacity }}, '{{ ref }}: {{ t }}'
+    assert len({{ ref }}) <= {{ t.capacity }}, '{{ t }}'
 {%- endmacro -%}
 
 
@@ -75,9 +83,13 @@
     # BEGIN COMPOSITE DESERIALIZATION: {{ t }}
     _des_.require_remaining_bit_length({{ t.bit_length_set|max }})
 {%- if t is StructureType %}
+    {%- set field_ref_map = {} %}
     {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
     # BEGIN STRUCTURE FIELD DESERIALIZATION: {{ f }}
-    {{ _deserialize_any(f.data_type, f|id, offset) }}
+    {%- set field_ref = make_unique_ref('f') %}
+    {%- do field_ref_map.update({f: field_ref}) %}
+    # The temporary {{ field_ref }} holds the value of the field {{ f.name }}
+    {{ _deserialize_any(f.data_type, field_ref, offset) }}
     # END STRUCTURE FIELD DESERIALIZATION: {{ f }}
     {%- endfor %}
     {%- set assignment_root -%}
@@ -85,24 +97,28 @@
     {%- endset %}
     {{ assignment_root }}
     {%- for f in t.fields if f is not PaddingField -%}
-        {{ f|id }}={{ f|id }}{{- ')' if loop.last else (',\n' + ' ' * (4 + assignment_root|length)) -}}
+        {{ f|id }}={{ field_ref_map[f] }}
+        {{- ')' if loop.last else (',\n' + ' ' * (4 + assignment_root|length)) -}}
     {%- else -%}
             )
     {%- endfor %}
 
 {%- elif t is UnionType %}
+    {%- set tag_ref = make_unique_ref('tag') %}
     # Tag field byte-aligned: {{ base_offset.is_aligned_at_byte() }}; {# -#}
       values byte-aligned: {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
-    {{ _deserialize_integer(t.tag_field_type, '_tag_', base_offset) }}
+    {{ _deserialize_integer(t.tag_field_type, tag_ref, base_offset) }}
     {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
     # BEGIN UNION FIELD DESERIALIZATION: {{ f }}
-    {{ 'if' if loop.first else 'elif' }} _tag_ == {{ loop.index0 }}:
-        {{ _deserialize_any(f.data_type, f|id, offset)|indent }}
-        {{ ref }} = {{ ref_type_name or t|full_reference }}({{ f|id }}={{ f|id }})
+    {%- set field_ref = make_unique_ref('f') %}
+    {{ 'if' if loop.first else 'elif' }} {{ tag_ref }} == {{ loop.index0 }}:
+        # The temporary {{ field_ref }} holds the value of the field {{ f.name }}
+        {{ _deserialize_any(f.data_type, field_ref, offset)|indent }}
+        {{ ref }} = {{ ref_type_name or t|full_reference }}({{ f|id }}={{ field_ref }})
     # END UNION FIELD DESERIALIZATION: {{ f }}
     {%- endfor %}
     else:
-        raise _des_.FormatError(f'{{ t }}: Union tag value {_tag_} is invalid')
+        raise _des_.FormatError(f'{{ t }}: Union tag value { {{- tag_ref -}} } is invalid')
 
 {%- else -%}{%- assert False -%}
 {%- endif %}
@@ -112,7 +128,7 @@
 
 {%- macro _deserialize_any(t, ref, offset) -%}
     {%- if offset.is_aligned_at_byte() -%}
-    assert _des_.consumed_bit_length % 8 == 0, '{{ ref }}: {{ t }}'
+    assert _des_.consumed_bit_length % 8 == 0, '{{ t }}'
     {% endif -%}
     {%- if t is VoidType -%}                    _des_.skip_bits({{ t.bit_length }})
     {%- elif t is BooleanType -%}               {{ ref }} = _des_.fetch_unaligned_bit()
@@ -126,7 +142,7 @@
         {%- if offset.is_aligned_at_byte() -%}
     {{ ref }} = {{ t|full_reference }}._deserialize_aligned_(_des_)
         {%- else -%}
-    # Object {{ ref }} is not always byte-aligned, deserializing in-place.
+    # The object is not always byte-aligned, deserializing in-place.
     {{ _deserialize_composite(t, ref, offset) }}
         {%- endif -%}
     {%- else -%}{%- assert False -%}
