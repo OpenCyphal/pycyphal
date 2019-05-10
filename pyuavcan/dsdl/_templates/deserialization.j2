@@ -86,10 +86,14 @@
     {%- set field_ref_map = {} %}
     {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
     # BEGIN STRUCTURE FIELD DESERIALIZATION: {{ f }}
+    {%- if f is not PaddingField %}
     {%- set field_ref = make_unique_ref('f') %}
     {%- do field_ref_map.update({f: field_ref}) %}
-    # The temporary {{ field_ref }} holds the value of the field {{ f.name }}
+    # The temporary {{ field_ref }} holds the value of the field "{{ f.name }}"
     {{ _deserialize_any(f.data_type, field_ref, offset) }}
+    {%- else %}
+    {{ _deserialize_any(f.data_type, '[void field does not require a reference]', offset) }}
+    {%- endif %}
     # END STRUCTURE FIELD DESERIALIZATION: {{ f }}
     {%- endfor %}
     {%- set assignment_root -%}
@@ -108,11 +112,10 @@
     # Tag field byte-aligned: {{ base_offset.is_aligned_at_byte() }}; {# -#}
       values byte-aligned: {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
     {{ _deserialize_integer(t.tag_field_type, tag_ref, base_offset) }}
+    {%- set field_ref = make_unique_ref('uni') %}
     {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
     # BEGIN UNION FIELD DESERIALIZATION: {{ f }}
-    {%- set field_ref = make_unique_ref('f') %}
     {{ 'if' if loop.first else 'elif' }} {{ tag_ref }} == {{ loop.index0 }}:
-        # The temporary {{ field_ref }} holds the value of the field {{ f.name }}
         {{ _deserialize_any(f.data_type, field_ref, offset)|indent }}
         {{ ref }} = {{ ref_type_name or t|full_reference }}({{ f|id }}={{ field_ref }})
     # END UNION FIELD DESERIALIZATION: {{ f }}
