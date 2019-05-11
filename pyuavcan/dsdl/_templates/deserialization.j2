@@ -23,11 +23,6 @@
 {%- endmacro -%}
 
 
-{%- macro _deserialize_float(t, ref, offset) -%}
-    {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_f{{ t.bit_length }}()
-{%- endmacro -%}
-
-
 {%- macro _deserialize_fixed_length_array(t, ref, offset) -%}
 {%- if t.element_type is BooleanType -%}
     {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_array_of_bits({{ t.capacity }})
@@ -133,10 +128,10 @@
     {%- if offset.is_aligned_at_byte() -%}
     assert _des_.consumed_bit_length % 8 == 0, '{{ t }}'
     {% endif -%}
-    {%- if t is VoidType -%}                    _des_.skip_bits({{ t.bit_length }})
-    {%- elif t is BooleanType -%}               {{ ref }} = _des_.fetch_unaligned_bit()
-    {%- elif t is IntegerType -%}               {{ _deserialize_integer(t, ref, offset) }}
-    {%- elif t is FloatType -%}                 {{ _deserialize_float(t, ref, offset) }}
+    {%- if t is VoidType -%}        _des_.skip_bits({{ t.bit_length }})
+    {%- elif t is BooleanType -%}   {{ ref }} = _des_.fetch_unaligned_bit()
+    {%- elif t is IntegerType -%}   {{ _deserialize_integer(t, ref, offset) }}
+    {%- elif t is FloatType -%}     {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_f{{ t.bit_length }}()
     {#- Despite the apparent similarities, fixed and variable arrays are very different when it comes to serialization,
      #- mostly because of the different logic of offset computation. -#}
     {%- elif t is FixedLengthArrayType -%}      {{ _deserialize_fixed_length_array(t, ref, offset) }}

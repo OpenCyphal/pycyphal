@@ -18,7 +18,7 @@ import pydsdl
 import pydsdlgen
 import pydsdlgen.jinja
 
-import pydsdlgen.jinja.jinja2.ext
+import pydsdlgen.jinja.jinja2.ext   # TODO: remove, see https://github.com/UAVCAN/pydsdlgen/issues/43
 
 
 _AnyPath = typing.Union[str, pathlib.Path]
@@ -30,10 +30,10 @@ _SOURCE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).parent
 _TEMPLATE_DIRECTORY: pathlib.Path = _SOURCE_DIRECTORY / pathlib.Path('_templates')
 
 
-def generate_python_package_from_dsdl_namespace(package_parent_directory: _AnyPath,
-                                                root_namespace_directory: _AnyPath,
-                                                lookup_directories: typing.Iterable[_AnyPath],
-                                                allow_unregulated_fixed_port_id: bool = False) -> pathlib.Path:
+def generate_package_from_dsdl_namespace(package_parent_directory: _AnyPath,
+                                         root_namespace_directory: _AnyPath,
+                                         lookup_directories: typing.Iterable[_AnyPath],
+                                         allow_unregulated_fixed_port_id: bool = False) -> pathlib.Path:
     # Read the DSDL definitions
     composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
                                             lookup_directories=list(map(str, lookup_directories)),

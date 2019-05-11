@@ -1,0 +1,4 @@
+@union
+@deprecated
+uint1 x
+uint1 y
