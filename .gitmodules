@@ -1,0 +1,3 @@
+[submodule "pyuavcan/_public_regulated_data_types"]
+	path = pyuavcan/_public_regulated_data_types
+	url = https://github.com/UAVCAN/public_regulated_data_types
