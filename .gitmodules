@@ -1,3 +1,0 @@
-[submodule "pyuavcan/public_regulated_data_types"]
-	path = pyuavcan/public_regulated_data_types
-	url = https://github.com/UAVCAN/dsdl
