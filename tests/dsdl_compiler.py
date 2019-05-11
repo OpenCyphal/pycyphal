@@ -4,24 +4,48 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import logging
-import pathlib
+import sys
+import pydsdl
 import shutil
-# noinspection PyProtectedMember
-from pyuavcan.dsdl._compiler import generate_package_from_dsdl_namespace, _SOURCE_DIRECTORY
+import pathlib
+import logging
+import importlib
+
+import pyuavcan.dsdl
+
+
+_PROJECT_ROOT_DIR = pathlib.Path(__file__).parent.parent
+_DESTINATION_DIRECTORY = _PROJECT_ROOT_DIR / pathlib.Path('.test_dsdl_generated')
+_PUBLIC_REGULATED_DATA_TYPES = _PROJECT_ROOT_DIR / 'public_regulated_data_types.cache'
 
 
 def _unittest_dsdl_compiler() -> None:
-    # Suppress unnecessary logging from PyDSDL, there's too much of it and we don't want it to interfere
     logging.getLogger('pydsdl').setLevel(logging.WARNING)
 
-    root_ns = _SOURCE_DIRECTORY.parent / pathlib.Path('_public_regulated_data_types') / pathlib.Path('uavcan')
+    if _DESTINATION_DIRECTORY.exists():  # pragma: no cover
+        shutil.rmtree(_DESTINATION_DIRECTORY, ignore_errors=True)
+    _DESTINATION_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
-    parent_dir = _SOURCE_DIRECTORY.parent.parent / pathlib.Path('.dsdl_generated')
-    if parent_dir.exists():  # pragma: no cover
-        shutil.rmtree(parent_dir, ignore_errors=True)
-    parent_dir.mkdir(parents=True, exist_ok=True)
+    uavcan_root = _PUBLIC_REGULATED_DATA_TYPES / 'uavcan'
+    uavcan_info = pyuavcan.dsdl.generate_package_from_dsdl_namespace(_DESTINATION_DIRECTORY, uavcan_root, [])
+    assert str(uavcan_info.path).endswith('uavcan')
 
-    pkg_dir = generate_package_from_dsdl_namespace(parent_dir, root_ns, [])
+    test_root = pathlib.Path(__file__).parent / 'dsdl_namespaces' / 'test'
+    test_info = pyuavcan.dsdl.generate_package_from_dsdl_namespace(_DESTINATION_DIRECTORY, test_root, [uavcan_root])
+    assert str(test_info.path).endswith('test')
 
-    assert pkg_dir.name.endswith('uavcan')
+    _test_package(uavcan_info)
+    _test_package(test_info)
+
+
+def _test_package(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
+    original_sys_path = sys.path
+    sys.path.append(str(info.path.parent))
+    mod = importlib.import_module(info.name)
+    sys.path = original_sys_path
+
+    def get_python_type(composite: pydsdl.CompositeType) -> pyuavcan.dsdl.CompositeObject:
+        pass
+
+    for t in info.types:
+        pass

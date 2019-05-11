@@ -5,7 +5,6 @@
 #
 
 import gzip
-import numpy
 import typing
 import pickle
 import base64
@@ -13,6 +12,7 @@ import pathlib
 import keyword
 import builtins
 import itertools
+from dataclasses import dataclass
 
 import pydsdl
 import pydsdlgen
@@ -25,15 +25,20 @@ _AnyPath = typing.Union[str, pathlib.Path]
 
 _ILLEGAL_IDENTIFIERS: typing.Set[str] = set(map(str, list(keyword.kwlist) + dir(builtins)))
 
-_SOURCE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).parent
+_TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).parent / pathlib.Path('_templates')
 
-_TEMPLATE_DIRECTORY: pathlib.Path = _SOURCE_DIRECTORY / pathlib.Path('_templates')
+
+@dataclass(frozen=True)
+class GeneratedPackageInfo:
+    path:  pathlib.Path
+    types: typing.List[pydsdl.CompositeType]
+    name:  str
 
 
 def generate_package_from_dsdl_namespace(package_parent_directory: _AnyPath,
                                          root_namespace_directory: _AnyPath,
                                          lookup_directories: typing.Iterable[_AnyPath],
-                                         allow_unregulated_fixed_port_id: bool = False) -> pathlib.Path:
+                                         allow_unregulated_fixed_port_id: bool = False) -> GeneratedPackageInfo:
     # Read the DSDL definitions
     composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
                                             lookup_directories=list(map(str, lookup_directories)),
@@ -74,7 +79,9 @@ def generate_package_from_dsdl_namespace(package_parent_directory: _AnyPath,
     generator._env.add_extension(pydsdlgen.jinja.jinja2.ext.do)
     generator.generate_all()
 
-    return pathlib.Path(package_parent_directory) / pathlib.Path(root_namespace_name)
+    return GeneratedPackageInfo(path=pathlib.Path(package_parent_directory) / pathlib.Path(root_namespace_name),
+                                types=composite_types,
+                                name=root_namespace_name)
 
 
 def _make_identifier(a: pydsdl.Attribute) -> str:
