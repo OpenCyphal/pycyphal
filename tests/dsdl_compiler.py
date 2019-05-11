@@ -5,6 +5,7 @@
 #
 
 import sys
+import typing
 import pydsdl
 import shutil
 import pathlib
@@ -40,12 +41,32 @@ def _unittest_dsdl_compiler() -> None:
 
 def _test_package(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
     original_sys_path = sys.path
-    sys.path.append(str(info.path.parent))
+    sys.path.insert(0, str(info.path.parent))
     mod = importlib.import_module(info.name)
     sys.path = original_sys_path
 
-    def get_python_type(composite: pydsdl.CompositeType) -> pyuavcan.dsdl.CompositeObject:
-        pass
+    for dsdl_type in info.types:
+        python_type = _get_python_type(mod, dsdl_type)
+        o = _make_random_instance(python_type)
+        _test_roundtrip_serialization(o)
 
-    for t in info.types:
-        pass
+
+def _get_python_type(module: typing.Any, composite: pydsdl.CompositeType) -> typing.Type[pyuavcan.dsdl.CompositeObject]:
+    obj = module
+    # The first level is already reached, it's the package itself.
+    # The final component is the short name, it requires special handling.
+    for component in composite.name_components[1:-1]:
+        # This will break on reserved identifiers because we append those with an underscore.
+        obj = importlib.import_module(obj.__name__ + '.' + component)
+    ref = '%s_%d_%d' % (composite.short_name, composite.version.major, composite.version.minor)
+    obj = getattr(obj, ref)
+    assert issubclass(obj, pyuavcan.dsdl.CompositeObject)
+    return obj   # type: ignore
+
+
+def _make_random_instance(t: typing.Type[pyuavcan.dsdl.CompositeObject]) -> pyuavcan.dsdl.CompositeObject:
+    pass
+
+
+def _test_roundtrip_serialization(o: pyuavcan.dsdl.CompositeObject) -> None:
+    pass
