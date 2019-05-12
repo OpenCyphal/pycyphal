@@ -61,6 +61,7 @@ def _test_package(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
 
 
 def _test_type(data_type: pydsdl.CompositeType) -> None:
+    _logger.info('Roundtrip serialization test of %s', data_type)
     _test_roundtrip_serialization(pyuavcan.dsdl.get_generated_implementation_of(data_type)())
     for _ in range(10):
         o = _make_random_object(data_type)
@@ -109,20 +110,12 @@ def _make_random_object(data_type: pydsdl.SerializableType) -> typing.Any:
 
 
 def _test_roundtrip_serialization(o: pyuavcan.dsdl.CompositeObject) -> None:
-    _logger.info('Roundtrip serialization test; original/serialized/deserialized:')
-    _logger.info('\t%s', o)
-
     sr = pyuavcan.dsdl.serialize(o)
-    _logger.info('\t%s', bytes(sr).hex() or '<empty>')
-
     d = pyuavcan.dsdl.try_deserialize(type(o), sr)
-    _logger.info('\t%s', d)
-
     assert d is not None
     assert type(o) is type(d)
     assert pyuavcan.dsdl.get_type(o) == pyuavcan.dsdl.get_type(d)
-    assert _are_close(pyuavcan.dsdl.get_type(o), o, d), f'{o} != {d}'
-
+    assert _are_close(pyuavcan.dsdl.get_type(o), o, d), f'{o} != {d}; sr: {bytes(sr).hex()}'
     # Similar floats may produce drastically different string representations, so if there is at least one float inside,
     # we skip the string representation equality check.
     if pydsdl.FloatType.__name__ not in repr(pyuavcan.dsdl.get_type(d)):
