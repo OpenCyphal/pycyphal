@@ -68,8 +68,11 @@ def _get_python_type(module: typing.Any, composite: pydsdl.CompositeType) -> typ
     # The first level is already reached, it's the package itself.
     # The final component is the short name, it requires special handling.
     for component in composite.name_components[1:-1]:
-        # This will break on reserved identifiers because we append those with an underscore.
-        obj = importlib.import_module(obj.__name__ + '.' + component)
+        try:
+            obj = importlib.import_module(obj.__name__ + '.' + component)
+        except ImportError:     # We seem to have hit a reserved word; try with an underscore.
+            obj = importlib.import_module(obj.__name__ + '.' + component + '_')
+
     ref = '%s_%d_%d' % (composite.short_name, composite.version.major, composite.version.minor)
     obj = getattr(obj, ref)
     assert issubclass(obj, pyuavcan.dsdl.CompositeObject)
@@ -101,7 +104,8 @@ def _are_close(a: typing.Any, b: typing.Any) -> bool:
         assert pyuavcan.dsdl.get_type(a) == pyuavcan.dsdl.get_type(b)
         for f in pyuavcan.dsdl.get_type(a).fields:
             if not isinstance(f, pydsdl.PaddingField):
-                if not _are_close(_get_attribute(a, f.name), _get_attribute(b, f.name)):
+                if not _are_close(pyuavcan.dsdl.get_attribute(a, f.name),
+                                  pyuavcan.dsdl.get_attribute(b, f.name)):
                     return False
         return True                 # Empty objects of same type compare equal
 
@@ -113,10 +117,3 @@ def _are_close(a: typing.Any, b: typing.Any) -> bool:
 
     else:
         return numpy.allclose(a, b)
-
-
-def _get_attribute(o: pyuavcan.dsdl.CompositeObject, name: str) -> typing.Any:
-    try:
-        return getattr(o, name)
-    except AttributeError:
-        return getattr(o, name + '_')   # Attributes whose names match reserved words are suffixed with an underscore.

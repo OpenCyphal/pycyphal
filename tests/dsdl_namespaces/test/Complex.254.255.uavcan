@@ -3,5 +3,5 @@
 float16 VALUE = 3.14159265358979
 uavcan.node.port.ID.1.0[<=2] property
 uavcan.register.Value.0.1[2] id
-truncated uint2[<=50] bytes
-truncated uint7[50] str
+truncated uint2[<=5] bytes
+truncated uint7[5] str
