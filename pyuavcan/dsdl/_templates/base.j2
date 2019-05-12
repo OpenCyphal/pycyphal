@@ -145,7 +145,7 @@ class {{ name }}(_dsdl_.CompositeObject):
 {%- endfor %}
     def __init__(self
                  {%- if type is UnionType -%}, *{%- endif -%}
-                 {%- for f in type.fields if f is not PaddingField -%}
+                 {%- for f in type.fields_except_padding -%}
                  ,
                  {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
                      _ty_.Optional[{{ relaxed_type_annotation(f.data_type) }}] = None
@@ -159,7 +159,7 @@ class {{ name }}(_dsdl_.CompositeObject):
         If one parameter is provided, it will be used to initialize and select the field under the same name.
         If more than one parameter is provided, a ValueError will be raised.
         {%- endif %}
-{%- for f in type.fields if f is not PaddingField %}
+{%- for f in type.fields_except_padding %}
         :param {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) }}{{ f }}
 {%- endfor %}
         """
@@ -171,12 +171,12 @@ class {{ name }}(_dsdl_.CompositeObject):
  # FIELD INITIALIZATION
 -#}
 {%- if type is not UnionType -%}
-    {%- for f in type.fields if f is not PaddingField %}
+    {%- for f in type.fields_except_padding %}
         self._{{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
                           {{- strict_type_annotation(f.data_type) }}
         {{- '\n' if loop.last else '' -}}
     {%- endfor %}
-    {%- for f in type.fields if f is not PaddingField %}
+    {%- for f in type.fields_except_padding %}
         {%- if f.data_type is BooleanType %}
         self.{{ f|id }} = {{ f|id }} if {{ f|id }} is not None else False
 
@@ -268,7 +268,7 @@ class {{ name }}(_dsdl_.CompositeObject):
 {#-
  # FIELD ACCESSORS AND MUTATORS
 -#}
-{%- for f in type.fields if f is not PaddingField %}
+{%- for f in type.fields_except_padding %}
     @property
     def {{ f|id }}(self) -> {# #}
     {%- if type is UnionType -%}
@@ -356,7 +356,7 @@ class {{ name }}(_dsdl_.CompositeObject):
     def __str__(self) -> str:
 {%- if type is not UnionType %}
         _o_0_ = ', '.join([
-    {%- for f in type.fields if f is not PaddingField %}
+    {%- for f in type.fields_except_padding %}
             '{{ f.name }}=%s' % {{ printable_field_representation(f) }},
     {%- endfor %}
         ])

@@ -96,7 +96,7 @@
         {{ ref }} = {{ ref_type_name or t|full_reference }}(
     {%- endset %}
     {{ assignment_root }}
-    {%- for f in t.fields if f is not PaddingField -%}
+    {%- for f in t.fields_except_padding -%}
         {{ f|id }}={{ field_ref_map[f] }}
         {{- ')' if loop.last else (',\n' + ' ' * (4 + assignment_root|length)) -}}
     {%- else -%}

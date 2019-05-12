@@ -109,27 +109,3 @@ def get_type(class_or_instance: _ClassOrInstance) -> pydsdl.CompositeType:
     out = class_or_instance._TYPE_
     assert isinstance(out, pydsdl.CompositeType)
     return out
-
-
-def get_attribute(o: CompositeObject, name: str) -> typing.Any:
-    """
-    DSDL type attributes whose names can't be represented in Python (such as "def") are suffixed with an underscore.
-    This function allows the caller to read arbitrary attributes referring them by their original DSDL names,
-    e.g., "def" instead of "def_".
-    """
-    try:
-        return getattr(o, name)
-    except AttributeError:
-        return getattr(o, name + '_')
-
-
-def set_attribute(o: CompositeObject, name: str, value: typing.Any) -> None:
-    """
-    DSDL type attributes whose names can't be represented in Python (such as "def") are suffixed with an underscore.
-    This function allows the caller to assign arbitrary attributes referring them by their original DSDL names,
-    e.g., "def" instead of "def_".
-    """
-    try:
-        setattr(o, name, value)
-    except AttributeError:
-        setattr(o, name + '_', value)

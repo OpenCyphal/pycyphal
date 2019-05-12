@@ -9,10 +9,11 @@ import numpy
 import typing
 import pydsdl
 import shutil
+import random
 import pathlib
 import logging
-import importlib
 from itertools import starmap
+from functools import partial
 
 import pyuavcan.dsdl
 
@@ -20,6 +21,9 @@ import pyuavcan.dsdl
 _PROJECT_ROOT_DIR = pathlib.Path(__file__).parent.parent
 _DESTINATION_DIRECTORY = _PROJECT_ROOT_DIR / pathlib.Path('.test_dsdl_generated')
 _PUBLIC_REGULATED_DATA_TYPES = _PROJECT_ROOT_DIR / 'public_regulated_data_types.cache'
+
+
+_logger = logging.getLogger(__name__)
 
 
 def _unittest_dsdl_compiler() -> None:
@@ -48,72 +52,109 @@ def _unittest_dsdl_compiler() -> None:
 
 # noinspection PyUnresolvedReferences
 def _test_package(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
-    mod = importlib.import_module(info.name)
     for dsdl_type in info.types:
-        python_type = _get_python_type(mod, dsdl_type)
-        if issubclass(python_type, pyuavcan.dsdl.ServiceObject):
-            _test_type(python_type.Request)
-            _test_type(python_type.Response)
+        if isinstance(dsdl_type, pydsdl.ServiceType):
+            _test_type(dsdl_type.request_type)
+            _test_type(dsdl_type.response_type)
         else:
-            _test_type(python_type)
+            _test_type(dsdl_type)
 
 
-def _test_type(t: typing.Type[pyuavcan.dsdl.CompositeObject]) -> None:
-    o = _make_random_instance(t)
-    _test_roundtrip_serialization(o)
+def _test_type(data_type: pydsdl.CompositeType) -> None:
+    _test_roundtrip_serialization(pyuavcan.dsdl.get_generated_implementation_of(data_type)())
+    for _ in range(10):
+        o = _make_random_object(data_type)
+        _test_roundtrip_serialization(o)
 
 
-def _get_python_type(module: typing.Any, composite: pydsdl.CompositeType) -> typing.Type[pyuavcan.dsdl.CompositeObject]:
-    obj = module
-    # The first level is already reached, it's the package itself.
-    # The final component is the short name, it requires special handling.
-    for component in composite.name_components[1:-1]:
-        try:
-            obj = importlib.import_module(obj.__name__ + '.' + component)
-        except ImportError:     # We seem to have hit a reserved word; try with an underscore.
-            obj = importlib.import_module(obj.__name__ + '.' + component + '_')
+def _make_random_object(data_type: pydsdl.SerializableType) -> typing.Any:
+    if isinstance(data_type, pydsdl.BooleanType):
+        return random.choice([False, True])
 
-    ref = '%s_%d_%d' % (composite.short_name, composite.version.major, composite.version.minor)
-    obj = getattr(obj, ref)
-    assert issubclass(obj, pyuavcan.dsdl.CompositeObject)
-    return obj   # type: ignore
+    elif isinstance(data_type, pydsdl.IntegerType):  # noinspection PyTypeChecker
+        return random.randint(int(data_type.inclusive_value_range.min),
+                              int(data_type.inclusive_value_range.max))
 
+    elif isinstance(data_type, pydsdl.FloatType):
+        if data_type.bit_length < 64:
+            return random.uniform(float(data_type.inclusive_value_range.min),
+                                  float(data_type.inclusive_value_range.max))
+        else:
+            # uniform() with 64-bit floats degenerates into inf due to a numerical instability in the standard library.
+            return random.random() * 1e9
 
-def _make_random_instance(t: typing.Type[pyuavcan.dsdl.CompositeObject]) -> pyuavcan.dsdl.CompositeObject:
-    return t()  # TODO
+    elif isinstance(data_type, pydsdl.FixedLengthArrayType):
+        return [_make_random_object(data_type.element_type) for _ in range(data_type.capacity)]
+
+    elif isinstance(data_type, pydsdl.VariableLengthArrayType):
+        length = random.randint(0, data_type.capacity)
+        return [_make_random_object(data_type.element_type) for _ in range(length)]
+
+    elif isinstance(data_type, pydsdl.StructureType):
+        o = pyuavcan.dsdl.get_generated_implementation_of(data_type)()
+        for f in data_type.fields_except_padding:
+            v = _make_random_object(f.data_type)
+            pyuavcan.dsdl.set_attribute(o, f.name, v)
+        return o
+
+    elif isinstance(data_type, pydsdl.UnionType):
+        f = random.choice(data_type.fields)
+        v = _make_random_object(f.data_type)
+        o = pyuavcan.dsdl.get_generated_implementation_of(data_type)()
+        pyuavcan.dsdl.set_attribute(o, f.name, v)
+        return o
+
+    else:
+        raise TypeError(f'Unsupported type: {type(data_type)}')
 
 
 def _test_roundtrip_serialization(o: pyuavcan.dsdl.CompositeObject) -> None:
+    _logger.info('Roundtrip serialization test; original/serialized/deserialized:')
+    _logger.info('\t%s', o)
+
     sr = pyuavcan.dsdl.serialize(o)
-    print('Roundtrip serialization test; object/serialized:')
-    print('\t', o, sep='')
-    print('\t', bytes(sr).hex() or '<empty>', sep='')
+    _logger.info('\t%s', bytes(sr).hex() or '<empty>')
+
     d = pyuavcan.dsdl.try_deserialize(type(o), sr)
+    _logger.info('\t%s', d)
+
     assert d is not None
     assert type(o) is type(d)
     assert pyuavcan.dsdl.get_type(o) == pyuavcan.dsdl.get_type(d)
-    assert _are_close(o, d)
-    assert str(o) == str(d)
-    assert repr(o) == repr(d)
+    assert _are_close(pyuavcan.dsdl.get_type(o), o, d), f'{o} != {d}'
+
+    # Similar floats may produce drastically different string representations, so if there is at least one float inside,
+    # we skip the string representation equality check.
+    if pydsdl.FloatType.__name__ not in repr(pyuavcan.dsdl.get_type(d)):
+        assert str(o) == str(d)
+        assert repr(o) == repr(d)
 
 
-def _are_close(a: typing.Any, b: typing.Any) -> bool:
-    if isinstance(a, pyuavcan.dsdl.CompositeObject) and isinstance(b, pyuavcan.dsdl.CompositeObject):
+def _are_close(data_type: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> bool:
+    if a is None or b is None:  # These occur, for example, in unions
+        return (a is None) == (b is None)
+
+    elif isinstance(data_type, pydsdl.CompositeType):
         if type(a) != type(b):
             return False
-        assert pyuavcan.dsdl.get_type(a) == pyuavcan.dsdl.get_type(b)
-        for f in pyuavcan.dsdl.get_type(a).fields:
-            if not isinstance(f, pydsdl.PaddingField):
-                if not _are_close(pyuavcan.dsdl.get_attribute(a, f.name),
-                                  pyuavcan.dsdl.get_attribute(b, f.name)):
-                    return False
+        for f in pyuavcan.dsdl.get_type(a).fields_except_padding:
+            if not _are_close(f.data_type,
+                              pyuavcan.dsdl.get_attribute(a, f.name),
+                              pyuavcan.dsdl.get_attribute(b, f.name)):
+                return False
         return True                 # Empty objects of same type compare equal
 
-    elif isinstance(a, numpy.ndarray) and isinstance(b, numpy.ndarray):
-        return all(starmap(_are_close, zip(a, b))) if len(a) == len(b) and a.dtype == b.dtype else False
+    elif isinstance(data_type, pydsdl.ArrayType):
+        return all(starmap(partial(_are_close, data_type.element_type), zip(a, b))) \
+            if len(a) == len(b) and a.dtype == b.dtype else False
 
-    elif a is None and b is None:   # These occur, for example, in unions
-        return True
+    elif isinstance(data_type, pydsdl.FloatType):
+        t = {
+            16: numpy.float16,
+            32: numpy.float32,
+            64: numpy.float64,
+        }[data_type.bit_length]
+        return numpy.allclose(t(a), t(b))
 
     else:
         return numpy.allclose(a, b)
