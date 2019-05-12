@@ -33,7 +33,10 @@ class Deserializer:
             raise ValueError(f'Unsupported buffer: {type(source_bytes)}')
 
         self._buf = source_bytes
+        self._buf_bit_length = len(self._buf) * 8
         self._bit_offset = 0
+
+        assert self.consumed_bit_length + self.remaining_bit_length == self._buf_bit_length
 
     @staticmethod
     def new(source_bytes: numpy.ndarray) -> 'Deserializer':
@@ -48,7 +51,7 @@ class Deserializer:
 
     @property
     def remaining_bit_length(self) -> int:
-        return len(self._buf) * 8 - self._bit_offset
+        return self._buf_bit_length - self._bit_offset
 
     def require_remaining_bit_length(self, inclusive_minimum: int) -> None:
         """
@@ -57,12 +60,12 @@ class Deserializer:
         may result in IndexError being thrown later during deserialization if the serialized representation is
         shorter than expected.
         """
-        assert self.consumed_bit_length + self.remaining_bit_length == len(self._buf) * 8
         if self.remaining_bit_length < inclusive_minimum:
+            assert self.consumed_bit_length + self.remaining_bit_length == self._buf_bit_length
             raise self.FormatError(
                 f'The remaining fragment of the serialized representation is {self.remaining_bit_length} bits long, '
                 f'which is shorter than the expected minimum of {inclusive_minimum} bits. '
-                f'The total length of the serialized representation is {len(self._buf) * 8} bits, '
+                f'The total length of the serialized representation is {self._buf_bit_length} bits, '
                 f'and the current total offset from the beginning is {self.consumed_bit_length} bits.')
 
     def skip_bits(self, bit_length: int) -> None:
@@ -90,8 +93,6 @@ class Deserializer:
         A new array is always created (the memory cannot be shared with the buffer due to the layout transformation).
         The returned array is of dtype numpy.bool.
         """
-        if count < 0:
-            raise ValueError('The number of elements in the bit array cannot be negative')
         assert self._bit_offset % 8 == 0
         bs = self._buf[self._byte_offset:self._byte_offset + (count + 7) // 8]
         out = numpy.unpackbits(bs)[:count]
@@ -102,8 +103,6 @@ class Deserializer:
 
     def fetch_aligned_bytes(self, count: int) -> numpy.ndarray:
         assert self._bit_offset % 8 == 0
-        if count < 0:
-            raise ValueError('The number of elements in the byte array cannot be negative')
         out = self._buf[self._byte_offset:self._byte_offset + count]
         if len(out) != count:   # Explicit check is required because numpy silently truncates slices
             raise IndexError(f'Could not fetch {count} bytes from the buffer, only {len(out)} are available')
@@ -203,23 +202,37 @@ class Deserializer:
         return out
 
     def fetch_unaligned_bytes(self, count: int) -> numpy.ndarray:
-        # This is a faster variation of the Ben Dyer's unaligned bit copy algorithm:
-        # https://github.com/UAVCAN/libuavcan/blob/fd8ba19bc9c09c05a/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12
-        # It is faster because here we are aware that the destination is always aligned, which we take advantage of.
-        # This algorithm breaks for byte-aligned offset, so we have to delegate the aligned case (it's also faster):
-        if self._bit_offset % 8 == 0:
-            return self.fetch_aligned_bytes(count)
-        else:
-            out = numpy.empty(count, dtype=_Byte)
-            left = self._bit_offset % 8
-            right = 8 - left
-            assert (1 <= right <= 7) and (1 <= left <= 7)
-            for i in range(count):
-                byte_offset = self._byte_offset
-                out[i] = ((self._buf[byte_offset] << left) & 0xFF) | (self._buf[byte_offset + 1] >> right)
+        if count > 0:
+            if self._bit_offset % 8 != 0:
+                # This is a faster variation of the Ben Dyer's unaligned bit copy algorithm:
+                # https://github.com/UAVCAN/libuavcan/blob/fd8ba19bc9c09/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12
+                # It is faster because here we are aware that the destination is always aligned, which we take
+                # advantage of. This algorithm breaks for byte-aligned offset, so we have to delegate the aligned
+                # case to the aligned copy method (which is also much faster).
+                out = numpy.empty(count, dtype=_Byte)
+                left = self._bit_offset % 8
+                right = 8 - left
+                assert (1 <= right <= 7) and (1 <= left <= 7)
+                last_index = count - 1
+                for i in range(last_index):
+                    byte_offset = self._byte_offset
+                    out[i] = ((self._buf[byte_offset] << left) & 0xFF) | (self._buf[byte_offset + 1] >> right)
+                    self._bit_offset += 8
+                # The loop above has traversed all bytes except the last one. The last one is a special case:
+                # If we're reading the last few unaligned bits, the very last byte access will be always out of range.
+                x = (self._buf[self._byte_offset] << left) & 0xFF
                 self._bit_offset += 8
-            assert len(out) == count
-            return out
+                try:
+                    x |= self._buf[self._byte_offset] >> right
+                except IndexError:      # So we ignore the exception and just keep the last bits zeroed out.
+                    pass                # This is still safe if the caller made sure to check the remaining_bit_length.
+                out[last_index] = x
+                assert len(out) == count
+                return out
+            else:
+                return self.fetch_aligned_bytes(count)
+        else:
+            return numpy.zeros(0, dtype=_Byte)
 
     def fetch_unaligned_unsigned(self, bit_length: int) -> int:
         byte_length = (bit_length + 7) // 8
@@ -407,10 +420,10 @@ def _unittest_deserializer_aligned() -> None:
     assert list(des.fetch_aligned_bytes(0)) == []
     assert des.remaining_bit_length == 3 * 8
 
-    with raises(ValueError):
+    with raises(IndexError):
         des.fetch_aligned_array_of_bits(-1)
 
-    with raises(ValueError):
+    with raises(IndexError):
         des.fetch_aligned_bytes(-1)
 
     with raises(IndexError):
@@ -444,7 +457,7 @@ def _unittest_deserializer_unaligned() -> None:
     assert des.consumed_bit_length % 8 == 3
     assert des.remaining_bit_length == 5
     with raises(IndexError):
-        des.fetch_unaligned_bytes(1)
+        des.fetch_unaligned_bytes(2)
     assert des.consumed_bit_length == 27
 
     des = Deserializer.new(numpy.array([0b10101010, 0b01011101, 0b11001100, 0b10010001], dtype=_Byte))

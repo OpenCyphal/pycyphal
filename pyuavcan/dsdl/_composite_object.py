@@ -23,10 +23,10 @@ class CompositeObject:
     The entities follow the naming pattern "_.*_" to avoid collisions with DSDL attributes.
     """
     # Type definition as provided by PyDSDL.
-    _TYPE_: pydsdl.CompositeType = None
+    _TYPE_: pydsdl.CompositeType
 
-    # Defined for serializable types only.
-    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: typing.Optional[int] = None
+    # Defined in generated classes.
+    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int
 
     def _serialize_aligned_(self, _ser_: Serializer) -> None:
         """

@@ -8,20 +8,13 @@
 {%- block contents -%}
 
 # noinspection PyPep8Naming, SpellCheckingInspection
-class {{ T|short_reference }}(_dsdl_.CompositeObject):
+class {{ T|short_reference }}(_dsdl_.ServiceObject):
     {{ data_schema('Request',  T.request_type, T|short_reference)|indent }}
 
     {{ data_schema('Response', T.response_type, T|short_reference)|indent }}
 
-    def _serialize_aligned_(self, _ser_: _dsdl_.Serializer) -> None:
-        raise TypeError('Service type {{ T }} cannot be serialized')
-
-    @staticmethod
-    def _deserialize_aligned_(_des_: _dsdl_.Deserializer) -> _dsdl_.CompositeObject:
-        raise TypeError('Service type {{ T }} cannot be deserialized')
-
     def __str__(self) -> str:
-        return '{{ T|full_reference }}()'
+        return '{{ T }}()'
 
     __repr__ = __str__
 

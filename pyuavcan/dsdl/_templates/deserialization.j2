@@ -9,6 +9,7 @@
 
 {%- macro deserialize(t, self_type_name) -%}
     {#- "self" is a reserved keyword in DSDL, conflicts are not possible. -#}
+    _des_.require_remaining_bit_length({{ t.bit_length_set|min }})
     {{ _deserialize_composite(t, 'self', 0|bit_length_set, self_type_name) }}
 {%- endmacro -%}
 
@@ -51,6 +52,7 @@
     assert {{ length_ref }} >= 0
     if {{ length_ref }} > {{ t.capacity }}:
         raise _des_.FormatError(f'Variable array length prefix { {{- length_ref -}} } > {{ t.capacity }}')
+    _des_.require_remaining_bit_length({{ length_ref }} * {{ t.element_type.bit_length_set|min }})
 
 {%- if t.element_type is BooleanType %}
     {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
@@ -76,7 +78,6 @@
 {%- macro _deserialize_composite(t, ref, base_offset, ref_type_name=None) -%}
     {#- The begin/end markers are emitted to facilitate automatic testing. -#}
     # BEGIN COMPOSITE DESERIALIZATION: {{ t }}
-    _des_.require_remaining_bit_length({{ t.bit_length_set|max }})
 {%- if t is StructureType %}
     {%- set field_ref_map = {} %}
     {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
@@ -125,7 +126,8 @@
 
 
 {%- macro _deserialize_any(t, ref, offset) -%}
-    {%- if offset.is_aligned_at_byte() -%}
+    _des_.require_remaining_bit_length({{ t.bit_length_set|min }})
+    {% if offset.is_aligned_at_byte() -%}
     assert _des_.consumed_bit_length % 8 == 0, '{{ t }}'
     {% endif -%}
     {%- if t is VoidType -%}        _des_.skip_bits({{ t.bit_length }})

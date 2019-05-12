@@ -333,21 +333,16 @@ class {{ name }}(_dsdl_.CompositeObject):
     # noinspection PyProtectedMember
     def _serialize_aligned_(self, _ser_: _dsdl_.Serializer) -> None:
         assert _ser_.current_bit_length % 8 == 0, 'Serializer is not byte-aligned'
-    {%- if type.fields %}
         _orig_bit_length_ = _ser_.current_bit_length
         {{ serialize(type)|indent }}
         assert {{ type.bit_length_set|min }} <= (_ser_.current_bit_length - _orig_bit_length_) {# -#}
                                              <= {{ type.bit_length_set|max }}, \
             'Bad serialization of {{ type }}'
-    {%- else %}
-        pass
-    {%- endif %}
 
     # noinspection PyProtectedMember
     @staticmethod
     def _deserialize_aligned_(_des_: _dsdl_.Deserializer) -> '{{ full_class_name }}':
         assert _des_.consumed_bit_length % 8 == 0, 'Deserializer is not byte-aligned'
-    {%- if type.fields %}
         _bit_length_base_ = _des_.consumed_bit_length
         {{ deserialize(type, full_class_name)|indent }}
         assert {{ type.bit_length_set|min }} <= (_des_.consumed_bit_length - _bit_length_base_) {# -#}
@@ -355,9 +350,6 @@ class {{ name }}(_dsdl_.CompositeObject):
             'Bad deserialization of {{ type }}'
         assert isinstance(self, {{ full_class_name }})
         return self
-    {%- else %}
-        return {{ full_class_name }}()  # No fields to deserialize.
-    {% endif %}
 {#
  # PYTHON DATA MODEL
  #}
