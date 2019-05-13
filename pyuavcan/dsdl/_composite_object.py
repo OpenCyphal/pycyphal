@@ -60,18 +60,18 @@ _ClassOrInstance = typing.Union[typing.Type[CompositeObject], CompositeObject]
 
 
 # noinspection PyProtectedMember
-def serialize(o: CompositeObject) -> numpy.ndarray:
+def serialize(obj: CompositeObject) -> numpy.ndarray:
     """
     Constructs a serialized representation of the provided top-level object.
     The returned serialized representation is padded to one byte in accordance with the Specification.
     The type of the returned array is numpy.array(dtype=numpy.uint8) with the WRITEABLE flag set to False.
     """
-    if isinstance(o, CompositeObject) and isinstance(o._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_, int):
-        ser = Serializer.new(o._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
-        o._serialize_aligned_(ser)
+    if isinstance(obj, CompositeObject) and isinstance(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_, int):
+        ser = Serializer.new(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
+        obj._serialize_aligned_(ser)
         return ser.buffer
     else:
-        raise TypeError(f'Cannot serialize an instance of {type(o).__name__}')
+        raise TypeError(f'Cannot serialize an instance of {type(obj).__name__}')
 
 
 # noinspection PyProtectedMember

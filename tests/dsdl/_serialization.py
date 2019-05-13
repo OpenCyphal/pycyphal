@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass
 
 import pyuavcan.dsdl
-from . import _util
+from ._util import are_close, make_random_object
 
 
 # Fail the test if any type takes longer than this to serialize or deserialize.
@@ -74,20 +74,20 @@ class _TypeTestStatistics:
                    self.mean_deserialization_time)
 
 
-def _test_type(data_type: pydsdl.CompositeType, num_random_samples: int) -> _TypeTestStatistics:
-    _logger.debug('Roundtrip serialization test of %s with %d random samples', data_type, num_random_samples)
-    cls = pyuavcan.dsdl.get_generated_class(data_type)
+def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTestStatistics:
+    _logger.debug('Roundtrip serialization test of %s with %d random samples', model, num_random_samples)
+    cls = pyuavcan.dsdl.get_generated_class(model)
     samples: typing.List[typing.Tuple[float, float]] = [
         _serialize_deserialize(cls())
     ]
     rand_sr_validness: typing.List[bool] = []
 
-    def once(o: pyuavcan.dsdl.CompositeObject) -> None:
-        samples.append(_serialize_deserialize(o))
+    def once(obj: pyuavcan.dsdl.CompositeObject) -> None:
+        samples.append(_serialize_deserialize(obj))
 
     for _ in range(num_random_samples):
         # Forward test: get random object, serialize, deserialize, compare
-        once(_util.make_random_object(data_type))
+        once(make_random_object(model))
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
         sr = _make_random_serialized_representation(pyuavcan.dsdl.get_type(cls).bit_length_set)
@@ -105,25 +105,25 @@ def _test_type(data_type: pydsdl.CompositeType, num_random_samples: int) -> _Typ
     )
 
 
-def _serialize_deserialize(o: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[float, float]:
+def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[float, float]:
     ts = time.process_time()
-    sr = pyuavcan.dsdl.serialize(o)
+    sr = pyuavcan.dsdl.serialize(obj)
     ser_sample = time.process_time() - ts
 
     ts = time.process_time()
-    d = pyuavcan.dsdl.try_deserialize(type(o), sr)
+    d = pyuavcan.dsdl.try_deserialize(type(obj), sr)
     des_sample = time.process_time() - ts
 
     assert d is not None
-    assert type(o) is type(d)
-    assert pyuavcan.dsdl.get_type(o) == pyuavcan.dsdl.get_type(d)
-    assert _util.are_close(pyuavcan.dsdl.get_type(o), o, d), f'{o} != {d}; sr: {bytes(sr).hex()}'
+    assert type(obj) is type(d)
+    assert pyuavcan.dsdl.get_type(obj) == pyuavcan.dsdl.get_type(d)
+    assert are_close(pyuavcan.dsdl.get_type(obj), obj, d), f'{obj} != {d}; sr: {bytes(sr).hex()}'
 
     # Similar floats may produce drastically different string representations, so if there is at least one float inside,
     # we skip the string representation equality check.
     if pydsdl.FloatType.__name__ not in repr(pyuavcan.dsdl.get_type(d)):
-        assert str(o) == str(d)
-        assert repr(o) == repr(d)
+        assert str(obj) == str(d)
+        assert repr(obj) == repr(d)
 
     return ser_sample, des_sample
 

@@ -37,19 +37,19 @@ def get_generated_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObj
     return out
 
 
-def get_attribute(o: CompositeObject, name: str) -> typing.Any:
+def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject]], name: str) -> typing.Any:
     """
     DSDL type attributes whose names can't be represented in Python (such as "def") are suffixed with an underscore.
     This function allows the caller to read arbitrary attributes referring them by their original DSDL names,
     e.g., "def" instead of "def_".
     """
     try:
-        return getattr(o, name)
+        return getattr(obj, name)
     except AttributeError:
-        return getattr(o, name + '_')
+        return getattr(obj, name + '_')
 
 
-def set_attribute(o: CompositeObject, name: str, value: typing.Any) -> None:
+def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
     """
     DSDL type attributes whose names can't be represented in Python (such as "def") are suffixed with an underscore.
     This function allows the caller to assign arbitrary attributes referring them by their original DSDL names,
@@ -58,9 +58,9 @@ def set_attribute(o: CompositeObject, name: str, value: typing.Any) -> None:
     suffixed = name + '_'
     # We can't call setattr() without asking first because if it doesn't exist it will be created,
     # which would be disastrous.
-    if hasattr(o, name):
-        setattr(o, name, value)
-    elif hasattr(o, suffixed):
-        setattr(o, suffixed, value)
+    if hasattr(obj, name):
+        setattr(obj, name, value)
+    elif hasattr(obj, suffixed):
+        setattr(obj, suffixed, value)
     else:
         raise AttributeError(suffixed)

@@ -7,11 +7,14 @@
 import os
 import sys
 import shutil
+import pydsdl
+import pytest
 import pathlib
 import logging
 
 import pyuavcan.dsdl
 from . import _serialization
+from ._util import make_random_object
 
 
 _PROJECT_ROOT_DIR = pathlib.Path(__file__).parent.parent.parent
@@ -44,4 +47,51 @@ def _unittest_dsdl_compiler() -> None:
     _serialization.test_package(uavcan_info, _NUM_RANDOM_SAMPLES)
     _serialization.test_package(test_info, _NUM_RANDOM_SAMPLES)
 
+    _test_non_serialization_related_behaviors(uavcan_info)
+    _test_non_serialization_related_behaviors(test_info)
+
     sys.path = original_sys_path
+
+
+def _test_non_serialization_related_behaviors(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
+    for model in info.types:
+        if isinstance(model, pydsdl.ServiceType):
+            _test_type(model.request_type)
+            _test_type(model.response_type)
+        else:
+            _test_type(model)
+
+
+def _test_type(model: pydsdl.CompositeType) -> None:
+    _test_constants(model)
+    for _ in range(10):
+        _test_textual_representations(model, make_random_object(model))
+
+
+def _test_constants(model: pydsdl.CompositeType) -> None:
+    cls = pyuavcan.dsdl.get_generated_class(model)
+    for c in model.constants:
+        if isinstance(c.data_type, pydsdl.PrimitiveType):
+            reference = c.value
+            generated = pyuavcan.dsdl.get_attribute(cls, c.name)
+            assert isinstance(reference, pydsdl.Primitive)
+            assert reference.native_value == pytest.approx(generated), \
+                'The generated constant does not compare equal against the DSDL source'
+
+
+def _test_textual_representations(model: pydsdl.CompositeType, obj: pyuavcan.dsdl.CompositeObject) -> None:
+    for fn in [str, repr]:
+        assert callable(fn)
+        s = fn(obj)
+        for f in model.fields_except_padding:
+            field_present = (f'{f.name}=' in s) or (f'{f.name}_=' in s)
+            if isinstance(model, pydsdl.UnionType):
+                # In unions only the active field is printed. The active field may contain nested fields which
+                # may be named similarly to other fields in the current union, so we can't easily ensure lack of
+                # non-active fields in the output.
+                field_active = pyuavcan.dsdl.get_attribute(obj, f.name) is not None
+                if field_active:
+                    assert field_present, f'{f.name}: {s}'
+            else:
+                # In structures all fields are printed always.
+                assert field_present, f'{f.name}: {s}'

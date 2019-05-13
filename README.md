@@ -11,3 +11,16 @@ UAVCAN is an open lightweight protocol designed for reliable intravehicular comm
 aerospace and robotic applications over robust networks such as CAN bus or Ethernet.
 
 TODO: the documentation is missing, please come back later.
+
+## Development
+
+### Semantic naming conventions
+
+API functions and methods that contain parameters of the following types should adhere to
+the semantic naming conventions:
+
+ Type                                       | Name          | Notes
+--------------------------------------------|---------------|----------------------------------------------------------
+`pydsdl.*Type`                              | `model`       | PyDSDL type model (descriptor)
+`pyuavcan.dsdl.*Object`                     | `obj`         | Instance of a generated class implementing a DSDL type
+`typing.Type[pyuavcan.dsdl.*Object]`        | `cls`         | Generated class implementing a DSDL type
