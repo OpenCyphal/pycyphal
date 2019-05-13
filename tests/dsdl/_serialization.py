@@ -48,13 +48,16 @@ def test_package(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
     max_name_len = max(map(lambda t: len(str(t)), performance.keys()))
     for ty, stat in sorted(performance.items(), key=lambda kv: -kv[1].worst_time):
         assert isinstance(stat, _TypeTestStatistics)
-        assert stat.worst_time <= _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME
         suffix = '' if stat.worst_time < 1e-3 else '\tSLOW!'
         _logger.info(f'%-{max_name_len}s %3.0f%% %6.0f %6.0f%s', ty,
                      stat.random_serialized_representation_correctness_ratio * 100,
                      stat.mean_serialization_time * 1e6,
                      stat.mean_deserialization_time * 1e6,
                      suffix)
+        assert stat.worst_time <= _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME
+        assert stat.random_serialized_representation_correctness_ratio > 0, \
+            'At least one random sample must be valid. ' \
+            'Either the tested code is incorrect, or the number of random samples is too low.'
 
 
 @dataclass(frozen=True)
