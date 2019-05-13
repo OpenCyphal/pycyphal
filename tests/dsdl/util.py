@@ -19,11 +19,11 @@ def make_random_object(data_type: pydsdl.SerializableType) -> typing.Any:
     """
     Returns an object of the specified DSDL type populated with random data.
     """
-    def _fifty_fifty() -> bool:
+    def fifty_fifty() -> bool:
         return random.random() >= 0.5
 
     if isinstance(data_type, pydsdl.BooleanType):
-        return _fifty_fifty()
+        return fifty_fifty()
 
     elif isinstance(data_type, pydsdl.IntegerType):  # noinspection PyTypeChecker
         return random.randint(int(data_type.inclusive_value_range.min),
@@ -43,7 +43,7 @@ def make_random_object(data_type: pydsdl.SerializableType) -> typing.Any:
     elif isinstance(data_type, pydsdl.FixedLengthArrayType):
         out = [make_random_object(data_type.element_type) for _ in range(data_type.capacity)]
         et = data_type.element_type
-        if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length <= 8 and _fifty_fifty():
+        if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length <= 8 and fifty_fifty():
             out = bytes(out)
         return out
 
@@ -51,11 +51,11 @@ def make_random_object(data_type: pydsdl.SerializableType) -> typing.Any:
         length = random.randint(0, data_type.capacity)
         out = [make_random_object(data_type.element_type) for _ in range(length)]
         et = data_type.element_type
-        if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length <= 8 and _fifty_fifty():
+        if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length <= 8 and fifty_fifty():
             out = bytes(out)
-        if data_type.string_like and _fifty_fifty():
+        if data_type.string_like and fifty_fifty():
             try:
-                out = out.decode()
+                out = bytes(out).decode()
             except ValueError:
                 pass
         return out
