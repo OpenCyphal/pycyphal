@@ -5,20 +5,16 @@
 #
 
 import numpy
+import typing
 import logging
-
 import pyuavcan.dsdl
 
 
 _logger = logging.getLogger(__name__)
 
 
-def test() -> None:
-    _test_a()
-    _test_heartbeat()
-
-
-def _test_a() -> None:
+# noinspection PyUnusedLocal
+def _unittest_manual_a(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import test.str
     obj = pyuavcan.dsdl.try_deserialize(
         test.str.A_1_0,
@@ -63,7 +59,8 @@ def _test_a() -> None:
     assert len(obj.y) == 0
 
 
-def _test_heartbeat() -> None:
+# noinspection PyUnusedLocal
+def _unittest_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import uavcan.node
     obj = pyuavcan.dsdl.try_deserialize(
         uavcan.node.Heartbeat_1_0,

@@ -15,6 +15,22 @@ from functools import partial
 import pyuavcan.dsdl
 
 
+def expand_service_types(models: typing.Iterable[pydsdl.CompositeType], keep_services: bool = False) \
+        -> typing.Iterator[pydsdl.CompositeType]:
+    """
+    Iterates all types in the provided list, expanding each ServiceType into a pair of CompositeType: one for
+    request, one for response.
+    """
+    for m in models:
+        if isinstance(m, pydsdl.ServiceType):
+            yield m.request_type
+            yield m.response_type
+            if keep_services:
+                yield m
+        else:
+            yield m
+
+
 def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
     """
     Returns an object of the specified DSDL type populated with random data.
