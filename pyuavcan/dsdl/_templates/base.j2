@@ -90,7 +90,7 @@ import {{ n }}
      and {{ src }}.ndim == 1:
         self._{{ f|id }} = {{ src }}  # Fast binding if type/dimension match
     else:
-        self._{{ f|id }} = _np_.array({{ src }}, {{ t.element_type|numpy_scalar_type }})
+        self._{{ f|id }} = _np_.array({{ src }}, {{ t.element_type|numpy_scalar_type }}).flatten()
     assert isinstance(self._{{ f|id }}, _np_.ndarray)
     assert self._{{ f|id }}.dtype == {{ t.element_type|numpy_scalar_type }}
     assert self._{{ f|id }}.ndim == 1
