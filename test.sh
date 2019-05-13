@@ -4,7 +4,7 @@ status=0
 
 # Static type checking
 export MYPYPATH=".test_dsdl_generated"
-if ! mypy --strict --config-file=setup.cfg pyuavcan tests
+if ! mypy --strict --config-file=setup.cfg pyuavcan tests .test_dsdl_generated
 then
     status=1
 fi
@@ -24,7 +24,7 @@ fi
 
 # Unit tests
 # https://docs.pytest.org/en/latest/pythonpath.html#invoking-pytest-versus-python-m-pytest
-if coverage run --source pyuavcan,tests,.test_dsdl_generated -m pytest -vv pyuavcan tests
+if coverage run --source pyuavcan,tests,.test_dsdl_generated -m pytest -v pyuavcan tests
 then
     coverage report
 else

@@ -108,8 +108,9 @@
     # Tag field byte-aligned: {{ base_offset.is_aligned_at_byte() }}; {# -#}
       values byte-aligned: {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
     {{ _deserialize_integer(t.tag_field_type, tag_ref, base_offset) }}
-    {%- set field_ref = make_unique_ref('uni') %}
     {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
+    {#- We generate new temporary for each variant to prevent MyPy from complaining. #}
+    {%- set field_ref = make_unique_ref('uni') %}
     # BEGIN UNION FIELD DESERIALIZATION: {{ f }}
     {{ 'if' if loop.first else 'elif' }} {{ tag_ref }} == {{ loop.index0 }}:
         {{ _deserialize_any(f.data_type, field_ref, offset)|indent }}
