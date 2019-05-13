@@ -40,7 +40,7 @@ def get_generated_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObj
 def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject]], name: str) -> typing.Any:
     """
     DSDL type attributes whose names can't be represented in Python (such as "def") are suffixed with an underscore.
-    This function allows the caller to read arbitrary attributes referring them by their original DSDL names,
+    This function allows the caller to read arbitrary attributes referring to them by their original DSDL names,
     e.g., "def" instead of "def_".
     """
     try:
@@ -52,7 +52,7 @@ def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject
 def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
     """
     DSDL type attributes whose names can't be represented in Python (such as "def") are suffixed with an underscore.
-    This function allows the caller to assign arbitrary attributes referring them by their original DSDL names,
+    This function allows the caller to assign arbitrary attributes referring to them by their original DSDL names,
     e.g., "def" instead of "def_".
     """
     suffixed = name + '_'

@@ -91,10 +91,10 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
         sr = _make_random_serialized_representation(pyuavcan.dsdl.get_type(cls).bit_length_set)
-        obj = pyuavcan.dsdl.try_deserialize(cls, sr)
-        rand_sr_validness.append(obj is not None)
-        if obj:
-            once(obj)
+        ob = pyuavcan.dsdl.try_deserialize(cls, sr)
+        rand_sr_validness.append(ob is not None)
+        if ob:
+            once(ob)
 
     out = numpy.mean(samples, axis=0)
     assert out.shape == (2,)

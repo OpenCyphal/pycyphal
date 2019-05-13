@@ -92,7 +92,7 @@ import {{ n }}
     else:
         {{ src }} = _np_.array({{ src }}, {{ t.element_type|numpy_scalar_type }}).flatten()
         if not {{ src }}.size {{ cmp }} {{ t.capacity }}:  # Length cannot be checked before casting and flattening
-            raise ValueError(f'{{ f.name }}: invalid array length: not {x.size} {{ cmp }} {{ t.capacity }}')
+            raise ValueError(f'{{ f.name }}: invalid array length: not { {{- src }}.size} {{ cmp }} {{ t.capacity }}')
         self._{{ f|id }} = {{ src }}
     assert isinstance(self._{{ f|id }}, _np_.ndarray)
     assert self._{{ f|id }}.dtype == {{ t.element_type|numpy_scalar_type }}

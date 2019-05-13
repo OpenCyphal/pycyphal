@@ -56,7 +56,7 @@ class CompositeObject:
         return out
 
 
-_ClassOrInstance = typing.Union[typing.Type[CompositeObject], CompositeObject]
+CompositeObjectTypeVar = typing.TypeVar('CompositeObjectTypeVar', bound=CompositeObject)
 
 
 # noinspection PyProtectedMember
@@ -75,7 +75,8 @@ def serialize(obj: CompositeObject) -> numpy.ndarray:
 
 
 # noinspection PyProtectedMember
-def try_deserialize(cls: typing.Type[CompositeObject], source_bytes: numpy.ndarray) -> typing.Optional[CompositeObject]:
+def try_deserialize(cls: typing.Type[CompositeObjectTypeVar], source_bytes: numpy.ndarray) \
+        -> typing.Optional[CompositeObjectTypeVar]:
     """
     Constructs a Python object representing an instance of the supplied data type from its serialized representation.
     Returns None if the provided serialized representation is invalid.
@@ -92,7 +93,7 @@ def try_deserialize(cls: typing.Type[CompositeObject], source_bytes: numpy.ndarr
     if issubclass(cls, CompositeObject) and isinstance(source_bytes, numpy.ndarray) \
             and source_bytes.dtype == numpy.uint8:
         try:
-            return cls._deserialize_aligned_(Deserializer.new(source_bytes))
+            return cls._deserialize_aligned_(Deserializer.new(source_bytes))  # type: ignore
         except Deserializer.FormatError:
             # Use explicit level check to avoid unnecessary load in production.
             # This is necessary because we perform complex data transformations before invoking the logger.
@@ -104,7 +105,7 @@ def try_deserialize(cls: typing.Type[CompositeObject], source_bytes: numpy.ndarr
         raise TypeError(f'Cannot deserialize an instance of {cls} from {type(source_bytes).__name__}')
 
 
-def get_type(class_or_instance: _ClassOrInstance) -> pydsdl.CompositeType:
+def get_type(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> pydsdl.CompositeType:
     # noinspection PyProtectedMember
     out = class_or_instance._TYPE_
     assert isinstance(out, pydsdl.CompositeType)

@@ -3,6 +3,7 @@
 status=0
 
 # Static type checking
+export MYPYPATH=".test_dsdl_generated"
 if ! mypy --strict --config-file=setup.cfg pyuavcan tests
 then
     status=1

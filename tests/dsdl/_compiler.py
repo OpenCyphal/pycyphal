@@ -13,7 +13,7 @@ import pathlib
 import logging
 
 import pyuavcan.dsdl
-from . import _serialization
+from . import _random_serialization, _manual
 from ._util import make_random_object
 
 
@@ -44,16 +44,17 @@ def _unittest_dsdl_compiler() -> None:
     test_info = pyuavcan.dsdl.generate_package_from_dsdl_namespace(_DESTINATION_DIRECTORY, test_root, [uavcan_root])
     assert str(test_info.path).endswith('test')
 
-    _serialization.test_package(uavcan_info, _NUM_RANDOM_SAMPLES)
-    _serialization.test_package(test_info, _NUM_RANDOM_SAMPLES)
+    _manual.test()
 
-    _test_non_serialization_related_behaviors(uavcan_info)
-    _test_non_serialization_related_behaviors(test_info)
+    _test_package(uavcan_info)
+    _test_package(test_info)
 
     sys.path = original_sys_path
 
 
-def _test_non_serialization_related_behaviors(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
+def _test_package(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
+    _random_serialization.test_package(info, _NUM_RANDOM_SAMPLES)
+
     for model in info.types:
         if isinstance(model, pydsdl.ServiceType):
             _test_type(model.request_type)
