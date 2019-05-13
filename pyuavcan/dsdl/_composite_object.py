@@ -23,7 +23,7 @@ class CompositeObject:
     The entities follow the naming pattern "_.*_" to avoid collisions with DSDL attributes.
     """
     # Type definition as provided by PyDSDL.
-    _TYPE_: pydsdl.CompositeType
+    _MODEL_: pydsdl.CompositeType
 
     # Defined in generated classes.
     _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int
@@ -99,14 +99,14 @@ def try_deserialize(cls: typing.Type[CompositeObjectTypeVar], source_bytes: nump
             # This is necessary because we perform complex data transformations before invoking the logger.
             if _logger.isEnabledFor(logging.INFO):
                 _logger.info('Invalid serialized representation of %s (in Base64): %s',
-                             get_type(cls), base64.b64encode(source_bytes.tobytes()).decode(), exc_info=True)
+                             get_model(cls), base64.b64encode(source_bytes.tobytes()).decode(), exc_info=True)
             return None
     else:
         raise TypeError(f'Cannot deserialize an instance of {cls} from {type(source_bytes).__name__}')
 
 
-def get_type(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> pydsdl.CompositeType:
+def get_model(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> pydsdl.CompositeType:
     # noinspection PyProtectedMember
-    out = class_or_instance._TYPE_
+    out = class_or_instance._MODEL_
     assert isinstance(out, pydsdl.CompositeType)
     return out

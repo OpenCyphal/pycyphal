@@ -18,9 +18,9 @@ class {{ T|short_reference }}(_dsdl_.ServiceObject):
 
     __repr__ = __str__
 
-    _TYPE_: _pydsdl_.ServiceType = _dsdl_.CompositeObject._restore_constant_(
+    _MODEL_: _pydsdl_.ServiceType = _dsdl_.CompositeObject._restore_constant_(
         {{ T | pickle | indent(8) }}
     )
-    assert isinstance(_TYPE_, _pydsdl_.ServiceType)
+    assert isinstance(_MODEL_, _pydsdl_.ServiceType)
 
 {%- endblock -%}

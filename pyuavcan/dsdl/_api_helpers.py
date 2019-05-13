@@ -7,7 +7,7 @@
 import typing
 import pydsdl
 import importlib
-from ._composite_object import CompositeObject, get_type
+from ._composite_object import CompositeObject, get_model
 from ._service_object import ServiceObject
 
 
@@ -31,7 +31,7 @@ def get_generated_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObj
                 mod = importlib.import_module(name + '_')
         ref = f'{model.short_name}_{model.version.major}_{model.version.minor}'
         out = getattr(mod, ref)
-        assert get_type(out) == model
+        assert get_model(out) == model
 
     assert issubclass(out, CompositeObject)
     return out

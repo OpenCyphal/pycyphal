@@ -377,10 +377,10 @@ class {{ name }}(_dsdl_.CompositeObject):
  # PYDSDL TYPE DESCRIPTOR
  #}
     {% set meta_type = 'UnionType' if type is UnionType else 'StructureType' -%}
-    _TYPE_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
+    _MODEL_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
         {{ type | pickle | indent(8) }}
     )
-    assert isinstance(_TYPE_, _pydsdl_.{{ meta_type }})
+    assert isinstance(_MODEL_, _pydsdl_.{{ meta_type }})
 
     _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int = {{ ((type.bit_length_set|max) + 7) // 8 }}  {# -#}
                                                             # {{ type.bit_length_set|max }} bits

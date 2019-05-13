@@ -85,7 +85,7 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
         once(make_random_object(model))
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
-        sr = _make_random_serialized_representation(pyuavcan.dsdl.get_type(cls).bit_length_set)
+        sr = _make_random_serialized_representation(pyuavcan.dsdl.get_model(cls).bit_length_set)
         ob = pyuavcan.dsdl.try_deserialize(cls, sr)
         rand_sr_validness.append(ob is not None)
         if ob:
@@ -111,12 +111,12 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
 
     assert d is not None
     assert type(obj) is type(d)
-    assert pyuavcan.dsdl.get_type(obj) == pyuavcan.dsdl.get_type(d)
-    assert are_close(pyuavcan.dsdl.get_type(obj), obj, d), f'{obj} != {d}; sr: {bytes(sr).hex()}'
+    assert pyuavcan.dsdl.get_model(obj) == pyuavcan.dsdl.get_model(d)
+    assert are_close(pyuavcan.dsdl.get_model(obj), obj, d), f'{obj} != {d}; sr: {bytes(sr).hex()}'
 
     # Similar floats may produce drastically different string representations, so if there is at least one float inside,
     # we skip the string representation equality check.
-    if pydsdl.FloatType.__name__ not in repr(pyuavcan.dsdl.get_type(d)):
+    if pydsdl.FloatType.__name__ not in repr(pyuavcan.dsdl.get_model(d)):
         assert str(obj) == str(d)
         assert repr(obj) == repr(d)
 

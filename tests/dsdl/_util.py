@@ -106,7 +106,7 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
     elif isinstance(model, pydsdl.CompositeType):
         if type(a) != type(b):  # pragma: no cover
             return False
-        for f in pyuavcan.dsdl.get_type(a).fields_except_padding:  # pragma: no cover
+        for f in pyuavcan.dsdl.get_model(a).fields_except_padding:  # pragma: no cover
             if not are_close(f.data_type,
                              pyuavcan.dsdl.get_attribute(a, f.name),
                              pyuavcan.dsdl.get_attribute(b, f.name)):
