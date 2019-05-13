@@ -4,7 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import os
 import time
 import numpy
 import typing
@@ -14,11 +13,8 @@ import logging
 from dataclasses import dataclass
 
 import pyuavcan.dsdl
-from . import util
+from . import _util
 
-
-_NUM_RANDOM_SAMPLES = int(os.environ.get('PYUAVCAN_TEST_NUM_RANDOM_SAMPLES', 100))
-assert _NUM_RANDOM_SAMPLES > 0, 'Invalid configuration'
 
 # Fail the test if any type takes longer than this to serialize or deserialize.
 _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 5e-3
@@ -27,13 +23,13 @@ _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 5e-3
 _logger = logging.getLogger(__name__)
 
 
-def test_package(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
+def test_package(info: pyuavcan.dsdl.GeneratedPackageInfo, num_random_samples: int) -> None:
     logging.getLogger('pyuavcan.dsdl._composite_object').setLevel(logging.WARNING)
 
     performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
 
     def once(t: pydsdl.CompositeType) -> None:
-        performance[t] = _test_type(t)
+        performance[t] = _test_type(t, num_random_samples)
 
     for dsdl_type in info.types:
         if isinstance(dsdl_type, pydsdl.ServiceType):
@@ -43,21 +39,27 @@ def test_package(info: pyuavcan.dsdl.GeneratedPackageInfo) -> None:
             once(dsdl_type)
 
     _logger.info('Tested types ordered by serialization/deserialization speed, %d random samples per type',
-                 _NUM_RANDOM_SAMPLES)
-    _logger.info('Columns: random SR correctness ratio, mean serialization time (us), mean deserialization time (us)')
+                 num_random_samples)
+    _logger.info('Columns: random SR correctness ratio; mean serialization time (us); mean deserialization time (us)')
+
     max_name_len = max(map(lambda t: len(str(t)), performance.keys()))
     for ty, stat in sorted(performance.items(), key=lambda kv: -kv[1].worst_time):
         assert isinstance(stat, _TypeTestStatistics)
         suffix = '' if stat.worst_time < 1e-3 else '\tSLOW!'
+
         _logger.info(f'%-{max_name_len}s %3.0f%% %6.0f %6.0f%s', ty,
                      stat.random_serialized_representation_correctness_ratio * 100,
                      stat.mean_serialization_time * 1e6,
                      stat.mean_deserialization_time * 1e6,
                      suffix)
-        assert stat.worst_time <= _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME
+
+        assert stat.worst_time <= _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME, \
+            f'Serialization performance issues detected in type {ty}'
+
         assert stat.random_serialized_representation_correctness_ratio > 0, \
-            'At least one random sample must be valid. ' \
-            'Either the tested code is incorrect, or the number of random samples is too low.'
+            f'At least one random sample must be valid. ' \
+            f'Either the tested code is incorrect, or the number of random samples is too low. ' \
+            f'Failed type: {ty}'
 
 
 @dataclass(frozen=True)
@@ -72,8 +74,8 @@ class _TypeTestStatistics:
                    self.mean_deserialization_time)
 
 
-def _test_type(data_type: pydsdl.CompositeType) -> _TypeTestStatistics:
-    _logger.debug('Roundtrip serialization test of %s', data_type)
+def _test_type(data_type: pydsdl.CompositeType, num_random_samples: int) -> _TypeTestStatistics:
+    _logger.debug('Roundtrip serialization test of %s with %d random samples', data_type, num_random_samples)
     cls = pyuavcan.dsdl.get_generated_class(data_type)
     samples: typing.List[typing.Tuple[float, float]] = [
         _serialize_deserialize(cls())
@@ -83,9 +85,9 @@ def _test_type(data_type: pydsdl.CompositeType) -> _TypeTestStatistics:
     def once(o: pyuavcan.dsdl.CompositeObject) -> None:
         samples.append(_serialize_deserialize(o))
 
-    for _ in range(_NUM_RANDOM_SAMPLES):
+    for _ in range(num_random_samples):
         # Forward test: get random object, serialize, deserialize, compare
-        once(util.make_random_object(data_type))
+        once(_util.make_random_object(data_type))
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
         sr = _make_random_serialized_representation(pyuavcan.dsdl.get_type(cls).bit_length_set)
@@ -115,7 +117,7 @@ def _serialize_deserialize(o: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[flo
     assert d is not None
     assert type(o) is type(d)
     assert pyuavcan.dsdl.get_type(o) == pyuavcan.dsdl.get_type(d)
-    assert util.are_close(pyuavcan.dsdl.get_type(o), o, d), f'{o} != {d}; sr: {bytes(sr).hex()}'
+    assert _util.are_close(pyuavcan.dsdl.get_type(o), o, d), f'{o} != {d}; sr: {bytes(sr).hex()}'
 
     # Similar floats may produce drastically different string representations, so if there is at least one float inside,
     # we skip the string representation equality check.
