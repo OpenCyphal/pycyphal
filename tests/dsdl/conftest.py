@@ -20,9 +20,13 @@ PUBLIC_REGULATED_DATA_TYPES = PROJECT_ROOT_DIR / 'public_regulated_data_types.ca
 TEST_DATA_TYPES = pathlib.Path(__file__).parent / 'namespaces'
 
 
-# https://docs.pytest.org/en/latest/fixture.html#conftest-py-sharing-fixture-functions
 @pytest.fixture('session')  # type: ignore
 def generated_packages() -> typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedPackageInfo]]:
+    """
+    Runs the DSDL package generator against the standard and test namespaces, emits a list of GeneratedPackageInfo.
+    Automatically adds the path to the generated packages to sys path to make them importable.
+    https://docs.pytest.org/en/latest/fixture.html#conftest-py-sharing-fixture-functions
+    """
     original_sys_path = sys.path
     sys.path.insert(0, str(DESTINATION_DIRECTORY))
     logging.getLogger('pydsdl').setLevel(logging.WARNING)
