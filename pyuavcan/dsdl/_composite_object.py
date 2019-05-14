@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+from __future__ import annotations
 import abc
 import gzip
 import numpy
@@ -12,7 +13,7 @@ import pydsdl
 import pickle
 import base64
 import logging
-from ._serialized_representation import Serializer, Deserializer
+from . import _serialized_representation
 
 
 _logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ class CompositeObject(abc.ABC):
     _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int
 
     @abc.abstractmethod
-    def _serialize_aligned_(self, _ser_: Serializer) -> None:
+    def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
         """
         Auto-generated serialization method.
         Appends the serialized representation of its object to the supplied Serializer instance.
@@ -41,7 +42,7 @@ class CompositeObject(abc.ABC):
 
     @staticmethod
     @abc.abstractmethod
-    def _deserialize_aligned_(_des_: Deserializer) -> 'CompositeObject':
+    def _deserialize_aligned_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
         """
         Auto-generated deserialization method. Consumes (some) data from the supplied Deserializer instance.
         Raises a Deserializer.FormatError if the supplied serialized representation is invalid.
@@ -70,7 +71,7 @@ def serialize(obj: CompositeObject) -> numpy.ndarray:
     The type of the returned array is numpy.array(dtype=numpy.uint8) with the WRITEABLE flag set to False.
     """
     if isinstance(obj, CompositeObject) and isinstance(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_, int):
-        ser = Serializer.new(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
+        ser = _serialized_representation.Serializer.new(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
         obj._serialize_aligned_(ser)
         return ser.buffer
     else:
@@ -96,8 +97,8 @@ def try_deserialize(cls: typing.Type[CompositeObjectTypeVar], source_bytes: nump
     if issubclass(cls, CompositeObject) and isinstance(source_bytes, numpy.ndarray) \
             and source_bytes.dtype == numpy.uint8:
         try:
-            return cls._deserialize_aligned_(Deserializer.new(source_bytes))  # type: ignore
-        except Deserializer.FormatError:
+            return cls._deserialize_aligned_(_serialized_representation.Deserializer.new(source_bytes))  # type: ignore
+        except _serialized_representation.Deserializer.FormatError:
             # Use explicit level check to avoid unnecessary load in production.
             # This is necessary because we perform complex data transformations before invoking the logger.
             if _logger.isEnabledFor(logging.INFO):

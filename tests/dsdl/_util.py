@@ -9,9 +9,8 @@ import typing
 import pydsdl
 import random
 import struct
-from itertools import starmap
-from functools import partial
-
+import itertools
+import functools
 import pyuavcan.dsdl
 
 
@@ -114,7 +113,7 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
         return True                 # Empty objects of same type compare equal
 
     elif isinstance(model, pydsdl.ArrayType):
-        return all(starmap(partial(are_close, model.element_type), zip(a, b))) \
+        return all(itertools.starmap(functools.partial(are_close, model.element_type), zip(a, b))) \
             if len(a) == len(b) and a.dtype == b.dtype else False
 
     elif isinstance(model, pydsdl.FloatType):

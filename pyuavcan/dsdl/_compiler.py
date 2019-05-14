@@ -8,15 +8,14 @@ import gzip
 import typing
 import pickle
 import base64
+import pydsdl
+import nunavut
+import nunavut.jinja
 import pathlib
 import keyword
 import builtins
 import itertools
-from dataclasses import dataclass
-
-import pydsdl
-import nunavut
-import nunavut.jinja
+import dataclasses
 
 
 _AnyPath = typing.Union[str, pathlib.Path]
@@ -26,7 +25,7 @@ _ILLEGAL_IDENTIFIERS: typing.Set[str] = set(map(str, list(keyword.kwlist) + dir(
 _TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).parent / pathlib.Path('_templates')
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GeneratedPackageInfo:
     path:  pathlib.Path
     types: typing.List[pydsdl.CompositeType]

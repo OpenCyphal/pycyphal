@@ -8,12 +8,12 @@ import typing
 import pydsdl
 import pytest
 import pyuavcan.dsdl
-from ._util import expand_service_types
+from . import _util
 
 
 def _unittest_constants(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     for info in generated_packages:
-        for model in expand_service_types(info.types, keep_services=True):
+        for model in _util.expand_service_types(info.types, keep_services=True):
             cls = pyuavcan.dsdl.get_generated_class(model)
             for c in model.constants:
                 if isinstance(c.data_type, pydsdl.PrimitiveType):

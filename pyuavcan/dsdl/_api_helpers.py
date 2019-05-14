@@ -7,11 +7,10 @@
 import typing
 import pydsdl
 import importlib
-from ._composite_object import CompositeObject, get_model
-from ._service_object import ServiceObject
+from . import _composite_object, _service_object
 
 
-def get_generated_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
+def get_generated_class(model: pydsdl.CompositeType) -> typing.Type[_composite_object.CompositeObject]:
     """
     Returns the native class implementing the specified DSDL type represented by its PyDSDL model object.
     Assumes that the Python package containing the implementation is in the import lookup path set, otherwise
@@ -19,7 +18,7 @@ def get_generated_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObj
     """
     if model.parent_service is not None:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
         out = get_generated_class(model.parent_service)
-        assert issubclass(out, ServiceObject)
+        assert issubclass(out, _service_object.ServiceObject)
         out = getattr(out, model.short_name)
     else:
         mod = None
@@ -31,13 +30,14 @@ def get_generated_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObj
                 mod = importlib.import_module(name + '_')
         ref = f'{model.short_name}_{model.version.major}_{model.version.minor}'
         out = getattr(mod, ref)
-        assert get_model(out) == model
+        assert _composite_object.get_model(out) == model
 
-    assert issubclass(out, CompositeObject)
+    assert issubclass(out, _composite_object.CompositeObject)
     return out
 
 
-def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject]], name: str) -> typing.Any:
+def get_attribute(obj: typing.Union[_composite_object.CompositeObject, typing.Type[_composite_object.CompositeObject]],
+                  name: str) -> typing.Any:
     """
     DSDL type attributes whose names can't be represented in Python (such as "def") are suffixed with an underscore.
     This function allows the caller to read arbitrary attributes referring to them by their original DSDL names,
@@ -49,7 +49,7 @@ def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject
         return getattr(obj, name + '_')
 
 
-def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
+def set_attribute(obj: _composite_object.CompositeObject, name: str, value: typing.Any) -> None:
     """
     DSDL type attributes whose names can't be represented in Python (such as "def") are suffixed with an underscore.
     This function allows the caller to assign arbitrary attributes referring to them by their original DSDL names,

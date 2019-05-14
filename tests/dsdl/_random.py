@@ -11,10 +11,9 @@ import typing
 import pydsdl
 import random
 import logging
-from dataclasses import dataclass
-
+import dataclasses
 import pyuavcan.dsdl
-from ._util import are_close, make_random_object, expand_service_types
+from . import _util
 
 
 # Fail the test if any type takes longer than this to serialize or deserialize.
@@ -27,7 +26,7 @@ assert _NUM_RANDOM_SAMPLES >= 20, 'Invalid configuration: low number of random s
 _logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class _TypeTestStatistics:
     mean_serialization_time: float
     mean_deserialization_time: float
@@ -44,7 +43,7 @@ def _unittest_random(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPack
     performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
 
     for info in generated_packages:
-        for model in expand_service_types(info.types):
+        for model in _util.expand_service_types(info.types):
             performance[model] = _test_type(model, _NUM_RANDOM_SAMPLES)
 
     _logger.info('Tested types ordered by serialization speed, %d random samples per type', _NUM_RANDOM_SAMPLES)
@@ -82,7 +81,7 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
 
     for _ in range(num_random_samples):
         # Forward test: get random object, serialize, deserialize, compare
-        once(make_random_object(model))
+        once(_util.make_random_object(model))
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
         sr = _make_random_serialized_representation(pyuavcan.dsdl.get_model(cls).bit_length_set)
@@ -112,7 +111,7 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
     assert d is not None
     assert type(obj) is type(d)
     assert pyuavcan.dsdl.get_model(obj) == pyuavcan.dsdl.get_model(d)
-    assert are_close(pyuavcan.dsdl.get_model(obj), obj, d), f'{obj} != {d}; sr: {bytes(sr).hex()}'
+    assert _util.are_close(pyuavcan.dsdl.get_model(obj), obj, d), f'{obj} != {d}; sr: {bytes(sr).hex()}'
 
     # Similar floats may produce drastically different string representations, so if there is at least one float inside,
     # we skip the string representation equality check.

@@ -7,7 +7,7 @@
 import typing
 import pydsdl
 import pyuavcan.dsdl
-from ._util import make_random_object, expand_service_types
+from . import _util
 
 
 def _unittest_textual(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
@@ -26,9 +26,9 @@ def _unittest_textual(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPac
                 assert field_present, f'{f.name}: {s}'
 
     for info in generated_packages:
-        for model in expand_service_types(info.types):
+        for model in _util.expand_service_types(info.types):
             for fn in [str, repr]:
                 assert callable(fn)
                 for _ in range(10):
-                    ob = make_random_object(model)
+                    ob = _util.make_random_object(model)
                     validate(ob, fn(ob))
