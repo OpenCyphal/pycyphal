@@ -5,6 +5,12 @@
 #
 
 from ._compiler import generate_package, GeneratedPackageInfo
-from ._composite_object import CompositeObject, get_model, serialize, try_deserialize
-from ._api_helpers import get_attribute, set_attribute, get_class
+
+from ._composite_object import serialize, try_deserialize
+from ._composite_object import CompositeObject
 from ._service_object import ServiceObject
+
+from ._composite_object import get_model
+from ._api_helpers import get_class
+
+from ._api_helpers import get_attribute, set_attribute
