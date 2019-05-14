@@ -15,10 +15,8 @@ import itertools
 from dataclasses import dataclass
 
 import pydsdl
-import pydsdlgen
-import pydsdlgen.jinja
-
-import pydsdlgen.jinja.jinja2.ext   # TODO: remove, see https://github.com/UAVCAN/pydsdlgen/issues/43
+import nunavut
+import nunavut.jinja
 
 
 _AnyPath = typing.Union[str, pathlib.Path]
@@ -63,20 +61,17 @@ def generate_package_from_dsdl_namespace(package_parent_directory: _AnyPath,
     tests['saturated'] = _test_if_saturated
 
     # Generate code
-    root_ns = pydsdlgen.build_namespace_tree(types=composite_types,
-                                             root_namespace_dir=root_namespace_directory,
-                                             output_dir=str(package_parent_directory),
-                                             extension='.py',
-                                             namespace_output_stem='__init__')
-
-    generator = pydsdlgen.jinja.Generator(namespace=root_ns,
-                                          generate_namespace_types=True,
-                                          templates_dir=_TEMPLATE_DIRECTORY,
-                                          followlinks=True,
-                                          additional_filters=filters,
-                                          additional_tests=tests)
-    # noinspection PyProtectedMember
-    generator._env.add_extension(pydsdlgen.jinja.jinja2.ext.do)
+    root_ns = nunavut.build_namespace_tree(types=composite_types,
+                                           root_namespace_dir=root_namespace_directory,
+                                           output_dir=str(package_parent_directory),
+                                           extension='.py',
+                                           namespace_output_stem='__init__')
+    generator = nunavut.jinja.Generator(namespace=root_ns,
+                                        generate_namespace_types=True,
+                                        templates_dir=_TEMPLATE_DIRECTORY,
+                                        followlinks=True,
+                                        additional_filters=filters,
+                                        additional_tests=tests)
     generator.generate_all()
 
     return GeneratedPackageInfo(path=pathlib.Path(package_parent_directory) / pathlib.Path(root_namespace_name),
