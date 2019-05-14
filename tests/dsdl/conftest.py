@@ -39,13 +39,15 @@ def generated_packages() -> typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedP
         pyuavcan.dsdl.generate_package_from_dsdl_namespace(
             DESTINATION_DIRECTORY,
             PUBLIC_REGULATED_DATA_TYPES / 'uavcan',
-            []),
+            []
+        ),
         pyuavcan.dsdl.generate_package_from_dsdl_namespace(
             DESTINATION_DIRECTORY,
             TEST_DATA_TYPES / 'test',
             [
                 PUBLIC_REGULATED_DATA_TYPES / 'uavcan'
-            ]),
+            ]
+        ),
     ]
 
     logging.getLogger('pydsdl').setLevel(logging.DEBUG)
