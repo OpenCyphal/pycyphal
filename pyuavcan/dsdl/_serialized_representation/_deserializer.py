@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import abc
 import sys
 import numpy
 import typing
@@ -17,7 +18,7 @@ _T = typing.TypeVar('_T')
 _PrimitiveType = typing.Union[typing.Type[numpy.integer], typing.Type[numpy.inexact]]
 
 
-class Deserializer:
+class Deserializer(abc.ABC):
     class FormatError(ValueError):
         """
         This exception class is used when an auto-generated deserialization routine is supplied with invalid input data;
@@ -26,9 +27,9 @@ class Deserializer:
         pass
 
     def __init__(self, source_bytes: numpy.ndarray):
-        if issubclass(Deserializer, type(self)):
-            raise TypeError('Deserializer cannot be instantiated directly; use the new() factory instead')
-
+        """
+        Do not call this directly. Use .new() to instantiate.
+        """
         if not isinstance(source_bytes, numpy.ndarray) or source_bytes.dtype != _Byte:
             raise ValueError(f'Unsupported buffer: {type(source_bytes)}')
 
@@ -40,7 +41,7 @@ class Deserializer:
 
     @staticmethod
     def new(source_bytes: numpy.ndarray) -> 'Deserializer':
-        return {
+        return {  # type: ignore
             'little': _LittleEndianDeserializer,
             'big':       _BigEndianDeserializer,
         }[sys.byteorder](source_bytes)
@@ -79,6 +80,7 @@ class Deserializer:
     # Fast methods optimized for aligned primitive fields.
     # The most specialized methods must be used whenever possible for best performance.
     #
+    @abc.abstractmethod
     def fetch_aligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) \
             -> numpy.ndarray:
         """
@@ -185,6 +187,7 @@ class Deserializer:
     # Least specialized methods: no assumptions about alignment are made.
     # These are the slowest and may be used only if none of the above (specialized) methods are suitable.
     #
+    @abc.abstractmethod
     def fetch_unaligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) \
             -> numpy.ndarray:
         """See the aligned counterpart."""
@@ -368,9 +371,6 @@ def _unittest_deserializer_aligned() -> None:
         '10100011 11010'                                                            # 13 bits
         '000'.split()))                                                             # auto trailing padding
     assert len(sample) == 45
-
-    with raises(TypeError):
-        Deserializer(numpy.array([1, 2, 3], dtype=_Byte))
 
     with raises(ValueError):
         Deserializer.new(numpy.array([1, 2, 3], dtype=numpy.int8))

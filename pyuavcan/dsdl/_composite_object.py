@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import abc
 import gzip
 import numpy
 import typing
@@ -17,7 +18,7 @@ from ._serialized_representation import Serializer, Deserializer
 _logger = logging.getLogger(__name__)
 
 
-class CompositeObject:
+class CompositeObject(abc.ABC):
     """
     Base class of an instance of a DSDL composite type.
     The entities follow the naming pattern "_.*_" to avoid collisions with DSDL attributes.
@@ -28,6 +29,7 @@ class CompositeObject:
     # Defined in generated classes.
     _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int
 
+    @abc.abstractmethod
     def _serialize_aligned_(self, _ser_: Serializer) -> None:
         """
         Auto-generated serialization method.
@@ -38,6 +40,7 @@ class CompositeObject:
         raise NotImplementedError
 
     @staticmethod
+    @abc.abstractmethod
     def _deserialize_aligned_(_des_: Deserializer) -> 'CompositeObject':
         """
         Auto-generated deserialization method. Consumes (some) data from the supplied Deserializer instance.

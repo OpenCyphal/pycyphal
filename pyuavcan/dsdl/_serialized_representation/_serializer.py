@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import abc
 import sys
 import numpy
 import typing
@@ -13,7 +14,7 @@ import struct
 _Byte = numpy.uint8
 
 
-class Serializer:
+class Serializer(abc.ABC):
     """
     All methods operating on scalars implicitly truncate the value if it exceeds the range,
     excepting signed integers, for which overflow handling is not implemented (DSDL does not permit truncation
@@ -22,9 +23,9 @@ class Serializer:
     """
 
     def __init__(self, buffer_size_in_bytes: int):
-        if issubclass(Serializer, type(self)):
-            raise TypeError('Serializer cannot be instantiated directly; use the new() factory instead')
-
+        """
+        Do not call this directly. Use .new() to instantiate.
+        """
         # We extend the requested buffer size by one because some of the non-byte-aligned write operations
         # require us to temporarily use one extra byte after the current byte.
         buffer_size_in_bytes = int(buffer_size_in_bytes) + 1
@@ -33,7 +34,7 @@ class Serializer:
 
     @staticmethod
     def new(buffer_size_in_bytes: int) -> 'Serializer':
-        return {
+        return {  # type: ignore
             'little': _LittleEndianSerializer,
             'big':       _BigEndianSerializer,
         }[sys.byteorder](buffer_size_in_bytes)
@@ -58,6 +59,7 @@ class Serializer:
     # Fast methods optimized for aligned primitive fields.
     # The most specialized methods must be used whenever possible for best performance.
     #
+    @abc.abstractmethod
     def add_aligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
         """
         Accepts an array of (u?int|float)(8|16|32|64) and encodes it into the destination.
@@ -144,6 +146,7 @@ class Serializer:
     # Least specialized methods: no assumptions about alignment are made.
     # These are the slowest and may be used only if none of the above (specialized) methods are suitable.
     #
+    @abc.abstractmethod
     def add_unaligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
         """See the aligned counterpart."""
         raise NotImplementedError
