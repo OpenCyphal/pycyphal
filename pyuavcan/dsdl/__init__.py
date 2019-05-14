@@ -8,4 +8,3 @@ from ._compiler import generate_package, GeneratedPackageInfo
 from ._composite_object import CompositeObject, get_model, serialize, try_deserialize
 from ._api_helpers import get_attribute, set_attribute, get_class
 from ._service_object import ServiceObject
-from ._serialized_representation import Serializer, Deserializer

@@ -59,6 +59,10 @@ class CompositeObject(abc.ABC):
         assert isinstance(out, object)
         return out
 
+    # These typing hints are provided here for use in the generated classes. They are obviously not part of the API.
+    _SerializerTypeVar_ = typing.TypeVar('_SerializerTypeVar_', bound=_serialized_representation.Serializer)
+    _DeserializerTypeVar_ = typing.TypeVar('_DeserializerTypeVar_', bound=_serialized_representation.Deserializer)
+
 
 _CompositeObjectTypeVar = typing.TypeVar('_CompositeObjectTypeVar', bound=CompositeObject)
 
