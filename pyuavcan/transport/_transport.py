@@ -41,8 +41,8 @@ class Statistics:
 
 
 class TransferIDPolicy(enum.Enum):
-    PROGRESSIVE = enum.auto()
-    OVERFLOWING = enum.auto()
+    PROGRESSIVE = enum.auto()   # Like UDP or IEEE 802.15.4
+    OVERFLOWING = enum.auto()   # Like CAN 2.0 or CAN FD
 
 
 class Transport(abc.ABC):

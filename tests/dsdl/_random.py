@@ -43,7 +43,7 @@ def _unittest_random(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPack
     performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
 
     for info in generated_packages:
-        for model in _util.expand_service_types(info.types):
+        for model in _util.expand_service_types(info.models):
             performance[model] = _test_type(model, _NUM_RANDOM_SAMPLES)
 
     _logger.info('Tested types ordered by serialization speed, %d random samples per type', _NUM_RANDOM_SAMPLES)
@@ -70,7 +70,7 @@ def _unittest_random(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPack
 
 def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTestStatistics:
     _logger.debug('Roundtrip serialization test of %s with %d random samples', model, num_random_samples)
-    cls = pyuavcan.dsdl.get_generated_class(model)
+    cls = pyuavcan.dsdl.get_class(model)
     samples: typing.List[typing.Tuple[float, float]] = [
         _serialize_deserialize(cls())
     ]

@@ -4,8 +4,8 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._compiler import generate_package_from_dsdl_namespace, GeneratedPackageInfo
-from ._composite_object import CompositeObject, CompositeObjectTypeVar, get_model, serialize, try_deserialize
-from ._api_helpers import get_attribute, set_attribute, get_generated_class
+from ._compiler import generate_package, GeneratedPackageInfo
+from ._composite_object import CompositeObject, get_model, serialize, try_deserialize
+from ._api_helpers import get_attribute, set_attribute, get_class
 from ._service_object import ServiceObject
 from ._serialized_representation import Serializer, Deserializer

@@ -10,14 +10,14 @@ import importlib
 from . import _composite_object, _service_object
 
 
-def get_generated_class(model: pydsdl.CompositeType) -> typing.Type[_composite_object.CompositeObject]:
+def get_class(model: pydsdl.CompositeType) -> typing.Type[_composite_object.CompositeObject]:
     """
     Returns the native class implementing the specified DSDL type represented by its PyDSDL model object.
     Assumes that the Python package containing the implementation is in the import lookup path set, otherwise
     raises ImportError. If the package is found but it does not contain the requested type, raises AttributeError.
     """
     if model.parent_service is not None:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
-        out = get_generated_class(model.parent_service)
+        out = get_class(model.parent_service)
         assert issubclass(out, _service_object.ServiceObject)
         out = getattr(out, model.short_name)
     else:

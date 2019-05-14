@@ -36,12 +36,12 @@ def generated_packages() -> typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedP
     DESTINATION_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
     yield [
-        pyuavcan.dsdl.generate_package_from_dsdl_namespace(
+        pyuavcan.dsdl.generate_package(
             DESTINATION_DIRECTORY,
             PUBLIC_REGULATED_DATA_TYPES / 'uavcan',
             []
         ),
-        pyuavcan.dsdl.generate_package_from_dsdl_namespace(
+        pyuavcan.dsdl.generate_package(
             DESTINATION_DIRECTORY,
             TEST_DATA_TYPES / 'test',
             [

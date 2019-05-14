@@ -26,7 +26,7 @@ def _unittest_textual(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPac
                 assert field_present, f'{f.name}: {s}'
 
     for info in generated_packages:
-        for model in _util.expand_service_types(info.types):
+        for model in _util.expand_service_types(info.models):
             for fn in [str, repr]:
                 assert callable(fn)
                 for _ in range(10):

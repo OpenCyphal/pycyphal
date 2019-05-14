@@ -76,7 +76,7 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
         return out
 
     elif isinstance(model, pydsdl.StructureType):
-        o = pyuavcan.dsdl.get_generated_class(model)()
+        o = pyuavcan.dsdl.get_class(model)()
         for f in model.fields_except_padding:
             v = make_random_object(f.data_type)
             pyuavcan.dsdl.set_attribute(o, f.name, v)
@@ -85,7 +85,7 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
     elif isinstance(model, pydsdl.UnionType):
         f = random.choice(model.fields)
         v = make_random_object(f.data_type)
-        o = pyuavcan.dsdl.get_generated_class(model)()
+        o = pyuavcan.dsdl.get_class(model)()
         pyuavcan.dsdl.set_attribute(o, f.name, v)
         return o
 

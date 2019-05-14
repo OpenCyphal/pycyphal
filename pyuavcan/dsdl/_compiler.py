@@ -27,15 +27,15 @@ _TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).parent / pathlib.Path
 
 @dataclasses.dataclass(frozen=True)
 class GeneratedPackageInfo:
-    path:  pathlib.Path
-    types: typing.List[pydsdl.CompositeType]
-    name:  str
+    path:   pathlib.Path
+    models: typing.List[pydsdl.CompositeType]
+    name:   str
 
 
-def generate_package_from_dsdl_namespace(package_parent_directory: _AnyPath,
-                                         root_namespace_directory: _AnyPath,
-                                         lookup_directories: typing.Iterable[_AnyPath],
-                                         allow_unregulated_fixed_port_id: bool = False) -> GeneratedPackageInfo:
+def generate_package(package_parent_directory: _AnyPath,
+                     root_namespace_directory: _AnyPath,
+                     lookup_directories: typing.Iterable[_AnyPath],
+                     allow_unregulated_fixed_port_id: bool = False) -> GeneratedPackageInfo:
     # Read the DSDL definitions
     composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
                                             lookup_directories=list(map(str, lookup_directories)),
@@ -48,7 +48,7 @@ def generate_package_from_dsdl_namespace(package_parent_directory: _AnyPath,
         'alignment_prefix':  _make_serialization_alignment_prefix,
         'pickle':            _pickle_object,
         'numpy_scalar_type': _numpy_scalar_type,
-        'longest_id_length': lambda c: max(map(len, map(lambda x: _make_identifier(x), c))),
+        'longest_id_length': lambda c: max(map(len, map(_make_identifier, c))),
         'imports':           _list_imports,
         'bit_length_set':    pydsdl.BitLengthSet,
         'full_reference':    (lambda t: f'{t.full_name}_{t.version.major}_{t.version.minor}'),
@@ -74,7 +74,7 @@ def generate_package_from_dsdl_namespace(package_parent_directory: _AnyPath,
     generator.generate_all()
 
     return GeneratedPackageInfo(path=pathlib.Path(package_parent_directory) / pathlib.Path(root_namespace_name),
-                                types=composite_types,
+                                models=composite_types,
                                 name=root_namespace_name)
 
 

@@ -60,7 +60,7 @@ class CompositeObject(abc.ABC):
         return out
 
 
-CompositeObjectTypeVar = typing.TypeVar('CompositeObjectTypeVar', bound=CompositeObject)
+_CompositeObjectTypeVar = typing.TypeVar('_CompositeObjectTypeVar', bound=CompositeObject)
 
 
 # noinspection PyProtectedMember
@@ -79,8 +79,8 @@ def serialize(obj: CompositeObject) -> numpy.ndarray:
 
 
 # noinspection PyProtectedMember
-def try_deserialize(cls: typing.Type[CompositeObjectTypeVar], source_bytes: numpy.ndarray) \
-        -> typing.Optional[CompositeObjectTypeVar]:
+def try_deserialize(cls: typing.Type[_CompositeObjectTypeVar], source_bytes: numpy.ndarray) \
+        -> typing.Optional[_CompositeObjectTypeVar]:
     """
     Constructs a Python object representing an instance of the supplied data type from its serialized representation.
     Returns None if the provided serialized representation is invalid.
