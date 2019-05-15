@@ -72,9 +72,10 @@ def serialize(obj: CompositeObject) -> typing.Iterator[numpy.ndarray]:
     """
     Constructs a serialized representation of the provided top-level object.
     The resulting serialized representation is padded to one byte in accordance with the Specification.
-    The constructed serialized representation is returned as a sequence of chunks which must be concatenated
-    in order to obtain the final representation. The objective of this model is to avoid copying data into a temporary
-    array when possible. Each yielded chunk is numpy.array(dtype=numpy.uint8) with the WRITEABLE flag set to False.
+    The constructed serialized representation is returned as a sequence of byte-aligned fragments which must be
+    concatenated in order to obtain the final representation. The objective of this model is to avoid copying data
+    into a temporary buffer when possible. Each yielded fragment is of type numpy.array(dtype=numpy.uint8).
+    It is guaranteed that at least one fragment is always returned (which may be empty).
     """
     if isinstance(obj, CompositeObject) and isinstance(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_, int):
         ser = _serialized_representation.Serializer.new(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)

@@ -4,4 +4,8 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._transport import Transport
+from ._transport import Transport, ProtocolParameters, Statistics
+
+from ._port import Timestamp, Priority, PayloadFragmentIterator
+from ._port import Port, MessagePort, ServicePort
+from ._port import Publisher, Subscriber, Client, Server
