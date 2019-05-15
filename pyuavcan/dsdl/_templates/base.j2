@@ -76,13 +76,15 @@ import {{ n }}
     {%- else -%}{%- assert False -%}
     {%- endif -%}
 
-    {%- if t.string_like -%}
-    {#- Python uses UTF-8 by default, just like DSDL. -#}
+    {%- if t.string_like -%}    {#- DSDL uses UTF-8, which is the default in Python. -#}
     {{ src }} = {{ src }}.encode() if isinstance({{ src }}, str) else {{ src }}
     {% endif -%}
+
     {%- if t.element_type is UnsignedIntegerType and t.element_type.bit_length <= 8 -%}
-    {#- We must convert bytes into bytearray because NumPy treats bytes as string, trying to parse it and failing. -#}
-    {{ src }} = bytearray({{ src }}) if isinstance({{ src }}, bytes) else {{ src }}
+    {#- Zero-copy initialization from buffer. Necessary when dealing with images, point clouds, etc. -#}
+    if isinstance({{ src }}, (bytes, bytearray)) and len({{ src }}) {{ cmp }} {{ t.capacity }}:
+        self._{{ f|id }} = _np_.frombuffer({{ src }}, {{ t.element_type|numpy_scalar_type }})  # Fast zero-copy init
+    el  {#- Concatenated with the "if" below -#}
     {% endif -%}
 
     if isinstance({{ src }}, _np_.ndarray)
