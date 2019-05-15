@@ -26,13 +26,20 @@ class Deserializer(abc.ABC):
         """
         pass
 
-    def __init__(self, source_bytes: numpy.ndarray):
+    def __init__(self, source_bytes: typing.Union[bytearray, numpy.ndarray]):
         """
         Do not call this directly. Use .new() to instantiate.
         """
-        if not isinstance(source_bytes, numpy.ndarray) or source_bytes.dtype != _Byte:
-            raise ValueError(f'Unsupported buffer: {type(source_bytes)}')
+        if not isinstance(source_bytes, numpy.ndarray):
+            source_bytes = numpy.frombuffer(source_bytes, dtype=_Byte)  # Zero-copy! The buffer is NOT copied here.
 
+        assert isinstance(source_bytes, numpy.ndarray)
+        if source_bytes.dtype != _Byte:
+            raise ValueError(f'Buffer dtype must be {_Byte}, not {source_bytes.dtype}')
+        if source_bytes.ndim != 1:
+            raise ValueError(f'The buffer must be a flat array of bytes; found {source_bytes.ndim} dimensions instead')
+
+        assert isinstance(source_bytes, numpy.ndarray) and source_bytes.dtype == _Byte and source_bytes.ndim == 1
         self._buf = source_bytes
         self._buf_bit_length = len(self._buf) * 8
         self._bit_offset = 0
@@ -40,7 +47,14 @@ class Deserializer(abc.ABC):
         assert self.consumed_bit_length + self.remaining_bit_length == self._buf_bit_length
 
     @staticmethod
-    def new(source_bytes: numpy.ndarray) -> 'Deserializer':
+    def new(source_bytes: typing.Union[bytearray, numpy.ndarray]) -> 'Deserializer':
+        """
+        :param source_bytes: The source serialized representation. The deserializer will attempt to avoid copying
+                             any data from the serialized representation, establishing direct references to its
+                             memory instead. This may not be possible to do if the original buffer is read-only,
+                             in which case data may be copied, leading to slower (possibly much slower) deserialization.
+        :return: A new instance of Deserializer, either little-endian or big-endian, depending on the platform.
+        """
         return {  # type: ignore
             'little': _LittleEndianDeserializer,
             'big':       _BigEndianDeserializer,
@@ -444,7 +458,7 @@ def _unittest_deserializer_aligned() -> None:
 def _unittest_deserializer_unaligned() -> None:
     from pytest import raises, approx
 
-    des = Deserializer.new(numpy.array([0b10101010, 0b01011101, 0b11001100, 0b10010001], dtype=_Byte))
+    des = Deserializer.new(bytearray([0b10101010, 0b01011101, 0b11001100, 0b10010001]))
     assert des.consumed_bit_length == 0
     assert des.consumed_bit_length % 8 == 0
     assert list(des.fetch_aligned_array_of_bits(3)) == [True, False, True]
@@ -460,7 +474,7 @@ def _unittest_deserializer_unaligned() -> None:
         des.fetch_unaligned_bytes(2)
     assert des.consumed_bit_length == 27
 
-    des = Deserializer.new(numpy.array([0b10101010, 0b01011101, 0b11001100, 0b10010001], dtype=_Byte))
+    des = Deserializer.new(bytearray([0b10101010, 0b01011101, 0b11001100, 0b10010001]))
     assert list(des.fetch_unaligned_bytes(0)) == []
     assert list(des.fetch_unaligned_bytes(2)) == [0b10101010, 0b01011101]  # Actually aligned
     assert list(des.fetch_unaligned_bytes(1)) == [0b11001100]
@@ -469,7 +483,7 @@ def _unittest_deserializer_unaligned() -> None:
         des.fetch_unaligned_bytes(2)
 
     # The buffer is constructed from the corresponding serialization test.
-    sample = bytes(map(
+    sample = bytearray(map(
         lambda x: int(x, 2),
         '10100011 111'                          # 11 bits
         '10100 11101'                           # 10 bits
@@ -488,7 +502,7 @@ def _unittest_deserializer_unaligned() -> None:
         ''.split()))
     assert len(sample) == 31
 
-    des = Deserializer.new(numpy.frombuffer(sample, dtype=_Byte))       # Operating on the read-only buffer
+    des = Deserializer.new(sample)
     assert des.remaining_bit_length == 31 * 8
     des.require_remaining_bit_length(31 * 8)
 

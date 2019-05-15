@@ -1,0 +1,12 @@
+uint16 PIXELS_PER_ROW = 3840
+uint16 ROWS_PER_IMAGE = 2748
+uint32 PIXELS_PER_IMAGE = PIXELS_PER_ROW * ROWS_PER_IMAGE * 3
+
+uavcan.time.SynchronizedTimestamp.1.0 timestamp     # Image capture time
+void8
+
+@assert _offset_ == {64}
+uint8[PIXELS_PER_IMAGE] pixels                      # Row major, top-left pixel first, ordering RGB
+
+@assert _offset_.count == 1                         # Fixed size message
+@print _offset_.max / 1024 / 1024                   # Print size in mebibytes
