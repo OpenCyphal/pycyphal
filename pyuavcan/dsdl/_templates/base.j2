@@ -26,7 +26,11 @@ import warnings as _warnings_
 {%- endif -%}
 {%- for n in T|imports %}
 import {{ n }}
-{%- endfor %}
+{%- endfor -%}
+
+{#- How many elements in the array trigger summarization rather than full output.
+ #- Summarization replaces middle elements with an ellipsis. -#}
+{%- set ARRAY_PRINT_SUMMARIZATION_THRESHOLD = 1024 -%}
 
 {%- from 'serialization.j2' import serialize -%}
 {%- from 'deserialization.j2' import deserialize -%}
@@ -111,11 +115,16 @@ import {{ n }}
 -#}
 {%- macro printable_field_representation(f) -%}
     {%- if f.data_type is ArrayType -%}
-        {%- if f.data_type.string_like -%}                   repr(bytes(_x_ for _x_ in self.{{ f|id }}))
-        {%- elif f.data_type.element_type is BooleanType -%} list(map(int, self.{{ f|id }}))
-        {%- else -%}                                         list(self.{{ f|id }})
+        {%- if f.data_type.string_like and f.data_type.capacity <= ARRAY_PRINT_SUMMARIZATION_THRESHOLD -%}
+            repr(bytes(self.{{ f|id }}))[1:]
+        {%- else -%}
+            _np_.array2string(self.{{ f|id }}, separator=',', {#  -#}
+                              edgeitems={{ ARRAY_PRINT_SUMMARIZATION_THRESHOLD // 2 }}, {#  -#}
+                              threshold={{ ARRAY_PRINT_SUMMARIZATION_THRESHOLD }}, {#  -#}
+                              max_line_width={{ ARRAY_PRINT_SUMMARIZATION_THRESHOLD * 10000 }})
         {%- endif -%}
-    {%- else -%}                                             self.{{ f|id }}
+    {%- else -%}
+        self.{{ f|id }}
     {%- endif -%}
 {%- endmacro -%}
 

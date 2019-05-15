@@ -121,8 +121,12 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
         return True                 # Empty objects of same type compare equal
 
     elif isinstance(model, pydsdl.ArrayType):
-        return all(itertools.starmap(functools.partial(are_close, model.element_type), zip(a, b))) \
-            if len(a) == len(b) and a.dtype == b.dtype else False
+        if len(a) != len(b) or a.dtype != b.dtype:
+            return False
+        if isinstance(model.element_type, pydsdl.PrimitiveType):
+            return numpy.allclose(a, b, equal_nan=True)  # Drastic speedup for large arrays like images or point clouds
+        else:
+            return all(itertools.starmap(functools.partial(are_close, model.element_type), zip(a, b)))
 
     elif isinstance(model, pydsdl.FloatType):
         t = {
