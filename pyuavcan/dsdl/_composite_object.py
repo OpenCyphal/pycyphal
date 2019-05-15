@@ -68,16 +68,18 @@ _CompositeObjectTypeVar = typing.TypeVar('_CompositeObjectTypeVar', bound=Compos
 
 
 # noinspection PyProtectedMember
-def serialize(obj: CompositeObject) -> numpy.ndarray:
+def serialize(obj: CompositeObject) -> typing.Iterator[numpy.ndarray]:
     """
     Constructs a serialized representation of the provided top-level object.
-    The returned serialized representation is padded to one byte in accordance with the Specification.
-    The type of the returned array is numpy.array(dtype=numpy.uint8) with the WRITEABLE flag set to False.
+    The resulting serialized representation is padded to one byte in accordance with the Specification.
+    The constructed serialized representation is returned as a sequence of chunks which must be concatenated
+    in order to obtain the final representation. The objective of this model is to avoid copying data into a temporary
+    array when possible. Each yielded chunk is numpy.array(dtype=numpy.uint8) with the WRITEABLE flag set to False.
     """
     if isinstance(obj, CompositeObject) and isinstance(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_, int):
         ser = _serialized_representation.Serializer.new(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
         obj._serialize_aligned_(ser)
-        return ser.buffer
+        yield ser.buffer        # TODO: as you can see, we don't really take advantage of the fragmentation logic yet.
     else:
         raise TypeError(f'Cannot serialize an instance of {type(obj).__name__}')
 

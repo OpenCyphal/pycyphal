@@ -107,7 +107,8 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
 
 def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[float, float]:
     ts = time.process_time()
-    sr = pyuavcan.dsdl.serialize(obj)
+    chunks = list(pyuavcan.dsdl.serialize(obj))
+    sr = numpy.concatenate(chunks) if len(chunks) > 1 else chunks[0]
     ser_sample = time.process_time() - ts
 
     ts = time.process_time()
