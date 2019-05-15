@@ -118,8 +118,7 @@ import {{ n }}
         {%- if f.data_type.string_like and f.data_type.capacity <= ARRAY_PRINT_SUMMARIZATION_THRESHOLD -%}
             repr(bytes(self.{{ f|id }}))[1:]
         {%- else -%}
-            _np_.array2string(self.{{ f|id }}, separator=',', {#  -#}
-                              edgeitems={{ ARRAY_PRINT_SUMMARIZATION_THRESHOLD // 2 }}, {#  -#}
+            _np_.array2string(self.{{ f|id }}, separator=',', edgeitems=10, {#  -#}
                               threshold={{ ARRAY_PRINT_SUMMARIZATION_THRESHOLD }}, {#  -#}
                               max_line_width={{ ARRAY_PRINT_SUMMARIZATION_THRESHOLD * 10000 }})
         {%- endif -%}

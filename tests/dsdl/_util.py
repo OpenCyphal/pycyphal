@@ -61,7 +61,7 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
             out = numpy.random.randint(0, 256, size=model.capacity, dtype=numpy.uint8)
         else:
             out = [make_random_object(model.element_type) for _ in range(model.capacity)]
-        if model.capacity < 1024:
+        if model.capacity < 10000:
             if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length <= 8 and fifty_fifty():
                 out = bytes(out)
         return out
@@ -73,7 +73,7 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
             out = numpy.random.randint(0, 256, size=length, dtype=numpy.uint8)
         else:
             out = [make_random_object(model.element_type) for _ in range(length)]
-        if length < 1024:
+        if length < 10000:
             if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length <= 8 and fifty_fifty():
                 out = bytes(out)
             if model.string_like and fifty_fifty():

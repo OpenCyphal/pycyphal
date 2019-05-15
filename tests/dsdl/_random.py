@@ -17,7 +17,7 @@ from . import _util
 
 
 # Fail the test if any type takes longer than this to serialize or deserialize.
-_MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 5e-3
+_MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 10e-3
 
 _NUM_RANDOM_SAMPLES = int(os.environ.get('PYUAVCAN_TEST_NUM_RANDOM_SAMPLES', 300))
 assert _NUM_RANDOM_SAMPLES >= 20, 'Invalid configuration: low number of random samples may trigger a false-negative.'
@@ -79,7 +79,8 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
     def once(obj: pyuavcan.dsdl.CompositeObject) -> None:
         samples.append(_serialize_deserialize(obj))
 
-    for _ in range(num_random_samples):
+    for index in range(num_random_samples):
+        ts = time.process_time()
         # Forward test: get random object, serialize, deserialize, compare
         once(_util.make_random_object(model))
 
@@ -89,6 +90,11 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
         rand_sr_validness.append(ob is not None)
         if ob:
             once(ob)
+
+        elapsed = time.process_time() - ts
+        if elapsed > 1.0:
+            _logger.info(f'Random sample {index + 1} of {num_random_samples} took {elapsed:#.1f} s; '
+                         f'random SR correct: {ob is not None}')
 
     out = numpy.mean(samples, axis=0)
     assert out.shape == (2,)
