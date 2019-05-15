@@ -93,8 +93,8 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
 
         elapsed = time.process_time() - ts
         if elapsed > 1.0:
-            _logger.info(f'Random sample {index + 1} of {num_random_samples} took {elapsed:#.1f} s; '
-                         f'random SR correct: {ob is not None}')
+            _logger.debug(f'Attention: random sample {index + 1} of {num_random_samples} took {elapsed:.1f} s; '
+                          f'random SR correct: {ob is not None}')
 
     out = numpy.mean(samples, axis=0)
     assert out.shape == (2,)

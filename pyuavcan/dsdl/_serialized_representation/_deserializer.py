@@ -51,14 +51,11 @@ class Deserializer(abc.ABC):
         """
         :param source_bytes: The source serialized representation. The deserializer will attempt to avoid copying
                              any data from the serialized representation, establishing direct references to its
-                             memory instead. This may not be possible to do if the original buffer is read-only,
-                             in which case data may be copied, leading to slower (possibly much slower) deserialization.
+                             memory instead. If the source buffer is read-only, some of the deserialized array-typed
+                             values may end up being read-only as well. If that is undesirable, use writeable buffer.
         :return: A new instance of Deserializer, either little-endian or big-endian, depending on the platform.
         """
-        return {  # type: ignore
-            'little': _LittleEndianDeserializer,
-            'big':       _BigEndianDeserializer,
-        }[sys.byteorder](source_bytes)
+        return _PlatformSpecificDeserializer(source_bytes)  # type: ignore
 
     @property
     def consumed_bit_length(self) -> int:
@@ -98,8 +95,8 @@ class Deserializer(abc.ABC):
     def fetch_aligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) \
             -> numpy.ndarray:
         """
-        Returns a new array which may directly refer to the underlying memory if the buffer containing the source
-        serialized representation is writeable; otherwise, new memory will be allocated.
+        Returns a new array which may directly refer to the underlying memory.
+        The returned array may be read-only if the source buffer is read-only.
         """
         raise NotImplementedError
 
@@ -332,23 +329,14 @@ class _LittleEndianDeserializer(Deserializer):
         out: numpy.ndarray = numpy.frombuffer(self._buf, dtype=dtype, count=count, offset=self._byte_offset)
         assert len(out) == count                # numpy should throw if there is not enough bytes in the source buffer
         self._bit_offset += out.nbytes * 8
-        return self._ensure_writeable(out)
+        return out
 
     def fetch_unaligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) \
             -> numpy.ndarray:
         assert dtype not in (numpy.bool, numpy.bool_, numpy.object), 'Invalid usage'
         bs = self.fetch_unaligned_bytes(numpy.dtype(dtype).itemsize * count)
         assert len(bs) >= count
-        out: numpy.ndarray = numpy.frombuffer(bs, dtype=dtype, count=count)
-        return self._ensure_writeable(out)
-
-    @staticmethod
-    def _ensure_writeable(array: numpy.ndarray) -> numpy.ndarray:
-        # The returned array must be writeable, which is possible only if the underlying buffer is writeable.
-        # If not, we will have to clone the output array. Perhaps we should escalate this to error?
-        array = array if array.flags.writeable else array.copy()
-        assert array.flags.writeable
-        return array
+        return numpy.frombuffer(bs, dtype=dtype, count=count)
 
 
 class _BigEndianDeserializer(Deserializer):
@@ -359,6 +347,12 @@ class _BigEndianDeserializer(Deserializer):
     def fetch_unaligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) \
             -> numpy.ndarray:
         raise NotImplementedError('Pull requests are welcome')
+
+
+_PlatformSpecificDeserializer = {
+    'little': _LittleEndianDeserializer,
+    'big':       _BigEndianDeserializer,
+}[sys.byteorder]
 
 
 def _unittest_deserializer_aligned() -> None:

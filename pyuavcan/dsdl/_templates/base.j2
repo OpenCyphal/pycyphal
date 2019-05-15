@@ -81,13 +81,14 @@ import {{ n }}
     {%- endif -%}
 
     {%- if t.string_like -%}    {#- DSDL uses UTF-8, which is the default in Python. -#}
-    {{ src }} = {{ src }}.encode() if isinstance({{ src }}, str) else {{ src }}
+    {{ src }} = {{ src }}.encode() if isinstance({{ src }}, str) else {{ src }}  # Implicit string encoding
     {% endif -%}
 
     {%- if t.element_type is UnsignedIntegerType and t.element_type.bit_length <= 8 -%}
-    {#- Zero-copy initialization from buffer. Necessary when dealing with images, point clouds, etc. -#}
     if isinstance({{ src }}, (bytes, bytearray)) and len({{ src }}) {{ cmp }} {{ t.capacity }}:
-        self._{{ f|id }} = _np_.frombuffer({{ src }}, {{ t.element_type|numpy_scalar_type }})  # Fast zero-copy init
+        # Fast zero-copy initialization from buffer. Necessary when dealing with images, point clouds, etc.
+        # Mutability will be inherited; e.g., bytes - immutable, bytearray - mutable.
+        self._{{ f|id }} = _np_.frombuffer({{ src }}, {{ t.element_type|numpy_scalar_type }})
     el  {#- Concatenated with the "if" below -#}
     {% endif -%}
 
@@ -95,8 +96,10 @@ import {{ n }}
     {#- #} and {{ src }}.dtype == {{ t.element_type|numpy_scalar_type }}
     {#- #} and {{ src }}.ndim == 1
     {#- #} and {{ src }}.size {{ cmp }} {{ t.capacity }}:
-        self._{{ f|id }} = {{ src }}  # Fast binding if type/dimension match
+        # Fast binding if the source array has the same type and dimensionality. Beware of the shared reference.
+        self._{{ f|id }} = {{ src }}
     else:
+        # Last resort, slow construction of a new array. New memory may be allocated.
         {{ src }} = _np_.array({{ src }}, {{ t.element_type|numpy_scalar_type }}).flatten()
         if not {{ src }}.size {{ cmp }} {{ t.capacity }}:  # Length cannot be checked before casting and flattening
             raise ValueError(f'{{ f.name }}: invalid array length: not { {{- src }}.size} {{ cmp }} {{ t.capacity }}')

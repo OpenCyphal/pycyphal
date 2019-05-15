@@ -34,10 +34,7 @@ class Serializer(abc.ABC):
 
     @staticmethod
     def new(buffer_size_in_bytes: int) -> 'Serializer':
-        return {  # type: ignore
-            'little': _LittleEndianSerializer,
-            'big':       _BigEndianSerializer,
-        }[sys.byteorder](buffer_size_in_bytes)
+        return _PlatformSpecificSerializer(buffer_size_in_bytes)  # type: ignore
 
     @property
     def current_bit_length(self) -> int:
@@ -267,6 +264,12 @@ class _BigEndianSerializer(Serializer):
 
     def add_unaligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
         raise NotImplementedError('Pull requests are welcome')
+
+
+_PlatformSpecificSerializer = {
+    'little': _LittleEndianSerializer,
+    'big':       _BigEndianSerializer,
+}[sys.byteorder]
 
 
 def _byte_as_bit_string(x: int) -> str:

@@ -95,9 +95,9 @@ def try_deserialize(cls: typing.Type[_CompositeObjectTypeVar],
                     REPRESENTATION. THEREFORE, IN ORDER TO AVOID UNINTENDED DATA CORRUPTION, THE CALLER MUST DESTROY
                     ALL REFERENCES TO THE SERIALIZED REPRESENTATION IMMEDIATELY AFTER THE INVOCATION.
 
-    PERFORMANCE WARNING: The supplied array containing the serialized representation should be writeable. If it is not,
-                         the deserialization routine will be unable to implement zero-copy array deserialization.
-                         This is why we support bytearray but not bytes.
+    USAGE WARNING: The supplied array containing the serialized representation should be writeable. If it is not,
+                   some of the array-typed fields of the constructed object may be read-only. This is why we accept
+                   bytearray but not bytes.
 
     >> import pyuavcan.dsdl
     >> import uavcan.primitive.array
