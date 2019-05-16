@@ -8,7 +8,7 @@
 {%- block contents -%}
 
 # noinspection PyPep8Naming, SpellCheckingInspection
-class {{ T|short_reference }}(_dsdl_.ServiceObject):
+class {{ T|short_reference }}(_dsdl_.{%- if T.has_fixed_port_id -%}FixedPort{%- endif -%}ServiceObject):
     {{ data_schema('Request',  T.request_type, T|short_reference)|indent }}
 
     {{ data_schema('Response', T.response_type, T|short_reference)|indent }}
@@ -17,7 +17,9 @@ class {{ T|short_reference }}(_dsdl_.ServiceObject):
         return '{{ T }}()'
 
     __repr__ = __str__
-
+    {% if T.has_fixed_port_id %}
+    _FIXED_PORT_ID_ = {{ T.fixed_port_id|int }}
+    {%- endif %}
     _MODEL_: _pydsdl_.ServiceType = _dsdl_.CompositeObject._restore_constant_(
         {{ T | pickle | indent(8) }}
     )

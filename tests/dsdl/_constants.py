@@ -22,3 +22,6 @@ def _unittest_constants(generated_packages: typing.List[pyuavcan.dsdl.GeneratedP
                     assert isinstance(reference, pydsdl.Primitive)
                     assert reference.native_value == pytest.approx(generated), \
                         'The generated constant does not compare equal against the DSDL source'
+            if issubclass(cls, pyuavcan.dsdl.FixedPortObject):
+                assert issubclass(cls, pyuavcan.dsdl.CompositeObject) and issubclass(cls, pyuavcan.dsdl.FixedPortObject)
+                assert pyuavcan.dsdl.get_fixed_port_id(cls) == pyuavcan.dsdl.get_model(cls).fixed_port_id

@@ -139,7 +139,7 @@ import {{ n }}
 {%- do reset_unique_ref() -%}
 {%- set full_class_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
 # noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection
-class {{ name }}(_dsdl_.CompositeObject):
+class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}CompositeObject):
 {#-
  # CONSTANTS
 -#}
@@ -390,14 +390,17 @@ class {{ name }}(_dsdl_.CompositeObject):
 {#
  # PYDSDL TYPE DESCRIPTOR
  #}
+    {%- if T.has_fixed_port_id %}
+    _FIXED_PORT_ID_ = {{ T.fixed_port_id|int }}
+    {%- endif %}
+    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_ = {{ ((type.bit_length_set|max|int) + 7) // 8 }}  {# -#}
+                                                 # {{ type.bit_length_set|max }} bits
+
     {% set meta_type = 'UnionType' if type is UnionType else 'StructureType' -%}
     _MODEL_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
         {{ type | pickle | indent(8) }}
     )
     assert isinstance(_MODEL_, _pydsdl_.{{ meta_type }})
-
-    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_: int = {{ ((type.bit_length_set|max) + 7) // 8 }}  {# -#}
-                                                      # {{ type.bit_length_set|max }} bits
 {%- endmacro -%}
 
 {#-

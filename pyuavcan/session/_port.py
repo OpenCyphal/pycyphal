@@ -27,11 +27,6 @@ class MessagePort(Port[DataTypeClass]):
     def subject_id(self) -> int:
         raise NotImplementedError
 
-    @property
-    @abc.abstractmethod
-    def priority(self) -> pyuavcan.transport.Priority:
-        raise NotImplementedError
-
 
 class Publisher(MessagePort[DataTypeClass]):
     def __init__(self,

@@ -8,6 +8,10 @@ from __future__ import annotations
 import typing
 import pyuavcan.transport
 import pyuavcan.dsdl
+from . import _port
+
+
+DataTypeClass = typing.TypeVar('DataTypeClass', bound=pyuavcan.dsdl.CompositeObject)
 
 
 class Session:
@@ -38,25 +42,25 @@ class Session:
         raise NotImplementedError
 
     async def new_publisher(self,
-                            cls:        pyuavcan.dsdl.CompositeObjectTypeVar,
+                            cls:        DataTypeClass,
                             subject_id: typing.Optional[int] = None,
-                            priority:   pyuavcan.transport.Priority = pyuavcan.transport.Priority.NOMINAL,
-                            loopback:   bool = False) -> None:
+                            priority:   pyuavcan.transport.Priority = pyuavcan.transport.Priority.SLOW,
+                            loopback:   bool = False) -> _port.Publisher[DataTypeClass]:
         raise NotImplementedError
 
     async def new_subscriber(self,
-                             cls:        pyuavcan.dsdl.CompositeObjectTypeVar,
+                             cls:        DataTypeClass,
                              subject_id: typing.Optional[int] = None) -> None:
         raise NotImplementedError
 
     async def new_client(self,
-                         cls:            pyuavcan.dsdl.ServiceObjectTypeVar,
+                         cls:            DataTypeClass,
                          server_node_id: int,
                          service_id:     typing.Optional[int] = None,
-                         priority:       pyuavcan.transport.Priority = pyuavcan.transport.Priority.NOMINAL) -> None:
+                         priority:       pyuavcan.transport.Priority = pyuavcan.transport.Priority.SLOW) -> None:
         raise NotImplementedError
 
     async def get_server(self,
-                         cls:        pyuavcan.dsdl.ServiceObjectTypeVar,
+                         cls:        DataTypeClass,
                          service_id: typing.Optional[int] = None) -> None:
         raise NotImplementedError
