@@ -36,14 +36,50 @@ class Timestamp:
     monotonic: float    # Belongs to the domain of time.monotonic()
 
 
-class Port(abc.ABC):
-    @dataclasses.dataclass(frozen=True)
-    class DataSpecifierBase:
-        compact_data_type_id: int
+@dataclasses.dataclass(frozen=True)
+class DataSpecifier:
+    compact_data_type_id:   int
+    max_payload_size_bytes: int
 
+
+@dataclasses.dataclass(frozen=True)
+class MessageDataSpecifier(DataSpecifier):
+    subject_id: int
+
+
+@dataclasses.dataclass(frozen=True)
+class ServiceDataSpecifier(DataSpecifier):
+    class Role(enum.Enum):
+        CLIENT = enum.auto()
+        SERVER = enum.auto()
+
+    service_id: int
+    role:       Role
+
+
+@dataclasses.dataclass
+class Transfer:
+    transfer_id:        int
+    fragmented_payload: FragmentedPayload
+    loopback:           bool
+
+
+@dataclasses.dataclass
+class ReceivedTransfer(Transfer):
+    timestamp:      Timestamp
+    source_node_id: typing.Optional[int]        # Not set for anonymous transfers
+
+
+@dataclasses.dataclass
+class OutgoingTransfer(Transfer):
+    priority:            Priority
+    destination_node_id: typing.Optional[int]   # Not set for broadcast transfers
+
+
+class Port(abc.ABC):        # TODO: statistics
     @property
     @abc.abstractmethod
-    def data_specifier(self) -> DataSpecifierBase:
+    def data_specifier(self) -> DataSpecifier:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -51,111 +87,35 @@ class Port(abc.ABC):
         raise NotImplementedError
 
 
-class MessagePort(Port):
-    @dataclasses.dataclass(frozen=True)
-    class DataSpecifier(Port.DataSpecifierBase):
-        subject_id:             int
-        max_payload_size_bytes: int
-
+class InputPort(Port):
     @property
     @abc.abstractmethod
     def data_specifier(self) -> DataSpecifier:
         raise NotImplementedError
 
+    @abc.abstractmethod
+    async def close(self) -> None:
+        raise NotImplementedError
 
-class ServicePort(Port):
-    @dataclasses.dataclass(frozen=True)
-    class DataSpecifier(Port.DataSpecifierBase):
-        MaxPayloadSize = typing.NamedTuple('MaxPayloadSize', [('request', int), ('response', int)])
-        service_id:             int
-        max_payload_size_bytes: MaxPayloadSize
+    @abc.abstractmethod
+    async def receive(self) -> ReceivedTransfer:
+        raise NotImplementedError
 
+    @abc.abstractmethod
+    async def try_receive(self, timeout: float) -> typing.Optional[ReceivedTransfer]:
+        raise NotImplementedError
+
+
+class OutputPort(Port):
     @property
     @abc.abstractmethod
     def data_specifier(self) -> DataSpecifier:
         raise NotImplementedError
 
-
-class Publisher(MessagePort):
-    @dataclasses.dataclass
-    class Transfer:
-        priority:           Priority
-        transfer_id:        int
-        fragmented_payload: FragmentedPayload
-        loopback:           bool = False
-
     @abc.abstractmethod
-    async def publish(self, transfer: Transfer) -> None:
-        raise NotImplementedError
-
-
-class Subscriber(MessagePort):
-    @dataclasses.dataclass
-    class Transfer:
-        timestamp:          Timestamp
-        transfer_id:        int
-        publisher_node_id:  int
-        fragmented_payload: FragmentedPayload
-        loopback:           bool
-
-    @abc.abstractmethod
-    async def receive(self) -> Transfer:
+    async def close(self) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def try_receive(self, timeout: float) -> typing.Optional[Transfer]:
-        raise NotImplementedError
-
-
-class Client(ServicePort):
-    @dataclasses.dataclass
-    class Request:
-        priority:           Priority
-        transfer_id:        int
-        fragmented_payload: FragmentedPayload
-
-    @dataclasses.dataclass
-    class Response:
-        timestamp:          Timestamp
-        fragmented_payload: FragmentedPayload
-
-    @abc.abstractmethod
-    async def try_request(self, request: Request, response_timeout: float) -> typing.Optional[Response]:
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def server_node_id(self) -> int:
-        raise NotImplementedError
-
-
-class Server(ServicePort):
-    @dataclasses.dataclass(frozen=True)
-    class TransactionMetadata:
-        priority:           Priority
-        transfer_id:        int
-        client_node_id:     int
-        fragmented_payload: FragmentedPayload
-
-    @dataclasses.dataclass
-    class Request:
-        timestamp:            Timestamp
-        transaction_metadata: Server.TransactionMetadata
-        fragmented_payload:   FragmentedPayload
-
-    @dataclasses.dataclass
-    class Response:
-        transaction_metadata: Server.TransactionMetadata
-        fragmented_payload:   FragmentedPayload
-
-    @abc.abstractmethod
-    async def listen(self) -> Request:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def try_listen(self, timeout: float) -> typing.Optional[Request]:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def respond(self, response: Response) -> None:
+    async def send(self, transfer: OutgoingTransfer) -> None:
         raise NotImplementedError
