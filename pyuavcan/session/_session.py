@@ -11,7 +11,14 @@ import pyuavcan.dsdl
 from . import _port
 
 
-DataTypeClass = typing.TypeVar('DataTypeClass', bound=pyuavcan.dsdl.CompositeObject)
+MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
+ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)
+
+FixedPortMessageClass = typing.TypeVar('FixedPortMessageClass', bound=pyuavcan.dsdl.FixedPortCompositeObject)
+FixedPortServiceClass = typing.TypeVar('FixedPortServiceClass', bound=pyuavcan.dsdl.FixedPortServiceObject)
+
+
+DEFAULT_PRIORITY = pyuavcan.transport.Priority.SLOW
 
 
 class Session:
@@ -42,25 +49,45 @@ class Session:
         raise NotImplementedError
 
     async def new_publisher(self,
-                            cls:        DataTypeClass,
-                            subject_id: typing.Optional[int] = None,
-                            priority:   pyuavcan.transport.Priority = pyuavcan.transport.Priority.SLOW,
-                            loopback:   bool = False) -> _port.Publisher[DataTypeClass]:
+                            cls:        typing.Type[MessageClass],
+                            subject_id: int,
+                            priority:   pyuavcan.transport.Priority = DEFAULT_PRIORITY,
+                            loopback:   bool = False) -> _port.Publisher[MessageClass]:
         raise NotImplementedError
 
-    async def new_subscriber(self,
-                             cls:        DataTypeClass,
-                             subject_id: typing.Optional[int] = None) -> None:
+    async def new_publisher_with_fixed_subject_id(self,
+                                                  cls:      typing.Type[FixedPortMessageClass],
+                                                  priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY,
+                                                  loopback: bool = False) -> _port.Publisher[FixedPortMessageClass]:
+        return await self.new_publisher(cls=cls,
+                                        subject_id=pyuavcan.dsdl.get_fixed_port_id(cls),
+                                        priority=priority,
+                                        loopback=loopback)
+
+    async def new_subscriber(self, cls: typing.Type[MessageClass], subject_id: int) -> None:
         raise NotImplementedError
+
+    async def new_subscriber_with_fixed_subject_id(self, cls: typing.Type[FixedPortMessageClass]) -> None:
+        return await self.new_subscriber(cls=cls, subject_id=pyuavcan.dsdl.get_fixed_port_id(cls))
 
     async def new_client(self,
-                         cls:            DataTypeClass,
+                         cls:            typing.Type[ServiceClass],
+                         service_id:     int,
                          server_node_id: int,
-                         service_id:     typing.Optional[int] = None,
-                         priority:       pyuavcan.transport.Priority = pyuavcan.transport.Priority.SLOW) -> None:
+                         priority:       pyuavcan.transport.Priority = DEFAULT_PRIORITY) -> None:
         raise NotImplementedError
 
-    async def get_server(self,
-                         cls:        DataTypeClass,
-                         service_id: typing.Optional[int] = None) -> None:
+    async def new_client_with_fixed_service_id(self,
+                                               cls:            typing.Type[FixedPortServiceClass],
+                                               server_node_id: int,
+                                               priority:       pyuavcan.transport.Priority = DEFAULT_PRIORITY) -> None:
+        return await self.new_client(cls=cls,
+                                     service_id=pyuavcan.dsdl.get_fixed_port_id(cls),
+                                     server_node_id=server_node_id,
+                                     priority=priority)
+
+    async def get_server(self, cls: typing.Type[ServiceClass], service_id: int) -> None:
         raise NotImplementedError
+
+    async def get_server_with_fixed_service_id(self, cls: typing.Type[FixedPortServiceClass]) -> None:
+        return await self.get_server(cls=cls, service_id=pyuavcan.dsdl.get_fixed_port_id(cls))
