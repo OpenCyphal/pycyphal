@@ -49,10 +49,7 @@ class Publisher(MessagePort[DataTypeClass]):
 
     @priority.setter
     def priority(self, value: pyuavcan.transport.Priority) -> None:
-        if isinstance(value, pyuavcan.transport.Priority):
-            self._priority = value
-        else:
-            raise ValueError(f'Not a valid priority type: {type(value)}')
+        self._priority = pyuavcan.transport.Priority(value)
 
     @property
     def loopback(self) -> bool:
