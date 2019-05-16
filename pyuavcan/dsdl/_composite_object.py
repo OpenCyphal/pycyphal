@@ -28,7 +28,7 @@ class CompositeObject(abc.ABC):
     _MODEL_: pydsdl.CompositeType
 
     # Defined in generated classes.
-    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int
+    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_: int
 
     @abc.abstractmethod
     def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
@@ -78,7 +78,7 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     It is guaranteed that at least one fragment is always returned (which may be empty).
     """
     # TODO: update the Serializer class to emit an iterable of fragments.
-    ser = _serialized_representation.Serializer.new(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
+    ser = _serialized_representation.Serializer.new(obj._MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_)
     obj._serialize_aligned_(ser)
     yield ser.buffer.data
 
@@ -120,3 +120,9 @@ def get_model(class_or_instance: typing.Union[typing.Type[CompositeObject], Comp
     out = class_or_instance._MODEL_
     assert isinstance(out, pydsdl.CompositeType)
     return out
+
+
+def get_max_serialized_representation_size_bytes(class_or_instance: typing.Union[typing.Type[CompositeObject],
+                                                                                 CompositeObject]) -> int:
+    # noinspection PyProtectedMember
+    return int(class_or_instance._MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_)

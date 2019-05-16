@@ -16,7 +16,7 @@ class ServiceObject(_composite_object.CompositeObject):
     Request: typing.Type[_composite_object.CompositeObject]
     Response: typing.Type[_composite_object.CompositeObject]
 
-    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_ = 0
+    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_ = 0
 
     def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
         raise TypeError(f'Service type {type(self).__name__} cannot be serialized')

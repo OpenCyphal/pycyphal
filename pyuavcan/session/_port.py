@@ -21,7 +21,7 @@ class Port(abc.ABC, typing.Generic[DataTypeClass]):
         raise NotImplementedError
 
 
-class MessagePort(Port):
+class MessagePort(Port[DataTypeClass]):
     @property
     @abc.abstractmethod
     def subject_id(self) -> int:
@@ -33,14 +33,14 @@ class MessagePort(Port):
         raise NotImplementedError
 
 
-class Publisher(MessagePort):
+class Publisher(MessagePort[DataTypeClass]):
     def __init__(self,
                  cls:                  typing.Type[DataTypeClass],
-                 transport_level_port: pyuavcan.transport.Publisher,
+                 transport_layer_port: pyuavcan.transport.Publisher,
                  priority:             pyuavcan.transport.Priority,
                  loopback:             bool):
         self._cls = cls
-        self._tlp = transport_level_port
+        self._tlp = transport_layer_port
         self._priority = priority
         self._loopback = loopback
 

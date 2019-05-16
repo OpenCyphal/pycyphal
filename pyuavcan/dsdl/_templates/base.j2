@@ -396,8 +396,8 @@ class {{ name }}(_dsdl_.CompositeObject):
     )
     assert isinstance(_MODEL_, _pydsdl_.{{ meta_type }})
 
-    _SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_: int = {{ ((type.bit_length_set|max) + 7) // 8 }}  {# -#}
-                                                            # {{ type.bit_length_set|max }} bits
+    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_: int = {{ ((type.bit_length_set|max) + 7) // 8 }}  {# -#}
+                                                      # {{ type.bit_length_set|max }} bits
 {%- endmacro -%}
 
 {#-
