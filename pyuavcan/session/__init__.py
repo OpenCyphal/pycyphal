@@ -4,6 +4,4 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-
-class Endpoint:
-    pass
+from ._session import Session

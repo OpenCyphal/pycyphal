@@ -6,6 +6,6 @@
 
 from ._transport import Transport, ProtocolParameters, Statistics
 
-from ._port import Timestamp, Priority, PayloadFragmentIterator
+from ._port import Timestamp, Priority, FragmentedPayload
 from ._port import Port, MessagePort, ServicePort
 from ._port import Publisher, Subscriber, Client, Server

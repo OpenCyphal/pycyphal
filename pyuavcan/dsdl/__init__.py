@@ -7,8 +7,8 @@
 from ._compiler import generate_package, GeneratedPackageInfo
 
 from ._composite_object import serialize, try_deserialize
-from ._composite_object import CompositeObject
-from ._service_object import ServiceObject
+from ._composite_object import CompositeObject, CompositeObjectTypeVar
+from ._service_object import ServiceObject, ServiceObjectTypeVar
 
 from ._composite_object import get_model
 from ._api_helpers import get_class

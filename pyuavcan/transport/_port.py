@@ -11,7 +11,8 @@ import typing
 import dataclasses
 
 
-PayloadFragmentIterator = typing.Iterator[bytearray]
+# The format of the memoryview object should be 'B'.
+FragmentedPayload = typing.Iterable[memoryview]
 
 
 class Priority(enum.IntEnum):
@@ -78,10 +79,10 @@ class ServicePort(Port):
 class Publisher(MessagePort):
     @dataclasses.dataclass
     class Transfer:
-        priority:                  Priority
-        transfer_id:               int
-        payload_fragment_iterator: PayloadFragmentIterator
-        loopback:                  bool = False
+        priority:           Priority
+        transfer_id:        int
+        fragmented_payload: FragmentedPayload
+        loopback:           bool = False
 
     @abc.abstractmethod
     async def publish(self, transfer: Transfer) -> None:
@@ -91,11 +92,11 @@ class Publisher(MessagePort):
 class Subscriber(MessagePort):
     @dataclasses.dataclass
     class Transfer:
-        timestamp:                 Timestamp
-        transfer_id:               int
-        publisher_node_id:         int
-        payload_fragment_iterator: PayloadFragmentIterator
-        loopback:                  bool
+        timestamp:          Timestamp
+        transfer_id:        int
+        publisher_node_id:  int
+        fragmented_payload: FragmentedPayload
+        loopback:           bool
 
     @abc.abstractmethod
     async def receive(self) -> Transfer:
@@ -109,14 +110,14 @@ class Subscriber(MessagePort):
 class Client(ServicePort):
     @dataclasses.dataclass
     class Request:
-        priority:                  Priority
-        transfer_id:               int
-        payload_fragment_iterator: PayloadFragmentIterator
+        priority:           Priority
+        transfer_id:        int
+        fragmented_payload: FragmentedPayload
 
     @dataclasses.dataclass
     class Response:
-        timestamp:                 Timestamp
-        payload_fragment_iterator: PayloadFragmentIterator
+        timestamp:          Timestamp
+        fragmented_payload: FragmentedPayload
 
     @abc.abstractmethod
     async def try_request(self, request: Request, response_timeout: float) -> typing.Optional[Response]:
@@ -131,21 +132,21 @@ class Client(ServicePort):
 class Server(ServicePort):
     @dataclasses.dataclass(frozen=True)
     class TransactionMetadata:
-        priority:                  Priority
-        transfer_id:               int
-        client_node_id:            int
-        payload_fragment_iterator: PayloadFragmentIterator
+        priority:           Priority
+        transfer_id:        int
+        client_node_id:     int
+        fragmented_payload: FragmentedPayload
 
     @dataclasses.dataclass
     class Request:
-        timestamp:                 Timestamp
-        transaction_metadata:      Server.TransactionMetadata
-        payload_fragment_iterator: PayloadFragmentIterator
+        timestamp:            Timestamp
+        transaction_metadata: Server.TransactionMetadata
+        fragmented_payload:   FragmentedPayload
 
     @dataclasses.dataclass
     class Response:
-        transaction_metadata:      Server.TransactionMetadata
-        payload_fragment_iterator: PayloadFragmentIterator
+        transaction_metadata: Server.TransactionMetadata
+        fragmented_payload:   FragmentedPayload
 
     @abc.abstractmethod
     async def listen(self) -> Request:

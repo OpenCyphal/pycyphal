@@ -78,7 +78,7 @@ def _unittest_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsdl.Gen
     assert obj.vendor_specific_status_code == 0x7FFFF
 
 
-def _compile_serialized_representation(*binary_chunks: str) -> numpy.ndarray:
+def _compile_serialized_representation(*binary_chunks: str) -> typing.Iterable[memoryview]:
     s = ''.join(binary_chunks)
     s = s.ljust(len(s) + 8 - len(s) % 8, '0')
     assert len(s) % 8 == 0
@@ -86,7 +86,7 @@ def _compile_serialized_representation(*binary_chunks: str) -> numpy.ndarray:
     byte_list = list(map(lambda x: int(x, 2), byte_sized_chunks))
     out = numpy.array(byte_list, dtype=numpy.uint8)
     _logger.debug('Constructed serialized representation: %r --> %s', binary_chunks, out)
-    return out
+    return [out.data]
 
 
 def _bin(value: int, width: int) -> str:

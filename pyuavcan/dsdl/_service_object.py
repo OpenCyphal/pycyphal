@@ -24,3 +24,6 @@ class ServiceObject(_composite_object.CompositeObject):
     @staticmethod
     def _deserialize_aligned_(_des_: _serialized_representation.Deserializer) -> _composite_object.CompositeObject:
         raise TypeError('Service types cannot be deserialized')
+
+
+ServiceObjectTypeVar = typing.TypeVar('ServiceObjectTypeVar', bound=ServiceObject)

@@ -85,7 +85,7 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
         once(_util.make_random_object(model))
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
-        sr = _make_random_serialized_representation(pyuavcan.dsdl.get_model(cls).bit_length_set)
+        sr = _make_random_fragmented_serialized_representation(pyuavcan.dsdl.get_model(cls).bit_length_set)
         ob = pyuavcan.dsdl.try_deserialize(cls, sr)
         rand_sr_validness.append(ob is not None)
         if ob:
@@ -108,17 +108,16 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
 def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[float, float]:
     ts = time.process_time()
     chunks = list(pyuavcan.dsdl.serialize(obj))
-    sr = numpy.concatenate(chunks) if len(chunks) > 1 else chunks[0]
     ser_sample = time.process_time() - ts
 
     ts = time.process_time()
-    d = pyuavcan.dsdl.try_deserialize(type(obj), sr)
+    d = pyuavcan.dsdl.try_deserialize(type(obj), chunks)
     des_sample = time.process_time() - ts
 
     assert d is not None
     assert type(obj) is type(d)
     assert pyuavcan.dsdl.get_model(obj) == pyuavcan.dsdl.get_model(d)
-    assert _util.are_close(pyuavcan.dsdl.get_model(obj), obj, d), f'{obj} != {d}; sr: {bytes(sr).hex()}'
+    assert _util.are_close(pyuavcan.dsdl.get_model(obj), obj, d), f'{obj} != {d}; sr: {bytes().join(chunks).hex()}'
 
     # Similar floats may produce drastically different string representations, so if there is at least one float inside,
     # we skip the string representation equality check.
@@ -129,7 +128,7 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
     return ser_sample, des_sample
 
 
-def _make_random_serialized_representation(bls: pydsdl.BitLengthSet) -> numpy.ndarray:
+def _make_random_fragmented_serialized_representation(bls: pydsdl.BitLengthSet) -> typing.Iterable[memoryview]:
     bit_length = random.choice(list(bls))
     byte_length = (bit_length + 7) // 8
-    return numpy.random.randint(0, 256, size=byte_length, dtype=numpy.uint8)
+    return [numpy.random.randint(0, 256, size=byte_length, dtype=numpy.uint8).data]

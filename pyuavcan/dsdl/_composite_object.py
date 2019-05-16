@@ -64,30 +64,29 @@ class CompositeObject(abc.ABC):
     _DeserializerTypeVar_ = typing.TypeVar('_DeserializerTypeVar_', bound=_serialized_representation.Deserializer)
 
 
-_CompositeObjectTypeVar = typing.TypeVar('_CompositeObjectTypeVar', bound=CompositeObject)
+CompositeObjectTypeVar = typing.TypeVar('CompositeObjectTypeVar', bound=CompositeObject)
 
 
 # noinspection PyProtectedMember
-def serialize(obj: CompositeObject) -> typing.Iterator[numpy.ndarray]:
+def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     """
     Constructs a serialized representation of the provided top-level object.
     The resulting serialized representation is padded to one byte in accordance with the Specification.
     The constructed serialized representation is returned as a sequence of byte-aligned fragments which must be
     concatenated in order to obtain the final representation. The objective of this model is to avoid copying data
-    into a temporary buffer when possible. Each yielded fragment is of type numpy.array(dtype=numpy.uint8).
+    into a temporary buffer when possible. Each yielded fragment is of type memoryview pointing to raw unsigned bytes.
     It is guaranteed that at least one fragment is always returned (which may be empty).
     """
-    if isinstance(obj, CompositeObject) and isinstance(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_, int):
-        ser = _serialized_representation.Serializer.new(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
-        obj._serialize_aligned_(ser)
-        yield ser.buffer        # TODO: as you can see, we don't really take advantage of the fragmentation logic yet.
-    else:
-        raise TypeError(f'Cannot serialize an instance of {type(obj).__name__}')
+    # TODO: update the Serializer class to emit an iterable of fragments.
+    ser = _serialized_representation.Serializer.new(obj._SERIALIZED_REPRESENTATION_BUFFER_SIZE_IN_BYTES_)
+    obj._serialize_aligned_(ser)
+    yield ser.buffer.data
 
 
 # noinspection PyProtectedMember
-def try_deserialize(cls: typing.Type[_CompositeObjectTypeVar],
-                    source_bytes: typing.Union[bytearray, numpy.ndarray]) -> typing.Optional[_CompositeObjectTypeVar]:
+def try_deserialize(cls: typing.Type[CompositeObjectTypeVar],
+                    fragmented_serialized_representation: typing.Iterable[memoryview]) \
+        -> typing.Optional[CompositeObjectTypeVar]:
     """
     Constructs a Python object representing an instance of the supplied data type from its serialized representation.
     Returns None if the provided serialized representation is invalid.
@@ -98,28 +97,21 @@ def try_deserialize(cls: typing.Type[_CompositeObjectTypeVar],
                     REPRESENTATION. THEREFORE, IN ORDER TO AVOID UNINTENDED DATA CORRUPTION, THE CALLER MUST DESTROY
                     ALL REFERENCES TO THE SERIALIZED REPRESENTATION IMMEDIATELY AFTER THE INVOCATION.
 
-    USAGE WARNING: The supplied array containing the serialized representation should be writeable. If it is not,
-                   some of the array-typed fields of the constructed object may be read-only. This is why we accept
-                   bytearray but not bytes.
-
-    >> import pyuavcan.dsdl
-    >> import uavcan.primitive.array
-    >> b = bytearray([2, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-    >> msg = pyuavcan.dsdl.try_deserialize(uavcan.primitive.array.Natural32_1_0, b)
-    >> msg
-    uavcan.primitive.array.Natural32.1.0(value=[67305985, 134678021])
-    >> msg.value[0] = 0xFFFFFFFF
-    >> list(b)                     # Source array has been updated
-    [2, 255, 255, 255, 255, 5, 6, 7, 8, 9]
+    USAGE WARNING: The supplied fragments of the serialized representation should be writeable. If they are not,
+                   some of the array-typed fields of the constructed object may be read-only.
     """
+    # TODO: update the Deserializer class to support fragmented input.
+    # join() on one element will create a copy, so that is very expensive.
+    fragments = list(fragmented_serialized_representation)
+    contiguous = fragments[0] if len(fragments) == 1 else bytearray().join(fragmented_serialized_representation)
+    deserializer = _serialized_representation.Deserializer.new(contiguous)
     try:
-        return cls._deserialize_aligned_(_serialized_representation.Deserializer.new(source_bytes))  # type: ignore
+        return cls._deserialize_aligned_(deserializer)  # type: ignore
     except _serialized_representation.Deserializer.FormatError:
         # Use explicit level check to avoid unnecessary load in production.
         # This is necessary because we perform complex data transformations before invoking the logger.
         if _logger.isEnabledFor(logging.INFO):
-            _logger.info('Invalid serialized representation of %s (in Base64): %s',
-                         get_model(cls), base64.b64encode(bytes(source_bytes)).decode(), exc_info=True)
+            _logger.info('Invalid serialized representation of %s: %s', get_model(cls), deserializer, exc_info=True)
         return None
 
 
