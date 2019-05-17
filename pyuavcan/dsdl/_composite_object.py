@@ -122,7 +122,7 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
 
 # noinspection PyProtectedMember
 def try_deserialize(cls: typing.Type[CompositeObjectTypeVar],
-                    fragmented_serialized_representation: typing.Iterable[memoryview]) \
+                    fragmented_serialized_representation: typing.Sequence[memoryview]) \
         -> typing.Optional[CompositeObjectTypeVar]:
     """
     Constructs a Python object representing an instance of the supplied data type from its serialized representation.
@@ -139,8 +139,10 @@ def try_deserialize(cls: typing.Type[CompositeObjectTypeVar],
     """
     # TODO: update the Deserializer class to support fragmented input.
     # join() on one element will create a copy, so that is very expensive.
-    fragments = list(fragmented_serialized_representation)
-    contiguous = fragments[0] if len(fragments) == 1 else bytearray().join(fragmented_serialized_representation)
+    if len(fragmented_serialized_representation) == 1:  # Optimized hot path; no memory reallocation whatsoever
+        contiguous: typing.Union[bytearray, memoryview] = fragmented_serialized_representation[0]
+    else:
+        contiguous = bytearray().join(fragmented_serialized_representation)
     deserializer = _serialized_representation.Deserializer.new(contiguous)
     try:
         return cls._deserialize_aligned_(deserializer)  # type: ignore

@@ -26,9 +26,9 @@ class Statistics:
         errors:   int
         overruns: int
 
-    outgoing: Directional
-    incoming: Directional
-    errors:   int
+    output: Directional
+    input:  Directional
+    errors: int
 
 
 class Transport(abc.ABC):

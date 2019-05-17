@@ -7,5 +7,6 @@
 from ._transport import Transport, ProtocolParameters, Statistics
 
 from ._port import Timestamp, Priority, FragmentedPayload
-from ._port import Port, MessagePort, ServicePort
-from ._port import Publisher, Subscriber, Client, Server
+from ._port import Port, InputPort, OutputPort
+from ._port import DataSpecifier, MessageDataSpecifier, ServiceDataSpecifier
+from ._port import Transfer, ReceivedTransfer, OutgoingTransfer

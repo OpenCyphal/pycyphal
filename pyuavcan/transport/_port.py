@@ -12,7 +12,8 @@ import dataclasses
 
 
 # The format of the memoryview object should be 'B'.
-FragmentedPayload = typing.Iterable[memoryview]
+# We're using Sequence and not Iterable to permit sharing across multiple consumers.
+FragmentedPayload = typing.Sequence[memoryview]
 
 
 class Priority(enum.IntEnum):
@@ -59,9 +60,10 @@ class ServiceDataSpecifier(DataSpecifier):
 
 @dataclasses.dataclass
 class Transfer:
-    transfer_id:        int
+    priority:           Priority
+    transfer_id:        int                     # When transmitting, modulo will be computed by the transport
     fragmented_payload: FragmentedPayload
-    loopback:           bool
+    loopback:           bool                    # Request in outgoing transfers, indicator in received transfers
 
 
 @dataclasses.dataclass
@@ -72,7 +74,6 @@ class ReceivedTransfer(Transfer):
 
 @dataclasses.dataclass
 class OutgoingTransfer(Transfer):
-    priority:            Priority
     destination_node_id: typing.Optional[int]   # Not set for broadcast transfers
 
 
@@ -102,7 +103,7 @@ class InputPort(Port):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def try_receive(self, timeout: float) -> typing.Optional[ReceivedTransfer]:
+    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[ReceivedTransfer]:
         raise NotImplementedError
 
 

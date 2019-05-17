@@ -5,6 +5,7 @@
 #
 
 import os
+import gc
 import time
 import numpy
 import typing
@@ -76,25 +77,35 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
     ]
     rand_sr_validness: typing.List[bool] = []
 
-    def once(obj: pyuavcan.dsdl.CompositeObject) -> None:
-        samples.append(_serialize_deserialize(obj))
+    def once(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[float, float]:
+        s = _serialize_deserialize(obj)
+        samples.append(s)
+        return s
+
+    gc.collect()
+    gc.disable()        # Must be disabled, otherwise it induces spurious false-positive performance warnings
 
     for index in range(num_random_samples):
         ts = time.process_time()
         # Forward test: get random object, serialize, deserialize, compare
-        once(_util.make_random_object(model))
+        sample_ser = once(_util.make_random_object(model))
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
         sr = _make_random_fragmented_serialized_representation(pyuavcan.dsdl.get_model(cls).bit_length_set)
         ob = pyuavcan.dsdl.try_deserialize(cls, sr)
         rand_sr_validness.append(ob is not None)
+        sample_des: typing.Optional[typing.Tuple[float, float]] = None
         if ob:
-            once(ob)
+            sample_des = once(ob)
 
         elapsed = time.process_time() - ts
         if elapsed > 1.0:
+            duration_ser = f'{sample_ser[0] * 1e6:.0f}/{sample_ser[1] * 1e6:.0f}'
+            duration_des = f'{sample_des[0] * 1e6:.0f}/{sample_des[1] * 1e6:.0f}' if sample_des else 'N/A'
             _logger.debug(f'Attention: random sample {index + 1} of {num_random_samples} took {elapsed:.1f} s; '
-                          f'random SR correct: {ob is not None}')
+                          f'random SR correct: {ob is not None}; '
+                          f'duration forward/reverse [us]: ({duration_ser})/({duration_des})')
+    gc.enable()
 
     out = numpy.mean(samples, axis=0)
     assert out.shape == (2,)
@@ -107,11 +118,11 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
 
 def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[float, float]:
     ts = time.process_time()
-    chunks = list(pyuavcan.dsdl.serialize(obj))
+    chunks = list(pyuavcan.dsdl.serialize(obj))           # GC must be disabled while we're in the timed context
     ser_sample = time.process_time() - ts
 
     ts = time.process_time()
-    d = pyuavcan.dsdl.try_deserialize(type(obj), chunks)
+    d = pyuavcan.dsdl.try_deserialize(type(obj), chunks)  # GC must be disabled while we're in the timed context
     des_sample = time.process_time() - ts
 
     assert d is not None
@@ -128,7 +139,7 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
     return ser_sample, des_sample
 
 
-def _make_random_fragmented_serialized_representation(bls: pydsdl.BitLengthSet) -> typing.Iterable[memoryview]:
+def _make_random_fragmented_serialized_representation(bls: pydsdl.BitLengthSet) -> typing.Sequence[memoryview]:
     bit_length = random.choice(list(bls))
     byte_length = (bit_length + 7) // 8
     return [numpy.random.randint(0, 256, size=byte_length, dtype=numpy.uint8).data]

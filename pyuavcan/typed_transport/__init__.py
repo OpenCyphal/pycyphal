@@ -4,4 +4,4 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._session import Session
+from ._typed_transport import TypedTransport

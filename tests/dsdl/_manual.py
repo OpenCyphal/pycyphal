@@ -78,7 +78,7 @@ def _unittest_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsdl.Gen
     assert obj.vendor_specific_status_code == 0x7FFFF
 
 
-def _compile_serialized_representation(*binary_chunks: str) -> typing.Iterable[memoryview]:
+def _compile_serialized_representation(*binary_chunks: str) -> typing.Sequence[memoryview]:
     s = ''.join(binary_chunks)
     s = s.ljust(len(s) + 8 - len(s) % 8, '0')
     assert len(s) % 8 == 0
