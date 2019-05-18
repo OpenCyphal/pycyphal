@@ -7,8 +7,7 @@
 from __future__ import annotations
 import abc
 import typing
-import dataclasses
-from ._transfer import Transfer
+from ._transfer import Transfer, TransferFrom
 from ._data_specifier import DataSpecifier
 
 
@@ -38,10 +37,6 @@ class InputSession(Session):
 
 # noinspection PyAbstractClass
 class PromiscuousInputSession(InputSession):
-    @dataclasses.dataclass
-    class TransferFrom(Transfer):
-        source_node_id: typing.Optional[int]    # Set to None to indicate anonymous transfers
-
     @abc.abstractmethod
     async def receive(self) -> TransferFrom:
         raise NotImplementedError

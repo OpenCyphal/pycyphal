@@ -62,21 +62,21 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     async def get_broadcast_output(self, data_specifier: DataSpecifier) -> BroadcastOutputSession:
         """
-        All transports must support this session type for message transfers.
+        All transports must support this session type for messages.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     async def get_unicast_output(self, data_specifier: DataSpecifier, destination_node_id: int) -> UnicastOutputSession:
         """
-        All transports must support this session type for service transfers.
+        All transports must support this session type for services.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     async def get_promiscuous_input(self, data_specifier: DataSpecifier) -> PromiscuousInputSession:
         """
-        All transports must support this session type for message transfers.
+        All transports must support this session type for all kinds of transfers.
         """
         raise NotImplementedError
 
@@ -86,3 +86,13 @@ class Transport(abc.ABC):
         All transports must support this session type for service transfers.
         """
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def __str__(self) -> str:
+        """
+        Should print the basic transport information: address, media configuration, etc.
+        """
+        raise NotImplementedError
+
+    def __repr__(self) -> str:
+        return self.__str__()

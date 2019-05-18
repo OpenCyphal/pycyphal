@@ -6,7 +6,9 @@
 
 from ._transport import Transport, ProtocolParameters, Statistics
 
-from ._transfer import Timestamp, Priority, FragmentedPayload, Transfer
+from ._timestamp import Timestamp
+
+from ._transfer import Priority, FragmentedPayload, Transfer, TransferFrom
 
 from ._session import Session, InputSession, OutputSession
 from ._session import PromiscuousInputSession, SelectiveInputSession

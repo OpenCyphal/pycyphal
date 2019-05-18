@@ -8,6 +8,7 @@ from __future__ import annotations
 import enum
 import typing
 import dataclasses
+from ._timestamp import Timestamp
 
 
 # The format of the memoryview object should be 'B'.
@@ -31,15 +32,14 @@ class Priority(enum.IntEnum):
 
 
 @dataclasses.dataclass
-class Timestamp:
-    wall:      float    # Belongs to the domain of time.time()
-    monotonic: float    # Belongs to the domain of time.monotonic()
-
-
-@dataclasses.dataclass
 class Transfer:
     timestamp:          Timestamp           # When transmitting, contains the creation timestamp for latency diagnostics
     priority:           Priority
     transfer_id:        int                 # When transmitting, modulo will be computed by the transport
     fragmented_payload: FragmentedPayload
     loopback:           bool                # Request in outgoing transfers, indicator in received transfers
+
+
+@dataclasses.dataclass
+class TransferFrom(Transfer):
+    source_node_id: typing.Optional[int]    # Set to None to indicate anonymous transfers

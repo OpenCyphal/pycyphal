@@ -46,7 +46,7 @@ class InputAggregateSession(AggregateSession):
 
 # noinspection PyAbstractClass
 class PromiscuousInputAggregateSession(InputAggregateSession):
-    Output = typing.Tuple[pyuavcan.transport.PromiscuousInputSession.TransferFrom, pyuavcan.transport.Transport]
+    Output = typing.Tuple[pyuavcan.transport.TransferFrom, pyuavcan.transport.Transport]
 
     @abc.abstractmethod
     async def receive(self) -> Output:  # covariant on Transfer
