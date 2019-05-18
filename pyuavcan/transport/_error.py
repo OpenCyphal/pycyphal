@@ -7,3 +7,7 @@
 
 class TransportError(RuntimeError):
     pass
+
+
+class UnsupportedSessionConfigurationError(TransportError):
+    pass

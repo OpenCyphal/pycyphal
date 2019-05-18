@@ -6,7 +6,7 @@
 
 import typing
 import pyuavcan.transport
-from . import _aggregate_port
+from . import _aggregate_session
 
 
 class AggregateTransport:
@@ -30,10 +30,18 @@ class AggregateTransport:
     async def remove_transport(self, transport: pyuavcan.transport.Transport) -> None:
         raise NotImplementedError
 
-    async def get_output_port(self, data_specifier: pyuavcan.transport.DataSpecifier) \
-            -> _aggregate_port.AggregateOutputPort:
+    async def get_broadcast_output(self, data_specifier: pyuavcan.transport.DataSpecifier) \
+            -> _aggregate_session.BroadcastOutputAggregateSession:
         raise NotImplementedError
 
-    async def get_input_port(self, data_specifier: pyuavcan.transport.DataSpecifier) \
-            -> _aggregate_port.AggregateInputPort:
+    async def get_unicast_output(self, data_specifier: pyuavcan.transport.DataSpecifier, destination_node_id: int) \
+            -> _aggregate_session.UnicastOutputAggregateSession:
+        raise NotImplementedError
+
+    async def get_promiscuous_input(self, data_specifier: pyuavcan.transport.DataSpecifier) \
+            -> _aggregate_session.PromiscuousInputAggregateSession:
+        raise NotImplementedError
+
+    async def get_selective_input(self, data_specifier: pyuavcan.transport.DataSpecifier, source_node_id: int) \
+            -> _aggregate_session.SelectiveInputAggregateSession:
         raise NotImplementedError

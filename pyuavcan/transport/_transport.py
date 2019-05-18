@@ -7,7 +7,8 @@
 from __future__ import annotations
 import abc
 import dataclasses
-from . import _port
+from ._session import PromiscuousInputSession, SelectiveInputSession, BroadcastOutputSession, UnicastOutputSession
+from ._data_specifier import DataSpecifier
 
 
 @dataclasses.dataclass(frozen=True)
@@ -59,9 +60,29 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_output_port(self, data_specifier: _port.DataSpecifier) -> _port.OutputPort:
+    async def get_broadcast_output(self, data_specifier: DataSpecifier) -> BroadcastOutputSession:
+        """
+        All transports must support this session type for message transfers.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_input_port(self, data_specifier: _port.DataSpecifier) -> _port.InputPort:
+    async def get_unicast_output(self, data_specifier: DataSpecifier, destination_node_id: int) -> UnicastOutputSession:
+        """
+        All transports must support this session type for service transfers.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def get_promiscuous_input(self, data_specifier: DataSpecifier) -> PromiscuousInputSession:
+        """
+        All transports must support this session type for message transfers.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def get_selective_input(self, data_specifier: DataSpecifier, source_node_id: int) -> SelectiveInputSession:
+        """
+        All transports must support this session type for service transfers.
+        """
         raise NotImplementedError
