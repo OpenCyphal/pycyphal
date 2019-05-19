@@ -11,7 +11,6 @@ import typing
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from .. import _aggregate_transport
 
 
 DataTypeClass    = typing.TypeVar('DataTypeClass', bound=pyuavcan.dsdl.CompositeObject)
@@ -38,15 +37,28 @@ class ReceivedMetadata:
     # input sessions, which implies that the transfer may not have the source node ID. However, if we're using
     # a selective session, the source node ID will be possible to obtain from the session instance. Therefore,
     # the information we're looking for is always available but not from the same source.
-    transfer:       pyuavcan.transport.Transfer     # The transfer which delivered the data.
-    transport:      pyuavcan.transport.Transport    # The interface this transfer was received from.
+    transfer: pyuavcan.transport.Transfer   # The transfer which delivered the data. Specialized per transport.
+
+
+@dataclasses.dataclass(frozen=True)
+class ReceivedMessageMetadata(ReceivedMetadata):
     source_node_id: typing.Optional[int]            # None for anonymous transfers.
 
 
-class TypedSession(abc.ABC, typing.Generic[DataTypeClass]):
+@dataclasses.dataclass(frozen=True)
+class ReceivedServiceMetadata(ReceivedMetadata):
+    source_node_id: int                             # Always populated.
+
+
+class Channel(abc.ABC, typing.Generic[DataTypeClass]):
     @property
     @abc.abstractmethod
     def data_type_class(self) -> typing.Type[DataTypeClass]:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def port_id(self) -> int:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -54,24 +66,24 @@ class TypedSession(abc.ABC, typing.Generic[DataTypeClass]):
         raise NotImplementedError
 
 
-class MessageSession(TypedSession[MessageTypeClass]):
+class MessageChannel(Channel[MessageTypeClass]):
     @property
     @abc.abstractmethod
-    def aggregate_session(self) -> _aggregate_transport.AggregateSession:
+    def session(self) -> pyuavcan.transport.Session:
         raise NotImplementedError
 
 
-class ServiceSession(TypedSession[ServiceTypeClass]):
+class ServiceChannel(Channel[ServiceTypeClass]):
     @property
     @abc.abstractmethod
-    def aggregate_input_session(self) -> _aggregate_transport.InputAggregateSession:
+    def input_session(self) -> pyuavcan.transport.InputSession:
         raise NotImplementedError
 
 
-class Publisher(MessageSession[MessageTypeClass]):
+class Publisher(MessageChannel[MessageTypeClass]):
     def __init__(self,
                  cls:                 typing.Type[MessageTypeClass],
-                 session:             _aggregate_transport.OutputAggregateSession,
+                 session:             pyuavcan.transport.OutputSession,
                  transfer_id_counter: OutgoingTransferIDCounter,
                  priority:            pyuavcan.transport.Priority,
                  loopback:            bool):
@@ -86,7 +98,7 @@ class Publisher(MessageSession[MessageTypeClass]):
         return self._cls
 
     @property
-    def aggregate_session(self) -> _aggregate_transport.OutputAggregateSession:
+    def session(self) -> pyuavcan.transport.OutputSession:
         return self._session
 
     @property
@@ -123,11 +135,11 @@ class Publisher(MessageSession[MessageTypeClass]):
         raise NotImplementedError
 
 
-class Subscriber(MessageSession[MessageTypeClass]):
+class Subscriber(MessageChannel[MessageTypeClass]):
     def __init__(self,
                  cls:            typing.Type[MessageTypeClass],
                  data_specifier: pyuavcan.transport.MessageDataSpecifier,
-                 session:        _aggregate_transport.InputAggregateSession):
+                 session:        pyuavcan.transport.InputSession):
         self._cls = cls
         self._ds = data_specifier
         self._session = session
@@ -137,27 +149,25 @@ class Subscriber(MessageSession[MessageTypeClass]):
         return self._cls
 
     @property
-    def aggregate_session(self) -> _aggregate_transport.InputAggregateSession:
+    def session(self) -> pyuavcan.transport.InputSession:
         return self._session
 
-    async def receive_with_metadata(self) -> typing.Tuple[MessageTypeClass, ReceivedMetadata]:
+    async def receive_with_metadata(self) -> typing.Tuple[MessageTypeClass, ReceivedMessageMetadata]:
         transfer: typing.Optional[pyuavcan.transport.Transfer] = None
-        transport: typing.Optional[pyuavcan.transport.Transport] = None
         message: typing.Optional[MessageTypeClass] = None
-        while message is None or transfer is None or transport is None:
-            transfer, transport = await self._session.receive()
+        while message is None or transfer is None:
+            transfer = await self._session.receive()
             message = pyuavcan.dsdl.try_deserialize(self._cls, transfer.fragmented_payload)
             # TODO: if message is None, record deserialization error
-        return message, self._construct_metadata(transfer, transport)
+        return message, self._construct_metadata(transfer)
 
     async def try_receive_with_metadata(self, monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[MessageTypeClass, ReceivedMetadata]]:
-        result = await self._session.try_receive(monotonic_deadline)
-        if result is not None:
-            transfer, transport = result
+            -> typing.Optional[typing.Tuple[MessageTypeClass, ReceivedMessageMetadata]]:
+        transfer = await self._session.try_receive(monotonic_deadline)
+        if transfer is not None:
             message = pyuavcan.dsdl.try_deserialize(self._cls, transfer.fragmented_payload)
             if message is not None:
-                return message, self._construct_metadata(transfer, transport)
+                return message, self._construct_metadata(transfer)
         return None
 
     async def receive(self) -> MessageTypeClass:
@@ -170,25 +180,21 @@ class Subscriber(MessageSession[MessageTypeClass]):
     async def close(self) -> None:
         raise NotImplementedError
 
-    def _construct_metadata(self,
-                            transfer: pyuavcan.transport.Transfer,
-                            transport: pyuavcan.transport.Transport) -> ReceivedMetadata:
+    def _construct_metadata(self, transfer: pyuavcan.transport.Transfer) -> ReceivedMessageMetadata:
         if isinstance(transfer, pyuavcan.transport.TransferFrom):
             source_node_id = transfer.source_node_id
-        elif isinstance(self._session, _aggregate_transport.SelectiveInputAggregateSession):
+        elif isinstance(self._session, pyuavcan.transport.SelectiveInputSession):
             source_node_id = self._session.source_node_id
         else:
             raise RuntimeError('Impossible configuration: source node ID is not obtainable')
-        return ReceivedMetadata(transfer=transfer,
-                                transport=transport,
-                                source_node_id=source_node_id)
+        return ReceivedMessageMetadata(transfer=transfer, source_node_id=source_node_id)
 
 
-class Client(ServiceSession[ServiceTypeClass]):
+class Client(ServiceChannel[ServiceTypeClass]):
     def __init__(self,                # Not making assumptions about promiscuity or broadcasting. Shall be generic.
                  cls:                 typing.Type[ServiceTypeClass],
-                 input_session:       _aggregate_transport.InputAggregateSession,
-                 output_session:      _aggregate_transport.OutputAggregateSession,
+                 input_session:       pyuavcan.transport.InputSession,
+                 output_session:      pyuavcan.transport.OutputSession,
                  transfer_id_counter: OutgoingTransferIDCounter,
                  priority:            pyuavcan.transport.Priority):
         self._cls: typing.Type[pyuavcan.dsdl.ServiceObject] = cls
@@ -202,11 +208,11 @@ class Client(ServiceSession[ServiceTypeClass]):
         return self._cls  # type: ignore
 
     @property
-    def aggregate_input_session(self) -> _aggregate_transport.InputAggregateSession:
+    def input_session(self) -> pyuavcan.transport.InputSession:
         return self._input_session
 
     @property
-    def aggregate_output_session(self) -> _aggregate_transport.OutputAggregateSession:
+    def output_session(self) -> pyuavcan.transport.OutputSession:
         return self._output_session
 
     @property
@@ -224,7 +230,7 @@ class Client(ServiceSession[ServiceTypeClass]):
     async def try_call_with_metadata(self,
                                      request: DataTypeClass,
                                      response_monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[DataTypeClass, ReceivedMetadata]]:  # TODO: use proper types
+            -> typing.Optional[typing.Tuple[DataTypeClass, ReceivedServiceMetadata]]:  # TODO: use proper types
         # TODO: THIS IS WRONG; MATCH THE RESPONSE BY TRANSFER ID; WE'RE GOING TO NEED A WORKER TASK!
         transfer_id = self._transfer_id_counter.get_value_then_increment()
         await self._do_send(request, transfer_id)
@@ -249,57 +255,54 @@ class Client(ServiceSession[ServiceTypeClass]):
         await self._output_session.send(transfer)
 
     async def _try_receive(self, transfer_id: int, response_monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[DataTypeClass, ReceivedMetadata]]:  # TODO: use proper types
+            -> typing.Optional[typing.Tuple[DataTypeClass, ReceivedServiceMetadata]]:  # TODO: use proper types
         while time.monotonic() <= response_monotonic_deadline:
             # TODO: THIS IS WRONG; MATCH THE RESPONSE BY TRANSFER ID; WE'RE GOING TO NEED A WORKER TASK!
-            result = await self._input_session.try_receive(response_monotonic_deadline)
-            if result is not None:
-                transfer, transport = result
+            transfer = await self._input_session.try_receive(response_monotonic_deadline)
+            if transfer is not None:
                 response = pyuavcan.dsdl.try_deserialize(self._cls.Response, transfer.fragmented_payload)
                 if response is not None:
-                    return response, self._construct_metadata(transfer, transport)
+                    return response, self._construct_metadata(transfer)
         return None     # Timed out
 
     async def close(self) -> None:
         raise NotImplementedError
 
-    def _construct_metadata(self,
-                            transfer: pyuavcan.transport.Transfer,
-                            transport: pyuavcan.transport.Transport) -> ReceivedMetadata:
-        if isinstance(transfer, pyuavcan.transport.TransferFrom):
+    def _construct_metadata(self, transfer: pyuavcan.transport.Transfer) -> ReceivedServiceMetadata:
+        if isinstance(transfer, pyuavcan.transport.TransferFrom) and transfer.source_node_id is not None:
             source_node_id = transfer.source_node_id
-        elif isinstance(self._input_session, _aggregate_transport.SelectiveInputAggregateSession):
+        elif isinstance(self._input_session, pyuavcan.transport.SelectiveInputSession):
             source_node_id = self._input_session.source_node_id
-        elif isinstance(self._output_session, _aggregate_transport.UnicastOutputAggregateSession):
+        elif isinstance(self._output_session, pyuavcan.transport.UnicastOutputSession):
             source_node_id = self._output_session.destination_node_id
         else:
             raise RuntimeError('Impossible configuration: server node ID is not obtainable')
-        return ReceivedMetadata(transfer=transfer,
-                                transport=transport,
-                                source_node_id=source_node_id)
+        assert source_node_id is not None
+        return ReceivedServiceMetadata(transfer=transfer, source_node_id=source_node_id)
 
 
-class Server(ServiceSession[ServiceTypeClass]):
-    _OutputSessionFactory = typing.Callable[[int], typing.Awaitable[_aggregate_transport.OutputAggregateSession]]
+class Server(ServiceChannel[ServiceTypeClass]):
+    _OutputSessionFactory = typing.Callable[[int], typing.Awaitable[pyuavcan.transport.OutputSession]]
 
     # TODO: use proper types!
-    Handler = typing.Callable[[DataTypeClass, ReceivedMetadata], typing.Awaitable[typing.Optional[DataTypeClass]]]
+    Handler = typing.Callable[[DataTypeClass, ReceivedServiceMetadata],
+                              typing.Awaitable[typing.Optional[DataTypeClass]]]
 
     def __init__(self,
                  cls:                    typing.Type[ServiceTypeClass],
-                 input_session:          _aggregate_transport.InputAggregateSession,
+                 input_session:          pyuavcan.transport.InputSession,
                  output_session_factory: _OutputSessionFactory):
         self._cls = cls
         self._input_session = input_session
         self._output_session_factory = output_session_factory
-        self._output_session_cache: typing.Dict[int, _aggregate_transport.OutputAggregateSession] = {}
+        self._output_session_cache: typing.Dict[int, pyuavcan.transport.OutputSession] = {}
 
     @property
     def data_type_class(self) -> typing.Type[ServiceTypeClass]:
         return self._cls
 
     @property
-    def aggregate_input_session(self) -> _aggregate_transport.InputAggregateSession:
+    def input_session(self) -> pyuavcan.transport.InputSession:
         return self._input_session
 
     async def listen_forever(self, handler: Handler) -> None:
@@ -325,14 +328,15 @@ class Server(ServiceSession[ServiceTypeClass]):
         raise NotImplementedError
 
     async def _try_receive(self, monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[DataTypeClass, ReceivedMetadata]]:  # TODO: use proper types
+            -> typing.Optional[typing.Tuple[DataTypeClass, ReceivedServiceMetadata]]:  # TODO: use proper types
         while time.monotonic() <= monotonic_deadline:
-            result = await self._input_session.try_receive(monotonic_deadline)
-            if result is not None:
-                transfer, transport = result
+            transfer = await self._input_session.try_receive(monotonic_deadline)
+            if transfer is not None:
                 response = pyuavcan.dsdl.try_deserialize(self._cls.Response, transfer.fragmented_payload)
                 if response is not None:
-                    return response, self._construct_metadata(transfer, transport)
+                    meta = self._try_construct_metadata(transfer)       # TODO: log error if failed
+                    if meta is not None:
+                        return response, meta
         return None     # Timed out
 
     async def _do_send(self,
@@ -352,7 +356,7 @@ class Server(ServiceSession[ServiceTypeClass]):
                                                loopback=False)
         await output_session.send(transfer)
 
-    async def _get_output_session(self, client_node_id: int) -> _aggregate_transport.OutputAggregateSession:
+    async def _get_output_session(self, client_node_id: int) -> pyuavcan.transport.OutputSession:
         client_node_id = int(client_node_id)
         try:
             return self._output_session_cache[client_node_id]
@@ -361,15 +365,13 @@ class Server(ServiceSession[ServiceTypeClass]):
             self._output_session_cache[client_node_id] = out
             return out
 
-    def _construct_metadata(self,
-                            transfer: pyuavcan.transport.Transfer,
-                            transport: pyuavcan.transport.Transport) -> ReceivedMetadata:
-        if isinstance(transfer, pyuavcan.transport.TransferFrom):
+    def _try_construct_metadata(self, transfer: pyuavcan.transport.Transfer) \
+            -> typing.Optional[ReceivedServiceMetadata]:
+        if isinstance(transfer, pyuavcan.transport.TransferFrom) and transfer.source_node_id is not None:
             source_node_id = transfer.source_node_id
-        elif isinstance(self._input_session, _aggregate_transport.SelectiveInputAggregateSession):
+        elif isinstance(self._input_session, pyuavcan.transport.SelectiveInputSession):
             source_node_id = self._input_session.source_node_id
         else:
-            raise RuntimeError('Impossible configuration: client node ID is not obtainable')
-        return ReceivedMetadata(transfer=transfer,
-                                transport=transport,
-                                source_node_id=source_node_id)
+            return None
+        assert isinstance(source_node_id, int)
+        return ReceivedServiceMetadata(transfer=transfer, source_node_id=source_node_id)

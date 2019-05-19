@@ -23,10 +23,11 @@ class ProtocolParameters:
 class Statistics:
     @dataclasses.dataclass
     class Directional:
-        frames:   int
-        bytes:    int
-        errors:   int
-        overruns: int
+        transfers: int
+        frames:    int
+        bytes:     int
+        errors:    int
+        overruns:  int
 
     output: Directional
     input:  Directional

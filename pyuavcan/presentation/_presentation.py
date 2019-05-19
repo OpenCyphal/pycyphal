@@ -6,10 +6,9 @@
 
 from __future__ import annotations
 import typing
-import pyuavcan.transport
 import pyuavcan.dsdl
-from ._typed_session import Publisher, Subscriber, Client, Server
-from .. import _aggregate_transport
+import pyuavcan.transport
+from ._channel import Publisher, Subscriber, Client, Server
 
 
 MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
@@ -22,20 +21,13 @@ FixedPortServiceClass = typing.TypeVar('FixedPortServiceClass', bound=pyuavcan.d
 DEFAULT_PRIORITY = pyuavcan.transport.Priority.SLOW
 
 
-class TypedTransport:
-    def __init__(self, aggregate_transport: _aggregate_transport.AggregateTransport) -> None:
-        self._aggregate_transport = aggregate_transport
+class Presentation:
+    def __init__(self, transport: pyuavcan.transport.Transport) -> None:
+        self._transport = transport
 
     @property
-    def aggregate_transport(self) -> _aggregate_transport.AggregateTransport:
-        return self._aggregate_transport
-
-    @property
-    def local_node_id(self) -> int:
-        raise NotImplementedError
-
-    async def set_local_node_id(self, node_id: int) -> None:
-        raise NotImplementedError
+    def transport(self) -> pyuavcan.transport.Transport:
+        return self._transport
 
     async def get_publisher(self,
                             cls:        typing.Type[MessageClass],

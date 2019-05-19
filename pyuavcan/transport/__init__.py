@@ -15,3 +15,5 @@ from ._session import PromiscuousInputSession, SelectiveInputSession
 from ._session import BroadcastOutputSession, UnicastOutputSession
 
 from ._data_specifier import DataSpecifier, MessageDataSpecifier, ServiceDataSpecifier
+
+from ._error import TransportError, UnsupportedSessionConfigurationError, OperationNotDefinedForAnonymousNodeError
