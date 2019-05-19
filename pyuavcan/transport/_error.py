@@ -9,6 +9,10 @@ class TransportError(RuntimeError):
     pass
 
 
+class InvalidTransportConfigurationError(TransportError):
+    pass
+
+
 class UnsupportedSessionConfigurationError(TransportError):
     pass
 

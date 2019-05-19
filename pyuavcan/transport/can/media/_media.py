@@ -10,8 +10,7 @@ from . import _frame
 
 
 class Media(abc.ABC):
-    MIN_MTU = 8         # Like in CAN 2.0
-    MAX_MTU = 64
+    VALID_MTU = {8, 12, 16, 20, 24, 32, 48, 64}
 
     @property
     @abc.abstractmethod

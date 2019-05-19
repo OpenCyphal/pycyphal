@@ -8,10 +8,10 @@ from .. import _media, _frame
 
 
 class SocketCAN(_media.Media):
-    def __init__(self, mtu=_media.Media.MAX_MTU):
+    def __init__(self, mtu=max(_media.Media.VALID_MTU)):
         mtu = int(mtu)
-        if not (self.MIN_MTU <= mtu <= self.MAX_MTU):
-            raise ValueError(f'Invalid MTU: {self.MIN_MTU} <= {mtu} <= {self.MAX_MTU}')
+        if mtu not in self.VALID_MTU:
+            raise ValueError(f'Invalid MTU: {mtu} not in {self.VALID_MTU}')
 
         self._mtu = mtu
         super(SocketCAN, self).__init__()

@@ -56,7 +56,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
             else:
                 raise ValueError(f'Node ID not in range, changes not applied: 0 <= {node_id} < {nid_card}')
         else:
-            raise ValueError('Node ID can be assigned only once')
+            raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     @property
     def transports(self) -> typing.List[pyuavcan.transport.Transport]:

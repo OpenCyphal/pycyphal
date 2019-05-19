@@ -32,8 +32,8 @@ class CANTransport(pyuavcan.transport.Transport):
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         sft_payload_capacity = self._media.mtu - 1
         return pyuavcan.transport.ProtocolParameters(
-            transfer_id_modulo=32,
-            node_id_set_cardinality=128,
+            transfer_id_modulo=_media.TRANSFER_ID_MODULO,
+            node_id_set_cardinality=_media.NODE_ID_MASK + 1,
             single_frame_transfer_payload_capacity_bytes=sft_payload_capacity
         )
 
@@ -42,7 +42,14 @@ class CANTransport(pyuavcan.transport.Transport):
         return self._local_node_id
 
     async def set_local_node_id(self, node_id: int) -> None:
-        self._local_node_id = int(node_id)
+        if self._local_node_id is None:
+            if 0 <= node_id <= _media.NODE_ID_MASK:
+                self._local_node_id = int(node_id)
+                # TODO: RECONFIGURE ACCEPTANCE FILTERS
+            else:
+                raise ValueError(f'Invalid node ID for CAN: {node_id}')
+        else:
+            raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     async def close(self) -> None:
         # TODO: STOP THE LOCAL TASK

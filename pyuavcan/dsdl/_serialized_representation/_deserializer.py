@@ -128,7 +128,7 @@ class Deserializer(abc.ABC):
         self._bit_offset += 8
         return int(out)  # the array element access yields numpy.uint8, we don't want that
 
-    def fetch_aligned_u16(self) -> int:
+    def fetch_aligned_u16(self) -> int:  # TODO: here and below, consider using int.from_bytes()?
         out = self.fetch_aligned_u8()
         out |= self.fetch_aligned_u8() << 8
         return out
