@@ -124,7 +124,7 @@ class ReceivedFrame(Frame):
     timestamp: pyuavcan.transport.Timestamp
 
     @property
-    def payload(self) -> memoryview:
+    def padded_payload(self) -> memoryview:
         return memoryview(self.data)[:-1]
 
     @property
@@ -163,7 +163,7 @@ class ReceivedFrame(Frame):
 
     @property
     def _tail(self) -> int:
-        return self.payload[-1]
+        return self.data[-1]
 
 
 _DLC_TO_LENGTH = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64]
