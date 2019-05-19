@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 import abc
+import typing
 import dataclasses
 from ._session import PromiscuousInputSession, SelectiveInputSession, BroadcastOutputSession, UnicastOutputSession
 from ._data_specifier import DataSpecifier
@@ -40,7 +41,7 @@ class Transport(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def local_node_id(self) -> int:
+    def local_node_id(self) -> typing.Optional[int]:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -48,11 +49,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def start(self) -> None:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def stop(self) -> None:
+    async def close(self) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod

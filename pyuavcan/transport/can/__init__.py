@@ -5,5 +5,4 @@
 #
 
 from ._can import CANTransport
-from ._can20 import CAN20Transport
-from ._canfd import CANFDTransport
+from . import media

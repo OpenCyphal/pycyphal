@@ -11,3 +11,7 @@ class TransportError(RuntimeError):
 
 class UnsupportedSessionConfigurationError(TransportError):
     pass
+
+
+class OperationNotDefinedForAnonymousNodeError(TransportError):
+    pass
