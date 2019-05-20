@@ -10,6 +10,7 @@ from ._timestamp import Timestamp
 
 from ._transfer import Priority, FragmentedPayload, Transfer, TransferFrom
 
+from ._session import OutputFeedback
 from ._session import Session, InputSession, OutputSession
 from ._session import PromiscuousInputSession, SelectiveInputSession
 from ._session import BroadcastOutputSession, UnicastOutputSession

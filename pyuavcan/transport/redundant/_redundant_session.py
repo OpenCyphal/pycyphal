@@ -9,11 +9,25 @@ import typing
 import pyuavcan.transport
 
 
-class TransportSpecificTransfer(abc.ABC):
+class TransportSpecific(abc.ABC):
     @property
     @abc.abstractmethod
     def transport(self) -> pyuavcan.transport.Transport:
-        """The transport over which the transfer has been or to be transferred."""
+        """The transport over which the entity has been or to be transferred."""
+        raise NotImplementedError
+
+
+class TransportSpecificOutputFeedback(pyuavcan.transport.OutputFeedback, TransportSpecific):
+    @property
+    def original_transfer_timestamp(self) -> pyuavcan.transport.Timestamp:
+        raise NotImplementedError
+
+    @property
+    def first_frame_transmission_timestamp(self) -> pyuavcan.transport.Timestamp:
+        raise NotImplementedError
+
+    @property
+    def transport(self) -> pyuavcan.transport.Transport:
         raise NotImplementedError
 
 
@@ -28,7 +42,7 @@ class RedundantSession:
 # ------------------------------------- INPUT -------------------------------------
 
 class PromiscuousInputSession(pyuavcan.transport.PromiscuousInputSession, RedundantSession):
-    class RedundantTransferFrom(pyuavcan.transport.TransferFrom, TransportSpecificTransfer):
+    class RedundantTransferFrom(pyuavcan.transport.TransferFrom, TransportSpecific):
         def __init__(self, transport: pyuavcan.transport.Transport):
             self._transport = transport
 
@@ -51,7 +65,7 @@ class PromiscuousInputSession(pyuavcan.transport.PromiscuousInputSession, Redund
 
 
 class SelectiveInputSession(pyuavcan.transport.SelectiveInputSession, RedundantSession):
-    class RedundantTransfer(pyuavcan.transport.TransferFrom, TransportSpecificTransfer):
+    class RedundantTransfer(pyuavcan.transport.Transfer, TransportSpecific):
         def __init__(self, transport: pyuavcan.transport.Transport):
             self._transport = transport
 
@@ -79,12 +93,23 @@ class SelectiveInputSession(pyuavcan.transport.SelectiveInputSession, RedundantS
 
 # ------------------------------------- OUTPUT -------------------------------------
 
-class BroadcastOutputSession(pyuavcan.transport.BroadcastOutputSession, RedundantSession):
+class RedundantOutputSession(RedundantSession):
+    pass
+
+
+class BroadcastOutputSession(pyuavcan.transport.BroadcastOutputSession, RedundantOutputSession):
     @property
     def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
         raise NotImplementedError
 
     async def close(self) -> None:
+        raise NotImplementedError
+
+    def enable_transmission_timestamping(self,
+                                         handler: typing.Callable[[TransportSpecificOutputFeedback], None]) -> None:
+        raise NotImplementedError
+
+    def disable_transmission_timestamping(self) -> None:
         raise NotImplementedError
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
@@ -94,12 +119,19 @@ class BroadcastOutputSession(pyuavcan.transport.BroadcastOutputSession, Redundan
         raise NotImplementedError
 
 
-class UnicastOutputSession(pyuavcan.transport.UnicastOutputSession, RedundantSession):
+class UnicastOutputSession(pyuavcan.transport.UnicastOutputSession, RedundantOutputSession):
     @property
     def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
         raise NotImplementedError
 
     async def close(self) -> None:
+        raise NotImplementedError
+
+    def enable_transmission_timestamping(self,
+                                         handler: typing.Callable[[TransportSpecificOutputFeedback], None]) -> None:
+        raise NotImplementedError
+
+    def disable_transmission_timestamping(self) -> None:
         raise NotImplementedError
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:

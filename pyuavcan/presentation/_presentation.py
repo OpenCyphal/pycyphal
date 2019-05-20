@@ -32,18 +32,16 @@ class Presentation:
     async def get_publisher(self,
                             cls:        typing.Type[MessageClass],
                             subject_id: int,
-                            priority:   pyuavcan.transport.Priority = DEFAULT_PRIORITY,
-                            loopback:   bool = False) -> Publisher[MessageClass]:
+                            priority:   pyuavcan.transport.Priority = DEFAULT_PRIORITY) -> Publisher[MessageClass]:
         raise NotImplementedError
 
     async def get_publisher_with_fixed_subject_id(self,
                                                   cls:      typing.Type[FixedPortMessageClass],
-                                                  priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY,
-                                                  loopback: bool = False) -> Publisher[FixedPortMessageClass]:
+                                                  priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY) \
+            -> Publisher[FixedPortMessageClass]:
         return await self.get_publisher(cls=cls,
                                         subject_id=pyuavcan.dsdl.get_fixed_port_id(cls),
-                                        priority=priority,
-                                        loopback=loopback)
+                                        priority=priority)
 
     async def get_subscriber(self, cls: typing.Type[MessageClass], subject_id: int) -> Subscriber[MessageClass]:
         raise NotImplementedError

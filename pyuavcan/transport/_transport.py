@@ -92,8 +92,6 @@ class Transport(abc.ABC):
     async def get_selective_input(self, data_specifier: DataSpecifier, source_node_id: int) -> SelectiveInputSession:
         """
         All transports must support this session type for service transfers.
-        If supported for message transfers, this can be used to receive loopback message frames if "source_node_id"
-        equals the local node ID.
         """
         raise NotImplementedError
 

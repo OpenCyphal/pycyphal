@@ -8,7 +8,38 @@ from __future__ import annotations
 import abc
 import typing
 from ._transfer import Transfer, TransferFrom
+from ._timestamp import Timestamp
 from ._data_specifier import DataSpecifier
+
+
+class OutputFeedback(abc.ABC):
+    @property
+    @abc.abstractmethod
+    def original_transfer_timestamp(self) -> Timestamp:
+        """
+        This is the timestamp value supplied when the transfer was created. It can be used by the upper layers
+        to match each transmitted transfer with its transmission timestamp.
+        Why do we use timestamp for matching? This is because:
+            - Priority is rarely unique, hence unfit for matching.
+            - Transfer ID may be modified by the transport layer by applying modulo, which is difficult to reliably
+              account for in the application, especially in heterogeneous redundant transports with multiple
+              publishers per session.
+            - The fragmented payload may contain references to the actual memory of the serialized object, meaning
+              that it may actually change after the object is transmitted, also rendering it unfit for matching.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def first_frame_transmission_timestamp(self) -> Timestamp:
+        """
+        This is the best-effort transmission timestamp. Transport implementations are not required to adhere to
+        any specific accuracy goals. They may use either software or hardware timestamping under the hood,
+        depending on the capabilities of the underlying media driver.
+        The timestamp of a multi-frame transfer equals the timestamp of its first frame.
+        The overall stack latency can be computed by subtracting the original transfer timestamp from this value.
+        """
+        raise NotImplementedError
 
 
 class Session(abc.ABC):        # TODO: statistics
@@ -58,6 +89,27 @@ class SelectiveInputSession(InputSession):
 
 # noinspection PyAbstractClass
 class OutputSession(Session):
+    @abc.abstractmethod
+    def enable_feedback(self, handler: typing.Callable[[OutputFeedback], None]) -> None:
+        """
+        Output feedback is disabled by default. It can be enabled by invoking this method. While the feedback is
+        enabled, the performance of the transport may be reduced, possibly resulting in higher input/output
+        latencies and increased CPU load.
+
+        The transport implementation is allowed to invoke the handler from any context, possibly from another thread.
+        The caller should ensure adequate synchronization.
+
+        We avoid full-transfer loopback on purpose because that would make it impossible for us to timestamp outgoing
+        transfers independently per transport interface (assuming redundant transports here), since the transport
+        aggregation logic would deduplicate redundant received transfers, thus making the valuable timing
+        information unavailable.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def disable_feedback(self) -> None:
+        raise NotImplementedError
+
     @abc.abstractmethod
     async def send(self, transfer: Transfer) -> None:
         raise NotImplementedError

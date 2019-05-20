@@ -25,7 +25,7 @@ class SessionSpecifier:
 
 @dataclasses.dataclass(frozen=True)
 class MessageSessionSpecifier(SessionSpecifier):
-    subject_id: int
+    subject_id:     int
     source_node_id: typing.Optional[int]  # None if anonymous
 
 

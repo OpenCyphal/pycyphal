@@ -17,6 +17,10 @@ _DECIMAL_NANO = decimal.Decimal('1e-9')
 
 
 class Timestamp:
+    """
+    Timestamp objects are immutable in order to allow them to be hashable.
+    """
+
     def __init__(self, wall_ns: int, monotonic_ns: int) -> None:
         """
         :param wall_ns:         Belongs to the domain of time.time_ns().
@@ -58,6 +62,15 @@ class Timestamp:
     @staticmethod
     def _ns_to_second(x: int) -> decimal.Decimal:
         return decimal.Decimal(x) * _DECIMAL_NANO
+
+    def __eq__(self, other: typing.Any) -> bool:
+        if isinstance(other, Timestamp):
+            return self._wall_ns == other._wall_ns and self._monotonic_ns == other._monotonic_ns
+        else:
+            return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self._wall_ns + self._monotonic_ns)
 
     def __str__(self) -> str:
         dt = datetime.datetime.fromtimestamp(float(self.wall))  # Precision loss is acceptable - wall time is imprecise

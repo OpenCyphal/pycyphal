@@ -85,12 +85,10 @@ class Publisher(MessageChannel[MessageTypeClass]):
                  cls:                 typing.Type[MessageTypeClass],
                  session:             pyuavcan.transport.OutputSession,
                  transfer_id_counter: OutgoingTransferIDCounter,
-                 priority:            pyuavcan.transport.Priority,
-                 loopback:            bool):
+                 priority:            pyuavcan.transport.Priority):
         self._cls = cls
         self._session = session
         self._priority = priority
-        self._loopback = loopback
         self._transfer_id_counter = transfer_id_counter
 
     @property
@@ -110,14 +108,6 @@ class Publisher(MessageChannel[MessageTypeClass]):
         self._priority = pyuavcan.transport.Priority(value)
 
     @property
-    def loopback(self) -> bool:
-        return self._loopback
-
-    @loopback.setter
-    def loopback(self, value: bool) -> None:
-        self._loopback = bool(value)
-
-    @property
     def transfer_id_counter(self) -> OutgoingTransferIDCounter:
         return self._transfer_id_counter
 
@@ -127,8 +117,7 @@ class Publisher(MessageChannel[MessageTypeClass]):
         transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
                                                priority=self._priority,
                                                transfer_id=self._transfer_id_counter.get_value_then_increment(),
-                                               fragmented_payload=fragmented_payload,
-                                               loopback=self._loopback)
+                                               fragmented_payload=fragmented_payload)
         await self._session.send(transfer)
 
     async def close(self) -> None:
@@ -250,8 +239,7 @@ class Client(ServiceChannel[ServiceTypeClass]):
         transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
                                                priority=self._priority,
                                                transfer_id=transfer_id,
-                                               fragmented_payload=fragmented_payload,
-                                               loopback=False)
+                                               fragmented_payload=fragmented_payload)
         await self._output_session.send(transfer)
 
     async def _try_receive(self, transfer_id: int, response_monotonic_deadline: float) \
@@ -352,8 +340,7 @@ class Server(ServiceChannel[ServiceTypeClass]):
         transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
                                                priority=priority,
                                                transfer_id=transfer_id,
-                                               fragmented_payload=fragmented_payload,
-                                               loopback=False)
+                                               fragmented_payload=fragmented_payload)
         await output_session.send(transfer)
 
     async def _get_output_session(self, client_node_id: int) -> pyuavcan.transport.OutputSession:

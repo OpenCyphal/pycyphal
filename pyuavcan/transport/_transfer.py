@@ -33,11 +33,10 @@ class Priority(enum.IntEnum):
 
 @dataclasses.dataclass
 class Transfer:
-    timestamp:          Timestamp           # When transmitting, contains the creation timestamp for latency diagnostics
+    timestamp:          Timestamp           # When transmitting, contains the creation timestamp
     priority:           Priority
     transfer_id:        int                 # When transmitting, modulo will be computed by the transport
     fragmented_payload: FragmentedPayload
-    loopback:           bool                # Request in outgoing transfers, indicator in received transfers
 
 
 @dataclasses.dataclass
