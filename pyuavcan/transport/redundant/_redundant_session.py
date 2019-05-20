@@ -17,7 +17,7 @@ class TransportSpecific(abc.ABC):
         raise NotImplementedError
 
 
-class TransportSpecificOutputFeedback(pyuavcan.transport.OutputFeedback, TransportSpecific):
+class TransportSpecificFeedback(pyuavcan.transport.Feedback, TransportSpecific):
     @property
     def original_transfer_timestamp(self) -> pyuavcan.transport.Timestamp:
         raise NotImplementedError
@@ -105,8 +105,7 @@ class BroadcastOutputSession(pyuavcan.transport.BroadcastOutputSession, Redundan
     async def close(self) -> None:
         raise NotImplementedError
 
-    def enable_transmission_timestamping(self,
-                                         handler: typing.Callable[[TransportSpecificOutputFeedback], None]) -> None:
+    def enable_transmission_timestamping(self, handler: typing.Callable[[TransportSpecificFeedback], None]) -> None:
         raise NotImplementedError
 
     def disable_transmission_timestamping(self) -> None:
@@ -127,8 +126,7 @@ class UnicastOutputSession(pyuavcan.transport.UnicastOutputSession, RedundantOut
     async def close(self) -> None:
         raise NotImplementedError
 
-    def enable_transmission_timestamping(self,
-                                         handler: typing.Callable[[TransportSpecificOutputFeedback], None]) -> None:
+    def enable_transmission_timestamping(self, handler: typing.Callable[[TransportSpecificFeedback], None]) -> None:
         raise NotImplementedError
 
     def disable_transmission_timestamping(self) -> None:

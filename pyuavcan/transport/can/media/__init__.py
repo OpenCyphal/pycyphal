@@ -6,5 +6,5 @@
 
 from ._media import Media
 
-from ._frame import Frame, SessionSpecifier, MessageSessionSpecifier, ServiceSessionSpecifier
-from ._frame import NODE_ID_MASK, TRANSFER_ID_MODULO
+from ._frame import Frame, TRANSFER_ID_MODULO
+from ._uavcan_can_identifier import CANIdentifier, MessageCANIdentifier, ServiceCANIdentifier

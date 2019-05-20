@@ -24,7 +24,7 @@ fi
 
 # Unit tests
 # https://docs.pytest.org/en/latest/pythonpath.html#invoking-pytest-versus-python-m-pytest
-if coverage run --source pyuavcan,tests,.test_dsdl_generated -m pytest -v pyuavcan tests
+if coverage run --source pyuavcan,tests,.test_dsdl_generated -m pytest -v pyuavcan tests $@
 then
     coverage report
 else

@@ -12,7 +12,7 @@ from ._timestamp import Timestamp
 from ._data_specifier import DataSpecifier
 
 
-class OutputFeedback(abc.ABC):
+class Feedback(abc.ABC):
     @property
     @abc.abstractmethod
     def original_transfer_timestamp(self) -> Timestamp:
@@ -21,8 +21,8 @@ class OutputFeedback(abc.ABC):
         to match each transmitted transfer with its transmission timestamp.
         Why do we use timestamp for matching? This is because:
             - Priority is rarely unique, hence unfit for matching.
-            - Transfer ID may be modified by the transport layer by applying modulo, which is difficult to reliably
-              account for in the application, especially in heterogeneous redundant transports with multiple
+            - Transfer ID may be modified by the transport layer by computing its modulus, which is difficult to
+              reliably account for in the application, especially in heterogeneous redundant transports with multiple
               publishers per session.
             - The fragmented payload may contain references to the actual memory of the serialized object, meaning
               that it may actually change after the object is transmitted, also rendering it unfit for matching.
@@ -90,7 +90,7 @@ class SelectiveInputSession(InputSession):
 # noinspection PyAbstractClass
 class OutputSession(Session):
     @abc.abstractmethod
-    def enable_feedback(self, handler: typing.Callable[[OutputFeedback], None]) -> None:
+    def enable_feedback(self, handler: typing.Callable[[Feedback], None]) -> None:
         """
         Output feedback is disabled by default. It can be enabled by invoking this method. While the feedback is
         enabled, the performance of the transport may be reduced, possibly resulting in higher input/output
