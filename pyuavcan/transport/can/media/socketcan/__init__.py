@@ -8,12 +8,12 @@ from .. import _media, _frame
 
 
 class SocketCAN(_media.Media):
-    def __init__(self, mtu=max(_media.Media.VALID_MTU)):
+    def __init__(self, mtu: int = max(_media.Media.VALID_MTU)) -> None:
         mtu = int(mtu)
         if mtu not in self.VALID_MTU:
             raise ValueError(f'Invalid MTU: {mtu} not in {self.VALID_MTU}')
 
-        self._mtu = mtu
+        self._mtu = int(mtu)
         super(SocketCAN, self).__init__()
 
     @property

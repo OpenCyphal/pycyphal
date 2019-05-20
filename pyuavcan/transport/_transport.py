@@ -43,10 +43,20 @@ class Transport(abc.ABC):
     @property
     @abc.abstractmethod
     def local_node_id(self) -> typing.Optional[int]:
+        """
+        By default, the local node ID is not assigned, meaning that the local node is in the anonymous mode.
+        While in the anonymous mode, some transports may choose to operate in a particular mode to facilitate
+        plug-and-play node ID allocation. For example, a CAN transport may disable automatic retransmission as
+        dictated by the Specification.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     async def set_local_node_id(self, node_id: int) -> None:
+        """
+        This method can be invoked only if the local node ID is not assigned. Once a local node ID is assigned,
+        this method shall not be invoked anymore. In other words, it can be invoked at most once.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
