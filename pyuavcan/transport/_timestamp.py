@@ -29,6 +29,9 @@ class Timestamp:
         self._wall_ns = int(wall_ns)
         self._monotonic_ns = int(monotonic_ns)
 
+        if self._wall_ns < 0 or self._monotonic_ns < 0:
+            raise ValueError(f'Neither of the timestamp samples can be negative; found this: {self!r}')
+
     @staticmethod
     def from_second(wall: _AnyScalar, monotonic: _AnyScalar) -> Timestamp:
         return Timestamp(wall_ns=Timestamp._second_to_ns(wall),

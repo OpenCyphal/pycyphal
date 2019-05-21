@@ -57,31 +57,33 @@ class FilterConfiguration:
         fmt = self.format if self.format == other.format else None
         return FilterConfiguration(identifier=identifier, mask=mask, format=fmt)
 
-    @staticmethod
-    def compact(configurations: typing.Sequence[FilterConfiguration],
-                target_number_of_configurations: int) -> typing.List[FilterConfiguration]:
-        """
-        Implements the CAN acceptance filter configuration optimization algorithm described in the Specification
-        (originally proposed by P. Kirienko and I. Sheremet).
-        """
-        if target_number_of_configurations < 1:
-            raise ValueError(f'The number of configurations must be positive; found {target_number_of_configurations}')
-        configurations = list(configurations)
-        while len(configurations) > target_number_of_configurations:
-            options = itertools.starmap(lambda ia, ib: (ia[0], ib[0], ia[1].merge(ib[1])),
-                                        itertools.permutations(enumerate(configurations), 2))
-            index_replace, index_remove, merged = max(options, key=lambda x: x[2].rank)
-            configurations[index_replace] = merged
-            del configurations[index_remove]  # Invalidates indexes
-        assert all(map(lambda x: isinstance(x, FilterConfiguration), configurations))
-        return configurations
-
     def __str__(self) -> str:
         out = ''.join(
             (str((self.identifier >> bit) & 1) if self.mask & (1 << bit) != 0 else 'x')
             for bit in reversed(range(int(self.format or _frame.Frame.Format.EXTENDED)))
         )
         return (self.format.name[:3].lower() if self.format else "any") + ':' + out
+
+
+def compact_filter_configurations(configurations: typing.Iterable[FilterConfiguration],
+                                  target_number_of_configurations: int) -> typing.List[FilterConfiguration]:
+    """
+    Implements the CAN acceptance filter configuration optimization algorithm described in the Specification
+    (originally proposed by P. Kirienko and I. Sheremet).
+    """
+    if target_number_of_configurations < 1:
+        raise ValueError(f'The number of configurations must be positive; found {target_number_of_configurations}')
+
+    configurations = list(configurations)
+    while len(configurations) > target_number_of_configurations:
+        options = itertools.starmap(lambda ia, ib: (ia[0], ib[0], ia[1].merge(ib[1])),
+                                    itertools.permutations(enumerate(configurations), 2))
+        index_replace, index_remove, merged = max(options, key=lambda x: x[2].rank)
+        configurations[index_replace] = merged
+        del configurations[index_remove]  # Invalidates indexes
+
+    assert all(map(lambda x: isinstance(x, FilterConfiguration), configurations))
+    return configurations
 
 
 # noinspection SpellCheckingInspection

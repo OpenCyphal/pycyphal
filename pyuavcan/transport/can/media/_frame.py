@@ -11,10 +11,7 @@ import dataclasses
 import pyuavcan.transport
 
 
-TRANSFER_ID_MODULO = 32
-
-
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Frame:
     class Format(enum.IntEnum):
         STANDARD = 11
@@ -23,6 +20,17 @@ class Frame:
     identifier: int
     data:       bytearray
     format:     Format
+    loopback:   bool        # Indicates a loopback request for outgoing frames; marks loopback for received frames.
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.format, self.Format):
+            raise ValueError(f'Invalid frame format: {self.format}')
+
+        if not (0 <= self.identifier < 2 ** int(self.format)):
+            raise ValueError(f'Invalid CAN ID for format {self.format}: {self.identifier}')
+
+        if len(self.data) not in _LENGTH_TO_DLC:
+            raise ValueError(f'Unsupported data length: {len(self.data)}')
 
     @property
     def data_length_code(self) -> int:
@@ -33,68 +41,16 @@ class Frame:
                              f'valid length values are: {list(_LENGTH_TO_DLC.keys())}') from None
 
     @staticmethod
-    def parse_data_length_code(dlc: int) -> int:
+    def convert_data_length_code_to_length(dlc: int) -> int:
         try:
             return _DLC_TO_LENGTH[dlc]
         except LookupError:
             raise ValueError(f'{dlc} is not a valid DLC') from None
 
-    @staticmethod
-    def new(identifier:        int,
-            padded_payload:    memoryview,
-            transfer_id:       int,
-            start_of_transfer: bool,
-            end_of_transfer:   bool,
-            toggle_bit:        bool) -> Frame:
-        if not (0 <= identifier < 2 ** 29):
-            raise ValueError(f'Invalid CAN ID: {identifier}')
 
-        if transfer_id < 0:
-            raise ValueError(f'Invalid transfer ID: {transfer_id}')
-
-        tail_byte = transfer_id % TRANSFER_ID_MODULO
-        if start_of_transfer:
-            tail_byte |= 1 << 7
-        if end_of_transfer:
-            tail_byte |= 1 << 6
-        if toggle_bit:
-            tail_byte |= 1 << 5
-
-        data = bytearray(padded_payload)
-        data.append(tail_byte)
-        if len(data) not in _LENGTH_TO_DLC:
-            raise ValueError(f'Unsupported payload length: {len(padded_payload)}')
-
-        return Frame(identifier=identifier, data=data, format=Frame.Format.EXTENDED)
-
-
-@dataclasses.dataclass
-class ReceivedFrame(Frame):
+@dataclasses.dataclass(frozen=True)
+class TimestampedFrame(Frame):
     timestamp: pyuavcan.transport.Timestamp
-
-    @property
-    def padded_payload(self) -> memoryview:
-        return memoryview(self.data)[:-1]
-
-    @property
-    def start_of_transfer(self) -> bool:
-        return self._tail & (1 << 7) != 0
-
-    @property
-    def end_of_transfer(self) -> bool:
-        return self._tail & (1 << 6) != 0
-
-    @property
-    def toggle_bit(self) -> bool:
-        return self._tail & (1 << 5) != 0
-
-    @property
-    def transfer_id(self) -> int:
-        return self._tail & (TRANSFER_ID_MODULO - 1)
-
-    @property
-    def _tail(self) -> int:
-        return self.data[-1]
 
 
 _DLC_TO_LENGTH = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64]

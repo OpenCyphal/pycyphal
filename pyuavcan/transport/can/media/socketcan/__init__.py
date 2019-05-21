@@ -4,26 +4,41 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from .. import _media, _frame
+import typing
+import pyuavcan.transport.can.media as _media
 
 
 class SocketCAN(_media.Media):
-    def __init__(self, mtu: int = max(_media.Media.VALID_MTU)) -> None:
-        mtu = int(mtu)
-        if mtu not in self.VALID_MTU:
-            raise ValueError(f'Invalid MTU: {mtu} not in {self.VALID_MTU}')
+    def __init__(self, max_data_field_length: int = 64) -> None:
+        max_data_field_length = int(max_data_field_length)
+        if max_data_field_length not in self.VALID_MAX_DATA_FIELD_LENGTH_SET:
+            raise ValueError(f'Invalid MTU: {max_data_field_length} not in {self.VALID_MAX_DATA_FIELD_LENGTH_SET}')
 
-        self._mtu = int(mtu)
+        self._max_data_field_length = int(max_data_field_length)
         super(SocketCAN, self).__init__()
 
     @property
-    def mtu(self) -> int:
-        return self._mtu
+    def max_data_field_length(self) -> int:
+        return self._max_data_field_length
 
-    async def send(self, frame: _frame.Frame) -> None:
+    @property
+    def number_of_acceptance_filters(self) -> int:
+        """
+        https://www.kernel.org/doc/Documentation/networking/can.txt
+        https://github.com/torvalds/linux/blob/9c7db5004280767566e91a33445bf93aa479ef02/net/can/af_can.c#L327-L348
+        """
+        return 1024
+
+    async def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
         raise NotImplementedError
 
-    async def receive(self, monotonic_deadline: float) -> _frame.ReceivedFrame:
+    async def enable_automatic_retransmission(self) -> None:
+        raise NotImplementedError
+
+    async def send(self, frame: _media.Frame) -> None:
+        raise NotImplementedError
+
+    async def try_receive(self, monotonic_deadline: float) -> _media.TimestampedFrame:
         raise NotImplementedError
 
     async def close(self) -> None:

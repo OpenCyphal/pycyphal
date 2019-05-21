@@ -6,5 +6,6 @@
 
 from ._media import Media
 
-from ._frame import Frame, TRANSFER_ID_MODULO
-from ._uavcan_can_identifier import CANIdentifier, MessageCANIdentifier, ServiceCANIdentifier
+from ._frame import Frame, TimestampedFrame
+
+from ._filter import FilterConfiguration, compact_filter_configurations

@@ -7,7 +7,7 @@
 from __future__ import annotations
 import typing
 import pyuavcan.transport
-from . import _session, media as _media
+from . import _session, media as _media, _frame, _can_id
 
 
 _SessionFactory = typing.TypeVar('_SessionFactory')
@@ -21,10 +21,10 @@ class CANTransport(pyuavcan.transport.Transport):
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
-        sft_payload_capacity = self._media.mtu - 1
+        sft_payload_capacity = self._media.max_data_field_length - 1
         return pyuavcan.transport.ProtocolParameters(
-            transfer_id_modulo=_media.TRANSFER_ID_MODULO,
-            node_id_set_cardinality=_media.CANIdentifier.NODE_ID_MASK + 1,
+            transfer_id_modulo=_frame.TRANSFER_ID_MODULO,
+            node_id_set_cardinality=_can_id.CANID.NODE_ID_MASK + 1,
             single_frame_transfer_payload_capacity_bytes=sft_payload_capacity
         )
 
@@ -34,7 +34,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     async def set_local_node_id(self, node_id: int) -> None:
         if self._local_node_id is None:
-            if 0 <= node_id <= _media.CANIdentifier.NODE_ID_MASK:
+            if 0 <= node_id <= _can_id.CANID.NODE_ID_MASK:
                 self._local_node_id = int(node_id)
                 await self._media.enable_automatic_retransmission()
                 await self._reconfigure_acceptance_filters()

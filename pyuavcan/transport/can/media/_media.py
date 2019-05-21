@@ -11,11 +11,12 @@ from . import _frame, _filter
 
 
 class Media(abc.ABC):
-    VALID_MTU = {8, 12, 16, 20, 24, 32, 48, 64}
+    VALID_MAX_DATA_FIELD_LENGTH_SET = {8, 12, 16, 20, 24, 32, 48, 64}
 
     @property
     @abc.abstractmethod
-    def mtu(self) -> int:
+    def max_data_field_length(self) -> int:
+        """Must belong to VALID_MAX_DATA_FIELD_LENGTH_SET"""
         raise NotImplementedError
 
     @property
@@ -28,6 +29,9 @@ class Media(abc.ABC):
         optimal number of filters which can be used without degrading the performance of the media driver. It is
         safe to err towards a smaller number (this may result in an increased processing load for the library);
         however, it is best to ensure that the underlying controller supports not less than four filters.
+        If the underlying CAN protocol implementation does not support acceptance filtering (neither in software
+        nor in hardware), its media driver must emulate it in software.
+        The returned value not be less than one.
         """
         raise NotImplementedError
 
@@ -55,7 +59,11 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[_frame.ReceivedFrame]:
+    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[_frame.TimestampedFrame]:
+        """
+        Every returned frame must be timestamped. Both monotonic and wall timestamps are required.
+        There are no accuracy requirements.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
