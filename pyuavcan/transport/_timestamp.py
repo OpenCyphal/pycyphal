@@ -78,7 +78,7 @@ class Timestamp:
     def __str__(self) -> str:
         dt = datetime.datetime.fromtimestamp(float(self.wall))  # Precision loss is acceptable - wall time is imprecise
         iso = dt.isoformat(timespec='microseconds')
-        return f'{iso}~{self.monotonic:.9f}'
+        return f'{iso}/{self.monotonic:.9f}'
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(wall_ns={self._wall_ns}, monotonic_ns={self._monotonic_ns})'
