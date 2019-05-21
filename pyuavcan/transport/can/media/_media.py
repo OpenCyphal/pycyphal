@@ -26,7 +26,8 @@ class Media(abc.ABC):
         such as SocketCAN, may implement acceptance filtering in software instead of hardware. In such case, the
         number of available filters may be unlimited (since they're all virtual), so this method should return the
         optimal number of filters which can be used without degrading the performance of the media driver. It is
-        safe to err towards a smaller number (this may result in an increased processing load for the library).
+        safe to err towards a smaller number (this may result in an increased processing load for the library);
+        however, it is best to ensure that the underlying controller supports not less than four filters.
         """
         raise NotImplementedError
 

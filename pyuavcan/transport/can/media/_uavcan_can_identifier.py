@@ -111,12 +111,23 @@ def generate_filter_configurations(subject_id_list: typing.Iterable[int],
 
     full: typing.List[_filter.FilterConfiguration] = []
 
-    # If the local node ID is set, we may receive service requests, so we need to allocate one filter for those.
     if local_node_id is not None:
         assert local_node_id < 2 ** 7
+        # If the local node ID is set, we may receive service requests, so we need to allocate one filter for those.
         #                     prio s r service-id dest.  source  v
         full.append(ext(idn=0b_000_1_0_000000000_0000000_0000000_1 | (int(local_node_id) << 8),
                         msk=0b_000_1_0_000000000_1111111_0000000_1))
+        # Also, we may need loopback frames for timestamping, so we add a filter for frames where the source node ID
+        # equals ours.
+        #                     prio m a    subject-id    source  v
+        full.append(ext(idn=0b_000_0_0_0000000000000000_0000000_1 | (int(local_node_id) << 1),
+                        msk=0b_000_1_0_0000000000000000_1111111_1))
+    else:
+        # If the local node ID is not set, we may need to receive loopback frames for sent anonymous transfers.
+        # This essentially means that we need to allow ALL anonymous transfers.
+        #                     prio m a    subject-id    source  v
+        full.append(ext(idn=0b_000_0_1_0000000000000000_0000000_1,
+                        msk=0b_000_1_1_0000000000000000_0000000_1))
 
     # One filter per unique subject ID. Sorted for testability.
     for sid in sorted(set(subject_id_list)):
@@ -137,11 +148,17 @@ def _unittest_can_media_filter_configuration() -> None:
         return FilterConfiguration(identifier=idn, mask=msk, format=Frame.Format.EXTENDED)
 
     degenerate = FilterConfiguration.compact(generate_filter_configurations([], None), 999)
-    assert degenerate == []
+    assert degenerate == [ext(idn=0b_000_0_1_0000000000000000_0000000_1,    # Anonymous messages
+                              msk=0b_000_1_1_0000000000000000_0000000_1)]
 
     no_subjects = FilterConfiguration.compact(generate_filter_configurations([], 0b1010101), 999)
-    assert no_subjects == [ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
-                               msk=0b_000_1_0_000000000_1111111_0000000_1)]
+    assert no_subjects == [
+        ext(idn=0b_000_1_0_000000000_1010101_0000000_1,     # Services
+            msk=0b_000_1_0_000000000_1111111_0000000_1),
+
+        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback messages
+            msk=0b_000_1_0_0000000000000000_1111111_1),
+    ]
 
     reference_subject_ids = [
         0b0000000000000000,
@@ -157,7 +174,10 @@ def _unittest_can_media_filter_configuration() -> None:
     retained = FilterConfiguration.compact(generate_filter_configurations(reference_subject_ids, 0b1010101), 999)
     assert retained == [
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
-            msk=0b_000_1_0_000000000_1111111_0000000_1),  # service
+            msk=0b_000_1_0_000000000_1111111_0000000_1),    # Services
+
+        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback messages
+            msk=0b_000_1_0_0000000000000000_1111111_1),
 
         ext(idn=0b_000_0_0_0000000000000000_0000000_1,
             msk=0b_000_1_0_1111111111111111_0000000_1),
@@ -172,40 +192,46 @@ def _unittest_can_media_filter_configuration() -> None:
             msk=0b_000_1_0_1111111111111111_0000000_1),
 
         ext(idn=0b_000_0_0_0000000000101010_0000000_1,
-            msk=0b_000_1_0_1111111111111111_0000000_1),  # Duplicates removed
+            msk=0b_000_1_0_1111111111111111_0000000_1),     # Duplicates removed
 
         ext(idn=0b_000_0_0_0000000000101011_0000000_1,
             msk=0b_000_1_0_1111111111111111_0000000_1),
     ]
 
-    reduced = FilterConfiguration.compact(generate_filter_configurations(reference_subject_ids, 0b1010101), 6)
+    reduced = FilterConfiguration.compact(generate_filter_configurations(reference_subject_ids, 0b1010101), 7)
     assert reduced == [
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
-            msk=0b_000_1_0_000000000_1111111_0000000_1),  # service
+            msk=0b_000_1_0_000000000_1111111_0000000_1),    # Services
+
+        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback messages
+            msk=0b_000_1_0_0000000000000000_1111111_1),
 
         ext(idn=0b_000_0_0_0000000000000000_0000000_1,
             msk=0b_000_1_0_1111111111111111_0000000_1),
 
         ext(idn=0b_000_0_0_0000000000000101_0000000_1,
-            msk=0b_000_1_0_1111111111101111_0000000_1),   # merged with 5th
+            msk=0b_000_1_0_1111111111101111_0000000_1),     # Merged with 6th
 
         ext(idn=0b_000_0_0_0000000000001010_0000000_1,
             msk=0b_000_1_0_1111111111111111_0000000_1),
 
-        # This one removed, merged with 3rd
+        # This one removed, merged with 4th
 
         ext(idn=0b_000_0_0_0000000000101010_0000000_1,
-            msk=0b_000_1_0_1111111111111111_0000000_1),  # Duplicates removed
+            msk=0b_000_1_0_1111111111111111_0000000_1),     # Duplicates removed
 
         ext(idn=0b_000_0_0_0000000000101011_0000000_1,
             msk=0b_000_1_0_1111111111111111_0000000_1),
     ]
     print([str(r) for r in reduced])
 
-    reduced = FilterConfiguration.compact(generate_filter_configurations(reference_subject_ids, 0b1010101), 2)
+    reduced = FilterConfiguration.compact(generate_filter_configurations(reference_subject_ids, 0b1010101), 3)
     assert reduced == [
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
-            msk=0b_000_1_0_000000000_1111111_0000000_1),  # service left intact
+            msk=0b_000_1_0_000000000_1111111_0000000_1),    # Services
+
+        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback messages
+            msk=0b_000_1_0_0000000000000000_1111111_1),
 
         ext(idn=0b_000_0_0_0000000000000000_0000000_1,
             msk=0b_000_1_0_1111111111000000_0000000_1),
