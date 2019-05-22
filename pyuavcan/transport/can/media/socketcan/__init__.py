@@ -35,7 +35,7 @@ class SocketCAN(_media.Media):
     async def enable_automatic_retransmission(self) -> None:
         raise NotImplementedError
 
-    async def send(self, frame: _media.Frame) -> None:
+    async def send(self, frames: typing.Iterable[_media.Frame]) -> None:
         raise NotImplementedError
 
     async def try_receive(self, monotonic_deadline: float) -> _media.TimestampedFrame:

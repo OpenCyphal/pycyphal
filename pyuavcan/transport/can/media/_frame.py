@@ -47,6 +47,12 @@ class Frame:
         except LookupError:
             raise ValueError(f'{dlc} is not a valid DLC') from None
 
+    @staticmethod
+    def get_required_padding(data_length: int) -> int:
+        supremum = next(x for x in _DLC_TO_LENGTH if x >= data_length)
+        assert supremum >= data_length
+        return supremum - data_length
+
     def __str__(self) -> str:
         ide = {
             self.Format.EXTENDED: '0x%08x',

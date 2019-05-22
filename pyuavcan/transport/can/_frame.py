@@ -8,7 +8,6 @@ from __future__ import annotations
 import typing
 import dataclasses
 import pyuavcan.transport
-from ._can_id import CANID
 from . import media as _media
 
 
@@ -17,7 +16,7 @@ TRANSFER_ID_MODULO = 32
 
 @dataclasses.dataclass(frozen=True)
 class UAVCANFrame:
-    identifier:         CANID
+    identifier:         int
     padded_payload:     memoryview
     transfer_id:        int
     start_of_transfer:  bool
@@ -26,6 +25,9 @@ class UAVCANFrame:
     loopback:           bool
 
     def __post_init__(self) -> None:
+        if not (0 <= self.identifier <= 2 ** 29):
+            raise ValueError(f'Invalid identifier: {self.identifier}')
+
         if self.transfer_id < 0:
             raise ValueError('Transfer ID cannot be negative')
 
@@ -44,10 +46,18 @@ class UAVCANFrame:
         data = bytearray(self.padded_payload)
         data.append(tail)
 
-        return _media.Frame(identifier=self.identifier.compile(),
+        return _media.Frame(identifier=self.identifier,
                             data=data,
                             format=_media.Frame.Format.EXTENDED,
                             loopback=self.loopback)
+
+    @staticmethod
+    def pad_payload(p: memoryview) -> memoryview:
+        padding = _media.Frame.get_required_padding(len(p) + 1)
+        if padding > 0:
+            return memoryview(bytearray(p) + b'\x55' * padding)
+        else:
+            return p
 
 
 @dataclasses.dataclass(frozen=True)
@@ -62,10 +72,6 @@ class TimestampedUAVCANFrame(UAVCANFrame):
         if len(source.data) < 1:
             return None
 
-        identifier = CANID.try_parse(source.identifier)
-        if identifier is None:
-            return None
-
         padded_payload, tail = memoryview(source.data)[:-1], source.data[-1]
         transfer_id = tail & (TRANSFER_ID_MODULO - 1)
         sot, eot, tog = tuple(tail & (1 << x) != 0 for x in (7, 6, 5))
@@ -73,7 +79,7 @@ class TimestampedUAVCANFrame(UAVCANFrame):
             return None
 
         return TimestampedUAVCANFrame(timestamp=source.timestamp,
-                                      identifier=identifier,
+                                      identifier=source.identifier,
                                       padded_payload=padded_payload,
                                       transfer_id=transfer_id,
                                       start_of_transfer=sot,
