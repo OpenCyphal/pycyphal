@@ -14,7 +14,7 @@ import pyuavcan.transport
 @dataclasses.dataclass(frozen=True)
 class Frame:
     class Format(enum.IntEnum):
-        STANDARD = 11
+        BASE     = 11
         EXTENDED = 29
 
     identifier: int
@@ -56,7 +56,7 @@ class Frame:
     def __str__(self) -> str:
         ide = {
             self.Format.EXTENDED: '0x%08x',
-            self.Format.STANDARD: '0x%03x',
+            self.Format.BASE: '0x%03x',
         }[self.format] % self.identifier
         data_hex = ' '.join(map('{:02x}'.format, self.data))
         data_ascii = ''.join((chr(x) if 32 <= x <= 126 else '.') for x in self.data)
@@ -80,7 +80,7 @@ for item in _DLC_TO_LENGTH:
 
 
 def _unittest_can_media_frame() -> None:
-    assert str(Frame(0, bytearray(), Frame.Format.STANDARD, False)) == "0x000    ''"
+    assert str(Frame(0, bytearray(), Frame.Format.BASE, False)) == "0x000    ''"
 
     assert str(Frame(0x12345678, bytearray(b'Hello\x01\x02\x7F'), Frame.Format.EXTENDED, True)) == \
         "0x12345678  48 65 6c 6c 6f 01 02 7f  'Hello...'  loopback"

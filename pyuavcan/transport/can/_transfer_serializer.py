@@ -14,6 +14,7 @@ def serialize_transfer(can_identifier:        int,
                        max_data_field_length: int,
                        loopback:              bool) -> typing.Iterable[_media.Frame]:
     chunks_iter = _rechunk(fragmented_payload, max_data_field_length - 1)
+    # TODO: CRC computation - append padding and then CRC to the fragmented payload?
     for index, (last, chunk) in enumerate(_mark_last(chunks_iter)):
         padded_payload: memoryview = _frame.UAVCANFrame.pad_payload(chunk) if last else chunk
         ufr = _frame.UAVCANFrame(identifier=can_identifier,

@@ -26,8 +26,9 @@ class SocketCAN(_media.Media):
         """
         https://www.kernel.org/doc/Documentation/networking/can.txt
         https://github.com/torvalds/linux/blob/9c7db5004280767566e91a33445bf93aa479ef02/net/can/af_can.c#L327-L348
+        https://github.com/torvalds/linux/blob/54dee406374ce8adb352c48e175176247cb8db7c/include/uapi/linux/can.h#L200
         """
-        return 1024
+        return 512
 
     async def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
         raise NotImplementedError

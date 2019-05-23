@@ -39,7 +39,7 @@ class FilterConfiguration:
         """
         This is a part of the CAN acceptance filter configuration optimization algorithm.
         Observe that we return negative rank for configurations which do not distinguish between extended and
-        standard frames in order to discourage merger of configurations of different frame types, since they are
+        base frames in order to discourage merger of configurations of different frame types, since they are
         hard to support in certain CAN controllers.
         """
         mask_mask = 2 ** self.identifier_bit_length - 1
@@ -98,7 +98,7 @@ def _unittest_can_media_filter_str() -> None:
                                    0b10111111111111111111111111111,
                                    Frame.Format.EXTENDED)) == 'ext:1x101010101010101010101010101'
 
-    assert str(FilterConfiguration(0b10101010101, 0b11111111111, Frame.Format.STANDARD)) == 'sta:10101010101'
+    assert str(FilterConfiguration(0b10101010101, 0b11111111111, Frame.Format.BASE)) == 'bas:10101010101'
 
     assert str(FilterConfiguration(123, 456, None)) == 'any:xxxxxxxxxxxxxxxxxxxx001xx1xxx'
 
@@ -113,7 +113,7 @@ def _unittest_can_media_filter_merge() -> None:
     assert FilterConfiguration(123456, 0, None).rank == -29         # Worst rank
     assert FilterConfiguration(123456, 0b110, None).rank == -27     # Two better
 
-    assert FilterConfiguration(1234, 0b110, Frame.Format.STANDARD).rank == 2
+    assert FilterConfiguration(1234, 0b110, Frame.Format.BASE).rank == 2
 
     assert FilterConfiguration(0b111, 0b111, Frame.Format.EXTENDED).merge(
-        FilterConfiguration(0b111, 0b111, Frame.Format.STANDARD)).rank == -29 + 3
+        FilterConfiguration(0b111, 0b111, Frame.Format.BASE)).rank == -29 + 3
