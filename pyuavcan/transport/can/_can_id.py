@@ -118,11 +118,11 @@ def _validate_unsigned_range(value: int, max_value: int) -> None:
 
 def generate_filter_configurations(subject_id_list: typing.Iterable[int],
                                    local_node_id:   typing.Optional[int]) -> typing.List[_media.FilterConfiguration]:
-    from .media import Frame
+    from .media import FrameFormat
 
     def ext(idn: int, msk: int) -> _media.FilterConfiguration:
         assert idn < 2 ** 29 and msk < 2 ** 29
-        return _media.FilterConfiguration(identifier=idn, mask=msk, format=Frame.Format.EXTENDED)
+        return _media.FilterConfiguration(identifier=idn, mask=msk, format=FrameFormat.EXTENDED)
 
     full: typing.List[_media.FilterConfiguration] = []
 
@@ -155,11 +155,11 @@ def generate_filter_configurations(subject_id_list: typing.Iterable[int],
 
 
 def _unittest_can_filter_configuration() -> None:
-    from .media import FilterConfiguration, compact_filter_configurations, Frame
+    from .media import FilterConfiguration, compact_filter_configurations, FrameFormat
 
     def ext(idn: int, msk: int) -> FilterConfiguration:
         assert idn < 2 ** 29 and msk < 2 ** 29
-        return FilterConfiguration(identifier=idn, mask=msk, format=Frame.Format.EXTENDED)
+        return FilterConfiguration(identifier=idn, mask=msk, format=FrameFormat.EXTENDED)
 
     degenerate = compact_filter_configurations(generate_filter_configurations([], None), 999)
     assert degenerate == [ext(idn=0b_000_0_1_0000000000000000_0000000_1,    # Anonymous messages

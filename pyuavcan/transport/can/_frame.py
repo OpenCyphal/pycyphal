@@ -34,7 +34,7 @@ class UAVCANFrame:
         if self.start_of_transfer and not self.toggle_bit:
             raise ValueError(f'The toggle bit must be set in the first frame of the transfer')
 
-    def compile(self) -> _media.Frame:
+    def compile(self) -> _media.DataFrame:
         tail = self.transfer_id % TRANSFER_ID_MODULO
         if self.start_of_transfer:
             tail |= 1 << 7
@@ -46,14 +46,14 @@ class UAVCANFrame:
         data = bytearray(self.padded_payload)
         data.append(tail)
 
-        return _media.Frame(identifier=self.identifier,
-                            data=data,
-                            format=_media.Frame.Format.EXTENDED,
-                            loopback=self.loopback)
+        return _media.DataFrame(identifier=self.identifier,
+                                data=data,
+                                format=_media.FrameFormat.EXTENDED,
+                                loopback=self.loopback)
 
     @staticmethod
     def pad_payload(p: memoryview) -> memoryview:
-        padding = _media.Frame.get_required_padding(len(p) + 1)
+        padding = _media.DataFrame.get_required_padding(len(p) + 1)
         if padding > 0:
             return memoryview(bytearray(p) + b'\x55' * padding)
         else:
@@ -65,8 +65,8 @@ class TimestampedUAVCANFrame(UAVCANFrame):
     timestamp: pyuavcan.transport.Timestamp
 
     @staticmethod
-    def try_parse(source: _media.TimestampedFrame) -> typing.Optional[TimestampedUAVCANFrame]:
-        if source.format != _media.Frame.Format.EXTENDED:
+    def try_parse(source: _media.TimestampedDataFrame) -> typing.Optional[TimestampedUAVCANFrame]:
+        if source.format != _media.FrameFormat.EXTENDED:
             return None
 
         if len(source.data) < 1:

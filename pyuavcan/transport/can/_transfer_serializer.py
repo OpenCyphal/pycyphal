@@ -12,7 +12,7 @@ def serialize_transfer(can_identifier:        int,
                        transfer_id:           int,
                        fragmented_payload:    typing.Sequence[memoryview],
                        max_data_field_length: int,
-                       loopback:              bool) -> typing.Iterable[_media.Frame]:
+                       loopback:              bool) -> typing.Iterable[_media.DataFrame]:
     chunks_iter = _rechunk(fragmented_payload, max_data_field_length - 1)
     # TODO: CRC computation - append padding and then CRC to the fragmented payload?
     for index, (last, chunk) in enumerate(_mark_last(chunks_iter)):

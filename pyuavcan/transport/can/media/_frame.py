@@ -11,19 +11,20 @@ import dataclasses
 import pyuavcan.transport
 
 
-@dataclasses.dataclass(frozen=True)
-class Frame:
-    class Format(enum.IntEnum):
-        BASE     = 11
-        EXTENDED = 29
+class FrameFormat(enum.IntEnum):
+    BASE = 11
+    EXTENDED = 29
 
+
+@dataclasses.dataclass(frozen=True)
+class DataFrame:
     identifier: int
     data:       bytearray
-    format:     Format
+    format:     FrameFormat
     loopback:   bool        # Indicates a loopback request for outgoing frames; marks loopback for received frames.
 
     def __post_init__(self) -> None:
-        if not isinstance(self.format, self.Format):
+        if not isinstance(self.format, FrameFormat):
             raise ValueError(f'Invalid frame format: {self.format}')
 
         if not (0 <= self.identifier < 2 ** int(self.format)):
@@ -55,8 +56,8 @@ class Frame:
 
     def __str__(self) -> str:
         ide = {
-            self.Format.EXTENDED: '0x%08x',
-            self.Format.BASE: '0x%03x',
+            FrameFormat.EXTENDED: '0x%08x',
+            FrameFormat.BASE: '0x%03x',
         }[self.format] % self.identifier
         data_hex = ' '.join(map('{:02x}'.format, self.data))
         data_ascii = ''.join((chr(x) if 32 <= x <= 126 else '.') for x in self.data)
@@ -65,11 +66,11 @@ class Frame:
 
 
 @dataclasses.dataclass(frozen=True)
-class TimestampedFrame(Frame):
+class TimestampedDataFrame(DataFrame):
     timestamp: pyuavcan.transport.Timestamp
 
     def __str__(self) -> str:
-        return f'{self.timestamp}: {super(TimestampedFrame, self).__str__()}'
+        return f'{self.timestamp}: {super(TimestampedDataFrame, self).__str__()}'
 
 
 _DLC_TO_LENGTH = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64]
@@ -80,15 +81,15 @@ for item in _DLC_TO_LENGTH:
 
 
 def _unittest_can_media_frame() -> None:
-    assert str(Frame(0, bytearray(), Frame.Format.BASE, False)) == "0x000    ''"
+    assert str(DataFrame(0, bytearray(), FrameFormat.BASE, False)) == "0x000    ''"
 
-    assert str(Frame(0x12345678, bytearray(b'Hello\x01\x02\x7F'), Frame.Format.EXTENDED, True)) == \
+    assert str(DataFrame(0x12345678, bytearray(b'Hello\x01\x02\x7F'), FrameFormat.EXTENDED, True)) == \
         "0x12345678  48 65 6c 6c 6f 01 02 7f  'Hello...'  loopback"
 
-    assert str(TimestampedFrame(0x12345678,
-                                bytearray(b'Hello\x01\x02\x7F'),
-                                Frame.Format.EXTENDED,
-                                True,
-                                pyuavcan.transport.Timestamp(wall_ns=1558481132502003000,
-                                                             monotonic_ns=635720258263416))) == \
+    assert str(TimestampedDataFrame(0x12345678,
+                                    bytearray(b'Hello\x01\x02\x7F'),
+                                    FrameFormat.EXTENDED,
+                                    True,
+                                    pyuavcan.transport.Timestamp(wall_ns=1558481132502003000,
+                                                                 monotonic_ns=635720258263416))) == \
         "2019-05-22T02:25:32.502003/635720.258263416: 0x12345678  48 65 6c 6c 6f 01 02 7f  'Hello...'  loopback"

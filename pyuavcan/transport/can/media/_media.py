@@ -55,14 +55,14 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def send(self, frames: typing.Iterable[_frame.Frame]) -> None:
+    async def send(self, frames: typing.Iterable[_frame.DataFrame]) -> None:
         """
         All frames are guaranteed to share the same CAN ID. This guarantee may enable some optimizations.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[_frame.TimestampedFrame]:
+    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[_frame.TimestampedDataFrame]:
         """
         Every returned frame must be timestamped. Both monotonic and wall timestamps are required.
         There are no accuracy requirements.

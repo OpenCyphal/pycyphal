@@ -15,7 +15,7 @@ from . import _frame
 class FilterConfiguration:
     identifier: int
     mask:       int
-    format:     typing.Optional[_frame.Frame.Format]  # None means no preference
+    format:     typing.Optional[_frame.FrameFormat]  # None means no preference
 
     def __post_init__(self) -> None:
         max_bit_length = 2 ** self.identifier_bit_length - 1
@@ -27,7 +27,7 @@ class FilterConfiguration:
     @property
     def identifier_bit_length(self) -> int:
         # noinspection PyTypeChecker
-        return int(self.format if self.format is not None else max(_frame.Frame.Format))
+        return int(self.format if self.format is not None else max(_frame.FrameFormat))
 
     @staticmethod
     def new_promiscuous() -> FilterConfiguration:
@@ -60,7 +60,7 @@ class FilterConfiguration:
     def __str__(self) -> str:
         out = ''.join(
             (str((self.identifier >> bit) & 1) if self.mask & (1 << bit) != 0 else 'x')
-            for bit in reversed(range(int(self.format or _frame.Frame.Format.EXTENDED)))
+            for bit in reversed(range(int(self.format or _frame.FrameFormat.EXTENDED)))
         )
         return (self.format.name[:3].lower() if self.format else "any") + ':' + out
 
@@ -88,17 +88,17 @@ def compact_filter_configurations(configurations: typing.Iterable[FilterConfigur
 
 # noinspection SpellCheckingInspection
 def _unittest_can_media_filter_str() -> None:
-    from ._frame import Frame
+    from ._frame import FrameFormat
 
     assert str(FilterConfiguration(0b10101010,
                                    0b11101000,
-                                   Frame.Format.EXTENDED)) == 'ext:xxxxxxxxxxxxxxxxxxxxx101x1xxx'
+                                   FrameFormat.EXTENDED)) == 'ext:xxxxxxxxxxxxxxxxxxxxx101x1xxx'
 
     assert str(FilterConfiguration(0b10101010101010101010101010101,
                                    0b10111111111111111111111111111,
-                                   Frame.Format.EXTENDED)) == 'ext:1x101010101010101010101010101'
+                                   FrameFormat.EXTENDED)) == 'ext:1x101010101010101010101010101'
 
-    assert str(FilterConfiguration(0b10101010101, 0b11111111111, Frame.Format.BASE)) == 'bas:10101010101'
+    assert str(FilterConfiguration(0b10101010101, 0b11111111111, FrameFormat.BASE)) == 'bas:10101010101'
 
     assert str(FilterConfiguration(123, 456, None)) == 'any:xxxxxxxxxxxxxxxxxxxx001xx1xxx'
 
@@ -108,12 +108,12 @@ def _unittest_can_media_filter_str() -> None:
 
 
 def _unittest_can_media_filter_merge() -> None:
-    from ._frame import Frame
+    from ._frame import FrameFormat
 
     assert FilterConfiguration(123456, 0, None).rank == -29         # Worst rank
     assert FilterConfiguration(123456, 0b110, None).rank == -27     # Two better
 
-    assert FilterConfiguration(1234, 0b110, Frame.Format.BASE).rank == 2
+    assert FilterConfiguration(1234, 0b110, FrameFormat.BASE).rank == 2
 
-    assert FilterConfiguration(0b111, 0b111, Frame.Format.EXTENDED).merge(
-        FilterConfiguration(0b111, 0b111, Frame.Format.BASE)).rank == -29 + 3
+    assert FilterConfiguration(0b111, 0b111, FrameFormat.EXTENDED).merge(
+        FilterConfiguration(0b111, 0b111, FrameFormat.BASE)).rank == -29 + 3

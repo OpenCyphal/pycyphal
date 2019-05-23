@@ -6,6 +6,6 @@
 
 from ._media import Media
 
-from ._frame import Frame, TimestampedFrame
+from ._frame import FrameFormat, DataFrame, TimestampedDataFrame
 
 from ._filter import FilterConfiguration, compact_filter_configurations
