@@ -34,20 +34,15 @@ except ImportError:
 class PythonCan(AbstractDriver):
     TX_QUEUE_SIZE = 1000
 
-    def __init__(self, interface, **_extras):
+    def __init__(self):
         super(PythonCan, self).__init__()
 
         if can is None:
             logger.error("To use this driver, make sure the module python-can is installed")
             raise ValueError("python-can must be installed.")
 
-        # get bus from default config
         try:
-            if interface is None:
-                self._bus = can.Bus()
-            else:
-                self._bus = can.interface.Bus(channel=interface, bustype=_extras['bustype'], bitrate=_extras['bitrate'])
-            # self._bus.state = can.bus.BusState.ACTIVE
+            self._bus = can.interface.Bus()
         except Exception as ex:
             logger.info("Please make sure you have a valid can.ini file located in the current working directory.")
             logger.info("See also: https://python-can.readthedocs.io/en/master/configuration.html#configuration-file")
