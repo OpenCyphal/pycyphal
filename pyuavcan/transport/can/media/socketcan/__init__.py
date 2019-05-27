@@ -39,7 +39,7 @@ class SocketCAN(_media.Media):
     async def send(self, frames: typing.Iterable[_media.DataFrame]) -> None:
         raise NotImplementedError
 
-    async def try_receive(self, monotonic_deadline: float) -> _media.TimestampedDataFrame:
+    async def try_receive(self, monotonic_deadline: float) -> typing.Iterable[_media.TimestampedDataFrame]:
         raise NotImplementedError
 
     async def close(self) -> None:

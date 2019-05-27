@@ -62,10 +62,15 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[_frame.TimestampedDataFrame]:
+    async def try_receive(self, monotonic_deadline: float) -> typing.Iterable[_frame.TimestampedDataFrame]:
         """
         Every returned frame must be timestamped. Both monotonic and wall timestamps are required.
-        There are no accuracy requirements.
+        There are no timestamping accuracy requirements.
+        An empty set must be returned on timeout if no frames have been received.
+        If the returned set contains more than one frame, all frames must be ordered by the time of their arrival,
+        which also must be reflected in their timestamps; that is, the timestamp of a returned frame at index N
+        shall not be higher than the timestamp of a frame at index N+1.
+        The implementation should strive to return as many frames per call as possible.
         """
         raise NotImplementedError
 

@@ -1,7 +1,9 @@
 #
 # Development-only dependencies (not required to use the library)
 #
-pytest      ~= 4.5
-coverage    >= 4.5
-mypy        >= 0.701
-pycodestyle >= 2.5
+pytest          ~= 4.5
+pytest-asyncio  >= 0.10 < 2.0
+
+coverage        ~= 4.5
+mypy            >= 0.701 < 2.0
+pycodestyle     ~= 2.5
