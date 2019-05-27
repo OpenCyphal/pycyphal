@@ -91,6 +91,7 @@ def _unittest_util_refragment_automatic() -> None:
         reference = _to_bytes(input_fragments)
         expected_frags = math.ceil(len(reference) / output_fragment_size)
         out = list(refragment(input_fragments, output_fragment_size))
+        assert all(map(lambda x: isinstance(x, memoryview), out))
         assert len(out) == expected_frags
         assert _to_bytes(out) == reference
         if expected_frags > 0:

@@ -57,7 +57,7 @@ class CRC16CCITT:
     ]
 
 
-def _unittest_util_hash_crc16ccitt() -> None:
+def _unittest_util_hash_crc16_ccitt() -> None:
     assert CRC16CCITT().value == 0xFFFF
     c = CRC16CCITT()
     c.add(b'123456')
