@@ -51,14 +51,6 @@ class UAVCANFrame:
                                 format=_media.FrameFormat.EXTENDED,
                                 loopback=self.loopback)
 
-    @staticmethod
-    def pad_payload(p: memoryview) -> memoryview:
-        padding = _media.DataFrame.get_required_padding(len(p) + 1)
-        if padding > 0:
-            return memoryview(bytearray(p) + b'\x55' * padding)
-        else:
-            return p
-
 
 @dataclasses.dataclass(frozen=True)
 class TimestampedUAVCANFrame(UAVCANFrame):

@@ -57,15 +57,19 @@ def _unittest_util_refragment_manual() -> None:
     with raises(ValueError):
         _ = list(refragment([memoryview(b'')], 0))
 
-    assert b'' == _to_bytes(refragment([], 1000))
-    assert b'' == _to_bytes(refragment([memoryview(b'')], 1000))
+    assert [] == list(refragment([], 1000))
+    assert [] == list(refragment([memoryview(b'')], 1000))
 
-    assert b'012345' == _to_bytes(refragment([memoryview(b'012345')], 1000))
+    def lb(it: typing.Iterable[memoryview]) -> typing.List[bytes]:
+        return list(map(bytes, it))
 
-    assert b'0123456789' == _to_bytes(refragment([memoryview(b'012345'), memoryview(b'6789')], 1000))
-    assert b'0123456789' == _to_bytes(refragment([memoryview(b'012345'), memoryview(b'6789')], 6))
-    assert b'0123456789' == _to_bytes(refragment([memoryview(b'012345'), memoryview(b'6789')], 3))
-    assert b'0123456789' == _to_bytes(refragment([memoryview(b'012345'), memoryview(b'6789'), memoryview(b'')], 1))
+    assert [b'012345'] == lb(refragment([memoryview(b'012345')], 1000))
+
+    assert [b'0123456789'] == lb(refragment([memoryview(b'012345'), memoryview(b'6789')], 1000))
+    assert [b'012345', b'6789'] == lb(refragment([memoryview(b'012345'), memoryview(b'6789')], 6))
+    assert [b'012', b'345', b'678', b'9'] == lb(refragment([memoryview(b'012345'), memoryview(b'6789')], 3))
+    assert [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'] \
+        == lb(refragment([memoryview(b'012345'), memoryview(b'6789'), memoryview(b'')], 1))
 
     tiny = [
         memoryview(b'0'),
@@ -75,16 +79,15 @@ def _unittest_util_refragment_manual() -> None:
         memoryview(b'4'),
         memoryview(b'5'),
     ]
-    assert b'012345' == _to_bytes(refragment(tiny, 1000))
-    assert b'012345' == _to_bytes(refragment(tiny, 1))
+    assert [b'012345'] == lb(refragment(tiny, 1000))
+    assert [b'0', b'1', b'2', b'3', b'4', b'5'] == lb(refragment(tiny, 1))
 
 
 def _unittest_util_refragment_automatic() -> None:
     import math
     import random
 
-    def once(input_fragments: typing.Iterable[memoryview], output_fragment_size: int) -> None:
-        input_fragments = list(input_fragments)
+    def once(input_fragments: typing.List[memoryview], output_fragment_size: int) -> None:
         reference = _to_bytes(input_fragments)
         expected_frags = math.ceil(len(reference) / output_fragment_size)
         out = list(refragment(input_fragments, output_fragment_size))
@@ -95,11 +98,18 @@ def _unittest_util_refragment_automatic() -> None:
             assert all([x == output_fragment_size for x in sizes[:-1]])
             assert 0 < sizes[-1] <= output_fragment_size
 
-    def once_all(input_fragments: typing.Iterable[memoryview]) -> None:
-        input_fragments = list(input_fragments)
+    def once_all(input_fragments: typing.List[memoryview]) -> None:
         longest = max(map(len, input_fragments)) if len(input_fragments) > 0 else 1
         for size in range(1, longest + 2):
             once(input_fragments, size)
+
+        # Manual check for the edge case where all fragments are assembled into one chunk
+        total_size = sum(map(len, input_fragments))
+        if total_size > 0:
+            out_list = list(refragment(input_fragments, total_size))
+            assert len(out_list) in (0, 1)
+            out = out_list[0] if out_list else b''
+            assert out == _to_bytes(input_fragments)
 
     once_all([])
     once_all([memoryview(b'012345'), memoryview(b'6789')])
