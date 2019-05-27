@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 import typing
+import asyncio
 import pyuavcan.transport
 from . import _session, media as _media, _frame, _can_id
 
@@ -14,10 +15,13 @@ _SessionFactory = typing.TypeVar('_SessionFactory')
 
 
 class CANTransport(pyuavcan.transport.Transport):
-    def __init__(self, media: _media.Media):
+    def __init__(self,
+                 media: _media.Media,
+                 loop:  typing.Optional[asyncio.AbstractEventLoop] = None):
         self._media = media
         self._local_node_id: typing.Optional[int] = None
         self._started = False
+        self._send_mutex = asyncio.Lock(loop=loop)
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -65,6 +69,10 @@ class CANTransport(pyuavcan.transport.Transport):
     async def get_selective_input(self, data_specifier: pyuavcan.transport.DataSpecifier, source_node_id: int) \
             -> _session.SelectiveInputSession:
         raise NotImplementedError
+
+    @property
+    def media(self) -> _media.Media:
+        return self._media
 
     async def _start(self) -> None:
         pass

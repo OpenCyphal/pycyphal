@@ -125,10 +125,10 @@ def _unittest_can_serialize_transfer() -> None:
     crc.add(bytes(range(0x1D)))
     assert crc.value == 0xC46F
     assert [
-        mkf(123456, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 19, True, False, True),
-        mkf(123456, b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 19, False, False, False),
-        mkf(123456, b'\x6f', 19, False, True, True),
-    ] == list(serialize_transfer(123456, 32323219, [mv(bytes(range(0x1D)))], 16, False))
+        mkf(123456, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 19, True, False, True, True),
+        mkf(123456, b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 19, False, False, False, True),
+        mkf(123456, b'\x6f', 19, False, True, True, True),
+    ] == list(serialize_transfer(123456, 32323219, [mv(bytes(range(0x1D)))], 16, True))
 
     crc = pyuavcan.util.hash.CRC16CCITT()
     crc.add(bytes(range(0x1E)) + b'\x55')

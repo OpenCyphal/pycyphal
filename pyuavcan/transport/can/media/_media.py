@@ -71,6 +71,7 @@ class Media(abc.ABC):
         which also must be reflected in their timestamps; that is, the timestamp of a returned frame at index N
         shall not be higher than the timestamp of a frame at index N+1.
         The implementation should strive to return as many frames per call as possible.
+        WARNING: The method send() may be invoked concurrently from another task while this one is blocked.
         """
         raise NotImplementedError
 

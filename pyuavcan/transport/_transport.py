@@ -38,6 +38,11 @@ class Transport(abc.ABC):
     @property
     @abc.abstractmethod
     def protocol_parameters(self) -> ProtocolParameters:
+        """
+        Generally, the returned values are constant, as in, they never change for the current transport instance.
+        This is not a hard guarantee, however. For example, the redundant transport aggregator may return a different
+        set of parameters after the set of aggregated transports is changed (e.g., a transport is added or removed).
+        """
         raise NotImplementedError
 
     @property
@@ -61,10 +66,18 @@ class Transport(abc.ABC):
 
     @abc.abstractmethod
     async def close(self) -> None:
+        """
+        After a transport is closed, none of its methods can be used. The behavior of methods invoked on a closed
+        transport is undefined.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     async def get_statistics(self) -> Statistics:
+        """
+        The current approximated statistic sample. We say "approximated" because we do not require the implementations
+        to sample the statistical counters atomically, although normally they should strive to do so when possible.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -91,7 +104,7 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     async def get_selective_input(self, data_specifier: DataSpecifier, source_node_id: int) -> SelectiveInputSession:
         """
-        All transports must support this session type for service transfers.
+        All transports must support this session type for services.
         """
         raise NotImplementedError
 
