@@ -16,23 +16,23 @@ def refragment(input_fragments: typing.Iterable[memoryview], output_fragment_siz
     if output_fragment_size < 1:
         raise ValueError(f'Invalid output fragment size: {output_fragment_size}')
 
-    carry = bytearray()
+    carry: typing.Union[bytearray, memoryview] = memoryview(b'')
     for frag in input_fragments:
         # First, emit the leftover carry from the previous iteration(s), and update the fragment.
         # After this operation either the carry or the fragment (or both) will be empty.
         if carry:
             offset = output_fragment_size - len(carry)
-            assert len(carry) < output_fragment_size
-            assert offset < output_fragment_size
-            if len(frag) >= offset:
-                carry += frag[:offset]
+            assert len(carry) < output_fragment_size and offset < output_fragment_size
+            if isinstance(carry, bytearray):
+                carry += frag[:offset]                                                  # Expensive copy!
+            else:
+                carry = bytearray().join((carry, frag[:offset]))                        # Expensive copy!
+
+            frag = frag[offset:]
+            if len(carry) >= output_fragment_size:
                 assert len(carry) == output_fragment_size
                 yield memoryview(carry)
-                carry = bytearray()
-                frag = frag[offset:]
-            else:
-                carry += frag
-                frag = _EMPTY_FRAGMENT
+                carry = memoryview(b'')
 
         assert not carry or not frag
 
@@ -41,7 +41,7 @@ def refragment(input_fragments: typing.Iterable[memoryview], output_fragment_siz
             assert not carry
             chunk = frag[offset:offset + output_fragment_size]
             if len(chunk) < output_fragment_size:
-                carry = bytearray(chunk)
+                carry = chunk
             else:
                 assert len(chunk) == output_fragment_size
                 yield chunk
@@ -49,9 +49,6 @@ def refragment(input_fragments: typing.Iterable[memoryview], output_fragment_siz
     if carry:
         assert len(carry) < output_fragment_size
         yield memoryview(carry)
-
-
-_EMPTY_FRAGMENT = memoryview(b'')
 
 
 def _unittest_util_refragment_manual() -> None:
@@ -62,11 +59,24 @@ def _unittest_util_refragment_manual() -> None:
 
     assert b'' == _to_bytes(refragment([], 1000))
     assert b'' == _to_bytes(refragment([memoryview(b'')], 1000))
+
     assert b'012345' == _to_bytes(refragment([memoryview(b'012345')], 1000))
+
     assert b'0123456789' == _to_bytes(refragment([memoryview(b'012345'), memoryview(b'6789')], 1000))
     assert b'0123456789' == _to_bytes(refragment([memoryview(b'012345'), memoryview(b'6789')], 6))
     assert b'0123456789' == _to_bytes(refragment([memoryview(b'012345'), memoryview(b'6789')], 3))
     assert b'0123456789' == _to_bytes(refragment([memoryview(b'012345'), memoryview(b'6789'), memoryview(b'')], 1))
+
+    tiny = [
+        memoryview(b'0'),
+        memoryview(b'1'),
+        memoryview(b'2'),
+        memoryview(b'3'),
+        memoryview(b'4'),
+        memoryview(b'5'),
+    ]
+    assert b'012345' == _to_bytes(refragment(tiny, 1000))
+    assert b'012345' == _to_bytes(refragment(tiny, 1))
 
 
 def _unittest_util_refragment_automatic() -> None:
