@@ -6,25 +6,16 @@
 
 from __future__ import annotations
 import time
-import enum
 import typing
 import asyncio
 import collections
 import pyuavcan.util
 import pyuavcan.transport
 from .. import _frame, _can_id
-from . import _base
+from . import _base, _transfer_receiver
 
 
 InputQueueItem = typing.Tuple[_can_id.CANID, _frame.TimestampedUAVCANFrame]
-
-
-class TransferReceptionError(enum.Enum):
-    MISSED_START_OF_TRANSFER = enum.auto()
-    UNEXPECTED_TOGGLE_BIT    = enum.auto()
-    UNEXPECTED_TRANSFER_ID   = enum.auto()
-    TRANSFER_CRC_ERROR       = enum.auto()
-    PAYLOAD_TOO_LARGE        = enum.auto()
 
 
 class InputSession(_base.Session):
@@ -41,11 +32,12 @@ class InputSession(_base.Session):
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._transfer_id_timeout_ns = int(InputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
-        self._receivers = [_TransferReceiver(data_specifier.max_payload_size_bytes) for _ in _node_id_range()]
+        self._receivers = [_transfer_receiver.TransferReceiver(data_specifier.max_payload_size_bytes)
+                           for _ in _node_id_range()]
 
         self._success_count_anonymous = 0
         self._success_count = [0 for _ in _node_id_range()]
-        self._error_counts: typing.List[typing.DefaultDict[TransferReceptionError, int]] = [
+        self._error_counts: typing.List[typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]] = [
             collections.defaultdict(int) for _ in _node_id_range()
         ]
 
@@ -86,7 +78,7 @@ class InputSession(_base.Session):
 
                 receiver = self._receivers[source_node_id]
                 result = receiver.process_frame(canid.priority, source_node_id, frame, self._transfer_id_timeout_ns)
-                if isinstance(result, TransferReceptionError):
+                if isinstance(result, _transfer_receiver.TransferReceptionError):
                     self._error_counts[source_node_id][result] += 1
                 elif isinstance(result, pyuavcan.transport.TransferFrom):
                     self._success_count[source_node_id] += 1
@@ -135,7 +127,8 @@ class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputS
         self._transfer_id_timeout_ns = int(value / _NANO)
 
     @property
-    def error_counts_per_source_node_id(self) -> typing.Dict[int, typing.DefaultDict[TransferReceptionError, int]]:
+    def error_counts_per_source_node_id(self) -> \
+            typing.Dict[int, typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]]:
         return {nid: self._error_counts[nid].copy() for nid in _node_id_range()}
 
     @property
@@ -191,80 +184,12 @@ class SelectiveInputSession(InputSession, pyuavcan.transport.SelectiveInputSessi
         self._transfer_id_timeout_ns = int(value / _NANO)
 
     @property
-    def error_counts(self) -> typing.DefaultDict[TransferReceptionError, int]:
+    def error_counts(self) -> typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]:
         return self._error_counts[self.source_node_id].copy()
 
     @property
     def transfer_count(self) -> int:
         return self._success_count[self.source_node_id]
-
-
-class _TransferReceiver:
-    def __init__(self, max_payload_size_bytes: int):
-        self._initialized = False
-        self._fragmented_payload: typing.List[memoryview] = []
-        self._timestamp = pyuavcan.transport.Timestamp(0, 0)
-        self._transfer_id = 0
-        self._toggle_bit = False
-        self._max_payload_size_bytes = int(max_payload_size_bytes)
-
-    def process_frame(self,
-                      priority:               pyuavcan.transport.Priority,
-                      source_node_id:         int,
-                      frame:                  _frame.TimestampedUAVCANFrame,
-                      transfer_id_timeout_ns: int) -> typing.Union[None,
-                                                                   TransferReceptionError,
-                                                                   pyuavcan.transport.Transfer]:
-        tid_timed_out = frame.timestamp.monotonic_ns - self._timestamp.monotonic_ns > transfer_id_timeout_ns
-        not_previous_tid = _frame.compute_transfer_id_forward_distance(frame.transfer_id, self._transfer_id) > 1
-
-        if tid_timed_out or (frame.start_of_transfer and not_previous_tid) or not self._initialized:     # Restart
-            self._initialized = True
-            self._transfer_id = frame.transfer_id
-            self._fragmented_payload.clear()
-            self._toggle_bit = frame.toggle_bit
-            if not frame.start_of_transfer:
-                self._increment_transfer_id()
-                return TransferReceptionError.MISSED_START_OF_TRANSFER
-
-        if frame.toggle_bit != self._toggle_bit:
-            return TransferReceptionError.UNEXPECTED_TOGGLE_BIT
-
-        if frame.transfer_id != self._transfer_id:
-            return TransferReceptionError.UNEXPECTED_TRANSFER_ID
-
-        if frame.start_of_transfer:
-            self._timestamp = frame.timestamp
-
-        self._toggle_bit = not self._toggle_bit
-        self._fragmented_payload.append(frame.padded_payload)
-
-        if frame.end_of_transfer:
-            fragmented_payload = self._fragmented_payload.copy()
-            self._increment_transfer_id()
-            self._fragmented_payload.clear()
-
-            crc = pyuavcan.util.hash.CRC16CCITT()
-            for frag in fragmented_payload:
-                crc.add(frag)
-            if crc.value != crc.RESIDUE:
-                return TransferReceptionError.TRANSFER_CRC_ERROR
-
-            return pyuavcan.transport.TransferFrom(timestamp=self._timestamp,
-                                                   priority=priority,
-                                                   transfer_id=frame.transfer_id,
-                                                   fragmented_payload=fragmented_payload,
-                                                   source_node_id=source_node_id)
-        else:
-            if sum(map(len, self._fragmented_payload)) > self._max_payload_size_bytes:
-                self._increment_transfer_id()
-                self._fragmented_payload.clear()
-                return TransferReceptionError.PAYLOAD_TOO_LARGE
-
-            return None     # Expect more frames to come
-
-    def _increment_transfer_id(self) -> None:
-        self._transfer_id = (self._transfer_id + 1) % _frame.TRANSFER_ID_MODULO
 
 
 def _node_id_range() -> typing.Iterable[int]:

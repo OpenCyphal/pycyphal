@@ -4,5 +4,8 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._input import InputSession, PromiscuousInputSession, SelectiveInputSession, TransferReceptionError, InputQueueItem
+from ._input import InputSession, PromiscuousInputSession, SelectiveInputSession, InputQueueItem
+
 from ._output import OutputSession, BroadcastOutputSession, UnicastOutputSession
+
+from ._transfer_receiver import TransferReceptionError

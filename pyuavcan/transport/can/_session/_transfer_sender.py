@@ -7,11 +7,10 @@
 import typing
 import itertools
 import pyuavcan.util
-from . import _frame, media as _media
+from .. import _frame, media as _media
 
 
 _PADDING_PATTERN = b'\x55'
-_CRC_LENGTH = 2
 
 
 def serialize_transfer(can_identifier:        int,
@@ -43,10 +42,10 @@ def serialize_transfer(can_identifier:        int,
     else:                                                       # MULTI-FRAME TRANSFER
         # Compute padding
         last_frame_payload_length = payload_length % max_single_frame_payload_length
-        if last_frame_payload_length + _CRC_LENGTH >= max_single_frame_payload_length:
+        if last_frame_payload_length + _frame.TRANSFER_CRC_LENGTH_BYTES >= max_single_frame_payload_length:
             padding = b''
         else:
-            last_frame_data_length = last_frame_payload_length + _CRC_LENGTH + 1
+            last_frame_data_length = last_frame_payload_length + _frame.TRANSFER_CRC_LENGTH_BYTES + 1
             assert last_frame_data_length <= max_data_field_length
             padding = _PADDING_PATTERN * _media.DataFrame.get_required_padding(last_frame_data_length)
 

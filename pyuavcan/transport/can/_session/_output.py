@@ -8,8 +8,8 @@ from __future__ import annotations
 import typing
 import asyncio
 import pyuavcan.transport
-from .. import _frame, _can_id, _transfer_serializer
-from . import _base
+from .. import _frame, _can_id
+from . import _base, _transfer_sender
 
 
 class OutputSession(_base.Session):
@@ -25,7 +25,7 @@ class OutputSession(_base.Session):
 
     async def _do_send(self, can_identifier: int, transfer: pyuavcan.transport.Transfer) -> None:
         async with self._media_lock:
-            await self._media.send(_transfer_serializer.serialize_transfer(
+            await self._media.send(_transfer_sender.serialize_transfer(
                 can_identifier=can_identifier,
                 transfer_id=transfer.transfer_id,
                 fragmented_payload=transfer.fragmented_payload,

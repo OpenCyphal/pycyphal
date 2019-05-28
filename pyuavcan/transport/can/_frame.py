@@ -13,16 +13,18 @@ from . import media as _media
 
 TRANSFER_ID_MODULO = 32
 
+TRANSFER_CRC_LENGTH_BYTES = 2
+
 
 @dataclasses.dataclass(frozen=True)
 class UAVCANFrame:
-    identifier:         int
-    padded_payload:     memoryview
-    transfer_id:        int
-    start_of_transfer:  bool
-    end_of_transfer:    bool
-    toggle_bit:         bool
-    loopback:           bool
+    identifier:        int
+    padded_payload:    memoryview
+    transfer_id:       int
+    start_of_transfer: bool
+    end_of_transfer:   bool
+    toggle_bit:        bool
+    loopback:          bool
 
     def __post_init__(self) -> None:
         if not (0 <= self.identifier <= 2 ** 29):
