@@ -78,3 +78,19 @@ class TimestampedUAVCANFrame(UAVCANFrame):
                                       end_of_transfer=eot,
                                       toggle_bit=tog,
                                       loopback=source.loopback)
+
+
+def compute_transfer_id_forward_distance(a: int, b: int) -> int:
+    """
+    The algorithm is defined in the CAN bus transport layer specification of the UAVCAN Specification.
+    """
+    assert a >= 0 and b >= 0
+    a %= TRANSFER_ID_MODULO
+    b %= TRANSFER_ID_MODULO
+    d = b - a
+    if d < 0:
+        d += TRANSFER_ID_MODULO
+
+    assert 0 <= d < TRANSFER_ID_MODULO
+    assert (a + d) & (TRANSFER_ID_MODULO - 1) == b
+    return d

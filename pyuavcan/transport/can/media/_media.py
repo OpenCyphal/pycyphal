@@ -11,6 +11,8 @@ from . import _frame, _filter
 
 
 class Media(abc.ABC):
+    ReceivedFramesHandler = typing.Callable[[typing.Iterable[_frame.TimestampedDataFrame]], typing.Awaitable[None]]
+
     VALID_MAX_DATA_FIELD_LENGTH_SET = {8, 12, 16, 20, 24, 32, 48, 64}
 
     @property
@@ -32,6 +34,21 @@ class Media(abc.ABC):
         If the underlying CAN protocol implementation does not support acceptance filtering (neither in software
         nor in hardware), its media driver must emulate it in software.
         The returned value not be less than one.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def set_received_frames_handler(self, handler: ReceivedFramesHandler) -> None:
+        """
+        Every received frame must be timestamped. Both monotonic and wall timestamps are required.
+        There are no timestamping accuracy requirements. An empty set of frames should never be reported.
+        If the set contains more than one frame, all frames must be ordered by the time of their arrival,
+        which also must be reflected in their timestamps; that is, the timestamp of a frame at index N shall
+        not be higher than the timestamp of a frame at index N+1.
+        The implementation should strive to return as many frames per call as possible.
+        The handler shall be invoked on the same event loop.
+        The transport is guaranteed to invoke this method at least once during initialization; it can be used
+        to perform a lazy start of the receive loop task.
         """
         raise NotImplementedError
 
@@ -58,20 +75,7 @@ class Media(abc.ABC):
     async def send(self, frames: typing.Iterable[_frame.DataFrame]) -> None:
         """
         All frames are guaranteed to share the same CAN ID. This guarantee may enable some optimizations.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def try_receive(self, monotonic_deadline: float) -> typing.Iterable[_frame.TimestampedDataFrame]:
-        """
-        Every returned frame must be timestamped. Both monotonic and wall timestamps are required.
-        There are no timestamping accuracy requirements.
-        An empty set must be returned on timeout if no frames have been received.
-        If the returned set contains more than one frame, all frames must be ordered by the time of their arrival,
-        which also must be reflected in their timestamps; that is, the timestamp of a returned frame at index N
-        shall not be higher than the timestamp of a frame at index N+1.
-        The implementation should strive to return as many frames per call as possible.
-        WARNING: The method send() may be invoked concurrently from another task while this one is blocked.
+        The frames MUST be delivered to the bus in the same order.
         """
         raise NotImplementedError
 

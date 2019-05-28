@@ -8,7 +8,9 @@ import typing
 
 
 class CRC16CCITT:
-    def __init__(self):
+    RESIDUE = 0x0000
+
+    def __init__(self) -> None:
         self._value = 0xFFFF
 
     def add(self, data: typing.Union[bytes, bytearray, memoryview]) -> None:
@@ -65,3 +67,5 @@ def _unittest_util_hash_crc16_ccitt() -> None:
     assert c.value == 0x29B1
     c.add(b'')
     assert c.value == 0x29B1
+    c.add(b'\x29\xB1')
+    assert c.value == c.RESIDUE

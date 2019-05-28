@@ -65,6 +65,15 @@ class InputSession(Session):
     async def try_receive(self, monotonic_deadline: float) -> typing.Optional[Transfer]:
         raise NotImplementedError
 
+    @property
+    @abc.abstractmethod
+    def transfer_id_timeout(self) -> float:
+        raise NotImplementedError
+
+    @transfer_id_timeout.setter
+    def transfer_id_timeout(self, value: float) -> None:
+        raise NotImplementedError
+
 
 # noinspection PyAbstractClass
 class PromiscuousInputSession(InputSession):

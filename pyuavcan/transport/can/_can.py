@@ -21,7 +21,10 @@ class CANTransport(pyuavcan.transport.Transport):
         self._media = media
         self._local_node_id: typing.Optional[int] = None
         self._started = False
-        self._send_mutex = asyncio.Lock(loop=loop)
+        self._media_lock = asyncio.Lock(loop=loop)
+        self._loop = loop if loop is not None else asyncio.get_event_loop()
+
+        self._media.set_received_frames_handler(self._on_frames_received)
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -48,7 +51,6 @@ class CANTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     async def close(self) -> None:
-        # TODO: STOP THE LOCAL TASK
         await self._media.close()
 
     async def get_statistics(self) -> pyuavcan.transport.Statistics:
@@ -56,26 +58,60 @@ class CANTransport(pyuavcan.transport.Transport):
 
     async def get_broadcast_output(self, data_specifier: pyuavcan.transport.DataSpecifier) \
             -> _session.BroadcastOutputSession:
-        raise NotImplementedError
+        def finalizer() -> None:
+            pass        # TODO
+
+        return _session.BroadcastOutputSession(data_specifier=data_specifier,
+                                               transport=self,
+                                               media_lock=self._media_lock,
+                                               finalizer=finalizer)
 
     async def get_unicast_output(self, data_specifier: pyuavcan.transport.DataSpecifier, destination_node_id: int) \
             -> _session.UnicastOutputSession:
-        raise NotImplementedError
+        def finalizer() -> None:
+            pass        # TODO
+
+        return _session.UnicastOutputSession(destination_node_id=destination_node_id,
+                                             data_specifier=data_specifier,
+                                             transport=self,
+                                             media_lock=self._media_lock,
+                                             finalizer=finalizer)
 
     async def get_promiscuous_input(self, data_specifier: pyuavcan.transport.DataSpecifier) \
             -> _session.PromiscuousInputSession:
-        raise NotImplementedError
+        def finalizer() -> None:
+            pass        # TODO
+
+        queue: asyncio.Queue[_session.InputQueueItem] = asyncio.Queue(loop=self._loop)  # TODO
+
+        return _session.PromiscuousInputSession(data_specifier=data_specifier,
+                                                loop=self._loop,
+                                                queue=queue,
+                                                finalizer=finalizer)
 
     async def get_selective_input(self, data_specifier: pyuavcan.transport.DataSpecifier, source_node_id: int) \
             -> _session.SelectiveInputSession:
-        raise NotImplementedError
+        def finalizer() -> None:
+            pass        # TODO
+
+        queue: asyncio.Queue[_session.InputQueueItem] = asyncio.Queue(loop=self._loop)  # TODO
+
+        return _session.SelectiveInputSession(source_node_id=source_node_id,
+                                              data_specifier=data_specifier,
+                                              loop=self._loop,
+                                              queue=queue,
+                                              finalizer=finalizer)
 
     @property
     def media(self) -> _media.Media:
         return self._media
 
-    async def _start(self) -> None:
-        pass
+    async def _on_frames_received(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
+        async with self._media_lock:
+            for fr in frames:
+                cid = _can_id.CANID.try_parse(fr.identifier)
+                # TODO queue dispatch
+                # TODO loopback handling
 
     async def _reconfigure_acceptance_filters(self) -> None:
         pass
