@@ -32,27 +32,35 @@ class TransferReceiver:
                       priority:               pyuavcan.transport.Priority,
                       source_node_id:         int,
                       frame:                  _frame.TimestampedUAVCANFrame,
-                      transfer_id_timeout_ns: int) -> typing.Union[None,
-                                                                   TransferReceptionError,
-                                                                   pyuavcan.transport.Transfer]:
-        tid_timed_out = frame.timestamp.monotonic_ns - self._timestamp.monotonic_ns > transfer_id_timeout_ns
+                      transfer_id_timeout_ns: int) \
+            -> typing.Union[None, TransferReceptionError, pyuavcan.transport.Transfer]:
+        # FIRST STAGE - DETECTION OF NEW TRANSFERS.
+        # Decide if we need to begin a new transfer.
+        tid_timed_out = \
+            frame.timestamp.monotonic_ns - self._timestamp.monotonic_ns > transfer_id_timeout_ns or \
+            self._timestamp.monotonic_ns == 0
+
         not_previous_tid = _frame.compute_transfer_id_forward_distance(frame.transfer_id, self._transfer_id) > 1
 
         if tid_timed_out or (frame.start_of_transfer and not_previous_tid):
             self._transfer_id = frame.transfer_id
-            self._fragmented_payload.clear()
             self._toggle_bit = frame.toggle_bit
             if not frame.start_of_transfer:
-                self._increment_transfer_id()
                 return TransferReceptionError.MISSED_START_OF_TRANSFER
 
+        # SECOND STAGE - DROP UNEXPECTED FRAMES.
+        # A properly functioning CAN bus may occasionally replicate frames (see the Specification for background).
+        # Here we combat these issues by checking the transfer ID and the toggle bit.
         if frame.toggle_bit != self._toggle_bit:
             return TransferReceptionError.UNEXPECTED_TOGGLE_BIT
 
         if frame.transfer_id != self._transfer_id:
             return TransferReceptionError.UNEXPECTED_TRANSFER_ID
 
+        # THIRD STAGE - PAYLOAD REASSEMBLY AND VERIFICATION.
+        # Collect the data and check its correctness.
         if frame.start_of_transfer:
+            self._fragmented_payload.clear()
             self._timestamp = frame.timestamp
 
         self._toggle_bit = not self._toggle_bit
@@ -66,12 +74,10 @@ class TransferReceiver:
             if frame.start_of_transfer:
                 assert len(fragmented_payload) == 1     # Single-frame transfer, additional checks not needed
             else:
-                assert len(fragmented_payload) > 1
-
+                assert len(fragmented_payload) > 1      # Multi-frame transfer, check and remove the trailing CRC
                 crc = pyuavcan.util.hash.CRC16CCITT()
                 for frag in fragmented_payload:
                     crc.add(frag)
-
                 if crc.value != crc.RESIDUE:
                     return TransferReceptionError.TRANSFER_CRC_MISMATCH
 

@@ -127,8 +127,8 @@ class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputS
         self._transfer_id_timeout_ns = int(value / _NANO)
 
     @property
-    def error_counts_per_source_node_id(self) -> \
-            typing.Dict[int, typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]]:
+    def error_counts_per_source_node_id(self) \
+            -> typing.Dict[int, typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]]:
         return {nid: self._error_counts[nid].copy() for nid in _node_id_range()}
 
     @property
