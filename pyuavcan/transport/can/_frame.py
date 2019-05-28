@@ -96,3 +96,15 @@ def compute_transfer_id_forward_distance(a: int, b: int) -> int:
     assert 0 <= d < TRANSFER_ID_MODULO
     assert (a + d) & (TRANSFER_ID_MODULO - 1) == b
     return d
+
+
+def _unittest_can_transfer_id_forward_distance() -> None:
+    cfd = compute_transfer_id_forward_distance
+    assert 0 == cfd(0, 0)
+    assert 1 == cfd(0, 1)
+    assert 7 == cfd(0, 7)
+    assert 0 == cfd(7, 7)
+    assert 1 == cfd(31, 0)
+    assert 5 == cfd(0, 5)
+    assert 31 == cfd(31, 30)
+    assert 30 == cfd(7, 5)
