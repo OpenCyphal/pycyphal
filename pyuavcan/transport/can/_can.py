@@ -7,11 +7,12 @@
 from __future__ import annotations
 import typing
 import asyncio
+import logging
 import pyuavcan.transport
 from . import _session, media as _media, _frame, _can_id
 
 
-_SessionFactory = typing.TypeVar('_SessionFactory')
+_logger = logging.getLogger(__name__)
 
 
 class CANTransport(pyuavcan.transport.Transport):
@@ -23,6 +24,8 @@ class CANTransport(pyuavcan.transport.Transport):
         self._started = False
         self._media_lock = asyncio.Lock(loop=loop)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
+
+        self._output_registry: typing.Dict[pyuavcan.transport.DataSpecifier, _session.OutputSession] = {}
 
         self._media.set_received_frames_handler(self._on_frames_received)
 
@@ -120,14 +123,17 @@ class CANTransport(pyuavcan.transport.Transport):
 
     def _on_frames_received(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
         for raw_frame in frames:
-            cid = _can_id.CANID.try_parse(raw_frame.identifier)
-            if cid is not None:                                             # Ignore non-UAVCAN CAN frames
-                ufr = _frame.TimestampedUAVCANFrame.try_parse(raw_frame)
-                if ufr is not None:                                         # Ignore non-UAVCAN CAN frames
-                    if not ufr.loopback:
-                        self._handle_received_frame(cid, ufr)
-                    else:
-                        self._handle_loopback_frame(cid, ufr)
+            try:
+                cid = _can_id.CANID.try_parse(raw_frame.identifier)
+                if cid is not None:                                             # Ignore non-UAVCAN CAN frames
+                    ufr = _frame.TimestampedUAVCANFrame.try_parse(raw_frame)
+                    if ufr is not None:                                         # Ignore non-UAVCAN CAN frames
+                        if not ufr.loopback:
+                            self._handle_received_frame(cid, ufr)
+                        else:
+                            self._handle_loopback_frame(cid, ufr)
+            except Exception as ex:
+                _logger.exception(f'Unhandled exception while processing input CAN frame {raw_frame}: {ex}')
 
     def _handle_received_frame(self, can_id: _can_id.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
         assert not frame.loopback
@@ -136,8 +142,16 @@ class CANTransport(pyuavcan.transport.Transport):
 
     def _handle_loopback_frame(self, can_id: _can_id.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
         assert frame.loopback
-        # TODO loopback handling
-        pass
+        key = can_id.to_output_data_specifier()
+        try:
+            session = self._output_registry[key]
+        except KeyError:
+            _logger.info('No matching output session for loopback frame: %s; '
+                         'parsed CAN ID: %s; reconstructed data specifier: %s. '
+                         'Either the session has just been closed or the media driver is misbehaving.',
+                         frame, can_id, key, self._media)
+        else:
+            session.handle_loopback_frame(frame)
 
     async def _reconfigure_acceptance_filters(self) -> None:
         pass

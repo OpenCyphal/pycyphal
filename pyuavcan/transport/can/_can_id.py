@@ -26,6 +26,12 @@ class CANID:
     def compile(self) -> int:
         raise NotImplementedError
 
+    def to_input_data_specifier(self) -> pyuavcan.transport.DataSpecifier:
+        raise NotImplemented
+
+    def to_output_data_specifier(self) -> pyuavcan.transport.DataSpecifier:
+        raise NotImplemented
+
     @staticmethod
     def try_parse(identifier: int) -> typing.Optional[CANID]:
         _validate_unsigned_range(identifier, 2 ** 29 - 1)
@@ -84,6 +90,12 @@ class MessageCANID(CANID):
         assert 0 <= identifier < 2 ** 29
         return identifier
 
+    def to_input_data_specifier(self) -> pyuavcan.transport.MessageDataSpecifier:
+        return pyuavcan.transport.MessageDataSpecifier(self.subject_id)
+
+    def to_output_data_specifier(self) -> pyuavcan.transport.MessageDataSpecifier:
+        return pyuavcan.transport.MessageDataSpecifier(self.subject_id)
+
 
 @dataclasses.dataclass(frozen=True)
 class ServiceCANID(CANID):
@@ -109,6 +121,16 @@ class ServiceCANID(CANID):
 
         assert 0 <= identifier < 2 ** 29
         return identifier
+
+    def to_input_data_specifier(self) -> pyuavcan.transport.ServiceDataSpecifier:
+        role_enum = pyuavcan.transport.ServiceDataSpecifier.Role
+        role = role_enum.SERVER if self.request_not_response else role_enum.CLIENT
+        return pyuavcan.transport.ServiceDataSpecifier(self.service_id, role)
+
+    def to_output_data_specifier(self) -> pyuavcan.transport.ServiceDataSpecifier:
+        role_enum = pyuavcan.transport.ServiceDataSpecifier.Role
+        role = role_enum.CLIENT if self.request_not_response else role_enum.SERVER
+        return pyuavcan.transport.ServiceDataSpecifier(self.service_id, role)
 
 
 def _validate_unsigned_range(value: int, max_value: int) -> None:

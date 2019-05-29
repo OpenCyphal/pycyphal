@@ -54,14 +54,15 @@ class OutputSession(_base.Session):
 
         super(OutputSession, self).__init__(finalizer=finalizer)
 
-    def handle_loopback_frame(self, can_identifier: int, frame: _frame.TimestampedUAVCANFrame) -> None:
-        if frame.start_of_transfer:
-            key = _PendingFeedbackKey(can_identifier=can_identifier,
+    def handle_loopback_frame(self, frame: _frame.TimestampedUAVCANFrame) -> None:
+        assert frame.loopback, 'Internal API misuse'
+        if frame.start_of_transfer and frame.loopback:
+            key = _PendingFeedbackKey(can_identifier=frame.identifier,
                                       transfer_id_modulus=frame.transfer_id)
             try:
                 original_timestamp = self._pending_feedback.pop(key)
             except KeyError:
-                _logger.debug('No pending feedback entry for ID 0x%08x frame %s', can_identifier, frame)
+                _logger.debug('No pending feedback entry for ID 0x%08x frame %s', frame.identifier, frame)
             else:
                 if self._feedback_handler is not None:
                     feedback = Feedback(original_timestamp, frame)
