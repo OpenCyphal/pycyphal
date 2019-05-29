@@ -106,12 +106,26 @@ class CANTransport(pyuavcan.transport.Transport):
     def media(self) -> _media.Media:
         return self._media
 
-    async def _on_frames_received(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
-        async with self._media_lock:
-            for fr in frames:
-                cid = _can_id.CANID.try_parse(fr.identifier)
-                # TODO queue dispatch
-                # TODO loopback handling
+    def _on_frames_received(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
+        for raw_frame in frames:
+            cid = _can_id.CANID.try_parse(raw_frame.identifier)
+            if cid is not None:                                             # Ignore non-UAVCAN CAN frames
+                ufr = _frame.TimestampedUAVCANFrame.try_parse(raw_frame)
+                if ufr is not None:                                         # Ignore non-UAVCAN CAN frames
+                    if not ufr.loopback:
+                        self._handle_received_frame(cid, ufr)
+                    else:
+                        self._handle_loopback_frame(cid, ufr)
+
+    def _handle_received_frame(self, can_id: _can_id.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+        assert not frame.loopback
+        # TODO queue dispatch
+        pass
+
+    def _handle_loopback_frame(self, can_id: _can_id.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+        assert frame.loopback
+        # TODO loopback handling
+        pass
 
     async def _reconfigure_acceptance_filters(self) -> None:
         pass

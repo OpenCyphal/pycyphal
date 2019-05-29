@@ -7,9 +7,37 @@
 from __future__ import annotations
 import typing
 import asyncio
+import logging
+import dataclasses
 import pyuavcan.transport
 from .. import _frame, _can_id
 from . import _base, _transfer_sender
+
+
+_logger = logging.getLogger(__name__)
+
+
+class Feedback(pyuavcan.transport.Feedback):
+    def __init__(self,
+                 original_transfer_timestamp: pyuavcan.transport.Timestamp,
+                 start_of_transfer:           _frame.TimestampedUAVCANFrame):
+        self._original_transfer_timestamp = original_transfer_timestamp
+        self._start_of_transfer = start_of_transfer
+        assert self._start_of_transfer.start_of_transfer
+
+    @property
+    def original_transfer_timestamp(self) -> pyuavcan.transport.Timestamp:
+        return self._original_transfer_timestamp
+
+    @property
+    def first_frame_transmission_timestamp(self) -> pyuavcan.transport.Timestamp:
+        return self._start_of_transfer.timestamp
+
+
+@dataclasses.dataclass(frozen=True)
+class _PendingFeedbackKey:
+    can_identifier:      int
+    transfer_id_modulus: int
 
 
 class OutputSession(_base.Session):
@@ -21,17 +49,57 @@ class OutputSession(_base.Session):
         self._media = transport.media
         self._media_lock = media_lock
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
+
+        self._pending_feedback: typing.Dict[_PendingFeedbackKey, pyuavcan.transport.Timestamp] = {}
+
         super(OutputSession, self).__init__(finalizer=finalizer)
+
+    def handle_loopback_frame(self, can_identifier: int, frame: _frame.TimestampedUAVCANFrame) -> None:
+        if frame.start_of_transfer:
+            key = _PendingFeedbackKey(can_identifier=can_identifier,
+                                      transfer_id_modulus=frame.transfer_id)
+            try:
+                original_timestamp = self._pending_feedback.pop(key)
+            except KeyError:
+                _logger.debug('No pending feedback entry for ID 0x%08x frame %s', can_identifier, frame)
+            else:
+                if self._feedback_handler is not None:
+                    feedback = Feedback(original_timestamp, frame)
+                    try:
+                        self._feedback_handler(feedback)
+                    except Exception as ex:
+                        _logger.exception(f'Unhandled exception in the output session feedback handler '
+                                          f'{self._feedback_handler}: {ex}')
 
     async def _do_send(self, can_identifier: int, transfer: pyuavcan.transport.Transfer) -> None:
         async with self._media_lock:
+            needs_feedback = self._feedback_handler is not None
+            if needs_feedback:
+                key = _PendingFeedbackKey(can_identifier=can_identifier,
+                                          transfer_id_modulus=transfer.transfer_id % _frame.TRANSFER_ID_MODULO)
+                try:
+                    old = self._pending_feedback[key]
+                except KeyError:
+                    pass
+                else:
+                    _logger.warning('Overriding old feedback entry %s at key %s', old, key)
+
+                self._pending_feedback[key] = transfer.timestamp
+
             await self._media.send(_transfer_sender.serialize_transfer(
                 can_identifier=can_identifier,
                 transfer_id=transfer.transfer_id,
                 fragmented_payload=transfer.fragmented_payload,
                 max_data_field_length=self._media.max_data_field_length,
-                loopback=self._feedback_handler is not None
+                loopback=needs_feedback
             ))
+
+    def _do_enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
+        self._feedback_handler = handler
+
+    def _do_disable_feedback(self) -> None:
+        self._feedback_handler = None
+        self._pending_feedback.clear()
 
 
 class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSession):
@@ -56,10 +124,10 @@ class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSe
         self._finalizer()
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
-        self._feedback_handler = handler
+        self._do_enable_feedback(handler)
 
     def disable_feedback(self) -> None:
-        self._feedback_handler = None
+        self._do_disable_feedback()
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
         can_id = _can_id.MessageCANID(
@@ -96,10 +164,10 @@ class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSessio
         self._finalizer()
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
-        self._feedback_handler = handler
+        self._do_enable_feedback(handler)
 
     def disable_feedback(self) -> None:
-        self._feedback_handler = None
+        self._do_disable_feedback()
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
         source_node_id = self._transport.local_node_id

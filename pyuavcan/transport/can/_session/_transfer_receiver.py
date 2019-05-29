@@ -135,10 +135,12 @@ def _unittest_can_transfer_receiver_manual() -> None:
 
     def go(frame: _frame.TimestampedUAVCANFrame) \
             -> typing.Union[None, TransferReceptionError, pyuavcan.transport.TransferFrom]:
-        return rx.process_frame(priority=priority,
+        away = rx.process_frame(priority=priority,
                                 source_node_id=source_node_id,
                                 frame=frame,
                                 transfer_id_timeout_ns=transfer_id_timeout_ns)
+        assert away is None or isinstance(away, (TransferReceptionError, pyuavcan.transport.TransferFrom))
+        return away
 
     def fr(monotonic_ns:      int,
            padded_payload:    typing.Union[bytes, str],

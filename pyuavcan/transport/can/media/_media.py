@@ -11,7 +11,7 @@ from . import _frame, _filter
 
 
 class Media(abc.ABC):
-    ReceivedFramesHandler = typing.Callable[[typing.Iterable[_frame.TimestampedDataFrame]], typing.Awaitable[None]]
+    ReceivedFramesHandler = typing.Callable[[typing.Iterable[_frame.TimestampedDataFrame]], None]
 
     VALID_MAX_DATA_FIELD_LENGTH_SET = {8, 12, 16, 20, 24, 32, 48, 64}
 
