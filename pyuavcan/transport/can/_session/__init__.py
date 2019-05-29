@@ -4,7 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._input import InputSession, PromiscuousInputSession, SelectiveInputSession, InputQueueItem
+from ._input import InputSession, PromiscuousInputSession, SelectiveInputSession
 
 from ._output import OutputSession, BroadcastOutputSession, UnicastOutputSession
 

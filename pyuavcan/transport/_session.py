@@ -58,6 +58,10 @@ class Session(abc.ABC):        # TODO: statistics
 
     @abc.abstractmethod
     async def close(self) -> None:
+        """
+        After a session is closed, none of its methods can be used anymore. The behavior or methods after close()
+        is undefined. Implementations may implement automatic closing from __del__() if possible and appropriate.
+        """
         raise NotImplementedError
 
 

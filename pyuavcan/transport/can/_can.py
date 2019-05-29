@@ -25,14 +25,17 @@ class CANTransport(pyuavcan.transport.Transport):
         self._media_lock = asyncio.Lock(loop=loop)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
+        # Lookup performance for the output registry is not important because it's only used for loopback frames.
+        # Hence we don't trade-off memory for speed here.
         self._output_registry: typing.Dict[typing.Tuple[pyuavcan.transport.DataSpecifier, typing.Optional[int]],
-                                           _session.OutputSession] = {}
+                                           _session.OutputSession] = {}  # None for broadcast
 
-        self._input_dispatch_table: typing.List[typing.Optional[asyncio.Queue[_session.InputQueueItem]]] = [
+        # Input lookup must be fast, so we use constant-complexity static lookup table.
+        self._input_dispatch_table: typing.List[typing.Optional[_session.InputSession]] = [
             None for _ in range(_INPUT_DISPATCH_TABLE_SIZE + 1)
         ]
 
-        self._media.set_received_frames_handler(self._on_frames_received)
+        self._media.set_received_frames_handler(self._on_frames_received)   # Effectively starts the transport.
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -64,10 +67,68 @@ class CANTransport(pyuavcan.transport.Transport):
     async def get_statistics(self) -> pyuavcan.transport.Statistics:
         raise NotImplementedError
 
+    async def get_broadcast_output(self,
+                                   data_specifier:   pyuavcan.transport.DataSpecifier,
+                                   payload_metadata: pyuavcan.transport.PayloadMetadata) \
+            -> _session.BroadcastOutputSession:
+        def factory(finalizer: typing.Callable[[], None]) -> _session.BroadcastOutputSession:
+            metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
+            return _session.BroadcastOutputSession(metadata=metadata,
+                                                   transport=self,
+                                                   media_lock=self._media_lock,
+                                                   finalizer=finalizer)
+        out = self._get_output(data_specifier, None, factory)
+        assert isinstance(out, _session.BroadcastOutputSession)
+        return out
+
+    async def get_unicast_output(self,
+                                 data_specifier:      pyuavcan.transport.DataSpecifier,
+                                 payload_metadata:    pyuavcan.transport.PayloadMetadata,
+                                 destination_node_id: int) -> _session.UnicastOutputSession:
+        def factory(finalizer: typing.Callable[[], None]) -> _session.UnicastOutputSession:
+            metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
+            return _session.UnicastOutputSession(destination_node_id=destination_node_id,
+                                                 metadata=metadata,
+                                                 transport=self,
+                                                 media_lock=self._media_lock,
+                                                 finalizer=finalizer)
+        out = self._get_output(data_specifier, destination_node_id, factory)
+        assert isinstance(out, _session.UnicastOutputSession)
+        return out
+
+    async def get_promiscuous_input(self,
+                                    data_specifier:   pyuavcan.transport.DataSpecifier,
+                                    payload_metadata: pyuavcan.transport.PayloadMetadata) \
+            -> _session.PromiscuousInputSession:
+        def factory(finalizer: typing.Callable[[], None]) -> _session.PromiscuousInputSession:
+            metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
+            return _session.PromiscuousInputSession(metadata=metadata, loop=self._loop, finalizer=finalizer)
+        out = self._get_input(data_specifier, None, factory)
+        assert isinstance(out, _session.PromiscuousInputSession)
+        return out
+
+    async def get_selective_input(self,
+                                  data_specifier:   pyuavcan.transport.DataSpecifier,
+                                  payload_metadata: pyuavcan.transport.PayloadMetadata,
+                                  source_node_id:   int) -> _session.SelectiveInputSession:
+        def factory(finalizer: typing.Callable[[], None]) -> _session.SelectiveInputSession:
+            metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
+            return _session.SelectiveInputSession(source_node_id=source_node_id,
+                                                  metadata=metadata,
+                                                  loop=self._loop,
+                                                  finalizer=finalizer)
+        out = self._get_input(data_specifier, source_node_id, factory)
+        assert isinstance(out, _session.SelectiveInputSession)
+        return out
+
+    @property
+    def media(self) -> _media.Media:
+        return self._media
+
     def _get_output(self,
-                    data_specifier: pyuavcan.transport.DataSpecifier,
+                    data_specifier:      pyuavcan.transport.DataSpecifier,
                     destination_node_id: typing.Optional[int],
-                    factory: typing.Callable[[typing.Callable[[], None]], _session.OutputSession]) \
+                    factory:             typing.Callable[[typing.Callable[[], None]], _session.OutputSession]) \
             -> _session.OutputSession:
         def finalizer() -> None:
             try:
@@ -83,73 +144,20 @@ class CANTransport(pyuavcan.transport.Transport):
             self._output_registry[key] = session
             return session
 
-    async def get_broadcast_output(self,
-                                   data_specifier:   pyuavcan.transport.DataSpecifier,
-                                   payload_metadata: pyuavcan.transport.PayloadMetadata) \
-            -> _session.BroadcastOutputSession:
-        out = self._get_output(
-            data_specifier,
-            None,
-            lambda fin: _session.BroadcastOutputSession(metadata=pyuavcan.transport.SessionMetadata(data_specifier,
-                                                                                                    payload_metadata),
-                                                        transport=self,
-                                                        media_lock=self._media_lock,
-                                                        finalizer=fin)
-        )
-        assert isinstance(out, _session.BroadcastOutputSession)
-        return out
-
-    async def get_unicast_output(self,
-                                 data_specifier:      pyuavcan.transport.DataSpecifier,
-                                 payload_metadata:    pyuavcan.transport.PayloadMetadata,
-                                 destination_node_id: int) -> _session.UnicastOutputSession:
-        out = self._get_output(
-            data_specifier,
-            destination_node_id,
-            lambda fin: _session.UnicastOutputSession(destination_node_id=destination_node_id,
-                                                      metadata=pyuavcan.transport.SessionMetadata(data_specifier,
-                                                                                                  payload_metadata),
-                                                      transport=self,
-                                                      media_lock=self._media_lock,
-                                                      finalizer=fin)
-        )
-        assert isinstance(out, _session.UnicastOutputSession)
-        return out
-
-    async def get_promiscuous_input(self,
-                                    data_specifier:   pyuavcan.transport.DataSpecifier,
-                                    payload_metadata: pyuavcan.transport.PayloadMetadata) \
-            -> _session.PromiscuousInputSession:
+    def _get_input(self,
+                   data_specifier: pyuavcan.transport.DataSpecifier,
+                   source_node_id: typing.Optional[int],
+                   factory:        typing.Callable[[typing.Callable[[], None]], _session.InputSession]) \
+            -> _session.InputSession:
         def finalizer() -> None:
-            pass        # TODO
+            self._input_dispatch_table[index] = None
 
-        queue: asyncio.Queue[_session.InputQueueItem] = asyncio.Queue(loop=self._loop)  # TODO
-
-        metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
-        return _session.PromiscuousInputSession(metadata=metadata,
-                                                loop=self._loop,
-                                                queue=queue,
-                                                finalizer=finalizer)
-
-    async def get_selective_input(self,
-                                  data_specifier:   pyuavcan.transport.DataSpecifier,
-                                  payload_metadata: pyuavcan.transport.PayloadMetadata,
-                                  source_node_id:   int) -> _session.SelectiveInputSession:
-        def finalizer() -> None:
-            pass        # TODO
-
-        queue: asyncio.Queue[_session.InputQueueItem] = asyncio.Queue(loop=self._loop)  # TODO
-
-        metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
-        return _session.SelectiveInputSession(source_node_id=source_node_id,
-                                              metadata=metadata,
-                                              loop=self._loop,
-                                              queue=queue,
-                                              finalizer=finalizer)
-
-    @property
-    def media(self) -> _media.Media:
-        return self._media
+        index = _compute_input_dispatch_table_index(data_specifier, source_node_id)
+        session = self._input_dispatch_table[index]
+        if session is None:
+            session = factory(finalizer)
+            self._input_dispatch_table[index] = session
+        return session
 
     def _on_frames_received(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
         for raw_frame in frames:
@@ -177,13 +185,9 @@ class CANTransport(pyuavcan.transport.Transport):
 
         for nid in {exact_source_node_id, None}:
             index = _compute_input_dispatch_table_index(data_spec, nid)
-            queue = self._input_dispatch_table[index]
-            if queue is not None:
-                try:
-                    queue.put_nowait((can_id, frame))
-                except asyncio.QueueFull:       # TODO: logging
-                    _logger.info('Input session for data %s source node ID %s: input queue overflow',
-                                 data_spec, nid)
+            session = self._input_dispatch_table[index]
+            if session is not None:                                     # Ignore UAVCAN frames we don't care about
+                session.push_frame(can_id, frame)
 
     def _handle_loopback_frame(self, can_id: _can_id.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
         assert frame.loopback

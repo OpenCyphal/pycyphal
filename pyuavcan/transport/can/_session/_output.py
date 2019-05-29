@@ -49,9 +49,7 @@ class OutputSession(_base.Session):
         self._media = transport.media
         self._media_lock = media_lock
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
-
         self._pending_feedback: typing.Dict[_PendingFeedbackKey, pyuavcan.transport.Timestamp] = {}
-
         super(OutputSession, self).__init__(finalizer=finalizer)
 
     def handle_loopback_frame(self, frame: _frame.TimestampedUAVCANFrame) -> None:

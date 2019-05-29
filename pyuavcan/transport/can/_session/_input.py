@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 import typing
 import asyncio
+import logging
 import collections
 import pyuavcan.util
 import pyuavcan.transport
@@ -15,20 +16,20 @@ from .. import _frame, _can_id
 from . import _base, _transfer_receiver
 
 
-InputQueueItem = typing.Tuple[_can_id.CANID, _frame.TimestampedUAVCANFrame]
+_logger = logging.getLogger(__name__)
 
 
 class InputSession(_base.Session):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2     # [second] Per the Specification.
 
+    _QueueItem = typing.Tuple[_can_id.CANID, _frame.TimestampedUAVCANFrame]
+
     def __init__(self,
                  metadata:       pyuavcan.transport.SessionMetadata,
                  loop:           typing.Optional[asyncio.AbstractEventLoop],
-                 queue:          asyncio.Queue[InputQueueItem],
                  finalizer:      _base.Finalizer):
         self._metadata = metadata
-        self._queue = queue
-        self._lock = asyncio.Lock(loop=loop)
+        self._queue: asyncio.Queue[InputSession._QueueItem] = asyncio.Queue()    # TODO: Configurable queue depth
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._transfer_id_timeout_ns = int(InputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
@@ -40,55 +41,73 @@ class InputSession(_base.Session):
         self._error_counts: typing.List[typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]] = [
             collections.defaultdict(int) for _ in _node_id_range()
         ]
+        self._overflow_count = 0
 
         super(InputSession, self).__init__(finalizer=finalizer)
 
+    def push_frame(self, can_id: _can_id.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+        """
+        Pushes a newly received frame for later processing.
+        This method must be non-blocking and non-yielding (hence it's not async).
+        """
+        try:
+            self._queue.put_nowait((can_id, frame))
+        except asyncio.QueueFull:
+            self._overflow_count += 1
+            _logger.info('Input session %s: input queue overflow; frame %s (CAN ID fields: %s) is dropped',
+                         self, frame, can_id)
+
+    @property
+    def overflow_count(self) -> int:
+        """
+        How many frames have been dropped due to the input queue overflow.
+        """
+        return self._overflow_count
+
     async def _do_try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
-        async with self._lock:
-            while True:
-                timeout = monotonic_deadline - time.monotonic()
-                if timeout <= 0:
-                    break
+        while True:
+            timeout = monotonic_deadline - time.monotonic()
+            if timeout <= 0:
+                break
 
-                canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
-                assert isinstance(canid, _can_id.CANID), 'Internal session protocol violation'
-                assert isinstance(frame, _frame.TimestampedUAVCANFrame), 'Internal session protocol violation'
+            canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+            assert isinstance(canid, _can_id.CANID)
+            assert isinstance(frame, _frame.TimestampedUAVCANFrame)
 
-                if isinstance(canid, _can_id.MessageCANID):
-                    assert isinstance(self._metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier)
-                    assert self._metadata.data_specifier.subject_id == canid.subject_id
-                    source_node_id = canid.source_node_id
-                    if source_node_id is None:
-                        # Anonymous transfer - no reconstruction needed
-                        self._success_count_anonymous += 1
-                        return pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
-                                                               priority=canid.priority,
-                                                               transfer_id=frame.transfer_id,
-                                                               fragmented_payload=[frame.padded_payload],
-                                                               source_node_id=None)
+            if isinstance(canid, _can_id.MessageCANID):
+                assert isinstance(self._metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier)
+                assert self._metadata.data_specifier.subject_id == canid.subject_id
+                source_node_id = canid.source_node_id
+                if source_node_id is None:
+                    # Anonymous transfer - no reconstruction needed
+                    self._success_count_anonymous += 1
+                    return pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
+                                                           priority=canid.priority,
+                                                           transfer_id=frame.transfer_id,
+                                                           fragmented_payload=[frame.padded_payload],
+                                                           source_node_id=None)
 
-                elif isinstance(canid, _can_id.ServiceCANID):
-                    assert isinstance(self._metadata.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
-                    assert self._metadata.data_specifier.service_id == canid.service_id
-                    assert (self._metadata.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.SERVER) \
-                        == canid.request_not_response
-                    source_node_id = canid.source_node_id
+            elif isinstance(canid, _can_id.ServiceCANID):
+                assert isinstance(self._metadata.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
+                assert self._metadata.data_specifier.service_id == canid.service_id
+                assert (self._metadata.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.SERVER) \
+                    == canid.request_not_response
+                source_node_id = canid.source_node_id
 
-                else:
-                    assert False
+            else:
+                assert False
 
-                receiver = self._receivers[source_node_id]
-                result = receiver.process_frame(canid.priority, source_node_id, frame, self._transfer_id_timeout_ns)
-                if isinstance(result, _transfer_receiver.TransferReceptionError):
-                    self._error_counts[source_node_id][result] += 1
-                elif isinstance(result, pyuavcan.transport.TransferFrom):
-                    self._success_count[source_node_id] += 1
-                    return result
-                elif result is None:
-                    pass        # Nothing to do - expecting more frames
-                else:
-                    assert False
-
+            receiver = self._receivers[source_node_id]
+            result = receiver.process_frame(canid.priority, source_node_id, frame, self._transfer_id_timeout_ns)
+            if isinstance(result, _transfer_receiver.TransferReceptionError):
+                self._error_counts[source_node_id][result] += 1
+            elif isinstance(result, pyuavcan.transport.TransferFrom):
+                self._success_count[source_node_id] += 1
+                return result
+            elif result is None:
+                pass        # Nothing to do - expecting more frames
+            else:
+                assert False
         return None
 
 
@@ -96,11 +115,9 @@ class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputS
     def __init__(self,
                  metadata:       pyuavcan.transport.SessionMetadata,
                  loop:           typing.Optional[asyncio.AbstractEventLoop],
-                 queue:          asyncio.Queue[InputQueueItem],
                  finalizer:      _base.Finalizer):
         super(PromiscuousInputSession, self).__init__(metadata=metadata,
                                                       loop=loop,
-                                                      queue=queue,
                                                       finalizer=finalizer)
 
     @property
@@ -150,12 +167,10 @@ class SelectiveInputSession(InputSession, pyuavcan.transport.SelectiveInputSessi
                  source_node_id: int,
                  metadata:       pyuavcan.transport.SessionMetadata,
                  loop:           typing.Optional[asyncio.AbstractEventLoop],
-                 queue:          asyncio.Queue[InputQueueItem],
                  finalizer:      _base.Finalizer):
         self._source_node_id = int(source_node_id)
         super(SelectiveInputSession, self).__init__(metadata=metadata,
                                                     loop=loop,
-                                                    queue=queue,
                                                     finalizer=finalizer)
 
     @property
