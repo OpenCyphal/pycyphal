@@ -51,7 +51,11 @@ class PromiscuousInputSession(pyuavcan.transport.PromiscuousInputSession, Redund
             return self._transport
 
     @property
-    def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
+    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+        raise NotImplementedError
+
+    @property
+    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         raise NotImplementedError
 
     async def close(self) -> None:
@@ -74,7 +78,11 @@ class SelectiveInputSession(pyuavcan.transport.SelectiveInputSession, RedundantS
             return self._transport
 
     @property
-    def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
+    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+        raise NotImplementedError
+
+    @property
+    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         raise NotImplementedError
 
     async def close(self) -> None:
@@ -99,7 +107,11 @@ class RedundantOutputSession(RedundantSession):
 
 class BroadcastOutputSession(pyuavcan.transport.BroadcastOutputSession, RedundantOutputSession):
     @property
-    def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
+    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+        raise NotImplementedError
+
+    @property
+    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         raise NotImplementedError
 
     async def close(self) -> None:
@@ -120,7 +132,11 @@ class BroadcastOutputSession(pyuavcan.transport.BroadcastOutputSession, Redundan
 
 class UnicastOutputSession(pyuavcan.transport.UnicastOutputSession, RedundantOutputSession):
     @property
-    def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
+    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+        raise NotImplementedError
+
+    @property
+    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         raise NotImplementedError
 
     async def close(self) -> None:

@@ -11,8 +11,7 @@ import dataclasses
 
 @dataclasses.dataclass(frozen=True)
 class DataSpecifier:
-    compact_data_type_id:   int
-    max_payload_size_bytes: int
+    pass
 
 
 @dataclasses.dataclass(frozen=True)

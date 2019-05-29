@@ -10,6 +10,7 @@ import typing
 import dataclasses
 from ._session import PromiscuousInputSession, SelectiveInputSession, BroadcastOutputSession, UnicastOutputSession
 from ._data_specifier import DataSpecifier
+from ._payload_metadata import PayloadMetadata
 
 
 @dataclasses.dataclass(frozen=True)
@@ -81,28 +82,38 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_broadcast_output(self, data_specifier: DataSpecifier) -> BroadcastOutputSession:
+    async def get_broadcast_output(self,
+                                   data_specifier:   DataSpecifier,
+                                   payload_metadata: PayloadMetadata) -> BroadcastOutputSession:
         """
         All transports must support this session type for messages.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_unicast_output(self, data_specifier: DataSpecifier, destination_node_id: int) -> UnicastOutputSession:
+    async def get_unicast_output(self,
+                                 data_specifier:      DataSpecifier,
+                                 payload_metadata:    PayloadMetadata,
+                                 destination_node_id: int) -> UnicastOutputSession:
         """
         All transports must support this session type for services.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_promiscuous_input(self, data_specifier: DataSpecifier) -> PromiscuousInputSession:
+    async def get_promiscuous_input(self,
+                                    data_specifier:   DataSpecifier,
+                                    payload_metadata: PayloadMetadata) -> PromiscuousInputSession:
         """
         All transports must support this session type for all kinds of transfers.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_selective_input(self, data_specifier: DataSpecifier, source_node_id: int) -> SelectiveInputSession:
+    async def get_selective_input(self,
+                                  data_specifier:   DataSpecifier,
+                                  payload_metadata: PayloadMetadata,
+                                  source_node_id:   int) -> SelectiveInputSession:
         """
         All transports must support this session type for services.
         """

@@ -74,20 +74,28 @@ class RedundantTransport(pyuavcan.transport.Transport):
     async def get_statistics(self) -> pyuavcan.transport.Statistics:
         raise NotImplementedError
 
-    async def get_broadcast_output(self, data_specifier: pyuavcan.transport.DataSpecifier) \
+    async def get_broadcast_output(self,
+                                   data_specifier:   pyuavcan.transport.DataSpecifier,
+                                   payload_metadata: pyuavcan.transport.PayloadMetadata) \
             -> _redundant_session.BroadcastOutputSession:
         raise NotImplementedError
 
-    async def get_unicast_output(self, data_specifier: pyuavcan.transport.DataSpecifier, destination_node_id: int) \
-            -> _redundant_session.UnicastOutputSession:
+    async def get_unicast_output(self,
+                                 data_specifier:      pyuavcan.transport.DataSpecifier,
+                                 payload_metadata:    pyuavcan.transport.PayloadMetadata,
+                                 destination_node_id: int) -> _redundant_session.UnicastOutputSession:
         raise NotImplementedError
 
-    async def get_promiscuous_input(self, data_specifier: pyuavcan.transport.DataSpecifier) \
+    async def get_promiscuous_input(self,
+                                    data_specifier:   pyuavcan.transport.DataSpecifier,
+                                    payload_metadata: pyuavcan.transport.PayloadMetadata) \
             -> _redundant_session.PromiscuousInputSession:
         raise NotImplementedError
 
-    async def get_selective_input(self, data_specifier: pyuavcan.transport.DataSpecifier, source_node_id: int) \
-            -> _redundant_session.SelectiveInputSession:
+    async def get_selective_input(self,
+                                  data_specifier:   pyuavcan.transport.DataSpecifier,
+                                  payload_metadata: pyuavcan.transport.PayloadMetadata,
+                                  source_node_id:   int) -> _redundant_session.SelectiveInputSession:
         raise NotImplementedError
 
     def __str__(self) -> str:

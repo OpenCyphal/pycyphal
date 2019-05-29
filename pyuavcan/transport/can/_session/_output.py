@@ -104,21 +104,27 @@ class OutputSession(_base.Session):
 
 class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSession):
     def __init__(self,
-                 data_specifier: pyuavcan.transport.DataSpecifier,
+                 metadata:       pyuavcan.transport.SessionMetadata,
                  transport:      pyuavcan.transport.can.CANTransport,
                  media_lock:     asyncio.Lock,
                  finalizer:      _base.Finalizer):
-        if not isinstance(data_specifier, pyuavcan.transport.MessageDataSpecifier):
-            raise ValueError(f'This transport does not support broadcast outputs for {data_specifier}')
-        self._data_specifier: pyuavcan.transport.MessageDataSpecifier = data_specifier
+        self._metadata = metadata
+
+        if not isinstance(metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier):
+            raise ValueError(f'This transport does not support broadcast outputs for {metadata.data_specifier}')
+        self._data_specifier: pyuavcan.transport.MessageDataSpecifier = metadata.data_specifier
 
         super(BroadcastOutputSession, self).__init__(transport=transport,
                                                      media_lock=media_lock,
                                                      finalizer=finalizer)
 
     @property
-    def data_specifier(self) -> pyuavcan.transport.MessageDataSpecifier:
-        return self._data_specifier
+    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+        return self._metadata
+
+    @property
+    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
+        raise NotImplementedError
 
     async def close(self) -> None:
         self._finalizer()
@@ -132,7 +138,7 @@ class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSe
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
         can_id = _can_id.MessageCANID(
             priority=transfer.priority,
-            subject_id=self.data_specifier.subject_id,
+            subject_id=self._data_specifier.subject_id,
             source_node_id=self._transport.local_node_id  # May be anonymous
         ).compile()
 
@@ -142,23 +148,24 @@ class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSe
 class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSession):
     def __init__(self,
                  destination_node_id: int,
-                 data_specifier:      pyuavcan.transport.DataSpecifier,
+                 metadata:            pyuavcan.transport.SessionMetadata,
                  transport:           pyuavcan.transport.can.CANTransport,
                  media_lock:          asyncio.Lock,
                  finalizer:           _base.Finalizer):
         self._destination_node_id = int(destination_node_id)
+        self._metadata = metadata
 
-        if not isinstance(data_specifier, pyuavcan.transport.ServiceDataSpecifier):
-            raise ValueError(f'This transport does not support unicast outputs for {data_specifier}')
-        self._data_specifier: pyuavcan.transport.ServiceDataSpecifier = data_specifier
+        if not isinstance(metadata.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
+            raise ValueError(f'This transport does not support unicast outputs for {metadata.data_specifier}')
+        self._data_specifier: pyuavcan.transport.ServiceDataSpecifier = metadata.data_specifier
 
         super(UnicastOutputSession, self).__init__(transport=transport,
                                                    media_lock=media_lock,
                                                    finalizer=finalizer)
 
     @property
-    def data_specifier(self) -> pyuavcan.transport.ServiceDataSpecifier:
-        return self._data_specifier
+    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+        return self._metadata
 
     async def close(self) -> None:
         self._finalizer()
@@ -177,8 +184,8 @@ class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSessio
 
         can_id = _can_id.ServiceCANID(
             priority=transfer.priority,
-            service_id=self.data_specifier.service_id,
-            request_not_response=self.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.CLIENT,
+            service_id=self._data_specifier.service_id,
+            request_not_response=self._data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.CLIENT,
             source_node_id=source_node_id,
             destination_node_id=self._destination_node_id
         ).compile()

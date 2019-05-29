@@ -56,48 +56,60 @@ class CANTransport(pyuavcan.transport.Transport):
     async def get_statistics(self) -> pyuavcan.transport.Statistics:
         raise NotImplementedError
 
-    async def get_broadcast_output(self, data_specifier: pyuavcan.transport.DataSpecifier) \
+    async def get_broadcast_output(self,
+                                   data_specifier:   pyuavcan.transport.DataSpecifier,
+                                   payload_metadata: pyuavcan.transport.PayloadMetadata) \
             -> _session.BroadcastOutputSession:
         def finalizer() -> None:
             pass        # TODO
 
-        return _session.BroadcastOutputSession(data_specifier=data_specifier,
+        metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
+        return _session.BroadcastOutputSession(metadata=metadata,
                                                transport=self,
                                                media_lock=self._media_lock,
                                                finalizer=finalizer)
 
-    async def get_unicast_output(self, data_specifier: pyuavcan.transport.DataSpecifier, destination_node_id: int) \
-            -> _session.UnicastOutputSession:
+    async def get_unicast_output(self,
+                                 data_specifier:      pyuavcan.transport.DataSpecifier,
+                                 payload_metadata:    pyuavcan.transport.PayloadMetadata,
+                                 destination_node_id: int) -> _session.UnicastOutputSession:
         def finalizer() -> None:
             pass        # TODO
 
+        metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
         return _session.UnicastOutputSession(destination_node_id=destination_node_id,
-                                             data_specifier=data_specifier,
+                                             metadata=metadata,
                                              transport=self,
                                              media_lock=self._media_lock,
                                              finalizer=finalizer)
 
-    async def get_promiscuous_input(self, data_specifier: pyuavcan.transport.DataSpecifier) \
+    async def get_promiscuous_input(self,
+                                    data_specifier:   pyuavcan.transport.DataSpecifier,
+                                    payload_metadata: pyuavcan.transport.PayloadMetadata) \
             -> _session.PromiscuousInputSession:
         def finalizer() -> None:
             pass        # TODO
 
         queue: asyncio.Queue[_session.InputQueueItem] = asyncio.Queue(loop=self._loop)  # TODO
 
-        return _session.PromiscuousInputSession(data_specifier=data_specifier,
+        metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
+        return _session.PromiscuousInputSession(metadata=metadata,
                                                 loop=self._loop,
                                                 queue=queue,
                                                 finalizer=finalizer)
 
-    async def get_selective_input(self, data_specifier: pyuavcan.transport.DataSpecifier, source_node_id: int) \
-            -> _session.SelectiveInputSession:
+    async def get_selective_input(self,
+                                  data_specifier:   pyuavcan.transport.DataSpecifier,
+                                  payload_metadata: pyuavcan.transport.PayloadMetadata,
+                                  source_node_id:   int) -> _session.SelectiveInputSession:
         def finalizer() -> None:
             pass        # TODO
 
         queue: asyncio.Queue[_session.InputQueueItem] = asyncio.Queue(loop=self._loop)  # TODO
 
+        metadata = pyuavcan.transport.SessionMetadata(data_specifier, payload_metadata)
         return _session.SelectiveInputSession(source_node_id=source_node_id,
-                                              data_specifier=data_specifier,
+                                              metadata=metadata,
                                               loop=self._loop,
                                               queue=queue,
                                               finalizer=finalizer)

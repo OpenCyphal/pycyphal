@@ -7,9 +7,11 @@
 from __future__ import annotations
 import abc
 import typing
+import dataclasses
 from ._transfer import Transfer, TransferFrom
 from ._timestamp import Timestamp
 from ._data_specifier import DataSpecifier
+from ._payload_metadata import PayloadMetadata
 
 
 class Feedback(abc.ABC):
@@ -42,10 +44,16 @@ class Feedback(abc.ABC):
         raise NotImplementedError
 
 
+@dataclasses.dataclass(frozen=True)
+class SessionMetadata:
+    data_specifier:   DataSpecifier
+    payload_metadata: PayloadMetadata
+
+
 class Session(abc.ABC):        # TODO: statistics
     @property
     @abc.abstractmethod
-    def data_specifier(self) -> DataSpecifier:
+    def metadata(self) -> SessionMetadata:
         raise NotImplementedError
 
     @abc.abstractmethod

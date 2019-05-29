@@ -22,17 +22,17 @@ class InputSession(_base.Session):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2     # [second] Per the Specification.
 
     def __init__(self,
-                 data_specifier: pyuavcan.transport.DataSpecifier,
+                 metadata:       pyuavcan.transport.SessionMetadata,
                  loop:           typing.Optional[asyncio.AbstractEventLoop],
                  queue:          asyncio.Queue[InputQueueItem],
                  finalizer:      _base.Finalizer):
-        self._data_specifier = data_specifier
+        self._metadata = metadata
         self._queue = queue
         self._lock = asyncio.Lock(loop=loop)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._transfer_id_timeout_ns = int(InputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
-        self._receivers = [_transfer_receiver.TransferReceiver(data_specifier.max_payload_size_bytes)
+        self._receivers = [_transfer_receiver.TransferReceiver(metadata.payload_metadata.max_size_bytes)
                            for _ in _node_id_range()]
 
         self._success_count_anonymous = 0
@@ -55,8 +55,8 @@ class InputSession(_base.Session):
                 assert isinstance(frame, _frame.TimestampedUAVCANFrame), 'Internal session protocol violation'
 
                 if isinstance(canid, _can_id.MessageCANID):
-                    assert isinstance(self._data_specifier, pyuavcan.transport.MessageDataSpecifier)
-                    assert self._data_specifier.subject_id == canid.subject_id
+                    assert isinstance(self._metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier)
+                    assert self._metadata.data_specifier.subject_id == canid.subject_id
                     source_node_id = canid.source_node_id
                     if source_node_id is None:
                         # Anonymous transfer - no reconstruction needed
@@ -68,9 +68,10 @@ class InputSession(_base.Session):
                                                                source_node_id=None)
 
                 elif isinstance(canid, _can_id.ServiceCANID):
-                    assert isinstance(self._data_specifier, pyuavcan.transport.ServiceDataSpecifier)
-                    assert self._data_specifier.service_id == canid.service_id
-                    assert (self._data_specifier.role == self._data_specifier.Role.SERVER) == canid.request_not_response
+                    assert isinstance(self._metadata.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
+                    assert self._metadata.data_specifier.service_id == canid.service_id
+                    assert (self._metadata.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.SERVER) \
+                        == canid.request_not_response
                     source_node_id = canid.source_node_id
 
                 else:
@@ -93,18 +94,22 @@ class InputSession(_base.Session):
 
 class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputSession):
     def __init__(self,
-                 data_specifier: pyuavcan.transport.DataSpecifier,
+                 metadata:       pyuavcan.transport.SessionMetadata,
                  loop:           typing.Optional[asyncio.AbstractEventLoop],
                  queue:          asyncio.Queue[InputQueueItem],
                  finalizer:      _base.Finalizer):
-        super(PromiscuousInputSession, self).__init__(data_specifier=data_specifier,
+        super(PromiscuousInputSession, self).__init__(metadata=metadata,
                                                       loop=loop,
                                                       queue=queue,
                                                       finalizer=finalizer)
 
     @property
-    def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
-        return self._data_specifier
+    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+        return self._metadata
+
+    @property
+    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
+        raise NotImplementedError
 
     async def close(self) -> None:
         self._finalizer()
@@ -143,19 +148,23 @@ class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputS
 class SelectiveInputSession(InputSession, pyuavcan.transport.SelectiveInputSession):
     def __init__(self,
                  source_node_id: int,
-                 data_specifier: pyuavcan.transport.DataSpecifier,
+                 metadata:       pyuavcan.transport.SessionMetadata,
                  loop:           typing.Optional[asyncio.AbstractEventLoop],
                  queue:          asyncio.Queue[InputQueueItem],
                  finalizer:      _base.Finalizer):
         self._source_node_id = int(source_node_id)
-        super(SelectiveInputSession, self).__init__(data_specifier=data_specifier,
+        super(SelectiveInputSession, self).__init__(metadata=metadata,
                                                     loop=loop,
                                                     queue=queue,
                                                     finalizer=finalizer)
 
     @property
-    def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
-        return self._data_specifier
+    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+        return self._metadata
+
+    @property
+    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
+        raise NotImplementedError
 
     async def close(self) -> None:
         self._finalizer()
