@@ -18,7 +18,9 @@ class Media(abc.ABC):
     @property
     @abc.abstractmethod
     def max_data_field_length(self) -> int:
-        """Must belong to VALID_MAX_DATA_FIELD_LENGTH_SET"""
+        """
+        Must belong to VALID_MAX_DATA_FIELD_LENGTH_SET.
+        """
         raise NotImplementedError
 
     @property
@@ -31,8 +33,10 @@ class Media(abc.ABC):
         optimal number of filters which can be used without degrading the performance of the media driver. It is
         safe to err towards a smaller number (this may result in an increased processing load for the library);
         however, it is best to ensure that the underlying controller supports not less than four filters.
+
         If the underlying CAN protocol implementation does not support acceptance filtering (neither in software
         nor in hardware), its media driver must emulate it in software.
+
         The returned value not be less than one.
         """
         raise NotImplementedError
@@ -42,11 +46,17 @@ class Media(abc.ABC):
         """
         Every received frame must be timestamped. Both monotonic and wall timestamps are required.
         There are no timestamping accuracy requirements. An empty set of frames should never be reported.
+
         If the set contains more than one frame, all frames must be ordered by the time of their arrival,
-        which also must be reflected in their timestamps; that is, the timestamp of a frame at index N shall
-        not be higher than the timestamp of a frame at index N+1.
+        which also should be reflected in their timestamps; that is, the timestamp of a frame at index N
+        generally should not be higher than the timestamp of a frame at index N+1. The timestamp ordering,
+        however, is not a strict requirement because it is recognized that due to error variations in the
+        timestamping algorithms timestamp values may not be monotonically increasing.
+
         The implementation should strive to return as many frames per call as possible.
+
         The handler shall be invoked on the same event loop.
+
         The transport is guaranteed to invoke this method at least once during initialization; it can be used
         to perform a lazy start of the receive loop task.
         """

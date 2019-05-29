@@ -42,6 +42,13 @@ class Timestamp:
         """Warning: clocks are sampled non-atomically! Monotonic sampled first."""
         return Timestamp(monotonic_ns=time.monotonic_ns(), wall_ns=time.time_ns())
 
+    @staticmethod
+    def combine_oldest(*arguments: Timestamp) -> Timestamp:
+        return Timestamp(
+            wall_ns=min(x.wall_ns for x in arguments),
+            monotonic_ns=min(x.monotonic_ns for x in arguments)
+        )
+
     @property
     def wall(self) -> decimal.Decimal:
         return self._ns_to_second(self._wall_ns)
