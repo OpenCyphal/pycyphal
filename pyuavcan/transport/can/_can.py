@@ -9,7 +9,7 @@ import typing
 import asyncio
 import logging
 import pyuavcan.transport
-from . import _session, media as _media, _frame, _can_id
+from . import _session, media as _media, _frame, _identifier
 
 
 _logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class CANTransport(pyuavcan.transport.Transport):
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=_frame.TRANSFER_ID_MODULO,
-            node_id_set_cardinality=_can_id.CANID.NODE_ID_MASK + 1,
+            node_id_set_cardinality=_identifier.CANID.NODE_ID_MASK + 1,
             single_frame_transfer_payload_capacity_bytes=self.frame_payload_capacity
         )
 
@@ -65,7 +65,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     async def set_local_node_id(self, node_id: int) -> None:
         if self._local_node_id is None:
-            if 0 <= node_id <= _can_id.CANID.NODE_ID_MASK:
+            if 0 <= node_id <= _identifier.CANID.NODE_ID_MASK:
                 self._local_node_id = int(node_id)
                 await self._reconfigure_acceptance_filters()
                 with self._media_lock:
@@ -179,7 +179,7 @@ class CANTransport(pyuavcan.transport.Transport):
     def _on_frames_received(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
         for raw_frame in frames:
             try:
-                cid = _can_id.CANID.try_parse(raw_frame.identifier)
+                cid = _identifier.CANID.try_parse(raw_frame.identifier)
                 if cid is not None:                                             # Ignore non-UAVCAN CAN frames
                     ufr = _frame.TimestampedUAVCANFrame.try_parse(raw_frame)
                     if ufr is not None:                                         # Ignore non-UAVCAN CAN frames
@@ -190,12 +190,12 @@ class CANTransport(pyuavcan.transport.Transport):
             except Exception as ex:
                 _logger.exception(f'Unhandled exception while processing input CAN frame {raw_frame}: {ex}')
 
-    def _handle_received_frame(self, can_id: _can_id.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+    def _handle_received_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
         assert not frame.loopback
         data_spec = can_id.to_input_data_specifier()
-        if isinstance(can_id, _can_id.ServiceCANID):
+        if isinstance(can_id, _identifier.ServiceCANID):
             exact_source_node_id: typing.Optional[int] = can_id.source_node_id
-        elif isinstance(can_id, _can_id.MessageCANID):
+        elif isinstance(can_id, _identifier.MessageCANID):
             exact_source_node_id = can_id.source_node_id
         else:
             assert False
@@ -206,10 +206,10 @@ class CANTransport(pyuavcan.transport.Transport):
             if session is not None:                                     # Ignore UAVCAN frames we don't care about
                 session.push_frame(can_id, frame)
 
-    def _handle_loopback_frame(self, can_id: _can_id.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+    def _handle_loopback_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
         assert frame.loopback
         data_spec = can_id.to_output_data_specifier()
-        if isinstance(can_id, _can_id.ServiceCANID):
+        if isinstance(can_id, _identifier.ServiceCANID):
             dest_nid: typing.Optional[int] = can_id.destination_node_id
         else:
             assert not hasattr(can_id, 'destination_node_id')
@@ -232,7 +232,7 @@ class CANTransport(pyuavcan.transport.Transport):
             if isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         ]
 
-        fcs = _can_id.generate_filter_configurations(subject_ids, self.local_node_id)
+        fcs = _identifier.generate_filter_configurations(subject_ids, self.local_node_id)
         assert len(fcs) > len(subject_ids)
 
         with self._media_lock:
@@ -275,7 +275,7 @@ def _compute_input_dispatch_table_index(data_specifier: pyuavcan.transport.DataS
 
 _NUM_SUBJECTS = pyuavcan.transport.MessageDataSpecifier.SUBJECT_ID_MASK + 1
 _NUM_SERVICES = pyuavcan.transport.ServiceDataSpecifier.SERVICE_ID_MASK + 1
-_NUM_NODE_IDS = _can_id.CANID.NODE_ID_MASK + 1
+_NUM_NODE_IDS = _identifier.CANID.NODE_ID_MASK + 1
 
 # Services multiplied by two to account for requests and responses.
 # One added to nodes to allow promiscuous inputs which don't care about source node ID.

@@ -12,7 +12,7 @@ import logging
 import collections
 import pyuavcan.util
 import pyuavcan.transport
-from .. import _frame, _can_id
+from .. import _frame, _identifier
 from . import _base, _transfer_receiver
 
 
@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 class InputSession(_base.Session):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2     # [second] Per the Specification.
 
-    _QueueItem = typing.Tuple[_can_id.CANID, _frame.TimestampedUAVCANFrame]
+    _QueueItem = typing.Tuple[_identifier.CANID, _frame.TimestampedUAVCANFrame]
 
     def __init__(self,
                  metadata:  pyuavcan.transport.SessionMetadata,
@@ -45,7 +45,7 @@ class InputSession(_base.Session):
 
         super(InputSession, self).__init__(finalizer=finalizer)
 
-    def push_frame(self, can_id: _can_id.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+    def push_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
         """
         Pushes a newly received frame for later processing.
         This method must be non-blocking and non-yielding (hence it's not async).
@@ -98,10 +98,10 @@ class InputSession(_base.Session):
                 break
 
             canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
-            assert isinstance(canid, _can_id.CANID)
+            assert isinstance(canid, _identifier.CANID)
             assert isinstance(frame, _frame.TimestampedUAVCANFrame)
 
-            if isinstance(canid, _can_id.MessageCANID):
+            if isinstance(canid, _identifier.MessageCANID):
                 assert isinstance(self._metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier)
                 assert self._metadata.data_specifier.subject_id == canid.subject_id
                 source_node_id = canid.source_node_id
@@ -114,7 +114,7 @@ class InputSession(_base.Session):
                                                            fragmented_payload=[frame.padded_payload],
                                                            source_node_id=None)
 
-            elif isinstance(canid, _can_id.ServiceCANID):
+            elif isinstance(canid, _identifier.ServiceCANID):
                 assert isinstance(self._metadata.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
                 assert self._metadata.data_specifier.service_id == canid.service_id
                 assert (self._metadata.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.SERVER) \
@@ -237,7 +237,7 @@ class SelectiveInputSession(InputSession, pyuavcan.transport.SelectiveInputSessi
 
 
 def _node_id_range() -> typing.Iterable[int]:
-    return range(_can_id.CANID.NODE_ID_MASK + 1)
+    return range(_identifier.CANID.NODE_ID_MASK + 1)
 
 
 _NANO = 1e-9

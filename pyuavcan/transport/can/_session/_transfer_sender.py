@@ -13,7 +13,7 @@ from .. import _frame
 _PADDING_PATTERN = b'\x55'
 
 
-def serialize_transfer(can_identifier:          int,
+def serialize_transfer(compiled_identifier:     int,
                        transfer_id:             int,
                        fragmented_payload:      typing.Sequence[memoryview],
                        max_frame_payload_bytes: int,
@@ -30,7 +30,7 @@ def serialize_transfer(can_identifier:          int,
                                                 max_frame_payload_bytes)
         payload, = tuple(refragmented)
         assert max_frame_payload_bytes >= len(payload) >= payload_length
-        yield _frame.UAVCANFrame(identifier=can_identifier,
+        yield _frame.UAVCANFrame(identifier=compiled_identifier,
                                  padded_payload=payload,
                                  transfer_id=transfer_id,
                                  start_of_transfer=True,
@@ -59,7 +59,7 @@ def serialize_transfer(can_identifier:          int,
 
         # Serialized frame emission
         for index, (last, frag) in enumerate(pyuavcan.util.mark_last(refragmented)):
-            yield _frame.UAVCANFrame(identifier=can_identifier,
+            yield _frame.UAVCANFrame(identifier=compiled_identifier,
                                      padded_payload=frag,
                                      transfer_id=transfer_id,
                                      start_of_transfer=index == 0,
@@ -97,12 +97,12 @@ def _unittest_can_serialize_transfer() -> None:
                          format=FrameFormat.EXTENDED,
                          loopback=loopback)
 
-    def run(can_identifier:          int,
+    def run(compiled_identifier:     int,
             transfer_id:             int,
             fragmented_payload:      typing.Sequence[memoryview],
             max_frame_payload_bytes: int,
             loopback:                bool) -> typing.Iterable[DataFrame]:
-        for f in serialize_transfer(can_identifier=can_identifier,
+        for f in serialize_transfer(compiled_identifier=compiled_identifier,
                                     transfer_id=transfer_id,
                                     fragmented_payload=fragmented_payload,
                                     max_frame_payload_bytes=max_frame_payload_bytes,

@@ -9,7 +9,7 @@ import random
 import typing
 import dataclasses
 import pyuavcan.transport
-from . import media as _media
+import pyuavcan.transport.can
 
 
 @dataclasses.dataclass(frozen=True)
@@ -135,14 +135,15 @@ def _validate_unsigned_range(value: int, max_value: int) -> None:
 
 
 def generate_filter_configurations(subject_id_list: typing.Iterable[int],
-                                   local_node_id:   typing.Optional[int]) -> typing.List[_media.FilterConfiguration]:
-    from .media import FrameFormat
+                                   local_node_id:   typing.Optional[int]) \
+        -> typing.List[pyuavcan.transport.can.media.FilterConfiguration]:
+    from .media import FrameFormat, FilterConfiguration
 
-    def ext(idn: int, msk: int) -> _media.FilterConfiguration:
+    def ext(idn: int, msk: int) -> FilterConfiguration:
         assert idn < 2 ** 29 and msk < 2 ** 29
-        return _media.FilterConfiguration(identifier=idn, mask=msk, format=FrameFormat.EXTENDED)
+        return FilterConfiguration(identifier=idn, mask=msk, format=FrameFormat.EXTENDED)
 
-    full: typing.List[_media.FilterConfiguration] = []
+    full: typing.List[FilterConfiguration] = []
 
     if local_node_id is not None:
         assert local_node_id < 2 ** 7

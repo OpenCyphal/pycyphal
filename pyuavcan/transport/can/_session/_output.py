@@ -9,7 +9,7 @@ import typing
 import logging
 import dataclasses
 import pyuavcan.transport
-from .. import _frame, _can_id
+from .. import _frame, _identifier
 from . import _base, _transfer_sender
 
 
@@ -37,7 +37,7 @@ class Feedback(pyuavcan.transport.Feedback):
 
 @dataclasses.dataclass(frozen=True)
 class _PendingFeedbackKey:
-    can_identifier:      int
+    compiled_identifier: int
     transfer_id_modulus: int
 
 
@@ -55,7 +55,7 @@ class OutputSession(_base.Session):
     def handle_loopback_frame(self, frame: _frame.TimestampedUAVCANFrame) -> None:
         assert frame.loopback, 'Internal API misuse'
         if frame.start_of_transfer and frame.loopback:
-            key = _PendingFeedbackKey(can_identifier=frame.identifier,
+            key = _PendingFeedbackKey(compiled_identifier=frame.identifier,
                                       transfer_id_modulus=frame.transfer_id)
             try:
                 original_timestamp = self._pending_feedback.pop(key)
@@ -70,10 +70,10 @@ class OutputSession(_base.Session):
                         _logger.exception(f'Unhandled exception in the output session feedback handler '
                                           f'{self._feedback_handler}: {ex}')
 
-    async def _do_send(self, can_identifier: int, transfer: pyuavcan.transport.Transfer) -> None:
+    async def _do_send(self, compiled_identifier: int, transfer: pyuavcan.transport.Transfer) -> None:
         needs_feedback = self._feedback_handler is not None
         if needs_feedback:
-            key = _PendingFeedbackKey(can_identifier=can_identifier,
+            key = _PendingFeedbackKey(compiled_identifier=compiled_identifier,
                                       transfer_id_modulus=transfer.transfer_id % _frame.TRANSFER_ID_MODULO)
             try:
                 old = self._pending_feedback[key]
@@ -85,7 +85,7 @@ class OutputSession(_base.Session):
             self._pending_feedback[key] = transfer.timestamp
 
         await self._send_handler(_transfer_sender.serialize_transfer(
-            can_identifier=can_identifier,
+            compiled_identifier=compiled_identifier,
             transfer_id=transfer.transfer_id,
             fragmented_payload=transfer.fragmented_payload,
             max_frame_payload_bytes=self._transport.frame_payload_capacity,
@@ -134,13 +134,13 @@ class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSe
         self._do_disable_feedback()
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
-        can_id = _can_id.MessageCANID(
+        compiled_identifier = _identifier.MessageCANID(
             priority=transfer.priority,
             subject_id=self._data_specifier.subject_id,
             source_node_id=self._transport.local_node_id  # May be anonymous
         ).compile()
 
-        await self._do_send(can_id, transfer)
+        await self._do_send(compiled_identifier, transfer)
 
 
 class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSession):
@@ -180,7 +180,7 @@ class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSessio
             raise pyuavcan.transport.InvalidTransportConfigurationError(
                 'Cannot emit a service transfer because the local node is anonymous (does not have a node ID)')
 
-        can_id = _can_id.ServiceCANID(
+        compiled_identifier = _identifier.ServiceCANID(
             priority=transfer.priority,
             service_id=self._data_specifier.service_id,
             request_not_response=self._data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.CLIENT,
@@ -188,7 +188,7 @@ class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSessio
             destination_node_id=self._destination_node_id
         ).compile()
 
-        await self._do_send(can_id, transfer)
+        await self._do_send(compiled_identifier, transfer)
 
     @property
     def destination_node_id(self) -> int:

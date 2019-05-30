@@ -40,7 +40,8 @@ class FilterConfiguration:
         This is a part of the CAN acceptance filter configuration optimization algorithm.
         Observe that we return negative rank for configurations which do not distinguish between extended and
         base frames in order to discourage merger of configurations of different frame types, since they are
-        hard to support in certain CAN controllers.
+        hard to support in certain CAN controllers. The effect of this is that we guarantee that an ambivalent
+        filter configuration will never appear if the controller has at least one acceptance filter.
         """
         mask_mask = 2 ** self.identifier_bit_length - 1
         rank = bin(self.mask & mask_mask).count('1')
