@@ -10,7 +10,7 @@ import pyuavcan.dsdl
 from . import _util
 
 
-def _unittest_textual(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_textual(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     def validate(obj: pyuavcan.dsdl.CompositeObject, s: str) -> None:
         for f in model.fields_except_padding:
             field_present = (f'{f.name}=' in s) or (f'{f.name}_=' in s)

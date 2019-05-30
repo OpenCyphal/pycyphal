@@ -39,7 +39,7 @@ class _TypeTestStatistics:
                    self.mean_deserialization_time)
 
 
-def _unittest_random(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     logging.getLogger('pyuavcan.dsdl._composite_object').setLevel(logging.WARNING)
     performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
 

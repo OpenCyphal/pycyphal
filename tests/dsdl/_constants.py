@@ -11,7 +11,7 @@ import pyuavcan.dsdl
 from . import _util
 
 
-def _unittest_constants(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_constants(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     for info in generated_packages:
         for model in _util.expand_service_types(info.models, keep_services=True):
             cls = pyuavcan.dsdl.get_class(model)

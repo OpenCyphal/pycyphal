@@ -282,7 +282,7 @@ _NUM_NODE_IDS = _identifier.CANID.NODE_ID_MASK + 1
 _INPUT_DISPATCH_TABLE_SIZE = (_NUM_SUBJECTS + _NUM_SERVICES * 2) * (_NUM_NODE_IDS + 1)
 
 
-def _unittest_can_compute_input_dispatch_table_index() -> None:
+def _unittest_slow_can_compute_input_dispatch_table_index() -> None:
     values: typing.Set[int] = set()
     for node_id in (*range(_NUM_NODE_IDS), None):
         for subj in range(_NUM_SUBJECTS):

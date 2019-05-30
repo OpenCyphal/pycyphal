@@ -83,7 +83,7 @@ def _unittest_util_refragment_manual() -> None:
     assert [b'0', b'1', b'2', b'3', b'4', b'5'] == lb(refragment(tiny, 1))
 
 
-def _unittest_util_refragment_automatic() -> None:
+def _unittest_slow_util_refragment_automatic() -> None:
     import math
     import random
 
