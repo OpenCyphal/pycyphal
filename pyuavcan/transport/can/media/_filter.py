@@ -65,8 +65,8 @@ class FilterConfiguration:
         return (self.format.name[:3].lower() if self.format else "any") + ':' + out
 
 
-def compact_filter_configurations(configurations: typing.Iterable[FilterConfiguration],
-                                  target_number_of_configurations: int) -> typing.List[FilterConfiguration]:
+def optimize_filter_configurations(configurations: typing.Iterable[FilterConfiguration],
+                                   target_number_of_configurations: int) -> typing.List[FilterConfiguration]:
     """
     Implements the CAN acceptance filter configuration optimization algorithm described in the Specification
     (originally proposed by P. Kirienko and I. Sheremet).

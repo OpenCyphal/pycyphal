@@ -11,6 +11,7 @@ from . import _frame, _filter
 
 
 class Media(abc.ABC):
+    # The frames handler is non-blocking and non-yielding; returns immediately.
     ReceivedFramesHandler = typing.Callable[[typing.Iterable[_frame.TimestampedDataFrame]], None]
 
     VALID_MAX_DATA_FIELD_LENGTH_SET = {8, 12, 16, 20, 24, 32, 48, 64}
@@ -20,6 +21,9 @@ class Media(abc.ABC):
     def max_data_field_length(self) -> int:
         """
         Must belong to VALID_MAX_DATA_FIELD_LENGTH_SET.
+
+        Observe that the media interface doesn't care whether we're using CAN FD or CAN 2.0 because the UAVCAN
+        CAN transport protocol itself doesn't care. The transport simply does not distinguish them.
         """
         raise NotImplementedError
 
@@ -53,7 +57,8 @@ class Media(abc.ABC):
         however, is not a strict requirement because it is recognized that due to error variations in the
         timestamping algorithms timestamp values may not be monotonically increasing.
 
-        The implementation should strive to return as many frames per call as possible.
+        The implementation should strive to return as many frames per call as possible as long as that
+        does not increase the worst case latency.
 
         The handler shall be invoked on the same event loop.
 
@@ -65,11 +70,12 @@ class Media(abc.ABC):
     @abc.abstractmethod
     async def configure_acceptance_filters(self, configuration: typing.Sequence[_filter.FilterConfiguration]) -> None:
         """
-        The initial configuration is unspecified (can be arbitrary). The transport is guaranteed to invoke this method
-        during the initialization. This method may also be invoked whenever the subscription set is changed in order
-        to communicate to the underlying CAN controller hardware which CAN frames should be picked up and which ones
-        should be ignored. An empty set of configurations means that the transport is not interested in any frames,
-        i.e., all frames should be rejected by the controller.
+        This method is invoked whenever the subscription set is changed in order to communicate to the underlying
+        CAN controller hardware which CAN frames should be picked up and which ones should be ignored.
+
+        An empty set of configurations means that the transport is not interested in any frames, i.e., all frames
+        should be rejected by the controller. That is also the recommended default configuration (ignore all frames
+        until explicitly requested otherwise).
         """
         raise NotImplementedError
 
@@ -91,4 +97,18 @@ class Media(abc.ABC):
 
     @abc.abstractmethod
     async def close(self) -> None:
+        """
+        After the media instance is closed, none of its methods can be used anymore. The behavior or methods after
+        close() is undefined.
+        """
         raise NotImplementedError
+
+    @abc.abstractmethod
+    def __str__(self) -> str:
+        """
+        Should print the basic media information.
+        """
+        raise NotImplementedError
+
+    def __repr__(self) -> str:
+        return self.__str__()

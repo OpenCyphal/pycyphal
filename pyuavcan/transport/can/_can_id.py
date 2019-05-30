@@ -46,7 +46,7 @@ class CANID:
         if service_not_message:
             spec: CANID = ServiceCANID(
                 priority=priority,
-                service_id=(identifier >> 15) & ServiceCANID.SERVICE_ID_MASK,
+                service_id=(identifier >> 15) & pyuavcan.transport.ServiceDataSpecifier.SERVICE_ID_MASK,
                 request_not_response=identifier & (1 << 24) != 0,
                 source_node_id=source_node_id,
                 destination_node_id=(identifier >> 8) & CANID.NODE_ID_MASK
@@ -56,7 +56,7 @@ class CANID:
             anonymous = identifier & (1 << 24) != 0
             spec = MessageCANID(
                 priority=priority,
-                subject_id=(identifier >> 8) & MessageCANID.SUBJECT_ID_MASK,
+                subject_id=(identifier >> 8) & pyuavcan.transport.MessageDataSpecifier.SUBJECT_ID_MASK,
                 source_node_id=None if anonymous else source_node_id
             )
 
@@ -65,14 +65,12 @@ class CANID:
 
 @dataclasses.dataclass(frozen=True)
 class MessageCANID(CANID):
-    SUBJECT_ID_MASK = 32767
-
     subject_id:     int
     source_node_id: typing.Optional[int]  # None if anonymous
 
     def __post_init__(self) -> None:
         _validate_unsigned_range(int(self.priority), self.PRIORITY_MASK)
-        _validate_unsigned_range(self.subject_id, self.SUBJECT_ID_MASK)
+        _validate_unsigned_range(self.subject_id, pyuavcan.transport.MessageDataSpecifier.SUBJECT_ID_MASK)
         if self.source_node_id is not None:
             _validate_unsigned_range(self.source_node_id, self.NODE_ID_MASK)
 
@@ -99,8 +97,6 @@ class MessageCANID(CANID):
 
 @dataclasses.dataclass(frozen=True)
 class ServiceCANID(CANID):
-    SERVICE_ID_MASK = 511
-
     service_id:           int
     request_not_response: bool
     source_node_id:       int
@@ -108,7 +104,7 @@ class ServiceCANID(CANID):
 
     def __post_init__(self) -> None:
         _validate_unsigned_range(int(self.priority), self.PRIORITY_MASK)
-        _validate_unsigned_range(self.service_id, self.SERVICE_ID_MASK)
+        _validate_unsigned_range(self.service_id, pyuavcan.transport.ServiceDataSpecifier.SERVICE_ID_MASK)
         _validate_unsigned_range(self.source_node_id, self.NODE_ID_MASK)
         _validate_unsigned_range(self.destination_node_id, self.NODE_ID_MASK)
 
@@ -177,17 +173,17 @@ def generate_filter_configurations(subject_id_list: typing.Iterable[int],
 
 
 def _unittest_can_filter_configuration() -> None:
-    from .media import FilterConfiguration, compact_filter_configurations, FrameFormat
+    from .media import FilterConfiguration, optimize_filter_configurations, FrameFormat
 
     def ext(idn: int, msk: int) -> FilterConfiguration:
         assert idn < 2 ** 29 and msk < 2 ** 29
         return FilterConfiguration(identifier=idn, mask=msk, format=FrameFormat.EXTENDED)
 
-    degenerate = compact_filter_configurations(generate_filter_configurations([], None), 999)
+    degenerate = optimize_filter_configurations(generate_filter_configurations([], None), 999)
     assert degenerate == [ext(idn=0b_000_0_1_0000000000000000_0000000_1,    # Anonymous messages
                               msk=0b_000_1_1_0000000000000000_0000000_1)]
 
-    no_subjects = compact_filter_configurations(generate_filter_configurations([], 0b1010101), 999)
+    no_subjects = optimize_filter_configurations(generate_filter_configurations([], 0b1010101), 999)
     assert no_subjects == [
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,     # Services
             msk=0b_000_1_0_000000000_1111111_0000000_1),
@@ -207,7 +203,7 @@ def _unittest_can_filter_configuration() -> None:
         0b0000000000101011,  # Similar, Hamming distance 1
     ]
 
-    retained = compact_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 999)
+    retained = optimize_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 999)
     assert retained == [
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
             msk=0b_000_1_0_000000000_1111111_0000000_1),    # Services
@@ -234,7 +230,7 @@ def _unittest_can_filter_configuration() -> None:
             msk=0b_000_1_0_1111111111111111_0000000_1),
     ]
 
-    reduced = compact_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 7)
+    reduced = optimize_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 7)
     assert reduced == [
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
             msk=0b_000_1_0_000000000_1111111_0000000_1),    # Services
@@ -261,7 +257,7 @@ def _unittest_can_filter_configuration() -> None:
     ]
     print([str(r) for r in reduced])
 
-    reduced = compact_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 3)
+    reduced = optimize_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 3)
     assert reduced == [
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
             msk=0b_000_1_0_000000000_1111111_0000000_1),    # Services
@@ -274,7 +270,7 @@ def _unittest_can_filter_configuration() -> None:
     ]
     print([str(r) for r in reduced])
 
-    reduced = compact_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 1)
+    reduced = optimize_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 1)
     assert reduced == [
         ext(idn=0b_000_0_0_000000000_0000000_0000000_1,
             msk=0b_000_0_0_000000000_0000000_0000000_1),    # Degenerates to checking only protocol version

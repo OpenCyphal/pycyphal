@@ -6,13 +6,14 @@
 
 from __future__ import annotations
 import typing
-import asyncio
 import logging
 import dataclasses
 import pyuavcan.transport
 from .. import _frame, _can_id
 from . import _base, _transfer_sender
 
+
+SendHandler = typing.Callable[[typing.Iterable[_frame.UAVCANFrame]], typing.Awaitable[None]]
 
 _logger = logging.getLogger(__name__)
 
@@ -42,12 +43,11 @@ class _PendingFeedbackKey:
 
 class OutputSession(_base.Session):
     def __init__(self,
-                 transport:  pyuavcan.transport.can.CANTransport,
-                 media_lock: asyncio.Lock,
-                 finalizer:  _base.Finalizer):
+                 transport:    pyuavcan.transport.can.CANTransport,
+                 send_handler: SendHandler,
+                 finalizer:    _base.Finalizer):
         self._transport = transport
-        self._media = transport.media
-        self._media_lock = media_lock
+        self._send_handler = send_handler
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._pending_feedback: typing.Dict[_PendingFeedbackKey, pyuavcan.transport.Timestamp] = {}
         super(OutputSession, self).__init__(finalizer=finalizer)
@@ -71,27 +71,26 @@ class OutputSession(_base.Session):
                                           f'{self._feedback_handler}: {ex}')
 
     async def _do_send(self, can_identifier: int, transfer: pyuavcan.transport.Transfer) -> None:
-        async with self._media_lock:
-            needs_feedback = self._feedback_handler is not None
-            if needs_feedback:
-                key = _PendingFeedbackKey(can_identifier=can_identifier,
-                                          transfer_id_modulus=transfer.transfer_id % _frame.TRANSFER_ID_MODULO)
-                try:
-                    old = self._pending_feedback[key]
-                except KeyError:
-                    pass
-                else:
-                    _logger.warning('Overriding old feedback entry %s at key %s', old, key)
+        needs_feedback = self._feedback_handler is not None
+        if needs_feedback:
+            key = _PendingFeedbackKey(can_identifier=can_identifier,
+                                      transfer_id_modulus=transfer.transfer_id % _frame.TRANSFER_ID_MODULO)
+            try:
+                old = self._pending_feedback[key]
+            except KeyError:
+                pass
+            else:
+                _logger.warning('Overriding old feedback entry %s at key %s', old, key)
 
-                self._pending_feedback[key] = transfer.timestamp
+            self._pending_feedback[key] = transfer.timestamp
 
-            await self._media.send(_transfer_sender.serialize_transfer(
-                can_identifier=can_identifier,
-                transfer_id=transfer.transfer_id,
-                fragmented_payload=transfer.fragmented_payload,
-                max_data_field_length=self._media.max_data_field_length,
-                loopback=needs_feedback
-            ))
+        await self._send_handler(_transfer_sender.serialize_transfer(
+            can_identifier=can_identifier,
+            transfer_id=transfer.transfer_id,
+            fragmented_payload=transfer.fragmented_payload,
+            max_frame_payload_bytes=self._transport.frame_payload_capacity,
+            loopback=needs_feedback
+        ))
 
     def _do_enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
         self._feedback_handler = handler
@@ -103,10 +102,10 @@ class OutputSession(_base.Session):
 
 class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSession):
     def __init__(self,
-                 metadata:       pyuavcan.transport.SessionMetadata,
-                 transport:      pyuavcan.transport.can.CANTransport,
-                 media_lock:     asyncio.Lock,
-                 finalizer:      _base.Finalizer):
+                 metadata:     pyuavcan.transport.SessionMetadata,
+                 transport:    pyuavcan.transport.can.CANTransport,
+                 send_handler: SendHandler,
+                 finalizer:    _base.Finalizer):
         self._metadata = metadata
 
         if not isinstance(metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier):
@@ -114,7 +113,7 @@ class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSe
         self._data_specifier: pyuavcan.transport.MessageDataSpecifier = metadata.data_specifier
 
         super(BroadcastOutputSession, self).__init__(transport=transport,
-                                                     media_lock=media_lock,
+                                                     send_handler=send_handler,
                                                      finalizer=finalizer)
 
     @property
@@ -149,7 +148,7 @@ class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSessio
                  destination_node_id: int,
                  metadata:            pyuavcan.transport.SessionMetadata,
                  transport:           pyuavcan.transport.can.CANTransport,
-                 media_lock:          asyncio.Lock,
+                 send_handler:        SendHandler,
                  finalizer:           _base.Finalizer):
         self._destination_node_id = int(destination_node_id)
         self._metadata = metadata
@@ -159,7 +158,7 @@ class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSessio
         self._data_specifier: pyuavcan.transport.ServiceDataSpecifier = metadata.data_specifier
 
         super(UnicastOutputSession, self).__init__(transport=transport,
-                                                   media_lock=media_lock,
+                                                   send_handler=send_handler,
                                                    finalizer=finalizer)
 
     @property

@@ -16,6 +16,8 @@ class DataSpecifier:
 
 @dataclasses.dataclass(frozen=True)
 class MessageDataSpecifier(DataSpecifier):
+    SUBJECT_ID_MASK = 32767
+
     subject_id: int
 
 
@@ -24,6 +26,8 @@ class ServiceDataSpecifier(DataSpecifier):
     class Role(enum.Enum):
         CLIENT = enum.auto()
         SERVER = enum.auto()
+
+    SERVICE_ID_MASK = 511
 
     service_id: int
     role:       Role

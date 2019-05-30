@@ -8,4 +8,4 @@ from ._media import Media
 
 from ._frame import FrameFormat, DataFrame, TimestampedDataFrame
 
-from ._filter import FilterConfiguration, compact_filter_configurations
+from ._filter import FilterConfiguration, optimize_filter_configurations

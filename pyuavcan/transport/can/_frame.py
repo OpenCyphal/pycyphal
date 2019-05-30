@@ -53,6 +53,10 @@ class UAVCANFrame:
                                 format=_media.FrameFormat.EXTENDED,
                                 loopback=self.loopback)
 
+    @staticmethod
+    def get_required_padding(data_length: int) -> int:
+        return _media.DataFrame.get_required_padding(data_length + 1)   # +1 for the tail byte
+
 
 @dataclasses.dataclass(frozen=True)
 class TimestampedUAVCANFrame(UAVCANFrame):

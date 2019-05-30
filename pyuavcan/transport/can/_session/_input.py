@@ -25,11 +25,11 @@ class InputSession(_base.Session):
     _QueueItem = typing.Tuple[_can_id.CANID, _frame.TimestampedUAVCANFrame]
 
     def __init__(self,
-                 metadata:       pyuavcan.transport.SessionMetadata,
-                 loop:           typing.Optional[asyncio.AbstractEventLoop],
-                 finalizer:      _base.Finalizer):
+                 metadata:  pyuavcan.transport.SessionMetadata,
+                 loop:      typing.Optional[asyncio.AbstractEventLoop],
+                 finalizer: _base.Finalizer):
         self._metadata = metadata
-        self._queue: asyncio.Queue[InputSession._QueueItem] = asyncio.Queue()    # TODO: Configurable queue depth
+        self._queue: asyncio.Queue[InputSession._QueueItem] = asyncio.Queue()
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._transfer_id_timeout_ns = int(InputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
@@ -58,11 +58,38 @@ class InputSession(_base.Session):
                          self, frame, can_id)
 
     @property
+    def queue_capacity(self) -> typing.Optional[int]:
+        """
+        Returns the capacity of the input frame queue. None means that the capacity is unlimited, which is the default.
+        """
+        return self._queue.maxsize if self._queue.maxsize > 0 else None
+
+    @queue_capacity.setter
+    def queue_capacity(self, value: typing.Optional[int]) -> None:
+        """
+        Changes the input frame queue capacity. If the argument is None, the new capacity will be unlimited.
+        If the new capacity is smaller than the number of frames currently in the queue, the newest frames will
+        be discarded and the number of queue overruns will be incremented accordingly.
+        The complexity may be up to linear on the number of frames currently in the queue.
+        """
+        old_queue = self._queue
+        self._queue = asyncio.Queue(value if value is not None else 0, loop=self._loop)
+        try:
+            while True:
+                self.push_frame(*old_queue.get_nowait())
+        except asyncio.QueueEmpty:
+            pass
+
+    @property
     def overflow_count(self) -> int:
         """
         How many frames have been dropped due to the input queue overflow.
         """
         return self._overflow_count
+
+    @property
+    def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
+        return self._metadata.data_specifier
 
     async def _do_try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:
@@ -113,9 +140,9 @@ class InputSession(_base.Session):
 
 class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputSession):
     def __init__(self,
-                 metadata:       pyuavcan.transport.SessionMetadata,
-                 loop:           typing.Optional[asyncio.AbstractEventLoop],
-                 finalizer:      _base.Finalizer):
+                 metadata:  pyuavcan.transport.SessionMetadata,
+                 loop:      typing.Optional[asyncio.AbstractEventLoop],
+                 finalizer: _base.Finalizer):
         super(PromiscuousInputSession, self).__init__(metadata=metadata,
                                                       loop=loop,
                                                       finalizer=finalizer)
@@ -123,10 +150,6 @@ class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputS
     @property
     def metadata(self) -> pyuavcan.transport.SessionMetadata:
         return self._metadata
-
-    @property
-    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
-        raise NotImplementedError
 
     async def close(self) -> None:
         self._finalizer()
@@ -148,6 +171,7 @@ class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputS
     def transfer_id_timeout(self, value: float) -> None:
         self._transfer_id_timeout_ns = int(value / _NANO)
 
+    # TODO: proper statistics instead of this
     @property
     def error_counts_per_source_node_id(self) \
             -> typing.Dict[int, typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]]:
@@ -176,10 +200,6 @@ class SelectiveInputSession(InputSession, pyuavcan.transport.SelectiveInputSessi
     @property
     def metadata(self) -> pyuavcan.transport.SessionMetadata:
         return self._metadata
-
-    @property
-    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
-        raise NotImplementedError
 
     async def close(self) -> None:
         self._finalizer()
