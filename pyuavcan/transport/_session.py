@@ -131,6 +131,9 @@ class SelectiveInputSession(InputSession):
     def source_node_id(self) -> int:
         raise NotImplementedError
 
+    def __str__(self) -> str:
+        return f'{type(self).__name__}(metadata={self.metadata}, source_node_id={self.source_node_id})'
+
 
 # ------------------------------------- OUTPUT -------------------------------------
 
@@ -173,3 +176,6 @@ class UnicastOutputSession(OutputSession):
     @abc.abstractmethod
     def destination_node_id(self) -> int:
         raise NotImplementedError
+
+    def __str__(self) -> str:
+        return f'{type(self).__name__}(metadata={self.metadata}, destination_node_id={self.destination_node_id})'
