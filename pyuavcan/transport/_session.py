@@ -50,10 +50,30 @@ class SessionMetadata:
     payload_metadata: PayloadMetadata
 
 
+@dataclasses.dataclass
+class Statistics:
+    transfers: int = 0
+    frames:    int = 0
+    bytes:     int = 0
+    errors:    int = 0
+    overruns:  int = 0
+
+
 class Session(abc.ABC):        # TODO: statistics
     @property
     @abc.abstractmethod
     def metadata(self) -> SessionMetadata:
+        """
+        Identifies the category of data exchanged through this session.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def sample_statistics(self) -> Statistics:
+        """
+        The current approximated statistic sample. We say "approximated" because we do not require the implementations
+        to sample the statistical counters atomically, although normally they should strive to do so when possible.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod

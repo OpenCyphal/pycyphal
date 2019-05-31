@@ -110,8 +110,8 @@ class MockMedia(_media.Media):
 
     def _test_acceptance(self, frame: _media.DataFrame) -> bool:
         return any(map(
-            lambda f: frame.identifier & f.mask == f.identifier & f.mask
-            and (f.format is None or frame.format == f.format),
+            lambda f:
+            frame.identifier & f.mask == f.identifier & f.mask and (f.format is None or frame.format == f.format),
             self._acceptance_filters))
 
     def __str__(self) -> str:

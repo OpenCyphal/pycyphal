@@ -6,10 +6,11 @@
 
 from __future__ import annotations
 import time
+import copy
 import typing
 import asyncio
 import logging
-import collections
+import dataclasses
 import pyuavcan.util
 import pyuavcan.transport
 from .. import _frame, _identifier
@@ -17,6 +18,12 @@ from . import _base, _transfer_receiver
 
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass
+class ExtendedStatistics(pyuavcan.transport.Statistics):
+    reception_error_counters: typing.Dict[_transfer_receiver.TransferReceptionError, int] = \
+        dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_receiver.TransferReceptionError})
 
 
 class InputSession(_base.Session):
@@ -36,12 +43,7 @@ class InputSession(_base.Session):
         self._receivers = [_transfer_receiver.TransferReceiver(metadata.payload_metadata.max_size_bytes)
                            for _ in _node_id_range()]
 
-        self._success_count_anonymous = 0
-        self._success_count = [0 for _ in _node_id_range()]
-        self._error_counts: typing.List[typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]] = [
-            collections.defaultdict(int) for _ in _node_id_range()
-        ]
-        self._overflow_count = 0
+        self._statistics = ExtendedStatistics()         # We could easily support per-source-node statistics if needed
 
         super(InputSession, self).__init__(finalizer=finalizer)
 
@@ -53,7 +55,7 @@ class InputSession(_base.Session):
         try:
             self._queue.put_nowait((can_id, frame))
         except asyncio.QueueFull:
-            self._overflow_count += 1
+            self._statistics.overruns += 1
             _logger.info('Input session %s: input queue overflow; frame %s (CAN ID fields: %s) is dropped',
                          self, frame, can_id)
 
@@ -81,13 +83,6 @@ class InputSession(_base.Session):
             pass
 
     @property
-    def overflow_count(self) -> int:
-        """
-        How many frames have been dropped due to the input queue overflow.
-        """
-        return self._overflow_count
-
-    @property
     def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
         return self._metadata.data_specifier
 
@@ -99,9 +94,14 @@ class InputSession(_base.Session):
             if timeout <= 0:
                 break
 
-            canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
-            assert isinstance(canid, _identifier.CANID)
-            assert isinstance(frame, _frame.TimestampedUAVCANFrame)
+            try:
+                canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                assert isinstance(canid, _identifier.CANID)
+                assert isinstance(frame, _frame.TimestampedUAVCANFrame)
+            except asyncio.TimeoutError:
+                continue
+
+            self._statistics.frames += 1
 
             if isinstance(canid, _identifier.MessageCANID):
                 assert isinstance(self._metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier)
@@ -109,7 +109,8 @@ class InputSession(_base.Session):
                 source_node_id = canid.source_node_id
                 if source_node_id is None:
                     # Anonymous transfer - no reconstruction needed
-                    self._success_count_anonymous += 1
+                    self._statistics.transfers += 1
+                    self._statistics.bytes += len(frame.padded_payload)
                     return pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
                                                            priority=canid.priority,
                                                            transfer_id=frame.transfer_id,
@@ -129,15 +130,20 @@ class InputSession(_base.Session):
             receiver = self._receivers[source_node_id]
             result = receiver.process_frame(canid.priority, source_node_id, frame, self._transfer_id_timeout_ns)
             if isinstance(result, _transfer_receiver.TransferReceptionError):
-                self._error_counts[source_node_id][result] += 1
+                self._statistics.errors += 1
+                self._statistics.reception_error_counters[result] += 1
             elif isinstance(result, pyuavcan.transport.TransferFrom):
-                self._success_count[source_node_id] += 1
+                self._statistics.transfers += 1
+                self._statistics.bytes += sum(map(len, result.fragmented_payload))
                 return result
             elif result is None:
                 pass        # Nothing to do - expecting more frames
             else:
                 assert False
         return None
+
+    def _do_sample_statistics(self) -> ExtendedStatistics:
+        return copy.copy(self._statistics)
 
 
 class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputSession):
@@ -152,6 +158,9 @@ class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputS
     @property
     def metadata(self) -> pyuavcan.transport.SessionMetadata:
         return self._metadata
+
+    def sample_statistics(self) -> ExtendedStatistics:
+        return self._do_sample_statistics()
 
     async def close(self) -> None:
         self._finalizer()
@@ -173,20 +182,6 @@ class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputS
     def transfer_id_timeout(self, value: float) -> None:
         self._transfer_id_timeout_ns = int(value / _NANO)
 
-    # TODO: proper statistics instead of this
-    @property
-    def error_counts_per_source_node_id(self) \
-            -> typing.Dict[int, typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]]:
-        return {nid: self._error_counts[nid].copy() for nid in _node_id_range()}
-
-    @property
-    def transfer_count_per_source_node_id(self) -> typing.Dict[int, int]:
-        return {nid: self._success_count[nid] for nid in _node_id_range()}
-
-    @property
-    def anonymous_transfer_count(self) -> int:
-        return self._success_count_anonymous
-
 
 class SelectiveInputSession(InputSession, pyuavcan.transport.SelectiveInputSession):
     def __init__(self,
@@ -202,6 +197,9 @@ class SelectiveInputSession(InputSession, pyuavcan.transport.SelectiveInputSessi
     @property
     def metadata(self) -> pyuavcan.transport.SessionMetadata:
         return self._metadata
+
+    def sample_statistics(self) -> ExtendedStatistics:
+        return self._do_sample_statistics()
 
     async def close(self) -> None:
         self._finalizer()
@@ -228,14 +226,6 @@ class SelectiveInputSession(InputSession, pyuavcan.transport.SelectiveInputSessi
     @transfer_id_timeout.setter
     def transfer_id_timeout(self, value: float) -> None:
         self._transfer_id_timeout_ns = int(value / _NANO)
-
-    @property
-    def error_counts(self) -> typing.DefaultDict[_transfer_receiver.TransferReceptionError, int]:
-        return self._error_counts[self.source_node_id].copy()
-
-    @property
-    def transfer_count(self) -> int:
-        return self._success_count[self.source_node_id]
 
 
 def _node_id_range() -> typing.Iterable[int]:

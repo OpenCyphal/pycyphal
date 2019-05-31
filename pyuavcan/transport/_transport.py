@@ -8,6 +8,7 @@ from __future__ import annotations
 import abc
 import typing
 import dataclasses
+from ._session import InputSession, OutputSession
 from ._session import PromiscuousInputSession, SelectiveInputSession, BroadcastOutputSession, UnicastOutputSession
 from ._data_specifier import DataSpecifier
 from ._payload_metadata import PayloadMetadata
@@ -18,21 +19,6 @@ class ProtocolParameters:
     transfer_id_modulo:                           int   # 32 for CAN, 2**56 for UDP, etc.
     node_id_set_cardinality:                      int   # 128 for CAN, etc.
     single_frame_transfer_payload_capacity_bytes: int   # 7 for CAN 2.0, 63 for CAN FD, etc.
-
-
-@dataclasses.dataclass
-class Statistics:
-    @dataclasses.dataclass
-    class Directional:
-        transfers: int
-        frames:    int
-        bytes:     int
-        errors:    int
-        overruns:  int
-
-    output: Directional
-    input:  Directional
-    errors: int
 
 
 class Transport(abc.ABC):
@@ -74,10 +60,21 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_statistics(self) -> Statistics:
+    async def get_promiscuous_input(self,
+                                    data_specifier:   DataSpecifier,
+                                    payload_metadata: PayloadMetadata) -> PromiscuousInputSession:
         """
-        The current approximated statistic sample. We say "approximated" because we do not require the implementations
-        to sample the statistical counters atomically, although normally they should strive to do so when possible.
+        All transports must support this session type for all kinds of transfers.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def get_selective_input(self,
+                                  data_specifier:   DataSpecifier,
+                                  payload_metadata: PayloadMetadata,
+                                  source_node_id:   int) -> SelectiveInputSession:
+        """
+        All transports must support this session type for services.
         """
         raise NotImplementedError
 
@@ -100,22 +97,19 @@ class Transport(abc.ABC):
         """
         raise NotImplementedError
 
+    @property
     @abc.abstractmethod
-    async def get_promiscuous_input(self,
-                                    data_specifier:   DataSpecifier,
-                                    payload_metadata: PayloadMetadata) -> PromiscuousInputSession:
+    def inputs(self) -> typing.Sequence[InputSession]:
         """
-        All transports must support this session type for all kinds of transfers.
+        All active input sessions.
         """
         raise NotImplementedError
 
+    @property
     @abc.abstractmethod
-    async def get_selective_input(self,
-                                  data_specifier:   DataSpecifier,
-                                  payload_metadata: PayloadMetadata,
-                                  source_node_id:   int) -> SelectiveInputSession:
+    def outputs(self) -> typing.Sequence[OutputSession]:
         """
-        All transports must support this session type for services.
+        All active output sessions.
         """
         raise NotImplementedError
 

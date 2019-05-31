@@ -31,3 +31,7 @@ async def _unittest_can_transport() -> None:
     )
     assert tr.frame_payload_capacity == 63
     assert tr.local_node_id is None
+
+    bs_ds = pyuavcan.transport.MessageDataSpecifier(1234)
+    bs_meta = pyuavcan.transport.PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 123)
+    bco = await tr.get_broadcast_output(bs_ds, bs_meta)

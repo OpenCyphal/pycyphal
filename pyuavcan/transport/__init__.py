@@ -4,13 +4,13 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._transport import Transport, ProtocolParameters, Statistics
+from ._transport import Transport, ProtocolParameters
 
 from ._timestamp import Timestamp
 
 from ._transfer import Priority, FragmentedPayload, Transfer, TransferFrom
 
-from ._session import SessionMetadata, Feedback
+from ._session import SessionMetadata, Statistics, Feedback
 from ._session import Session, InputSession, OutputSession
 from ._session import PromiscuousInputSession, SelectiveInputSession
 from ._session import BroadcastOutputSession, UnicastOutputSession

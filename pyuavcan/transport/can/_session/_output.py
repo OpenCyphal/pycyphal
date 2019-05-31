@@ -5,8 +5,10 @@
 #
 
 from __future__ import annotations
+import copy
 import typing
 import logging
+import itertools
 import dataclasses
 import pyuavcan.transport
 from .. import _frame, _identifier
@@ -50,6 +52,7 @@ class OutputSession(_base.Session):
         self._send_handler = send_handler
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._pending_feedback: typing.Dict[_PendingFeedbackKey, pyuavcan.transport.Timestamp] = {}
+        self._statistics = pyuavcan.transport.Statistics()
         super(OutputSession, self).__init__(finalizer=finalizer)
 
     def handle_loopback_frame(self, frame: _frame.TimestampedUAVCANFrame) -> None:
@@ -82,17 +85,32 @@ class OutputSession(_base.Session):
             except KeyError:
                 pass
             else:
+                self._statistics.errors += 1
                 _logger.warning('Overriding old feedback entry %s at key %s', old, key)
 
             self._pending_feedback[key] = transfer.timestamp
 
-        await self._send_handler(_transfer_sender.serialize_transfer(
-            compiled_identifier=compiled_identifier,
-            transfer_id=transfer.transfer_id,
-            fragmented_payload=transfer.fragmented_payload,
-            max_frame_payload_bytes=self._transport.frame_payload_capacity,
-            loopback=needs_feedback
-        ))
+        try:
+            frames, frame_count_iter = itertools.tee(_transfer_sender.serialize_transfer(
+                compiled_identifier=compiled_identifier,
+                transfer_id=transfer.transfer_id,
+                fragmented_payload=transfer.fragmented_payload,
+                max_frame_payload_bytes=self._transport.frame_payload_capacity,
+                loopback=needs_feedback
+            ))
+            num_frames = sum(1 for _ in frame_count_iter)
+            del frame_count_iter
+
+            await self._send_handler(frames)
+
+            # Update statistics only when the transfer is sent successfully
+            assert num_frames > 0
+            self._statistics.transfers += 1
+            self._statistics.frames += num_frames
+            self._statistics.bytes += sum(map(len, transfer.fragmented_payload))  # Session level, not transport level
+        except Exception:
+            self._statistics.errors += 1
+            raise
 
     def _do_enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
         self._feedback_handler = handler
@@ -100,6 +118,9 @@ class OutputSession(_base.Session):
     def _do_disable_feedback(self) -> None:
         self._feedback_handler = None
         self._pending_feedback.clear()
+
+    def _do_sample_statistics(self) -> pyuavcan.transport.Statistics:
+        return copy.copy(self._statistics)
 
 
 class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSession):
@@ -122,9 +143,8 @@ class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSe
     def metadata(self) -> pyuavcan.transport.SessionMetadata:
         return self._metadata
 
-    @property
-    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
-        raise NotImplementedError
+    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+        return self._do_sample_statistics()
 
     async def close(self) -> None:
         self._finalizer()
@@ -166,6 +186,9 @@ class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSessio
     @property
     def metadata(self) -> pyuavcan.transport.SessionMetadata:
         return self._metadata
+
+    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+        return self._do_sample_statistics()
 
     async def close(self) -> None:
         self._finalizer()

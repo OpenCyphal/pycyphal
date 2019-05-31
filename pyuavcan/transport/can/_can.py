@@ -85,12 +85,23 @@ class CANTransport(pyuavcan.transport.Transport):
         else:
             raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
+    @property
+    def inputs(self) -> typing.List[pyuavcan.transport.InputSession]:
+        def convert(x: _session.InputSession) -> pyuavcan.transport.InputSession:
+            assert isinstance(x, pyuavcan.transport.InputSession)
+            return x
+        return list(map(convert, filter(None, self._input_dispatch_table)))
+
+    @property
+    def outputs(self) -> typing.List[pyuavcan.transport.OutputSession]:
+        def convert(x: _session.OutputSession) -> pyuavcan.transport.OutputSession:
+            assert isinstance(x, pyuavcan.transport.OutputSession)
+            return x
+        return list(map(convert, self._output_registry.values()))
+
     async def close(self) -> None:
         async with self._media_lock:
             await self._media.close()
-
-    async def get_statistics(self) -> pyuavcan.transport.Statistics:
-        raise NotImplementedError
 
     async def get_broadcast_output(self,
                                    data_specifier:   pyuavcan.transport.DataSpecifier,
