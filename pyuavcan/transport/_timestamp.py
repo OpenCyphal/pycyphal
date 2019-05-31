@@ -89,3 +89,33 @@ class Timestamp:
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(wall_ns={self._wall_ns}, monotonic_ns={self._monotonic_ns})'
+
+
+def _unittest_timestamp() -> None:
+    from pytest import raises
+    from decimal import Decimal
+
+    Timestamp(0, 0)
+
+    with raises(ValueError):
+        Timestamp(-1, 0)
+
+    with raises(ValueError):
+        Timestamp(0, -1)
+
+    ts = Timestamp.from_second(Decimal('5.123456789'), Decimal('123.456789'))
+    assert ts.wall_ns == 5123456789
+    assert ts.monotonic_ns == 123456789000
+    assert ts.wall == Decimal('5.123456789')
+    assert ts.monotonic == Decimal('123.456789')
+    assert hash(ts) == hash(Timestamp(5123456789, 123456789000))
+    assert hash(ts) != hash(Timestamp(123, 456))
+    assert ts == Timestamp(5123456789, 123456789000)
+    assert ts != Timestamp(123, 123456789000)
+    assert ts != Timestamp(5123456789, 456)
+    assert ts != 'Hello'
+    assert Timestamp.combine_oldest(Timestamp(123, 123456789000),
+                                    Timestamp(5123456789, 456),
+                                    ts) == Timestamp(123, 456)
+
+    print(ts)

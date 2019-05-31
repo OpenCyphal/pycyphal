@@ -24,9 +24,7 @@ class DataFrame:
     loopback:   bool        # Indicates a loopback request for outgoing frames; marks loopback for received frames.
 
     def __post_init__(self) -> None:
-        if not isinstance(self.format, FrameFormat):
-            raise ValueError(f'Invalid frame format: {self.format}')
-
+        assert isinstance(self.format, FrameFormat)
         if not (0 <= self.identifier < 2 ** int(self.format)):
             raise ValueError(f'Invalid CAN ID for format {self.format}: {self.identifier}')
 
@@ -35,11 +33,7 @@ class DataFrame:
 
     @property
     def data_length_code(self) -> int:
-        try:
-            return _LENGTH_TO_DLC[len(self.data)]
-        except LookupError:
-            raise ValueError(f'{len(self.data)} bytes is not a valid data length; '
-                             f'valid length values are: {list(_LENGTH_TO_DLC.keys())}') from None
+        return _LENGTH_TO_DLC[len(self.data)]       # The length is checked at the time of construction
 
     @staticmethod
     def convert_data_length_code_to_length(dlc: int) -> int:
@@ -50,7 +44,7 @@ class DataFrame:
 
     @staticmethod
     def get_required_padding(data_length: int) -> int:
-        supremum = next(x for x in _DLC_TO_LENGTH if x >= data_length)
+        supremum = next(x for x in _DLC_TO_LENGTH if x >= data_length)  # pragma: no branch
         assert supremum >= data_length
         return supremum - data_length
 
@@ -92,6 +86,8 @@ for item in _DLC_TO_LENGTH:
 
 
 def _unittest_can_media_frame() -> None:
+    from pytest import raises
+
     assert str(DataFrame(0, bytearray(), FrameFormat.BASE, False)) == "0x000    ''"
 
     assert str(DataFrame(0x12345678, bytearray(b'Hello\x01\x02\x7F'), FrameFormat.EXTENDED, True)) == \
@@ -109,3 +105,24 @@ def _unittest_can_media_frame() -> None:
         TimestampedDataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False,
                              timestamp=pyuavcan.transport.Timestamp.now())
     )
+
+    for fmt in FrameFormat:
+        with raises(ValueError):
+            DataFrame(-1, bytearray(), fmt, False)
+
+        with raises(ValueError):
+            DataFrame(2 ** int(fmt), bytearray(), fmt, True)
+
+    with raises(ValueError):
+        DataFrame(123, bytearray(b'a' * 9), FrameFormat.EXTENDED, True)
+
+    with raises(ValueError):
+        DataFrame.convert_data_length_code_to_length(16)
+
+    for sz in range(100):
+        try:
+            f = DataFrame(123, bytearray(b'a' * sz), FrameFormat.EXTENDED, True)
+        except ValueError:
+            pass
+        else:
+            assert f.convert_data_length_code_to_length(f.data_length_code) == sz

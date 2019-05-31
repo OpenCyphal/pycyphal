@@ -27,9 +27,6 @@ class UAVCANFrame:
     loopback:          bool
 
     def __post_init__(self) -> None:
-        if not (0 <= self.identifier <= 2 ** 29):
-            raise ValueError(f'Invalid identifier: {self.identifier}')
-
         if self.transfer_id < 0:
             raise ValueError('Transfer ID cannot be negative')
 
@@ -112,3 +109,66 @@ def _unittest_can_transfer_id_forward_distance() -> None:
     assert 5 == cfd(0, 5)
     assert 31 == cfd(31, 30)
     assert 30 == cfd(7, 5)
+
+
+def _unittest_can_uavcan_frame() -> None:
+    from pytest import raises
+    from pyuavcan.transport import Timestamp
+    from .media import TimestampedDataFrame, FrameFormat
+
+    UAVCANFrame(123, memoryview(b''), 123, True, False, True, loopback=False)
+    UAVCANFrame(123, memoryview(b''), 123, False, False, True, loopback=False)
+    UAVCANFrame(123, memoryview(b''), 123, False, False, False, loopback=False)
+
+    with raises(ValueError):
+        UAVCANFrame(123, memoryview(b''), -1, True, False, True, loopback=False)
+
+    with raises(ValueError):
+        UAVCANFrame(123, memoryview(b''), 123, True, False, False, loopback=False)
+
+    ts = Timestamp.now()
+
+    ref = TimestampedUAVCANFrame(identifier=0,
+                                 padded_payload=memoryview(b''),
+                                 transfer_id=0,
+                                 start_of_transfer=False,
+                                 end_of_transfer=False,
+                                 toggle_bit=False,
+                                 loopback=True,
+                                 timestamp=ts)
+    assert ref == TimestampedUAVCANFrame.try_parse(
+        TimestampedDataFrame(0, bytearray(b'\x00'), FrameFormat.EXTENDED, loopback=True, timestamp=ts))
+
+    ref = TimestampedUAVCANFrame(identifier=123456,
+                                 padded_payload=memoryview(b'Hello'),
+                                 transfer_id=12,
+                                 start_of_transfer=True,
+                                 end_of_transfer=False,
+                                 toggle_bit=True,
+                                 loopback=False,
+                                 timestamp=ts)
+    assert ref == TimestampedUAVCANFrame.try_parse(
+        TimestampedDataFrame(123456, bytearray(b'Hello\xAC'), FrameFormat.EXTENDED, loopback=False, timestamp=ts))
+
+    ref = TimestampedUAVCANFrame(identifier=1234567,
+                                 padded_payload=memoryview(b'Hello'),
+                                 transfer_id=12,
+                                 start_of_transfer=False,
+                                 end_of_transfer=True,
+                                 toggle_bit=True,
+                                 loopback=False,
+                                 timestamp=ts)
+    assert ref == TimestampedUAVCANFrame.try_parse(
+        TimestampedDataFrame(1234567, bytearray(b'Hello\x6C'), FrameFormat.EXTENDED, loopback=False, timestamp=ts))
+
+    assert TimestampedUAVCANFrame.try_parse(
+        TimestampedDataFrame(1234567, bytearray(b'Hello\xCC'), FrameFormat.EXTENDED, loopback=False, timestamp=ts)
+    ) is None   # Bad toggle
+
+    assert TimestampedUAVCANFrame.try_parse(
+        TimestampedDataFrame(1234567, bytearray(b''), FrameFormat.EXTENDED, loopback=False, timestamp=ts)
+    ) is None   # No tail byte
+
+    assert TimestampedUAVCANFrame.try_parse(
+        TimestampedDataFrame(123, bytearray(b'Hello\x6C'), FrameFormat.BASE, loopback=False, timestamp=ts)
+    ) is None   # Bad frame format

@@ -87,6 +87,27 @@ def optimize_filter_configurations(configurations: typing.Iterable[FilterConfigu
     return configurations
 
 
+def _unittest_can_media_filter_faults() -> None:
+    from ._frame import FrameFormat
+    from pytest import raises
+
+    with raises(ValueError):
+        FilterConfiguration(0, -1, None)
+
+    with raises(ValueError):
+        FilterConfiguration(-1, 0, None)
+
+    for fmt in FrameFormat:
+        with raises(ValueError):
+            FilterConfiguration(2 ** int(fmt), 0, fmt)
+
+        with raises(ValueError):
+            FilterConfiguration(0, 2 ** int(fmt), fmt)
+
+    with raises(ValueError):
+        optimize_filter_configurations([], 0)
+
+
 # noinspection SpellCheckingInspection
 def _unittest_can_media_filter_str() -> None:
     from ._frame import FrameFormat
