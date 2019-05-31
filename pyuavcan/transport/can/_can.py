@@ -44,12 +44,12 @@ class CANTransport(pyuavcan.transport.Transport):
             None for _ in range(_INPUT_DISPATCH_TABLE_SIZE + 1)
         ]
 
-        if self._media.max_data_field_length not in _media.Media.VALID_MAX_DATA_FIELD_LENGTH_SET:  # pragma: no cover
+        if self._media.max_data_field_length not in _media.Media.VALID_MAX_DATA_FIELD_LENGTH_SET:
             raise InvalidMediaConfigurationError(
                 f'The maximum data field length value {self._media.max_data_field_length} '
                 f'is not a member of {_media.Media.VALID_MAX_DATA_FIELD_LENGTH_SET}')
 
-        if self._media.number_of_acceptance_filters < 1:    # pragma: no cover
+        if self._media.number_of_acceptance_filters < 1:
             raise InvalidMediaConfigurationError(
                 f'The number of acceptance filters is too low: {self._media.number_of_acceptance_filters}')
 
@@ -65,10 +65,9 @@ class CANTransport(pyuavcan.transport.Transport):
 
     @property
     def frame_payload_capacity(self) -> int:
-        with self._media_lock:
-            out = self._media.max_data_field_length - 1
-            assert out > 0
-            return out
+        out = self._media.max_data_field_length - 1
+        assert out > 0
+        return out
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
@@ -79,7 +78,7 @@ class CANTransport(pyuavcan.transport.Transport):
             if 0 <= node_id <= _identifier.CANID.NODE_ID_MASK:
                 self._local_node_id = int(node_id)
                 await self._reconfigure_acceptance_filters()
-                with self._media_lock:
+                async with self._media_lock:
                     await self._media.enable_automatic_retransmission()
             else:
                 raise ValueError(f'Invalid node ID for CAN: {node_id}')
@@ -87,7 +86,7 @@ class CANTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     async def close(self) -> None:
-        with self._media_lock:
+        async with self._media_lock:
             await self._media.close()
 
     async def get_statistics(self) -> pyuavcan.transport.Statistics:
@@ -156,7 +155,7 @@ class CANTransport(pyuavcan.transport.Transport):
         try:
             return self._output_registry[key]
         except KeyError:
-            session = factory(lambda: self._output_registry.pop(key))
+            session = factory(lambda: self._output_registry.pop(key))  # type: ignore
             self._output_registry[key] = session
             return session
 
@@ -178,7 +177,7 @@ class CANTransport(pyuavcan.transport.Transport):
         return session
 
     async def _do_send(self, frames: typing.Iterable[_frame.UAVCANFrame]) -> None:
-        with self._media_lock:
+        async with self._media_lock:
             await self._media.send(x.compile() for x in frames)
 
     def _on_frames_received(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
@@ -240,7 +239,7 @@ class CANTransport(pyuavcan.transport.Transport):
         fcs = _identifier.generate_filter_configurations(subject_ids, self.local_node_id)
         assert len(fcs) > len(subject_ids)
 
-        with self._media_lock:
+        async with self._media_lock:
             num_filters = self._media.number_of_acceptance_filters
             fcs = _media.optimize_filter_configurations(fcs, num_filters)
             assert len(fcs) <= num_filters

@@ -250,7 +250,7 @@ class Client(ServiceChannel[ServiceTypeClass]):
             if transfer is not None:
                 response = pyuavcan.dsdl.try_deserialize(self._cls.Response, transfer.fragmented_payload)
                 if response is not None:
-                    return response, self._construct_metadata(transfer)
+                    return response, self._construct_metadata(transfer)  # type: ignore
         return None     # Timed out
 
     async def close(self) -> None:
@@ -293,18 +293,18 @@ class Server(ServiceChannel[ServiceTypeClass]):
     def input_session(self) -> pyuavcan.transport.InputSession:
         return self._input_session
 
-    async def listen_forever(self, handler: Handler) -> None:
+    async def listen_forever(self, handler: Handler) -> None:  # type: ignore
         while True:
             await self.listen_until(handler, time.monotonic() + 10.0 ** 10)
 
-    async def listen_until(self, handler: Handler, monotonic_deadline: float) -> None:
+    async def listen_until(self, handler: Handler, monotonic_deadline: float) -> None:  # type: ignore
         while time.monotonic() <= monotonic_deadline:
             # TODO: WHEN WE ARE AGGREGATING TRANSFERS WITH DIFFERENT TRANSFER ID MODULO SETTINGS, THE TRANSFER ID
             # TODO: VALUE OBTAINED FROM THE REQUEST TRANSFER MAY BE INCORRECT FOR SOME OF THE INTERFACES WHEN WE ARE
             # TODO: TRANSMITTING THE RESPONSE!
             result = await self._try_receive(monotonic_deadline)
             if result:
-                request, meta = result
+                request, meta = result  # type: ignore
                 response = await handler(request, meta)
                 if response is not None:
                     await self._do_send(response,
@@ -324,7 +324,7 @@ class Server(ServiceChannel[ServiceTypeClass]):
                 if response is not None:
                     meta = self._try_construct_metadata(transfer)       # TODO: log error if failed
                     if meta is not None:
-                        return response, meta
+                        return response, meta  # type: ignore
         return None     # Timed out
 
     async def _do_send(self,

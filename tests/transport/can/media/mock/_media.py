@@ -66,7 +66,13 @@ class MockMedia(_media.Media):
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
 
-        frames = [
+        # The media interface spec says that it is guaranteed that the CAN ID is the same across the set; enforce this.
+        assert len(set(map(lambda x: x.identifier, frames))) == 1, 'Interface constraint violation: nonuniform CAN ID'
+
+        # CAN frames with empty payload are not possible in UAVCAN.
+        assert min(map(lambda x: len(x.data), frames)) >= 1
+
+        timestamped = [
             _media.TimestampedDataFrame(identifier=f.identifier,
                                         data=f.data,
                                         format=f.format,
@@ -74,18 +80,13 @@ class MockMedia(_media.Media):
                                         timestamp=pyuavcan.transport.Timestamp.now())
             for f in frames
         ]
-        assert len(frames) > 0, 'Interface constraint violation: empty transmission set'
-
-        # The media interface spec says that it is guaranteed that the CAN ID is the same across the set; enforce this.
-        assert len(set(map(lambda x: x.identifier, frames))) == 1, 'Interface constraint violation: nonuniform CAN ID'
-
-        # CAN frames with empty payload are not possible in UAVCAN.
-        assert min(map(lambda x: len(x.data), frames)) >= 1
+        del frames
+        assert len(timestamped) > 0, 'Interface constraint violation: empty transmission set'
 
         # Broadcast across the virtual bus we're emulating here.
         for p in self._peers:
             if p is not self:
-                p._receive(frames)
+                p._receive(timestamped)
 
         # Simple loopback emulation with acceptance filtering.
         self._receive(_media.TimestampedDataFrame(identifier=f.identifier,
@@ -93,7 +94,7 @@ class MockMedia(_media.Media):
                                                   format=f.format,
                                                   loopback=True,
                                                   timestamp=f.timestamp)
-                      for f in frames if f.loopback)
+                      for f in timestamped if f.loopback)
 
     async def close(self) -> None:
         if self._closed:
@@ -102,7 +103,7 @@ class MockMedia(_media.Media):
             self._closed = True
             self._peers.remove(self)
 
-    def _receive(self, frames: typing.Iterable[_media.DataFrame]) -> None:
+    def _receive(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
         frames = list(filter(self._test_acceptance, frames))
         if frames:                                          # Where are the assignment expressions when you need them?
             self._rx_handler(frames)
@@ -127,9 +128,9 @@ class MockMedia(_media.Media):
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_can_mock_media() -> None:
-    from pyuavcan.transport.can.media import DataFrame, TimestampedDataFrame, FrameFormat, FilterConfiguration
+    from pyuavcan.transport.can.media import DataFrame, FrameFormat, FilterConfiguration
 
-    peers = set()
+    peers: typing.Set[MockMedia] = set()
 
     me = MockMedia(peers, 64, 3)
     assert len(peers) == 1 and me in peers
@@ -193,13 +194,13 @@ async def _unittest_can_mock_media() -> None:
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         await me.configure_acceptance_filters([])
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        await me.set_received_frames_handler(me_collector.give)
+        me.set_received_frames_handler(me_collector.give)
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         await me.close()
 
 
 class _RxCollector:
-    def __init__(self):
+    def __init__(self) -> None:
         self._collected: typing.List[_media.TimestampedDataFrame] = []
 
     def give(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
