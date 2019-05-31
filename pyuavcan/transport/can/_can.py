@@ -15,6 +15,10 @@ from . import _session, media as _media, _frame, _identifier
 _logger = logging.getLogger(__name__)
 
 
+class InvalidMediaConfigurationError(pyuavcan.transport.InvalidTransportConfigurationError):
+    pass
+
+
 class CANTransport(pyuavcan.transport.Transport):
     def __init__(self,
                  media: _media.Media,
@@ -40,7 +44,14 @@ class CANTransport(pyuavcan.transport.Transport):
             None for _ in range(_INPUT_DISPATCH_TABLE_SIZE + 1)
         ]
 
-        self._max_can_data_field_length = self._media.max_data_field_length
+        if self._media.max_data_field_length not in _media.Media.VALID_MAX_DATA_FIELD_LENGTH_SET:  # pragma: no cover
+            raise InvalidMediaConfigurationError(
+                f'The maximum data field length value {self._media.max_data_field_length} '
+                f'is not a member of {_media.Media.VALID_MAX_DATA_FIELD_LENGTH_SET}')
+
+        if self._media.number_of_acceptance_filters < 1:    # pragma: no cover
+            raise InvalidMediaConfigurationError(
+                f'The number of acceptance filters is too low: {self._media.number_of_acceptance_filters}')
 
         self._media.set_received_frames_handler(self._on_frames_received)   # Starts the transport.
 
@@ -141,17 +152,11 @@ class CANTransport(pyuavcan.transport.Transport):
                     destination_node_id: typing.Optional[int],
                     factory:             typing.Callable[[typing.Callable[[], None]], _session.OutputSession]) \
             -> _session.OutputSession:
-        def finalizer() -> None:
-            try:
-                del self._output_registry[key]
-            except LookupError:
-                pass
-
         key = data_specifier, destination_node_id
         try:
             return self._output_registry[key]
         except KeyError:
-            session = factory(finalizer)
+            session = factory(lambda: self._output_registry.pop(key))
             self._output_registry[key] = session
             return session
 

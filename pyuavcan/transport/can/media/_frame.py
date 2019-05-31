@@ -54,6 +54,17 @@ class DataFrame:
         assert supremum >= data_length
         return supremum - data_length
 
+    def is_same_manifestation(self, other: DataFrame) -> bool:
+        """
+        Compares two frames ignoring the information that is not representable on the physical layer.
+        That means that only the CAN ID, data, and the format are compared. This can be used to ensure
+        equality ignoring timestamps, loopback, and other properties that are not representable outside
+        of this model.
+        """
+        return self.identifier == other.identifier \
+            and self.data == other.data \
+            and self.format == other.format
+
     def __str__(self) -> str:
         ide = {
             FrameFormat.EXTENDED: '0x%08x',
@@ -93,3 +104,8 @@ def _unittest_can_media_frame() -> None:
                                     pyuavcan.transport.Timestamp(wall_ns=1558481132502003000,
                                                                  monotonic_ns=635720258263416))) == \
         "2019-05-22T02:25:32.502003/635720.258263416: 0x12345678  48 65 6c 6c 6f 01 02 7f  'Hello...'  loopback"
+
+    assert DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=True).is_same_manifestation(
+        TimestampedDataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False,
+                             timestamp=pyuavcan.transport.Timestamp.now())
+    )

@@ -71,6 +71,8 @@ class OutputSession(_base.Session):
                                           f'{self._feedback_handler}: {ex}')
 
     async def _do_send(self, compiled_identifier: int, transfer: pyuavcan.transport.Transfer) -> None:
+        self._raise_if_closed()
+
         needs_feedback = self._feedback_handler is not None
         if needs_feedback:
             key = _PendingFeedbackKey(compiled_identifier=compiled_identifier,

@@ -93,6 +93,8 @@ class InputSession(_base.Session):
 
     async def _do_try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:
+            self._raise_if_closed()
+
             timeout = monotonic_deadline - time.monotonic()
             if timeout <= 0:
                 break

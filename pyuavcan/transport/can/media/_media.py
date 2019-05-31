@@ -51,6 +51,8 @@ class Media(abc.ABC):
         Every received frame must be timestamped. Both monotonic and wall timestamps are required.
         There are no timestamping accuracy requirements. An empty set of frames should never be reported.
 
+        The media implementation must drop all non-data frames (RTR frames, error frames, etc.).
+
         If the set contains more than one frame, all frames must be ordered by the time of their arrival,
         which also should be reflected in their timestamps; that is, the timestamp of a frame at index N
         generally should not be higher than the timestamp of a frame at index N+1. The timestamp ordering,
@@ -91,7 +93,7 @@ class Media(abc.ABC):
     async def send(self, frames: typing.Iterable[_frame.DataFrame]) -> None:
         """
         All frames are guaranteed to share the same CAN ID. This guarantee may enable some optimizations.
-        The frames MUST be delivered to the bus in the same order.
+        The frames MUST be delivered to the bus in the same order. The iterable is guaranteed to be non-empty.
         """
         raise NotImplementedError
 

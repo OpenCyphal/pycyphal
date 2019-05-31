@@ -7,6 +7,7 @@
 from __future__ import annotations
 import typing
 import logging
+import pyuavcan.transport
 
 
 Finalizer = typing.Callable[[], None]
@@ -17,7 +18,18 @@ _logger = logging.getLogger(__name__)
 
 class Session:
     def __init__(self, finalizer: Finalizer):
-        self._finalizer = finalizer
+        def finalizer_proxy() -> None:
+            if not self._closed:
+                self._closed = True
+                finalizer()
+
+        self._closed = False
+        self._finalizer = finalizer_proxy
+
+    def _raise_if_closed(self) -> None:
+        if self._closed:
+            raise pyuavcan.transport.ResourceClosedError(
+                f'The requested action cannot be performed because the session object {self} is closed')
 
     def __del__(self) -> None:
         try:

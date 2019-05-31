@@ -19,3 +19,7 @@ class UnsupportedSessionConfigurationError(TransportError):
 
 class OperationNotDefinedForAnonymousNodeError(TransportError):
     pass
+
+
+class ResourceClosedError(TransportError):
+    pass

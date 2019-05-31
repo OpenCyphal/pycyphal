@@ -11,14 +11,16 @@ import pyuavcan.transport.can.media as _media
 
 class SocketCAN(_media.Media):
     def __init__(self,
-                 max_data_field_length: int = 64,
+                 iface_name:            str,
+                 max_data_field_length: int,
                  loop:                  typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
         max_data_field_length = int(max_data_field_length)
         if max_data_field_length not in self.VALID_MAX_DATA_FIELD_LENGTH_SET:
             raise ValueError(f'Invalid MTU: {max_data_field_length} not in {self.VALID_MAX_DATA_FIELD_LENGTH_SET}')
 
+        self._iface_name = str(iface_name)
         self._max_data_field_length = int(max_data_field_length)
-        self._maybe_loop = loop
+        self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         super(SocketCAN, self).__init__()
 
@@ -52,4 +54,7 @@ class SocketCAN(_media.Media):
         raise NotImplementedError
 
     async def close(self) -> None:
+        raise NotImplementedError
+
+    def __str__(self) -> str:
         raise NotImplementedError
