@@ -172,14 +172,14 @@ class CANTransport(pyuavcan.transport.Transport):
             -> _session.InputSession:
         def finalizer() -> None:
             self._input_dispatch_table[index] = None
+            asyncio.ensure_future(self._reconfigure_acceptance_filters(), loop=self._loop)
 
         index = _compute_input_dispatch_table_index(data_specifier, source_node_id)
         session = self._input_dispatch_table[index]
         if session is None:
             session = factory(finalizer)
             self._input_dispatch_table[index] = session
-
-        await self._reconfigure_acceptance_filters()
+            await self._reconfigure_acceptance_filters()
         return session
 
     async def _do_send(self, frames: typing.Iterable[_frame.UAVCANFrame]) -> None:
@@ -236,14 +236,15 @@ class CANTransport(pyuavcan.transport.Transport):
             session.handle_loopback_frame(frame)
 
     async def _reconfigure_acceptance_filters(self) -> None:
-        subject_ids = [
+        subject_ids = set(
             ds.subject_id
             for ds in (ses.data_specifier for ses in self._input_dispatch_table if ses is not None)
             if isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
-        ]
+        )
 
         fcs = _identifier.generate_filter_configurations(subject_ids, self.local_node_id)
         assert len(fcs) > len(subject_ids)
+        del subject_ids
 
         async with self._media_lock:
             num_filters = self._media.number_of_acceptance_filters

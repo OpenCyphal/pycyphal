@@ -133,7 +133,8 @@ class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSe
         self._metadata = metadata
 
         if not isinstance(metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier):
-            raise ValueError(f'This transport does not support broadcast outputs for {metadata.data_specifier}')
+            raise pyuavcan.transport.UnsupportedSessionConfigurationError(
+                f'This transport does not support broadcast outputs for {metadata.data_specifier}')
         self._data_specifier: pyuavcan.transport.MessageDataSpecifier = metadata.data_specifier
 
         super(BroadcastOutputSession, self).__init__(transport=transport,
@@ -177,7 +178,8 @@ class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSessio
         self._metadata = metadata
 
         if not isinstance(metadata.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
-            raise ValueError(f'This transport does not support unicast outputs for {metadata.data_specifier}')
+            raise pyuavcan.transport.UnsupportedSessionConfigurationError(
+                f'This transport does not support unicast outputs for {metadata.data_specifier}')
         self._data_specifier: pyuavcan.transport.ServiceDataSpecifier = metadata.data_specifier
 
         super(UnicastOutputSession, self).__init__(transport=transport,

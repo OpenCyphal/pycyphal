@@ -30,9 +30,3 @@ class Session:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(
                 f'The requested action cannot be performed because the session object {self} is closed')
-
-    def __del__(self) -> None:  # pragma: no cover
-        try:
-            self._finalizer()
-        except Exception as ex:
-            _logger.exception(f'Finalizer for {self!r} has failed: {ex}')

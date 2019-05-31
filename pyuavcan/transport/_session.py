@@ -84,6 +84,12 @@ class Session(abc.ABC):        # TODO: statistics
         """
         raise NotImplementedError
 
+    def __str__(self) -> str:
+        return f'{type(self).__name__}(metadata={self.metadata})'
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 # ------------------------------------- INPUT -------------------------------------
 

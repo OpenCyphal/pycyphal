@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import time
 import typing
 import pytest
 import pyuavcan.transport
@@ -11,6 +12,8 @@ import pyuavcan.transport
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_can_transport() -> None:
+    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata
+    from pyuavcan.transport import UnsupportedSessionConfigurationError
     from .media.mock import MockMedia
 
     with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
@@ -32,6 +35,48 @@ async def _unittest_can_transport() -> None:
     assert tr.frame_payload_capacity == 63
     assert tr.local_node_id is None
 
-    bs_ds = pyuavcan.transport.MessageDataSpecifier(1234)
-    bs_meta = pyuavcan.transport.PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 123)
-    bco = await tr.get_broadcast_output(bs_ds, bs_meta)
+    meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 123)
+
+    with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't broadcast service calls
+        await tr.get_broadcast_output(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.SERVER), meta)
+
+    with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't unicast messages
+        await tr.get_unicast_output(MessageDataSpecifier(1234), meta, 123)
+
+    broadcaster = await tr.get_broadcast_output(MessageDataSpecifier(12345), meta)
+    assert broadcaster is await tr.get_broadcast_output(MessageDataSpecifier(12345), meta)              # Same stuff
+
+    subscriber_promiscuous = await tr.get_promiscuous_input(MessageDataSpecifier(2222), meta)
+    assert subscriber_promiscuous is await tr.get_promiscuous_input(MessageDataSpecifier(2222), meta)
+
+    subscriber_selective = await tr.get_selective_input(MessageDataSpecifier(2222), meta, 42)
+    assert subscriber_selective is await tr.get_selective_input(MessageDataSpecifier(2222), meta, 42)
+
+    server_listener = await tr.get_promiscuous_input(
+        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta)
+    assert server_listener is await tr.get_promiscuous_input(
+        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta)
+
+    server_responder = await tr.get_unicast_output(
+        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta, 123)
+    assert server_responder is await tr.get_unicast_output(
+        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta, 123)
+
+    client_requester = await tr.get_unicast_output(
+        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 123)
+    assert client_requester is await tr.get_unicast_output(
+        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 123)
+
+    client_listener = await tr.get_selective_input(
+        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 123)
+    assert client_listener is await tr.get_selective_input(
+        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 123)
+
+    base_ts = time.process_time()
+    inputs = tr.inputs
+    print(f'INPUTS (sampled in {time.process_time() - base_ts:.3f}s): {inputs}')
+    assert set(inputs) == {subscriber_promiscuous, subscriber_selective, server_listener, client_listener}
+    del inputs
+
+    print('OUTPUTS:', tr.outputs)
+    assert set(tr.outputs) == {broadcaster, server_responder, client_requester}
