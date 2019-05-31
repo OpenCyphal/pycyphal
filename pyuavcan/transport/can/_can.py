@@ -40,9 +40,13 @@ class CANTransport(pyuavcan.transport.Transport):
         # Input lookup must be fast, so we use constant-complexity static lookup table.
         # TODO: consider using weakref?
         # TODO: consider traversing using gc.get_referrers()?
-        self._input_dispatch_table: typing.List[typing.Optional[_session.InputSession]] = [
-            None for _ in range(_INPUT_DISPATCH_TABLE_SIZE + 1)
-        ]
+        self._input_dispatch_table: typing.List[typing.Optional[_session.InputSession]] = \
+            [None] * (_INPUT_DISPATCH_TABLE_SIZE + 1)   # This method of construction is an order of magnitude faster.
+
+        # This is redundant since it duplicates the state kept in the input dispatch table, but it is necessary
+        # since the dispatch table takes almost a second to traverse.
+        # TODO: encapsulate the input dispatch table
+        self._input_sessions: typing.Set[_session.InputSession] = set()
 
         if self._media.max_data_field_length not in _media.Media.VALID_MAX_DATA_FIELD_LENGTH_SET:
             raise InvalidMediaConfigurationError(
@@ -88,7 +92,7 @@ class CANTransport(pyuavcan.transport.Transport):
     @property
     def inputs(self) -> typing.List[pyuavcan.transport.InputSession]:
         # This might be a tad slow since the dispatch table is fucking huge. Do we care?
-        return [x for x in self._input_dispatch_table if x is not None]
+        return list(self._input_sessions)
 
     @property
     def outputs(self) -> typing.List[pyuavcan.transport.OutputSession]:
@@ -173,12 +177,14 @@ class CANTransport(pyuavcan.transport.Transport):
         def finalizer() -> None:
             self._input_dispatch_table[index] = None
             asyncio.ensure_future(self._reconfigure_acceptance_filters(), loop=self._loop)
+            self._input_sessions.remove(session)
 
         index = _compute_input_dispatch_table_index(data_specifier, source_node_id)
         session = self._input_dispatch_table[index]
         if session is None:
             session = factory(finalizer)
             self._input_dispatch_table[index] = session
+            self._input_sessions.add(session)
             await self._reconfigure_acceptance_filters()
         return session
 
@@ -237,9 +243,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     async def _reconfigure_acceptance_filters(self) -> None:
         subject_ids = set(
-            ds.subject_id
-            for ds in (ses.data_specifier for ses in self._input_dispatch_table if ses is not None)
-            if isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
+            ds.subject_id for ds in self._input_sessions if isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         )
 
         fcs = _identifier.generate_filter_configurations(subject_ids, self.local_node_id)
@@ -256,6 +260,7 @@ class CANTransport(pyuavcan.transport.Transport):
         raise NotImplementedError
 
 
+# TODO: encapsulate the input dispatch table
 def _compute_input_dispatch_table_index(data_specifier: pyuavcan.transport.DataSpecifier,
                                         source_node_id: typing.Optional[int]) -> int:
     """
