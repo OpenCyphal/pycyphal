@@ -26,7 +26,8 @@ class ExtendedStatistics(pyuavcan.transport.Statistics):
         dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_receiver.TransferReceptionError})
 
 
-class InputSession(_base.Session):
+# noinspection PyAbstractClass
+class InputSession(_base.Session, pyuavcan.transport.InputSession):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2     # [second] Per the Specification.
 
     _QueueItem = typing.Tuple[_identifier.CANID, _frame.TimestampedUAVCANFrame]

@@ -87,17 +87,12 @@ class CANTransport(pyuavcan.transport.Transport):
 
     @property
     def inputs(self) -> typing.List[pyuavcan.transport.InputSession]:
-        def convert(x: _session.InputSession) -> pyuavcan.transport.InputSession:
-            assert isinstance(x, pyuavcan.transport.InputSession)
-            return x
-        return list(map(convert, filter(None, self._input_dispatch_table)))
+        # This might be a tad slow since the dispatch table is fucking huge. Do we care?
+        return [x for x in self._input_dispatch_table if x is not None]
 
     @property
     def outputs(self) -> typing.List[pyuavcan.transport.OutputSession]:
-        def convert(x: _session.OutputSession) -> pyuavcan.transport.OutputSession:
-            assert isinstance(x, pyuavcan.transport.OutputSession)
-            return x
-        return list(map(convert, self._output_registry.values()))
+        return list(self._output_registry.values())
 
     async def close(self) -> None:
         async with self._media_lock:

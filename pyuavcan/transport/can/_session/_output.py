@@ -43,7 +43,8 @@ class _PendingFeedbackKey:
     transfer_id_modulus: int
 
 
-class OutputSession(_base.Session):
+# noinspection PyAbstractClass
+class OutputSession(_base.Session, pyuavcan.transport.OutputSession):
     def __init__(self,
                  transport:    pyuavcan.transport.can.CANTransport,
                  send_handler: SendHandler,
@@ -72,6 +73,16 @@ class OutputSession(_base.Session):
                     except Exception as ex:
                         _logger.exception(f'Unhandled exception in the output session feedback handler '
                                           f'{self._feedback_handler}: {ex}')
+
+    def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
+        self._feedback_handler = handler
+
+    def disable_feedback(self) -> None:
+        self._feedback_handler = None
+        self._pending_feedback.clear()
+
+    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+        return copy.copy(self._statistics)
 
     async def _do_send(self, compiled_identifier: int, transfer: pyuavcan.transport.Transfer) -> None:
         self._raise_if_closed()
@@ -112,16 +123,6 @@ class OutputSession(_base.Session):
             self._statistics.errors += 1
             raise
 
-    def _do_enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
-        self._feedback_handler = handler
-
-    def _do_disable_feedback(self) -> None:
-        self._feedback_handler = None
-        self._pending_feedback.clear()
-
-    def _do_sample_statistics(self) -> pyuavcan.transport.Statistics:
-        return copy.copy(self._statistics)
-
 
 class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSession):
     def __init__(self,
@@ -144,16 +145,16 @@ class BroadcastOutputSession(OutputSession, pyuavcan.transport.BroadcastOutputSe
         return self._metadata
 
     def sample_statistics(self) -> pyuavcan.transport.Statistics:
-        return self._do_sample_statistics()
+        return super(BroadcastOutputSession, self).sample_statistics()
 
     async def close(self) -> None:
         self._finalizer()
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
-        self._do_enable_feedback(handler)
+        super(BroadcastOutputSession, self).enable_feedback(handler)
 
     def disable_feedback(self) -> None:
-        self._do_disable_feedback()
+        super(BroadcastOutputSession, self).disable_feedback()
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
         compiled_identifier = _identifier.MessageCANID(
@@ -188,16 +189,16 @@ class UnicastOutputSession(OutputSession, pyuavcan.transport.UnicastOutputSessio
         return self._metadata
 
     def sample_statistics(self) -> pyuavcan.transport.Statistics:
-        return self._do_sample_statistics()
+        return super(UnicastOutputSession, self).sample_statistics()
 
     async def close(self) -> None:
         self._finalizer()
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
-        self._do_enable_feedback(handler)
+        super(UnicastOutputSession, self).enable_feedback(handler)
 
     def disable_feedback(self) -> None:
-        self._do_disable_feedback()
+        super(UnicastOutputSession, self).disable_feedback()
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
         source_node_id = self._transport.local_node_id
