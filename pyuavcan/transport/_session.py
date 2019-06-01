@@ -59,7 +59,7 @@ class Statistics:
     overruns:  int = 0
 
 
-class Session(abc.ABC):        # TODO: statistics
+class Session(abc.ABC):
     @property
     @abc.abstractmethod
     def metadata(self) -> SessionMetadata:

@@ -4,7 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._can import CANTransport
+from ._can import CANTransport, CANFrameStatistics
 
 from ._session import PromiscuousCANInput, SelectiveCANInput
 from ._session import BroadcastCANOutput, UnicastCANOutput

@@ -5,9 +5,12 @@
 #
 
 from __future__ import annotations
+import copy
 import typing
 import asyncio
 import logging
+import itertools
+import dataclasses
 import pyuavcan.transport
 from . import _session, media as _media, _frame, _identifier
 
@@ -17,6 +20,47 @@ _logger = logging.getLogger(__name__)
 
 class InvalidMediaConfigurationError(pyuavcan.transport.InvalidTransportConfigurationError):
     pass
+
+
+@dataclasses.dataclass
+class CANFrameStatistics:
+    """
+    Invariants:
+        sent >= loopback_requested
+        received >= received_uavcan >= received_uavcan_accepted
+        loopback_requested >= loopback_returned
+    """
+
+    sent: int = 0                       # Number of frames sent to the media instance
+
+    received:                 int = 0   # Number of genuine frames received from the bus (loopback not included)
+    received_uavcan:          int = 0   # Subset of the above that happen to be valid UAVCAN frames
+    received_uavcan_accepted: int = 0   # Subset of the above that are useful for the local application
+
+    loopback_requested: int = 0         # Number of sent frames that we requested loopback for
+    loopback_returned:  int = 0         # Number of loopback frames received from the media instance (not from the bus)
+
+    errored: int = 0                    # How many frames of any kind could not be successfully processed
+
+    @property
+    def media_acceptance_filtering_efficiency(self) -> float:
+        """
+        An efficiency metric for the acceptance filtering implemented in the media instance.
+        The value of 1.0 (100%) indicates perfect filtering, where the media can sort out relevant frames from
+        irrelevant ones completely autonomously. The value of 0 indicates that none of the frames passed over
+        from the media instance are useful for the application (all ignored).
+        """
+        return self.received_uavcan_accepted / self.received
+
+    @property
+    def lost_loopback(self) -> int:
+        """
+        The number of loopback frames that have been requested but never returned. Normally the value should be zero.
+        The value may transiently increase to small values if the counters happened to be sampled while the loopback
+        frames reside in the transmission queue of the CAN controller awaiting being processed. If the value remains
+        positive for long periods of time, the media driver is probably misbehaving.
+        """
+        return self.loopback_requested - self.loopback_returned
 
 
 class CANTransport(pyuavcan.transport.Transport):
@@ -47,6 +91,8 @@ class CANTransport(pyuavcan.transport.Transport):
         # since the dispatch table takes almost a second to traverse.
         # TODO: encapsulate the input dispatch table
         self._input_sessions: typing.Set[_session.CANInputSession] = set()
+
+        self._frame_stats = CANFrameStatistics()
 
         if self._media.max_data_field_length not in _media.Media.VALID_MAX_DATA_FIELD_LENGTH_SET:
             raise InvalidMediaConfigurationError(
@@ -100,6 +146,9 @@ class CANTransport(pyuavcan.transport.Transport):
     async def close(self) -> None:
         async with self._media_lock:
             await self._media.close()
+
+    def sample_frame_counters(self) -> CANFrameStatistics:
+        return copy.copy(self._frame_stats)
 
     async def get_broadcast_output(self,
                                    data_specifier:   pyuavcan.transport.DataSpecifier,
@@ -189,23 +238,37 @@ class CANTransport(pyuavcan.transport.Transport):
 
     async def _do_send(self, frames: typing.Iterable[_frame.UAVCANFrame]) -> None:
         async with self._media_lock:
+            frames, stat_iter = itertools.tee(frames)
             await self._media.send(x.compile() for x in frames)
+            del frames
+            for f in stat_iter:
+                self._frame_stats.sent += 1
+                if f.loopback:
+                    self._frame_stats.loopback_requested += 1
 
     def _on_frames_received(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
         for raw_frame in frames:
             try:
+                if raw_frame.loopback:
+                    self._frame_stats.loopback_returned += 1
+                else:
+                    self._frame_stats.received += 1
+
                 cid = _identifier.CANID.try_parse(raw_frame.identifier)
                 if cid is not None:                                             # Ignore non-UAVCAN CAN frames
                     ufr = _frame.TimestampedUAVCANFrame.try_parse(raw_frame)
                     if ufr is not None:                                         # Ignore non-UAVCAN CAN frames
                         if not ufr.loopback:
-                            self._handle_received_frame(cid, ufr)
+                            self._frame_stats.received_uavcan += 1
+                            if self._handle_received_frame(cid, ufr):
+                                self._frame_stats.received_uavcan_accepted += 1
                         else:
                             self._handle_loopback_frame(cid, ufr)
             except Exception as ex:
+                self._frame_stats.errored += 1
                 _logger.exception(f'Unhandled exception while processing input CAN frame {raw_frame}: {ex}')
 
-    def _handle_received_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+    def _handle_received_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> bool:
         assert not frame.loopback
         data_spec = can_id.to_input_data_specifier()
         if isinstance(can_id, _identifier.ServiceCANID):
@@ -215,11 +278,15 @@ class CANTransport(pyuavcan.transport.Transport):
         else:
             assert False
 
+        accepted = False
         for nid in {exact_source_node_id, None}:
             index = _compute_input_dispatch_table_index(data_spec, nid)
             session = self._input_dispatch_table[index]
             if session is not None:                                     # Ignore UAVCAN frames we don't care about
                 session.push_frame(can_id, frame)
+                accepted = True
+
+        return accepted
 
     def _handle_loopback_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
         assert frame.loopback

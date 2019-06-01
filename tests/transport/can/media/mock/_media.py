@@ -66,12 +66,6 @@ class MockMedia(_media.Media):
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
 
-        # The media interface spec says that it is guaranteed that the CAN ID is the same across the set; enforce this.
-        assert len(set(map(lambda x: x.identifier, frames))) == 1, 'Interface constraint violation: nonuniform CAN ID'
-
-        # CAN frames with empty payload are not possible in UAVCAN.
-        assert min(map(lambda x: len(x.data), frames)) >= 1
-
         timestamped = [
             _media.TimestampedDataFrame(identifier=f.identifier,
                                         data=f.data,
@@ -82,6 +76,9 @@ class MockMedia(_media.Media):
         ]
         del frames
         assert len(timestamped) > 0, 'Interface constraint violation: empty transmission set'
+        assert min(map(lambda x: len(x.data), timestamped)) >= 1, 'CAN frames with empty payload are not valid'
+        # The media interface spec says that it is guaranteed that the CAN ID is the same across the set; enforce this.
+        assert len(set(map(lambda x: x.identifier, timestamped))) == 1, 'Interface constraint violation: nonuniform ID'
 
         # Broadcast across the virtual bus we're emulating here.
         for p in self._peers:
@@ -116,7 +113,7 @@ class MockMedia(_media.Media):
 
     def __str__(self) -> str:
         return f'{type(self).__name__}(' \
-            f'peers={{{", ".join(map(str, filter(lambda x: x is not self, self._peers)))}}}, ' \
+            f'num_peers={len(self._peers)}, ' \
             f'max_data_field_length={self.max_data_field_length}, ' \
             f'acceptance_filters=[{", ".join(map(str, self._acceptance_filters))}])'
 
@@ -141,7 +138,7 @@ async def _unittest_can_mock_media() -> None:
     await me.enable_automatic_retransmission()
     assert me.automatic_retransmission_enabled
 
-    me_collector = _RxCollector()
+    me_collector = FrameCollector()
     me.set_received_frames_handler(me_collector.give)
 
     # Will drop the loopback because of the acceptance filters
@@ -149,7 +146,7 @@ async def _unittest_can_mock_media() -> None:
         DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
         DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True),
     ])
-    assert not me_collector.take()
+    assert me_collector.empty
 
     await me.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
     # Now the loopback will be accepted because we have reconfigured the filters
@@ -157,21 +154,21 @@ async def _unittest_can_mock_media() -> None:
         DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
         DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True),
     ])
-    assert len(me_collector.items) == 1
-    assert me_collector.take()[0].is_same_manifestation(
+    assert me_collector.pop().is_same_manifestation(
         DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True))
+    assert me_collector.empty
 
     pe = MockMedia(peers, 8, 1)
     assert peers == {me, pe}
 
-    pe_collector = _RxCollector()
+    pe_collector = FrameCollector()
     pe.set_received_frames_handler(pe_collector.give)
 
     await me.send([
         DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
         DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True),
     ])
-    assert not pe_collector.take()
+    assert pe_collector.empty
 
     await pe.configure_acceptance_filters([FilterConfiguration(123, 127, None)])
     await me.send([
@@ -181,11 +178,11 @@ async def _unittest_can_mock_media() -> None:
     await me.send([
         DataFrame(456, bytearray(b'ghi'), FrameFormat.EXTENDED, loopback=False),    # Dropped by the filters
     ])
-    assert len(pe_collector.items) == 2
-    assert pe_collector.items[0].is_same_manifestation(
+    assert pe_collector.pop().is_same_manifestation(
         DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False))
-    assert pe_collector.items[1].is_same_manifestation(
+    assert pe_collector.pop().is_same_manifestation(
         DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=False))
+    assert pe_collector.empty
 
     await me.close()
     assert peers == {pe}
@@ -199,7 +196,7 @@ async def _unittest_can_mock_media() -> None:
         await me.close()
 
 
-class _RxCollector:
+class FrameCollector:
     def __init__(self) -> None:
         self._collected: typing.List[_media.TimestampedDataFrame] = []
 
@@ -216,3 +213,16 @@ class _RxCollector:
     @property
     def items(self) -> typing.List[_media.TimestampedDataFrame]:
         return self._collected[:]
+
+    def pop(self) -> _media.TimestampedDataFrame:
+        head, self._collected = self._collected[0], self._collected[1:]
+        return head
+
+    @property
+    def empty(self) -> bool:
+        return len(self._collected) == 0
+
+    def __str__(self) -> str:
+        return f'{type(self).__name__}({str(self._collected)})'
+
+    __repr__ = __str__

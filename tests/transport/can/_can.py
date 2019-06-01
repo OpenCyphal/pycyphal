@@ -12,23 +12,28 @@ import pyuavcan.transport
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_can_transport() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata
-    from pyuavcan.transport import UnsupportedSessionConfigurationError
-    from .media.mock import MockMedia
+    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, Timestamp
+    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, can
+    # noinspection PyProtectedMember
+    from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
+    # noinspection PyProtectedMember
+    from pyuavcan.transport.can._frame import UAVCANFrame
+    from .media.mock import MockMedia, FrameCollector
 
     with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
-        pyuavcan.transport.can.CANTransport(MockMedia(set(), 64, 0))
+        can.CANTransport(MockMedia(set(), 64, 0))
 
     with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
-        pyuavcan.transport.can.CANTransport(MockMedia(set(), 7, 16))
+        can.CANTransport(MockMedia(set(), 7, 16))
 
     peers: typing.Set[MockMedia] = set()
     media = MockMedia(peers, 64, 1000)
     media2 = MockMedia(peers, 64, 3)
-    assert len(peers) == 2
+    peeper = MockMedia(peers, 64, 1000)
+    assert len(peers) == 3
 
-    tr = pyuavcan.transport.can.CANTransport(media)
-    tr2 = pyuavcan.transport.can.CANTransport(media2)
+    tr = can.CANTransport(media)
+    tr2 = can.CANTransport(media2)
 
     assert tr.protocol_parameters == pyuavcan.transport.ProtocolParameters(
         transfer_id_modulo=32,
@@ -39,6 +44,9 @@ async def _unittest_can_transport() -> None:
     assert tr.local_node_id is None
     assert tr.protocol_parameters == tr2.protocol_parameters
 
+    #
+    # Instantiate session objects
+    #
     meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 123)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't broadcast service calls
@@ -84,3 +92,50 @@ async def _unittest_can_transport() -> None:
 
     print('OUTPUTS:', tr.outputs)
     assert set(tr.outputs) == {broadcaster, server_responder, client_requester}
+
+    #
+    # Basic exchange test, no one is listening
+    #
+    await media2.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
+    await peeper.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
+
+    collector = FrameCollector()
+    peeper.set_received_frames_handler(collector.give)
+
+    assert tr.sample_frame_counters() == can.CANFrameStatistics()
+    assert tr2.sample_frame_counters() == can.CANFrameStatistics()
+
+    ts = Timestamp.now()
+
+    await broadcaster.send(Transfer(
+        timestamp=ts,
+        priority=Priority.IMMEDIATE,
+        transfer_id=32 + 11,            # Modulus 11
+        fragmented_payload=[
+            _mem('abc'),
+            _mem('def')
+        ]
+    ))
+
+    assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=1)
+    assert tr2.sample_frame_counters() == can.CANFrameStatistics(received=1, received_uavcan=1)
+
+    f = collector.pop()
+    assert collector.empty
+    r = UAVCANFrame(
+        identifier=MessageCANID(Priority.IMMEDIATE, 12345, None).compile(),
+        padded_payload=_mem('abcdef'),
+        transfer_id=11,
+        start_of_transfer=True,
+        end_of_transfer=True,
+        toggle_bit=True,
+        loopback=False
+    ).compile()
+    # TODO: define the pseudo node ID as a function of payload
+    assert r.identifier | 0b_1111_1110 == f.identifier | 0b_1111_1110
+    assert r.data == f.data
+    assert r.format == f.format
+
+
+def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
+    return memoryview(data.encode() if isinstance(data, str) else data)

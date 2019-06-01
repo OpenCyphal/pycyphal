@@ -102,6 +102,9 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
             self._pending_feedback[key] = transfer.timestamp
 
         try:
+            # TODO: raise if multi-frame anonymous!
+            payload_size_bytes = sum(map(len, transfer.fragmented_payload))
+
             frames, frame_count_iter = itertools.tee(_transfer_sender.serialize_transfer(
                 compiled_identifier=compiled_identifier,
                 transfer_id=transfer.transfer_id,
@@ -118,7 +121,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
             assert num_frames > 0
             self._statistics.transfers += 1
             self._statistics.frames += num_frames
-            self._statistics.bytes += sum(map(len, transfer.fragmented_payload))  # Session level, not transport level
+            self._statistics.bytes += payload_size_bytes    # Session level, not transport level
         except Exception:
             self._statistics.errors += 1
             raise
