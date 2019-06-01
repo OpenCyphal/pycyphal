@@ -13,7 +13,8 @@ import pyuavcan.transport
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_can_transport() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, Timestamp
-    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, can
+    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, can, Statistics
+    from pyuavcan.transport import InvalidTransportConfigurationError
     # noinspection PyProtectedMember
     from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
     # noinspection PyProtectedMember
@@ -116,9 +117,14 @@ async def _unittest_can_transport() -> None:
             _mem('def')
         ]
     ))
+    assert broadcaster.sample_statistics() == Statistics(transfers=1, frames=1, bytes=6)
 
     assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=1)
     assert tr2.sample_frame_counters() == can.CANFrameStatistics(received=1, received_uavcan=1)
+    assert tr.sample_frame_counters().media_acceptance_filtering_efficiency == pytest.approx(1)
+    assert tr2.sample_frame_counters().media_acceptance_filtering_efficiency == pytest.approx(0)
+    assert tr.sample_frame_counters().lost_loopback == 0
+    assert tr2.sample_frame_counters().lost_loopback == 0
 
     assert collector.pop().is_same_manifestation(UAVCANFrame(
         identifier=MessageCANID(Priority.IMMEDIATE, None, 12345).compile([_mem('abcdef')]),  # payload fragments joined
@@ -130,6 +136,12 @@ async def _unittest_can_transport() -> None:
         loopback=False
     ).compile())
     assert collector.empty
+
+    with pytest.raises(InvalidTransportConfigurationError, match='.*anonymous.*'):
+        await client_requester.send(Transfer(
+            timestamp=ts, priority=Priority.IMMEDIATE, transfer_id=0, fragmented_payload=[]
+        ))
+    assert client_requester.sample_statistics() == Statistics()   # Not incremented!
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

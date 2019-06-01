@@ -50,7 +50,7 @@ class CANFrameStatistics:
         irrelevant ones completely autonomously. The value of 0 indicates that none of the frames passed over
         from the media instance are useful for the application (all ignored).
         """
-        return self.received_uavcan_accepted / self.received
+        return (self.received_uavcan_accepted / self.received) if self.received > 0 else 1.0
 
     @property
     def lost_loopback(self) -> int:

@@ -87,12 +87,28 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
     async def _do_send(self, can_id: _identifier.CANID, transfer: pyuavcan.transport.Transfer) -> None:
         self._raise_if_closed()
 
-        compiled_identifier = can_id.compile(transfer.fragmented_payload)
+        # Decompose the outgoing transfer into individual CAN frames
+        frames, auxiliary_iter = itertools.tee(_transfer_sender.serialize_transfer(
+            compiled_identifier=can_id.compile(transfer.fragmented_payload),
+            transfer_id=transfer.transfer_id,
+            fragmented_payload=transfer.fragmented_payload,
+            max_frame_payload_bytes=self._transport.frame_payload_capacity,
+            loopback_first_frame=self._feedback_handler is not None
+        ))
+        first_frame = next(auxiliary_iter)
+        num_frames = 1 + sum(1 for _ in auxiliary_iter)
+        assert num_frames > 0
+        del auxiliary_iter
 
-        needs_feedback = self._feedback_handler is not None
-        if needs_feedback:
-            key = _PendingFeedbackKey(compiled_identifier=compiled_identifier,
-                                      transfer_id_modulus=transfer.transfer_id % _frame.TRANSFER_ID_MODULO)
+        # Ensure we're not trying to emit a multi-frame anonymous transfer - that's illegal
+        if can_id.source_node_id is None and num_frames > 1:
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                f'Anonymous nodes cannot emit multi-frame transfers. CANID: {can_id}, transfer: {transfer}')
+
+        # If a loopback was requested, register it in the pending loopback registry
+        if first_frame.loopback:
+            key = _PendingFeedbackKey(compiled_identifier=first_frame.identifier,
+                                      transfer_id_modulus=first_frame.transfer_id)
             try:
                 old = self._pending_feedback[key]
             except KeyError:
@@ -103,21 +119,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
 
             self._pending_feedback[key] = transfer.timestamp
 
-        frames, frame_count_iter = itertools.tee(_transfer_sender.serialize_transfer(
-            compiled_identifier=compiled_identifier,
-            transfer_id=transfer.transfer_id,
-            fragmented_payload=transfer.fragmented_payload,
-            max_frame_payload_bytes=self._transport.frame_payload_capacity,
-            loopback=needs_feedback
-        ))
-        num_frames = sum(1 for _ in frame_count_iter)
-        assert num_frames > 0
-        del frame_count_iter
-
-        if can_id.source_node_id is None and num_frames > 1:
-            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
-                f'Anonymous nodes cannot emit multi-frame transfers. CANID: {can_id}, transfer: {transfer}')
-
+        # Emit the frames and update the statistical counters
         try:
             await self._send_handler(frames)
         except Exception:

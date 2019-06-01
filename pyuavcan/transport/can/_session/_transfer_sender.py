@@ -17,7 +17,11 @@ def serialize_transfer(compiled_identifier:     int,
                        transfer_id:             int,
                        fragmented_payload:      typing.Sequence[memoryview],
                        max_frame_payload_bytes: int,
-                       loopback:                bool) -> typing.Iterable[_frame.UAVCANFrame]:
+                       loopback_first_frame:    bool) -> typing.Iterable[_frame.UAVCANFrame]:
+    """
+    We never request loopback for the whole transfer since it doesn't make sense. Instead, loopback request is
+    always limited to the first frame only since it's sufficient for timestamping purposes.
+    """
     if max_frame_payload_bytes < 1:  # pragma: no cover
         raise ValueError(f'Invalid max payload: {max_frame_payload_bytes}')
 
@@ -36,7 +40,7 @@ def serialize_transfer(compiled_identifier:     int,
                                  start_of_transfer=True,
                                  end_of_transfer=True,
                                  toggle_bit=True,
-                                 loopback=loopback)
+                                 loopback=loopback_first_frame)
     else:                                                       # MULTI-FRAME TRANSFER
         # Compute padding
         last_frame_payload_length = payload_length % max_frame_payload_bytes
@@ -59,13 +63,14 @@ def serialize_transfer(compiled_identifier:     int,
 
         # Serialized frame emission
         for index, (last, frag) in enumerate(pyuavcan.util.mark_last(refragmented)):
+            first = index == 0
             yield _frame.UAVCANFrame(identifier=compiled_identifier,
                                      padded_payload=frag,
                                      transfer_id=transfer_id,
-                                     start_of_transfer=index == 0,
+                                     start_of_transfer=first,
                                      end_of_transfer=last,
                                      toggle_bit=index % 2 == 0,
-                                     loopback=loopback)
+                                     loopback=first and loopback_first_frame)
 
 
 def _unittest_can_serialize_transfer() -> None:
@@ -106,7 +111,7 @@ def _unittest_can_serialize_transfer() -> None:
                                     transfer_id=transfer_id,
                                     fragmented_payload=fragmented_payload,
                                     max_frame_payload_bytes=max_frame_payload_bytes,
-                                    loopback=loopback):
+                                    loopback_first_frame=loopback):
             yield f.compile()
 
     def one(items: typing.Iterable[meta]) -> meta:
@@ -135,8 +140,8 @@ def _unittest_can_serialize_transfer() -> None:
     assert crc.value == 0xC46F
     assert [
         mkf(123456, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 19, True, False, True, True),
-        mkf(123456, b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 19, False, False, False, True),
-        mkf(123456, b'\x6f', 19, False, True, True, True),
+        mkf(123456, b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 19, False, False, False),
+        mkf(123456, b'\x6f', 19, False, True, True),
     ] == list(run(123456, 32323219, [mv(bytes(range(0x1D)))], 15, True))
 
     crc = pyuavcan.util.hash.CRC16CCITT()
