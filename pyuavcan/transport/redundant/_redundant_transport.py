@@ -71,31 +71,28 @@ class RedundantTransport(pyuavcan.transport.Transport):
     async def close(self) -> None:
         raise NotImplementedError
 
-    async def get_statistics(self) -> pyuavcan.transport.Statistics:
-        raise NotImplementedError
-
     async def get_broadcast_output(self,
                                    data_specifier:   pyuavcan.transport.DataSpecifier,
                                    payload_metadata: pyuavcan.transport.PayloadMetadata) \
-            -> _redundant_session.BroadcastOutputSession:
+            -> _redundant_session.BroadcastRedundantOutput:
         raise NotImplementedError
 
     async def get_unicast_output(self,
                                  data_specifier:      pyuavcan.transport.DataSpecifier,
                                  payload_metadata:    pyuavcan.transport.PayloadMetadata,
-                                 destination_node_id: int) -> _redundant_session.UnicastOutputSession:
+                                 destination_node_id: int) -> _redundant_session.UnicastRedundantOutput:
         raise NotImplementedError
 
     async def get_promiscuous_input(self,
                                     data_specifier:   pyuavcan.transport.DataSpecifier,
                                     payload_metadata: pyuavcan.transport.PayloadMetadata) \
-            -> _redundant_session.PromiscuousInputSession:
+            -> _redundant_session.PromiscuousRedundantInput:
         raise NotImplementedError
 
     async def get_selective_input(self,
                                   data_specifier:   pyuavcan.transport.DataSpecifier,
                                   payload_metadata: pyuavcan.transport.PayloadMetadata,
-                                  source_node_id:   int) -> _redundant_session.SelectiveInputSession:
+                                  source_node_id:   int) -> _redundant_session.SelectiveRedundantInput:
         raise NotImplementedError
 
     def __str__(self) -> str:

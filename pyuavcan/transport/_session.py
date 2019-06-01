@@ -114,7 +114,7 @@ class InputSession(Session):
 
 
 # noinspection PyAbstractClass
-class PromiscuousInputSession(InputSession):
+class PromiscuousInput(InputSession):
     @abc.abstractmethod
     async def receive(self) -> TransferFrom:
         raise NotImplementedError
@@ -125,7 +125,7 @@ class PromiscuousInputSession(InputSession):
 
 
 # noinspection PyAbstractClass
-class SelectiveInputSession(InputSession):
+class SelectiveInput(InputSession):
     @property
     @abc.abstractmethod
     def source_node_id(self) -> int:
@@ -166,12 +166,12 @@ class OutputSession(Session):
 
 
 # noinspection PyAbstractClass
-class BroadcastOutputSession(OutputSession):
+class BroadcastOutput(OutputSession):
     pass
 
 
 # noinspection PyAbstractClass
-class UnicastOutputSession(OutputSession):
+class UnicastOutput(OutputSession):
     @property
     @abc.abstractmethod
     def destination_node_id(self) -> int:

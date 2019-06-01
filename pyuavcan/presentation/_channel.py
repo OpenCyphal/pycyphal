@@ -172,7 +172,7 @@ class Subscriber(MessageChannel[MessageTypeClass]):
     def _construct_metadata(self, transfer: pyuavcan.transport.Transfer) -> ReceivedMessageMetadata:
         if isinstance(transfer, pyuavcan.transport.TransferFrom):
             source_node_id = transfer.source_node_id
-        elif isinstance(self._session, pyuavcan.transport.SelectiveInputSession):
+        elif isinstance(self._session, pyuavcan.transport.SelectiveInput):
             source_node_id = self._session.source_node_id
         else:
             raise RuntimeError('Impossible configuration: source node ID is not obtainable')
@@ -259,9 +259,9 @@ class Client(ServiceChannel[ServiceTypeClass]):
     def _construct_metadata(self, transfer: pyuavcan.transport.Transfer) -> ReceivedServiceMetadata:
         if isinstance(transfer, pyuavcan.transport.TransferFrom) and transfer.source_node_id is not None:
             source_node_id = transfer.source_node_id
-        elif isinstance(self._input_session, pyuavcan.transport.SelectiveInputSession):
+        elif isinstance(self._input_session, pyuavcan.transport.SelectiveInput):
             source_node_id = self._input_session.source_node_id
-        elif isinstance(self._output_session, pyuavcan.transport.UnicastOutputSession):
+        elif isinstance(self._output_session, pyuavcan.transport.UnicastOutput):
             source_node_id = self._output_session.destination_node_id
         else:
             raise RuntimeError('Impossible configuration: server node ID is not obtainable')
@@ -356,7 +356,7 @@ class Server(ServiceChannel[ServiceTypeClass]):
             -> typing.Optional[ReceivedServiceMetadata]:
         if isinstance(transfer, pyuavcan.transport.TransferFrom) and transfer.source_node_id is not None:
             source_node_id = transfer.source_node_id
-        elif isinstance(self._input_session, pyuavcan.transport.SelectiveInputSession):
+        elif isinstance(self._input_session, pyuavcan.transport.SelectiveInput):
             source_node_id = self._input_session.source_node_id
         else:
             return None

@@ -27,7 +27,7 @@ class ExtendedStatistics(pyuavcan.transport.Statistics):
 
 
 # noinspection PyAbstractClass
-class InputSession(_base.Session, pyuavcan.transport.InputSession):
+class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2     # [second] Per the Specification.
 
     _QueueItem = typing.Tuple[_identifier.CANID, _frame.TimestampedUAVCANFrame]
@@ -37,16 +37,16 @@ class InputSession(_base.Session, pyuavcan.transport.InputSession):
                  loop:      typing.Optional[asyncio.AbstractEventLoop],
                  finalizer: _base.Finalizer):
         self._metadata = metadata
-        self._queue: asyncio.Queue[InputSession._QueueItem] = asyncio.Queue()
+        self._queue: asyncio.Queue[CANInputSession._QueueItem] = asyncio.Queue()
         self._loop = loop if loop is not None else asyncio.get_event_loop()
-        self._transfer_id_timeout_ns = int(InputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
+        self._transfer_id_timeout_ns = int(CANInputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
         self._receivers = [_transfer_receiver.TransferReceiver(metadata.payload_metadata.max_size_bytes)
                            for _ in _node_id_range()]
 
         self._statistics = ExtendedStatistics()         # We could easily support per-source-node statistics if needed
 
-        super(InputSession, self).__init__(finalizer=finalizer)
+        super(CANInputSession, self).__init__(finalizer=finalizer)
 
     def push_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
         """
@@ -147,14 +147,14 @@ class InputSession(_base.Session, pyuavcan.transport.InputSession):
         return copy.copy(self._statistics)
 
 
-class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputSession):
+class PromiscuousCANInput(CANInputSession, pyuavcan.transport.PromiscuousInput):
     def __init__(self,
                  metadata:  pyuavcan.transport.SessionMetadata,
                  loop:      typing.Optional[asyncio.AbstractEventLoop],
                  finalizer: _base.Finalizer):
-        super(PromiscuousInputSession, self).__init__(metadata=metadata,
-                                                      loop=loop,
-                                                      finalizer=finalizer)
+        super(PromiscuousCANInput, self).__init__(metadata=metadata,
+                                                  loop=loop,
+                                                  finalizer=finalizer)
 
     @property
     def metadata(self) -> pyuavcan.transport.SessionMetadata:
@@ -184,16 +184,16 @@ class PromiscuousInputSession(InputSession, pyuavcan.transport.PromiscuousInputS
         self._transfer_id_timeout_ns = int(value / _NANO)
 
 
-class SelectiveInputSession(InputSession, pyuavcan.transport.SelectiveInputSession):
+class SelectiveCANInput(CANInputSession, pyuavcan.transport.SelectiveInput):
     def __init__(self,
                  source_node_id: int,
                  metadata:       pyuavcan.transport.SessionMetadata,
                  loop:           typing.Optional[asyncio.AbstractEventLoop],
                  finalizer:      _base.Finalizer):
         self._source_node_id = int(source_node_id)
-        super(SelectiveInputSession, self).__init__(metadata=metadata,
-                                                    loop=loop,
-                                                    finalizer=finalizer)
+        super(SelectiveCANInput, self).__init__(metadata=metadata,
+                                                loop=loop,
+                                                finalizer=finalizer)
 
     @property
     def metadata(self) -> pyuavcan.transport.SessionMetadata:

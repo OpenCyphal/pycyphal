@@ -6,5 +6,6 @@
 
 from ._redundant_transport import RedundantTransport
 
-from ._redundant_session import PromiscuousInputSession, SelectiveInputSession
-from ._redundant_session import BroadcastOutputSession, UnicastOutputSession
+from ._redundant_session import RedundantOutputSession, RedundantInputSession
+from ._redundant_session import PromiscuousRedundantInput, SelectiveRedundantInput
+from ._redundant_session import BroadcastRedundantOutput, UnicastRedundantOutput

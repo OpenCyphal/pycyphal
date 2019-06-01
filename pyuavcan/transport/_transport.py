@@ -9,7 +9,7 @@ import abc
 import typing
 import dataclasses
 from ._session import InputSession, OutputSession
-from ._session import PromiscuousInputSession, SelectiveInputSession, BroadcastOutputSession, UnicastOutputSession
+from ._session import PromiscuousInput, SelectiveInput, BroadcastOutput, UnicastOutput
 from ._data_specifier import DataSpecifier
 from ._payload_metadata import PayloadMetadata
 
@@ -62,7 +62,7 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     async def get_promiscuous_input(self,
                                     data_specifier:   DataSpecifier,
-                                    payload_metadata: PayloadMetadata) -> PromiscuousInputSession:
+                                    payload_metadata: PayloadMetadata) -> PromiscuousInput:
         """
         All transports must support this session type for all kinds of transfers.
         """
@@ -72,7 +72,7 @@ class Transport(abc.ABC):
     async def get_selective_input(self,
                                   data_specifier:   DataSpecifier,
                                   payload_metadata: PayloadMetadata,
-                                  source_node_id:   int) -> SelectiveInputSession:
+                                  source_node_id:   int) -> SelectiveInput:
         """
         All transports must support this session type for services.
         """
@@ -81,7 +81,7 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     async def get_broadcast_output(self,
                                    data_specifier:   DataSpecifier,
-                                   payload_metadata: PayloadMetadata) -> BroadcastOutputSession:
+                                   payload_metadata: PayloadMetadata) -> BroadcastOutput:
         """
         All transports must support this session type for messages.
         """
@@ -91,7 +91,7 @@ class Transport(abc.ABC):
     async def get_unicast_output(self,
                                  data_specifier:      DataSpecifier,
                                  payload_metadata:    PayloadMetadata,
-                                 destination_node_id: int) -> UnicastOutputSession:
+                                 destination_node_id: int) -> UnicastOutput:
         """
         All transports must support this session type for services.
         """

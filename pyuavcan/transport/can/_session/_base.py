@@ -16,7 +16,7 @@ Finalizer = typing.Callable[[], None]
 _logger = logging.getLogger(__name__)
 
 
-class Session:
+class CANSession:
     def __init__(self, finalizer: Finalizer):
         def finalizer_proxy() -> None:
             if not self._closed:

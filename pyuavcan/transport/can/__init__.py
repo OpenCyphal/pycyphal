@@ -6,8 +6,8 @@
 
 from ._can import CANTransport
 
-from ._session import PromiscuousInputSession, SelectiveInputSession
-from ._session import BroadcastOutputSession, UnicastOutputSession
+from ._session import PromiscuousCANInput, SelectiveCANInput
+from ._session import BroadcastCANOutput, UnicastCANOutput
 from ._session import TransferReceptionError
 
 from . import media

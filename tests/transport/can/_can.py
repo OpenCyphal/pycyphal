@@ -24,8 +24,11 @@ async def _unittest_can_transport() -> None:
 
     peers: typing.Set[MockMedia] = set()
     media = MockMedia(peers, 64, 1000)
+    media2 = MockMedia(peers, 64, 3)
+    assert len(peers) == 2
 
     tr = pyuavcan.transport.can.CANTransport(media)
+    tr2 = pyuavcan.transport.can.CANTransport(media2)
 
     assert tr.protocol_parameters == pyuavcan.transport.ProtocolParameters(
         transfer_id_modulo=32,
@@ -34,6 +37,7 @@ async def _unittest_can_transport() -> None:
     )
     assert tr.frame_payload_capacity == 63
     assert tr.local_node_id is None
+    assert tr.protocol_parameters == tr2.protocol_parameters
 
     meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 123)
 

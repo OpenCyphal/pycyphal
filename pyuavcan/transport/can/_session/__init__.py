@@ -4,8 +4,8 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._input import InputSession, PromiscuousInputSession, SelectiveInputSession
+from ._input import CANInputSession, PromiscuousCANInput, SelectiveCANInput
 
-from ._output import OutputSession, BroadcastOutputSession, UnicastOutputSession
+from ._output import CANOutputSession, BroadcastCANOutput, UnicastCANOutput
 
 from ._transfer_receiver import TransferReceptionError

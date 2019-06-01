@@ -41,7 +41,11 @@ class RedundantSession:
 
 # ------------------------------------- INPUT -------------------------------------
 
-class PromiscuousInputSession(pyuavcan.transport.PromiscuousInputSession, RedundantSession):
+class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
+    pass
+
+
+class PromiscuousRedundantInput(RedundantInputSession, pyuavcan.transport.PromiscuousInput):
     class RedundantTransferFrom(pyuavcan.transport.TransferFrom, TransportSpecific):
         def __init__(self, transport: pyuavcan.transport.Transport):
             self._transport = transport
@@ -68,7 +72,7 @@ class PromiscuousInputSession(pyuavcan.transport.PromiscuousInputSession, Redund
         raise NotImplementedError
 
 
-class SelectiveInputSession(pyuavcan.transport.SelectiveInputSession, RedundantSession):
+class SelectiveRedundantInput(RedundantInputSession, pyuavcan.transport.SelectiveInput):
     class RedundantTransfer(pyuavcan.transport.Transfer, TransportSpecific):
         def __init__(self, transport: pyuavcan.transport.Transport):
             self._transport = transport
@@ -105,7 +109,7 @@ class RedundantOutputSession(RedundantSession):
     pass
 
 
-class BroadcastOutputSession(pyuavcan.transport.BroadcastOutputSession, RedundantOutputSession):
+class BroadcastRedundantOutput(RedundantOutputSession, pyuavcan.transport.BroadcastOutput):
     @property
     def metadata(self) -> pyuavcan.transport.SessionMetadata:
         raise NotImplementedError
@@ -130,7 +134,7 @@ class BroadcastOutputSession(pyuavcan.transport.BroadcastOutputSession, Redundan
         raise NotImplementedError
 
 
-class UnicastOutputSession(pyuavcan.transport.UnicastOutputSession, RedundantOutputSession):
+class UnicastRedundantOutput(RedundantOutputSession, pyuavcan.transport.UnicastOutput):
     @property
     def metadata(self) -> pyuavcan.transport.SessionMetadata:
         raise NotImplementedError
