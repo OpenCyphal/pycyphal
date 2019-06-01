@@ -120,21 +120,16 @@ async def _unittest_can_transport() -> None:
     assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=1)
     assert tr2.sample_frame_counters() == can.CANFrameStatistics(received=1, received_uavcan=1)
 
-    f = collector.pop()
-    assert collector.empty
-    r = UAVCANFrame(
-        identifier=MessageCANID(Priority.IMMEDIATE, 12345, None).compile(),
+    assert collector.pop().is_same_manifestation(UAVCANFrame(
+        identifier=MessageCANID(Priority.IMMEDIATE, None, 12345).compile([_mem('abcdef')]),  # payload fragments joined
         padded_payload=_mem('abcdef'),
         transfer_id=11,
         start_of_transfer=True,
         end_of_transfer=True,
         toggle_bit=True,
         loopback=False
-    ).compile()
-    # TODO: define the pseudo node ID as a function of payload
-    assert r.identifier | 0b_1111_1110 == f.identifier | 0b_1111_1110
-    assert r.data == f.data
-    assert r.format == f.format
+    ).compile())
+    assert collector.empty
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

@@ -5,7 +5,6 @@
 #
 
 from __future__ import annotations
-import random
 import typing
 import dataclasses
 import pyuavcan.transport
@@ -17,12 +16,17 @@ class CANID:
     PRIORITY_MASK = 7
     NODE_ID_MASK = 127
 
-    priority: pyuavcan.transport.Priority
+    priority:       pyuavcan.transport.Priority
+    source_node_id: typing.Optional[int]  # None if anonymous; may be non-optional in derived classes
 
     def __post_init__(self) -> None:
         assert isinstance(self.priority, pyuavcan.transport.Priority)
 
-    def compile(self) -> int:
+    def compile(self, fragmented_transfer_payload: typing.Iterable[memoryview]) -> int:
+        # You might be wondering, why the hell would a CAN ID abstraction depend on the payload of the transfer?
+        # This is to accommodate the special case of anonymous message transfers. We need to know the payload to
+        # compute the pseudo node ID when emitting anonymous messages. We could use just random numbers from the
+        # standard library, but that would make the code hard to test.
         raise NotImplementedError
 
     def to_input_data_specifier(self) -> pyuavcan.transport.DataSpecifier:
@@ -65,7 +69,6 @@ class CANID:
 @dataclasses.dataclass(frozen=True)
 class MessageCANID(CANID):
     subject_id:     int
-    source_node_id: typing.Optional[int]  # None if anonymous
 
     def __post_init__(self) -> None:
         super(MessageCANID, self).__post_init__()
@@ -74,12 +77,14 @@ class MessageCANID(CANID):
         if self.source_node_id is not None:
             _validate_unsigned_range(self.source_node_id, self.NODE_ID_MASK)
 
-    def compile(self) -> int:
+    def compile(self, fragmented_transfer_payload: typing.Iterable[memoryview]) -> int:
         identifier = (int(self.priority) << 26) | (self.subject_id << 8) | 1
 
         source_node_id = self.source_node_id
         if source_node_id is None:  # Anonymous frame
-            source_node_id = random.randint(0, self.NODE_ID_MASK)
+            # Anonymous transfers cannot be multi-frame, but we have no way of enforcing this here since we don't
+            # know what the MTU is. The caller must enforce this instead.
+            source_node_id = int(sum(map(sum, fragmented_transfer_payload))) & self.NODE_ID_MASK
             identifier |= (1 << 24)
 
         assert 0 <= source_node_id <= self.NODE_ID_MASK     # Should be valid here already
@@ -97,10 +102,10 @@ class MessageCANID(CANID):
 
 @dataclasses.dataclass(frozen=True)
 class ServiceCANID(CANID):
+    source_node_id:       int   # Overrides Optional[int] by covariance (property not writeable)
+    destination_node_id:  int
     service_id:           int
     request_not_response: bool
-    source_node_id:       int
-    destination_node_id:  int
 
     def __post_init__(self) -> None:
         super(ServiceCANID, self).__post_init__()
@@ -112,7 +117,8 @@ class ServiceCANID(CANID):
         if self.source_node_id == self.destination_node_id:
             raise ValueError(f'Invalid service frame: source node ID == destination node ID == {self.source_node_id}')
 
-    def compile(self) -> int:
+    def compile(self, fragmented_transfer_payload: typing.Iterable[memoryview]) -> int:
+        del fragmented_transfer_payload
         identifier = (int(self.priority) << 26) | (1 << 25) | (self.service_id << 15) | \
             (self.destination_node_id << 8) | (self.source_node_id << 1) | 1
 
@@ -134,7 +140,7 @@ class ServiceCANID(CANID):
 
 
 def _validate_unsigned_range(value: int, max_value: int) -> None:
-    if not (0 <= value <= max_value):
+    if not isinstance(value, int) or not (0 <= value <= max_value):
         raise ValueError(f'Value {value} is not in the interval [0, {max_value}]')
 
 
@@ -291,56 +297,66 @@ def _unittest_can_identifier_parse() -> None:
         CANID.try_parse(2 ** 29)
 
     with raises(ValueError):
-        MessageCANID(Priority.HIGH, 2 ** 15, None)
+        MessageCANID(Priority.HIGH, None, 2 ** 15)
 
     with raises(ValueError):
-        MessageCANID(Priority.HIGH, 123, 128)
-
-    with raises(ValueError):
-        MessageCANID(Priority.HIGH, -1, 123)
+        MessageCANID(Priority.HIGH, 128, 123)
 
     with raises(ValueError):
         MessageCANID(Priority.HIGH, 123, -1)
 
     with raises(ValueError):
-        ServiceCANID(Priority.HIGH, 123, True, 123, -1)
+        MessageCANID(Priority.HIGH, -1, 123)
 
     with raises(ValueError):
-        ServiceCANID(Priority.HIGH, 123, True, 128, 123)
+        ServiceCANID(Priority.HIGH, -1, 123, 123, True)
 
     with raises(ValueError):
-        ServiceCANID(Priority.HIGH, 512, True, 42, 123)
+        ServiceCANID(Priority.HIGH, 128, 123, 123, True)
 
     with raises(ValueError):
-        ServiceCANID(Priority.HIGH, 123, True, 42, 42)
+        ServiceCANID(Priority.HIGH, 123, -1, 123, True)
 
-    reference_message = MessageCANID(Priority.FAST, 12345, 123)
+    with raises(ValueError):
+        ServiceCANID(Priority.HIGH, 123, 128, 123, True)
+
+    with raises(ValueError):
+        ServiceCANID(Priority.HIGH, 123, 123, -1, True)
+
+    with raises(ValueError):
+        ServiceCANID(Priority.HIGH, 123, 123, 512, True)
+
+    with raises(ValueError):
+        # noinspection PyTypeChecker
+        ServiceCANID(Priority.HIGH, None, 123, 512, True)  # type: ignore
+
+    reference_message = MessageCANID(Priority.FAST, 123, 12345)
     reference_message_id = 0b_010_0_0_0011000000111001_1111011_1
     assert CANID.try_parse(0b_010_0_0_0011000000111001_1111011_0) is None
     assert CANID.try_parse(reference_message_id) == reference_message
-    assert reference_message_id == reference_message.compile()
+    assert reference_message_id == reference_message.compile([])
     assert reference_message.to_output_data_specifier() == reference_message.to_output_data_specifier()
     assert reference_message.to_output_data_specifier() == MessageDataSpecifier(12345)
 
-    reference_message = MessageCANID(Priority.FAST, 4321, None)
+    reference_message = MessageCANID(Priority.FAST, None, 4321)
     reference_message_id = 0b_010_0_1_0001000011100001_1111111_1
     assert CANID.try_parse(0b_010_0_1_0001000011100001_1111111_0) is None
     assert CANID.try_parse(reference_message_id) == reference_message
-    assert reference_message_id == reference_message.compile() | 0b_1111111_0
+    assert reference_message_id == reference_message.compile([memoryview(bytes([100, 27]))])
     assert reference_message.to_output_data_specifier() == reference_message.to_input_data_specifier()
     assert reference_message.to_output_data_specifier() == MessageDataSpecifier(4321)
 
-    reference_service = ServiceCANID(Priority.OPTIONAL, 300, True, 123, 42)
+    reference_service = ServiceCANID(Priority.OPTIONAL, 123, 42, 300, True)
     reference_service_id = 0b_111_1_1_100101100_0101010_1111011_1
     assert CANID.try_parse(0b_111_1_1_100101100_0101010_1111011_0) is None
     assert CANID.try_parse(reference_service_id) == reference_service
-    assert reference_service_id == reference_service.compile()
+    assert reference_service_id == reference_service.compile([])
     assert reference_service.to_input_data_specifier() == ServiceDataSpecifier(300, ServiceDataSpecifier.Role.SERVER)
     assert reference_service.to_output_data_specifier() == ServiceDataSpecifier(300, ServiceDataSpecifier.Role.CLIENT)
 
-    reference_service = ServiceCANID(Priority.OPTIONAL, 255, False, 42, 123)
+    reference_service = ServiceCANID(Priority.OPTIONAL, 42, 123, 255, False)
     reference_service_id = 0b_111_1_0_011111111_1111011_0101010_1
     assert CANID.try_parse(reference_service_id) == reference_service
-    assert reference_service_id == reference_service.compile()
+    assert reference_service_id == reference_service.compile([])
     assert reference_service.to_input_data_specifier() == ServiceDataSpecifier(255, ServiceDataSpecifier.Role.CLIENT)
     assert reference_service.to_output_data_specifier() == ServiceDataSpecifier(255, ServiceDataSpecifier.Role.SERVER)

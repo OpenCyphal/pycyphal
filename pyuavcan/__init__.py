@@ -11,3 +11,8 @@ if sys.version_info[:2] < (3, 7):   # pragma: no cover
 
 __version__ = 0, 1, 0
 __license__ = 'MIT'
+
+import pyuavcan.util
+import pyuavcan.dsdl
+import pyuavcan.transport
+import pyuavcan.presentation

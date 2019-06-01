@@ -84,8 +84,10 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
     def sample_statistics(self) -> pyuavcan.transport.Statistics:
         return copy.copy(self._statistics)
 
-    async def _do_send(self, compiled_identifier: int, transfer: pyuavcan.transport.Transfer) -> None:
+    async def _do_send(self, can_id: _identifier.CANID, transfer: pyuavcan.transport.Transfer) -> None:
         self._raise_if_closed()
+
+        compiled_identifier = can_id.compile(transfer.fragmented_payload)
 
         needs_feedback = self._feedback_handler is not None
         if needs_feedback:
@@ -101,30 +103,30 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
 
             self._pending_feedback[key] = transfer.timestamp
 
+        frames, frame_count_iter = itertools.tee(_transfer_sender.serialize_transfer(
+            compiled_identifier=compiled_identifier,
+            transfer_id=transfer.transfer_id,
+            fragmented_payload=transfer.fragmented_payload,
+            max_frame_payload_bytes=self._transport.frame_payload_capacity,
+            loopback=needs_feedback
+        ))
+        num_frames = sum(1 for _ in frame_count_iter)
+        assert num_frames > 0
+        del frame_count_iter
+
+        if can_id.source_node_id is None and num_frames > 1:
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                f'Anonymous nodes cannot emit multi-frame transfers. CANID: {can_id}, transfer: {transfer}')
+
         try:
-            # TODO: raise if multi-frame anonymous!
-            payload_size_bytes = sum(map(len, transfer.fragmented_payload))
-
-            frames, frame_count_iter = itertools.tee(_transfer_sender.serialize_transfer(
-                compiled_identifier=compiled_identifier,
-                transfer_id=transfer.transfer_id,
-                fragmented_payload=transfer.fragmented_payload,
-                max_frame_payload_bytes=self._transport.frame_payload_capacity,
-                loopback=needs_feedback
-            ))
-            num_frames = sum(1 for _ in frame_count_iter)
-            del frame_count_iter
-
             await self._send_handler(frames)
-
-            # Update statistics only when the transfer is sent successfully
-            assert num_frames > 0
-            self._statistics.transfers += 1
-            self._statistics.frames += num_frames
-            self._statistics.bytes += payload_size_bytes    # Session level, not transport level
         except Exception:
             self._statistics.errors += 1
             raise
+        else:
+            self._statistics.transfers += 1
+            self._statistics.frames += num_frames
+            self._statistics.bytes += sum(map(len, transfer.fragmented_payload))  # Session level, not transport level
 
 
 class BroadcastCANOutput(CANOutputSession, pyuavcan.transport.BroadcastOutput):
@@ -161,13 +163,13 @@ class BroadcastCANOutput(CANOutputSession, pyuavcan.transport.BroadcastOutput):
         super(BroadcastCANOutput, self).disable_feedback()
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
-        compiled_identifier = _identifier.MessageCANID(
+        can_id = _identifier.MessageCANID(
             priority=transfer.priority,
             subject_id=self._data_specifier.subject_id,
             source_node_id=self._transport.local_node_id  # May be anonymous
-        ).compile()
+        )
 
-        await self._do_send(compiled_identifier, transfer)
+        await self._do_send(can_id, transfer)
 
 
 class UnicastCANOutput(CANOutputSession, pyuavcan.transport.UnicastOutput):
@@ -211,15 +213,14 @@ class UnicastCANOutput(CANOutputSession, pyuavcan.transport.UnicastOutput):
             raise pyuavcan.transport.InvalidTransportConfigurationError(
                 'Cannot emit a service transfer because the local node is anonymous (does not have a node ID)')
 
-        compiled_identifier = _identifier.ServiceCANID(
+        can_id = _identifier.ServiceCANID(
             priority=transfer.priority,
             service_id=self._data_specifier.service_id,
             request_not_response=self._data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.CLIENT,
             source_node_id=source_node_id,
             destination_node_id=self._destination_node_id
-        ).compile()
-
-        await self._do_send(compiled_identifier, transfer)
+        )
+        await self._do_send(can_id, transfer)
 
     @property
     def destination_node_id(self) -> int:
