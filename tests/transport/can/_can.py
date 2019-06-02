@@ -12,8 +12,8 @@ import pyuavcan.transport
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_can_transport() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, Timestamp
-    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, can, Statistics
+    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
+    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, can, Statistics, Timestamp
     from pyuavcan.transport import InvalidTransportConfigurationError, OperationNotDefinedForAnonymousNodeError
     from pyuavcan.transport import ResourceClosedError
     # noinspection PyProtectedMember
@@ -175,7 +175,8 @@ async def _unittest_can_transport() -> None:
     assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
         received=2, received_uavcan=2, received_uavcan_accepted=1)
 
-    received = await promiscuous_m12345.receive()
+    received: Transfer = await promiscuous_m12345.receive()
+    assert isinstance(received, TransferFrom)
     assert received.transfer_id == 11
     assert received.source_node_id is None      # The sender is anonymous
     assert received.priority == Priority.IMMEDIATE
@@ -215,6 +216,7 @@ async def _unittest_can_transport() -> None:
     assert is_timestamp_valid(fb.first_frame_transmission_timestamp)
 
     received = await promiscuous_m12345.receive()
+    assert isinstance(received, TransferFrom)
     assert received.transfer_id == 2
     assert received.source_node_id == 5
     assert received.priority == Priority.SLOW
@@ -230,6 +232,7 @@ async def _unittest_can_transport() -> None:
     assert broadcaster.sample_statistics() == Statistics(transfers=4, frames=8, payload_bytes=318)
 
     received = await promiscuous_m12345.receive()
+    assert isinstance(received, TransferFrom)
     assert received.transfer_id == 3
     assert received.source_node_id == 5
     assert received.priority == Priority.OPTIONAL
@@ -334,7 +337,7 @@ async def _unittest_can_transport() -> None:
                                 source_node_id=5,
                                 destination_node_id=123,
                                 service_id=333,
-                                request_not_response=True).compile(_mem('Ignored')),
+                                request_not_response=True).compile([_mem('Ignored')]),
         padded_payload=_mem('Ignored'),
         start_of_transfer=False,        # Ignored because not start-of-frame
         end_of_transfer=False,
@@ -348,7 +351,7 @@ async def _unittest_can_transport() -> None:
                                 source_node_id=5,
                                 destination_node_id=123,
                                 service_id=333,
-                                request_not_response=True).compile(_mem('Ignored')),
+                                request_not_response=True).compile([_mem('Ignored')]),
         padded_payload=_mem('Ignored'),
         start_of_transfer=True,
         end_of_transfer=False,
@@ -381,7 +384,7 @@ async def _unittest_can_transport() -> None:
                                 source_node_id=5,
                                 destination_node_id=123,
                                 service_id=333,
-                                request_not_response=True).compile(_mem('Ignored')),
+                                request_not_response=True).compile([_mem('Ignored')]),
         padded_payload=_mem('Ignored'),
         start_of_transfer=True,
         end_of_transfer=False,
@@ -399,6 +402,7 @@ async def _unittest_can_transport() -> None:
     assert is_timestamp_valid(fb.first_frame_transmission_timestamp)
 
     received = await promiscuous_server_s333.receive()
+    assert isinstance(received, TransferFrom)
     assert received.source_node_id == 5
     assert received.transfer_id == 12
     assert received.priority == Priority.FAST
@@ -441,7 +445,7 @@ async def _unittest_can_transport() -> None:
                                 source_node_id=5,
                                 destination_node_id=123,
                                 service_id=333,
-                                request_not_response=True).compile(_mem('')),
+                                request_not_response=True).compile([_mem('')]),
         data=bytearray(b''),                # The CAN ID is valid for UAVCAN, but the payload is not - no tail byte
         format=can.media.FrameFormat.EXTENDED,
         loopback=False)
@@ -459,7 +463,7 @@ async def _unittest_can_transport() -> None:
                                 source_node_id=5,
                                 destination_node_id=123,
                                 service_id=444,             # No such service
-                                request_not_response=True).compile(_mem('Ignored')),
+                                request_not_response=True).compile([_mem('Ignored')]),
         padded_payload=_mem('Ignored'),
         start_of_transfer=True,
         end_of_transfer=False,
@@ -510,7 +514,7 @@ async def _unittest_can_transport() -> None:
         transfer_id=7,
         fragmented_payload=[
             _mem('Finally, from so little sleeping and so much reading, '),
-            _mem('his brain dried up and he went completely out of his mind.'),  # Two frames. Thank you, Mr. Cervantes.
+            _mem('his brain dried up and he went completely out of his mind.'),  # Two frames.
         ]
     ))
 
@@ -527,6 +531,7 @@ async def _unittest_can_transport() -> None:
                                                                    received_uavcan_accepted=14)
 
     received = await subscriber_promiscuous.receive()
+    assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123
     assert received.priority == Priority.EXCEPTIONAL
     assert received.transfer_id == 7
@@ -566,6 +571,7 @@ async def _unittest_can_transport() -> None:
                                                                    received_uavcan_accepted=14)
 
     received = await subscriber_promiscuous.receive()
+    assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123
     assert received.priority == Priority.NOMINAL
     assert received.transfer_id == 7
@@ -591,7 +597,7 @@ async def _unittest_can_transport() -> None:
             _mem('a' * 63),
             _mem('b' * 63),
             _mem('c' * 63),
-            _mem('d' * 62),  # Tricky case - one of the CRC bytes spills over in to the fifth frame
+            _mem('d' * 62),  # Tricky case - one of the CRC bytes spills over into the fifth frame
         ]
     ))
 
@@ -634,7 +640,7 @@ def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
 
 
 class _FeedbackCollector:
-    def __init__(self):
+    def __init__(self) -> None:
         self._item: typing.Optional[pyuavcan.transport.Feedback] = None
 
     def give(self, feedback: pyuavcan.transport.Feedback) -> None:
