@@ -97,7 +97,7 @@ def _unittest_can_media_frame() -> None:
                                     bytearray(b'Hello\x01\x02\x7F'),
                                     FrameFormat.EXTENDED,
                                     True,
-                                    pyuavcan.transport.Timestamp(wall_ns=1558481132502003000,
+                                    pyuavcan.transport.Timestamp(system_ns=1558481132502003000,
                                                                  monotonic_ns=635720258263416))) == \
         "2019-05-22T02:25:32.502003/635720.258263416: 0x12345678  48 65 6c 6c 6f 01 02 7f  'Hello...'  loopback"
 

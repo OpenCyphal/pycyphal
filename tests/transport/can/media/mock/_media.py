@@ -66,32 +66,33 @@ class MockMedia(_media.Media):
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
 
-        timestamped = [
-            _media.TimestampedDataFrame(identifier=f.identifier,
-                                        data=f.data,
-                                        format=f.format,
-                                        loopback=f.loopback,
-                                        timestamp=pyuavcan.transport.Timestamp.now())
-            for f in frames
-        ]
-        del frames
-        assert len(timestamped) > 0, 'Interface constraint violation: empty transmission set'
-        assert min(map(lambda x: len(x.data), timestamped)) >= 1, 'CAN frames with empty payload are not valid'
+        frames = list(frames)
+        assert len(frames) > 0, 'Interface constraint violation: empty transmission set'
+        assert min(map(lambda x: len(x.data), frames)) >= 1, 'CAN frames with empty payload are not valid'
         # The media interface spec says that it is guaranteed that the CAN ID is the same across the set; enforce this.
-        assert len(set(map(lambda x: x.identifier, timestamped))) == 1, 'Interface constraint violation: nonuniform ID'
+        assert len(set(map(lambda x: x.identifier, frames))) == 1, 'Interface constraint violation: nonuniform ID'
+
+        timestamp = pyuavcan.transport.Timestamp.now()
 
         # Broadcast across the virtual bus we're emulating here.
         for p in self._peers:
             if p is not self:
-                p._receive(timestamped)
+                # Unconditionally clear the loopback flag because for the other side these are
+                # regular received frames, not loopback frames.
+                p._receive(_media.TimestampedDataFrame(identifier=f.identifier,
+                                                       data=f.data,
+                                                       format=f.format,
+                                                       loopback=False,
+                                                       timestamp=timestamp)
+                           for f in frames)
 
         # Simple loopback emulation with acceptance filtering.
         self._receive(_media.TimestampedDataFrame(identifier=f.identifier,
                                                   data=f.data,
                                                   format=f.format,
                                                   loopback=True,
-                                                  timestamp=f.timestamp)
-                      for f in timestamped if f.loopback)
+                                                  timestamp=timestamp)
+                      for f in frames if f.loopback)
 
     async def close(self) -> None:
         if self._closed:

@@ -162,13 +162,14 @@ def generate_filter_configurations(subject_id_list: typing.Iterable[int],
         full.append(ext(idn=0b_000_1_0_000000000_0000000_0000000_1 | (int(local_node_id) << 8),
                         msk=0b_000_1_0_000000000_1111111_0000000_1))
         # Also, we may need loopback frames for timestamping, so we add a filter for frames where the source node ID
-        # equals ours.
-        #                     prio m a    subject-id    source  v
+        # equals ours. Both messages and services!
+        #                     prio x ? subj/serv-dest.  source  v
         full.append(ext(idn=0b_000_0_0_0000000000000000_0000000_1 | (int(local_node_id) << 1),
-                        msk=0b_000_1_0_0000000000000000_1111111_1))
+                        msk=0b_000_0_0_0000000000000000_1111111_1))
     else:
         # If the local node ID is not set, we may need to receive loopback frames for sent anonymous transfers.
-        # This essentially means that we need to allow ALL anonymous transfers.
+        # This essentially means that we need to allow ALL anonymous transfers. Those may be only messages, as there
+        # is no such thing as anonymous service transfer.
         #                     prio m a    subject-id    source  v
         full.append(ext(idn=0b_000_0_1_0000000000000000_0000000_1,
                         msk=0b_000_1_1_0000000000000000_0000000_1))
@@ -199,8 +200,8 @@ def _unittest_can_filter_configuration() -> None:
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,     # Services
             msk=0b_000_1_0_000000000_1111111_0000000_1),
 
-        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback messages
-            msk=0b_000_1_0_0000000000000000_1111111_1),
+        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback frames (both messages and services)
+            msk=0b_000_0_0_0000000000000000_1111111_1),
     ]
 
     reference_subject_ids = [
@@ -219,8 +220,8 @@ def _unittest_can_filter_configuration() -> None:
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
             msk=0b_000_1_0_000000000_1111111_0000000_1),    # Services
 
-        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback messages
-            msk=0b_000_1_0_0000000000000000_1111111_1),
+        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback frames (both messages and services)
+            msk=0b_000_0_0_0000000000000000_1111111_1),
 
         ext(idn=0b_000_0_0_0000000000000000_0000000_1,
             msk=0b_000_1_0_1111111111111111_0000000_1),
@@ -246,8 +247,8 @@ def _unittest_can_filter_configuration() -> None:
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
             msk=0b_000_1_0_000000000_1111111_0000000_1),    # Services
 
-        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback messages
-            msk=0b_000_1_0_0000000000000000_1111111_1),
+        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback frames (both messages and services)
+            msk=0b_000_0_0_0000000000000000_1111111_1),
 
         ext(idn=0b_000_0_0_0000000000000000_0000000_1,
             msk=0b_000_1_0_1111111111111111_0000000_1),
@@ -273,8 +274,8 @@ def _unittest_can_filter_configuration() -> None:
         ext(idn=0b_000_1_0_000000000_1010101_0000000_1,
             msk=0b_000_1_0_000000000_1111111_0000000_1),    # Services
 
-        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback messages
-            msk=0b_000_1_0_0000000000000000_1111111_1),
+        ext(idn=0b_000_0_0_0000000000000000_1010101_1,      # Loopback frames (both messages and services)
+            msk=0b_000_0_0_0000000000000000_1111111_1),
 
         ext(idn=0b_000_0_0_0000000000000000_0000000_1,
             msk=0b_000_1_0_1111111111000000_0000000_1),
@@ -329,6 +330,9 @@ def _unittest_can_identifier_parse() -> None:
     with raises(ValueError):
         # noinspection PyTypeChecker
         ServiceCANID(Priority.HIGH, None, 123, 512, True)  # type: ignore
+
+    with raises(ValueError):
+        ServiceCANID(Priority.HIGH, 123, 123, 42, True)   # Same source and destination
 
     reference_message = MessageCANID(Priority.FAST, 123, 12345)
     reference_message_id = 0b_010_0_0_0011000000111001_1111011_1

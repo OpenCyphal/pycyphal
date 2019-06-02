@@ -70,10 +70,9 @@ class TransferReceiver:
             self._timestamp = frame.timestamp   # Initialization from the first frame
 
         if self._timestamp.monotonic_ns > frame.timestamp.monotonic_ns or \
-                self._timestamp.wall_ns > frame.timestamp.wall_ns:
+                self._timestamp.system_ns > frame.timestamp.system_ns:
             # The timestamping algorithm may have corrected the time error since the first frame, accept lower value
-            self._timestamp = pyuavcan.transport.Timestamp.combine_oldest(self._timestamp,
-                                                                          frame.timestamp)
+            self._timestamp = pyuavcan.transport.Timestamp.combine_oldest(self._timestamp, frame.timestamp)
 
         self._toggle_bit = not self._toggle_bit
         self._fragmented_payload.append(frame.padded_payload)
@@ -156,14 +155,14 @@ def _unittest_can_transfer_receiver_manual() -> None:
             end_of_transfer=end_of_transfer,
             toggle_bit=toggle_bit,
             loopback=False,
-            timestamp=pyuavcan.transport.Timestamp(wall_ns=0, monotonic_ns=monotonic_ns))
+            timestamp=pyuavcan.transport.Timestamp(system_ns=0, monotonic_ns=monotonic_ns))
 
     def tr(monotonic_ns:       int,
            transfer_id:        int,
            fragmented_payload: typing.Sequence[typing.Union[bytes, str, memoryview]]) \
             -> pyuavcan.transport.TransferFrom:
         return pyuavcan.transport.TransferFrom(
-            timestamp=pyuavcan.transport.Timestamp(wall_ns=0, monotonic_ns=monotonic_ns),
+            timestamp=pyuavcan.transport.Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
             priority=priority,
             transfer_id=transfer_id,
             fragmented_payload=[

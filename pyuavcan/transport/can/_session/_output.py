@@ -128,7 +128,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
         else:
             self._statistics.transfers += 1
             self._statistics.frames += num_frames
-            self._statistics.bytes += sum(map(len, transfer.fragmented_payload))  # Session level, not transport level
+            self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))  # Session level, not transport
 
 
 class BroadcastCANOutput(CANOutputSession, pyuavcan.transport.BroadcastOutput):
@@ -212,7 +212,7 @@ class UnicastCANOutput(CANOutputSession, pyuavcan.transport.UnicastOutput):
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
         source_node_id = self._transport.local_node_id
         if source_node_id is None:
-            raise pyuavcan.transport.InvalidTransportConfigurationError(
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                 'Cannot emit a service transfer because the local node is anonymous (does not have a node ID)')
 
         can_id = _identifier.ServiceCANID(

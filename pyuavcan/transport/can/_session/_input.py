@@ -111,7 +111,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                 if source_node_id is None:
                     # Anonymous transfer - no reconstruction needed
                     self._statistics.transfers += 1
-                    self._statistics.bytes += len(frame.padded_payload)
+                    self._statistics.payload_bytes += len(frame.padded_payload)
                     return pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
                                                            priority=canid.priority,
                                                            transfer_id=frame.transfer_id,
@@ -135,7 +135,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                 self._statistics.reception_error_counters[result] += 1
             elif isinstance(result, pyuavcan.transport.TransferFrom):
                 self._statistics.transfers += 1
-                self._statistics.bytes += sum(map(len, result.fragmented_payload))
+                self._statistics.payload_bytes += sum(map(len, result.fragmented_payload))
                 return result
             elif result is None:
                 pass        # Nothing to do - expecting more frames

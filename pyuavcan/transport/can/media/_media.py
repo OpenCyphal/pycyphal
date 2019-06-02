@@ -48,7 +48,7 @@ class Media(abc.ABC):
     @abc.abstractmethod
     def set_received_frames_handler(self, handler: ReceivedFramesHandler) -> None:
         """
-        Every received frame must be timestamped. Both monotonic and wall timestamps are required.
+        Every received frame must be timestamped. Both monotonic and system timestamps are required.
         There are no timestamping accuracy requirements. An empty set of frames should never be reported.
 
         The media implementation must drop all non-data frames (RTR frames, error frames, etc.).

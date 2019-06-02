@@ -52,11 +52,22 @@ class SessionMetadata:
 
 @dataclasses.dataclass
 class Statistics:
-    transfers: int = 0
-    frames:    int = 0
-    bytes:     int = 0
-    errors:    int = 0
-    overruns:  int = 0
+    transfers:     int = 0  # Number of UAVCAN transfers
+    frames:        int = 0  # Number of UAVCAN frames
+    payload_bytes: int = 0  # Number of transport layer payload bytes, i.e., not including transport metadata or padding
+    errors:        int = 0  # Number of failures of any kind, even if they are also logged using other means
+    overruns:      int = 0  # Number of buffer overruns
+
+    def __eq__(self, other: object) -> bool:
+        """
+        The statistic comparison operator is defined for any combination of derived classes. It compares only
+        those fields that are available in both operands, ignoring unique fields. This is useful for testing.
+        """
+        if isinstance(other, Statistics):
+            fds = set(f.name for f in dataclasses.fields(self)) & set(f.name for f in dataclasses.fields(other))
+            return all(getattr(self, n) == getattr(other, n) for n in fds)
+        else:  # pragma: no cover
+            return NotImplemented
 
 
 class Session(abc.ABC):

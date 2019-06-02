@@ -28,11 +28,16 @@ def serialize_transfer(compiled_identifier:     int,
     payload_length = sum(map(len, fragmented_payload))
 
     if payload_length <= max_frame_payload_bytes:               # SINGLE-FRAME TRANSFER
-        padding_length = _frame.UAVCANFrame.get_required_padding(payload_length)
-        refragmented = pyuavcan.util.refragment(itertools.chain(fragmented_payload,
-                                                                (memoryview(_PADDING_PATTERN * padding_length),)),
-                                                max_frame_payload_bytes)
-        payload, = tuple(refragmented)
+        if payload_length > 0:
+            padding_length = _frame.UAVCANFrame.get_required_padding(payload_length)
+            refragmented = pyuavcan.util.refragment(itertools.chain(fragmented_payload,
+                                                                    (memoryview(_PADDING_PATTERN * padding_length),)),
+                                                    max_frame_payload_bytes)
+            payload, = tuple(refragmented)
+        else:
+            # The special case is necessary because refragment() yields nothing if the payload is empty
+            payload = memoryview(b'')
+
         assert max_frame_payload_bytes >= len(payload) >= payload_length
         yield _frame.UAVCANFrame(identifier=compiled_identifier,
                                  padded_payload=payload,

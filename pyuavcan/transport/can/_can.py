@@ -301,7 +301,7 @@ class CANTransport(pyuavcan.transport.Transport):
             session = self._output_registry[(data_spec, dest_nid)]
         except KeyError:
             _logger.info('No matching output session for loopback frame: %s; '
-                         'parsed CAN ID: %s; data specifier: %s; destination node ID: %s. '
+                         'parsed CAN ID: %s; data specifier: %s; destination node ID: %s; media: %s. '
                          'Either the session has just been closed or the media driver is misbehaving.',
                          frame, can_id, data_spec, dest_nid, self._media)
         else:
