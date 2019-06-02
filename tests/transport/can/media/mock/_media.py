@@ -135,12 +135,6 @@ class MockMedia(_media.Media):
             frame.identifier & f.mask == f.identifier & f.mask and (f.format is None or frame.format == f.format),
             self._acceptance_filters))
 
-    def __str__(self) -> str:
-        return f'{type(self).__name__}(' \
-            f'num_peers={len(self._peers)}, ' \
-            f'max_data_field_length={self.max_data_field_length}, ' \
-            f'acceptance_filters=[{", ".join(map(str, self._acceptance_filters))}])'
-
     @staticmethod
     def _make_dead_filter() -> _media.FilterConfiguration:
         fmt = _media.FrameFormat.BASE
@@ -158,7 +152,7 @@ async def _unittest_can_mock_media() -> None:
     assert me.max_data_field_length == 64
     assert me.number_of_acceptance_filters == 3
     assert not me.automatic_retransmission_enabled
-    print(me)
+    assert str(me) == "MockMedia(interface_name='mock', max_data_field_length=64)"
     await me.enable_automatic_retransmission()
     assert me.automatic_retransmission_enabled
 

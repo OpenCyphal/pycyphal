@@ -74,9 +74,13 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         If the new capacity is smaller than the number of frames currently in the queue, the newest frames will
         be discarded and the number of queue overruns will be incremented accordingly.
         The complexity may be up to linear on the number of frames currently in the queue.
+        If the value is not None, it must be a positive integer.
         """
+        if value is not None and not value > 0:
+            raise ValueError(f'Invalid value for queue capacity: {value}')
+
         old_queue = self._queue
-        self._queue = asyncio.Queue(value if value is not None else 0, loop=self._loop)
+        self._queue = asyncio.Queue(int(value) if value is not None else 0, loop=self._loop)
         try:
             while True:
                 self.push_frame(*old_queue.get_nowait())
@@ -146,6 +150,12 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
     def _do_sample_statistics(self) -> ExtendedStatistics:
         return copy.copy(self._statistics)
 
+    def _set_transfer_id_timeout(self, value: float) -> None:
+        if value > 0:
+            self._transfer_id_timeout_ns = int(value / _NANO)
+        else:
+            raise ValueError(f'Invalid value for transfer ID timeout [second]: {value}')
+
 
 class PromiscuousCANInput(CANInputSession, pyuavcan.transport.PromiscuousInput):
     def __init__(self,
@@ -181,7 +191,7 @@ class PromiscuousCANInput(CANInputSession, pyuavcan.transport.PromiscuousInput):
 
     @transfer_id_timeout.setter
     def transfer_id_timeout(self, value: float) -> None:
-        self._transfer_id_timeout_ns = int(value / _NANO)
+        self._set_transfer_id_timeout(value)
 
 
 class SelectiveCANInput(CANInputSession, pyuavcan.transport.SelectiveInput):
@@ -226,7 +236,7 @@ class SelectiveCANInput(CANInputSession, pyuavcan.transport.SelectiveInput):
 
     @transfer_id_timeout.setter
     def transfer_id_timeout(self, value: float) -> None:
-        self._transfer_id_timeout_ns = int(value / _NANO)
+        self._set_transfer_id_timeout(value)
 
 
 def _node_id_range() -> typing.Iterable[int]:

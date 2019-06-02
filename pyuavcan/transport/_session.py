@@ -108,19 +108,34 @@ class Session(abc.ABC):
 class InputSession(Session):
     @abc.abstractmethod
     async def receive(self) -> Transfer:
+        """
+        Blocks forever until a transfer is received.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     async def try_receive(self, monotonic_deadline: float) -> typing.Optional[Transfer]:
+        """
+        This is an alternative that will return None if the transfer is not received before the deadline [second].
+        The deadline is compared against time.monotonic().
+        If a transfer is received before the deadline, behaves like the non-timeout-capable version.
+        """
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
     def transfer_id_timeout(self) -> float:
+        """
+        By default, the transfer ID timeout is initialized with the default value provided in the Specification.
+        It can be overridden using this interface if necessary (rarely is). The units are seconds.
+        """
         raise NotImplementedError
 
     @transfer_id_timeout.setter
     def transfer_id_timeout(self, value: float) -> None:
+        """
+        Raises ValueError if the value is not positive.
+        """
         raise NotImplementedError
 
 
@@ -128,10 +143,18 @@ class InputSession(Session):
 class PromiscuousInput(InputSession):
     @abc.abstractmethod
     async def receive(self) -> TransferFrom:
+        """
+        Behaves like the overridden method in the base class except that the returned instance is a more
+        specialized type of Transfer equipped with the information about the sender.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     async def try_receive(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
+        """
+        Behaves like the overridden method in the base class except that the returned instance is a more
+        specialized type of Transfer equipped with the information about the sender.
+        """
         raise NotImplementedError
 
 
@@ -140,6 +163,10 @@ class SelectiveInput(InputSession):
     @property
     @abc.abstractmethod
     def source_node_id(self) -> int:
+        """
+        The node ID of a remote node whose transfers this session is configured to receive. Transfers from other
+        nodes will not be received by this session instance.
+        """
         raise NotImplementedError
 
     def __str__(self) -> str:
@@ -169,6 +196,9 @@ class OutputSession(Session):
 
     @abc.abstractmethod
     def disable_feedback(self) -> None:
+        """
+        Restores the original state.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -186,6 +216,9 @@ class UnicastOutput(OutputSession):
     @property
     @abc.abstractmethod
     def destination_node_id(self) -> int:
+        """
+        All transfers sent by this session instance will be directed towards this remote node.
+        """
         raise NotImplementedError
 
     def __str__(self) -> str:

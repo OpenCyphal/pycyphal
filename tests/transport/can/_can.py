@@ -29,9 +29,9 @@ async def _unittest_can_transport() -> None:
         can.CANTransport(MockMedia(set(), 7, 16))
 
     peers: typing.Set[MockMedia] = set()
-    media = MockMedia(peers, 64, 1000)
+    media = MockMedia(peers, 64, 10)
     media2 = MockMedia(peers, 64, 3)
-    peeper = MockMedia(peers, 64, 1000)
+    peeper = MockMedia(peers, 64, 10)
     assert len(peers) == 3
 
     tr = can.CANTransport(media)
@@ -63,8 +63,8 @@ async def _unittest_can_transport() -> None:
     subscriber_promiscuous = await tr.get_promiscuous_input(MessageDataSpecifier(2222), meta)
     assert subscriber_promiscuous is await tr.get_promiscuous_input(MessageDataSpecifier(2222), meta)
 
-    subscriber_selective = await tr.get_selective_input(MessageDataSpecifier(2222), meta, 42)
-    assert subscriber_selective is await tr.get_selective_input(MessageDataSpecifier(2222), meta, 42)
+    subscriber_selective = await tr.get_selective_input(MessageDataSpecifier(2222), meta, 123)
+    assert subscriber_selective is await tr.get_selective_input(MessageDataSpecifier(2222), meta, 123)
 
     server_listener = await tr.get_promiscuous_input(
         ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta)
@@ -104,8 +104,8 @@ async def _unittest_can_transport() -> None:
     collector = FrameCollector()
     peeper.set_received_frames_handler(collector.give)
 
-    assert tr.sample_frame_counters() == can.CANFrameStatistics()
-    assert tr2.sample_frame_counters() == can.CANFrameStatistics()
+    assert tr.sample_frame_statistics() == can.CANFrameStatistics()
+    assert tr2.sample_frame_statistics() == can.CANFrameStatistics()
 
     ts = Timestamp.now()
 
@@ -122,12 +122,12 @@ async def _unittest_can_transport() -> None:
     ))
     assert broadcaster.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=6)
 
-    assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=1)
-    assert tr2.sample_frame_counters() == can.CANFrameStatistics(received=1, received_uavcan=1)
-    assert tr.sample_frame_counters().media_acceptance_filtering_efficiency == pytest.approx(1)
-    assert tr2.sample_frame_counters().media_acceptance_filtering_efficiency == pytest.approx(0)
-    assert tr.sample_frame_counters().lost_loopback == 0
-    assert tr2.sample_frame_counters().lost_loopback == 0
+    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=1)
+    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(received=1, received_uavcan=1)
+    assert tr.sample_frame_statistics().media_acceptance_filtering_efficiency == pytest.approx(1)
+    assert tr2.sample_frame_statistics().media_acceptance_filtering_efficiency == pytest.approx(0)
+    assert tr.sample_frame_statistics().lost_loopback == 0
+    assert tr2.sample_frame_statistics().lost_loopback == 0
 
     assert collector.pop().is_same_manifestation(UAVCANFrame(
         identifier=MessageCANID(Priority.IMMEDIATE, None, 12345).compile([_mem('abcdef')]),  # payload fragments joined
@@ -171,8 +171,8 @@ async def _unittest_can_transport() -> None:
     ))
     assert broadcaster.sample_statistics() == Statistics(transfers=2, frames=2, payload_bytes=12)
 
-    assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=2)
-    assert tr2.sample_frame_counters() == can.CANFrameStatistics(
+    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=2)
+    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
         received=2, received_uavcan=2, received_uavcan_accepted=1)
 
     received = await promiscuous_m12345.receive()
@@ -206,8 +206,8 @@ async def _unittest_can_transport() -> None:
     assert broadcaster.sample_statistics() == Statistics(transfers=3, frames=7, payload_bytes=312)
     broadcaster.disable_feedback()
 
-    assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=7, loopback_requested=1, loopback_returned=1)
-    assert tr2.sample_frame_counters() == can.CANFrameStatistics(
+    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=7, loopback_requested=1, loopback_returned=1)
+    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
         received=7, received_uavcan=7, received_uavcan_accepted=6)
 
     fb = feedback_collector.take()
@@ -238,8 +238,8 @@ async def _unittest_can_transport() -> None:
 
     assert promiscuous_m12345.sample_statistics() == Statistics(transfers=3, frames=7, payload_bytes=325)
 
-    assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=8, loopback_requested=1, loopback_returned=1)
-    assert tr2.sample_frame_counters() == can.CANFrameStatistics(
+    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=8, loopback_requested=1, loopback_returned=1)
+    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
         received=8, received_uavcan=8, received_uavcan_accepted=7)
 
     await broadcaster.close()
@@ -429,9 +429,204 @@ async def _unittest_can_transport() -> None:
     assert promiscuous_client_s333.sample_statistics() == Statistics()
 
     # Final transport stats check; additional loopback frames are due to our manual tests above
-    assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=16, loopback_requested=2, loopback_returned=5)
-    assert tr2.sample_frame_counters() == can.CANFrameStatistics(
+    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16, loopback_requested=2, loopback_returned=5)
+    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
         received=15, received_uavcan=15, received_uavcan_accepted=14)
+
+    #
+    # Drop non-UAVCAN frames silently
+    #
+    media.inject_received([can.media.DataFrame(
+        identifier=ServiceCANID(priority=Priority.FAST,
+                                source_node_id=5,
+                                destination_node_id=123,
+                                service_id=333,
+                                request_not_response=True).compile(_mem('')),
+        data=bytearray(b''),                # The CAN ID is valid for UAVCAN, but the payload is not - no tail byte
+        format=can.media.FrameFormat.EXTENDED,
+        loopback=False)
+    ])
+
+    media.inject_received([can.media.DataFrame(
+        identifier=0,                       # The CAN ID is not valid for UAVCAN
+        data=bytearray(b'123'),
+        format=can.media.FrameFormat.BASE,
+        loopback=False)
+    ])
+
+    media.inject_received([UAVCANFrame(
+        identifier=ServiceCANID(priority=Priority.FAST,
+                                source_node_id=5,
+                                destination_node_id=123,
+                                service_id=444,             # No such service
+                                request_not_response=True).compile(_mem('Ignored')),
+        padded_payload=_mem('Ignored'),
+        start_of_transfer=True,
+        end_of_transfer=False,
+        toggle_bit=True,
+        transfer_id=12,
+        loopback=True).compile()
+    ])
+
+    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16,
+                                                                  received=2,
+                                                                  loopback_requested=2,
+                                                                  loopback_returned=6)
+
+    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(received=15,
+                                                                   received_uavcan=15,
+                                                                   received_uavcan_accepted=14)
+
+    #
+    # Reception logic test.
+    #
+    pub_m2222 = await tr2.get_broadcast_output(MessageDataSpecifier(2222), meta)
+
+    # Transfer ID timeout configuration - one of them will be configured very short for testing purposes
+    subscriber_promiscuous.transfer_id_timeout = 1e-9       # Very low, basically zero timeout
+    with pytest.raises(ValueError):
+        subscriber_promiscuous.transfer_id_timeout = -1
+    with pytest.raises(ValueError):
+        subscriber_promiscuous.transfer_id_timeout = float('nan')
+    assert subscriber_promiscuous.transfer_id_timeout == pytest.approx(1e-9)
+
+    subscriber_selective.transfer_id_timeout = 1.0
+    with pytest.raises(ValueError):
+        subscriber_selective.transfer_id_timeout = -1
+    with pytest.raises(ValueError):
+        subscriber_selective.transfer_id_timeout = float('nan')
+    assert subscriber_selective.transfer_id_timeout == pytest.approx(1.0)
+
+    # Queue capacity configuration
+    assert subscriber_selective.queue_capacity is None      # Unlimited by default
+    subscriber_selective.queue_capacity = 2
+    with pytest.raises(ValueError):
+        subscriber_selective.queue_capacity = 0
+    assert subscriber_selective.queue_capacity == 2
+
+    await pub_m2222.send(Transfer(
+        timestamp=ts,
+        priority=Priority.EXCEPTIONAL,
+        transfer_id=7,
+        fragmented_payload=[
+            _mem('Finally, from so little sleeping and so much reading, '),
+            _mem('his brain dried up and he went completely out of his mind.'),  # Two frames. Thank you, Mr. Cervantes.
+        ]
+    ))
+
+    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16,
+                                                                  received=4,
+                                                                  received_uavcan=2,
+                                                                  received_uavcan_accepted=2,
+                                                                  loopback_requested=2,
+                                                                  loopback_returned=6)
+
+    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(sent=2,
+                                                                   received=15,
+                                                                   received_uavcan=15,
+                                                                   received_uavcan_accepted=14)
+
+    received = await subscriber_promiscuous.receive()
+    assert received.source_node_id == 123
+    assert received.priority == Priority.EXCEPTIONAL
+    assert received.transfer_id == 7
+    assert is_timestamp_valid(received.timestamp)
+    assert bytes(received.fragmented_payload[0]).startswith(b'Finally')
+    assert bytes(received.fragmented_payload[-1]).rstrip(b'\x55').endswith(b'out of his mind.')
+
+    received = await subscriber_selective.receive()
+    assert received.priority == Priority.EXCEPTIONAL
+    assert received.transfer_id == 7
+    assert is_timestamp_valid(received.timestamp)
+    assert bytes(received.fragmented_payload[0]).startswith(b'Finally')
+    assert bytes(received.fragmented_payload[-1]).rstrip(b'\x55').endswith(b'out of his mind.')
+
+    assert subscriber_selective.sample_statistics() == subscriber_promiscuous.sample_statistics()
+    assert subscriber_promiscuous.sample_statistics() == Statistics(transfers=1,
+                                                                    frames=2,
+                                                                    payload_bytes=124)  # Includes padding!
+
+    await pub_m2222.send(Transfer(
+        timestamp=ts,
+        priority=Priority.NOMINAL,
+        transfer_id=7,                  # Same transfer ID, will be accepted only by the instance with low TID timeout
+        fragmented_payload=[]
+    ))
+
+    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16,
+                                                                  received=5,
+                                                                  received_uavcan=3,
+                                                                  received_uavcan_accepted=3,
+                                                                  loopback_requested=2,
+                                                                  loopback_returned=6)
+
+    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(sent=3,
+                                                                   received=15,
+                                                                   received_uavcan=15,
+                                                                   received_uavcan_accepted=14)
+
+    received = await subscriber_promiscuous.receive()
+    assert received.source_node_id == 123
+    assert received.priority == Priority.NOMINAL
+    assert received.transfer_id == 7
+    assert is_timestamp_valid(received.timestamp)
+    assert b''.join(received.fragmented_payload) == b''
+
+    assert subscriber_promiscuous.sample_statistics() == Statistics(transfers=2,
+                                                                    frames=3,
+                                                                    payload_bytes=124)
+
+    # Discarded because of the same transfer ID
+    assert (await subscriber_selective.try_receive(time.monotonic() + 1e-3)) is None
+    assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
+                                                                  frames=3,
+                                                                  payload_bytes=124,
+                                                                  errors=1)     # Error due to the repeated transfer ID
+
+    await pub_m2222.send(Transfer(
+        timestamp=ts,
+        priority=Priority.HIGH,
+        transfer_id=8,
+        fragmented_payload=[
+            _mem('a' * 63),
+            _mem('b' * 63),
+            _mem('c' * 63),
+            _mem('d' * 62),  # Tricky case - one of the CRC bytes spills over in to the fifth frame
+        ]
+    ))
+
+    # The promiscuous one is able to receive the transfer since its queue is large enough
+    received = await subscriber_promiscuous.receive()
+    assert received.priority == Priority.HIGH
+    assert received.transfer_id == 8
+    assert is_timestamp_valid(received.timestamp)
+    assert list(map(bytes, received.fragmented_payload)) == [
+        b'a' * 63,
+        b'b' * 63,
+        b'c' * 63,
+        b'd' * 62,
+    ]
+    assert subscriber_promiscuous.sample_statistics() == Statistics(transfers=3,
+                                                                    frames=8,
+                                                                    payload_bytes=375)
+
+    # The selective one is unable to do so since it's RX queue is too small; it is reflected in the error counter
+    assert (await subscriber_selective.try_receive(time.monotonic() + 1e-3)) is None
+    assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
+                                                                  frames=4,
+                                                                  payload_bytes=124,
+                                                                  errors=1,
+                                                                  overruns=3)  # Overruns!
+
+    #
+    # Finalization.
+    #
+    await client_listener.close()
+    await server_listener.close()
+    await subscriber_promiscuous.close()
+    await subscriber_selective.close()
+    await tr.close()
+    await tr2.close()
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

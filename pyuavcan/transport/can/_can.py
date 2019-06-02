@@ -147,7 +147,7 @@ class CANTransport(pyuavcan.transport.Transport):
         async with self._media_lock:
             await self._media.close()
 
-    def sample_frame_counters(self) -> CANFrameStatistics:
+    def sample_frame_statistics(self) -> CANFrameStatistics:
         return copy.copy(self._frame_stats)
 
     async def get_broadcast_output(self,
@@ -264,7 +264,7 @@ class CANTransport(pyuavcan.transport.Transport):
                                 self._frame_stats.received_uavcan_accepted += 1
                         else:
                             self._handle_loopback_frame(cid, ufr)
-            except Exception as ex:
+            except Exception as ex:  # pragma: no cover
                 self._frame_stats.errored += 1
                 _logger.exception(f'Unhandled exception while processing input CAN frame {raw_frame}: {ex}')
 

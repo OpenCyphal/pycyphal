@@ -116,7 +116,6 @@ class Media(abc.ABC):
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def __str__(self) -> str:
         """
         Should print the basic media information. Can be overridden if there is more relevant info to display.
