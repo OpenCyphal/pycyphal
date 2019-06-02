@@ -18,6 +18,17 @@ class Media(abc.ABC):
 
     @property
     @abc.abstractmethod
+    def interface_name(self) -> str:
+        """
+        The name of the interface on the local system. For example:
+            - "can0" for SocketCAN
+            - "/dev/serial/by-id/usb-Zubax_Robotics_Zubax_Babel_28002E0001514D593833302000000000-if00" for SLCAN
+            - "COM9" for SLCAN
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
     def max_data_field_length(self) -> int:
         """
         Must belong to VALID_MAX_DATA_FIELD_LENGTH_SET.
@@ -108,9 +119,11 @@ class Media(abc.ABC):
     @abc.abstractmethod
     def __str__(self) -> str:
         """
-        Should print the basic media information.
+        Should print the basic media information. Can be overridden if there is more relevant info to display.
         """
-        raise NotImplementedError
+        return f'{type(self).__name__}(' \
+            f'interface_name={self.interface_name!r}, ' \
+            f'max_data_field_length={self.max_data_field_length})'
 
     def __repr__(self) -> str:
         return self.__str__()

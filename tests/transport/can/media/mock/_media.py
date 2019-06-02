@@ -27,7 +27,13 @@ class MockMedia(_media.Media):
         self._automatic_retransmission_enabled = False      # This is the default per the media interface spec
         self._closed = False
 
+        self._raise_on_send_once: typing.Optional[Exception] = None
+
         super(MockMedia, self).__init__()
+
+    @property
+    def interface_name(self) -> str:
+        return 'mock'
 
     @property
     def max_data_field_length(self) -> int:
@@ -66,6 +72,11 @@ class MockMedia(_media.Media):
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
 
+        if self._raise_on_send_once:
+            self._raise_on_send_once, ex = None, self._raise_on_send_once
+            assert isinstance(ex, Exception)
+            raise ex
+
         frames = list(frames)
         assert len(frames) > 0, 'Interface constraint violation: empty transmission set'
         assert min(map(lambda x: len(x.data), frames)) >= 1, 'CAN frames with empty payload are not valid'
@@ -100,6 +111,18 @@ class MockMedia(_media.Media):
         else:
             self._closed = True
             self._peers.remove(self)
+
+    def raise_on_send_once(self, ex: Exception) -> None:
+        self._raise_on_send_once = ex
+
+    def inject_received(self, frames: typing.Iterable[_media.DataFrame]) -> None:
+        timestamp = pyuavcan.transport.Timestamp.now()
+        self._receive(_media.TimestampedDataFrame(identifier=f.identifier,
+                                                  data=f.data,
+                                                  format=f.format,
+                                                  loopback=f.loopback,
+                                                  timestamp=timestamp)
+                      for f in frames)
 
     def _receive(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
         frames = list(filter(self._test_acceptance, frames))
@@ -165,6 +188,10 @@ async def _unittest_can_mock_media() -> None:
     pe_collector = FrameCollector()
     pe.set_received_frames_handler(pe_collector.give)
 
+    me.raise_on_send_once(RuntimeError('Hello world!'))
+    with pytest.raises(RuntimeError, match='Hello world!'):
+        await me.send([])
+
     await me.send([
         DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
         DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True),
@@ -206,15 +233,6 @@ class FrameCollector:
         assert all(map(lambda x: isinstance(x, _media.TimestampedDataFrame), frames))
         self._collected += frames
 
-    def take(self) -> typing.List[_media.TimestampedDataFrame]:
-        out = self._collected
-        self._collected = []
-        return out
-
-    @property
-    def items(self) -> typing.List[_media.TimestampedDataFrame]:
-        return self._collected[:]
-
     def pop(self) -> _media.TimestampedDataFrame:
         head, self._collected = self._collected[0], self._collected[1:]
         return head
@@ -223,7 +241,7 @@ class FrameCollector:
     def empty(self) -> bool:
         return len(self._collected) == 0
 
-    def __str__(self) -> str:
+    def __str__(self) -> str:  # pragma: no cover
         return f'{type(self).__name__}({str(self._collected)})'
 
     __repr__ = __str__

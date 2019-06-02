@@ -58,19 +58,18 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
 
     def handle_loopback_frame(self, frame: _frame.TimestampedUAVCANFrame) -> None:
         assert frame.loopback, 'Internal API misuse'
-        if frame.start_of_transfer and frame.loopback:
-            key = _PendingFeedbackKey(compiled_identifier=frame.identifier,
-                                      transfer_id_modulus=frame.transfer_id)
+        if frame.start_of_transfer:
+            key = _PendingFeedbackKey(compiled_identifier=frame.identifier, transfer_id_modulus=frame.transfer_id)
             try:
                 original_timestamp = self._pending_feedback.pop(key)
             except KeyError:
-                _logger.debug('No pending feedback entry for ID 0x%08x frame %s', frame.identifier, frame)
+                _logger.debug('No pending feedback entry for frame: %s', frame)
             else:
-                if self._feedback_handler is not None:
+                if self._feedback_handler is not None:  # pragma: no cover
                     feedback = Feedback(original_timestamp, frame)
                     try:
                         self._feedback_handler(feedback)
-                    except Exception as ex:
+                    except Exception as ex:  # pragma: no cover
                         _logger.exception(f'Unhandled exception in the output session feedback handler '
                                           f'{self._feedback_handler}: {ex}')
 

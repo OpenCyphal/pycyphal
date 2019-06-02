@@ -25,6 +25,10 @@ class SocketCAN(_media.Media):
         super(SocketCAN, self).__init__()
 
     @property
+    def interface_name(self) -> str:
+        return self._iface_name
+
+    @property
     def max_data_field_length(self) -> int:
         return self._max_data_field_length
 
@@ -54,7 +58,4 @@ class SocketCAN(_media.Media):
         raise NotImplementedError
 
     async def close(self) -> None:
-        raise NotImplementedError
-
-    def __str__(self) -> str:
         raise NotImplementedError

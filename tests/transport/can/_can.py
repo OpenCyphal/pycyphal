@@ -19,7 +19,7 @@ async def _unittest_can_transport() -> None:
     # noinspection PyProtectedMember
     from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
     # noinspection PyProtectedMember
-    from pyuavcan.transport.can._frame import UAVCANFrame
+    from pyuavcan.transport.can._frame import UAVCANFrame, TimestampedUAVCANFrame
     from .media.mock import MockMedia, FrameCollector
 
     with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
@@ -315,7 +315,50 @@ async def _unittest_can_transport() -> None:
         await tr2.set_local_node_id(10)
     assert tr2.local_node_id == 123
 
-    client_requester.enable_feedback(feedback_collector.give)
+    client_requester.enable_feedback(feedback_collector.give)       # FEEDBACK ENABLED HERE
+
+    # Will fail with an error; make sure it's counted properly. The feedback registry entry will remain pending!
+    media.raise_on_send_once(RuntimeError('Induced failure'))
+    with pytest.raises(RuntimeError, match='Induced failure'):
+        await client_requester.send(Transfer(
+            timestamp=ts,
+            priority=Priority.FAST,
+            transfer_id=12,
+            fragmented_payload=[]
+        ))
+    assert client_requester.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=0, errors=1)
+
+    # Some malformed feedback frames which will be ignored
+    media.inject_received([UAVCANFrame(
+        identifier=ServiceCANID(priority=Priority.FAST,
+                                source_node_id=5,
+                                destination_node_id=123,
+                                service_id=333,
+                                request_not_response=True).compile(_mem('Ignored')),
+        padded_payload=_mem('Ignored'),
+        start_of_transfer=False,        # Ignored because not start-of-frame
+        end_of_transfer=False,
+        toggle_bit=True,
+        transfer_id=12,
+        loopback=True).compile()
+    ])
+
+    media.inject_received([UAVCANFrame(
+        identifier=ServiceCANID(priority=Priority.FAST,
+                                source_node_id=5,
+                                destination_node_id=123,
+                                service_id=333,
+                                request_not_response=True).compile(_mem('Ignored')),
+        padded_payload=_mem('Ignored'),
+        start_of_transfer=True,
+        end_of_transfer=False,
+        toggle_bit=True,
+        transfer_id=9,                  # Ignored because there is no such transfer-ID in the registry
+        loopback=True).compile()
+    ])
+
+    # Now, this transmission will succeed, but a pending loopback registry entry will be overwritten, which will be
+    # reflected in the error counter.
     await client_requester.send(Transfer(
         timestamp=ts,
         priority=Priority.FAST,
@@ -330,7 +373,22 @@ async def _unittest_can_transport() -> None:
         ]
     ))
     client_requester.disable_feedback()
-    assert client_requester.sample_statistics() == Statistics(transfers=2, frames=8, payload_bytes=438)
+    assert client_requester.sample_statistics() == Statistics(transfers=2, frames=8, payload_bytes=438, errors=2)
+
+    # The feedback is disabled, but we will send a valid loopback frame anyway to make sure it is silently ignored
+    media.inject_received([UAVCANFrame(
+        identifier=ServiceCANID(priority=Priority.FAST,
+                                source_node_id=5,
+                                destination_node_id=123,
+                                service_id=333,
+                                request_not_response=True).compile(_mem('Ignored')),
+        padded_payload=_mem('Ignored'),
+        start_of_transfer=True,
+        end_of_transfer=False,
+        toggle_bit=True,
+        transfer_id=12,
+        loopback=True).compile()
+    ])
 
     await client_requester.close()
     with pytest.raises(ResourceClosedError):
@@ -370,11 +428,10 @@ async def _unittest_can_transport() -> None:
     assert selective_client_s333_9.sample_statistics() == Statistics()
     assert promiscuous_client_s333.sample_statistics() == Statistics()
 
-    # Final transport stats check
-    assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=16, loopback_requested=2, loopback_returned=2)
+    # Final transport stats check; additional loopback frames are due to our manual tests above
+    assert tr.sample_frame_counters() == can.CANFrameStatistics(sent=16, loopback_requested=2, loopback_returned=5)
     assert tr2.sample_frame_counters() == can.CANFrameStatistics(
         received=15, received_uavcan=15, received_uavcan_accepted=14)
-
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
