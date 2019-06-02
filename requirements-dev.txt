@@ -1,6 +1,8 @@
 #
-# Development-only dependencies (not required to use the library)
+# Development-only dependencies that are not required to use the library.
+# They are needed only for development and testing.
 #
+
 pytest          ~= 4.5
 pytest-asyncio  >= 0.10 < 2.0
 

@@ -1,5 +1,5 @@
 #
-# Runtime dependencies
+# Runtime dependencies.
 #
 
 nunavut  < 2.0
