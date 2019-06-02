@@ -55,7 +55,8 @@ class Transport(abc.ABC):
     async def close(self) -> None:
         """
         After a transport is closed, none of its methods can be used. The behavior of methods invoked on a closed
-        transport is undefined.
+        transport is undefined. Generally, when closed, the transport should also close its underlying resources
+        such as media instances.
         """
         raise NotImplementedError
 

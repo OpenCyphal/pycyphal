@@ -19,7 +19,7 @@ async def _unittest_can_transport() -> None:
     # noinspection PyProtectedMember
     from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
     # noinspection PyProtectedMember
-    from pyuavcan.transport.can._frame import UAVCANFrame, TimestampedUAVCANFrame
+    from pyuavcan.transport.can._frame import UAVCANFrame
     from .media.mock import MockMedia, FrameCollector
 
     with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
