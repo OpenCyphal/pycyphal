@@ -4,8 +4,8 @@
 #
 
 pytest          ~= 4.5
-pytest-asyncio  >= 0.10 < 2.0
+pytest-asyncio  >= 0.10, < 2.0
 
 coverage        ~= 4.5
-mypy            >= 0.701 < 2.0
+mypy            >= 0.701, < 2.0
 pycodestyle     ~= 2.5
