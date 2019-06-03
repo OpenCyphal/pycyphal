@@ -21,7 +21,7 @@ from . import _util
 # This may appear huge but it's necessary to avoid false positives in the CI environment.
 _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 30e-3
 
-_NUM_RANDOM_SAMPLES = int(os.environ.get('PYUAVCAN_TEST_NUM_RANDOM_SAMPLES', 300))
+_NUM_RANDOM_SAMPLES = int(os.environ.get('PYUAVCAN_TEST_NUM_RANDOM_SAMPLES', 100))
 assert _NUM_RANDOM_SAMPLES >= 20, 'Invalid configuration: low number of random samples may trigger a false-negative.'
 
 

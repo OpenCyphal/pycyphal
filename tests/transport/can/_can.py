@@ -619,7 +619,7 @@ async def _unittest_can_transport() -> None:
                                                                     frames=8,
                                                                     payload_bytes=375)
 
-    # The selective one is unable to do so since it's RX queue is too small; it is reflected in the error counter
+    # The selective one is unable to do so since its RX queue is too small; it is reflected in the error counter
     assert (await subscriber_selective.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
     assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
                                                                   frames=5,
@@ -638,6 +638,8 @@ async def _unittest_can_transport() -> None:
     await subscriber_selective.close()
     await tr.close()
     await tr2.close()
+    with pytest.raises(ResourceClosedError):
+        await tr.close()
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
