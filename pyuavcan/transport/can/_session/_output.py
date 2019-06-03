@@ -48,7 +48,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
     def __init__(self,
                  transport:    pyuavcan.transport.can.CANTransport,
                  send_handler: SendHandler,
-                 finalizer:    _base.Finalizer):
+                 finalizer:    _base.SessionFinalizer):
         self._transport = transport
         self._send_handler = send_handler
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
@@ -135,7 +135,7 @@ class BroadcastCANOutput(CANOutputSession, pyuavcan.transport.BroadcastOutput):
                  metadata:     pyuavcan.transport.SessionMetadata,
                  transport:    pyuavcan.transport.can.CANTransport,
                  send_handler: SendHandler,
-                 finalizer:    _base.Finalizer):
+                 finalizer:    _base.SessionFinalizer):
         self._metadata = metadata
 
         if not isinstance(metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier):
@@ -155,7 +155,7 @@ class BroadcastCANOutput(CANOutputSession, pyuavcan.transport.BroadcastOutput):
         return super(BroadcastCANOutput, self).sample_statistics()
 
     async def close(self) -> None:
-        self._finalizer()
+        await super(BroadcastCANOutput, self).close()
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
         super(BroadcastCANOutput, self).enable_feedback(handler)
@@ -179,7 +179,7 @@ class UnicastCANOutput(CANOutputSession, pyuavcan.transport.UnicastOutput):
                  metadata:            pyuavcan.transport.SessionMetadata,
                  transport:           pyuavcan.transport.can.CANTransport,
                  send_handler:        SendHandler,
-                 finalizer:           _base.Finalizer):
+                 finalizer:           _base.SessionFinalizer):
         self._destination_node_id = int(destination_node_id)
         self._metadata = metadata
 
@@ -200,7 +200,7 @@ class UnicastCANOutput(CANOutputSession, pyuavcan.transport.UnicastOutput):
         return super(UnicastCANOutput, self).sample_statistics()
 
     async def close(self) -> None:
-        self._finalizer()
+        await super(UnicastCANOutput, self).close()
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
         super(UnicastCANOutput, self).enable_feedback(handler)

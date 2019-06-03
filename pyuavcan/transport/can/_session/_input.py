@@ -35,7 +35,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
     def __init__(self,
                  metadata:  pyuavcan.transport.SessionMetadata,
                  loop:      typing.Optional[asyncio.AbstractEventLoop],
-                 finalizer: _base.Finalizer):
+                 finalizer: _base.SessionFinalizer):
         self._metadata = metadata
         self._queue: asyncio.Queue[CANInputSession._QueueItem] = asyncio.Queue()
         self._loop = loop if loop is not None else asyncio.get_event_loop()
@@ -161,7 +161,7 @@ class PromiscuousCANInput(CANInputSession, pyuavcan.transport.PromiscuousInput):
     def __init__(self,
                  metadata:  pyuavcan.transport.SessionMetadata,
                  loop:      typing.Optional[asyncio.AbstractEventLoop],
-                 finalizer: _base.Finalizer):
+                 finalizer: _base.SessionFinalizer):
         super(PromiscuousCANInput, self).__init__(metadata=metadata,
                                                   loop=loop,
                                                   finalizer=finalizer)
@@ -174,7 +174,7 @@ class PromiscuousCANInput(CANInputSession, pyuavcan.transport.PromiscuousInput):
         return self._do_sample_statistics()
 
     async def close(self) -> None:
-        self._finalizer()
+        await super(PromiscuousCANInput, self).close()
 
     async def receive(self) -> pyuavcan.transport.TransferFrom:
         out: typing.Optional[pyuavcan.transport.TransferFrom] = None
@@ -199,7 +199,7 @@ class SelectiveCANInput(CANInputSession, pyuavcan.transport.SelectiveInput):
                  source_node_id: int,
                  metadata:       pyuavcan.transport.SessionMetadata,
                  loop:           typing.Optional[asyncio.AbstractEventLoop],
-                 finalizer:      _base.Finalizer):
+                 finalizer:      _base.SessionFinalizer):
         self._source_node_id = int(source_node_id)
         super(SelectiveCANInput, self).__init__(metadata=metadata,
                                                 loop=loop,
@@ -213,7 +213,7 @@ class SelectiveCANInput(CANInputSession, pyuavcan.transport.SelectiveInput):
         return self._do_sample_statistics()
 
     async def close(self) -> None:
-        self._finalizer()
+        await super(SelectiveCANInput, self).close()
 
     async def receive(self) -> pyuavcan.transport.Transfer:
         out: typing.Optional[pyuavcan.transport.Transfer] = None

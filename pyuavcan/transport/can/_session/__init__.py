@@ -4,6 +4,8 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+from ._base import SessionFinalizer
+
 from ._input import CANInputSession, PromiscuousCANInput, SelectiveCANInput
 
 from ._output import CANOutputSession, BroadcastCANOutput, UnicastCANOutput

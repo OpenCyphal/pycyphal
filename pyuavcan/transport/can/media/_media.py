@@ -7,12 +7,18 @@
 from __future__ import annotations
 import abc
 import typing
-from . import _frame, _filter
+from ._frame import DataFrame, TimestampedDataFrame
+from ._filter import FilterConfiguration
 
 
 class Media(abc.ABC):
+    """
+    The transport guarantees that the methods or properties will never be accessed concurrently from different
+    coroutines/tasks.
+    """
+
     # The frames handler is non-blocking and non-yielding; returns immediately.
-    ReceivedFramesHandler = typing.Callable[[typing.Iterable[_frame.TimestampedDataFrame]], None]
+    ReceivedFramesHandler = typing.Callable[[typing.Iterable[TimestampedDataFrame]], None]
 
     VALID_MAX_DATA_FIELD_LENGTH_SET = {8, 12, 16, 20, 24, 32, 48, 64}
 
@@ -81,7 +87,7 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def configure_acceptance_filters(self, configuration: typing.Sequence[_filter.FilterConfiguration]) -> None:
+    async def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         """
         This method is invoked whenever the subscription set is changed in order to communicate to the underlying
         CAN controller hardware which CAN frames should be picked up and which ones should be ignored.
@@ -101,10 +107,12 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def send(self, frames: typing.Iterable[_frame.DataFrame]) -> None:
+    async def send(self, frames: typing.Iterable[DataFrame]) -> None:
         """
         All frames are guaranteed to share the same CAN ID. This guarantee may enable some optimizations.
         The frames MUST be delivered to the bus in the same order. The iterable is guaranteed to be non-empty.
+        The method should avoid blocking; instead, it is recommended to unload the frames into an internal
+        transmission queue and return ASAP.
         """
         raise NotImplementedError
 

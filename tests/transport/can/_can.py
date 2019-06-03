@@ -619,7 +619,7 @@ async def _unittest_can_transport() -> None:
     # The selective one is unable to do so since it's RX queue is too small; it is reflected in the error counter
     assert (await subscriber_selective.try_receive(time.monotonic() + 1e-3)) is None
     assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
-                                                                  frames=4,
+                                                                  frames=5,
                                                                   payload_bytes=124,
                                                                   errors=1,
                                                                   overruns=3)  # Overruns!

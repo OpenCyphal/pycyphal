@@ -8,14 +8,14 @@ from __future__ import annotations
 import typing
 import itertools
 import dataclasses
-from . import _frame
+from ._frame import FrameFormat
 
 
 @dataclasses.dataclass(frozen=True)
 class FilterConfiguration:
     identifier: int
     mask:       int
-    format:     typing.Optional[_frame.FrameFormat]  # None means no preference
+    format:     typing.Optional[FrameFormat]  # None means no preference
 
     def __post_init__(self) -> None:
         max_bit_length = 2 ** self.identifier_bit_length - 1
@@ -27,7 +27,7 @@ class FilterConfiguration:
     @property
     def identifier_bit_length(self) -> int:
         # noinspection PyTypeChecker
-        return int(self.format if self.format is not None else max(_frame.FrameFormat))
+        return int(self.format if self.format is not None else max(FrameFormat))
 
     @staticmethod
     def new_promiscuous() -> FilterConfiguration:
@@ -61,7 +61,7 @@ class FilterConfiguration:
     def __str__(self) -> str:
         out = ''.join(
             (str((self.identifier >> bit) & 1) if self.mask & (1 << bit) != 0 else 'x')
-            for bit in reversed(range(int(self.format or _frame.FrameFormat.EXTENDED)))
+            for bit in reversed(range(int(self.format or FrameFormat.EXTENDED)))
         )
         return (self.format.name[:3].lower() if self.format else "any") + ':' + out
 
@@ -88,7 +88,6 @@ def optimize_filter_configurations(configurations: typing.Iterable[FilterConfigu
 
 
 def _unittest_can_media_filter_faults() -> None:
-    from ._frame import FrameFormat
     from pytest import raises
 
     with raises(ValueError):
@@ -110,8 +109,6 @@ def _unittest_can_media_filter_faults() -> None:
 
 # noinspection SpellCheckingInspection
 def _unittest_can_media_filter_str() -> None:
-    from ._frame import FrameFormat
-
     assert str(FilterConfiguration(0b10101010,
                                    0b11101000,
                                    FrameFormat.EXTENDED)) == 'ext:xxxxxxxxxxxxxxxxxxxxx101x1xxx'
@@ -130,8 +127,6 @@ def _unittest_can_media_filter_str() -> None:
 
 
 def _unittest_can_media_filter_merge() -> None:
-    from ._frame import FrameFormat
-
     assert FilterConfiguration(123456, 0, None).rank == -29         # Worst rank
     assert FilterConfiguration(123456, 0b110, None).rank == -27     # Two better
 

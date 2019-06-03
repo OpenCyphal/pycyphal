@@ -20,4 +20,4 @@ from ._data_specifier import DataSpecifier, MessageDataSpecifier, ServiceDataSpe
 from ._payload_metadata import PayloadMetadata
 
 from ._error import TransportError, UnsupportedSessionConfigurationError, OperationNotDefinedForAnonymousNodeError
-from ._error import InvalidTransportConfigurationError, ResourceClosedError
+from ._error import InvalidTransportConfigurationError, InvalidMediaConfigurationError, ResourceClosedError

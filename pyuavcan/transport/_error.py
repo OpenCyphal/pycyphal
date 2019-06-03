@@ -19,6 +19,13 @@ class InvalidTransportConfigurationError(TransportError):
     pass
 
 
+class InvalidMediaConfigurationError(InvalidTransportConfigurationError):
+    """
+    The transport could not be initialized because the specified media configuration is invalid.
+    """
+    pass
+
+
 class UnsupportedSessionConfigurationError(TransportError):
     """
     The requested session configuration is not supported by this transport.
