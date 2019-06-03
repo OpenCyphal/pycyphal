@@ -22,6 +22,11 @@ from . import _util
 # This may appear huge but it's necessary to avoid false positives in the CI environment.
 _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 30e-3
 
+# When generating random serialized representations, limit the number of fragments to this value
+# for performance reasons. Also, a large number of fragments may occasionally cause the test to run out of memory
+# and be killed, especially so in cloud-hosted CI systems which are always memory-impaired.
+_MAX_RANDOM_SERIALIZED_REPRESENTATION_FRAGMENTS = 1000
+
 _NUM_RANDOM_SAMPLES = int(os.environ.get('PYUAVCAN_TEST_NUM_RANDOM_SAMPLES', 100))
 assert _NUM_RANDOM_SAMPLES >= 20, 'Invalid configuration: low number of random samples may trigger a false-negative.'
 
@@ -138,7 +143,9 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
     assert d is not None
     assert type(obj) is type(d)
     assert pyuavcan.dsdl.get_model(obj) == pyuavcan.dsdl.get_model(d)
-    assert _util.are_close(pyuavcan.dsdl.get_model(obj), obj, d), f'{obj} != {d}; sr: {bytes().join(chunks).hex()}'
+
+    if not _util.are_close(pyuavcan.dsdl.get_model(obj), obj, d):  # pragma: no cover
+        assert False, f'{obj} != {d}; sr: {bytes().join(chunks).hex()}'  # Branched for performance reasons
 
     # Similar floats may produce drastically different string representations, so if there is at least one float inside,
     # we skip the string representation equality check.
@@ -157,7 +164,7 @@ def _make_random_fragmented_serialized_representation(bls: pydsdl.BitLengthSet) 
 
 def _fragment_randomly(data: memoryview) -> typing.List[memoryview]:
     try:
-        n = random.randint(1, len(data))
+        n = random.randint(1, min(_MAX_RANDOM_SERIALIZED_REPRESENTATION_FRAGMENTS, len(data)))
     except ValueError:
         return [data]       # Nothing to fragment
     else:

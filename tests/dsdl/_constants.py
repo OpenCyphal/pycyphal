@@ -16,7 +16,7 @@ def _unittest_slow_constants(generated_packages: typing.List[pyuavcan.dsdl.Gener
         for model in _util.expand_service_types(info.models, keep_services=True):
             cls = pyuavcan.dsdl.get_class(model)
             for c in model.constants:
-                if isinstance(c.data_type, pydsdl.PrimitiveType):
+                if isinstance(c.data_type, pydsdl.PrimitiveType):  # pragma: no branch
                     reference = c.value
                     generated = pyuavcan.dsdl.get_attribute(cls, c.name)
                     assert isinstance(reference, pydsdl.Primitive)
