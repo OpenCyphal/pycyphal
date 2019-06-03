@@ -17,6 +17,7 @@ from ._session import SessionFinalizer, CANInputSession, CANOutputSession
 from ._session import PromiscuousCANInput, SelectiveCANInput, BroadcastCANOutput, UnicastCANOutput
 from ._frame import UAVCANFrame, TimestampedUAVCANFrame, TRANSFER_ID_MODULO
 from ._identifier import CANID, MessageCANID, ServiceCANID, generate_filter_configurations
+from ._input_dispatch_table import InputDispatchTable
 
 
 _logger = logging.getLogger(__name__)
@@ -82,14 +83,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
         # Input lookup must be fast, so we use constant-complexity static lookup table.
         # TODO: consider using weakref?
-        # TODO: consider traversing using gc.get_referrers()?
-        self._input_dispatch_table: typing.List[typing.Optional[CANInputSession]] = \
-            [None] * (_INPUT_DISPATCH_TABLE_SIZE + 1)   # This method of construction is an order of magnitude faster.
-
-        # This is redundant since it duplicates the state kept in the input dispatch table, but it is necessary
-        # since the dispatch table takes almost a second to traverse.
-        # TODO: encapsulate the input dispatch table
-        self._input_sessions: typing.Set[CANInputSession] = set()
+        self._input_dispatch_table = InputDispatchTable()
 
         self._frame_stats = CANFrameStatistics()
 
@@ -136,7 +130,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     @property
     def inputs(self) -> typing.List[pyuavcan.transport.InputSession]:
-        return list(self._input_sessions)
+        return list(self._input_dispatch_table.items)
 
     @property
     def outputs(self) -> typing.List[pyuavcan.transport.OutputSession]:
@@ -223,17 +217,14 @@ class CANTransport(pyuavcan.transport.Transport):
                          factory:        typing.Callable[[SessionFinalizer], CANInputSession]) -> CANInputSession:
         async def finalizer() -> None:
             async with self._media_lock:
-                self._input_dispatch_table[index] = None
-                self._input_sessions.remove(session)
+                self._input_dispatch_table.remove(data_specifier, source_node_id)
                 await self._reconfigure_acceptance_filters_with_lock_acquired()
 
         async with self._media_lock:
-            index = _compute_input_dispatch_table_index(data_specifier, source_node_id)
-            session = self._input_dispatch_table[index]
+            session = self._input_dispatch_table.get(data_specifier, source_node_id)
             if session is None:
                 session = factory(finalizer)
-                self._input_dispatch_table[index] = session
-                self._input_sessions.add(session)
+                self._input_dispatch_table.add(session)
                 await self._reconfigure_acceptance_filters_with_lock_acquired()
             return session
 
@@ -281,8 +272,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
         accepted = False
         for nid in {exact_source_node_id, None}:
-            index = _compute_input_dispatch_table_index(data_spec, nid)
-            session = self._input_dispatch_table[index]
+            session = self._input_dispatch_table.get(data_spec, nid)
             if session is not None:                                     # Ignore UAVCAN frames we don't care about
                 session.push_frame(can_id, frame)
                 accepted = True
@@ -312,7 +302,7 @@ class CANTransport(pyuavcan.transport.Transport):
         assert self._media_lock.locked, 'Internal protocol violation: lock is not acquired'
 
         subject_ids = set(
-            ds.subject_id for ds in (x.data_specifier for x in self._input_sessions)
+            ds.subject_id for ds in (x.data_specifier for x in self._input_dispatch_table.items)
             if isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         )
 
@@ -333,60 +323,3 @@ class CANTransport(pyuavcan.transport.Transport):
             return out
         else:
             raise pyuavcan.transport.ResourceClosedError('The driver is already closed')
-
-
-# TODO: encapsulate the input dispatch table
-def _compute_input_dispatch_table_index(data_specifier: pyuavcan.transport.DataSpecifier,
-                                        source_node_id: typing.Optional[int]) -> int:
-    """
-    Time-memory trade-off: the input dispatch table is tens of megabytes large, but the lookup is very fast and O(1).
-    """
-    assert source_node_id is None or source_node_id < _NUM_NODE_IDS
-
-    if isinstance(data_specifier, pyuavcan.transport.MessageDataSpecifier):
-        dim1 = data_specifier.subject_id
-    elif isinstance(data_specifier, pyuavcan.transport.ServiceDataSpecifier):
-        if data_specifier.role == data_specifier.Role.CLIENT:
-            dim1 = data_specifier.service_id + _NUM_SUBJECTS
-        elif data_specifier.role == data_specifier.Role.SERVER:
-            dim1 = data_specifier.service_id + _NUM_SUBJECTS + _NUM_SERVICES
-        else:
-            assert False
-    else:
-        assert False
-
-    dim2_cardinality = _NUM_NODE_IDS + 1
-    dim2 = source_node_id if source_node_id is not None else _NUM_NODE_IDS
-
-    point = dim1 * dim2_cardinality + dim2
-
-    assert 0 <= point < _INPUT_DISPATCH_TABLE_SIZE
-    return point
-
-
-_NUM_SUBJECTS = pyuavcan.transport.MessageDataSpecifier.SUBJECT_ID_MASK + 1
-_NUM_SERVICES = pyuavcan.transport.ServiceDataSpecifier.SERVICE_ID_MASK + 1
-_NUM_NODE_IDS = CANID.NODE_ID_MASK + 1
-
-# Services multiplied by two to account for requests and responses.
-# One added to nodes to allow promiscuous inputs which don't care about source node ID.
-_INPUT_DISPATCH_TABLE_SIZE = (_NUM_SUBJECTS + _NUM_SERVICES * 2) * (_NUM_NODE_IDS + 1)
-
-
-def _unittest_slow_can_compute_input_dispatch_table_index() -> None:
-    values: typing.Set[int] = set()
-    for node_id in (*range(_NUM_NODE_IDS), None):
-        for subj in range(_NUM_SUBJECTS):
-            out = _compute_input_dispatch_table_index(pyuavcan.transport.MessageDataSpecifier(subj), node_id)
-            assert out not in values
-            values.add(out)
-            assert out < _INPUT_DISPATCH_TABLE_SIZE
-
-        for serv in range(_NUM_SERVICES):
-            for role in pyuavcan.transport.ServiceDataSpecifier.Role:
-                out = _compute_input_dispatch_table_index(pyuavcan.transport.ServiceDataSpecifier(serv, role), node_id)
-                assert out not in values
-                values.add(out)
-                assert out < _INPUT_DISPATCH_TABLE_SIZE
-
-    assert len(values) == _INPUT_DISPATCH_TABLE_SIZE
