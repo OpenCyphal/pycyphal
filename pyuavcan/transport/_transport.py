@@ -36,10 +36,12 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     def local_node_id(self) -> typing.Optional[int]:
         """
-        By default, the local node ID is not assigned, meaning that the local node is in the anonymous mode.
+        Generally, the local node ID is not assigned by default, meaning that the local node is in the anonymous mode.
         While in the anonymous mode, some transports may choose to operate in a particular mode to facilitate
         plug-and-play node ID allocation. For example, a CAN transport may disable automatic retransmission as
-        dictated by the Specification.
+        dictated by the Specification. Some transports, however, may initialize with a node ID already set if such is
+        dictated by the media configuration (for example, a UDP transfer may initialize with the node ID derived
+        from the address of the local host).
         """
         raise NotImplementedError
 
@@ -47,7 +49,9 @@ class Transport(abc.ABC):
     async def set_local_node_id(self, node_id: int) -> None:
         """
         This method can be invoked only if the local node ID is not assigned. Once a local node ID is assigned,
-        this method shall not be invoked anymore. In other words, it can be invoked at most once.
+        this method shall not be invoked anymore. In other words, it can be successfully invoked at most once.
+        The transport implementation should raise an appropriate exception derived from TransportError when that
+        is attempted.
         """
         raise NotImplementedError
 
@@ -65,7 +69,9 @@ class Transport(abc.ABC):
                                     data_specifier:   DataSpecifier,
                                     payload_metadata: PayloadMetadata) -> PromiscuousInput:
         """
-        All transports must support this session type for all kinds of transfers.
+        All transports support this session type for all kinds of transfers.
+        The transport will always return the same instance unless there is no session object with the requested data
+        specifier, in which case it will be created and stored internally until closed.
         """
         raise NotImplementedError
 
@@ -75,7 +81,9 @@ class Transport(abc.ABC):
                                   payload_metadata: PayloadMetadata,
                                   source_node_id:   int) -> SelectiveInput:
         """
-        All transports must support this session type for services.
+        All transports support this session type for service transfers. Support for message transfers is optional.
+        The transport will always return the same instance unless there is no session object with the requested data
+        specifier and source node ID, in which case it will be created and stored internally until closed.
         """
         raise NotImplementedError
 
@@ -84,7 +92,9 @@ class Transport(abc.ABC):
                                    data_specifier:   DataSpecifier,
                                    payload_metadata: PayloadMetadata) -> BroadcastOutput:
         """
-        All transports must support this session type for messages.
+        All transports support this session type for message transfers. Support for service transfers is optional.
+        The transport will always return the same instance unless there is no session object with the requested data
+        specifier, in which case it will be created and stored internally until closed.
         """
         raise NotImplementedError
 
@@ -94,7 +104,9 @@ class Transport(abc.ABC):
                                  payload_metadata:    PayloadMetadata,
                                  destination_node_id: int) -> UnicastOutput:
         """
-        All transports must support this session type for services.
+        All transports support this session type for service transfers. Support for message transfers is optional.
+        The transport will always return the same instance unless there is no session object with the requested data
+        specifier and destination node ID, in which case it will be created and stored internally until closed.
         """
         raise NotImplementedError
 
@@ -116,7 +128,7 @@ class Transport(abc.ABC):
 
     def __str__(self) -> str:
         """
-        Should print the basic transport information. Can be overridden if there is more relevant info to display.
+        Prints the basic transport information. May be overridden if there is more relevant info to display.
         """
         # TODO: somehow obtain the media information and print it here. Add a basic media info property of type str?
         return f'{type(self).__name__}(' \

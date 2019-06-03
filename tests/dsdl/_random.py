@@ -47,7 +47,6 @@ class _TypeTestStatistics:
 
 
 def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    logging.getLogger('pyuavcan.dsdl._composite_object').setLevel(logging.WARNING)
     performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
 
     for info in generated_packages:

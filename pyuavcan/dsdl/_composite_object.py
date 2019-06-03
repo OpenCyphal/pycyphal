@@ -200,9 +200,9 @@ def get_max_serialized_representation_size_bytes(class_or_instance: typing.Union
 def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[FixedPortObject], FixedPortObject]) -> int:
     # noinspection PyProtectedMember
     out = int(class_or_instance._FIXED_PORT_ID_)
-    if isinstance(class_or_instance, CompositeObject) or \
-            (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)):
-        assert out == get_model(class_or_instance).fixed_port_id  # pragma: no branch
+    if (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)) or \
+            isinstance(class_or_instance, CompositeObject):  # pragma: no branch
+        assert out == get_model(class_or_instance).fixed_port_id
     return out
 
 
@@ -233,4 +233,4 @@ def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
     elif hasattr(obj, suffixed):
         setattr(obj, suffixed, value)
     else:
-        raise AttributeError(name)
+        raise AttributeError(suffixed)
