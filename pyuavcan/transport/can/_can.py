@@ -75,14 +75,13 @@ class CANTransport(pyuavcan.transport.Transport):
 
         # Lookup performance for the output registry is not important because it's only used for loopback frames.
         # Hence we don't trade-off memory for speed here.
-        # TODO: consider using weakref.WeakValueDictionary?
-        # TODO: consider traversing using gc.get_referrers()?
+        # TODO: Consider using weakref.WeakValueDictionary? Consider traversing using gc.get_referrers()?
         # https://stackoverflow.com/questions/510406/is-there-a-way-to-get-the-current-ref-count-of-an-object-in-python
         self._output_registry: typing.Dict[typing.Tuple[pyuavcan.transport.DataSpecifier, typing.Optional[int]],
                                            CANOutputSession] = {}  # None for broadcast
 
         # Input lookup must be fast, so we use constant-complexity static lookup table.
-        # TODO: consider using weakref?
+        # TODO: Consider using weakref?
         self._input_dispatch_table = InputDispatchTable()
 
         self._frame_stats = CANFrameStatistics()

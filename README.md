@@ -1,8 +1,9 @@
 Full-featured UAVCAN stack in Python
 ====================================
 
-[![Travis CI](https://travis-ci.org/UAVCAN/pyuavcan.svg?branch=master)](https://travis-ci.org/UAVCAN/pyuavcan)
-[![Coverage Status](https://coveralls.io/repos/github/UAVCAN/pyuavcan/badge.svg)](https://coveralls.io/github/UAVCAN/pyuavcan)
+[![Travis CI](https://travis-ci.org/UAVCAN/pyuavcan.svg?branch=uavcan-v1.0)](https://travis-ci.org/UAVCAN/pyuavcan)
+[![Coverage Status](https://coveralls.io/repos/github/UAVCAN/pyuavcan/badge.svg?branch=uavcan-v1.0)](https://coveralls.io/github/UAVCAN/pyuavcan)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pyuavcan.svg)](https://pypi.org/project/pyuavcan/)
 [![Forum](https://img.shields.io/discourse/https/forum.uavcan.org/users.svg)](https://forum.uavcan.org)
 
 PyUAVCAN is a full-featured implementation of the [UAVCAN protocol stack](https://uavcan.org) in Python.

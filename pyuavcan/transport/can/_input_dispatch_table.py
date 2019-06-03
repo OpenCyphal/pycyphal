@@ -106,7 +106,7 @@ def _unittest_input_dispatch_table() -> None:
         t.remove(MessageDataSpecifier(1234), 123)
 
     async def finalizer() -> None:
-        pass
+        pass    # pragma: no cover
 
     a = PromiscuousCANInput(SessionMetadata(MessageDataSpecifier(1234), PayloadMetadata(456, 789)), None, finalizer)
     t.add(a)
