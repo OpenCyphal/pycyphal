@@ -18,7 +18,8 @@ from . import _util
 
 
 # Fail the test if any type takes longer than this to serialize or deserialize.
-_MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 10e-3
+# This may appear huge but it's necessary to avoid false positives in the CI environment.
+_MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 30e-3
 
 _NUM_RANDOM_SAMPLES = int(os.environ.get('PYUAVCAN_TEST_NUM_RANDOM_SAMPLES', 300))
 assert _NUM_RANDOM_SAMPLES >= 20, 'Invalid configuration: low number of random samples may trigger a false-negative.'

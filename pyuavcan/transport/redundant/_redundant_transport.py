@@ -94,6 +94,3 @@ class RedundantTransport(pyuavcan.transport.Transport):
                                   payload_metadata: pyuavcan.transport.PayloadMetadata,
                                   source_node_id:   int) -> _redundant_session.SelectiveRedundantInput:
         raise NotImplementedError
-
-    def __str__(self) -> str:
-        raise NotImplementedError

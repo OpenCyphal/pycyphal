@@ -18,7 +18,7 @@ from ._payload_metadata import PayloadMetadata
 class ProtocolParameters:
     transfer_id_modulo:                           int   # 32 for CAN, 2**56 for UDP, etc.
     node_id_set_cardinality:                      int   # 128 for CAN, etc.
-    single_frame_transfer_payload_capacity_bytes: int   # 7 for CAN 2.0, 63 for CAN FD, etc.
+    single_frame_transfer_payload_capacity_bytes: int   # 7 for CAN 2.0, <=63 for CAN FD, etc.
 
 
 class Transport(abc.ABC):
@@ -114,12 +114,16 @@ class Transport(abc.ABC):
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def __str__(self) -> str:
         """
-        Should print the basic transport information: address, media configuration, etc.
+        Should print the basic transport information. Can be overridden if there is more relevant info to display.
         """
-        raise NotImplementedError
+        # TODO: somehow obtain the media information and print it here. Add a basic media info property of type str?
+        return f'{type(self).__name__}(' \
+            f'protocol_parameters={self.protocol_parameters}, ' \
+            f'local_node_id={self.local_node_id}, ' \
+            f'inputs=[{", ".join(map(str, self.inputs))}], ' \
+            f'outputs=[{", ".join(map(str, self.outputs))}])'
 
     def __repr__(self) -> str:
         return self.__str__()

@@ -10,6 +10,9 @@ import pytest
 import pyuavcan.transport
 
 
+_RX_TIMEOUT = 10e-3
+
+
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_can_transport() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
@@ -251,10 +254,10 @@ async def _unittest_can_transport() -> None:
     await broadcaster.close()   # Does nothing
 
     # Final checks for the broadcaster - make sure nothing is left in the queue
-    assert (await promiscuous_m12345.try_receive(time.monotonic() + 1e-3)) is None
+    assert (await promiscuous_m12345.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
 
     # The selective listener was not supposed to pick up anything because it's selective for node 9, not 5
-    assert (await selective_m12345_9.try_receive(time.monotonic() + 1e-3)) is None
+    assert (await selective_m12345_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
 
     # Now, there are a bunch of items awaiting in the selective input for node 5, collect them and check the stats
     assert selective_m12345_5.source_node_id == 5
@@ -299,16 +302,16 @@ async def _unittest_can_transport() -> None:
     ))
     assert client_requester.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=0)
 
-    assert (await selective_server_s333_5.try_receive(time.monotonic() + 1e-3)) is None
-    assert (await selective_server_s333_9.try_receive(time.monotonic() + 1e-3)) is None
-    assert (await promiscuous_server_s333.try_receive(time.monotonic() + 1e-3)) is None
+    assert (await selective_server_s333_5.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await selective_server_s333_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_server_s333.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
     assert selective_server_s333_5.sample_statistics() == Statistics()
     assert selective_server_s333_9.sample_statistics() == Statistics()
     assert promiscuous_server_s333.sample_statistics() == Statistics()
 
-    assert (await selective_client_s333_5.try_receive(time.monotonic() + 1e-3)) is None
-    assert (await selective_client_s333_9.try_receive(time.monotonic() + 1e-3)) is None
-    assert (await promiscuous_client_s333.try_receive(time.monotonic() + 1e-3)) is None
+    assert (await selective_client_s333_5.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_client_s333.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
     assert selective_client_s333_5.sample_statistics() == Statistics()
     assert selective_client_s333_9.sample_statistics() == Statistics()
     assert promiscuous_client_s333.sample_statistics() == Statistics()
@@ -422,12 +425,12 @@ async def _unittest_can_transport() -> None:
     assert b'behold the light of day.' in bytes(received.fragmented_payload[-1])
 
     # Nothing is received - non-matching node ID selector
-    assert (await selective_server_s333_9.try_receive(time.monotonic() + 1e-3)) is None
+    assert (await selective_server_s333_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
 
     # Nothing is received - non-matching role (not server)
-    assert (await selective_client_s333_5.try_receive(time.monotonic() + 1e-3)) is None
-    assert (await selective_client_s333_9.try_receive(time.monotonic() + 1e-3)) is None
-    assert (await promiscuous_client_s333.try_receive(time.monotonic() + 1e-3)) is None
+    assert (await selective_client_s333_5.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_client_s333.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
     assert selective_client_s333_5.sample_statistics() == Statistics()
     assert selective_client_s333_9.sample_statistics() == Statistics()
     assert promiscuous_client_s333.sample_statistics() == Statistics()
@@ -583,7 +586,7 @@ async def _unittest_can_transport() -> None:
                                                                     payload_bytes=124)
 
     # Discarded because of the same transfer ID
-    assert (await subscriber_selective.try_receive(time.monotonic() + 1e-3)) is None
+    assert (await subscriber_selective.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
     assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
                                                                   frames=3,
                                                                   payload_bytes=124,
@@ -617,7 +620,7 @@ async def _unittest_can_transport() -> None:
                                                                     payload_bytes=375)
 
     # The selective one is unable to do so since it's RX queue is too small; it is reflected in the error counter
-    assert (await subscriber_selective.try_receive(time.monotonic() + 1e-3)) is None
+    assert (await subscriber_selective.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
     assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
                                                                   frames=5,
                                                                   payload_bytes=124,
@@ -627,6 +630,8 @@ async def _unittest_can_transport() -> None:
     #
     # Finalization.
     #
+    print('str(CANTransport):', tr)
+    print('str(CANTransport):', tr2)
     await client_listener.close()
     await server_listener.close()
     await subscriber_promiscuous.close()

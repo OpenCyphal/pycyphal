@@ -14,7 +14,7 @@ from ._filter import FilterConfiguration
 class Media(abc.ABC):
     """
     The transport guarantees that the methods or properties will never be accessed concurrently from different
-    coroutines/tasks.
+    coroutines/tasks, excepting __str__(), __repr__().
     """
 
     # The frames handler is non-blocking and non-yielding; returns immediately.

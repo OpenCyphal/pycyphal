@@ -86,6 +86,7 @@ for item in _DLC_TO_LENGTH:
 
 
 def _unittest_can_media_frame() -> None:
+    import re
     from pytest import raises
 
     assert str(DataFrame(0, bytearray(), FrameFormat.BASE, False)) == "0x000    ''"
@@ -93,13 +94,15 @@ def _unittest_can_media_frame() -> None:
     assert str(DataFrame(0x12345678, bytearray(b'Hello\x01\x02\x7F'), FrameFormat.EXTENDED, True)) == \
         "0x12345678  48 65 6c 6c 6f 01 02 7f  'Hello...'  loopback"
 
-    assert str(TimestampedDataFrame(0x12345678,
-                                    bytearray(b'Hello\x01\x02\x7F'),
-                                    FrameFormat.EXTENDED,
-                                    True,
-                                    pyuavcan.transport.Timestamp(system_ns=1558481132502003000,
-                                                                 monotonic_ns=635720258263416))) == \
-        "2019-05-22T02:25:32.502003/635720.258263416: 0x12345678  48 65 6c 6c 6f 01 02 7f  'Hello...'  loopback"
+    assert re.match(
+        r"2019-05-2\dT\d\d:\d\d:\d\d.502003/635720.258263416: "
+        r"0x12345678 {2}48 65 6c 6c 6f 01 02 7f {2}'Hello...' {2}loopback",
+        str(TimestampedDataFrame(0x12345678,
+                                 bytearray(b'Hello\x01\x02\x7F'),
+                                 FrameFormat.EXTENDED,
+                                 True,
+                                 pyuavcan.transport.Timestamp(system_ns=1558481132_502003000,
+                                                              monotonic_ns=635720258263416))))
 
     assert DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=True).is_same_manifestation(
         TimestampedDataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False,

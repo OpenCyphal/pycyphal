@@ -334,9 +334,6 @@ class CANTransport(pyuavcan.transport.Transport):
         else:
             raise pyuavcan.transport.ResourceClosedError('The driver is already closed')
 
-    def __str__(self) -> str:
-        raise NotImplementedError
-
 
 # TODO: encapsulate the input dispatch table
 def _compute_input_dispatch_table_index(data_specifier: pyuavcan.transport.DataSpecifier,
