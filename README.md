@@ -77,6 +77,15 @@ This will trigger the test executor to skip test functions whose names match the
 
 For more information refer to the PyTest documentation.
 
+### Running tests and static analysis
+
+The script `test.sh` can be used to run the unit tests and static code analysis tools locally.
+The coverage statistics will be collected and stored in the project root directory.
+
+After the tests are executed, it is possible to run the [SonarQube](https://sonarqube.org) scanner as follows:
+`sonar-scanner -Dsonar.login=<project-key>`.
+The scanner should not be run before the general test suite since it relies on its coverage data.
+
 ## License
 
 The library is available under the terms of the MIT License.
