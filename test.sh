@@ -17,6 +17,7 @@ mkdir .test_dsdl_generated 2> /dev/null
 if coverage run --source pyuavcan,tests,.test_dsdl_generated -m pytest -v pyuavcan tests $@
 then
     coverage report
+    coverage xml -i -o .coverage.xml
 else
     status=1
 fi
