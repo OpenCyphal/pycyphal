@@ -27,7 +27,7 @@ long-term stable version of the protocol known as UAVCAN v1.0.
 
 ## Usage
 
-The library is currently under heavy development, and as such, the usage documentation is not yet available.
+The library is currently under active development, and as such, the usage documentation is not yet available.
 Please come back later.
 If you are willing to help, please join the
 [UAVCAN Development & Maintenance forum](https://forum.uavcan.org/c/dev) for coordination.
