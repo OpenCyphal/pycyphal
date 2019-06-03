@@ -60,16 +60,16 @@ def _unittest_util_refragment_manual() -> None:
     assert [] == list(refragment([], 1000))
     assert [] == list(refragment([memoryview(b'')], 1000))
 
-    def lb(it: typing.Iterable[memoryview]) -> typing.List[bytes]:
+    def lby(it: typing.Iterable[memoryview]) -> typing.List[bytes]:
         return list(map(bytes, it))
 
-    assert [b'012345'] == lb(refragment([memoryview(b'012345')], 1000))
+    assert [b'012345'] == lby(refragment([memoryview(b'012345')], 1000))
 
-    assert [b'0123456789'] == lb(refragment([memoryview(b'012345'), memoryview(b'6789')], 1000))
-    assert [b'012345', b'6789'] == lb(refragment([memoryview(b'012345'), memoryview(b'6789')], 6))
-    assert [b'012', b'345', b'678', b'9'] == lb(refragment([memoryview(b'012345'), memoryview(b'6789')], 3))
+    assert [b'0123456789'] == lby(refragment([memoryview(b'012345'), memoryview(b'6789')], 1000))
+    assert [b'012345', b'6789'] == lby(refragment([memoryview(b'012345'), memoryview(b'6789')], 6))
+    assert [b'012', b'345', b'678', b'9'] == lby(refragment([memoryview(b'012345'), memoryview(b'6789')], 3))
     assert [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'] \
-        == lb(refragment([memoryview(b'012345'), memoryview(b'6789'), memoryview(b'')], 1))
+        == lby(refragment([memoryview(b'012345'), memoryview(b'6789'), memoryview(b'')], 1))
 
     tiny = [
         memoryview(b'0'),
@@ -79,8 +79,8 @@ def _unittest_util_refragment_manual() -> None:
         memoryview(b'4'),
         memoryview(b'5'),
     ]
-    assert [b'012345'] == lb(refragment(tiny, 1000))
-    assert [b'0', b'1', b'2', b'3', b'4', b'5'] == lb(refragment(tiny, 1))
+    assert [b'012345'] == lby(refragment(tiny, 1000))
+    assert [b'0', b'1', b'2', b'3', b'4', b'5'] == lby(refragment(tiny, 1))
 
 
 def _unittest_slow_util_refragment_automatic() -> None:

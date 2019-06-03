@@ -3,6 +3,9 @@ Full-featured UAVCAN stack in Python
 
 [![Travis CI](https://travis-ci.org/UAVCAN/pyuavcan.svg?branch=uavcan-v1.0)](https://travis-ci.org/UAVCAN/pyuavcan)
 [![Coverage Status](https://coveralls.io/repos/github/UAVCAN/pyuavcan/badge.svg?branch=uavcan-v1.0)](https://coveralls.io/github/UAVCAN/pyuavcan)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=UAVCAN_pyuavcan&metric=alert_status)](https://sonarcloud.io/dashboard?id=UAVCAN_pyuavcan)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=UAVCAN_pyuavcan&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=UAVCAN_pyuavcan)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=UAVCAN_pyuavcan&metric=ncloc)](https://sonarcloud.io/dashboard?id=UAVCAN_pyuavcan)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pyuavcan.svg)](https://pypi.org/project/pyuavcan/)
 [![Forum](https://img.shields.io/discourse/https/forum.uavcan.org/users.svg)](https://forum.uavcan.org)
 

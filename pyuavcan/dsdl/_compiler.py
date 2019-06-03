@@ -157,16 +157,16 @@ def _construct_instance_tests_from_root(root: typing.Type[object]) \
 
 # noinspection PyUnusedLocal
 def _unittest_instance_tests_from_root() -> None:
-    class A:
+    class Aa:
         pass
 
-    class B(A):
+    class Bb(Aa):
         pass
 
-    class C(B):
+    class Cc(Bb):
         pass
 
-    class D(A):
+    class Dd(Aa):
         pass
 
-    assert set(_construct_instance_tests_from_root(A).keys()) == {'A', 'B', 'C', 'D'}
+    assert set(_construct_instance_tests_from_root(Aa).keys()) == {'Aa', 'Bb', 'Cc', 'Dd'}

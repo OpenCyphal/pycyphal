@@ -132,7 +132,7 @@ def _unittest_can_transfer_receiver_manual() -> None:
 
     err = TransferReceptionError
 
-    def go(frame: _frame.TimestampedUAVCANFrame) \
+    def proc(frame: _frame.TimestampedUAVCANFrame) \
             -> typing.Union[None, TransferReceptionError, pyuavcan.transport.TransferFrom]:
         away = rx.process_frame(priority=priority,
                                 source_node_id=source_node_id,
@@ -141,12 +141,12 @@ def _unittest_can_transfer_receiver_manual() -> None:
         assert away is None or isinstance(away, (TransferReceptionError, pyuavcan.transport.TransferFrom))
         return away
 
-    def fr(monotonic_ns:      int,
-           padded_payload:    typing.Union[bytes, str],
-           transfer_id:       int,
-           start_of_transfer: bool,
-           end_of_transfer:   bool,
-           toggle_bit:        bool) -> _frame.TimestampedUAVCANFrame:
+    def frm(monotonic_ns:      int,
+            padded_payload:    typing.Union[bytes, str],
+            transfer_id:       int,
+            start_of_transfer: bool,
+            end_of_transfer:   bool,
+            toggle_bit:        bool) -> _frame.TimestampedUAVCANFrame:
         return _frame.TimestampedUAVCANFrame(
             identifier=can_identifier,
             padded_payload=memoryview(padded_payload if isinstance(padded_payload, bytes) else padded_payload.encode()),
@@ -157,9 +157,9 @@ def _unittest_can_transfer_receiver_manual() -> None:
             loopback=False,
             timestamp=pyuavcan.transport.Timestamp(system_ns=0, monotonic_ns=monotonic_ns))
 
-    def tr(monotonic_ns:       int,
-           transfer_id:        int,
-           fragmented_payload: typing.Sequence[typing.Union[bytes, str, memoryview]]) \
+    def trn(monotonic_ns:       int,
+            transfer_id:        int,
+            fragmented_payload: typing.Sequence[typing.Union[bytes, str, memoryview]]) \
             -> pyuavcan.transport.TransferFrom:
         return pyuavcan.transport.TransferFrom(
             timestamp=pyuavcan.transport.Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
@@ -173,17 +173,17 @@ def _unittest_can_transfer_receiver_manual() -> None:
     rx = TransferReceiver(50)
 
     # Correct single-frame transfers.
-    assert go(fr(1000, 'Hello', 0, True, True, True)) == tr(1000, 0, ['Hello'])
-    assert go(fr(1000, 'Hello', 0, True, True, True)) == err.UNEXPECTED_TRANSFER_ID
-    assert go(fr(1000, 'Hello', 0, True, True, True)) == err.UNEXPECTED_TRANSFER_ID
-    assert go(fr(2000, 'Hello', 0, True, True, True)) == tr(2000, 0, ['Hello'])         # TID timeout
+    assert proc(frm(1000, 'Hello', 0, True, True, True)) == trn(1000, 0, ['Hello'])
+    assert proc(frm(1000, 'Hello', 0, True, True, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(frm(1000, 'Hello', 0, True, True, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(frm(2000, 'Hello', 0, True, True, True)) == trn(2000, 0, ['Hello'])         # TID timeout
 
     # Correct multi-frame transfer.
-    assert go(fr(2000, b'\x00\x01\x02\x03\x04\x05\x06', 1, True, False, True)) is None
-    assert go(fr(2001, b'\x07\x08\x09\x0a\x0b\x0c\x0d', 1, False, False, False)) is None
-    assert go(fr(2002, b'\x0e\x0f\x10\x11\x12\x13\x14', 1, False, False, True)) is None
-    assert go(fr(2003, b'\x15\x16\x17\x18\x19\x1a\x1b', 1, False, False, False)) is None
-    assert go(fr(2004, b'\x1c\x1d' b'\x35\x54', 1, False, True, True)) == tr(2000, 1, [
+    assert proc(frm(2000, b'\x00\x01\x02\x03\x04\x05\x06', 1, True, False, True)) is None
+    assert proc(frm(2001, b'\x07\x08\x09\x0a\x0b\x0c\x0d', 1, False, False, False)) is None
+    assert proc(frm(2002, b'\x0e\x0f\x10\x11\x12\x13\x14', 1, False, False, True)) is None
+    assert proc(frm(2003, b'\x15\x16\x17\x18\x19\x1a\x1b', 1, False, False, False)) is None
+    assert proc(frm(2004, b'\x1c\x1d' b'\x35\x54', 1, False, True, True)) == trn(2000, 1, [
         b'\x00\x01\x02\x03\x04\x05\x06',
         b'\x07\x08\x09\x0a\x0b\x0c\x0d',
         b'\x0e\x0f\x10\x11\x12\x13\x14',
@@ -192,55 +192,59 @@ def _unittest_can_transfer_receiver_manual() -> None:
     ])
 
     # Correct transfer with the old transfer ID will be ignored.
-    assert go(fr(2010, b'\x00\x01\x02\x03\x04\x05\x06', 1, True, False, True)) == err.UNEXPECTED_TRANSFER_ID
-    assert go(fr(2011, b'\x07\x08\x09\x0a\x0b\x0c\x0d', 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
-    assert go(fr(2012, b'\x0e\x0f\x10\x11\x12\x13\x14', 1, False, False, True)) == err.UNEXPECTED_TRANSFER_ID
-    assert go(fr(2013, b'\x15\x16\x17\x18\x19\x1a\x1b', 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
-    assert go(fr(2014, b'\x1c\x1d' b'\x35\x54', 1, False, True, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(frm(2010, b'\x00\x01\x02\x03\x04\x05\x06', 1, True, False, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(frm(2011, b'\x07\x08\x09\x0a\x0b\x0c\x0d', 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(frm(2012, b'\x0e\x0f\x10\x11\x12\x13\x14', 1, False, False, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(frm(2013, b'\x15\x16\x17\x18\x19\x1a\x1b', 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(frm(2014, b'\x1c\x1d' b'\x35\x54', 1, False, True, True)) == err.UNEXPECTED_TRANSFER_ID
 
     # Correct reception where the CRC spills over into the next frame.
-    assert go(fr(2100, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 9, True, False, True)) is None
-    assert go(fr(2101, b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 9, False, False, False)) is None
-    assert go(fr(2102, b'\x6f', 9, False, True, True)) == tr(2100, 9, [
+    assert proc(frm(2100, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 9, True, False, True)) \
+        is None
+    assert proc(frm(2101, b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 9, False, False, False)) \
+        is None
+    assert proc(frm(2102, b'\x6f', 9, False, True, True)) == trn(2100, 9, [
         b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e',
         b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c',      # Third fragment is gone - used to contain CRC
     ])
 
     # Transfer ID rolled back but should be accepted anyway; CRC is invalid
-    assert go(fr(2200, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 8, True, False, True)) is None
-    assert go(fr(2201, b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 8, False, False, False)) is None
-    assert go(fr(2202, b'\x00', 8, False, True, True)) == err.TRANSFER_CRC_MISMATCH
+    assert proc(frm(2200, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 8, True, False, True)) \
+        is None
+    assert proc(frm(2201, b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 8, False, False, False)) \
+        is None
+    assert proc(frm(2202, b'\x00', 8, False, True, True)) == err.TRANSFER_CRC_MISMATCH
 
     # Transfer ID timeout and the new frame is not a start of new transfer --> missed start error
-    assert go(fr(4000, b'123456', 8, False, False, True)) == err.MISSED_START_OF_TRANSFER
+    assert proc(frm(4000, b'123456', 8, False, False, True)) == err.MISSED_START_OF_TRANSFER
 
     # New transfer; same TID is accepted anyway due to the timeout condition; repeated frames (bad toggles)
-    assert go(fr(4000, b'\x00\x01\x02\x03\x04\x05\x06', 8, True, False, True)) is None
-    assert go(fr(4010, b'123456', 8, True, False, True)) == err.UNEXPECTED_TOGGLE_BIT
-    assert go(fr(3500, b'\x07\x08\x09\x0a\x0b\x0c\x0d', 8, False, False, False)) is None    # Timestamp update!
-    assert go(fr(3000, b'', 8, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT           # Timestamp ignored
-    assert go(fr(4022, b'\x0e\x0f\x10\x11\x12\x13\x14', 8, False, False, True)) is None
-    assert go(fr(4002, b'\x0e\x0f\x10\x11\x12\x13\x14', 8, False, False, True)) == err.UNEXPECTED_TOGGLE_BIT
-    assert go(fr(4013, b'\x15\x16\x17\x18\x19\x1a\x1b', 8, False, False, False)) is None
-    assert go(fr(4003, b'\x15\x16\x17\x18\x19\x1a\x1b' * 2, 8, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT
-    assert go(fr(4004, b'\x1c\x1d' b'\x35\x54', 8, False, True, True)) == tr(3500, 8, [
+    assert proc(frm(4000, b'\x00\x01\x02\x03\x04\x05\x06', 8, True, False, True)) is None
+    assert proc(frm(4010, b'123456', 8, True, False, True)) == err.UNEXPECTED_TOGGLE_BIT
+    assert proc(frm(3500, b'\x07\x08\x09\x0a\x0b\x0c\x0d', 8, False, False, False)) is None    # Timestamp update!
+    assert proc(frm(3000, b'', 8, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT           # Timestamp ignored
+    assert proc(frm(4022, b'\x0e\x0f\x10\x11\x12\x13\x14', 8, False, False, True)) is None
+    assert proc(frm(4002, b'\x0e\x0f\x10\x11\x12\x13\x14', 8, False, False, True)) == err.UNEXPECTED_TOGGLE_BIT
+    assert proc(frm(4013, b'\x15\x16\x17\x18\x19\x1a\x1b', 8, False, False, False)) is None
+    assert proc(frm(4003, b'\x15\x16\x17\x18\x19\x1a\x1b' * 2, 8, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT
+    assert proc(frm(4004, b'\x1c\x1d' b'\x35\x54', 8, False, True, True)) == trn(3500, 8, [
         b'\x00\x01\x02\x03\x04\x05\x06',
         b'\x07\x08\x09\x0a\x0b\x0c\x0d',
         b'\x0e\x0f\x10\x11\x12\x13\x14',
         b'\x15\x16\x17\x18\x19\x1a\x1b',
         b'\x1c\x1d',
     ])
-    assert go(fr(4004, b'\x1c\x1d' b'\x35\x54', 8, False, True, True)) == err.UNEXPECTED_TRANSFER_ID  # TID, not toggle
+    assert proc(frm(4004, b'\x1c\x1d' b'\x35\x54', 8, False, True, True)) == err.UNEXPECTED_TRANSFER_ID  # Not toggle!
 
     # Transfer that is too large (above the configured limit) and rejected. Time goes back but it's fine.
-    assert go(fr(1000, b'0123456789abcdefghi', 0, True, False, True)) is None       # 19
-    assert go(fr(1001, b'0123456789abcdefghi', 0, False, False, False)) is None     # 38
-    assert go(fr(1001, b'0123456789abcdefghi', 0, False, False, True)) == err.PAYLOAD_TOO_LARGE
+    assert proc(frm(1000, b'0123456789abcdefghi', 0, True, False, True)) is None       # 19
+    assert proc(frm(1001, b'0123456789abcdefghi', 0, False, False, False)) is None     # 38
+    assert proc(frm(1001, b'0123456789abcdefghi', 0, False, False, True)) == err.PAYLOAD_TOO_LARGE
 
     # Transfer above the limit but accepted nevertheless because the overflow induced by the last frame is not checked.
-    assert go(fr(1000, b'0123456789abcdefghi', 31, True, False, True)) is None       # 19
-    assert go(fr(1001, b'0123456789abcdefghi', 31, False, False, False)) is None     # 38
-    assert go(fr(1001, b'0123456789abcdefghi' b'\xa9\x72', 31, False, True, True)) == tr(1000, 31, [
+    assert proc(frm(1000, b'0123456789abcdefghi', 31, True, False, True)) is None       # 19
+    assert proc(frm(1001, b'0123456789abcdefghi', 31, False, False, False)) is None     # 38
+    assert proc(frm(1001, b'0123456789abcdefghi' b'\xa9\x72', 31, False, True, True)) == trn(1000, 31, [
         b'0123456789abcdefghi',
         b'0123456789abcdefghi',
         b'0123456789abcdefghi',

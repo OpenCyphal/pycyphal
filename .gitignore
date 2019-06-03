@@ -40,3 +40,5 @@ coverage.xml
 *.log
 .*_generated
 *.cache
+
+.scannerwork

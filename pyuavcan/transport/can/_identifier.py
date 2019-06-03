@@ -339,7 +339,7 @@ def _unittest_can_identifier_parse() -> None:
     assert CANID.try_parse(0b_010_0_0_0011000000111001_1111011_0) is None
     assert CANID.try_parse(reference_message_id) == reference_message
     assert reference_message_id == reference_message.compile([])
-    assert reference_message.to_output_data_specifier() == reference_message.to_output_data_specifier()
+    assert reference_message.to_output_data_specifier() == reference_message.to_input_data_specifier()
     assert reference_message.to_output_data_specifier() == MessageDataSpecifier(12345)
 
     reference_message = MessageCANID(Priority.FAST, None, 4321)
