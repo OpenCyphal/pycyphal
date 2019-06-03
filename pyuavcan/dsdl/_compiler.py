@@ -87,7 +87,7 @@ def _make_identifier(a: pydsdl.Attribute) -> str:
 def _make_serialization_alignment_prefix(offset: pydsdl.BitLengthSet) -> str:
     if isinstance(offset, pydsdl.BitLengthSet):
         return 'aligned' if offset.is_aligned_at_byte() else 'unaligned'
-    else:
+    else:  # pragma: no cover
         raise ValueError(f'Expected BitLengthSet, got {type(offset).__name__}')
 
 
@@ -102,7 +102,7 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
         for o in [8, 16, 32, 64]:
             if w <= o:
                 return o
-        raise ValueError(f'Invalid bit width: {w}')
+        raise ValueError(f'Invalid bit width: {w}')  # pragma: no cover
 
     if isinstance(t, pydsdl.BooleanType):
         return f'_np_.bool'
@@ -140,7 +140,7 @@ def _test_if_saturated(t: pydsdl.PrimitiveType) -> bool:
             pydsdl.PrimitiveType.CastMode.SATURATED: True,
             pydsdl.PrimitiveType.CastMode.TRUNCATED: False,
         }[t.cast_mode]
-    else:
+    else:  # pragma: no cover
         raise ValueError(f'Cast mode is not defined for {type(t).__name__}')
 
 

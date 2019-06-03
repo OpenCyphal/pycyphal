@@ -287,6 +287,9 @@ def _unittest_serializer_aligned() -> None:
     expected = ''
     assert str(ser) == ''
 
+    with raises(ValueError):
+        ser.add_aligned_u8(-42)
+
     ser.add_aligned_u8(0b1010_0111)
     expected += '1010 0111'
     assert unseparate(ser) == unseparate(expected)

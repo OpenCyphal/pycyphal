@@ -8,6 +8,7 @@ import os
 import gc
 import time
 import numpy
+import pytest
 import typing
 import pydsdl
 import random
@@ -45,13 +46,20 @@ def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.Generate
     performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
 
     for info in generated_packages:
-        for model in _util.expand_service_types(info.models):
-            performance[model] = _test_type(model, _NUM_RANDOM_SAMPLES)
+        for model in _util.expand_service_types(info.models, keep_services=True):
+            if not isinstance(model, pydsdl.ServiceType):
+                performance[model] = _test_type(model, _NUM_RANDOM_SAMPLES)
+            else:
+                cls = pyuavcan.dsdl.get_class(model)
+                with pytest.raises(TypeError):
+                    assert list(pyuavcan.dsdl.serialize(cls()))
+                with pytest.raises(TypeError):
+                    pyuavcan.dsdl.try_deserialize(cls, [memoryview(b'')])
 
     _logger.info('Tested types ordered by serialization speed, %d random samples per type', _NUM_RANDOM_SAMPLES)
     _logger.info('Columns: random SR correctness ratio; mean serialization time (us); mean deserialization time (us)')
 
-    for ty, stat in sorted(performance.items(), key=lambda kv: -kv[1].worst_time):
+    for ty, stat in sorted(performance.items(), key=lambda kv: -kv[1].worst_time):  # pragma: no branch
         assert isinstance(stat, _TypeTestStatistics)
         suffix = '' if stat.worst_time < 1e-3 else '\tSLOW!'
 
@@ -83,9 +91,6 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
         samples.append(s)
         return s
 
-    gc.collect()
-    gc.disable()        # Must be disabled, otherwise it induces spurious false-positive performance warnings
-
     for index in range(num_random_samples):
         ts = time.process_time()
         # Forward test: get random object, serialize, deserialize, compare
@@ -103,10 +108,9 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
         if elapsed > 1.0:
             duration_ser = f'{sample_ser[0] * 1e6:.0f}/{sample_ser[1] * 1e6:.0f}'
             duration_des = f'{sample_des[0] * 1e6:.0f}/{sample_des[1] * 1e6:.0f}' if sample_des else 'N/A'
-            _logger.debug(f'Attention: random sample {index + 1} of {num_random_samples} took {elapsed:.1f} s; '
+            _logger.debug(f'Random sample {index + 1} of {num_random_samples} took {elapsed:.1f} s; '
                           f'random SR correct: {ob is not None}; '
                           f'duration forward/reverse [us]: ({duration_ser})/({duration_des})')
-    gc.enable()
 
     out = numpy.mean(samples, axis=0)
     assert out.shape == (2,)
@@ -118,6 +122,9 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
 
 
 def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[float, float]:
+    gc.collect()
+    gc.disable()        # Must be disabled, otherwise it induces spurious false-positive performance warnings
+
     ts = time.process_time()
     chunks = list(pyuavcan.dsdl.serialize(obj))           # GC must be disabled while we're in the timed context
     ser_sample = time.process_time() - ts
@@ -125,6 +132,8 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
     ts = time.process_time()
     d = pyuavcan.dsdl.try_deserialize(type(obj), chunks)  # GC must be disabled while we're in the timed context
     des_sample = time.process_time() - ts
+
+    gc.enable()
 
     assert d is not None
     assert type(obj) is type(d)
@@ -143,4 +152,25 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
 def _make_random_fragmented_serialized_representation(bls: pydsdl.BitLengthSet) -> typing.Sequence[memoryview]:
     bit_length = random.choice(list(bls))
     byte_length = (bit_length + 7) // 8
-    return [numpy.random.randint(0, 256, size=byte_length, dtype=numpy.uint8).data]
+    return _fragment_randomly(numpy.random.randint(0, 256, size=byte_length, dtype=numpy.uint8).data)
+
+
+def _fragment_randomly(data: memoryview) -> typing.List[memoryview]:
+    try:
+        n = random.randint(1, len(data))
+    except ValueError:
+        return [data]       # Nothing to fragment
+    else:
+        q, r = divmod(len(data), n)
+        idx = [q * i + min(i, r) for i in range(n + 1)]
+        return [data[idx[i]:idx[i + 1]] for i in range(n)]
+
+
+def _unittest_fragment_randomly() -> None:
+    assert _fragment_randomly(memoryview(b'')) == [memoryview(b'')]
+    assert _fragment_randomly(memoryview(b'a')) == [memoryview(b'a')]
+    for _ in range(100):
+        size = random.randint(0, 100)
+        data = numpy.random.randint(0, 256, size=size, dtype=numpy.uint8).data
+        fragments = _fragment_randomly(data)
+        assert b''.join(fragments) == data

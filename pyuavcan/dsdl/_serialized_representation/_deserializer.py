@@ -383,6 +383,9 @@ def _unittest_deserializer_aligned() -> None:
     with raises(ValueError):
         Deserializer.new(numpy.array([1, 2, 3], dtype=numpy.int8))
 
+    with raises(ValueError):
+        Deserializer.new(numpy.array([[1, 2, 3], [4, 5, 6]], dtype=_Byte))
+
     des = Deserializer.new(numpy.frombuffer(sample, dtype=_Byte).copy())
     assert des.remaining_bit_length == 45 * 8
     des.require_remaining_bit_length(0)

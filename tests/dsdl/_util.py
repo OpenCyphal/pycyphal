@@ -73,7 +73,7 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
             out = numpy.random.randint(0, 256, size=length, dtype=numpy.uint8)
         else:
             out = [make_random_object(model.element_type) for _ in range(length)]
-        if length < 10000:
+        if length < 10000:  # pragma: no branch
             if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length <= 8 and fifty_fifty():
                 out = bytes(out)
             if model.string_like and fifty_fifty():
@@ -121,7 +121,7 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
         return True                 # Empty objects of same type compare equal
 
     elif isinstance(model, pydsdl.ArrayType):
-        if len(a) != len(b) or a.dtype != b.dtype:
+        if len(a) != len(b) or a.dtype != b.dtype:  # pragma: no cover
             return False
         if isinstance(model.element_type, pydsdl.PrimitiveType):
             return numpy.allclose(a, b, equal_nan=True)  # Drastic speedup for large arrays like images or point clouds
