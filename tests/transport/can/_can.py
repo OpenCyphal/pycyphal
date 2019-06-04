@@ -49,6 +49,9 @@ async def _unittest_can_transport() -> None:
     assert tr.local_node_id is None
     assert tr.protocol_parameters == tr2.protocol_parameters
 
+    assert not media.automatic_retransmission_enabled
+    assert not media2.automatic_retransmission_enabled
+
     #
     # Instantiate session objects
     #
@@ -190,6 +193,9 @@ async def _unittest_can_transport() -> None:
     assert selective_m12345_9.sample_statistics() == Statistics()       # Nothing
     assert promiscuous_m12345.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=6)
 
+    assert not media.automatic_retransmission_enabled
+    assert not media2.automatic_retransmission_enabled
+
     with pytest.raises(ValueError):
         await tr.set_local_node_id(128)
     with pytest.raises(ValueError):
@@ -197,6 +203,9 @@ async def _unittest_can_transport() -> None:
     await tr.set_local_node_id(5)
     with pytest.raises(InvalidTransportConfigurationError, match='.*once.*'):
         await tr.set_local_node_id(123)
+
+    assert media.automatic_retransmission_enabled
+    assert not media2.automatic_retransmission_enabled
 
     feedback_collector = _FeedbackCollector()
 
@@ -316,10 +325,16 @@ async def _unittest_can_transport() -> None:
     assert selective_client_s333_9.sample_statistics() == Statistics()
     assert promiscuous_client_s333.sample_statistics() == Statistics()
 
+    assert media.automatic_retransmission_enabled
+    assert not media2.automatic_retransmission_enabled
+
     await tr2.set_local_node_id(123)
     with pytest.raises(InvalidTransportConfigurationError):
         await tr2.set_local_node_id(10)
     assert tr2.local_node_id == 123
+
+    assert media.automatic_retransmission_enabled
+    assert media2.automatic_retransmission_enabled
 
     client_requester.enable_feedback(feedback_collector.give)       # FEEDBACK ENABLED HERE
 
