@@ -8,7 +8,7 @@ from __future__ import annotations
 import typing
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._channel import Publisher, Subscriber, Client, Server
+from ._channel import Publisher, Subscriber
 
 
 MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
@@ -35,41 +35,15 @@ class Presentation:
                             priority:   pyuavcan.transport.Priority = DEFAULT_PRIORITY) -> Publisher[MessageClass]:
         raise NotImplementedError
 
+    async def get_subscriber(self, cls: typing.Type[MessageClass], subject_id: int) -> Subscriber[MessageClass]:
+        raise NotImplementedError
+
     async def get_publisher_with_fixed_subject_id(self,
                                                   cls:      typing.Type[FixedPortMessageClass],
                                                   priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY) \
             -> Publisher[FixedPortMessageClass]:
-        return await self.get_publisher(cls=cls,
-                                        subject_id=pyuavcan.dsdl.get_fixed_port_id(cls),
-                                        priority=priority)
-
-    async def get_subscriber(self, cls: typing.Type[MessageClass], subject_id: int) -> Subscriber[MessageClass]:
-        raise NotImplementedError
+        return await self.get_publisher(cls=cls, subject_id=pyuavcan.dsdl.get_fixed_port_id(cls), priority=priority)
 
     async def get_subscriber_with_fixed_subject_id(self, cls: typing.Type[FixedPortMessageClass]) \
             -> Subscriber[FixedPortMessageClass]:
         return await self.get_subscriber(cls=cls, subject_id=pyuavcan.dsdl.get_fixed_port_id(cls))
-
-    async def get_client(self,
-                         cls:            typing.Type[ServiceClass],
-                         service_id:     int,
-                         server_node_id: int,
-                         priority:       pyuavcan.transport.Priority = DEFAULT_PRIORITY) -> Client[ServiceClass]:
-        raise NotImplementedError
-
-    async def get_client_with_fixed_service_id(self,
-                                               cls:            typing.Type[FixedPortServiceClass],
-                                               server_node_id: int,
-                                               priority:       pyuavcan.transport.Priority = DEFAULT_PRIORITY) \
-            -> Client[FixedPortServiceClass]:
-        return await self.get_client(cls=cls,
-                                     service_id=pyuavcan.dsdl.get_fixed_port_id(cls),
-                                     server_node_id=server_node_id,
-                                     priority=priority)
-
-    async def get_server(self, cls: typing.Type[ServiceClass], service_id: int) -> Server[ServiceClass]:
-        raise NotImplementedError
-
-    async def get_server_with_fixed_service_id(self, cls: typing.Type[FixedPortServiceClass]) \
-            -> Server[FixedPortServiceClass]:
-        return await self.get_server(cls=cls, service_id=pyuavcan.dsdl.get_fixed_port_id(cls))

@@ -6,6 +6,5 @@
 
 from ._presentation import Presentation, DEFAULT_PRIORITY
 
-from ._channel import Channel, MessageChannel, ServiceChannel, ReceivedMetadata
+from ._channel import Channel, MessageChannel, ServiceChannel
 from ._channel import Publisher, Subscriber
-from ._channel import Client, Server
