@@ -53,12 +53,12 @@ class TypedSession(abc.ABC, typing.Generic[DataTypeClass]):
 
 
 class MessageTypedSession(TypedSession[MessageTypeClass]):
-    def __init__(self, cls: typing.Type[MessageTypeClass]):
-        self._cls = cls
+    def __init__(self, dtype: typing.Type[MessageTypeClass]):
+        self._dtype = dtype
 
     @property
     def data_type_class(self) -> typing.Type[MessageTypeClass]:
-        return self._cls
+        return self._dtype
 
     @property
     @abc.abstractmethod
@@ -97,14 +97,14 @@ class ServiceTypedSession(TypedSession[ServiceTypeClass]):
 
 class Publisher(MessageTypedSession[MessageTypeClass]):
     def __init__(self,
-                 cls:                 typing.Type[MessageTypeClass],
+                 dtype:               typing.Type[MessageTypeClass],
                  transport_session:   pyuavcan.transport.OutputSession,
                  transfer_id_counter: OutgoingTransferIDCounter,
                  finalizer:           TypedSessionFinalizer):
         self._transport_session = transport_session
         self._transfer_id_counter = transfer_id_counter
         self._finalizer = finalizer
-        super(Publisher, self).__init__(cls=cls)
+        super(Publisher, self).__init__(dtype=dtype)
 
     @property
     def transport_session(self) -> pyuavcan.transport.OutputSession:
@@ -132,13 +132,13 @@ class Publisher(MessageTypedSession[MessageTypeClass]):
 
 class Subscriber(MessageTypedSession[MessageTypeClass]):
     def __init__(self,
-                 cls:               typing.Type[MessageTypeClass],
+                 dtype:             typing.Type[MessageTypeClass],
                  transport_session: pyuavcan.transport.InputSession,
                  finalizer:         TypedSessionFinalizer):
         self._transport_session = transport_session
         self._finalizer = finalizer
         self._deserialization_failure_count = 0
-        super(Subscriber, self).__init__(cls=cls)
+        super(Subscriber, self).__init__(dtype=dtype)
 
     @property
     def transport_session(self) -> pyuavcan.transport.InputSession:
@@ -150,7 +150,7 @@ class Subscriber(MessageTypedSession[MessageTypeClass]):
         message: typing.Optional[MessageTypeClass] = None
         while message is None or transfer is None:
             transfer = await self._transport_session.receive()
-            message = pyuavcan.dsdl.try_deserialize(self._cls, transfer.fragmented_payload)
+            message = pyuavcan.dsdl.try_deserialize(self._dtype, transfer.fragmented_payload)
             if message is None:
                 self._deserialization_failure_count += 1
         return message, transfer
@@ -159,7 +159,7 @@ class Subscriber(MessageTypedSession[MessageTypeClass]):
             -> typing.Optional[typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]]:
         transfer = await self._transport_session.try_receive(monotonic_deadline)
         if transfer is not None:
-            message = pyuavcan.dsdl.try_deserialize(self._cls, transfer.fragmented_payload)
+            message = pyuavcan.dsdl.try_deserialize(self._dtype, transfer.fragmented_payload)
             if message is not None:
                 return message, transfer
             else:

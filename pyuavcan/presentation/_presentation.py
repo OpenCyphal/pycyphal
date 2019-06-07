@@ -25,7 +25,7 @@ class Presentation:
 
         self._outgoing_transfer_id_counter_registry: \
             typing.DefaultDict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = \
-            collections.defaultdict()
+            collections.defaultdict(OutgoingTransferIDCounter)
 
         self._typed_session_registry: typing.Dict[pyuavcan.transport.SessionSpecifier,
                                                   TypedSession[pyuavcan.dsdl.CompositeObject]] = {}
@@ -34,7 +34,7 @@ class Presentation:
     def transport(self) -> pyuavcan.transport.Transport:
         return self._transport
 
-    async def get_publisher(self, cls: typing.Type[MessageClass], subject_id: int) -> Publisher[MessageClass]:
+    async def get_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) -> Publisher[MessageClass]:
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
         try:
@@ -43,13 +43,13 @@ class Presentation:
             return out
         except LookupError:
             transport_session = await self._transport.get_output_session(session_specifier,
-                                                                         self._make_message_payload_metadata(cls))
-            return Publisher(cls=cls,
+                                                                         self._make_message_payload_metadata(dtype))
+            return Publisher(dtype=dtype,
                              transport_session=transport_session,
                              transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
                              finalizer=self._make_finalizer(session_specifier))
 
-    async def get_subscriber(self, cls: typing.Type[MessageClass], subject_id: int) -> Subscriber[MessageClass]:
+    async def get_subscriber(self, dtype: typing.Type[MessageClass], subject_id: int) -> Subscriber[MessageClass]:
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
         try:
@@ -58,28 +58,27 @@ class Presentation:
             return out
         except LookupError:
             transport_session = await self._transport.get_input_session(session_specifier,
-                                                                        self._make_message_payload_metadata(cls))
-            return Subscriber(cls=cls,
+                                                                        self._make_message_payload_metadata(dtype))
+            return Subscriber(dtype=dtype,
                               transport_session=transport_session,
                               finalizer=self._make_finalizer(session_specifier))
 
-    async def get_publisher_with_fixed_subject_id(self, cls: typing.Type[FixedPortMessageClass]) \
+    async def get_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Publisher[FixedPortMessageClass]:
-        return await self.get_publisher(cls=cls, subject_id=pyuavcan.dsdl.get_fixed_port_id(cls))
+        return await self.get_publisher(dtype=dtype, subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
 
-    async def get_subscriber_with_fixed_subject_id(self, cls: typing.Type[FixedPortMessageClass]) \
+    async def get_subscriber_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Subscriber[FixedPortMessageClass]:
-        return await self.get_subscriber(cls=cls, subject_id=pyuavcan.dsdl.get_fixed_port_id(cls))
+        return await self.get_subscriber(dtype=dtype, subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
 
     def _make_finalizer(self, session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
         async def finalizer() -> None:
             self._typed_session_registry.pop(session_specifier)
-
         return finalizer
 
     @staticmethod
-    def _make_message_payload_metadata(cls: typing.Type[MessageClass]) -> pyuavcan.transport.PayloadMetadata:
-        model = pyuavcan.dsdl.get_model(cls)
-        max_size_bytes = pyuavcan.dsdl.get_max_serialized_representation_size_bytes(cls)
+    def _make_message_payload_metadata(dtype: typing.Type[MessageClass]) -> pyuavcan.transport.PayloadMetadata:
+        model = pyuavcan.dsdl.get_model(dtype)
+        max_size_bytes = pyuavcan.dsdl.get_max_serialized_representation_size_bytes(dtype)
         return pyuavcan.transport.PayloadMetadata(compact_data_type_id=model.compact_data_type_id,
                                                   max_size_bytes=max_size_bytes)

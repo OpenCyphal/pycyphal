@@ -46,7 +46,7 @@ API functions and methods that contain the following parameters should adhere to
 ----------------------------------------|-----------------------|----------------------------------------------------------
 `pydsdl.*Type`                          | `model`               | PyDSDL type model (descriptor).
 `pyuavcan.dsdl.*Object`                 | `obj`                 | Instance of a generated class implementing a DSDL type.
-`typing.Type[pyuavcan.dsdl.*Object]`    | `cls`                 | Generated class implementing a DSDL type.
+`typing.Type[pyuavcan.dsdl.*Object]`    | `dtype`               | Generated class implementing a DSDL type.
 `float`                                 | `monotonic_deadline`  | Abort operation if not completed by this time.
 `int`                                   | `node_id`             | A node identifier.
 
