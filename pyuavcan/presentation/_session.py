@@ -16,7 +16,7 @@ MessageTypeClass = typing.TypeVar('MessageTypeClass', bound=pyuavcan.dsdl.Compos
 ServiceTypeClass = typing.TypeVar('ServiceTypeClass', bound=pyuavcan.dsdl.ServiceObject)
 
 
-Finalizer = typing.Callable[[], typing.Awaitable[None]]
+TypedSessionFinalizer = typing.Callable[[], typing.Awaitable[None]]
 
 
 class OutgoingTransferIDCounter:
@@ -32,7 +32,7 @@ class OutgoingTransferIDCounter:
         self._value = int(value)
 
 
-class Channel(abc.ABC, typing.Generic[DataTypeClass]):
+class TypedSession(abc.ABC, typing.Generic[DataTypeClass]):
     @property
     @abc.abstractmethod
     def data_type_class(self) -> typing.Type[DataTypeClass]:
@@ -52,120 +52,118 @@ class Channel(abc.ABC, typing.Generic[DataTypeClass]):
         raise NotImplementedError
 
 
-class MessageChannel(Channel[MessageTypeClass]):
+class MessageTypedSession(TypedSession[MessageTypeClass]):
+    def __init__(self, cls: typing.Type[MessageTypeClass]):
+        self._cls = cls
+
+    @property
+    def data_type_class(self) -> typing.Type[MessageTypeClass]:
+        return self._cls
+
     @property
     @abc.abstractmethod
-    def session(self) -> pyuavcan.transport.Session:
+    def transport_session(self) -> pyuavcan.transport.Session:
         raise NotImplementedError
 
     @property
     def port_id(self) -> int:
-        ds = self.session.specifier.data_specifier
+        ds = self.transport_session.specifier.data_specifier
         assert isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         return ds.subject_id
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(' \
-            f'cls={pyuavcan.dsdl.get_model(self.data_type_class)}, ' \
-            f'session={self.session})'
+            f'dsdl_type={pyuavcan.dsdl.get_model(self.data_type_class)}, ' \
+            f'transport_session={self.transport_session})'
 
 
-class ServiceChannel(Channel[ServiceTypeClass]):
+class ServiceTypedSession(TypedSession[ServiceTypeClass]):
     @property
     @abc.abstractmethod
-    def input_session(self) -> pyuavcan.transport.InputSession:
+    def input_transport_session(self) -> pyuavcan.transport.InputSession:
         raise NotImplementedError
 
     @property
     def port_id(self) -> int:
-        ds = self.input_session.specifier.data_specifier
+        ds = self.input_transport_session.specifier.data_specifier
         assert isinstance(ds, pyuavcan.transport.ServiceDataSpecifier)
         return ds.service_id
 
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}(' \
+            f'dsdl_type={pyuavcan.dsdl.get_model(self.data_type_class)}, ' \
+            f'input_transport_session={self.input_transport_session})'
 
-class Publisher(MessageChannel[MessageTypeClass]):
+
+class Publisher(MessageTypedSession[MessageTypeClass]):
     def __init__(self,
                  cls:                 typing.Type[MessageTypeClass],
-                 session:             pyuavcan.transport.OutputSession,
+                 transport_session:   pyuavcan.transport.OutputSession,
                  transfer_id_counter: OutgoingTransferIDCounter,
-                 priority:            pyuavcan.transport.Priority,
-                 finalizer:           Finalizer):
-        self._cls = cls
-        self._session = session
-        self._priority = pyuavcan.transport.Priority(priority)
+                 finalizer:           TypedSessionFinalizer):
+        self._transport_session = transport_session
         self._transfer_id_counter = transfer_id_counter
         self._finalizer = finalizer
+        super(Publisher, self).__init__(cls=cls)
 
     @property
-    def data_type_class(self) -> typing.Type[MessageTypeClass]:
-        return self._cls
-
-    @property
-    def session(self) -> pyuavcan.transport.OutputSession:
-        return self._session
-
-    @property
-    def priority(self) -> pyuavcan.transport.Priority:
-        return self._priority
-
-    @priority.setter
-    def priority(self, value: pyuavcan.transport.Priority) -> None:
-        self._priority = pyuavcan.transport.Priority(value)
+    def transport_session(self) -> pyuavcan.transport.OutputSession:
+        return self._transport_session
 
     @property
     def transfer_id_counter(self) -> OutgoingTransferIDCounter:
         return self._transfer_id_counter
 
-    async def publish(self, message: MessageTypeClass) -> None:
+    async def publish(self, message:  MessageTypeClass, priority: pyuavcan.transport.Priority) -> None:
         timestamp = pyuavcan.transport.Timestamp.now()
         fragmented_payload = list(pyuavcan.dsdl.serialize(message))
         transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
-                                               priority=self._priority,
+                                               priority=priority,
                                                transfer_id=self._transfer_id_counter.get_then_increment(),
                                                fragmented_payload=fragmented_payload)
-        await self._session.send(transfer)
+        await self._transport_session.send(transfer)
 
     async def close(self) -> None:
         try:
-            await self._session.close()
+            await self._transport_session.close()
         finally:
             await self._finalizer()
 
 
-class Subscriber(MessageChannel[MessageTypeClass]):
+class Subscriber(MessageTypedSession[MessageTypeClass]):
     def __init__(self,
-                 cls:       typing.Type[MessageTypeClass],
-                 session:   pyuavcan.transport.InputSession,
-                 finalizer: Finalizer):
-        self._cls = cls
-        self._session = session
+                 cls:               typing.Type[MessageTypeClass],
+                 transport_session: pyuavcan.transport.InputSession,
+                 finalizer:         TypedSessionFinalizer):
+        self._transport_session = transport_session
         self._finalizer = finalizer
+        self._deserialization_failure_count = 0
+        super(Subscriber, self).__init__(cls=cls)
 
     @property
-    def data_type_class(self) -> typing.Type[MessageTypeClass]:
-        return self._cls
-
-    @property
-    def session(self) -> pyuavcan.transport.InputSession:
-        return self._session
+    def transport_session(self) -> pyuavcan.transport.InputSession:
+        return self._transport_session
 
     async def receive_with_metadata(self) \
             -> typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]:
         transfer: typing.Optional[pyuavcan.transport.TransferFrom] = None
         message: typing.Optional[MessageTypeClass] = None
         while message is None or transfer is None:
-            transfer = await self._session.receive()
+            transfer = await self._transport_session.receive()
             message = pyuavcan.dsdl.try_deserialize(self._cls, transfer.fragmented_payload)
-            # TODO: if message is None, record deserialization error
+            if message is None:
+                self._deserialization_failure_count += 1
         return message, transfer
 
     async def try_receive_with_metadata(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]]:
-        transfer = await self._session.try_receive(monotonic_deadline)
+        transfer = await self._transport_session.try_receive(monotonic_deadline)
         if transfer is not None:
             message = pyuavcan.dsdl.try_deserialize(self._cls, transfer.fragmented_payload)
             if message is not None:
                 return message, transfer
+            else:
+                self._deserialization_failure_count += 1
         return None
 
     async def receive(self) -> MessageTypeClass:
@@ -177,6 +175,10 @@ class Subscriber(MessageChannel[MessageTypeClass]):
 
     async def close(self) -> None:
         try:
-            await self._session.close()
+            await self._transport_session.close()
         finally:
             await self._finalizer()
+
+    @property
+    def deserialization_failure_count(self) -> int:
+        return self._deserialization_failure_count

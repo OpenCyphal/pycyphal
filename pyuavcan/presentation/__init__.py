@@ -4,7 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._presentation import Presentation, DEFAULT_PRIORITY
+from ._presentation import Presentation
 
-from ._channel import Channel, MessageChannel, ServiceChannel
-from ._channel import Publisher, Subscriber
+from ._session import TypedSession, MessageTypedSession, ServiceTypedSession
+from ._session import Publisher, Subscriber
