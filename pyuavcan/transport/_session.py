@@ -113,11 +113,8 @@ class Session(abc.ABC):
         """
         raise NotImplementedError
 
-    def __str__(self) -> str:
-        return f'{type(self).__name__}(specifier={self.specifier}, payload_metadata={self.payload_metadata})'
-
     def __repr__(self) -> str:
-        return self.__str__()
+        return f'{type(self).__name__}(specifier={self.specifier}, payload_metadata={self.payload_metadata})'
 
 
 # noinspection PyAbstractClass

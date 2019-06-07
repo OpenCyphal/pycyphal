@@ -235,7 +235,5 @@ class FrameCollector:
     def empty(self) -> bool:
         return len(self._collected) == 0
 
-    def __str__(self) -> str:  # pragma: no cover
+    def __repr__(self) -> str:  # pragma: no cover
         return f'{type(self).__name__}({str(self._collected)})'
-
-    __repr__ = __str__

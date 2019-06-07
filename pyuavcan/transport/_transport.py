@@ -96,7 +96,7 @@ class Transport(abc.ABC):
         """
         raise NotImplementedError
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         """
         Prints the basic transport information. May be overridden if there is more relevant info to display.
         """
@@ -106,6 +106,3 @@ class Transport(abc.ABC):
             f'local_node_id={self.local_node_id}, ' \
             f'input_sessions=[{", ".join(map(str, self.input_sessions))}], ' \
             f'output_sessions=[{", ".join(map(str, self.output_sessions))}])'
-
-    def __repr__(self) -> str:
-        return self.__str__()

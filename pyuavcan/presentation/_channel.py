@@ -48,11 +48,8 @@ class Channel(abc.ABC, typing.Generic[DataTypeClass]):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def __str__(self) -> str:
-        raise NotImplementedError
-
     def __repr__(self) -> str:
-        return self.__str__()
+        raise NotImplementedError
 
 
 class MessageChannel(Channel[MessageTypeClass]):
@@ -66,6 +63,11 @@ class MessageChannel(Channel[MessageTypeClass]):
         ds = self.session.specifier.data_specifier
         assert isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         return ds.subject_id
+
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}(' \
+            f'cls={pyuavcan.dsdl.get_model(self.data_type_class)}, ' \
+            f'session={self.session})'
 
 
 class ServiceChannel(Channel[ServiceTypeClass]):

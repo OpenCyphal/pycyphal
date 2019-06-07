@@ -22,10 +22,7 @@ class PayloadMetadata:
         if self.max_size_bytes < 0:
             raise ValueError(f'Invalid max size [byte]: {self.max_size_bytes}')
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return f'{type(self).__name__}(' \
             f'compact_data_type_id=0x{self.compact_data_type_id:08x}, ' \
             f'max_size_bytes={self.max_size_bytes})'
-
-    def __repr__(self) -> str:
-        return self.__str__()

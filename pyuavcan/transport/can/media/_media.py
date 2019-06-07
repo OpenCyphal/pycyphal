@@ -13,8 +13,8 @@ from ._filter import FilterConfiguration
 
 class Media(abc.ABC):
     """
-    The transport guarantees that the methods or properties will never be accessed concurrently from different
-    coroutines/tasks, excepting __str__(), __repr__().
+    The transport guarantees that the methods will never be accessed concurrently from different coroutines/tasks,
+    excepting __repr__() and properties.
     """
 
     # The frames handler is non-blocking and non-yielding; returns immediately.
@@ -124,13 +124,10 @@ class Media(abc.ABC):
         """
         raise NotImplementedError
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         """
         Should print the basic media information. Can be overridden if there is more relevant info to display.
         """
         return f'{type(self).__name__}(' \
             f'interface_name={self.interface_name!r}, ' \
             f'max_data_field_length={self.max_data_field_length})'
-
-    def __repr__(self) -> str:
-        return self.__str__()
