@@ -47,6 +47,13 @@ class Channel(abc.ABC, typing.Generic[DataTypeClass]):
     async def close(self) -> None:
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def __str__(self) -> str:
+        raise NotImplementedError
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
 
 class MessageChannel(Channel[MessageTypeClass]):
     @property
@@ -56,7 +63,7 @@ class MessageChannel(Channel[MessageTypeClass]):
 
     @property
     def port_id(self) -> int:
-        ds = self.session.metadata.data_specifier
+        ds = self.session.specifier.data_specifier
         assert isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         return ds.subject_id
 
@@ -69,7 +76,7 @@ class ServiceChannel(Channel[ServiceTypeClass]):
 
     @property
     def port_id(self) -> int:
-        ds = self.input_session.metadata.data_specifier
+        ds = self.input_session.specifier.data_specifier
         assert isinstance(ds, pyuavcan.transport.ServiceDataSpecifier)
         return ds.service_id
 
@@ -141,8 +148,8 @@ class Subscriber(MessageChannel[MessageTypeClass]):
         return self._session
 
     async def receive_with_metadata(self) \
-            -> typing.Tuple[MessageTypeClass, pyuavcan.transport.Transfer]:  # TODO TransferFrom
-        transfer: typing.Optional[pyuavcan.transport.Transfer] = None
+            -> typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]:
+        transfer: typing.Optional[pyuavcan.transport.TransferFrom] = None
         message: typing.Optional[MessageTypeClass] = None
         while message is None or transfer is None:
             transfer = await self._session.receive()
@@ -151,7 +158,7 @@ class Subscriber(MessageChannel[MessageTypeClass]):
         return message, transfer
 
     async def try_receive_with_metadata(self, monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[MessageTypeClass, pyuavcan.transport.Transfer]]:  # TODO TransferFrom
+            -> typing.Optional[typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]]:
         transfer = await self._session.try_receive(monotonic_deadline)
         if transfer is not None:
             message = pyuavcan.dsdl.try_deserialize(self._cls, transfer.fragmented_payload)

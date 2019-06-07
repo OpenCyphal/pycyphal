@@ -45,9 +45,19 @@ class Feedback(abc.ABC):
 
 
 @dataclasses.dataclass(frozen=True)
-class SessionMetadata:
-    data_specifier:   DataSpecifier
-    payload_metadata: PayloadMetadata
+class SessionSpecifier:
+    """
+    This is like a regular session specifier except that we assume that one end of a session terminates at the
+    local node. If the remote node ID is not set, then for output sessions this implies broadcast and for input
+    sessions this implies promiscuity. If set, then output sessions will be unicast to that node ID and input
+    sessions will ignore all transfers except those originating from the specified node ID.
+    """
+    data_specifier: DataSpecifier
+    remote_node_id: typing.Optional[int]
+
+    def __post_init__(self) -> None:
+        if self.remote_node_id is not None and self.remote_node_id < 0:
+            raise ValueError(f'Invalid remote node ID: {self.remote_node_id}')
 
 
 @dataclasses.dataclass
@@ -73,9 +83,17 @@ class Statistics:
 class Session(abc.ABC):
     @property
     @abc.abstractmethod
-    def metadata(self) -> SessionMetadata:
+    def specifier(self) -> SessionSpecifier:
         """
-        Identifies the category of data exchanged through this session.
+        Data specifier plus the remote node ID. The latter is optional.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def payload_metadata(self) -> PayloadMetadata:
+        """
+        Identifies the properties of the payload exchanged through this session.
         """
         raise NotImplementedError
 
@@ -96,25 +114,23 @@ class Session(abc.ABC):
         raise NotImplementedError
 
     def __str__(self) -> str:
-        return f'{type(self).__name__}(metadata={self.metadata})'
+        return f'{type(self).__name__}(specifier={self.specifier}, payload_metadata={self.payload_metadata})'
 
     def __repr__(self) -> str:
         return self.__str__()
 
 
-# ------------------------------------- INPUT -------------------------------------
-
 # noinspection PyAbstractClass
 class InputSession(Session):
     @abc.abstractmethod
-    async def receive(self) -> Transfer:
+    async def receive(self) -> TransferFrom:
         """
         Blocks forever until a transfer is received.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[Transfer]:
+    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
         """
         This is an alternative that will return None if the transfer is not received before the deadline [second].
         The deadline is compared against time.monotonic().
@@ -138,42 +154,6 @@ class InputSession(Session):
         """
         raise NotImplementedError
 
-
-# noinspection PyAbstractClass
-class PromiscuousInput(InputSession):
-    @abc.abstractmethod
-    async def receive(self) -> TransferFrom:
-        """
-        Behaves like the overridden method in the base class except that the returned instance is a more
-        specialized type of Transfer equipped with the information about the sender.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
-        """
-        Behaves like the overridden method in the base class except that the returned instance is a more
-        specialized type of Transfer equipped with the information about the sender.
-        """
-        raise NotImplementedError
-
-
-# noinspection PyAbstractClass
-class SelectiveInput(InputSession):
-    @property
-    @abc.abstractmethod
-    def source_node_id(self) -> int:
-        """
-        The node ID of a remote node whose transfers this session is configured to receive. Transfers from other
-        nodes will not be received by this session instance.
-        """
-        raise NotImplementedError
-
-    def __str__(self) -> str:
-        return f'{type(self).__name__}(metadata={self.metadata}, source_node_id={self.source_node_id})'
-
-
-# ------------------------------------- OUTPUT -------------------------------------
 
 # noinspection PyAbstractClass
 class OutputSession(Session):
@@ -204,22 +184,3 @@ class OutputSession(Session):
     @abc.abstractmethod
     async def send(self, transfer: Transfer) -> None:
         raise NotImplementedError
-
-
-# noinspection PyAbstractClass
-class BroadcastOutput(OutputSession):
-    pass
-
-
-# noinspection PyAbstractClass
-class UnicastOutput(OutputSession):
-    @property
-    @abc.abstractmethod
-    def destination_node_id(self) -> int:
-        """
-        All transfers sent by this session instance will be directed towards this remote node.
-        """
-        raise NotImplementedError
-
-    def __str__(self) -> str:
-        return f'{type(self).__name__}(metadata={self.metadata}, destination_node_id={self.destination_node_id})'

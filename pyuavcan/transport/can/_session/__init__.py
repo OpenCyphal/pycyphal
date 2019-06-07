@@ -6,8 +6,8 @@
 
 from ._base import SessionFinalizer
 
-from ._input import CANInputSession, PromiscuousCANInput, SelectiveCANInput
+from ._input import CANInputSession
 
-from ._output import CANOutputSession, BroadcastCANOutput, UnicastCANOutput
+from ._output import CANOutputSession, BroadcastCANOutputSession, UnicastCANOutputSession
 
 from ._transfer_receiver import TransferReceptionError

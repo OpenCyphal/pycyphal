@@ -6,7 +6,7 @@
 
 import typing
 import pyuavcan.transport
-from . import _redundant_session
+from ._redundant_session import RedundantInputSession, RedundantOutputSession
 
 
 class InconsistentRedundantTransportConfigurationError(pyuavcan.transport.TransportError):
@@ -69,28 +69,4 @@ class RedundantTransport(pyuavcan.transport.Transport):
         raise NotImplementedError
 
     async def close(self) -> None:
-        raise NotImplementedError
-
-    async def get_broadcast_output(self,
-                                   data_specifier:   pyuavcan.transport.DataSpecifier,
-                                   payload_metadata: pyuavcan.transport.PayloadMetadata) \
-            -> _redundant_session.BroadcastRedundantOutput:
-        raise NotImplementedError
-
-    async def get_unicast_output(self,
-                                 data_specifier:      pyuavcan.transport.DataSpecifier,
-                                 payload_metadata:    pyuavcan.transport.PayloadMetadata,
-                                 destination_node_id: int) -> _redundant_session.UnicastRedundantOutput:
-        raise NotImplementedError
-
-    async def get_promiscuous_input(self,
-                                    data_specifier:   pyuavcan.transport.DataSpecifier,
-                                    payload_metadata: pyuavcan.transport.PayloadMetadata) \
-            -> _redundant_session.PromiscuousRedundantInput:
-        raise NotImplementedError
-
-    async def get_selective_input(self,
-                                  data_specifier:   pyuavcan.transport.DataSpecifier,
-                                  payload_metadata: pyuavcan.transport.PayloadMetadata,
-                                  source_node_id:   int) -> _redundant_session.SelectiveRedundantInput:
         raise NotImplementedError

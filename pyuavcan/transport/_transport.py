@@ -8,9 +8,7 @@ from __future__ import annotations
 import abc
 import typing
 import dataclasses
-from ._session import InputSession, OutputSession
-from ._session import PromiscuousInput, SelectiveInput, BroadcastOutput, UnicastOutput
-from ._data_specifier import DataSpecifier
+from ._session import InputSession, OutputSession, SessionSpecifier
 from ._payload_metadata import PayloadMetadata
 
 
@@ -65,54 +63,26 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_promiscuous_input(self,
-                                    data_specifier:   DataSpecifier,
-                                    payload_metadata: PayloadMetadata) -> PromiscuousInput:
+    async def get_input_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
         """
-        All transports support this session type for all kinds of transfers.
-        The transport will always return the same instance unless there is no session object with the requested data
-        specifier, in which case it will be created and stored internally until closed.
+        The transport will always return the same instance unless there is no session object with the requested
+        specifier, in which case it will be created and stored internally until closed. The payload metadata parameter
+        is used only when a new instance is created, ignored otherwise.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_selective_input(self,
-                                  data_specifier:   DataSpecifier,
-                                  payload_metadata: PayloadMetadata,
-                                  source_node_id:   int) -> SelectiveInput:
+    async def get_output_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
         """
-        All transports support this session type for service transfers. Support for message transfers is optional.
-        The transport will always return the same instance unless there is no session object with the requested data
-        specifier and source node ID, in which case it will be created and stored internally until closed.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def get_broadcast_output(self,
-                                   data_specifier:   DataSpecifier,
-                                   payload_metadata: PayloadMetadata) -> BroadcastOutput:
-        """
-        All transports support this session type for message transfers. Support for service transfers is optional.
-        The transport will always return the same instance unless there is no session object with the requested data
-        specifier, in which case it will be created and stored internally until closed.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def get_unicast_output(self,
-                                 data_specifier:      DataSpecifier,
-                                 payload_metadata:    PayloadMetadata,
-                                 destination_node_id: int) -> UnicastOutput:
-        """
-        All transports support this session type for service transfers. Support for message transfers is optional.
-        The transport will always return the same instance unless there is no session object with the requested data
-        specifier and destination node ID, in which case it will be created and stored internally until closed.
+        The transport will always return the same instance unless there is no session object with the requested
+        specifier, in which case it will be created and stored internally until closed. The payload metadata parameter
+        is used only when a new instance is created, ignored otherwise.
         """
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
-    def inputs(self) -> typing.Sequence[InputSession]:
+    def input_sessions(self) -> typing.Sequence[InputSession]:
         """
         All active input sessions.
         """
@@ -120,7 +90,7 @@ class Transport(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def outputs(self) -> typing.Sequence[OutputSession]:
+    def output_sessions(self) -> typing.Sequence[OutputSession]:
         """
         All active output sessions.
         """
@@ -134,8 +104,8 @@ class Transport(abc.ABC):
         return f'{type(self).__name__}(' \
             f'protocol_parameters={self.protocol_parameters}, ' \
             f'local_node_id={self.local_node_id}, ' \
-            f'inputs=[{", ".join(map(str, self.inputs))}], ' \
-            f'outputs=[{", ".join(map(str, self.outputs))}])'
+            f'input_sessions=[{", ".join(map(str, self.input_sessions))}], ' \
+            f'output_sessions=[{", ".join(map(str, self.output_sessions))}])'
 
     def __repr__(self) -> str:
         return self.__str__()

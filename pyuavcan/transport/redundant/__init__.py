@@ -7,5 +7,3 @@
 from ._redundant_transport import RedundantTransport
 
 from ._redundant_session import RedundantOutputSession, RedundantInputSession
-from ._redundant_session import PromiscuousRedundantInput, SelectiveRedundantInput
-from ._redundant_session import BroadcastRedundantOutput, UnicastRedundantOutput
