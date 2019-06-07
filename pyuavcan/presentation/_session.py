@@ -35,7 +35,7 @@ class OutgoingTransferIDCounter:
 class TypedSession(abc.ABC, typing.Generic[DataTypeClass]):
     @property
     @abc.abstractmethod
-    def data_type_class(self) -> typing.Type[DataTypeClass]:
+    def dtype(self) -> typing.Type[DataTypeClass]:
         raise NotImplementedError
 
     @property
@@ -57,7 +57,7 @@ class MessageTypedSession(TypedSession[MessageTypeClass]):
         self._dtype = dtype
 
     @property
-    def data_type_class(self) -> typing.Type[MessageTypeClass]:
+    def dtype(self) -> typing.Type[MessageTypeClass]:
         return self._dtype
 
     @property
@@ -73,7 +73,7 @@ class MessageTypedSession(TypedSession[MessageTypeClass]):
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(' \
-            f'dsdl_type={pyuavcan.dsdl.get_model(self.data_type_class)}, ' \
+            f'dtype={pyuavcan.dsdl.get_model(self.dtype)}, ' \
             f'transport_session={self.transport_session})'
 
 
@@ -91,7 +91,7 @@ class ServiceTypedSession(TypedSession[ServiceTypeClass]):
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(' \
-            f'dsdl_type={pyuavcan.dsdl.get_model(self.data_type_class)}, ' \
+            f'dtype={pyuavcan.dsdl.get_model(self.dtype)}, ' \
             f'input_transport_session={self.input_transport_session})'
 
 
@@ -144,7 +144,7 @@ class Subscriber(MessageTypedSession[MessageTypeClass]):
     def transport_session(self) -> pyuavcan.transport.InputSession:
         return self._transport_session
 
-    async def receive_with_metadata(self) \
+    async def receive_with_transfer(self) \
             -> typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]:
         transfer: typing.Optional[pyuavcan.transport.TransferFrom] = None
         message: typing.Optional[MessageTypeClass] = None
@@ -155,7 +155,7 @@ class Subscriber(MessageTypedSession[MessageTypeClass]):
                 self._deserialization_failure_count += 1
         return message, transfer
 
-    async def try_receive_with_metadata(self, monotonic_deadline: float) \
+    async def try_receive_with_transfer(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]]:
         transfer = await self._transport_session.try_receive(monotonic_deadline)
         if transfer is not None:
@@ -167,10 +167,10 @@ class Subscriber(MessageTypedSession[MessageTypeClass]):
         return None
 
     async def receive(self) -> MessageTypeClass:
-        return (await self.receive_with_metadata())[0]
+        return (await self.receive_with_transfer())[0]
 
     async def try_receive(self, monotonic_deadline: float) -> typing.Optional[MessageTypeClass]:
-        out = await self.try_receive_with_metadata(monotonic_deadline)
+        out = await self.try_receive_with_transfer(monotonic_deadline)
         return out[0] if out else None
 
     async def close(self) -> None:
