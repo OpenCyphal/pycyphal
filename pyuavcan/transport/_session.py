@@ -154,6 +154,10 @@ class InputSession(Session):
         """
         raise NotImplementedError
 
+    @property
+    def source_node_id(self) -> typing.Optional[int]:
+        return self.specifier.remote_node_id
+
 
 # noinspection PyAbstractClass
 class OutputSession(Session):
@@ -184,3 +188,7 @@ class OutputSession(Session):
     @abc.abstractmethod
     async def send(self, transfer: Transfer) -> None:
         raise NotImplementedError
+
+    @property
+    def destination_node_id(self) -> typing.Optional[int]:
+        return self.specifier.remote_node_id

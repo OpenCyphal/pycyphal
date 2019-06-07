@@ -144,8 +144,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     async def get_input_session(self,
                                 specifier:        pyuavcan.transport.SessionSpecifier,
-                                payload_metadata: pyuavcan.transport.PayloadMetadata) \
-            -> pyuavcan.transport.InputSession:
+                                payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANInputSession:
         async def finalizer() -> None:
             async with self._media_lock:
                 self._input_dispatch_table.remove(specifier)
@@ -164,8 +163,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     async def get_output_session(self,
                                  specifier:        pyuavcan.transport.SessionSpecifier,
-                                 payload_metadata: pyuavcan.transport.PayloadMetadata) \
-            -> pyuavcan.transport.OutputSession:
+                                 payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANOutputSession:
         try:
             out = self._output_registry[specifier]
             assert out.specifier == specifier
@@ -178,11 +176,12 @@ class CANTransport(pyuavcan.transport.Transport):
             self._output_registry.pop(specifier)
 
         if specifier.remote_node_id is None:
-            session = BroadcastCANOutputSession(specifier=specifier,
-                                                payload_metadata=payload_metadata,
-                                                transport=self,
-                                                send_handler=self._do_send,
-                                                finalizer=finalizer)
+            session: CANOutputSession = \
+                BroadcastCANOutputSession(specifier=specifier,
+                                          payload_metadata=payload_metadata,
+                                          transport=self,
+                                          send_handler=self._do_send,
+                                          finalizer=finalizer)
         else:
             session = UnicastCANOutputSession(specifier=specifier,
                                               payload_metadata=payload_metadata,

@@ -18,7 +18,7 @@ async def _unittest_can_transport() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, can, Statistics, Timestamp
     from pyuavcan.transport import InvalidTransportConfigurationError, OperationNotDefinedForAnonymousNodeError
-    from pyuavcan.transport import ResourceClosedError
+    from pyuavcan.transport import ResourceClosedError, SessionSpecifier
     # noinspection PyProtectedMember
     from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
     # noinspection PyProtectedMember
@@ -58,48 +58,56 @@ async def _unittest_can_transport() -> None:
     meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't broadcast service calls
-        await tr.get_broadcast_output(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.SERVER), meta)
+        await tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.SERVER), None),
+                                    meta)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't unicast messages
-        await tr.get_unicast_output(MessageDataSpecifier(1234), meta, 123)
+        await tr.get_output_session(SessionSpecifier(MessageDataSpecifier(1234), 123), meta)
 
-    broadcaster = await tr.get_broadcast_output(MessageDataSpecifier(12345), meta)
-    assert broadcaster is await tr.get_broadcast_output(MessageDataSpecifier(12345), meta)              # Same stuff
+    broadcaster = await tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    assert broadcaster is await tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
-    subscriber_promiscuous = await tr.get_promiscuous_input(MessageDataSpecifier(2222), meta)
-    assert subscriber_promiscuous is await tr.get_promiscuous_input(MessageDataSpecifier(2222), meta)
+    subscriber_promiscuous = await tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
+    assert subscriber_promiscuous is await tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), None),
+                                                                meta)
 
-    subscriber_selective = await tr.get_selective_input(MessageDataSpecifier(2222), meta, 123)
-    assert subscriber_selective is await tr.get_selective_input(MessageDataSpecifier(2222), meta, 123)
+    subscriber_selective = await tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
+    assert subscriber_selective is await tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
 
-    server_listener = await tr.get_promiscuous_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta)
-    assert server_listener is await tr.get_promiscuous_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta)
+    server_listener = await tr.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
+    assert server_listener is await tr.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
 
-    server_responder = await tr.get_unicast_output(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta, 123)
-    assert server_responder is await tr.get_unicast_output(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta, 123)
+    server_responder = await tr.get_output_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 123), meta)
+    assert server_responder is await tr.get_output_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 123), meta)
 
-    client_requester = await tr.get_unicast_output(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 123)
-    assert client_requester is await tr.get_unicast_output(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 123)
+    client_requester = await tr.get_output_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+    assert client_requester is await tr.get_output_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
 
-    client_listener = await tr.get_selective_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 123)
-    assert client_listener is await tr.get_selective_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 123)
+    client_listener = await tr.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+    assert client_listener is await tr.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+
+    assert broadcaster.destination_node_id is None
+    assert subscriber_promiscuous.source_node_id is None
+    assert subscriber_selective.source_node_id == 123
+    assert server_listener.source_node_id is None
+    assert client_listener.source_node_id == 123
 
     base_ts = time.process_time()
-    inputs = tr.inputs
+    inputs = tr.input_sessions
     print(f'INPUTS (sampled in {time.process_time() - base_ts:.3f}s): {inputs}')
     assert set(inputs) == {subscriber_promiscuous, subscriber_selective, server_listener, client_listener}
     del inputs
 
-    print('OUTPUTS:', tr.outputs)
-    assert set(tr.outputs) == {broadcaster, server_responder, client_requester}
+    print('OUTPUTS:', tr.output_sessions)
+    assert set(tr.output_sessions) == {broadcaster, server_responder, client_requester}
 
     #
     # Basic exchange test, no one is listening
@@ -165,9 +173,9 @@ async def _unittest_can_transport() -> None:
     #
     # Broadcast exchange with input dispatch test
     #
-    selective_m12345_5 = await tr2.get_selective_input(MessageDataSpecifier(12345), meta, 5)
-    selective_m12345_9 = await tr2.get_selective_input(MessageDataSpecifier(12345), meta, 9)
-    promiscuous_m12345 = await tr2.get_promiscuous_input(MessageDataSpecifier(12345), meta)
+    selective_m12345_5 = await tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 5), meta)
+    selective_m12345_9 = await tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 9), meta)
+    promiscuous_m12345 = await tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
     await broadcaster.send(Transfer(
         timestamp=ts,
@@ -288,19 +296,19 @@ async def _unittest_can_transport() -> None:
     #
     # Unicast exchange test
     #
-    selective_server_s333_5 = await tr2.get_selective_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta, 5)
-    selective_server_s333_9 = await tr2.get_selective_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta, 9)
-    promiscuous_server_s333 = await tr2.get_promiscuous_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), meta)
+    selective_server_s333_5 = await tr2.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 5), meta)
+    selective_server_s333_9 = await tr2.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 9), meta)
+    promiscuous_server_s333 = await tr2.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
 
-    selective_client_s333_5 = await tr2.get_selective_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 5)
-    selective_client_s333_9 = await tr2.get_selective_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta, 9)
-    promiscuous_client_s333 = await tr2.get_promiscuous_input(
-        ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), meta)
+    selective_client_s333_5 = await tr2.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 5), meta)
+    selective_client_s333_9 = await tr2.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 9), meta)
+    promiscuous_client_s333 = await tr2.get_input_session(
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), None), meta)
 
     # No one is listening, this one will be lost.
     await client_requester.send(Transfer(
@@ -502,7 +510,7 @@ async def _unittest_can_transport() -> None:
     #
     # Reception logic test.
     #
-    pub_m2222 = await tr2.get_broadcast_output(MessageDataSpecifier(2222), meta)
+    pub_m2222 = await tr2.get_output_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
 
     # Transfer ID timeout configuration - one of them will be configured very short for testing purposes
     subscriber_promiscuous.transfer_id_timeout = 1e-9       # Very low, basically zero timeout
