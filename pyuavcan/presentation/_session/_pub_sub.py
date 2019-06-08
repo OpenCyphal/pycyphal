@@ -10,56 +10,10 @@ import time
 import typing
 import pyuavcan.dsdl
 import pyuavcan.transport
+from ._base import TypedSession, TypedSessionFinalizer, OutgoingTransferIDCounter
 
 
-DataTypeClass    = typing.TypeVar('DataTypeClass', bound=pyuavcan.dsdl.CompositeObject)
 MessageTypeClass = typing.TypeVar('MessageTypeClass', bound=pyuavcan.dsdl.CompositeObject)
-ServiceTypeClass = typing.TypeVar('ServiceTypeClass', bound=pyuavcan.dsdl.ServiceObject)
-
-
-TypedSessionFinalizer = typing.Callable[[], typing.Awaitable[None]]
-
-
-class OutgoingTransferIDCounter:
-    def __init__(self) -> None:
-        self._value: int = 0
-
-    def get_then_increment(self) -> int:
-        out = self._value
-        self._value += 1
-        return out
-
-    def override(self, value: int) -> None:
-        self._value = int(value)
-
-
-class TypedSession(abc.ABC, typing.Generic[DataTypeClass]):
-    @property
-    @abc.abstractmethod
-    def dtype(self) -> typing.Type[DataTypeClass]:
-        """
-        The generated Python class modeling the corresponding DSDL data type.
-        """
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def port_id(self) -> int:
-        """
-        The subject/service ID of the underlying transport session instance.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def close(self) -> None:
-        """
-        Invalidates the object and closes the underlying transport session instance.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def __repr__(self) -> str:
-        raise NotImplementedError
 
 
 class MessageTypedSession(TypedSession[MessageTypeClass]):
@@ -90,28 +44,6 @@ class MessageTypedSession(TypedSession[MessageTypeClass]):
             f'transport_session={self.transport_session})'
 
 
-class ServiceTypedSession(TypedSession[ServiceTypeClass]):
-    @property
-    @abc.abstractmethod
-    def input_transport_session(self) -> pyuavcan.transport.InputSession:
-        """
-        The underlying transport session instance used for the input transfers (requests for servers, responses
-        for clients).
-        """
-        raise NotImplementedError
-
-    @property
-    def port_id(self) -> int:
-        ds = self.input_transport_session.specifier.data_specifier
-        assert isinstance(ds, pyuavcan.transport.ServiceDataSpecifier)
-        return ds.service_id
-
-    def __repr__(self) -> str:
-        return f'{type(self).__name__}(' \
-            f'dtype={pyuavcan.dsdl.get_model(self.dtype)}, ' \
-            f'input_transport_session={self.input_transport_session})'
-
-
 class Publisher(MessageTypedSession[MessageTypeClass]):
     def __init__(self,
                  dtype:               typing.Type[MessageTypeClass],
@@ -129,6 +61,10 @@ class Publisher(MessageTypedSession[MessageTypeClass]):
 
     @property
     def transfer_id_counter(self) -> OutgoingTransferIDCounter:
+        """
+        Allows the caller to reach the transfer ID counter object. This may be useful in certain special cases
+        such as publication of time synchronization messages.
+        """
         return self._transfer_id_counter
 
     async def publish(self, message:  MessageTypeClass, priority: pyuavcan.transport.Priority) -> None:
