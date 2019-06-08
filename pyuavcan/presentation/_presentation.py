@@ -9,7 +9,7 @@ import typing
 import collections
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._session import TypedSession, Publisher, Subscriber, OutgoingTransferIDCounter, TypedSessionFinalizer
+from ._typed_session import TypedSession, Publisher, Subscriber, OutgoingTransferIDCounter, TypedSessionFinalizer
 
 
 MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)

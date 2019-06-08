@@ -7,7 +7,7 @@
 from __future__ import annotations
 import abc
 import typing
-import pyuavcan.transport
+import pyuavcan.dsdl
 
 
 DataTypeClass = typing.TypeVar('DataTypeClass', bound=pyuavcan.dsdl.CompositeObject)

@@ -6,6 +6,6 @@
 
 from ._presentation import Presentation
 
-from ._session import OutgoingTransferIDCounter
-from ._session import TypedSession, MessageTypedSession, ServiceTypedSession
-from ._session import Publisher, Subscriber
+from ._typed_session import OutgoingTransferIDCounter
+from ._typed_session import TypedSession, MessageTypedSession, ServiceTypedSession
+from ._typed_session import Publisher, Subscriber
