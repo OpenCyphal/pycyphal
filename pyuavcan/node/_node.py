@@ -32,7 +32,7 @@ class Node:
 
     @property
     def uptime(self) -> float:
-        out = time.monotonic() - self._instantiated_at.monotonic
+        out = time.monotonic() - float(self._instantiated_at.monotonic)
         assert out >= 0
         return out
 
