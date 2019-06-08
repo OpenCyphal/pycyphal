@@ -119,3 +119,8 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     ))
     assert (await sub_record.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
     assert sub_record.deserialization_failure_count == 1
+
+    await pres_a.close()
+    await pres_b.close()
+    with pytest.raises(pyuavcan.transport.ResourceClosedError):
+        await pres_a.close()

@@ -32,6 +32,10 @@ class Presentation:
 
     @property
     def transport(self) -> pyuavcan.transport.Transport:
+        """
+        Direct reference to the underlying transport implementation. This instance is used for exchanging serialized
+        representations over the network. The presentation layer instance takes ownership of the transport.
+        """
         return self._transport
 
     async def get_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) -> Publisher[MessageClass]:
@@ -72,6 +76,12 @@ class Presentation:
     async def get_subscriber_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Subscriber[FixedPortMessageClass]:
         return await self.get_subscriber(dtype=dtype, subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
+
+    async def close(self) -> None:
+        """
+        Closes the underlying transport instance.
+        """
+        await self._transport.close()
 
     def _make_finalizer(self, session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
         async def finalizer() -> None:
