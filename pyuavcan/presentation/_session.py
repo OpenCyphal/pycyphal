@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 import abc
+import time
 import typing
 import pyuavcan.dsdl
 import pyuavcan.transport
@@ -36,15 +37,24 @@ class TypedSession(abc.ABC, typing.Generic[DataTypeClass]):
     @property
     @abc.abstractmethod
     def dtype(self) -> typing.Type[DataTypeClass]:
+        """
+        The generated Python class modeling the corresponding DSDL data type.
+        """
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
     def port_id(self) -> int:
+        """
+        The subject/service ID of the underlying transport session instance.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     async def close(self) -> None:
+        """
+        Invalidates the object and closes the underlying transport session instance.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -63,6 +73,9 @@ class MessageTypedSession(TypedSession[MessageTypeClass]):
     @property
     @abc.abstractmethod
     def transport_session(self) -> pyuavcan.transport.Session:
+        """
+        The underlying transport session instance.
+        """
         raise NotImplementedError
 
     @property
@@ -81,6 +94,10 @@ class ServiceTypedSession(TypedSession[ServiceTypeClass]):
     @property
     @abc.abstractmethod
     def input_transport_session(self) -> pyuavcan.transport.InputSession:
+        """
+        The underlying transport session instance used for the input transfers (requests for servers, responses
+        for clients).
+        """
         raise NotImplementedError
 
     @property
@@ -115,6 +132,12 @@ class Publisher(MessageTypedSession[MessageTypeClass]):
         return self._transfer_id_counter
 
     async def publish(self, message:  MessageTypeClass, priority: pyuavcan.transport.Priority) -> None:
+        """
+        Serializes and publishes the message object at the specified priority level.
+        """
+        if not isinstance(message, self._dtype):
+            raise ValueError(f'Expected a message object of type {self.dtype}, found this: {message}')
+
         timestamp = pyuavcan.transport.Timestamp.now()
         fragmented_payload = list(pyuavcan.dsdl.serialize(message))
         transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
@@ -144,19 +167,37 @@ class Subscriber(MessageTypedSession[MessageTypeClass]):
     def transport_session(self) -> pyuavcan.transport.InputSession:
         return self._transport_session
 
-    async def receive_with_transfer(self) \
-            -> typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]:
-        transfer: typing.Optional[pyuavcan.transport.TransferFrom] = None
-        message: typing.Optional[MessageTypeClass] = None
-        while message is None or transfer is None:
-            transfer = await self._transport_session.receive()
-            message = pyuavcan.dsdl.try_deserialize(self._dtype, transfer.fragmented_payload)
-            if message is None:
-                self._deserialization_failure_count += 1
-        return message, transfer
+    async def receive(self) -> MessageTypeClass:
+        """
+        Blocks forever until a valid message is received.
+        """
+        return (await self.receive_with_transfer())[0]
+
+    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[MessageTypeClass]:
+        """
+        Blocks until either a valid message is received, in which case it is returned; or until the deadline
+        is reached, in which case None is returned. The method may also return None at any time before the deadline.
+        """
+        out = await self.try_receive_with_transfer(monotonic_deadline)
+        return out[0] if out else None
+
+    async def receive_with_transfer(self) -> typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]:
+        """
+        Blocks forever until a valid message is received. The received message will be returned along with the
+        transfer which delivered it.
+        """
+        out: typing.Optional[typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]] = None
+        while out is None:
+            out = await self.try_receive_with_transfer(time.monotonic() + _INFINITE_RECEIVE_RETRY_INTERVAL)
+        return out
 
     async def try_receive_with_transfer(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[MessageTypeClass, pyuavcan.transport.TransferFrom]]:
+        """
+        Blocks until either a valid message is received, in which case it is returned along with the transfer
+        which delivered it; or until the deadline is reached, in which case None is returned. The method may
+        also return None at any time before the deadline.
+        """
         transfer = await self._transport_session.try_receive(monotonic_deadline)
         if transfer is not None:
             message = pyuavcan.dsdl.try_deserialize(self._dtype, transfer.fragmented_payload)
@@ -166,13 +207,6 @@ class Subscriber(MessageTypedSession[MessageTypeClass]):
                 self._deserialization_failure_count += 1
         return None
 
-    async def receive(self) -> MessageTypeClass:
-        return (await self.receive_with_transfer())[0]
-
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[MessageTypeClass]:
-        out = await self.try_receive_with_transfer(monotonic_deadline)
-        return out[0] if out else None
-
     async def close(self) -> None:
         try:
             await self._transport_session.close()
@@ -181,4 +215,10 @@ class Subscriber(MessageTypedSession[MessageTypeClass]):
 
     @property
     def deserialization_failure_count(self) -> int:
+        """
+        The number of valid transfers whose payload could not be deserialized into a valid message object.
+        """
         return self._deserialization_failure_count
+
+
+_INFINITE_RECEIVE_RETRY_INTERVAL = 60

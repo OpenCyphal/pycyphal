@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import time
 import typing
 import pytest
 import pyuavcan
@@ -11,11 +12,15 @@ import pyuavcan.transport.can
 import tests.transport.can
 
 
+_RX_TIMEOUT = 10e-3
+
+
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) \
         -> None:
     assert generated_packages
     import uavcan.node
+    import uavcan.time
     import uavcan.diagnostic
     from pyuavcan.transport import Priority
 
@@ -57,7 +62,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
                                       mode=uavcan.node.Heartbeat_1_0.MODE_OPERATIONAL,
                                       vendor_specific_status_code=0xc0fe)
     await pub_heart.publish(heart, Priority.SLOW)
-    rx, transfer = await sub_heart.receive_with_transfer()
+    rx, transfer = await sub_heart.receive_with_transfer()  # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id is None
     assert transfer.priority == Priority.SLOW
@@ -76,6 +81,41 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert transfer.transfer_id == 23
     assert sub_heart.deserialization_failure_count == 0
 
+    await pub_heart.publish(heart, Priority.SLOW)
+    rx = await sub_heart.receive()
+    assert repr(rx) == repr(heart)
+
+    await pub_heart.publish(heart, Priority.SLOW)
+    rx = await sub_heart.try_receive(time.monotonic() + _RX_TIMEOUT)
+    assert repr(rx) == repr(heart)
+    rx = await sub_heart.try_receive(time.monotonic() + _RX_TIMEOUT)
+    assert rx is None
+
     await sub_heart.close()
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         await sub_heart.close()
+
+    record = uavcan.diagnostic.Record_1_0(timestamp=uavcan.time.SynchronizedTimestamp_1_0(1234567890),
+                                          severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.ALERT),
+                                          text='Hello world!')
+    with pytest.raises(ValueError, match='.*Heartbeat.*'):
+        # noinspection PyTypeChecker
+        await pub_heart.publish(record, Priority.NOMINAL)  # type: ignore
+
+    await pub_record.publish(record, Priority.OPTIONAL)
+    rx, transfer = await sub_record.receive_with_transfer()
+    assert repr(rx) == repr(record)
+    assert transfer.source_node_id == 42
+    assert transfer.priority == Priority.OPTIONAL
+    assert transfer.transfer_id == 0
+
+    # Broken transfer
+    assert sub_record.deserialization_failure_count == 0
+    await pub_record.transport_session.send(pyuavcan.transport.Transfer(
+        timestamp=pyuavcan.transport.Timestamp.now(),
+        priority=Priority.NOMINAL,
+        transfer_id=12,
+        fragmented_payload=[memoryview(b'Broken')],
+    ))
+    assert (await sub_record.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert sub_record.deserialization_failure_count == 1
