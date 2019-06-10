@@ -123,6 +123,7 @@ class Subscriber(MessageTypedSessionProxy[MessageClass]):
         its transport session instance will be closed. The underlying logic makes no guarantees, however, how quickly
         it will be closed. There is a chance that a new subscriber instance created in the future may still reuse the
         old underlying implementation which was previously scheduled for disposal.
+        The user should explicitly close all objects before disposing of the presentation layer instance.
         """
         self._raise_if_closed_or_failed()
         self._closed = True
@@ -203,6 +204,10 @@ class SubscriberImpl(typing.Generic[MessageClass]):
                 _logger.info(f'{self} is being closed')
             finally:
                 await self.transport_session.close()    # Race condition?
+        except pyuavcan.transport.ResourceClosedError:
+            # This is the desired state, no need to panic.
+            # The session could be closed manually or by closing the entire transport instance.
+            pass
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger

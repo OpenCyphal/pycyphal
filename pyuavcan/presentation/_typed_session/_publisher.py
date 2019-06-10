@@ -137,7 +137,12 @@ class PublisherImpl(typing.Generic[MessageClass]):
                     _logger.info(f'Typed session instance {self} is being closed')
                     self._closed = True
                     self._finalizer()
-                    await self.transport_session.close()  # Race condition?
+                    try:
+                        await self.transport_session.close()        # Race condition?
+                    except pyuavcan.transport.ResourceClosedError:
+                        # This is the desired state, no need to panic.
+                        # The session could be closed manually or by closing the entire transport instance.
+                        pass
 
     @property
     def proxy_count(self) -> int:
