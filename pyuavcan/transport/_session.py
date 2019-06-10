@@ -8,6 +8,7 @@ from __future__ import annotations
 import abc
 import typing
 import dataclasses
+import pyuavcan.util
 from ._transfer import Transfer, TransferFrom
 from ._timestamp import Timestamp
 from ._data_specifier import DataSpecifier
@@ -109,12 +110,12 @@ class Session(abc.ABC):
     async def close(self) -> None:
         """
         After a session is closed, none of its methods can be used anymore. The behavior or methods after close()
-        is undefined. Implementations may implement automatic closing from __del__() if possible and appropriate.
+        is undefined.
         """
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}(specifier={self.specifier}, payload_metadata={self.payload_metadata})'
+        return pyuavcan.util.repr_object(self, specifier=self.specifier, payload_metadata=self.payload_metadata)
 
 
 # noinspection PyAbstractClass

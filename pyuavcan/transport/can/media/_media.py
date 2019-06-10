@@ -7,6 +7,7 @@
 from __future__ import annotations
 import abc
 import typing
+import pyuavcan.util
 from ._frame import DataFrame, TimestampedDataFrame
 from ._filter import FilterConfiguration
 
@@ -126,8 +127,8 @@ class Media(abc.ABC):
 
     def __repr__(self) -> str:
         """
-        Should print the basic media information. Can be overridden if there is more relevant info to display.
+        Prints the basic media information. Can be overridden if there is more relevant info to display.
         """
-        return f'{type(self).__name__}(' \
-            f'interface_name={self.interface_name!r}, ' \
-            f'max_data_field_length={self.max_data_field_length})'
+        return pyuavcan.util.repr_object(self,
+                                         interface_name=self.interface_name,
+                                         max_data_field_length=self.max_data_field_length)

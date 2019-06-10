@@ -7,8 +7,12 @@
 from __future__ import annotations
 import abc
 import typing
+import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
+
+
+DEFAULT_PRIORITY = pyuavcan.transport.Priority.LOW
 
 
 DataTypeClass = typing.TypeVar('DataTypeClass', bound=pyuavcan.dsdl.CompositeObject)
@@ -32,7 +36,7 @@ class OutgoingTransferIDCounter:
         self._value = int(value)
 
 
-class TypedSession(abc.ABC, typing.Generic[DataTypeClass]):
+class TypedSessionProxy(abc.ABC, typing.Generic[DataTypeClass]):
     @property
     @abc.abstractmethod
     def dtype(self) -> typing.Type[DataTypeClass]:
@@ -52,23 +56,23 @@ class TypedSession(abc.ABC, typing.Generic[DataTypeClass]):
     @abc.abstractmethod
     async def close(self) -> None:
         """
-        Invalidates the object and closes the underlying transport session instance.
+        Invalidates the object and closes the underlying resources if necessary.
         """
         raise NotImplementedError
+
+    async def __aenter__(self) -> TypedSessionProxy[DataTypeClass]:
+        return self
+
+    async def __aexit__(self, *_: typing.Any) -> bool:
+        await self.close()
+        return False
 
     @abc.abstractmethod
     def __repr__(self) -> str:
         raise NotImplementedError
 
 
-class MessageTypedSession(TypedSession[MessageTypeClass]):
-    def __init__(self, dtype: typing.Type[MessageTypeClass]):
-        self._dtype = dtype
-
-    @property
-    def dtype(self) -> typing.Type[MessageTypeClass]:
-        return self._dtype
-
+class MessageTypedSessionProxy(TypedSessionProxy[MessageTypeClass]):
     @property
     @abc.abstractmethod
     def transport_session(self) -> pyuavcan.transport.Session:
@@ -83,13 +87,16 @@ class MessageTypedSession(TypedSession[MessageTypeClass]):
         assert isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         return ds.subject_id
 
+    async def __aenter__(self) -> MessageTypedSessionProxy[MessageTypeClass]:
+        return self
+
     def __repr__(self) -> str:
-        return f'{type(self).__name__}(' \
-            f'dtype={pyuavcan.dsdl.get_model(self.dtype)}, ' \
-            f'transport_session={self.transport_session})'
+        return pyuavcan.util.repr_object(self,
+                                         dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
+                                         transport_session=self.transport_session)
 
 
-class ServiceTypedSession(TypedSession[ServiceTypeClass]):
+class ServiceTypedSessionProxy(TypedSessionProxy[ServiceTypeClass]):
     @property
     @abc.abstractmethod
     def input_transport_session(self) -> pyuavcan.transport.InputSession:
@@ -105,7 +112,10 @@ class ServiceTypedSession(TypedSession[ServiceTypeClass]):
         assert isinstance(ds, pyuavcan.transport.ServiceDataSpecifier)
         return ds.service_id
 
+    async def __aenter__(self) -> ServiceTypedSessionProxy[ServiceTypeClass]:
+        return self
+
     def __repr__(self) -> str:
-        return f'{type(self).__name__}(' \
-            f'dtype={pyuavcan.dsdl.get_model(self.dtype)}, ' \
-            f'input_transport_session={self.input_transport_session})'
+        return pyuavcan.util.repr_object(self,
+                                         dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
+                                         input_transport_session=self.input_transport_session)

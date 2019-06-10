@@ -15,6 +15,7 @@ import tests.transport.can
 _RX_TIMEOUT = 10e-3
 
 
+# noinspection PyProtectedMember
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) \
         -> None:
@@ -43,14 +44,20 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     pub_record = await pres_b.get_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
     sub_record = await pres_a.get_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 
-    assert pub_heart is await pres_a.get_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
-    assert sub_heart is await pres_b.get_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    assert pub_heart._impl.proxy_count == 1
+    # TODO: "async with await" is an antipattern https://github.com/python/asyncio/issues/316
+    async with await pres_a.get_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0) as pub_heart_new:
+        assert pub_heart is not pub_heart_new
+        assert pub_heart._impl is pub_heart_new._impl
+        assert pub_heart._impl.proxy_count == 2
+    assert pub_heart._impl.proxy_count == 1
 
-    pub_heart_old = pub_heart
+    pub_heart_impl_old = pub_heart._impl
     await pub_heart.close()
+    assert pub_heart_impl_old.proxy_count == 0
+
     pub_heart = await pres_a.get_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
-    assert pub_heart is await pres_a.get_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
-    assert pub_heart is not pub_heart_old
+    assert pub_heart._impl is not pub_heart_impl_old
 
     assert pub_heart.transport_session.destination_node_id is None
     assert sub_heart.transport_session.specifier.data_specifier == pub_heart.transport_session.specifier.data_specifier
@@ -61,7 +68,10 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
                                       health=uavcan.node.Heartbeat_1_0.HEALTH_CAUTION,
                                       mode=uavcan.node.Heartbeat_1_0.MODE_OPERATIONAL,
                                       vendor_specific_status_code=0xc0fe)
-    await pub_heart.publish(heart, Priority.SLOW)
+    assert pub_heart.priority == pyuavcan.presentation.DEFAULT_PRIORITY
+    pub_heart.priority = Priority.SLOW
+    assert pub_heart.priority == Priority.SLOW
+    await pub_heart.publish(heart)
     rx, transfer = await sub_heart.receive_with_transfer()  # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id is None
@@ -73,7 +83,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     await tran_b.set_local_node_id(42)
 
     pub_heart.transfer_id_counter.override(23)
-    await pub_heart.publish(heart, Priority.SLOW)
+    await pub_heart.publish(heart)
     rx, transfer = await sub_heart.receive_with_transfer()
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id == 123
@@ -81,11 +91,11 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert transfer.transfer_id == 23
     assert sub_heart.deserialization_failure_count == 0
 
-    await pub_heart.publish(heart, Priority.SLOW)
+    await pub_heart.publish(heart)
     rx = await sub_heart.receive()
     assert repr(rx) == repr(heart)
 
-    await pub_heart.publish(heart, Priority.SLOW)
+    await pub_heart.publish(heart)
     rx = await sub_heart.try_receive(time.monotonic() + _RX_TIMEOUT)
     assert repr(rx) == repr(heart)
     rx = await sub_heart.try_receive(time.monotonic() + _RX_TIMEOUT)
@@ -98,15 +108,18 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     record = uavcan.diagnostic.Record_1_0(timestamp=uavcan.time.SynchronizedTimestamp_1_0(1234567890),
                                           severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.ALERT),
                                           text='Hello world!')
+    assert pub_record.priority == pyuavcan.presentation.DEFAULT_PRIORITY
+    pub_record.priority = Priority.NOMINAL
+    assert pub_record.priority == Priority.NOMINAL
     with pytest.raises(ValueError, match='.*Heartbeat.*'):
         # noinspection PyTypeChecker
-        await pub_heart.publish(record, Priority.NOMINAL)  # type: ignore
+        await pub_heart.publish(record)  # type: ignore
 
-    await pub_record.publish(record, Priority.OPTIONAL)
+    await pub_record.publish(record)
     rx, transfer = await sub_record.receive_with_transfer()
     assert repr(rx) == repr(record)
     assert transfer.source_node_id == 42
-    assert transfer.priority == Priority.OPTIONAL
+    assert transfer.priority == Priority.NOMINAL
     assert transfer.transfer_id == 0
 
     # Broken transfer

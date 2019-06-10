@@ -99,6 +99,10 @@ class CANTransport(pyuavcan.transport.Transport):
         media.set_received_frames_handler(self._on_frames_received)   # Starts the transport.
 
     @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        return self._loop
+
+    @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=TRANSFER_ID_MODULO,

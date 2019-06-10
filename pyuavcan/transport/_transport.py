@@ -7,7 +7,9 @@
 from __future__ import annotations
 import abc
 import typing
+import asyncio
 import dataclasses
+import pyuavcan.util
 from ._session import InputSession, OutputSession, SessionSpecifier
 from ._payload_metadata import PayloadMetadata
 
@@ -20,6 +22,14 @@ class ProtocolParameters:
 
 
 class Transport(abc.ABC):
+    @property
+    @abc.abstractmethod
+    def loop(self) -> asyncio.AbstractEventLoop:
+        """
+        The event loop used to operate the transport instance.
+        """
+        raise NotImplementedError
+
     @property
     @abc.abstractmethod
     def protocol_parameters(self) -> ProtocolParameters:
@@ -101,8 +111,8 @@ class Transport(abc.ABC):
         Prints the basic transport information. May be overridden if there is more relevant info to display.
         """
         # TODO: somehow obtain the media information and print it here. Add a basic media info property of type str?
-        return f'{type(self).__name__}(' \
-            f'protocol_parameters={self.protocol_parameters}, ' \
-            f'local_node_id={self.local_node_id}, ' \
-            f'input_sessions=[{", ".join(map(str, self.input_sessions))}], ' \
-            f'output_sessions=[{", ".join(map(str, self.output_sessions))}])'
+        return pyuavcan.util.repr_object(self,
+                                         protocol_parameters=self.protocol_parameters,
+                                         local_node_id=self.local_node_id,
+                                         input_sessions=', '.join(map(str, self.input_sessions)),
+                                         output_sessions=', '.join(map(str, self.output_sessions)))

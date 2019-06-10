@@ -4,9 +4,9 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._base import TypedSession, MessageTypedSession, ServiceTypedSession
+from ._base import TypedSessionProxy, MessageTypedSessionProxy, ServiceTypedSessionProxy, DEFAULT_PRIORITY
 from ._base import TypedSessionFinalizer, OutgoingTransferIDCounter
 
-from ._publisher import Publisher
+from ._publisher import Publisher, PublisherImpl
 
 from ._subscriber import Subscriber

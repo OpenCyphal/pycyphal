@@ -9,18 +9,22 @@ import time
 import typing
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessageTypedSession, TypedSessionFinalizer, MessageTypeClass
+from ._base import MessageTypedSessionProxy, TypedSessionFinalizer, MessageTypeClass
 
 
-class Subscriber(MessageTypedSession[MessageTypeClass]):
+class Subscriber(MessageTypedSessionProxy[MessageTypeClass]):
     def __init__(self,
                  dtype:             typing.Type[MessageTypeClass],
                  transport_session: pyuavcan.transport.InputSession,
                  finalizer:         TypedSessionFinalizer):
+        self._dtype = dtype
         self._transport_session = transport_session
         self._finalizer = finalizer
         self._deserialization_failure_count = 0
-        super(Subscriber, self).__init__(dtype=dtype)
+
+    @property
+    def dtype(self) -> typing.Type[MessageTypeClass]:
+        return self._dtype
 
     @property
     def transport_session(self) -> pyuavcan.transport.InputSession:

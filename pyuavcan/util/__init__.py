@@ -9,3 +9,5 @@ from . import hash
 from ._refragment import refragment
 
 from ._mark_last import mark_last
+
+from ._repr import repr_object
