@@ -38,15 +38,15 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     assert pres_a.transport is tran_a
 
-    pub_heart = await pres_a.get_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
-    sub_heart = await pres_b.get_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    pub_heart = await pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    sub_heart = await pres_b.make_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
 
-    pub_record = await pres_b.get_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
-    sub_record = await pres_a.get_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    pub_record = await pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    sub_record = await pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 
     assert pub_heart._impl.proxy_count == 1
     # TODO: "async with await" is an antipattern https://github.com/python/asyncio/issues/316
-    async with await pres_a.get_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0) as pub_heart_new:
+    async with await pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0) as pub_heart_new:
         assert pub_heart is not pub_heart_new
         assert pub_heart._impl is pub_heart_new._impl
         assert pub_heart._impl.proxy_count == 2
@@ -56,7 +56,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     await pub_heart.close()
     assert pub_heart_impl_old.proxy_count == 0
 
-    pub_heart = await pres_a.get_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    pub_heart = await pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
     assert pub_heart._impl is not pub_heart_impl_old
 
     assert pub_heart.transport_session.destination_node_id is None
@@ -77,7 +77,13 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert transfer.source_node_id is None
     assert transfer.priority == Priority.SLOW
     assert transfer.transfer_id == 0
-    assert sub_heart.deserialization_failure_count == 0
+
+    stat = sub_heart.sample_statistics()
+    assert stat.transfer.transfers == 1
+    assert stat.transfer.frames == 1
+    assert stat.transfer.overruns == 0
+    assert stat.deserialization_failures == 0
+    assert stat.messages == 1
 
     await tran_a.set_local_node_id(123)
     await tran_b.set_local_node_id(42)
@@ -89,7 +95,13 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert transfer.source_node_id == 123
     assert transfer.priority == Priority.SLOW
     assert transfer.transfer_id == 23
-    assert sub_heart.deserialization_failure_count == 0
+
+    stat = sub_heart.sample_statistics()
+    assert stat.transfer.transfers == 2
+    assert stat.transfer.frames == 2
+    assert stat.transfer.overruns == 0
+    assert stat.deserialization_failures == 0
+    assert stat.messages == 2
 
     await pub_heart.publish(heart)
     rx = await sub_heart.receive()
@@ -123,7 +135,13 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert transfer.transfer_id == 0
 
     # Broken transfer
-    assert sub_record.deserialization_failure_count == 0
+    stat = sub_record.sample_statistics()
+    assert stat.transfer.transfers == 1
+    assert stat.transfer.frames == 1
+    assert stat.transfer.overruns == 0
+    assert stat.deserialization_failures == 0
+    assert stat.messages == 1
+
     await pub_record.transport_session.send(pyuavcan.transport.Transfer(
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=Priority.NOMINAL,
@@ -131,7 +149,13 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
         fragmented_payload=[memoryview(b'Broken')],
     ))
     assert (await sub_record.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
-    assert sub_record.deserialization_failure_count == 1
+
+    stat = sub_record.sample_statistics()
+    assert stat.transfer.transfers == 2
+    assert stat.transfer.frames == 2
+    assert stat.transfer.overruns == 0
+    assert stat.deserialization_failures == 1
+    assert stat.messages == 1
 
     await pres_a.close()
     await pres_b.close()

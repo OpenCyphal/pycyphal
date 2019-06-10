@@ -5,8 +5,8 @@
 #
 
 from ._base import TypedSessionProxy, MessageTypedSessionProxy, ServiceTypedSessionProxy, DEFAULT_PRIORITY
-from ._base import TypedSessionFinalizer, OutgoingTransferIDCounter
+from ._base import OutgoingTransferIDCounter
 
 from ._publisher import Publisher, PublisherImpl
 
-from ._subscriber import Subscriber
+from ._subscriber import Subscriber, SubscriberImpl, SubscriberStatistics

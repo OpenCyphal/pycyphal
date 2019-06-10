@@ -9,3 +9,4 @@ from ._presentation import Presentation
 from ._typed_session import OutgoingTransferIDCounter, DEFAULT_PRIORITY
 from ._typed_session import TypedSessionProxy, MessageTypedSessionProxy, ServiceTypedSessionProxy
 from ._typed_session import Publisher, Subscriber
+from ._typed_session import SubscriberStatistics

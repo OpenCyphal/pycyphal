@@ -11,24 +11,24 @@ import asyncio
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessageTypedSessionProxy, TypedSessionFinalizer, OutgoingTransferIDCounter, MessageTypeClass
+from ._base import MessageTypedSessionProxy, OutgoingTransferIDCounter, MessageClass
 from ._base import DEFAULT_PRIORITY
 
 
 _logger = logging.getLogger(__name__)
 
 
-class Publisher(MessageTypedSessionProxy[MessageTypeClass]):
+class Publisher(MessageTypedSessionProxy[MessageClass]):
     def __init__(self,
-                 impl: PublisherImpl[MessageTypeClass],
+                 impl: PublisherImpl[MessageClass],
                  loop: asyncio.AbstractEventLoop):
-        self._maybe_impl: typing.Optional[PublisherImpl[MessageTypeClass]] = impl
+        self._maybe_impl: typing.Optional[PublisherImpl[MessageClass]] = impl
         self._loop = loop
         impl.register_proxy()
         self._priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY
 
     @property
-    def dtype(self) -> typing.Type[MessageTypeClass]:
+    def dtype(self) -> typing.Type[MessageClass]:
         return self._impl.dtype
 
     @property
@@ -47,7 +47,8 @@ class Publisher(MessageTypedSessionProxy[MessageTypeClass]):
     def priority(self) -> pyuavcan.transport.Priority:
         """
         The priority level used for transfers published via this proxy instance.
-        This parameter is configured separately per proxy instance; i.e., it is not shared.
+        This parameter is configured separately per proxy instance; i.e., it is not shared across different publisher
+        instances under the same session specifier.
         """
         return self._priority
 
@@ -56,7 +57,7 @@ class Publisher(MessageTypedSessionProxy[MessageTypeClass]):
         assert value in pyuavcan.transport.Priority
         self._priority = value
 
-    async def publish(self, message:  MessageTypeClass) -> None:
+    async def publish(self, message:  MessageClass) -> None:
         """
         Serializes and publishes the message object at the priority level selected earlier.
         """
@@ -68,33 +69,33 @@ class Publisher(MessageTypedSessionProxy[MessageTypeClass]):
         await impl.remove_proxy()
 
     @property
-    def _impl(self) -> PublisherImpl[MessageTypeClass]:
+    def _impl(self) -> PublisherImpl[MessageClass]:
         if self._maybe_impl is None:
             raise pyuavcan.transport.ResourceClosedError(repr(self))
         else:
             return self._maybe_impl
 
-    async def __aenter__(self) -> Publisher[MessageTypeClass]:
+    async def __aenter__(self) -> Publisher[MessageClass]:
         return self
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
-            _logger.warning(f'Typed session proxy {self} has not been disposed of properly; fixing')
+            _logger.warning(f'{self} has not been disposed of properly; fixing')
             # We can't just call close() here because the object is being deleted
             asyncio.ensure_future(self._maybe_impl.remove_proxy(), loop=self._loop)
 
 
-class PublisherImpl(typing.Generic[MessageTypeClass]):
+class PublisherImpl(typing.Generic[MessageClass]):
     """
     The publisher implementation. There is at most one such implementation per session specifier. It may be shared
     across multiple users with the help of the proxy class. When the last proxy is closed or garbage collected,
     the implementation will also be closed and removed.
     """
     def __init__(self,
-                 dtype:               typing.Type[MessageTypeClass],
+                 dtype:               typing.Type[MessageClass],
                  transport_session:   pyuavcan.transport.OutputSession,
                  transfer_id_counter: OutgoingTransferIDCounter,
-                 finalizer:           TypedSessionFinalizer,
+                 finalizer:           typing.Callable[[], None],
                  loop:                asyncio.AbstractEventLoop):
         self.dtype = dtype
         self.transport_session = transport_session
@@ -105,17 +106,7 @@ class PublisherImpl(typing.Generic[MessageTypeClass]):
         self._proxy_count = 0
         self._closed = False
 
-    async def close(self) -> None:
-        async with self._lock:
-            if not self._closed:
-                _logger.info(f'Typed session instance {self} is being closed')
-                self._closed = True
-                try:
-                    await self._finalizer()
-                finally:
-                    await self.transport_session.close()
-
-    async def publish(self, message:  MessageTypeClass, priority: pyuavcan.transport.Priority) -> None:
+    async def publish(self, message:  MessageClass, priority: pyuavcan.transport.Priority) -> None:
         if not isinstance(message, self.dtype):
             raise ValueError(f'Expected a message object of type {self.dtype}, found this: {message}')
 
@@ -141,7 +132,12 @@ class PublisherImpl(typing.Generic[MessageTypeClass]):
         _logger.debug(f'Typed session instance {self} lost a proxy, new count {self._proxy_count}')
         assert self._proxy_count >= 0
         if self._proxy_count <= 0:
-            await self.close()
+            async with self._lock:
+                if not self._closed:
+                    _logger.info(f'Typed session instance {self} is being closed')
+                    self._closed = True
+                    self._finalizer()
+                    await self.transport_session.close()  # Race condition?
 
     @property
     def proxy_count(self) -> int:
@@ -158,3 +154,7 @@ class PublisherImpl(typing.Generic[MessageTypeClass]):
                                          dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
                                          transport_session=self.transport_session,
                                          proxy_count=self._proxy_count)
+
+    def __del__(self) -> None:
+        assert self._closed
+        assert self._proxy_count == 0

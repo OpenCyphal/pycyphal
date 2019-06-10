@@ -15,12 +15,9 @@ import pyuavcan.transport
 DEFAULT_PRIORITY = pyuavcan.transport.Priority.LOW
 
 
-DataTypeClass = typing.TypeVar('DataTypeClass', bound=pyuavcan.dsdl.CompositeObject)
-MessageTypeClass = typing.TypeVar('MessageTypeClass', bound=pyuavcan.dsdl.CompositeObject)
-ServiceTypeClass = typing.TypeVar('ServiceTypeClass', bound=pyuavcan.dsdl.ServiceObject)
-
-
-TypedSessionFinalizer = typing.Callable[[], typing.Awaitable[None]]
+TypeClass = typing.TypeVar('TypeClass', bound=pyuavcan.dsdl.CompositeObject)
+MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
+ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)
 
 
 class OutgoingTransferIDCounter:
@@ -36,10 +33,10 @@ class OutgoingTransferIDCounter:
         self._value = int(value)
 
 
-class TypedSessionProxy(abc.ABC, typing.Generic[DataTypeClass]):
+class TypedSessionProxy(abc.ABC, typing.Generic[TypeClass]):
     @property
     @abc.abstractmethod
-    def dtype(self) -> typing.Type[DataTypeClass]:
+    def dtype(self) -> typing.Type[TypeClass]:
         """
         The generated Python class modeling the corresponding DSDL data type.
         """
@@ -60,7 +57,7 @@ class TypedSessionProxy(abc.ABC, typing.Generic[DataTypeClass]):
         """
         raise NotImplementedError
 
-    async def __aenter__(self) -> TypedSessionProxy[DataTypeClass]:
+    async def __aenter__(self) -> TypedSessionProxy[TypeClass]:
         return self
 
     async def __aexit__(self, *_: typing.Any) -> bool:
@@ -72,7 +69,7 @@ class TypedSessionProxy(abc.ABC, typing.Generic[DataTypeClass]):
         raise NotImplementedError
 
 
-class MessageTypedSessionProxy(TypedSessionProxy[MessageTypeClass]):
+class MessageTypedSessionProxy(TypedSessionProxy[MessageClass]):
     @property
     @abc.abstractmethod
     def transport_session(self) -> pyuavcan.transport.Session:
@@ -87,7 +84,7 @@ class MessageTypedSessionProxy(TypedSessionProxy[MessageTypeClass]):
         assert isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         return ds.subject_id
 
-    async def __aenter__(self) -> MessageTypedSessionProxy[MessageTypeClass]:
+    async def __aenter__(self) -> MessageTypedSessionProxy[MessageClass]:
         return self
 
     def __repr__(self) -> str:
@@ -96,7 +93,7 @@ class MessageTypedSessionProxy(TypedSessionProxy[MessageTypeClass]):
                                          transport_session=self.transport_session)
 
 
-class ServiceTypedSessionProxy(TypedSessionProxy[ServiceTypeClass]):
+class ServiceTypedSessionProxy(TypedSessionProxy[ServiceClass]):
     @property
     @abc.abstractmethod
     def input_transport_session(self) -> pyuavcan.transport.InputSession:
@@ -112,7 +109,7 @@ class ServiceTypedSessionProxy(TypedSessionProxy[ServiceTypeClass]):
         assert isinstance(ds, pyuavcan.transport.ServiceDataSpecifier)
         return ds.service_id
 
-    async def __aenter__(self) -> ServiceTypedSessionProxy[ServiceTypeClass]:
+    async def __aenter__(self) -> ServiceTypedSessionProxy[ServiceClass]:
         return self
 
     def __repr__(self) -> str:
