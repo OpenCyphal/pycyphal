@@ -7,6 +7,7 @@
 import time
 import typing
 import pytest
+import asyncio
 import pyuavcan
 import pyuavcan.transport.can
 import tests.transport.can
@@ -156,6 +157,15 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert stat.transfer.overruns == 0
     assert stat.deserialization_failures == 1
     assert stat.messages == 1
+
+    # Close the objects explicitly and ensure that they are finalized. This also removes the warnings that some tasks
+    # have been removed while pending.
+    await pub_heart.close()
+    await sub_record.close()
+    await pub_record.close()
+    await asyncio.sleep(1.1)
+    assert pres_a.sessions == []
+    assert pres_b.sessions == []
 
     await pres_a.close()
     await pres_b.close()

@@ -154,7 +154,3 @@ class PublisherImpl(typing.Generic[MessageClass]):
                                          dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
                                          transport_session=self.transport_session,
                                          proxy_count=self._proxy_count)
-
-    def __del__(self) -> None:
-        assert self._closed
-        assert self._proxy_count == 0

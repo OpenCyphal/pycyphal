@@ -86,7 +86,7 @@ class Subscriber(MessageTypedSessionProxy[MessageClass]):
         Blocks forever until a valid message is received. The received message will be returned along with the
         transfer which delivered it.
         """
-        self._raise_if_closed()
+        self._raise_if_closed_or_failed()
         message, transfer = await self._rx.queue.get()
         assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
         assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
@@ -101,7 +101,7 @@ class Subscriber(MessageTypedSessionProxy[MessageClass]):
         If the deadline is in the past (e.g., zero), the method will non-blockingly check if there is any data;
         if there is, it will be returned, otherwise None will be returned immediately.
         """
-        self._raise_if_closed()
+        self._raise_if_closed_or_failed()
         timeout = monotonic_deadline - time.monotonic()
         try:
             if timeout > 0:
@@ -124,13 +124,17 @@ class Subscriber(MessageTypedSessionProxy[MessageClass]):
         it will be closed. There is a chance that a new subscriber instance created in the future may still reuse the
         old underlying implementation which was previously scheduled for disposal.
         """
-        self._raise_if_closed()
+        self._raise_if_closed_or_failed()
         self._closed = True
         self._impl.remove_listener(self._rx)
 
-    def _raise_if_closed(self) -> None:
+    def _raise_if_closed_or_failed(self) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(repr(self))
+
+        if self._rx.exception is not None:
+            self._closed = True
+            raise RuntimeError('The subscriber has failed and been closed') from self._rx.exception
 
     async def __aenter__(self) -> Subscriber[MessageClass]:
         return self
@@ -147,6 +151,7 @@ class _Listener(typing.Generic[MessageClass]):
     queue:         asyncio.Queue[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]
     push_count:    int = 0
     overrun_count: int = 0
+    exception:     typing.Optional[Exception] = None
 
 
 class SubscriberImpl(typing.Generic[MessageClass]):
@@ -171,24 +176,41 @@ class SubscriberImpl(typing.Generic[MessageClass]):
         self._state = self.State.INIT
 
     async def _task_function(self) -> None:
-        while len(self._listeners) > 0 or self._state == self.State.INIT:
-            transfer = await self.transport_session.try_receive(time.monotonic() + _RECEIVE_POLL_INTERVAL)
-            if transfer is not None:
-                message = pyuavcan.dsdl.try_deserialize(self.dtype, transfer.fragmented_payload)
-                if message is not None:
-                    for rx in self._listeners:
-                        try:
-                            rx.queue.put_nowait((message, transfer))
-                            rx.push_count += 1
-                        except asyncio.QueueFull:
-                            rx.overrun_count += 1
-                else:
-                    self.deserialization_failure_count += 1
+        exception: typing.Optional[Exception] = None
+        try:
+            while len(self._listeners) > 0 or self._state == self.State.INIT:
+                transfer = await self.transport_session.try_receive(time.monotonic() + _RECEIVE_POLL_INTERVAL)
+                if transfer is not None:
+                    message = pyuavcan.dsdl.try_deserialize(self.dtype, transfer.fragmented_payload)
+                    if message is not None:
+                        for rx in self._listeners:
+                            try:
+                                rx.queue.put_nowait((message, transfer))
+                                rx.push_count += 1
+                            except asyncio.QueueFull:
+                                rx.overrun_count += 1
+                    else:
+                        self.deserialization_failure_count += 1
+        except Exception as ex:
+            exception = ex
+            # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
+            _logger.exception('Fatal error in the subscriber task of %s: %s', self, ex)
 
-        self._state = self.State.DEAD
-        _logger.info(f'{self} is being closed because there are no active listeners left')
-        self._finalizer()
-        await self.transport_session.close()    # Race condition?
+        try:
+            self._state = self.State.DEAD
+            try:
+                self._finalizer()
+                _logger.info(f'{self} is being closed')
+            finally:
+                await self.transport_session.close()    # Race condition?
+        except Exception as ex:
+            exception = ex
+            # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
+            _logger.exception(f'Failed to close the subscription session of %s: %s', self, ex)
+
+        exception = exception if exception is not None else pyuavcan.transport.ResourceClosedError(repr(self))
+        for rx in self._listeners:
+            rx.exception = exception
 
     def add_listener(self, rx: _Listener[MessageClass]) -> None:
         if self._state == self.State.DEAD:  # pragma: no cover
@@ -210,10 +232,6 @@ class SubscriberImpl(typing.Generic[MessageClass]):
                                          deserialization_failure_count=self.deserialization_failure_count,
                                          listeners=self._listeners,
                                          state=str(self._state))
-
-    def __del__(self) -> None:
-        assert self._state == self.State.DEAD
-        assert len(self._listeners) == 0
 
 
 _RECEIVE_POLL_INTERVAL = 1
