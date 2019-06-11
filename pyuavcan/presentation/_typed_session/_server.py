@@ -12,7 +12,7 @@ import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import ServiceClass, ServiceTypedSessionProxy, TypedSessionFinalizer
+from ._base import ServiceClass, ServiceTypedSession, TypedSessionFinalizer
 from ._error import TypedSessionClosedError
 
 
@@ -37,18 +37,18 @@ class ServerStatistics:
 
 
 @dataclasses.dataclass
-class IncomingServiceRequestMetadata:
+class ServiceRequestMetadata:
     timestamp:      pyuavcan.transport.Timestamp
     priority:       pyuavcan.transport.Priority
     transfer_id:    int
     client_node_id: int
 
 
-ServiceRequestHandler = typing.Callable[[ServiceRequestClass, IncomingServiceRequestMetadata],
+ServiceRequestHandler = typing.Callable[[ServiceRequestClass, ServiceRequestMetadata],
                                         typing.Awaitable[typing.Optional[ServiceResponseClass]]]
 
 
-class Server(ServiceTypedSessionProxy[ServiceClass]):
+class Server(ServiceTypedSession[ServiceClass]):
     """
     At most one task can use the server at any given time. The public API entries are serialized with a lock to
     enforce this. There can be at most one server instance per data specifier.
@@ -155,16 +155,16 @@ class Server(ServiceTypedSessionProxy[ServiceClass]):
             await self._finalizer((self._input_transport_session, *self._output_transport_sessions.values()))
 
     async def _try_receive_until(self, monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[ServiceClass.Request, IncomingServiceRequestMetadata]]:
+            -> typing.Optional[typing.Tuple[ServiceClass.Request, ServiceRequestMetadata]]:
         while True:
             transfer = await self._input_transport_session.try_receive(monotonic_deadline)
             if transfer is None:
                 return None
             if transfer.source_node_id is not None:
-                meta = IncomingServiceRequestMetadata(timestamp=transfer.timestamp,
-                                                      priority=transfer.priority,
-                                                      transfer_id=transfer.transfer_id,
-                                                      client_node_id=transfer.source_node_id)
+                meta = ServiceRequestMetadata(timestamp=transfer.timestamp,
+                                              priority=transfer.priority,
+                                              transfer_id=transfer.transfer_id,
+                                              client_node_id=transfer.source_node_id)
                 request = pyuavcan.dsdl.try_deserialize(self._dtype.Request, transfer.fragmented_payload)
                 if request is not None:
                     return request, meta  # type: ignore
@@ -175,7 +175,7 @@ class Server(ServiceTypedSessionProxy[ServiceClass]):
 
     @staticmethod
     async def _do_send(response: ServiceClass.Response,
-                       metadata: IncomingServiceRequestMetadata,
+                       metadata: ServiceRequestMetadata,
                        session:  pyuavcan.transport.OutputSession) -> None:
         timestamp = pyuavcan.transport.Timestamp.now()
         fragmented_payload = list(pyuavcan.dsdl.serialize(response))

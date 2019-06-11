@@ -48,6 +48,8 @@ class Presentation:
         """
         return self._transport
 
+    # ----------------------------------------  SESSION FACTORY METHODS  ----------------------------------------
+
     async def make_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) -> Publisher[MessageClass]:
         """
         Creates a new publisher instance for the specified type and subject ID. All publishers created with a given
@@ -115,6 +117,8 @@ class Presentation:
     async def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) -> Server[ServiceClass]:
         raise NotImplementedError
 
+    # ----------------------------------------  CONVENIENCE FACTORY METHODS  ----------------------------------------
+
     async def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Publisher[FixedPortMessageClass]:
         """
@@ -124,7 +128,7 @@ class Presentation:
         return await self.make_publisher(dtype=dtype, subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
 
     async def make_subscriber_with_fixed_subject_id(self,
-                                                    dtype: typing.Type[FixedPortMessageClass],
+                                                    dtype:          typing.Type[FixedPortMessageClass],
                                                     queue_capacity: typing.Optional[int] = None) \
             -> Subscriber[FixedPortMessageClass]:
         """
@@ -142,6 +146,8 @@ class Presentation:
         Raises a TypeError if the type has no fixed port ID.
         """
         return await self.get_server(dtype=dtype, service_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
+
+    # ----------------------------------------  AUXILIARY ENTITIES  ----------------------------------------
 
     async def close(self) -> None:
         """

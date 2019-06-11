@@ -36,7 +36,7 @@ class OutgoingTransferIDCounter:
         self._value = int(value)
 
 
-class TypedSessionProxy(abc.ABC, typing.Generic[TypeClass]):
+class TypedSession(abc.ABC, typing.Generic[TypeClass]):
     @property
     @abc.abstractmethod
     def dtype(self) -> typing.Type[TypeClass]:
@@ -65,7 +65,7 @@ class TypedSessionProxy(abc.ABC, typing.Generic[TypeClass]):
         raise NotImplementedError
 
 
-class MessageTypedSessionProxy(TypedSessionProxy[MessageClass]):
+class MessageTypedSession(TypedSession[MessageClass]):
     @property
     @abc.abstractmethod
     def transport_session(self) -> pyuavcan.transport.Session:
@@ -86,7 +86,7 @@ class MessageTypedSessionProxy(TypedSessionProxy[MessageClass]):
                                              transport_session=self.transport_session)
 
 
-class ServiceTypedSessionProxy(TypedSessionProxy[ServiceClass]):
+class ServiceTypedSession(TypedSession[ServiceClass]):
     @property
     @abc.abstractmethod
     def input_transport_session(self) -> pyuavcan.transport.InputSession:

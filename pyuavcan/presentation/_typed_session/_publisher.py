@@ -11,7 +11,7 @@ import asyncio
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessageTypedSessionProxy, OutgoingTransferIDCounter, MessageClass
+from ._base import MessageTypedSession, OutgoingTransferIDCounter, MessageClass
 from ._base import DEFAULT_PRIORITY, TypedSessionFinalizer
 from ._error import TypedSessionClosedError
 
@@ -19,7 +19,7 @@ from ._error import TypedSessionClosedError
 _logger = logging.getLogger(__name__)
 
 
-class Publisher(MessageTypedSessionProxy[MessageClass]):
+class Publisher(MessageTypedSession[MessageClass]):
     """
     Each task should request its own independent publisher instance from the presentation layer controller. Do not
     share the same publisher instance across different tasks.
@@ -126,17 +126,17 @@ class PublisherImpl(typing.Generic[MessageClass]):
         self._raise_if_closed()
         assert self._proxy_count >= 0
         self._proxy_count += 1
-        _logger.debug('Typed session instance %s got a new proxy, new count %s', self, self._proxy_count)
+        _logger.debug('%s got a new proxy, new count %s', self, self._proxy_count)
 
     async def remove_proxy(self) -> None:
         self._raise_if_closed()
         self._proxy_count -= 1
-        _logger.debug('Typed session instance %s lost a proxy, new count %s', self, self._proxy_count)
+        _logger.debug('%s has lost a proxy, new count %s', self, self._proxy_count)
         assert self._proxy_count >= 0
         if self._proxy_count <= 0:
             async with self._lock:
                 if not self._closed:
-                    _logger.info('Typed session instance %s is being closed', self)
+                    _logger.info('%s is being closed', self)
                     self._closed = True
                     await self._finalizer([self.transport_session])
 

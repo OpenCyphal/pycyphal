@@ -13,7 +13,7 @@ import dataclasses
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessageTypedSessionProxy, MessageClass, TypedSessionFinalizer
+from ._base import MessageTypedSession, MessageClass, TypedSessionFinalizer
 from ._error import TypedSessionClosedError
 
 
@@ -31,7 +31,7 @@ class SubscriberStatistics:
     deserialization_failures: int
 
 
-class Subscriber(MessageTypedSessionProxy[MessageClass]):
+class Subscriber(MessageTypedSession[MessageClass]):
     """
     Normally, each task should request its own subscriber instance. An attempt to reuse the same instance across
     different consumer tasks may lead to unpredictable message distribution.
