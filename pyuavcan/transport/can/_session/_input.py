@@ -129,17 +129,19 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
     async def _do_try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:
             self._raise_if_closed()
-
-            timeout = monotonic_deadline - time.monotonic()
-            if timeout <= 0:
-                break
-
             try:
-                canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                # Continue reading past the deadline until the queue is empty or a transfer is received.
+                timeout = monotonic_deadline - time.monotonic()
+                if timeout > 0:
+                    canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                else:
+                    canid, frame = self._queue.get_nowait()
                 assert isinstance(canid, _identifier.CANID)
                 assert isinstance(frame, _frame.TimestampedUAVCANFrame)
             except asyncio.TimeoutError:
-                continue
+                return None
+            except asyncio.QueueEmpty:
+                return None
 
             self._statistics.frames += 1
 
@@ -180,7 +182,6 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                 pass        # Nothing to do - expecting more frames
             else:
                 assert False
-        return None
 
 
 def _node_id_range() -> typing.Iterable[int]:

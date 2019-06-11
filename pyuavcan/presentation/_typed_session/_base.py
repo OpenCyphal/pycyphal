@@ -15,6 +15,9 @@ import pyuavcan.transport
 DEFAULT_PRIORITY = pyuavcan.transport.Priority.LOW
 
 
+TypedSessionFinalizer = typing.Callable[[typing.Iterable[pyuavcan.transport.Session]], typing.Awaitable[None]]
+
+
 TypeClass = typing.TypeVar('TypeClass', bound=pyuavcan.dsdl.CompositeObject)
 MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
 ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)

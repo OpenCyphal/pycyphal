@@ -13,11 +13,11 @@ import dataclasses
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessageTypedSessionProxy, MessageClass
+from ._base import MessageTypedSessionProxy, MessageClass, TypedSessionFinalizer
 from ._error import TypedSessionClosedError
 
 
-_RECEIVE_POLL_INTERVAL = 10
+_RECEIVE_TIMEOUT = 10
 
 
 _logger = logging.getLogger(__name__)
@@ -32,6 +32,10 @@ class SubscriberStatistics:
 
 
 class Subscriber(MessageTypedSessionProxy[MessageClass]):
+    """
+    Normally, each task should request its own subscriber instance. An attempt to reuse the same instance across
+    different consumer tasks may lead to unpredictable message distribution.
+    """
     def __init__(self,
                  impl:           SubscriberImpl[MessageClass],
                  loop:           asyncio.AbstractEventLoop,
@@ -46,6 +50,7 @@ class Subscriber(MessageTypedSessionProxy[MessageClass]):
         self._closed = False
         self._impl = impl
         self._loop = loop
+        self._lock = asyncio.Lock(loop=loop)
         self._rx: _Listener[MessageClass] = _Listener(asyncio.Queue(maxsize=queue_capacity, loop=loop))
         impl.add_listener(self._rx)
 
@@ -81,11 +86,12 @@ class Subscriber(MessageTypedSessionProxy[MessageClass]):
         Blocks forever until a valid message is received. The received message will be returned along with the
         transfer which delivered it.
         """
-        self._raise_if_closed_or_failed()
-        message, transfer = await self._rx.queue.get()
-        assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
-        assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
-        return message, transfer
+        async with self._lock:
+            self._raise_if_closed_or_failed()
+            message, transfer = await self._rx.queue.get()
+            assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
+            assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
+            return message, transfer
 
     async def try_receive_with_transfer_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
@@ -107,20 +113,21 @@ class Subscriber(MessageTypedSessionProxy[MessageClass]):
         If the timeout is non-positive, the method will non-blockingly check if there is any data; if there is,
         it will be returned, otherwise None will be returned immediately.
         """
-        self._raise_if_closed_or_failed()
-        try:
-            if timeout > 0:
-                message, transfer = await asyncio.wait_for(self._rx.queue.get(), timeout, loop=self._loop)
+        async with self._lock:
+            self._raise_if_closed_or_failed()
+            try:
+                if timeout > 0:
+                    message, transfer = await asyncio.wait_for(self._rx.queue.get(), timeout, loop=self._loop)
+                else:
+                    message, transfer = self._rx.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return None
+            except asyncio.TimeoutError:
+                return None
             else:
-                message, transfer = self._rx.queue.get_nowait()
-        except asyncio.QueueEmpty:
-            return None
-        except asyncio.TimeoutError:
-            return None
-        else:
-            assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
-            assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
-            return message, transfer
+                assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
+                assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
+                return message, transfer
 
     # ----------------------------------------  ITERATOR API  ----------------------------------------
 
@@ -159,11 +166,13 @@ class Subscriber(MessageTypedSessionProxy[MessageClass]):
         its transport session instance will be closed. The user should explicitly close all objects before disposing
         of the presentation layer instance.
         """
-        self._raise_if_closed_or_failed()
-        self._closed = True
-        await self._impl.remove_listener(self._rx)
+        async with self._lock:
+            self._raise_if_closed_or_failed()
+            self._closed = True
+            await self._impl.remove_listener(self._rx)
 
     def _raise_if_closed_or_failed(self) -> None:
+        assert self._lock.locked(), 'Internal protocol violation: the lock is not acquired'
         if self._closed:
             raise TypedSessionClosedError(repr(self))
 
@@ -210,7 +219,7 @@ class SubscriberImpl(typing.Generic[MessageClass]):
     def __init__(self,
                  dtype:             typing.Type[MessageClass],
                  transport_session: pyuavcan.transport.InputSession,
-                 finalizer:         typing.Callable[[pyuavcan.transport.Session], typing.Awaitable[None]],
+                 finalizer:         TypedSessionFinalizer,
                  loop:              asyncio.AbstractEventLoop):
         self.dtype = dtype
         self.transport_session = transport_session
@@ -224,7 +233,7 @@ class SubscriberImpl(typing.Generic[MessageClass]):
         exception: typing.Optional[Exception] = None
         try:
             while not self._closed:
-                transfer = await self.transport_session.try_receive(time.monotonic() + _RECEIVE_POLL_INTERVAL)
+                transfer = await self.transport_session.try_receive(time.monotonic() + _RECEIVE_TIMEOUT)
                 if transfer is not None:
                     message = pyuavcan.dsdl.try_deserialize(self.dtype, transfer.fragmented_payload)
                     if message is not None:
@@ -241,7 +250,7 @@ class SubscriberImpl(typing.Generic[MessageClass]):
 
         try:
             self._closed = True
-            await self._finalizer(self.transport_session)
+            await self._finalizer([self.transport_session])
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger

@@ -198,6 +198,9 @@ def get_max_serialized_representation_size_bytes(class_or_instance: typing.Union
 
 
 def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[FixedPortObject], FixedPortObject]) -> int:
+    """
+    Raises a TypeError if the type has no fixed port ID.
+    """
     # noinspection PyProtectedMember
     out = int(class_or_instance._FIXED_PORT_ID_)
     if (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)) or \

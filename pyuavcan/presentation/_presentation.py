@@ -6,14 +6,16 @@
 
 from __future__ import annotations
 import typing
+import logging
 import asyncio
 import collections
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._typed_session import OutgoingTransferIDCounter
+from ._typed_session import OutgoingTransferIDCounter, TypedSessionFinalizer
 from ._typed_session import Publisher, PublisherImpl
 from ._typed_session import Subscriber, SubscriberImpl
+from ._typed_session import Server
 
 
 MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
@@ -21,6 +23,9 @@ ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)
 
 FixedPortMessageClass = typing.TypeVar('FixedPortMessageClass', bound=pyuavcan.dsdl.FixedPortCompositeObject)
 FixedPortServiceClass = typing.TypeVar('FixedPortServiceClass', bound=pyuavcan.dsdl.FixedPortServiceObject)
+
+
+_logger = logging.getLogger(__name__)
 
 
 class Presentation:
@@ -72,8 +77,8 @@ class Presentation:
         return Publisher(impl, self._transport.loop)
 
     async def make_subscriber(self,
-                              dtype: typing.Type[MessageClass],
-                              subject_id: int,
+                              dtype:          typing.Type[MessageClass],
+                              subject_id:     int,
                               queue_capacity: typing.Optional[int] = None) -> Subscriber[MessageClass]:
         """
         Creates a new subscriber instance for the specified type and subject ID. All subscribers created with a given
@@ -107,6 +112,9 @@ class Presentation:
                           loop=self._transport.loop,
                           queue_capacity=queue_capacity)
 
+    async def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) -> Server[ServiceClass]:
+        raise NotImplementedError
+
     async def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Publisher[FixedPortMessageClass]:
         """
@@ -127,6 +135,14 @@ class Presentation:
                                           subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype),
                                           queue_capacity=queue_capacity)
 
+    async def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
+            -> Server[FixedPortServiceClass]:
+        """
+        An alias for get_server() which uses the fixed port ID associated with this type.
+        Raises a TypeError if the type has no fixed port ID.
+        """
+        return await self.get_server(dtype=dtype, service_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
+
     async def close(self) -> None:
         """
         Closes the underlying transport instance. Invalidates all existing session instances.
@@ -143,9 +159,8 @@ class Presentation:
         """
         return list(self._typed_session_registry.keys())
 
-    def _make_finalizer(self, session_specifier: pyuavcan.transport.SessionSpecifier) \
-            -> typing.Callable[[pyuavcan.transport.Session], typing.Awaitable[None]]:
-        async def finalizer(transport_session: pyuavcan.transport.Session) -> None:
+    def _make_finalizer(self, session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
+        async def finalizer(transport_sessions: typing.Iterable[pyuavcan.transport.Session]) -> None:
             # So this is rather messy. Observe that a typed session instance aggregates two distinct resources that
             # MUST be allocated and deallocated SYNCHRONOUSLY: the local registry entry in this class and the
             # corresponding transport session instance. I don't want to plaster our session objects with locks and
@@ -160,11 +175,18 @@ class Presentation:
                 done = True
                 try:
                     self._typed_session_registry.pop(session_specifier)
-                finally:
-                    try:
-                        await transport_session.close()
-                    except pyuavcan.transport.ResourceClosedError:
-                        pass
+                except Exception as ex:
+                    _logger.exception('Could not remove the session for the specifier %s: %s', session_specifier, ex)
+
+                results = await asyncio.gather(*[ts.close() for ts in transport_sessions],
+                                               loop=self._transport.loop,
+                                               return_exceptions=True)
+                errors = list(filter(
+                    lambda x: isinstance(x, Exception) and not isinstance(x, pyuavcan.transport.ResourceClosedError),
+                    results))
+                del results
+                if len(errors) > 0:
+                    _logger.error('Could not close transport sessions: %r', errors)
 
         done = False
         return finalizer

@@ -12,7 +12,7 @@ import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
 from ._base import MessageTypedSessionProxy, OutgoingTransferIDCounter, MessageClass
-from ._base import DEFAULT_PRIORITY
+from ._base import DEFAULT_PRIORITY, TypedSessionFinalizer
 from ._error import TypedSessionClosedError
 
 
@@ -20,6 +20,10 @@ _logger = logging.getLogger(__name__)
 
 
 class Publisher(MessageTypedSessionProxy[MessageClass]):
+    """
+    Each task should request its own independent publisher instance from the presentation layer controller. Do not
+    share the same publisher instance across different tasks.
+    """
     def __init__(self,
                  impl: PublisherImpl[MessageClass],
                  loop: asyncio.AbstractEventLoop):
@@ -93,7 +97,7 @@ class PublisherImpl(typing.Generic[MessageClass]):
                  dtype:               typing.Type[MessageClass],
                  transport_session:   pyuavcan.transport.OutputSession,
                  transfer_id_counter: OutgoingTransferIDCounter,
-                 finalizer:           typing.Callable[[pyuavcan.transport.Session], typing.Awaitable[None]],
+                 finalizer:           TypedSessionFinalizer,
                  loop:                asyncio.AbstractEventLoop):
         self.dtype = dtype
         self.transport_session = transport_session
@@ -134,7 +138,7 @@ class PublisherImpl(typing.Generic[MessageClass]):
                 if not self._closed:
                     _logger.info('Typed session instance %s is being closed', self)
                     self._closed = True
-                    await self._finalizer(self.transport_session)
+                    await self._finalizer([self.transport_session])
 
     @property
     def proxy_count(self) -> int:

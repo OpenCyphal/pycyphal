@@ -5,10 +5,12 @@
 #
 
 from ._base import TypedSessionProxy, MessageTypedSessionProxy, ServiceTypedSessionProxy, DEFAULT_PRIORITY
-from ._base import OutgoingTransferIDCounter
+from ._base import OutgoingTransferIDCounter, TypedSessionFinalizer
 
 from ._publisher import Publisher, PublisherImpl
 
 from ._subscriber import Subscriber, SubscriberImpl, SubscriberStatistics
+
+from ._server import Server, ServerStatistics, IncomingServiceRequestMetadata, ServiceRequestHandler
 
 from ._error import TypedSessionClosedError

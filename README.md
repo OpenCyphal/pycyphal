@@ -36,6 +36,13 @@ Please come back later.
 If you are willing to help, please join the
 [UAVCAN Development & Maintenance forum](https://forum.uavcan.org/c/dev) for coordination.
 
+## FAQ
+
+**Q:** PyUAVCAN seems complex. Does that mean that UAVCAN is a complex protocol?
+**A:** UAVCAN is a very simple protocol. This particular implementation may appear convoluted because it is very
+generic and provides a very high-level API. For comparison, there is a full-featured UAVCAN-over-CAN
+implementation in C99 only ~1k LoC large.
+
 ## Development
 
 ### Semantic naming conventions
