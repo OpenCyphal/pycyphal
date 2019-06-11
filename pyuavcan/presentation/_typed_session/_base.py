@@ -57,13 +57,6 @@ class TypedSessionProxy(abc.ABC, typing.Generic[TypeClass]):
         """
         raise NotImplementedError
 
-    async def __aenter__(self) -> TypedSessionProxy[TypeClass]:
-        return self
-
-    async def __aexit__(self, *_: typing.Any) -> bool:
-        await self.close()
-        return False
-
     @abc.abstractmethod
     def __repr__(self) -> str:
         raise NotImplementedError
@@ -83,9 +76,6 @@ class MessageTypedSessionProxy(TypedSessionProxy[MessageClass]):
         ds = self.transport_session.specifier.data_specifier
         assert isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         return ds.subject_id
-
-    async def __aenter__(self) -> MessageTypedSessionProxy[MessageClass]:
-        return self
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self,
@@ -108,9 +98,6 @@ class ServiceTypedSessionProxy(TypedSessionProxy[ServiceClass]):
         ds = self.input_transport_session.specifier.data_specifier
         assert isinstance(ds, pyuavcan.transport.ServiceDataSpecifier)
         return ds.service_id
-
-    async def __aenter__(self) -> ServiceTypedSessionProxy[ServiceClass]:
-        return self
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self,

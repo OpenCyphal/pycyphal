@@ -67,8 +67,9 @@ class Presentation:
                                      finalizer=self._make_finalizer(session_specifier),
                                      loop=self._transport.loop)
                 self._typed_session_registry[session_specifier] = impl
-            assert isinstance(impl, PublisherImpl)
-            return Publisher(impl, self._transport.loop)
+
+        assert isinstance(impl, PublisherImpl)
+        return Publisher(impl, self._transport.loop)
 
     async def make_subscriber(self,
                               dtype: typing.Type[MessageClass],
@@ -100,10 +101,11 @@ class Presentation:
                                       finalizer=self._make_finalizer(session_specifier),
                                       loop=self._transport.loop)
                 self._typed_session_registry[session_specifier] = impl
-            assert isinstance(impl, SubscriberImpl)
-            return Subscriber(impl=impl,
-                              loop=self._transport.loop,
-                              queue_capacity=queue_capacity)
+
+        assert isinstance(impl, SubscriberImpl)
+        return Subscriber(impl=impl,
+                          loop=self._transport.loop,
+                          queue_capacity=queue_capacity)
 
     async def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Publisher[FixedPortMessageClass]:

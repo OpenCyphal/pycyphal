@@ -13,6 +13,7 @@ import pyuavcan.dsdl
 import pyuavcan.transport
 from ._base import MessageTypedSessionProxy, OutgoingTransferIDCounter, MessageClass
 from ._base import DEFAULT_PRIORITY
+from ._error import TypedSessionClosedError
 
 
 _logger = logging.getLogger(__name__)
@@ -71,12 +72,9 @@ class Publisher(MessageTypedSessionProxy[MessageClass]):
     @property
     def _impl(self) -> PublisherImpl[MessageClass]:
         if self._maybe_impl is None:
-            raise pyuavcan.transport.ResourceClosedError(repr(self))
+            raise TypedSessionClosedError(repr(self))
         else:
             return self._maybe_impl
-
-    async def __aenter__(self) -> Publisher[MessageClass]:
-        return self
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
@@ -89,7 +87,7 @@ class PublisherImpl(typing.Generic[MessageClass]):
     """
     The publisher implementation. There is at most one such implementation per session specifier. It may be shared
     across multiple users with the help of the proxy class. When the last proxy is closed or garbage collected,
-    the implementation will also be closed and removed.
+    the implementation will also be closed and removed. This is not a part of the library API.
     """
     def __init__(self,
                  dtype:               typing.Type[MessageClass],
@@ -146,7 +144,7 @@ class PublisherImpl(typing.Generic[MessageClass]):
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            raise pyuavcan.transport.ResourceClosedError(repr(self))
+            raise TypedSessionClosedError(repr(self))
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,

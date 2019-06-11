@@ -10,3 +10,5 @@ from ._base import OutgoingTransferIDCounter
 from ._publisher import Publisher, PublisherImpl
 
 from ._subscriber import Subscriber, SubscriberImpl, SubscriberStatistics
+
+from ._error import TypedSessionClosedError

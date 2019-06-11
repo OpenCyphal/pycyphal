@@ -46,11 +46,12 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     sub_record = await pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 
     assert pub_heart._impl.proxy_count == 1
-    # TODO: "async with await" is an antipattern https://github.com/python/asyncio/issues/316
-    async with await pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0) as pub_heart_new:
-        assert pub_heart is not pub_heart_new
-        assert pub_heart._impl is pub_heart_new._impl
-        assert pub_heart._impl.proxy_count == 2
+    pub_heart_new = await pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    assert pub_heart is not pub_heart_new
+    assert pub_heart._impl is pub_heart_new._impl
+    assert pub_heart._impl.proxy_count == 2
+    await pub_heart_new.close()
+    del pub_heart_new
     assert pub_heart._impl.proxy_count == 1
 
     pub_heart_impl_old = pub_heart._impl
@@ -109,9 +110,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert repr(rx) == repr(heart)
 
     await pub_heart.publish(heart)
-    rx = await sub_heart.try_receive(time.monotonic() + _RX_TIMEOUT)
+    rx = await sub_heart.try_receive_until(time.monotonic() + _RX_TIMEOUT)
     assert repr(rx) == repr(heart)
-    rx = await sub_heart.try_receive(time.monotonic() + _RX_TIMEOUT)
+    rx = await sub_heart.try_receive_for(_RX_TIMEOUT)
     assert rx is None
 
     await sub_heart.close()
@@ -149,7 +150,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
         transfer_id=12,
         fragmented_payload=[memoryview(b'Broken')],
     ))
-    assert (await sub_record.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await sub_record.try_receive_until(time.monotonic() + _RX_TIMEOUT)) is None
 
     stat = sub_record.sample_statistics()
     assert stat.transfer.transfers == 2
