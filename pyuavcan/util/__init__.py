@@ -10,4 +10,4 @@ from ._refragment import refragment
 
 from ._mark_last import mark_last
 
-from ._repr import repr_object
+from ._repr import repr_attributes, repr_attributes_noexcept

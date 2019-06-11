@@ -111,8 +111,8 @@ class Transport(abc.ABC):
         Prints the basic transport information. May be overridden if there is more relevant info to display.
         """
         # TODO: somehow obtain the media information and print it here. Add a basic media info property of type str?
-        return pyuavcan.util.repr_object(self,
-                                         protocol_parameters=self.protocol_parameters,
-                                         local_node_id=self.local_node_id,
-                                         input_sessions=', '.join(map(str, self.input_sessions)),
-                                         output_sessions=', '.join(map(str, self.output_sessions)))
+        return pyuavcan.util.repr_attributes(self,
+                                             protocol_parameters=self.protocol_parameters,
+                                             local_node_id=self.local_node_id,
+                                             input_sessions=', '.join(map(str, self.input_sessions)),
+                                             output_sessions=', '.join(map(str, self.output_sessions)))

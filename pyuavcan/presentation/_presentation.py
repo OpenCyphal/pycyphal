@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 import typing
+import asyncio
 import collections
 import pyuavcan.util
 import pyuavcan.dsdl
@@ -32,6 +33,8 @@ class Presentation:
 
         self._typed_session_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, typing.Any] = {}
 
+        self._lock = asyncio.Lock(loop=transport.loop)
+
     @property
     def transport(self) -> pyuavcan.transport.Transport:
         """
@@ -49,22 +52,23 @@ class Presentation:
         from the finalizer if the user did not bother to do that properly; every such occurrence will be logged at the
         warning level.
         """
-        data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
-        session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
-        try:
-            impl = self._typed_session_registry[session_specifier]
+        async with self._lock:
+            data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
+            session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
+            try:
+                impl = self._typed_session_registry[session_specifier]
+                assert isinstance(impl, PublisherImpl)
+            except LookupError:
+                transport_session = await self._transport.get_output_session(session_specifier,
+                                                                             self._make_message_payload_metadata(dtype))
+                impl = PublisherImpl(dtype=dtype,
+                                     transport_session=transport_session,
+                                     transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
+                                     finalizer=self._make_finalizer(session_specifier),
+                                     loop=self._transport.loop)
+                self._typed_session_registry[session_specifier] = impl
             assert isinstance(impl, PublisherImpl)
-        except LookupError:
-            transport_session = await self._transport.get_output_session(session_specifier,
-                                                                         self._make_message_payload_metadata(dtype))
-            impl = PublisherImpl(dtype=dtype,
-                                 transport_session=transport_session,
-                                 transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
-                                 finalizer=self._make_finalizer(session_specifier),
-                                 loop=self._transport.loop)
-            self._typed_session_registry[session_specifier] = impl
-        assert isinstance(impl, PublisherImpl)
-        return Publisher(impl, self._transport.loop)
+            return Publisher(impl, self._transport.loop)
 
     async def make_subscriber(self,
                               dtype: typing.Type[MessageClass],
@@ -82,23 +86,24 @@ class Presentation:
         it is always limited at least by the amount of the available memory), the queue may become full in which case
         newer messages will be dropped and the overrun counter will be incremented once per dropped message.
         """
-        data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
-        session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
-        try:
-            impl = self._typed_session_registry[session_specifier]
+        async with self._lock:
+            data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
+            session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
+            try:
+                impl = self._typed_session_registry[session_specifier]
+                assert isinstance(impl, SubscriberImpl)
+            except LookupError:
+                transport_session = await self._transport.get_input_session(session_specifier,
+                                                                            self._make_message_payload_metadata(dtype))
+                impl = SubscriberImpl(dtype=dtype,
+                                      transport_session=transport_session,
+                                      finalizer=self._make_finalizer(session_specifier),
+                                      loop=self._transport.loop)
+                self._typed_session_registry[session_specifier] = impl
             assert isinstance(impl, SubscriberImpl)
-        except LookupError:
-            transport_session = await self._transport.get_input_session(session_specifier,
-                                                                        self._make_message_payload_metadata(dtype))
-            impl = SubscriberImpl(dtype=dtype,
-                                  transport_session=transport_session,
-                                  finalizer=self._make_finalizer(session_specifier),
-                                  loop=self._transport.loop)
-            self._typed_session_registry[session_specifier] = impl
-        assert isinstance(impl, SubscriberImpl)
-        return Subscriber(impl=impl,
-                          loop=self._transport.loop,
-                          queue_capacity=queue_capacity)
+            return Subscriber(impl=impl,
+                              loop=self._transport.loop,
+                              queue_capacity=queue_capacity)
 
     async def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Publisher[FixedPortMessageClass]:
@@ -124,7 +129,8 @@ class Presentation:
         """
         Closes the underlying transport instance. Invalidates all existing session instances.
         """
-        await self._transport.close()
+        async with self._lock:
+            await self._transport.close()
 
     @property
     def sessions(self) -> typing.Sequence[pyuavcan.transport.SessionSpecifier]:
@@ -135,14 +141,28 @@ class Presentation:
         """
         return list(self._typed_session_registry.keys())
 
-    def _make_finalizer(self, session_specifier: pyuavcan.transport.SessionSpecifier) -> typing.Callable[[], None]:
-        def finalizer() -> None:
-            # The finalizer must be invoked at most once! Double call could possibly remove a new instance created
-            # after the old one is removed.
+    def _make_finalizer(self, session_specifier: pyuavcan.transport.SessionSpecifier) \
+            -> typing.Callable[[pyuavcan.transport.Session], typing.Awaitable[None]]:
+        async def finalizer(transport_session: pyuavcan.transport.Session) -> None:
+            # So this is rather messy. Observe that a typed session instance aggregates two distinct resources that
+            # MUST be allocated and deallocated SYNCHRONOUSLY: the local registry entry in this class and the
+            # corresponding transport session instance. I don't want to plaster our session objects with locks and
+            # container references, so instead I decided to pass the associated resources into the finalizer, which
+            # disposes of all resources atomically by acquiring an explicit private lock. This is clearly not very
+            # obvious and in the future we should look for a cleaner design. The cleaner design can be retrofitted
+            # easily while keeping the API unchanged so this should be easy to fix transparently by bumping only
+            # the patch version of the library.
             nonlocal done
-            assert not done, 'Internal protocol violation: double close()'
-            done = True
-            self._typed_session_registry.pop(session_specifier)
+            async with self._lock:
+                assert not done, 'Internal protocol violation: double finalization'
+                done = True
+                try:
+                    self._typed_session_registry.pop(session_specifier)
+                finally:
+                    try:
+                        await transport_session.close()
+                    except pyuavcan.transport.ResourceClosedError:
+                        pass
 
         done = False
         return finalizer
@@ -155,4 +175,4 @@ class Presentation:
                                                   max_size_bytes=max_size_bytes)
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_object(self, transport=self.transport)
+        return pyuavcan.util.repr_attributes(self, transport=self.transport, sessions=self.sessions)

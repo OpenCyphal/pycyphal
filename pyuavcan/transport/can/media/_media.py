@@ -129,6 +129,6 @@ class Media(abc.ABC):
         """
         Prints the basic media information. Can be overridden if there is more relevant info to display.
         """
-        return pyuavcan.util.repr_object(self,
-                                         interface_name=self.interface_name,
-                                         max_data_field_length=self.max_data_field_length)
+        return pyuavcan.util.repr_attributes(self,
+                                             interface_name=self.interface_name,
+                                             max_data_field_length=self.max_data_field_length)

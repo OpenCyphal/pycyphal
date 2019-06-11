@@ -115,7 +115,7 @@ class Session(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_object(self, specifier=self.specifier, payload_metadata=self.payload_metadata)
+        return pyuavcan.util.repr_attributes(self, specifier=self.specifier, payload_metadata=self.payload_metadata)
 
 
 # noinspection PyAbstractClass

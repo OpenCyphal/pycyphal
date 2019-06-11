@@ -80,7 +80,7 @@ class Publisher(MessageTypedSessionProxy[MessageClass]):
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
-            _logger.warning(f'{self} has not been disposed of properly; fixing')
+            _logger.warning('%s has not been disposed of properly; fixing', self)
             # We can't just call close() here because the object is being deleted
             asyncio.ensure_future(self._maybe_impl.remove_proxy(), loop=self._loop)
 
@@ -95,7 +95,7 @@ class PublisherImpl(typing.Generic[MessageClass]):
                  dtype:               typing.Type[MessageClass],
                  transport_session:   pyuavcan.transport.OutputSession,
                  transfer_id_counter: OutgoingTransferIDCounter,
-                 finalizer:           typing.Callable[[], None],
+                 finalizer:           typing.Callable[[pyuavcan.transport.Session], typing.Awaitable[None]],
                  loop:                asyncio.AbstractEventLoop):
         self.dtype = dtype
         self.transport_session = transport_session
@@ -106,7 +106,7 @@ class PublisherImpl(typing.Generic[MessageClass]):
         self._proxy_count = 0
         self._closed = False
 
-    async def publish(self, message:  MessageClass, priority: pyuavcan.transport.Priority) -> None:
+    async def publish(self, message: MessageClass, priority: pyuavcan.transport.Priority) -> None:
         if not isinstance(message, self.dtype):
             raise ValueError(f'Expected a message object of type {self.dtype}, found this: {message}')
 
@@ -124,25 +124,19 @@ class PublisherImpl(typing.Generic[MessageClass]):
         self._raise_if_closed()
         assert self._proxy_count >= 0
         self._proxy_count += 1
-        _logger.debug(f'Typed session instance {self} got a new proxy, new count {self._proxy_count}')
+        _logger.debug('Typed session instance %s got a new proxy, new count %s', self, self._proxy_count)
 
     async def remove_proxy(self) -> None:
         self._raise_if_closed()
         self._proxy_count -= 1
-        _logger.debug(f'Typed session instance {self} lost a proxy, new count {self._proxy_count}')
+        _logger.debug('Typed session instance %s lost a proxy, new count %s', self, self._proxy_count)
         assert self._proxy_count >= 0
         if self._proxy_count <= 0:
             async with self._lock:
                 if not self._closed:
-                    _logger.info(f'Typed session instance {self} is being closed')
+                    _logger.info('Typed session instance %s is being closed', self)
                     self._closed = True
-                    self._finalizer()
-                    try:
-                        await self.transport_session.close()        # Race condition?
-                    except pyuavcan.transport.ResourceClosedError:
-                        # This is the desired state, no need to panic.
-                        # The session could be closed manually or by closing the entire transport instance.
-                        pass
+                    await self._finalizer(self.transport_session)
 
     @property
     def proxy_count(self) -> int:
@@ -155,7 +149,7 @@ class PublisherImpl(typing.Generic[MessageClass]):
             raise pyuavcan.transport.ResourceClosedError(repr(self))
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_object(self,
-                                         dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
-                                         transport_session=self.transport_session,
-                                         proxy_count=self._proxy_count)
+        return pyuavcan.util.repr_attributes_noexcept(self,
+                                                      dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
+                                                      transport_session=self.transport_session,
+                                                      proxy_count=self._proxy_count)

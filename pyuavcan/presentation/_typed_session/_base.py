@@ -88,9 +88,9 @@ class MessageTypedSessionProxy(TypedSessionProxy[MessageClass]):
         return self
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_object(self,
-                                         dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
-                                         transport_session=self.transport_session)
+        return pyuavcan.util.repr_attributes(self,
+                                             dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
+                                             transport_session=self.transport_session)
 
 
 class ServiceTypedSessionProxy(TypedSessionProxy[ServiceClass]):
@@ -113,6 +113,6 @@ class ServiceTypedSessionProxy(TypedSessionProxy[ServiceClass]):
         return self
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_object(self,
-                                         dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
-                                         input_transport_session=self.input_transport_session)
+        return pyuavcan.util.repr_attributes(self,
+                                             dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
+                                             input_transport_session=self.input_transport_session)
