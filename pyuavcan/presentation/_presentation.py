@@ -59,12 +59,12 @@ class Presentation:
 
     async def make_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) -> Publisher[MessageClass]:
         """
-        Creates a new publisher instance for the specified type and subject ID. All publishers created with a given
-        combination of type and subject share the same underlying implementation object which is hidden from the user;
-        the implementation is reference counted and it is destroyed automatically along with its underlying transport
-        level session instance when the last publisher is closed. The publisher instance will be close()d automatically
-        from the finalizer if the user did not bother to do that properly; every such occurrence will be logged at the
-        warning level.
+        Creates a new publisher instance for the specified subject ID. All publishers created for a specific subject
+        share the same underlying implementation object which is hidden from the user; the implementation is
+        reference counted and it is destroyed automatically along with its underlying transport level session
+        instance when the last publisher is closed. The publisher instance will be close()d automatically from
+        the finalizer when garbage collected if the user did not bother to do that manually; every such occurrence
+        will be logged.
         """
         async with self._lock:
             data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
@@ -90,12 +90,12 @@ class Presentation:
                               subject_id:     int,
                               queue_capacity: typing.Optional[int] = None) -> Subscriber[MessageClass]:
         """
-        Creates a new subscriber instance for the specified type and subject ID. All subscribers created with a given
-        combination of type and subject share the same underlying implementation object which is hidden from the user;
-        the implementation is reference counted and it is destroyed automatically along with its underlying transport
-        level session instance when the last subscriber is closed. The subscriber instance will be close()d
-        automatically from the finalizer if the user did not bother to do that properly; every such occurrence will be
-        logged at the warning level.
+        Creates a new subscriber instance for the specified subject ID. All subscribers created with a specific
+        subject share the same underlying implementation object which is hidden from the user; the implementation
+        is reference counted and it is destroyed automatically along with its underlying transport level session
+        instance when the last subscriber is closed. The subscriber instance will be close()d automatically from
+        the finalizer when garbage collected if the user did not bother to do that manually; every such occurrence
+        will be logged.
         By default, the size of the input queue is unlimited; the user may provide a positive integer value to override
         this. If the user is not reading the messages quickly enough and the size of the queue is limited (technically
         it is always limited at least by the amount of the available memory), the queue may become full in which case
@@ -125,6 +125,14 @@ class Presentation:
                           dtype:          typing.Type[ServiceClass],
                           service_id:     int,
                           server_node_id: int) -> Client[ServiceClass]:
+        """
+        Creates a new client instance for the specified server ID and the remote server node ID.
+        All clients created with a specific combination of service ID and server node ID share the same
+        underlying implementation object which is hidden from the user; the implementation is reference counted
+        and it is destroyed automatically along with its underlying transport level session instances when the
+        last client is closed. The client instance will be close()d automatically from the finalizer when garbage
+        collected if the  user did not bother to do that manually; every such occurrence will be logged.
+        """
         def transfer_id_modulo_factory() -> int:
             # This might be a tad slow because the protocol parameters may take some time to compute?
             return self._transport.protocol_parameters.transfer_id_modulo
@@ -159,6 +167,13 @@ class Presentation:
         return Client(impl=impl, loop=self._transport.loop)
 
     async def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) -> Server[ServiceClass]:
+        """
+        Returns the server instance for the specified service ID. If such instance does not exist, it will be
+        created. The instance should be used from one task only. Observe that unlike other typed session instances,
+        the server instance is returned as-is without any intermediate proxy objects. The server instance will not
+        be garbage collected as long as its presentation layer controller exists, hence it is the responsibility
+        of the user to close unwanted servers manually.
+        """
         async def output_transport_session_factory(client_node_id: int) -> pyuavcan.transport.OutputSession:
             _logger.info('%r has requested a new output session to client node %s', impl, client_node_id)
             async with self._lock:  # Important!
@@ -243,9 +258,7 @@ class Presentation:
     @property
     def sessions(self) -> typing.Sequence[pyuavcan.transport.SessionSpecifier]:
         """
-        A view of the active session instances that are currently open. Note that this view also includes instances
-        that are scheduled for removal, meaning that one request followed by another may end up returning fewer items
-        the second time even if the user did not request any changes explicitly.
+        A view of the active session instances that are currently open.
         """
         return list(self._typed_session_registry.keys())
 

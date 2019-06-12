@@ -182,7 +182,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
 
     def __del__(self) -> None:
         if not self._closed:
-            _logger.warning('%s has not been disposed of properly; fixing', self)
+            _logger.info('%s has not been disposed of properly; fixing', self)
             self._closed = True
             # We can't just call close() here because the object is being deleted
             asyncio.ensure_future(self._impl.remove_listener(self._rx), loop=self._loop)

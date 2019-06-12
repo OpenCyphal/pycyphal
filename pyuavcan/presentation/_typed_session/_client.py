@@ -134,7 +134,7 @@ class Client(ServiceTypedSession[ServiceClass]):
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
-            _logger.warning('%s has not been disposed of properly; fixing', self)
+            _logger.info('%s has not been disposed of properly; fixing', self)
             # We can't just call close() here because the object is being deleted
             asyncio.ensure_future(self._maybe_impl.remove_proxy(), loop=self._loop)
 
