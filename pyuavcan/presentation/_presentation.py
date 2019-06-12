@@ -15,6 +15,7 @@ import pyuavcan.transport
 from ._typed_session import OutgoingTransferIDCounter, TypedSessionFinalizer
 from ._typed_session import Publisher, PublisherImpl
 from ._typed_session import Subscriber, SubscriberImpl
+from ._typed_session import Client, ClientImpl
 from ._typed_session import Server
 
 
@@ -29,6 +30,12 @@ _logger = logging.getLogger(__name__)
 
 
 class Presentation:
+    """
+    Methods named "make_*()" create a new instance upon every invocation. Methods named "get_*()" create a new instance
+    only the first time they are invoked for the particular key parameter; the same instance is returned for every
+    subsequent call for the same key parameter until it is manually closed by the caller.
+    """
+
     def __init__(self, transport: pyuavcan.transport.Transport) -> None:
         self._transport = transport
 
@@ -67,7 +74,7 @@ class Presentation:
                 assert isinstance(impl, PublisherImpl)
             except LookupError:
                 transport_session = await self._transport.get_output_session(session_specifier,
-                                                                             self._make_message_payload_metadata(dtype))
+                                                                             self._make_payload_metadata(dtype))
                 impl = PublisherImpl(dtype=dtype,
                                      transport_session=transport_session,
                                      transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
@@ -102,7 +109,7 @@ class Presentation:
                 assert isinstance(impl, SubscriberImpl)
             except LookupError:
                 transport_session = await self._transport.get_input_session(session_specifier,
-                                                                            self._make_message_payload_metadata(dtype))
+                                                                            self._make_payload_metadata(dtype))
                 impl = SubscriberImpl(dtype=dtype,
                                       transport_session=transport_session,
                                       finalizer=self._make_finalizer(session_specifier),
@@ -114,8 +121,75 @@ class Presentation:
                           loop=self._transport.loop,
                           queue_capacity=queue_capacity)
 
+    async def make_client(self,
+                          dtype:          typing.Type[ServiceClass],
+                          service_id:     int,
+                          server_node_id: int) -> Client[ServiceClass]:
+        def transfer_id_modulo_factory() -> int:
+            # This might be a tad slow because the protocol parameters may take some time to compute?
+            return self._transport.protocol_parameters.transfer_id_modulo
+
+        async with self._lock:
+            data_specifier = pyuavcan.transport.ServiceDataSpecifier(
+                service_id=service_id,
+                role=pyuavcan.transport.ServiceDataSpecifier.Role.CLIENT
+            )
+            session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, server_node_id)
+            try:
+                impl = self._typed_session_registry[session_specifier]
+                assert isinstance(impl, ClientImpl)
+            except LookupError:
+                output_transport_session = await self._transport.get_output_session(
+                    session_specifier,
+                    self._make_payload_metadata(dtype.Request)
+                )
+                input_transport_session = await self._transport.get_input_session(
+                    session_specifier,
+                    self._make_payload_metadata(dtype.Response)
+                )
+                impl = ClientImpl(dtype=dtype,
+                                  input_transport_session=input_transport_session,
+                                  output_transport_session=output_transport_session,
+                                  transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
+                                  transfer_id_modulo_factory=transfer_id_modulo_factory,
+                                  finalizer=self._make_finalizer(session_specifier),
+                                  loop=self._transport.loop)
+
+        assert isinstance(impl, ClientImpl)
+        return Client(impl=impl, loop=self._transport.loop)
+
     async def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) -> Server[ServiceClass]:
-        raise NotImplementedError
+        async def output_transport_session_factory(client_node_id: int) -> pyuavcan.transport.OutputSession:
+            _logger.info('%r has requested a new output session to client node %s', impl, client_node_id)
+            async with self._lock:  # Important!
+                return await self._transport.get_output_session(
+                    specifier=pyuavcan.transport.SessionSpecifier(data_specifier, client_node_id),
+                    payload_metadata=self._make_payload_metadata(dtype.Response)
+                )
+
+        async with self._lock:
+            data_specifier = pyuavcan.transport.ServiceDataSpecifier(
+                service_id=service_id,
+                role=pyuavcan.transport.ServiceDataSpecifier.Role.SERVER
+            )
+            session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
+            try:
+                impl = self._typed_session_registry[session_specifier]
+                assert isinstance(impl, Server)
+            except LookupError:
+                input_transport_session = await self._transport.get_input_session(
+                    session_specifier,
+                    self._make_payload_metadata(dtype.Request)
+                )
+                impl = Server(dtype=dtype,
+                              input_transport_session=input_transport_session,
+                              output_transport_session_factory=output_transport_session_factory,
+                              finalizer=self._make_finalizer(session_specifier=session_specifier),
+                              loop=self._transport.loop)
+                self._typed_session_registry[session_specifier] = impl
+
+        assert isinstance(impl, Server)
+        return impl
 
     # ----------------------------------------  CONVENIENCE FACTORY METHODS  ----------------------------------------
 
@@ -138,6 +212,16 @@ class Presentation:
         return await self.make_subscriber(dtype=dtype,
                                           subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype),
                                           queue_capacity=queue_capacity)
+
+    async def make_client_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int) \
+            -> Client[FixedPortServiceClass]:
+        """
+        An alias for make_client() which uses the fixed port ID associated with this type.
+        Raises a TypeError if the type has no fixed port ID.
+        """
+        return await self.make_client(dtype=dtype,
+                                      service_id=pyuavcan.dsdl.get_fixed_port_id(dtype),
+                                      server_node_id=server_node_id)
 
     async def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
             -> Server[FixedPortServiceClass]:
@@ -198,7 +282,7 @@ class Presentation:
         return finalizer
 
     @staticmethod
-    def _make_message_payload_metadata(dtype: typing.Type[MessageClass]) -> pyuavcan.transport.PayloadMetadata:
+    def _make_payload_metadata(dtype: typing.Type[pyuavcan.dsdl.CompositeObject]) -> pyuavcan.transport.PayloadMetadata:
         model = pyuavcan.dsdl.get_model(dtype)
         max_size_bytes = pyuavcan.dsdl.get_max_serialized_representation_size_bytes(dtype)
         return pyuavcan.transport.PayloadMetadata(compact_data_type_id=model.compact_data_type_id,

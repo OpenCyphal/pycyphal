@@ -8,5 +8,7 @@ from ._presentation import Presentation
 
 from ._typed_session import OutgoingTransferIDCounter, TypedSessionClosedError, DEFAULT_PRIORITY
 from ._typed_session import TypedSession, MessageTypedSession, ServiceTypedSession
-from ._typed_session import Publisher, Subscriber, SubscriberStatistics
+from ._typed_session import Publisher
+from ._typed_session import Subscriber, SubscriberStatistics
+from ._typed_session import Client, ClientStatistics
 from ._typed_session import Server, ServerStatistics, ServiceRequestMetadata

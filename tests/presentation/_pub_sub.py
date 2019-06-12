@@ -81,9 +81,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert transfer.transfer_id == 0
 
     stat = sub_heart.sample_statistics()
-    assert stat.transfer.transfers == 1
-    assert stat.transfer.frames == 1
-    assert stat.transfer.overruns == 0
+    assert stat.transport_session.transfers == 1
+    assert stat.transport_session.frames == 1
+    assert stat.transport_session.overruns == 0
     assert stat.deserialization_failures == 0
     assert stat.messages == 1
 
@@ -99,9 +99,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert transfer.transfer_id == 23
 
     stat = sub_heart.sample_statistics()
-    assert stat.transfer.transfers == 2
-    assert stat.transfer.frames == 2
-    assert stat.transfer.overruns == 0
+    assert stat.transport_session.transfers == 2
+    assert stat.transport_session.frames == 2
+    assert stat.transport_session.overruns == 0
     assert stat.deserialization_failures == 0
     assert stat.messages == 2
 
@@ -138,9 +138,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     # Broken transfer
     stat = sub_record.sample_statistics()
-    assert stat.transfer.transfers == 1
-    assert stat.transfer.frames == 1
-    assert stat.transfer.overruns == 0
+    assert stat.transport_session.transfers == 1
+    assert stat.transport_session.frames == 1
+    assert stat.transport_session.overruns == 0
     assert stat.deserialization_failures == 0
     assert stat.messages == 1
 
@@ -153,9 +153,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert (await sub_record.try_receive_until(time.monotonic() + _RX_TIMEOUT)) is None
 
     stat = sub_record.sample_statistics()
-    assert stat.transfer.transfers == 2
-    assert stat.transfer.frames == 2
-    assert stat.transfer.overruns == 0
+    assert stat.transport_session.transfers == 2
+    assert stat.transport_session.frames == 2
+    assert stat.transport_session.overruns == 0
     assert stat.deserialization_failures == 1
     assert stat.messages == 1
 

@@ -28,13 +28,14 @@ class Publisher(MessageTypedSession[MessageClass]):
                  impl: PublisherImpl[MessageClass],
                  loop: asyncio.AbstractEventLoop):
         self._maybe_impl: typing.Optional[PublisherImpl[MessageClass]] = impl
+        self._dtype = impl.dtype   # Permit usage after close()
         self._loop = loop
         impl.register_proxy()
         self._priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY
 
     @property
     def dtype(self) -> typing.Type[MessageClass]:
-        return self._impl.dtype
+        return self._dtype
 
     @property
     def transport_session(self) -> pyuavcan.transport.OutputSession:

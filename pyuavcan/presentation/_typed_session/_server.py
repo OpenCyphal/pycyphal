@@ -19,7 +19,7 @@ from ._error import TypedSessionClosedError
 _LISTEN_FOREVER_TIMEOUT = 1
 
 
-OutputSessionFactory = typing.Callable[[int], typing.Awaitable[pyuavcan.transport.OutputSession]]
+OutputTransportSessionFactory = typing.Callable[[int], typing.Awaitable[pyuavcan.transport.OutputSession]]
 ServiceRequestClass = typing.TypeVar('ServiceRequestClass', bound=pyuavcan.dsdl.CompositeObject)
 ServiceResponseClass = typing.TypeVar('ServiceResponseClass', bound=pyuavcan.dsdl.CompositeObject)
 
@@ -29,11 +29,11 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class ServerStatistics:
-    request_transfer:         pyuavcan.transport.Statistics
-    response_transfers:       typing.Dict[int, pyuavcan.transport.Statistics]
-    served_requests:          int
-    deserialization_failures: int
-    malformed_requests:       int
+    request_transport_session:   pyuavcan.transport.Statistics
+    response_transport_sessions: typing.Dict[int, pyuavcan.transport.Statistics]
+    served_requests:             int
+    deserialization_failures:    int
+    malformed_requests:          int
 
 
 @dataclasses.dataclass
@@ -56,7 +56,7 @@ class Server(ServiceTypedSession[ServiceClass]):
     def __init__(self,
                  dtype:                            typing.Type[ServiceClass],
                  input_transport_session:          pyuavcan.transport.InputSession,
-                 output_transport_session_factory: OutputSessionFactory,
+                 output_transport_session_factory: OutputTransportSessionFactory,
                  finalizer:                        TypedSessionFinalizer,
                  loop:                             asyncio.AbstractEventLoop):
         self._dtype = dtype
@@ -134,9 +134,9 @@ class Server(ServiceTypedSession[ServiceClass]):
         Returns the statistical counters of this server, including the statistical metrics of the underlying
         transport sessions.
         """
-        return ServerStatistics(request_transfer=self._input_transport_session.sample_statistics(),
-                                response_transfers={nid: ts.sample_statistics()
-                                                    for nid, ts in self._output_transport_sessions.items()},
+        return ServerStatistics(request_transport_session=self._input_transport_session.sample_statistics(),
+                                response_transport_sessions={nid: ts.sample_statistics()
+                                                             for nid, ts in self._output_transport_sessions.items()},
                                 served_requests=self._served_request_count,
                                 deserialization_failures=self._deserialization_failure_count,
                                 malformed_requests=self._malformed_request_count)

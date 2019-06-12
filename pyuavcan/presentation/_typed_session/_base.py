@@ -12,7 +12,8 @@ import pyuavcan.dsdl
 import pyuavcan.transport
 
 
-DEFAULT_PRIORITY = pyuavcan.transport.Priority.LOW
+# This value is not mandated by the Specification.
+DEFAULT_PRIORITY = pyuavcan.transport.Priority.NOMINAL
 
 
 TypedSessionFinalizer = typing.Callable[[typing.Iterable[pyuavcan.transport.Session]], typing.Awaitable[None]]

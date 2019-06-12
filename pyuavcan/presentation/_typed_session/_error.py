@@ -13,3 +13,11 @@ class TypedSessionClosedError(pyuavcan.transport.ResourceClosedError):
     specialization of the corresponding transport-layer error type.
     """
     pass
+
+
+class RequestTransferIDVariabilityExhaustedError(pyuavcan.transport.TransportError):
+    """
+    Raised when an attempt is made to invoke more concurrent requests that supported by the transport layer.
+    For CAN, the number is 32; for some transports the number is unlimited.
+    """
+    pass

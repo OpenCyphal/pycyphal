@@ -25,7 +25,7 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class SubscriberStatistics:
-    transfer:                 pyuavcan.transport.Statistics
+    transport_session:        pyuavcan.transport.Statistics
     messages:                 int
     overruns:                 int
     deserialization_failures: int
@@ -155,7 +155,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
         Returns the statistical counters of this subscriber, including the statistical metrics of the underlying
         transport session, which is shared among all subscribers of the same session specifier.
         """
-        return SubscriberStatistics(transfer=self.transport_session.sample_statistics(),
+        return SubscriberStatistics(transport_session=self.transport_session.sample_statistics(),
                                     messages=self._rx.push_count,
                                     deserialization_failures=self._impl.deserialization_failure_count,
                                     overruns=self._rx.overrun_count)
@@ -254,7 +254,7 @@ class SubscriberImpl(typing.Generic[MessageClass]):
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
-            _logger.exception(f'Failed to close the subscription session of %s: %s', self, ex)
+            _logger.exception(f'Failed to finalize %s: %s', self, ex)
 
         exception = exception if exception is not None else TypedSessionClosedError(repr(self))
         for rx in self._listeners:

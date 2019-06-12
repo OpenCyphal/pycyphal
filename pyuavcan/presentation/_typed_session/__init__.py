@@ -11,6 +11,8 @@ from ._publisher import Publisher, PublisherImpl
 
 from ._subscriber import Subscriber, SubscriberImpl, SubscriberStatistics
 
+from ._client import Client, ClientImpl, ClientStatistics
+
 from ._server import Server, ServerStatistics, ServiceRequestMetadata, ServiceRequestHandler
 
 from ._error import TypedSessionClosedError
