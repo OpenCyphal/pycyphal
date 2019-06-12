@@ -47,7 +47,7 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     assert client0._impl is client1._impl
     assert client0._impl is not client_dead._impl
     assert client0._impl.proxy_count == 2
-    assert client_dead._impl.proxy_count == 2
+    assert client_dead._impl.proxy_count == 1
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
