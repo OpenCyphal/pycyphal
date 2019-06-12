@@ -45,6 +45,13 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     pub_record = await pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
     sub_record = await pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 
+    with pytest.raises(TypeError):
+        # noinspection PyTypeChecker
+        await pres_a.make_client_with_fixed_service_id(uavcan.node.Heartbeat_1_0, 123)  # type: ignore
+    with pytest.raises(TypeError):
+        # noinspection PyTypeChecker
+        await pres_a.get_server_with_fixed_service_id(uavcan.node.Heartbeat_1_0)  # type: ignore
+
     assert pub_heart._impl.proxy_count == 1
     pub_heart_new = await pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
     assert pub_heart is not pub_heart_new
@@ -172,3 +179,13 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     await pres_b.close()
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         await pres_a.close()
+
+    # All disposed of?
+    assert list(pres_a.sessions) == []
+    assert list(pres_b.sessions) == []
+
+    # Make sure the transport sessions have been closed properly, this is supremely important.
+    assert list(pres_a.transport.input_sessions) == []
+    assert list(pres_b.transport.input_sessions) == []
+    assert list(pres_a.transport.output_sessions) == []
+    assert list(pres_b.transport.output_sessions) == []

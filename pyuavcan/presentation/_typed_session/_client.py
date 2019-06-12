@@ -199,10 +199,14 @@ class ClientImpl(typing.Generic[ServiceClass]):
                                     transfer_id=transfer_id,
                                     priority=priority)
                 self.sent_request_count += 1
-            finally:
+            except BaseException:
                 self._forget_future(transfer_id)
+                raise
 
         # Wait for the response with the lock released.
+        # We have to make sure that no matter what happens, we remove the future from the table upon exit;
+        # otherwise the user will get a false exception when the same transfer ID is reused (which only happens
+        # with some low-capability transports such as CAN bus though).
         try:
             response, transfer = await asyncio.wait_for(future, timeout=response_timeout, loop=self._loop)
             assert isinstance(response, self.dtype.Response)
@@ -266,7 +270,8 @@ class ClientImpl(typing.Generic[ServiceClass]):
                 try:
                     fut = self._response_futures_by_transfer_id.pop(transfer.transfer_id)
                 except LookupError:
-                    _logger.info('Unexpected response %s with transfer %s', response, transfer)
+                    _logger.info('Unexpected response %s with transfer %s; TID values of pending requests: %r',
+                                 response, transfer, list(self._response_futures_by_transfer_id.keys()))
                     self.unexpected_response_count += 1
                 else:
                     fut.set_result((response, transfer))  # type: ignore
@@ -278,9 +283,8 @@ class ClientImpl(typing.Generic[ServiceClass]):
             _logger.exception('Fatal error in the task of %s: %s', self, ex)
 
         try:
-            async with self._lock:
-                self._closed = True
-                await self._finalizer([self.input_transport_session, self.output_transport_session])
+            self._closed = True
+            await self._finalizer([self.input_transport_session, self.output_transport_session])
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
@@ -301,7 +305,6 @@ class ClientImpl(typing.Generic[ServiceClass]):
             pass
 
     def _raise_if_closed(self) -> None:
-        assert self._lock.locked(), 'Internal protocol violation: the lock is not acquired'
         if self._closed:
             raise TypedSessionClosedError(repr(self))
 

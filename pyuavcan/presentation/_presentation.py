@@ -66,6 +66,9 @@ class Presentation:
         the finalizer when garbage collected if the user did not bother to do that manually; every such occurrence
         will be logged.
         """
+        if issubclass(dtype, pyuavcan.dsdl.ServiceObject):
+            raise TypeError(f'Not a message type: {dtype}')
+
         async with self._lock:
             data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
             session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
@@ -101,6 +104,9 @@ class Presentation:
         it is always limited at least by the amount of the available memory), the queue may become full in which case
         newer messages will be dropped and the overrun counter will be incremented once per dropped message.
         """
+        if issubclass(dtype, pyuavcan.dsdl.ServiceObject):
+            raise TypeError(f'Not a message type: {dtype}')
+
         async with self._lock:
             data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
             session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
@@ -133,6 +139,9 @@ class Presentation:
         last client is closed. The client instance will be close()d automatically from the finalizer when garbage
         collected if the  user did not bother to do that manually; every such occurrence will be logged.
         """
+        if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
+            raise TypeError(f'Not a service type: {dtype}')
+
         def transfer_id_modulo_factory() -> int:
             # This might be a tad slow because the protocol parameters may take some time to compute?
             return self._transport.protocol_parameters.transfer_id_modulo
@@ -162,6 +171,7 @@ class Presentation:
                                   transfer_id_modulo_factory=transfer_id_modulo_factory,
                                   finalizer=self._make_finalizer(session_specifier),
                                   loop=self._transport.loop)
+                self._typed_session_registry[session_specifier] = impl
 
         assert isinstance(impl, ClientImpl)
         return Client(impl=impl, loop=self._transport.loop)
@@ -174,6 +184,9 @@ class Presentation:
         be garbage collected as long as its presentation layer controller exists, hence it is the responsibility
         of the user to close unwanted servers manually.
         """
+        if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
+            raise TypeError(f'Not a service type: {dtype}')
+
         async def output_transport_session_factory(client_node_id: int) -> pyuavcan.transport.OutputSession:
             _logger.info('%r has requested a new output session to client node %s', impl, client_node_id)
             async with self._lock:  # Important!
