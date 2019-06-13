@@ -283,4 +283,4 @@ class CANTransport(pyuavcan.transport.Transport):
         if out is not None:
             return out
         else:
-            raise pyuavcan.transport.ResourceClosedError('The driver is already closed')
+            raise pyuavcan.transport.ResourceClosedError(repr(self))

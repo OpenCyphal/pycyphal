@@ -63,11 +63,25 @@ class Publisher(MessageTypedSession[MessageClass]):
         assert value in pyuavcan.transport.Priority
         self._priority = value
 
-    async def publish(self, message:  MessageClass) -> None:
+    async def publish(self, message: MessageClass) -> None:
         """
         Serializes and publishes the message object at the priority level selected earlier.
+        Should not be used simultaneously with publish_soon() because that makes the message ordering undefined.
         """
         await self._impl.publish(message, self._priority)
+
+    def publish_soon(self, message: MessageClass) -> None:
+        """
+        Serializes and publishes the message object at the priority level selected earlier. Does so without blocking.
+        Should not be used simultaneously with publish() because that makes the message ordering undefined.
+        """
+        async def executor() -> None:
+            try:
+                await self.publish(message)
+            except Exception as ex:
+                _logger.exception('%s deferred publication has failed: %s', self, ex)
+
+        asyncio.ensure_future(executor(), loop=self._loop)
 
     async def close(self) -> None:
         impl = self._impl

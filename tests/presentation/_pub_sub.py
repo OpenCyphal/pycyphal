@@ -146,7 +146,8 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
         # noinspection PyTypeChecker
         await pub_heart.publish(record)  # type: ignore
 
-    await pub_record.publish(record)
+    pub_record.publish_soon(record)
+    await asyncio.sleep(0.1)                # Need to make the deferred publication get the message out
     rx, transfer = await sub_record.receive_with_transfer()
     assert repr(rx) == repr(record)
     assert transfer.source_node_id == 42
