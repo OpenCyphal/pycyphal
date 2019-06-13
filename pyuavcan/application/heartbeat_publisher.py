@@ -55,7 +55,7 @@ class HeartbeatPublisher:
         self._mode = Mode.INITIALIZATION
         self._vendor_specific_status_code = 0
         self._publisher = self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)
-        self._before_heartbeat_handlers: typing.List[typing.Callable[[], None]] = []
+        self._pre_heartbeat_handlers: typing.List[typing.Callable[[], None]] = []
         self._period = float(Heartbeat.MAX_PUBLICATION_PERIOD)
         self._closed = False
         self._task = presentation.transport.loop.create_task(self._task_function())
@@ -114,7 +114,7 @@ class HeartbeatPublisher:
     def priority(self, value: pyuavcan.transport.Priority) -> None:
         self._publisher.priority = pyuavcan.transport.Priority(value)
 
-    def call_before_every_heartbeat(self, handler: typing.Callable[[], None]) -> None:
+    def add_pre_heartbeat_handler(self, handler: typing.Callable[[], None]) -> None:
         """
         Adds a new handler to be invoked immediately before a heartbeat message is published.
         The handler can be used to synchronize the heartbeat message data (health, mode, vendor-specific status code)
@@ -123,7 +123,7 @@ class HeartbeatPublisher:
         suppressed and logged. Note that the handler is to be not a coroutine but a regular function.
         This is also a good method of scheduling periodic status checks on the node.
         """
-        self._before_heartbeat_handlers.append(handler)
+        self._pre_heartbeat_handlers.append(handler)
 
     def make_message(self) -> Heartbeat:
         """
@@ -138,6 +138,7 @@ class HeartbeatPublisher:
         if not self._closed:
             self._closed = True
             self._publisher.close()
+            self._task.cancel()
 
     async def _task_function(self) -> None:
         next_heartbeat_at = time.monotonic()
@@ -163,11 +164,9 @@ class HeartbeatPublisher:
             pass
 
     def _call_pre_heartbeat_handlers(self) -> None:
-        for fun in self._before_heartbeat_handlers:
+        for fun in self._pre_heartbeat_handlers:
             try:
                 fun()
-            except asyncio.CancelledError:
-                raise
             except Exception as ex:
                 _logger.exception('%s got an unhandled exception from the pre-heartbeat handler: %s', self, ex)
 

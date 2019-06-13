@@ -31,6 +31,8 @@ class Node:
         self._presentation = pyuavcan.presentation.Presentation(transport)
         self._info = info
         self._heartbeat_publisher = pyuavcan.application.heartbeat_publisher.HeartbeatPublisher(self._presentation)
+        self._srv_info = self._presentation.get_server_with_fixed_service_id(uavcan.node.GetInfo_0_1)
+        self._srv_info.serve_in_background(self._handle_get_info_request)
 
     @property
     def presentation(self) -> pyuavcan.presentation.Presentation:
@@ -51,7 +53,7 @@ class Node:
     def heartbeat_publisher(self) -> pyuavcan.application.heartbeat_publisher.HeartbeatPublisher:
         return self._heartbeat_publisher
 
-    # ---------------------------------------- PUBLISHER FACTORY ----------------------------------------
+    # ---------------------------------------- MESSAGE PUBLISHER FACTORY ----------------------------------------
 
     def make_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) \
             -> pyuavcan.presentation.Publisher[MessageClass]:
@@ -63,7 +65,7 @@ class Node:
         """Wrapper for Presentation.make_publisher_with_fixed_subject_id(..)."""
         return self._presentation.make_publisher_with_fixed_subject_id(dtype)
 
-    # ---------------------------------------- SUBSCRIBER FACTORY ----------------------------------------
+    # ---------------------------------------- MESSAGE SUBSCRIBER FACTORY ----------------------------------------
 
     def make_subscriber(self,
                         dtype:          typing.Type[MessageClass],
@@ -109,7 +111,17 @@ class Node:
     # ---------------------------------------- AUXILIARY ----------------------------------------
 
     def close(self) -> None:
-        self._presentation.close()
+        try:
+            self._heartbeat_publisher.close()
+            self._srv_info.close()
+        finally:
+            self._presentation.close()
+
+    async def _handle_get_info_request(self,
+                                       _: uavcan.node.GetInfo_0_1.Request,
+                                       transfer: pyuavcan.transport.TransferFrom) -> NodeInfo:
+        _logger.info('%s got a node info request: %s', self, transfer)
+        return self._info
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self,
