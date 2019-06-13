@@ -224,7 +224,7 @@ class Presentation:
     async def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Publisher[FixedPortMessageClass]:
         """
-        An alias for make_publisher() which uses the fixed port ID associated with this type.
+        A wrapper for make_publisher() which uses the fixed port ID associated with this type.
         Raises a TypeError if the type has no fixed port ID.
         """
         return await self.make_publisher(dtype=dtype, subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
@@ -234,7 +234,7 @@ class Presentation:
                                                     queue_capacity: typing.Optional[int] = None) \
             -> Subscriber[FixedPortMessageClass]:
         """
-        An alias for make_subscriber() which uses the fixed port ID associated with this type.
+        A wrapper for make_subscriber() which uses the fixed port ID associated with this type.
         Raises a TypeError if the type has no fixed port ID.
         """
         return await self.make_subscriber(dtype=dtype,
@@ -244,7 +244,7 @@ class Presentation:
     async def make_client_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int) \
             -> Client[FixedPortServiceClass]:
         """
-        An alias for make_client() which uses the fixed port ID associated with this type.
+        A wrapper for make_client() which uses the fixed port ID associated with this type.
         Raises a TypeError if the type has no fixed port ID.
         """
         return await self.make_client(dtype=dtype,
@@ -254,7 +254,7 @@ class Presentation:
     async def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
             -> Server[FixedPortServiceClass]:
         """
-        An alias for get_server() which uses the fixed port ID associated with this type.
+        A wrapper for get_server() which uses the fixed port ID associated with this type.
         Raises a TypeError if the type has no fixed port ID.
         """
         return await self.get_server(dtype=dtype, service_id=pyuavcan.dsdl.get_fixed_port_id(dtype))

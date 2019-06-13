@@ -23,6 +23,9 @@ _RECEIVE_TIMEOUT = 10
 _logger = logging.getLogger(__name__)
 
 
+ReceivedMessageHandler = typing.Callable[[MessageClass, pyuavcan.transport.TransferFrom], typing.Awaitable[None]]
+
+
 @dataclasses.dataclass
 class SubscriberStatistics:
     transport_session:        pyuavcan.transport.Statistics
@@ -51,8 +54,39 @@ class Subscriber(MessageTypedSession[MessageClass]):
         self._impl = impl
         self._loop = loop
         self._lock = asyncio.Lock(loop=loop)
+        self._maybe_task: typing.Optional[asyncio.Task[None]] = None
         self._rx: _Listener[MessageClass] = _Listener(asyncio.Queue(maxsize=queue_capacity, loop=loop))
         impl.add_listener(self._rx)
+
+    # ----------------------------------------  HANDLER-BASED API  ----------------------------------------
+
+    def set_handler(self, handler: ReceivedMessageHandler[MessageClass]) -> None:
+        async def task_function() -> None:
+            # This could be an interesting opportunity for optimization: instead of using the queue, just let the
+            # implementation class invoke the handler from its own receive task directly. Eliminates extra indirection.
+            while not self._closed:
+                try:
+                    message, transfer = await self.receive_with_transfer()
+                    try:
+                        await handler(message, transfer)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as ex:
+                        _logger.exception('%s got an unhandled exception in the message handler: %s', self, ex)
+                except asyncio.CancelledError:
+                    _logger.debug('%s receive task cancelled', self)
+                    break
+                except pyuavcan.transport.ResourceClosedError as ex:
+                    _logger.info('%s receive task got a resource closed error and will exit: %s', self, ex)
+                    break
+                except Exception as ex:
+                    _logger.exception('%s receive task failure: %s', self, ex)
+                    await asyncio.sleep(1)  # TODO is this an adequate failure management strategy?
+
+        if self._maybe_task is not None:
+            self._maybe_task.cancel()
+
+        self._maybe_task = self._loop.create_task(task_function())
 
     # ----------------------------------------  NAKED RECEIVE  ----------------------------------------
 
@@ -166,10 +200,18 @@ class Subscriber(MessageTypedSession[MessageClass]):
         its transport session instance will be closed. The user should explicitly close all objects before disposing
         of the presentation layer instance.
         """
-        async with self._lock:
-            self._raise_if_closed_or_failed()
-            self._closed = True
-            await self._impl.remove_listener(self._rx)
+        if self._closed:
+            raise TypedSessionClosedError(repr(self))
+        self._closed = True
+
+        if self._maybe_task is not None:    # The task may be holding the lock.
+            try:
+                self._maybe_task.cancel()   # We don't wait for it to exit because it's pointless.
+            except Exception as ex:
+                _logger.exception('%s task could not be cancelled: %s', self, ex)
+            self._maybe_task = None
+
+        await self._impl.remove_listener(self._rx)
 
     def _raise_if_closed_or_failed(self) -> None:
         assert self._lock.locked(), 'Internal protocol violation: the lock is not acquired'

@@ -44,6 +44,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     pub_record = await pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
     sub_record = await pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    sub_record2 = await pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
@@ -126,6 +127,15 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         await sub_heart.close()
 
+    record_handler_output: typing.List[typing.Tuple[uavcan.diagnostic.Record_1_0, pyuavcan.transport.TransferFrom]] = []
+
+    async def record_handler(message: uavcan.diagnostic.Record_1_0,
+                             cb_transfer: pyuavcan.transport.TransferFrom) -> None:
+        print('RECORD HANDLER:', message, cb_transfer)
+        record_handler_output.append((message, cb_transfer))
+
+    sub_record2.set_handler(record_handler)
+
     record = uavcan.diagnostic.Record_1_0(timestamp=uavcan.time.SynchronizedTimestamp_1_0(1234567890),
                                           severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.ALERT),
                                           text='Hello world!')
@@ -170,6 +180,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     # have been removed while pending.
     await pub_heart.close()
     await sub_record.close()
+    await sub_record2.close()
     await pub_record.close()
     await asyncio.sleep(1.1)
     assert pres_a.sessions == []
@@ -189,3 +200,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert list(pres_b.transport.input_sessions) == []
     assert list(pres_a.transport.output_sessions) == []
     assert list(pres_b.transport.output_sessions) == []
+
+    assert len(record_handler_output) == 1
+    assert repr(record_handler_output[0][0]) == repr(record)
+    assert record_handler_output[0][1].source_node_id == 42
+    assert record_handler_output[0][1].transfer_id == 0
+    assert record_handler_output[0][1].priority == Priority.NOMINAL
