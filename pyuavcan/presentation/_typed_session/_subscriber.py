@@ -53,14 +53,21 @@ class Subscriber(MessageTypedSession[MessageClass]):
         self._closed = False
         self._impl = impl
         self._loop = loop
-        self._lock = asyncio.Lock(loop=loop)
         self._maybe_task: typing.Optional[asyncio.Task[None]] = None
         self._rx: _Listener[MessageClass] = _Listener(asyncio.Queue(maxsize=queue_capacity, loop=loop))
         impl.add_listener(self._rx)
 
     # ----------------------------------------  HANDLER-BASED API  ----------------------------------------
 
-    def set_handler(self, handler: ReceivedMessageHandler[MessageClass]) -> None:
+    def receive_in_background(self, handler: ReceivedMessageHandler[MessageClass]) -> None:
+        """
+        Configures the subscriber to invoke the specified handler whenever a message is received. If the caller
+        attempts to configure multiple handlers by invoking this method several times, only the last configured
+        handler will be active (the old ones will be forgotten). If the handler throws an exception, it will be
+        suppressed and logged.
+        This method of handling messages shall not be used with the plain async receive API; an attempt to do so
+        may lead to unpredictable message distribution between consumers.
+        """
         async def task_function() -> None:
             # This could be an interesting opportunity for optimization: instead of using the queue, just let the
             # implementation class invoke the handler from its own receive task directly. Eliminates extra indirection.
@@ -120,12 +127,11 @@ class Subscriber(MessageTypedSession[MessageClass]):
         Blocks forever until a valid message is received. The received message will be returned along with the
         transfer which delivered it.
         """
-        async with self._lock:
-            self._raise_if_closed_or_failed()
-            message, transfer = await self._rx.queue.get()
-            assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
-            assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
-            return message, transfer
+        self._raise_if_closed_or_failed()
+        message, transfer = await self._rx.queue.get()
+        assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
+        assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
+        return message, transfer
 
     async def try_receive_with_transfer_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
@@ -147,21 +153,20 @@ class Subscriber(MessageTypedSession[MessageClass]):
         If the timeout is non-positive, the method will non-blockingly check if there is any data; if there is,
         it will be returned, otherwise None will be returned immediately.
         """
-        async with self._lock:
-            self._raise_if_closed_or_failed()
-            try:
-                if timeout > 0:
-                    message, transfer = await asyncio.wait_for(self._rx.queue.get(), timeout, loop=self._loop)
-                else:
-                    message, transfer = self._rx.queue.get_nowait()
-            except asyncio.QueueEmpty:
-                return None
-            except asyncio.TimeoutError:
-                return None
+        self._raise_if_closed_or_failed()
+        try:
+            if timeout > 0:
+                message, transfer = await asyncio.wait_for(self._rx.queue.get(), timeout, loop=self._loop)
             else:
-                assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
-                assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
-                return message, transfer
+                message, transfer = self._rx.queue.get_nowait()
+        except asyncio.QueueEmpty:
+            return None
+        except asyncio.TimeoutError:
+            return None
+        else:
+            assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
+            assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
+            return message, transfer
 
     # ----------------------------------------  ITERATOR API  ----------------------------------------
 
@@ -214,7 +219,6 @@ class Subscriber(MessageTypedSession[MessageClass]):
         await self._impl.remove_listener(self._rx)
 
     def _raise_if_closed_or_failed(self) -> None:
-        assert self._lock.locked(), 'Internal protocol violation: the lock is not acquired'
         if self._closed:
             raise TypedSessionClosedError(repr(self))
 

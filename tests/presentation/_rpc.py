@@ -79,7 +79,7 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
         return response
 
     # TODO: fix the type annotations!
-    server_task = asyncio.create_task(server.listen_forever(server_handler))  # type: ignore
+    server.serve_in_background(server_handler)  # type: ignore
 
     last_request = uavcan.register.Access_0_1.Request(
         name=uavcan.register.Name_0_1('Hello world!'),
@@ -106,7 +106,6 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     assert last_metadata.transfer_id == 1
     assert last_metadata.priority == Priority.IMMEDIATE
 
-    server_task.cancel()
     await server.close()
     await client0.close()
     await client1.close()

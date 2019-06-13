@@ -134,7 +134,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
         print('RECORD HANDLER:', message, cb_transfer)
         record_handler_output.append((message, cb_transfer))
 
-    sub_record2.set_handler(record_handler)
+    sub_record2.receive_in_background(record_handler)
 
     record = uavcan.diagnostic.Record_1_0(timestamp=uavcan.time.SynchronizedTimestamp_1_0(1234567890),
                                           severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.ALERT),
