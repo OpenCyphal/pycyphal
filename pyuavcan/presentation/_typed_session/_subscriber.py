@@ -36,7 +36,7 @@ class SubscriberStatistics:
 
 class Subscriber(MessageTypedSession[MessageClass]):
     """
-    Normally, each task should request its own subscriber instance. An attempt to reuse the same instance across
+    Normally, every task should request its own subscriber instance. An attempt to reuse the same instance across
     different consumer tasks may lead to unpredictable message distribution.
     """
     def __init__(self,

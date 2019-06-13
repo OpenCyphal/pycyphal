@@ -31,6 +31,12 @@ _logger = logging.getLogger(__name__)
 
 class Presentation:
     """
+    This is the presentation layer controller. The presentation layer is a thin wrapper around the transport layer
+    that manages DSDL object serialization and provides a convenient API for the application. The presentation layer
+    also performs data sharing across multiple consumers in the application; for example, when the application
+    creates more than one subscriber for a given subject, the presentation layer will take care to distribute the
+    received messages into every subscription instance requested by the application.
+
     Methods named "make_*()" create a new instance upon every invocation. Methods named "get_*()" create a new instance
     only the first time they are invoked for the particular key parameter; the same instance is returned for every
     subsequent call for the same key parameter until it is manually closed by the caller.
@@ -96,10 +102,16 @@ class Presentation:
         instance when the last subscriber is closed. The subscriber instance will be close()d automatically from
         the finalizer when garbage collected if the user did not bother to do that manually; every such occurrence
         will be logged.
+
         By default, the size of the input queue is unlimited; the user may provide a positive integer value to override
         this. If the user is not reading the messages quickly enough and the size of the queue is limited (technically
         it is always limited at least by the amount of the available memory), the queue may become full in which case
         newer messages will be dropped and the overrun counter will be incremented once per dropped message.
+
+        Beware of data sharing issues: if the application uses more than one subscriber for a subject, every received
+        message will be passed into each subscriber for the subject. If the object is accidentally mutated by the
+        application, it will affect other subscribers. To avoid this, either do not mutate the received message
+        objects or clone them beforehand.
         """
         if issubclass(dtype, pyuavcan.dsdl.ServiceObject):
             raise TypeError(f'Not a message type: {dtype}')

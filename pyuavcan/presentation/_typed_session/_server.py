@@ -103,6 +103,7 @@ class Server(ServiceTypedSession[ServiceClass]):
         if self._maybe_task is not None:
             self._maybe_task.cancel()
 
+        self._raise_if_closed()
         self._maybe_task = self._loop.create_task(task_function())
 
     async def serve_for(self,
