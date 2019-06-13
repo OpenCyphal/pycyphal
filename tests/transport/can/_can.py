@@ -58,40 +58,39 @@ async def _unittest_can_transport() -> None:
     meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't broadcast service calls
-        await tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.SERVER), None),
-                                    meta)
+        tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.SERVER), None),
+                              meta)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't unicast messages
-        await tr.get_output_session(SessionSpecifier(MessageDataSpecifier(1234), 123), meta)
+        tr.get_output_session(SessionSpecifier(MessageDataSpecifier(1234), 123), meta)
 
-    broadcaster = await tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert broadcaster is await tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    broadcaster = tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    assert broadcaster is tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
-    subscriber_promiscuous = await tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
-    assert subscriber_promiscuous is await tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), None),
-                                                                meta)
+    subscriber_promiscuous = tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
+    assert subscriber_promiscuous is tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
 
-    subscriber_selective = await tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
-    assert subscriber_selective is await tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
+    subscriber_selective = tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
+    assert subscriber_selective is tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
 
-    server_listener = await tr.get_input_session(
+    server_listener = tr.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
-    assert server_listener is await tr.get_input_session(
+    assert server_listener is tr.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
 
-    server_responder = await tr.get_output_session(
+    server_responder = tr.get_output_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 123), meta)
-    assert server_responder is await tr.get_output_session(
+    assert server_responder is tr.get_output_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 123), meta)
 
-    client_requester = await tr.get_output_session(
+    client_requester = tr.get_output_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
-    assert client_requester is await tr.get_output_session(
+    assert client_requester is tr.get_output_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
 
-    client_listener = await tr.get_input_session(
+    client_listener = tr.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
-    assert client_listener is await tr.get_input_session(
+    assert client_listener is tr.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
 
     assert broadcaster.destination_node_id is None
@@ -112,8 +111,8 @@ async def _unittest_can_transport() -> None:
     #
     # Basic exchange test, no one is listening
     #
-    await media2.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
-    await peeper.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
+    media2.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
+    peeper.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
 
     collector = FrameCollector()
     peeper.set_received_frames_handler(collector.give)
@@ -173,9 +172,9 @@ async def _unittest_can_transport() -> None:
     #
     # Broadcast exchange with input dispatch test
     #
-    selective_m12345_5 = await tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 5), meta)
-    selective_m12345_9 = await tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 9), meta)
-    promiscuous_m12345 = await tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    selective_m12345_5 = tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 5), meta)
+    selective_m12345_9 = tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 9), meta)
+    promiscuous_m12345 = tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
     await broadcaster.send(Transfer(
         timestamp=ts,
@@ -205,12 +204,12 @@ async def _unittest_can_transport() -> None:
     assert not media2.automatic_retransmission_enabled
 
     with pytest.raises(ValueError):
-        await tr.set_local_node_id(128)
+        tr.set_local_node_id(128)
     with pytest.raises(ValueError):
-        await tr.set_local_node_id(-1)
-    await tr.set_local_node_id(5)
+        tr.set_local_node_id(-1)
+    tr.set_local_node_id(5)
     with pytest.raises(InvalidTransportConfigurationError, match='.*once.*'):
-        await tr.set_local_node_id(123)
+        tr.set_local_node_id(123)
 
     assert media.automatic_retransmission_enabled
     assert not media2.automatic_retransmission_enabled
@@ -265,10 +264,10 @@ async def _unittest_can_transport() -> None:
     assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
         received=8, received_uavcan=8, received_uavcan_accepted=7)
 
-    await broadcaster.close()
+    broadcaster.close()
     with pytest.raises(ResourceClosedError):
         await broadcaster.send(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4, fragmented_payload=[]))
-    await broadcaster.close()   # Does nothing
+    broadcaster.close()   # Does nothing
 
     # Final checks for the broadcaster - make sure nothing is left in the queue
     assert (await promiscuous_m12345.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
@@ -296,18 +295,18 @@ async def _unittest_can_transport() -> None:
     #
     # Unicast exchange test
     #
-    selective_server_s333_5 = await tr2.get_input_session(
+    selective_server_s333_5 = tr2.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 5), meta)
-    selective_server_s333_9 = await tr2.get_input_session(
+    selective_server_s333_9 = tr2.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 9), meta)
-    promiscuous_server_s333 = await tr2.get_input_session(
+    promiscuous_server_s333 = tr2.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
 
-    selective_client_s333_5 = await tr2.get_input_session(
+    selective_client_s333_5 = tr2.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 5), meta)
-    selective_client_s333_9 = await tr2.get_input_session(
+    selective_client_s333_9 = tr2.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 9), meta)
-    promiscuous_client_s333 = await tr2.get_input_session(
+    promiscuous_client_s333 = tr2.get_input_session(
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), None), meta)
 
     # No one is listening, this one will be lost.
@@ -336,9 +335,9 @@ async def _unittest_can_transport() -> None:
     assert media.automatic_retransmission_enabled
     assert not media2.automatic_retransmission_enabled
 
-    await tr2.set_local_node_id(123)
+    tr2.set_local_node_id(123)
     with pytest.raises(InvalidTransportConfigurationError):
-        await tr2.set_local_node_id(10)
+        tr2.set_local_node_id(10)
     assert tr2.local_node_id == 123
 
     assert media.automatic_retransmission_enabled
@@ -419,7 +418,7 @@ async def _unittest_can_transport() -> None:
         loopback=True).compile()
     ])
 
-    await client_requester.close()
+    client_requester.close()
     with pytest.raises(ResourceClosedError):
         await client_requester.send(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4, fragmented_payload=[]))
 
@@ -510,7 +509,7 @@ async def _unittest_can_transport() -> None:
     #
     # Reception logic test.
     #
-    pub_m2222 = await tr2.get_output_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
+    pub_m2222 = tr2.get_output_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
 
     # Transfer ID timeout configuration - one of them will be configured very short for testing purposes
     subscriber_promiscuous.transfer_id_timeout = 1e-9       # Very low, basically zero timeout
@@ -655,14 +654,14 @@ async def _unittest_can_transport() -> None:
     #
     print('str(CANTransport):', tr)
     print('str(CANTransport):', tr2)
-    await client_listener.close()
-    await server_listener.close()
-    await subscriber_promiscuous.close()
-    await subscriber_selective.close()
-    await tr.close()
-    await tr2.close()
+    client_listener.close()
+    server_listener.close()
+    subscriber_promiscuous.close()
+    subscriber_selective.close()
+    tr.close()
+    tr2.close()
     with pytest.raises(ResourceClosedError):
-        await tr.close()
+        tr.close()
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

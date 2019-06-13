@@ -120,10 +120,10 @@ class Client(ServiceTypedSession[ServiceClass]):
                                 deserialization_failures=self._impl.deserialization_failure_count,
                                 unexpected_responses=self._impl.unexpected_response_count)
 
-    async def close(self) -> None:
+    def close(self) -> None:
         impl = self._impl
         self._maybe_impl = None
-        await impl.remove_proxy()
+        impl.remove_proxy()
 
     @property
     def _impl(self) -> ClientImpl[ServiceClass]:
@@ -136,7 +136,7 @@ class Client(ServiceTypedSession[ServiceClass]):
         if self._maybe_impl is not None:
             _logger.info('%s has not been disposed of properly; fixing', self)
             # We can't just call close() here because the object is being deleted
-            asyncio.ensure_future(self._maybe_impl.remove_proxy(), loop=self._loop)
+            self._maybe_impl.remove_proxy()
 
 
 class ClientImpl(typing.Generic[ServiceClass]):
@@ -223,18 +223,15 @@ class ClientImpl(typing.Generic[ServiceClass]):
         self._proxy_count += 1
         _logger.debug('%s got a new proxy, new count %s', self, self._proxy_count)
 
-    async def remove_proxy(self) -> None:
+    def remove_proxy(self) -> None:
         self._raise_if_closed()
         self._proxy_count -= 1
         _logger.debug('%s has lost a proxy, new count %s', self, self._proxy_count)
         assert self._proxy_count >= 0
         if self._proxy_count <= 0:
-            async with self._lock:
-                if not self._closed:
-                    _logger.info('%s is being closed', self)
-                    self._closed = True
-                    self._task.cancel()
-                    await self._task
+            _logger.info('%s is being closed', self)
+            self._closed = True
+            self._task.cancel()
 
     @property
     def proxy_count(self) -> int:
@@ -284,7 +281,7 @@ class ClientImpl(typing.Generic[ServiceClass]):
 
         try:
             self._closed = True
-            await self._finalizer([self.input_transport_session, self.output_transport_session])
+            self._finalizer([self.input_transport_session, self.output_transport_session])
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger

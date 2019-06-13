@@ -107,7 +107,7 @@ class Session(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def close(self) -> None:
+    def close(self) -> None:
         """
         After a session is closed, none of its methods can be used anymore. The behavior or methods after close()
         is undefined.

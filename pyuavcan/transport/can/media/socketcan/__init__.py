@@ -45,17 +45,14 @@ class SocketCAN(_media.Media):
         # TODO: start RX loop task
         raise NotImplementedError
 
-    async def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
+    def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
         raise NotImplementedError
 
-    async def enable_automatic_retransmission(self) -> None:
+    def enable_automatic_retransmission(self) -> None:
         raise NotImplementedError
 
     async def send(self, frames: typing.Iterable[_media.DataFrame]) -> None:
         raise NotImplementedError
 
-    async def try_receive(self, monotonic_deadline: float) -> typing.Iterable[_media.TimestampedDataFrame]:
-        raise NotImplementedError
-
-    async def close(self) -> None:
+    def close(self) -> None:
         raise NotImplementedError

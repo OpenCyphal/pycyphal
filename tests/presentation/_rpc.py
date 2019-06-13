@@ -29,20 +29,20 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     tran_a = pyuavcan.transport.can.CANTransport(media_a)
     tran_b = pyuavcan.transport.can.CANTransport(media_b)
 
-    await tran_a.set_local_node_id(123)
-    await tran_b.set_local_node_id(42)
+    tran_a.set_local_node_id(123)
+    tran_b.set_local_node_id(42)
 
     pres_a = pyuavcan.presentation.Presentation(tran_a)
     pres_b = pyuavcan.presentation.Presentation(tran_b)
 
     assert pres_a.transport is tran_a
 
-    server = await pres_a.get_server_with_fixed_service_id(uavcan.register.Access_0_1)
-    assert server is await pres_a.get_server_with_fixed_service_id(uavcan.register.Access_0_1)
+    server = pres_a.get_server_with_fixed_service_id(uavcan.register.Access_0_1)
+    assert server is pres_a.get_server_with_fixed_service_id(uavcan.register.Access_0_1)
 
-    client0 = await pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 123)
-    client1 = await pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 123)
-    client_dead = await pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 111)
+    client0 = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 123)
+    client1 = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 123)
+    client_dead = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 111)
     assert client0 is not client1
     assert client0._impl is client1._impl
     assert client0._impl is not client_dead._impl
@@ -51,10 +51,10 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        await pres_a.make_publisher_with_fixed_subject_id(uavcan.register.Access_0_1)  # type: ignore
+        pres_a.make_publisher_with_fixed_subject_id(uavcan.register.Access_0_1)  # type: ignore
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        await pres_a.make_subscriber_with_fixed_subject_id(uavcan.register.Access_0_1)  # type: ignore
+        pres_a.make_subscriber_with_fixed_subject_id(uavcan.register.Access_0_1)  # type: ignore
 
     assert client0.response_timeout == pytest.approx(1.0)
     client0.response_timeout = 0.1
@@ -106,10 +106,13 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     assert last_metadata.transfer_id == 1
     assert last_metadata.priority == Priority.IMMEDIATE
 
-    await server.close()
-    await client0.close()
-    await client1.close()
-    await client_dead.close()
+    server.close()
+    client0.close()
+    client1.close()
+    client_dead.close()
+
+    # Allow the tasks to finish
+    await asyncio.sleep(0.1)
 
     # All disposed of?
     assert list(pres_a.sessions) == []

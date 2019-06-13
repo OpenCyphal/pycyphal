@@ -32,13 +32,13 @@ class TransportSpecificFeedback(pyuavcan.transport.Feedback, TransportSpecific):
 
 
 class RedundantSession(abc.ABC):
-    async def add_transport(self, transport: pyuavcan.transport.Transport) -> None:
+    def add_transport(self, transport: pyuavcan.transport.Transport) -> None:
         raise NotImplementedError
 
-    async def remove_transport(self, transport: pyuavcan.transport.Transport) -> None:
+    def remove_transport(self, transport: pyuavcan.transport.Transport) -> None:
         raise NotImplementedError
 
-    async def close(self) -> None:
+    def close(self) -> None:
         raise NotImplementedError
 
 
@@ -77,8 +77,8 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
     def sample_statistics(self) -> pyuavcan.transport.Statistics:
         raise NotImplementedError
 
-    async def close(self) -> None:
-        await super(RedundantInputSession, self).close()
+    def close(self) -> None:
+        super(RedundantInputSession, self).close()
 
 
 class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession):
@@ -105,5 +105,5 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
     def sample_statistics(self) -> pyuavcan.transport.Statistics:
         raise NotImplementedError
 
-    async def close(self) -> None:
-        await super(RedundantOutputSession, self).close()
+    def close(self) -> None:
+        super(RedundantOutputSession, self).close()

@@ -97,8 +97,8 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
     def sample_statistics(self) -> pyuavcan.transport.Statistics:
         return copy.copy(self._statistics)
 
-    async def close(self) -> None:
-        await super(CANOutputSession, self).close()
+    def close(self) -> None:
+        super(CANOutputSession, self).close()
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
         raise NotImplementedError

@@ -39,34 +39,34 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     assert pres_a.transport is tran_a
 
-    pub_heart = await pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
-    sub_heart = await pres_b.make_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    sub_heart = pres_b.make_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
 
-    pub_record = await pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
-    sub_record = await pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
-    sub_record2 = await pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    pub_record = pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    sub_record = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    sub_record2 = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        await pres_a.make_client_with_fixed_service_id(uavcan.node.Heartbeat_1_0, 123)  # type: ignore
+        pres_a.make_client_with_fixed_service_id(uavcan.node.Heartbeat_1_0, 123)  # type: ignore
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        await pres_a.get_server_with_fixed_service_id(uavcan.node.Heartbeat_1_0)  # type: ignore
+        pres_a.get_server_with_fixed_service_id(uavcan.node.Heartbeat_1_0)  # type: ignore
 
     assert pub_heart._impl.proxy_count == 1
-    pub_heart_new = await pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    pub_heart_new = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
     assert pub_heart is not pub_heart_new
     assert pub_heart._impl is pub_heart_new._impl
     assert pub_heart._impl.proxy_count == 2
-    await pub_heart_new.close()
+    pub_heart_new.close()
     del pub_heart_new
     assert pub_heart._impl.proxy_count == 1
 
     pub_heart_impl_old = pub_heart._impl
-    await pub_heart.close()
+    pub_heart.close()
     assert pub_heart_impl_old.proxy_count == 0
 
-    pub_heart = await pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
     assert pub_heart._impl is not pub_heart_impl_old
 
     assert pub_heart.transport_session.destination_node_id is None
@@ -95,8 +95,8 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert stat.deserialization_failures == 0
     assert stat.messages == 1
 
-    await tran_a.set_local_node_id(123)
-    await tran_b.set_local_node_id(42)
+    tran_a.set_local_node_id(123)
+    tran_b.set_local_node_id(42)
 
     pub_heart.transfer_id_counter.override(23)
     await pub_heart.publish(heart)
@@ -123,9 +123,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     rx = await sub_heart.try_receive_for(_RX_TIMEOUT)
     assert rx is None
 
-    await sub_heart.close()
+    sub_heart.close()
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        await sub_heart.close()
+        sub_heart.close()
 
     record_handler_output: typing.List[typing.Tuple[uavcan.diagnostic.Record_1_0, pyuavcan.transport.TransferFrom]] = []
 
@@ -179,18 +179,18 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     # Close the objects explicitly and ensure that they are finalized. This also removes the warnings that some tasks
     # have been removed while pending.
-    await pub_heart.close()
-    await sub_record.close()
-    await sub_record2.close()
-    await pub_record.close()
+    pub_heart.close()
+    sub_record.close()
+    sub_record2.close()
+    pub_record.close()
     await asyncio.sleep(1.1)
     assert pres_a.sessions == []
     assert pres_b.sessions == []
 
-    await pres_a.close()
-    await pres_b.close()
+    pres_a.close()
+    pres_b.close()
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        await pres_a.close()
+        pres_a.close()
 
     # All disposed of?
     assert list(pres_a.sessions) == []

@@ -199,7 +199,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
                                     deserialization_failures=self._impl.deserialization_failure_count,
                                     overruns=self._rx.overrun_count)
 
-    async def close(self) -> None:
+    def close(self) -> None:
         """
         If this is the last subscriber instance for this session specifier, the underlying implementation object and
         its transport session instance will be closed. The user should explicitly close all objects before disposing
@@ -216,7 +216,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
                 _logger.exception('%s task could not be cancelled: %s', self, ex)
             self._maybe_task = None
 
-        await self._impl.remove_listener(self._rx)
+        self._impl.remove_listener(self._rx)
 
     def _raise_if_closed_or_failed(self) -> None:
         if self._closed:
@@ -230,8 +230,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
         if not self._closed:
             _logger.info('%s has not been disposed of properly; fixing', self)
             self._closed = True
-            # We can't just call close() here because the object is being deleted
-            asyncio.ensure_future(self._impl.remove_listener(self._rx), loop=self._loop)
+            self._impl.remove_listener(self._rx)
 
 
 @dataclasses.dataclass
@@ -296,7 +295,7 @@ class SubscriberImpl(typing.Generic[MessageClass]):
 
         try:
             self._closed = True
-            await self._finalizer([self.transport_session])
+            self._finalizer([self.transport_session])
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
@@ -310,13 +309,12 @@ class SubscriberImpl(typing.Generic[MessageClass]):
         self._raise_if_closed()
         self._listeners.append(rx)
 
-    async def remove_listener(self, rx: _Listener[MessageClass]) -> None:
+    def remove_listener(self, rx: _Listener[MessageClass]) -> None:
         self._raise_if_closed()
         self._listeners.remove(rx)
         if len(self._listeners) == 0:
             self._closed = True
             self._task.cancel()         # Force the task to be stopped ASAP without waiting for timeout
-            await self._task            # Wait until fully disposed of
 
     def _raise_if_closed(self) -> None:
         if self._closed:

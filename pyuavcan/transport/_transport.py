@@ -54,7 +54,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def set_local_node_id(self, node_id: int) -> None:
+    def set_local_node_id(self, node_id: int) -> None:
         """
         This method can be invoked only if the local node ID is not assigned. Once a local node ID is assigned,
         this method shall not be invoked anymore. In other words, it can be successfully invoked at most once.
@@ -64,7 +64,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def close(self) -> None:
+    def close(self) -> None:
         """
         After a transport is closed, none of its methods can be used. The behavior of methods invoked on a closed
         transport is undefined. Generally, when closed, the transport should also close its underlying resources
@@ -73,7 +73,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_input_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
+    def get_input_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
         """
         The transport will always return the same instance unless there is no session object with the requested
         specifier, in which case it will be created and stored internally until closed. The payload metadata parameter
@@ -82,7 +82,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_output_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
+    def get_output_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
         """
         The transport will always return the same instance unless there is no session object with the requested
         specifier, in which case it will be created and stored internally until closed. The payload metadata parameter

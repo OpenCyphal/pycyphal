@@ -44,8 +44,8 @@ class Node:
     def local_node_id(self) -> typing.Optional[int]:
         return self._presentation.transport.local_node_id
 
-    async def set_local_node_id(self, node_id: int) -> None:
-        await self._presentation.transport.set_local_node_id(node_id)
+    def set_local_node_id(self, node_id: int) -> None:
+        self._presentation.transport.set_local_node_id(node_id)
 
     @property
     def heartbeat_publisher(self) -> pyuavcan.application.heartbeat_publisher.HeartbeatPublisher:
@@ -53,63 +53,63 @@ class Node:
 
     # ---------------------------------------- PUBLISHER FACTORY ----------------------------------------
 
-    async def make_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) \
+    def make_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) \
             -> pyuavcan.presentation.Publisher[MessageClass]:
         """Wrapper for Presentation.make_publisher(..)."""
-        return await self._presentation.make_publisher(dtype, subject_id)
+        return self._presentation.make_publisher(dtype, subject_id)
 
-    async def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
+    def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> pyuavcan.presentation.Publisher[FixedPortMessageClass]:
         """Wrapper for Presentation.make_publisher_with_fixed_subject_id(..)."""
-        return await self._presentation.make_publisher_with_fixed_subject_id(dtype)
+        return self._presentation.make_publisher_with_fixed_subject_id(dtype)
 
     # ---------------------------------------- SUBSCRIBER FACTORY ----------------------------------------
 
-    async def make_subscriber(self,
-                              dtype:          typing.Type[MessageClass],
-                              subject_id:     int,
-                              queue_capacity: typing.Optional[int] = None) -> \
+    def make_subscriber(self,
+                        dtype:          typing.Type[MessageClass],
+                        subject_id:     int,
+                        queue_capacity: typing.Optional[int] = None) -> \
             pyuavcan.presentation.Subscriber[MessageClass]:
         """Wrapper for Presentation.make_subscriber(..)."""
-        return await self._presentation.make_subscriber(dtype, subject_id, queue_capacity)
+        return self._presentation.make_subscriber(dtype, subject_id, queue_capacity)
 
-    async def make_subscriber_with_fixed_subject_id(self,
-                                                    dtype:          typing.Type[FixedPortMessageClass],
-                                                    queue_capacity: typing.Optional[int] = None) \
+    def make_subscriber_with_fixed_subject_id(self,
+                                              dtype:          typing.Type[FixedPortMessageClass],
+                                              queue_capacity: typing.Optional[int] = None) \
             -> pyuavcan.presentation.Subscriber[FixedPortMessageClass]:
         """Wrapper for Presentation.make_subscriber_with_fixed_subject_id(..)."""
-        return await self._presentation.make_subscriber_with_fixed_subject_id(dtype, queue_capacity)
+        return self._presentation.make_subscriber_with_fixed_subject_id(dtype, queue_capacity)
 
     # ---------------------------------------- SERVICE CLIENT FACTORY ----------------------------------------
 
-    async def make_client(self,
-                          dtype:          typing.Type[ServiceClass],
-                          service_id:     int,
-                          server_node_id: int) -> pyuavcan.presentation.Client[ServiceClass]:
+    def make_client(self,
+                    dtype:          typing.Type[ServiceClass],
+                    service_id:     int,
+                    server_node_id: int) -> pyuavcan.presentation.Client[ServiceClass]:
         """Wrapper for Presentation.make_client(..)."""
-        return await self._presentation.make_client(dtype, service_id, server_node_id)
+        return self._presentation.make_client(dtype, service_id, server_node_id)
 
-    async def make_client_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int) \
+    def make_client_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int) \
             -> pyuavcan.presentation.Client[FixedPortServiceClass]:
         """Wrapper for Presentation.make_client_with_fixed_service_id(..)."""
-        return await self._presentation.make_client_with_fixed_service_id(dtype, server_node_id)
+        return self._presentation.make_client_with_fixed_service_id(dtype, server_node_id)
 
     # ---------------------------------------- SERVICE SERVER FACTORY ----------------------------------------
 
-    async def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) \
+    def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) \
             -> pyuavcan.presentation.Server[ServiceClass]:
         """Wrapper for Presentation.get_server(..)."""
-        return await self._presentation.get_server(dtype, service_id)
+        return self._presentation.get_server(dtype, service_id)
 
-    async def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
+    def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
             -> pyuavcan.presentation.Server[FixedPortServiceClass]:
         """Wrapper for Presentation.get_server_with_fixed_service_id(..)."""
-        return await self._presentation.get_server_with_fixed_service_id(dtype)
+        return self._presentation.get_server_with_fixed_service_id(dtype)
 
     # ---------------------------------------- AUXILIARY ----------------------------------------
 
-    async def close(self) -> None:
-        await self._presentation.close()
+    def close(self) -> None:
+        self._presentation.close()
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self,

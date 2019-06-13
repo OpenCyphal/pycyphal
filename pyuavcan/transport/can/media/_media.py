@@ -88,7 +88,7 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
+    def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         """
         This method is invoked whenever the subscription set is changed in order to communicate to the underlying
         CAN controller hardware which CAN frames should be picked up and which ones should be ignored.
@@ -100,7 +100,7 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def enable_automatic_retransmission(self) -> None:
+    def enable_automatic_retransmission(self) -> None:
         """
         By default, automatic retransmission should be disabled to facilitate PnP node ID allocation. This method can
         be invoked at most once to enable it, which is usually done when the local node obtains a node ID.
@@ -112,13 +112,14 @@ class Media(abc.ABC):
         """
         All frames are guaranteed to share the same CAN ID. This guarantee may enable some optimizations.
         The frames MUST be delivered to the bus in the same order. The iterable is guaranteed to be non-empty.
-        The method should avoid blocking; instead, it is recommended to unload the frames into an internal
-        transmission queue and return ASAP.
+        The method should avoid yielding the execution flow; instead, it is recommended to unload the frames
+        into an internal transmission queue and return ASAP, as that minimizes the likelihood of inner
+        priority inversion.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def close(self) -> None:
+    def close(self) -> None:
         """
         After the media instance is closed, none of its methods can be used anymore. The behavior or methods after
         close() is undefined.

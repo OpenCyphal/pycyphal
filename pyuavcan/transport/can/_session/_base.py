@@ -10,7 +10,7 @@ import logging
 import pyuavcan.transport
 
 
-SessionFinalizer = typing.Callable[[], typing.Awaitable[None]]
+SessionFinalizer = typing.Callable[[], None]
 
 
 _logger = logging.getLogger(__name__)
@@ -25,8 +25,8 @@ class CANSession:
             raise pyuavcan.transport.ResourceClosedError(
                 f'The requested action cannot be performed because the session object {self} is closed')
 
-    async def close(self) -> None:
+    def close(self) -> None:
         fin = self._close_finalizer
         if fin is not None:
             self._close_finalizer = None
-            await fin()
+            fin()

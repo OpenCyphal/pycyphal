@@ -123,8 +123,8 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
             or out.source_node_id == self.specifier.remote_node_id, 'Internal input session protocol violation'
         return out
 
-    async def close(self) -> None:
-        await super(CANInputSession, self).close()
+    def close(self) -> None:
+        super(CANInputSession, self).close()
 
     async def _do_try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:

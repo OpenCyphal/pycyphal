@@ -19,7 +19,7 @@ from ._error import TypedSessionClosedError
 _LISTEN_FOREVER_TIMEOUT = 1
 
 
-OutputTransportSessionFactory = typing.Callable[[int], typing.Awaitable[pyuavcan.transport.OutputSession]]
+OutputTransportSessionFactory = typing.Callable[[int], pyuavcan.transport.OutputSession]
 ServiceRequestClass = typing.TypeVar('ServiceRequestClass', bound=pyuavcan.dsdl.CompositeObject)
 ServiceResponseClass = typing.TypeVar('ServiceResponseClass', bound=pyuavcan.dsdl.CompositeObject)
 
@@ -136,26 +136,22 @@ class Server(ServiceTypedSession[ServiceClass]):
             # This allows us to minimize the request processing time.
             self._served_request_count += 1
             request, meta = out
-            response_transport_session_creation_task = \
-                self._loop.create_task(self._get_output_transport_session(meta.client_node_id))
             response: typing.Optional[ServiceClass.Response] = None  # Fallback state
+            assert isinstance(request, self._dtype.Request), 'Internal protocol violation'
             try:
-                assert isinstance(request, self._dtype.Request), 'Internal protocol violation'
-                try:
-                    response = await handler(request, meta)  # type: ignore
-                    if response is not None and not isinstance(response, self._dtype.Response):
-                        raise ValueError(
-                            f'The application request handler has returned an invalid response: '
-                            f'expected an instance of {self._dtype.Response} or None, '
-                            f'found {type(response)} instead. '
-                            f'The corresponding request was {request} with metadata {meta}')
-                except asyncio.CancelledError:
-                    raise
-                except Exception as ex:
-                    _logger.exception('%s unhandled exception in the handler: %s', self, ex)
-            finally:
-                # Can't leave a task pending. Never.
-                response_transport_session = await response_transport_session_creation_task
+                response = await handler(request, meta)  # type: ignore
+                if response is not None and not isinstance(response, self._dtype.Response):
+                    raise ValueError(
+                        f'The application request handler has returned an invalid response: '
+                        f'expected an instance of {self._dtype.Response} or None, '
+                        f'found {type(response)} instead. '
+                        f'The corresponding request was {request} with metadata {meta}')
+            except asyncio.CancelledError:
+                raise
+            except Exception as ex:
+                _logger.exception('%s unhandled exception in the handler: %s', self, ex)
+
+            response_transport_session = self._get_output_transport_session(meta.client_node_id)
 
             # Send the response unless the application has opted out, in which case do nothing.
             if response is not None:
@@ -183,7 +179,7 @@ class Server(ServiceTypedSession[ServiceClass]):
     def input_transport_session(self) -> pyuavcan.transport.InputSession:
         return self._input_transport_session
 
-    async def close(self) -> None:
+    def close(self) -> None:
         if self._closed:
             raise TypedSessionClosedError(repr(self))
         self._closed = True
@@ -195,7 +191,7 @@ class Server(ServiceTypedSession[ServiceClass]):
                 _logger.exception('%s task could not be cancelled: %s', self, ex)
             self._maybe_task = None
 
-        await self._finalizer((self._input_transport_session, *self._output_transport_sessions.values()))
+        self._finalizer((self._input_transport_session, *self._output_transport_sessions.values()))
 
     async def _try_receive_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[ServiceClass.Request, ServiceRequestMetadata]]:
@@ -228,11 +224,11 @@ class Server(ServiceTypedSession[ServiceClass]):
                                                fragmented_payload=fragmented_payload)
         await session.send(transfer)
 
-    async def _get_output_transport_session(self, client_node_id: int) -> pyuavcan.transport.OutputSession:
+    def _get_output_transport_session(self, client_node_id: int) -> pyuavcan.transport.OutputSession:
         try:
             return self._output_transport_sessions[client_node_id]
         except LookupError:
-            out = await self._output_transport_session_factory(client_node_id)
+            out = self._output_transport_session_factory(client_node_id)
             self._output_transport_sessions[client_node_id] = out
             return out
 

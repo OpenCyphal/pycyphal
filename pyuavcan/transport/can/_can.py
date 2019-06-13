@@ -118,17 +118,16 @@ class CANTransport(pyuavcan.transport.Transport):
     def local_node_id(self) -> typing.Optional[int]:
         return self._local_node_id
 
-    async def set_local_node_id(self, node_id: int) -> None:
-        async with self._media_lock:
-            if self._local_node_id is None:
-                if 0 <= node_id <= CANID.NODE_ID_MASK:
-                    self._local_node_id = int(node_id)
-                    await self._media.enable_automatic_retransmission()
-                    await self._reconfigure_acceptance_filters_with_lock_acquired()
-                else:
-                    raise ValueError(f'Invalid node ID for CAN: {node_id}')
+    def set_local_node_id(self, node_id: int) -> None:
+        if self._local_node_id is None:
+            if 0 <= node_id <= CANID.NODE_ID_MASK:
+                self._local_node_id = int(node_id)
+                self._media.enable_automatic_retransmission()
+                self._reconfigure_acceptance_filters()
             else:
-                raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
+                raise ValueError(f'Invalid node ID for CAN: {node_id}')
+        else:
+            raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     @property
     def input_sessions(self) -> typing.List[pyuavcan.transport.InputSession]:
@@ -138,36 +137,33 @@ class CANTransport(pyuavcan.transport.Transport):
     def output_sessions(self) -> typing.List[pyuavcan.transport.OutputSession]:
         return list(self._output_registry.values())
 
-    async def close(self) -> None:
-        async with self._media_lock:
-            await self._media.close()
-            self._maybe_media = None
+    def close(self) -> None:
+        self._media.close()
+        self._maybe_media = None
 
     def sample_frame_statistics(self) -> CANFrameStatistics:
         return copy.copy(self._frame_stats)
 
-    async def get_input_session(self,
-                                specifier:        pyuavcan.transport.SessionSpecifier,
-                                payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANInputSession:
-        async def finalizer() -> None:
-            async with self._media_lock:
-                self._input_dispatch_table.remove(specifier)
-                await self._reconfigure_acceptance_filters_with_lock_acquired()
+    def get_input_session(self,
+                          specifier:        pyuavcan.transport.SessionSpecifier,
+                          payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANInputSession:
+        def finalizer() -> None:
+            self._input_dispatch_table.remove(specifier)
+            self._reconfigure_acceptance_filters()
 
-        async with self._media_lock:
-            session = self._input_dispatch_table.get(specifier)
-            if session is None:
-                session = CANInputSession(specifier=specifier,
-                                          payload_metadata=payload_metadata,
-                                          loop=self._loop,
-                                          finalizer=finalizer)
-                self._input_dispatch_table.add(session)
-                await self._reconfigure_acceptance_filters_with_lock_acquired()
-            return session
+        session = self._input_dispatch_table.get(specifier)
+        if session is None:
+            session = CANInputSession(specifier=specifier,
+                                      payload_metadata=payload_metadata,
+                                      loop=self._loop,
+                                      finalizer=finalizer)
+            self._input_dispatch_table.add(session)
+            self._reconfigure_acceptance_filters()
+        return session
 
-    async def get_output_session(self,
-                                 specifier:        pyuavcan.transport.SessionSpecifier,
-                                 payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANOutputSession:
+    def get_output_session(self,
+                           specifier:        pyuavcan.transport.SessionSpecifier,
+                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANOutputSession:
         try:
             out = self._output_registry[specifier]
             assert out.specifier == specifier
@@ -176,7 +172,7 @@ class CANTransport(pyuavcan.transport.Transport):
         except KeyError:
             pass
 
-        async def finalizer() -> None:
+        def finalizer() -> None:
             self._output_registry.pop(specifier)
 
         if specifier.remote_node_id is None:
@@ -259,9 +255,7 @@ class CANTransport(pyuavcan.transport.Transport):
         else:
             session.handle_loopback_frame(frame)
 
-    async def _reconfigure_acceptance_filters_with_lock_acquired(self) -> None:
-        assert self._media_lock.locked, 'Internal protocol violation: lock is not acquired'
-
+    def _reconfigure_acceptance_filters(self) -> None:
         subject_ids = set(
             ds.subject_id for ds in (x.specifier.data_specifier for x in self._input_dispatch_table.items)
             if isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
@@ -274,11 +268,10 @@ class CANTransport(pyuavcan.transport.Transport):
         num_filters = self._media.number_of_acceptance_filters
         fcs = optimize_filter_configurations(fcs, num_filters)
         assert len(fcs) <= num_filters
-        await self._media.configure_acceptance_filters(fcs)
+        self._media.configure_acceptance_filters(fcs)
 
     @property
     def _media(self) -> Media:
-        assert self._media_lock.locked, 'Internal protocol violation: non-synchronized media access'
         out = self._maybe_media
         if out is not None:
             return out

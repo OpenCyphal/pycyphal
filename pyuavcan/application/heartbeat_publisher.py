@@ -54,7 +54,7 @@ class HeartbeatPublisher:
         self._health = Health.NOMINAL
         self._mode = Mode.INITIALIZATION
         self._vendor_specific_status_code = 0
-        self._priority = DEFAULT_PRIORITY
+        self._publisher = self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)
         self._before_heartbeat_handlers: typing.List[typing.Callable[[], None]] = []
         self._period = float(Heartbeat.MAX_PUBLICATION_PERIOD)
         self._closed = False
@@ -108,11 +108,11 @@ class HeartbeatPublisher:
 
     @property
     def priority(self) -> pyuavcan.transport.Priority:
-        return self._priority
+        return self._publisher.priority
 
     @priority.setter
     def priority(self, value: pyuavcan.transport.Priority) -> None:
-        self._priority = pyuavcan.transport.Priority(value)
+        self._publisher.priority = pyuavcan.transport.Priority(value)
 
     def call_before_every_heartbeat(self, handler: typing.Callable[[], None]) -> None:
         """
@@ -134,8 +134,12 @@ class HeartbeatPublisher:
                          mode=self.mode,
                          vendor_specific_status_code=self.vendor_specific_status_code)
 
+    def close(self) -> None:
+        if not self._closed:
+            self._closed = True
+            self._publisher.close()
+
     async def _task_function(self) -> None:
-        publisher = await self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)  # FIXME
         next_heartbeat_at = time.monotonic()
         while not self._closed:
             try:
@@ -143,8 +147,7 @@ class HeartbeatPublisher:
                 await asyncio.sleep(next_heartbeat_at - time.monotonic())
                 self._call_pre_heartbeat_handlers()
                 if self._presentation.transport.local_node_id is not None:
-                    publisher.priority = self._priority
-                    await publisher.publish(self.make_message())
+                    await self._publisher.publish(self.make_message())
             except asyncio.CancelledError:
                 _logger.debug('%s publisher task cancelled', self)
                 break
@@ -155,7 +158,7 @@ class HeartbeatPublisher:
                 _logger.exception('%s publisher task exception: %s', self, ex)
 
         try:
-            await publisher.close()
+            self._publisher.close()
         except pyuavcan.transport.TransportError:
             pass
 
@@ -169,6 +172,4 @@ class HeartbeatPublisher:
                 _logger.exception('%s got an unhandled exception from the pre-heartbeat handler: %s', self, ex)
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             heartbeat=self.make_message(),
-                                             transport=self._presentation.transport)
+        return pyuavcan.util.repr_attributes(self, heartbeat=self.make_message(), publisher=self._publisher)

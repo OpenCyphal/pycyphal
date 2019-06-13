@@ -90,10 +90,10 @@ def _unittest_input_dispatch_table() -> None:
     with raises(LookupError):
         t.remove(SessionSpecifier(MessageDataSpecifier(1234), 123))
 
-    async def finalizer() -> None:
-        pass    # pragma: no cover
-
-    a = CANInputSession(SessionSpecifier(MessageDataSpecifier(1234), None), PayloadMetadata(456, 789), None, finalizer)
+    a = CANInputSession(SessionSpecifier(MessageDataSpecifier(1234), None),
+                        PayloadMetadata(456, 789),
+                        None,
+                        lambda: None)
     t.add(a)
     t.add(a)
     assert list(t.items) == [a]

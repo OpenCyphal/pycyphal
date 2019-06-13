@@ -16,7 +16,7 @@ import pyuavcan.transport
 DEFAULT_PRIORITY = pyuavcan.transport.Priority.NOMINAL
 
 
-TypedSessionFinalizer = typing.Callable[[typing.Iterable[pyuavcan.transport.Session]], typing.Awaitable[None]]
+TypedSessionFinalizer = typing.Callable[[typing.Iterable[pyuavcan.transport.Session]], None]
 
 
 TypeClass = typing.TypeVar('TypeClass', bound=pyuavcan.dsdl.CompositeObject)
@@ -55,7 +55,7 @@ class TypedSession(abc.ABC, typing.Generic[TypeClass]):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def close(self) -> None:
+    def close(self) -> None:
         """
         Invalidates the object and closes the underlying resources if necessary.
         """
