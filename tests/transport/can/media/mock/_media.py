@@ -50,7 +50,7 @@ class MockMedia(_media.Media):
         assert callable(handler)
         self._rx_handler = handler
 
-    async def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
+    def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
 
@@ -61,7 +61,7 @@ class MockMedia(_media.Media):
         assert len(configuration) == len(self._acceptance_filters)
         self._acceptance_filters = configuration
 
-    async def enable_automatic_retransmission(self) -> None:
+    def enable_automatic_retransmission(self) -> None:
         self._automatic_retransmission_enabled = True
 
     @property
@@ -105,7 +105,7 @@ class MockMedia(_media.Media):
                                                   timestamp=timestamp)
                       for f in frames if f.loopback)
 
-    async def close(self) -> None:
+    def close(self) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
         else:
@@ -153,7 +153,7 @@ async def _unittest_can_mock_media() -> None:
     assert me.number_of_acceptance_filters == 3
     assert not me.automatic_retransmission_enabled
     assert str(me) == "MockMedia(interface_name='mock', max_data_field_length=64)"
-    await me.enable_automatic_retransmission()
+    me.enable_automatic_retransmission()
     assert me.automatic_retransmission_enabled
 
     me_collector = FrameCollector()
@@ -166,7 +166,7 @@ async def _unittest_can_mock_media() -> None:
     ])
     assert me_collector.empty
 
-    await me.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
+    me.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
     # Now the loopback will be accepted because we have reconfigured the filters
     await me.send([
         DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
@@ -192,7 +192,7 @@ async def _unittest_can_mock_media() -> None:
     ])
     assert pe_collector.empty
 
-    await pe.configure_acceptance_filters([FilterConfiguration(123, 127, None)])
+    pe.configure_acceptance_filters([FilterConfiguration(123, 127, None)])
     await me.send([
         DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
         DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True),
@@ -206,16 +206,16 @@ async def _unittest_can_mock_media() -> None:
         DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=False))
     assert pe_collector.empty
 
-    await me.close()
+    me.close()
     assert peers == {pe}
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         await me.send([])
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        await me.configure_acceptance_filters([])
+        me.configure_acceptance_filters([])
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         me.set_received_frames_handler(me_collector.give)
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        await me.close()
+        me.close()
 
 
 class FrameCollector:
@@ -235,7 +235,5 @@ class FrameCollector:
     def empty(self) -> bool:
         return len(self._collected) == 0
 
-    def __str__(self) -> str:  # pragma: no cover
+    def __repr__(self) -> str:  # pragma: no cover
         return f'{type(self).__name__}({str(self._collected)})'
-
-    __repr__ = __str__

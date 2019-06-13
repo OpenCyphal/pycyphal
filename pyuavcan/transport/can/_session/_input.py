@@ -26,22 +26,24 @@ class ExtendedStatistics(pyuavcan.transport.Statistics):
         dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_receiver.TransferReceptionError})
 
 
-# noinspection PyAbstractClass
 class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2     # [second] Per the Specification.
 
     _QueueItem = typing.Tuple[_identifier.CANID, _frame.TimestampedUAVCANFrame]
 
     def __init__(self,
-                 metadata:  pyuavcan.transport.SessionMetadata,
-                 loop:      typing.Optional[asyncio.AbstractEventLoop],
-                 finalizer: _base.SessionFinalizer):
-        self._metadata = metadata
+                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 payload_metadata: pyuavcan.transport.PayloadMetadata,
+                 loop:             typing.Optional[asyncio.AbstractEventLoop],
+                 finalizer:        _base.SessionFinalizer):
+        self._specifier = specifier
+        self._payload_metadata = payload_metadata
+
         self._queue: asyncio.Queue[CANInputSession._QueueItem] = asyncio.Queue()
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._transfer_id_timeout_ns = int(CANInputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
-        self._receivers = [_transfer_receiver.TransferReceiver(metadata.payload_metadata.max_size_bytes)
+        self._receivers = [_transfer_receiver.TransferReceiver(payload_metadata.max_size_bytes)
                            for _ in _node_id_range()]
 
         self._statistics = ExtendedStatistics()         # We could easily support per-source-node statistics if needed
@@ -88,29 +90,64 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
             pass
 
     @property
-    def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
-        return self._metadata.data_specifier
+    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+        return self._specifier
+
+    @property
+    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
+        return self._payload_metadata
+
+    def sample_statistics(self) -> ExtendedStatistics:
+        return copy.copy(self._statistics)
+
+    @property
+    def transfer_id_timeout(self) -> float:
+        return self._transfer_id_timeout_ns * _NANO
+
+    @transfer_id_timeout.setter
+    def transfer_id_timeout(self, value: float) -> None:
+        if value > 0:
+            self._transfer_id_timeout_ns = round(value / _NANO)
+        else:
+            raise ValueError(f'Invalid value for transfer ID timeout [second]: {value}')
+
+    async def receive(self) -> pyuavcan.transport.TransferFrom:
+        out: typing.Optional[pyuavcan.transport.TransferFrom] = None
+        while out is None:
+            out = await self.try_receive(time.monotonic() + _INFINITE_RECEIVE_RETRY_INTERVAL)
+        return out
+
+    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+        out = await self._do_try_receive(monotonic_deadline)
+        assert out is None or self.specifier.remote_node_id is None \
+            or out.source_node_id == self.specifier.remote_node_id, 'Internal input session protocol violation'
+        return out
+
+    def close(self) -> None:
+        super(CANInputSession, self).close()
 
     async def _do_try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:
             self._raise_if_closed()
-
-            timeout = monotonic_deadline - time.monotonic()
-            if timeout <= 0:
-                break
-
             try:
-                canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                # Continue reading past the deadline until the queue is empty or a transfer is received.
+                timeout = monotonic_deadline - time.monotonic()
+                if timeout > 0:
+                    canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                else:
+                    canid, frame = self._queue.get_nowait()
                 assert isinstance(canid, _identifier.CANID)
                 assert isinstance(frame, _frame.TimestampedUAVCANFrame)
             except asyncio.TimeoutError:
-                continue
+                return None
+            except asyncio.QueueEmpty:
+                return None
 
             self._statistics.frames += 1
 
             if isinstance(canid, _identifier.MessageCANID):
-                assert isinstance(self._metadata.data_specifier, pyuavcan.transport.MessageDataSpecifier)
-                assert self._metadata.data_specifier.subject_id == canid.subject_id
+                assert isinstance(self._specifier.data_specifier, pyuavcan.transport.MessageDataSpecifier)
+                assert self._specifier.data_specifier.subject_id == canid.subject_id
                 source_node_id = canid.source_node_id
                 if source_node_id is None:
                     # Anonymous transfer - no reconstruction needed
@@ -123,9 +160,9 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                                                            source_node_id=None)
 
             elif isinstance(canid, _identifier.ServiceCANID):
-                assert isinstance(self._metadata.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
-                assert self._metadata.data_specifier.service_id == canid.service_id
-                assert (self._metadata.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.SERVER) \
+                assert isinstance(self._specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
+                assert self._specifier.data_specifier.service_id == canid.service_id
+                assert (self._specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.SERVER) \
                     == canid.request_not_response
                 source_node_id = canid.source_node_id
 
@@ -145,98 +182,6 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                 pass        # Nothing to do - expecting more frames
             else:
                 assert False
-        return None
-
-    def _do_sample_statistics(self) -> ExtendedStatistics:
-        return copy.copy(self._statistics)
-
-    def _set_transfer_id_timeout(self, value: float) -> None:
-        if value > 0:
-            self._transfer_id_timeout_ns = int(value / _NANO)
-        else:
-            raise ValueError(f'Invalid value for transfer ID timeout [second]: {value}')
-
-
-class PromiscuousCANInput(CANInputSession, pyuavcan.transport.PromiscuousInput):
-    def __init__(self,
-                 metadata:  pyuavcan.transport.SessionMetadata,
-                 loop:      typing.Optional[asyncio.AbstractEventLoop],
-                 finalizer: _base.SessionFinalizer):
-        super(PromiscuousCANInput, self).__init__(metadata=metadata,
-                                                  loop=loop,
-                                                  finalizer=finalizer)
-
-    @property
-    def metadata(self) -> pyuavcan.transport.SessionMetadata:
-        return self._metadata
-
-    def sample_statistics(self) -> ExtendedStatistics:
-        return self._do_sample_statistics()
-
-    async def close(self) -> None:
-        await super(PromiscuousCANInput, self).close()
-
-    async def receive(self) -> pyuavcan.transport.TransferFrom:
-        out: typing.Optional[pyuavcan.transport.TransferFrom] = None
-        while out is None:
-            out = await self.try_receive(time.monotonic() + _INFINITE_RECEIVE_RETRY_INTERVAL)
-        return out
-
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
-        return await self._do_try_receive(monotonic_deadline)
-
-    @property
-    def transfer_id_timeout(self) -> float:
-        return self._transfer_id_timeout_ns * _NANO
-
-    @transfer_id_timeout.setter
-    def transfer_id_timeout(self, value: float) -> None:
-        self._set_transfer_id_timeout(value)
-
-
-class SelectiveCANInput(CANInputSession, pyuavcan.transport.SelectiveInput):
-    def __init__(self,
-                 source_node_id: int,
-                 metadata:       pyuavcan.transport.SessionMetadata,
-                 loop:           typing.Optional[asyncio.AbstractEventLoop],
-                 finalizer:      _base.SessionFinalizer):
-        self._source_node_id = int(source_node_id)
-        super(SelectiveCANInput, self).__init__(metadata=metadata,
-                                                loop=loop,
-                                                finalizer=finalizer)
-
-    @property
-    def metadata(self) -> pyuavcan.transport.SessionMetadata:
-        return self._metadata
-
-    def sample_statistics(self) -> ExtendedStatistics:
-        return self._do_sample_statistics()
-
-    async def close(self) -> None:
-        await super(SelectiveCANInput, self).close()
-
-    async def receive(self) -> pyuavcan.transport.Transfer:
-        out: typing.Optional[pyuavcan.transport.Transfer] = None
-        while out is None:
-            out = await self.try_receive(time.monotonic() + _INFINITE_RECEIVE_RETRY_INTERVAL)
-        return out
-
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.Transfer]:
-        out = await self._do_try_receive(monotonic_deadline)
-        assert out is None or out.source_node_id == self.source_node_id, 'Mishandled selective input session'
-        return out
-
-    @property
-    def source_node_id(self) -> int:
-        return self._source_node_id
-
-    @property
-    def transfer_id_timeout(self) -> float:
-        return self._transfer_id_timeout_ns * _NANO
-
-    @transfer_id_timeout.setter
-    def transfer_id_timeout(self, value: float) -> None:
-        self._set_transfer_id_timeout(value)
 
 
 def _node_id_range() -> typing.Iterable[int]:

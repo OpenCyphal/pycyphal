@@ -13,10 +13,9 @@ class {{ T|short_reference }}(_dsdl_.{%- if T.has_fixed_port_id -%}FixedPort{%- 
 
     {{ data_schema('Response', T.response_type, T|short_reference)|indent }}
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return '{{ T }}()'
 
-    __repr__ = __str__
     {% if T.has_fixed_port_id %}
     _FIXED_PORT_ID_ = {{ T.fixed_port_id|int }}
     {%- endif %}

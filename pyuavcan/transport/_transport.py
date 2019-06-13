@@ -7,10 +7,10 @@
 from __future__ import annotations
 import abc
 import typing
+import asyncio
 import dataclasses
-from ._session import InputSession, OutputSession
-from ._session import PromiscuousInput, SelectiveInput, BroadcastOutput, UnicastOutput
-from ._data_specifier import DataSpecifier
+import pyuavcan.util
+from ._session import InputSession, OutputSession, SessionSpecifier
 from ._payload_metadata import PayloadMetadata
 
 
@@ -22,6 +22,14 @@ class ProtocolParameters:
 
 
 class Transport(abc.ABC):
+    @property
+    @abc.abstractmethod
+    def loop(self) -> asyncio.AbstractEventLoop:
+        """
+        The event loop used to operate the transport instance.
+        """
+        raise NotImplementedError
+
     @property
     @abc.abstractmethod
     def protocol_parameters(self) -> ProtocolParameters:
@@ -46,7 +54,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def set_local_node_id(self, node_id: int) -> None:
+    def set_local_node_id(self, node_id: int) -> None:
         """
         This method can be invoked only if the local node ID is not assigned. Once a local node ID is assigned,
         this method shall not be invoked anymore. In other words, it can be successfully invoked at most once.
@@ -56,7 +64,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def close(self) -> None:
+    def close(self) -> None:
         """
         After a transport is closed, none of its methods can be used. The behavior of methods invoked on a closed
         transport is undefined. Generally, when closed, the transport should also close its underlying resources
@@ -65,54 +73,26 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_promiscuous_input(self,
-                                    data_specifier:   DataSpecifier,
-                                    payload_metadata: PayloadMetadata) -> PromiscuousInput:
+    def get_input_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
         """
-        All transports support this session type for all kinds of transfers.
-        The transport will always return the same instance unless there is no session object with the requested data
-        specifier, in which case it will be created and stored internally until closed.
+        The transport will always return the same instance unless there is no session object with the requested
+        specifier, in which case it will be created and stored internally until closed. The payload metadata parameter
+        is used only when a new instance is created, ignored otherwise.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def get_selective_input(self,
-                                  data_specifier:   DataSpecifier,
-                                  payload_metadata: PayloadMetadata,
-                                  source_node_id:   int) -> SelectiveInput:
+    def get_output_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
         """
-        All transports support this session type for service transfers. Support for message transfers is optional.
-        The transport will always return the same instance unless there is no session object with the requested data
-        specifier and source node ID, in which case it will be created and stored internally until closed.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def get_broadcast_output(self,
-                                   data_specifier:   DataSpecifier,
-                                   payload_metadata: PayloadMetadata) -> BroadcastOutput:
-        """
-        All transports support this session type for message transfers. Support for service transfers is optional.
-        The transport will always return the same instance unless there is no session object with the requested data
-        specifier, in which case it will be created and stored internally until closed.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def get_unicast_output(self,
-                                 data_specifier:      DataSpecifier,
-                                 payload_metadata:    PayloadMetadata,
-                                 destination_node_id: int) -> UnicastOutput:
-        """
-        All transports support this session type for service transfers. Support for message transfers is optional.
-        The transport will always return the same instance unless there is no session object with the requested data
-        specifier and destination node ID, in which case it will be created and stored internally until closed.
+        The transport will always return the same instance unless there is no session object with the requested
+        specifier, in which case it will be created and stored internally until closed. The payload metadata parameter
+        is used only when a new instance is created, ignored otherwise.
         """
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
-    def inputs(self) -> typing.Sequence[InputSession]:
+    def input_sessions(self) -> typing.Sequence[InputSession]:
         """
         All active input sessions.
         """
@@ -120,22 +100,19 @@ class Transport(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def outputs(self) -> typing.Sequence[OutputSession]:
+    def output_sessions(self) -> typing.Sequence[OutputSession]:
         """
         All active output sessions.
         """
         raise NotImplementedError
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         """
         Prints the basic transport information. May be overridden if there is more relevant info to display.
         """
         # TODO: somehow obtain the media information and print it here. Add a basic media info property of type str?
-        return f'{type(self).__name__}(' \
-            f'protocol_parameters={self.protocol_parameters}, ' \
-            f'local_node_id={self.local_node_id}, ' \
-            f'inputs=[{", ".join(map(str, self.inputs))}], ' \
-            f'outputs=[{", ".join(map(str, self.outputs))}])'
-
-    def __repr__(self) -> str:
-        return self.__str__()
+        return pyuavcan.util.repr_attributes(self,
+                                             protocol_parameters=self.protocol_parameters,
+                                             local_node_id=self.local_node_id,
+                                             input_sessions=', '.join(map(str, self.input_sessions)),
+                                             output_sessions=', '.join(map(str, self.output_sessions)))

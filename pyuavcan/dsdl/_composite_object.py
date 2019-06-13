@@ -121,7 +121,7 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
 
 
 # noinspection PyProtectedMember
-def try_deserialize(cls: typing.Type[CompositeObjectTypeVar],
+def try_deserialize(dtype: typing.Type[CompositeObjectTypeVar],
                     fragmented_serialized_representation: typing.Sequence[memoryview]) \
         -> typing.Optional[CompositeObjectTypeVar]:
     """
@@ -145,12 +145,12 @@ def try_deserialize(cls: typing.Type[CompositeObjectTypeVar],
         contiguous = bytearray().join(fragmented_serialized_representation)
     deserializer = _serialized_representation.Deserializer.new(contiguous)
     try:
-        return cls._deserialize_aligned_(deserializer)  # type: ignore
+        return dtype._deserialize_aligned_(deserializer)  # type: ignore
     except _serialized_representation.Deserializer.FormatError:
         # Use explicit level check to avoid unnecessary load in production.
         # This is necessary because we perform complex data transformations before invoking the logger.
         if _logger.isEnabledFor(logging.INFO):  # pragma: no branch
-            _logger.info('Invalid serialized representation of %s: %s', get_model(cls), deserializer, exc_info=True)
+            _logger.info('Invalid serialized representation of %s: %s', get_model(dtype), deserializer, exc_info=True)
         return None
 
 
@@ -198,6 +198,9 @@ def get_max_serialized_representation_size_bytes(class_or_instance: typing.Union
 
 
 def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[FixedPortObject], FixedPortObject]) -> int:
+    """
+    Raises a TypeError if the type has no fixed port ID.
+    """
     # noinspection PyProtectedMember
     out = int(class_or_instance._FIXED_PORT_ID_)
     if (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)) or \

@@ -16,3 +16,6 @@ import pyuavcan.util            # noqa
 import pyuavcan.dsdl            # noqa
 import pyuavcan.transport       # noqa
 import pyuavcan.presentation    # noqa
+
+# pyuavcan.application is not imported by default because it depends on the standard DSDL namespace "uavcan";
+# it is necessary to ensure that the corresponding Python package is generated before importing pyuavcan.application.

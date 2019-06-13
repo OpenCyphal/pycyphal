@@ -20,6 +20,10 @@ class MessageDataSpecifier(DataSpecifier):
 
     subject_id: int
 
+    def __post_init__(self) -> None:
+        if not (0 <= self.subject_id <= self.SUBJECT_ID_MASK):
+            raise ValueError(f'Invalid subject ID: {self.subject_id}')
+
 
 @dataclasses.dataclass(frozen=True)
 class ServiceDataSpecifier(DataSpecifier):
@@ -31,3 +35,8 @@ class ServiceDataSpecifier(DataSpecifier):
 
     service_id: int
     role:       Role
+
+    def __post_init__(self) -> None:
+        assert self.role in self.Role
+        if not (0 <= self.service_id <= self.SERVICE_ID_MASK):
+            raise ValueError(f'Invalid service ID: {self.service_id}')

@@ -7,14 +7,15 @@
 from __future__ import annotations
 import abc
 import typing
+import pyuavcan.util
 from ._frame import DataFrame, TimestampedDataFrame
 from ._filter import FilterConfiguration
 
 
 class Media(abc.ABC):
     """
-    The transport guarantees that the methods or properties will never be accessed concurrently from different
-    coroutines/tasks, excepting __str__(), __repr__().
+    The transport guarantees that the methods will never be accessed concurrently from different coroutines/tasks,
+    excepting __repr__() and properties.
     """
 
     # The frames handler is non-blocking and non-yielding; returns immediately.
@@ -87,7 +88,7 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
+    def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         """
         This method is invoked whenever the subscription set is changed in order to communicate to the underlying
         CAN controller hardware which CAN frames should be picked up and which ones should be ignored.
@@ -99,10 +100,10 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def enable_automatic_retransmission(self) -> None:
+    def enable_automatic_retransmission(self) -> None:
         """
         By default, automatic retransmission should be disabled to facilitate PnP node ID allocation. This method can
-        be invoked at most once to disable it, which is usually done when the local node obtains a node ID.
+        be invoked at most once to enable it, which is usually done when the local node obtains a node ID.
         """
         raise NotImplementedError
 
@@ -111,26 +112,24 @@ class Media(abc.ABC):
         """
         All frames are guaranteed to share the same CAN ID. This guarantee may enable some optimizations.
         The frames MUST be delivered to the bus in the same order. The iterable is guaranteed to be non-empty.
-        The method should avoid blocking; instead, it is recommended to unload the frames into an internal
-        transmission queue and return ASAP.
+        The method should avoid yielding the execution flow; instead, it is recommended to unload the frames
+        into an internal transmission queue and return ASAP, as that minimizes the likelihood of inner
+        priority inversion.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def close(self) -> None:
+    def close(self) -> None:
         """
         After the media instance is closed, none of its methods can be used anymore. The behavior or methods after
         close() is undefined.
         """
         raise NotImplementedError
 
-    def __str__(self) -> str:
-        """
-        Should print the basic media information. Can be overridden if there is more relevant info to display.
-        """
-        return f'{type(self).__name__}(' \
-            f'interface_name={self.interface_name!r}, ' \
-            f'max_data_field_length={self.max_data_field_length})'
-
     def __repr__(self) -> str:
-        return self.__str__()
+        """
+        Prints the basic media information. Can be overridden if there is more relevant info to display.
+        """
+        return pyuavcan.util.repr_attributes(self,
+                                             interface_name=self.interface_name,
+                                             max_data_field_length=self.max_data_field_length)

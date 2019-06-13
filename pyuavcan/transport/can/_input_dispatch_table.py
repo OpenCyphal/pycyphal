@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 import typing
-from pyuavcan.transport import DataSpecifier, MessageDataSpecifier, ServiceDataSpecifier
-from ._session import CANInputSession, PromiscuousCANInput, SelectiveCANInput
+from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, SessionSpecifier
+from ._session import CANInputSession
 from ._identifier import CANID
 
 
@@ -29,7 +29,7 @@ class InputDispatchTable:
         self._table: typing.List[typing.Optional[CANInputSession]] = [None] * (self._TABLE_SIZE + 1)
 
         # A parallel dict is necessary for constant-complexity element listing. Traversing the table takes forever.
-        self._dict: typing.Dict[typing.Tuple[DataSpecifier, typing.Optional[int]], CANInputSession] = {}
+        self._dict: typing.Dict[SessionSpecifier, CANInputSession] = {}
 
     @property
     def items(self) -> typing.Iterable[CANInputSession]:
@@ -39,54 +39,40 @@ class InputDispatchTable:
         """
         This method is used only when a new input session is created; performance is not a priority.
         """
-        key = self._key(session)
-        self._table[self._compute_index(*key)] = session
+        key = session.specifier
+        self._table[self._compute_index(key)] = session
         self._dict[key] = session
 
-    def get(self,
-            data_specifier: DataSpecifier,
-            source_node_id: typing.Optional[int]) -> typing.Optional[CANInputSession]:
+    def get(self, specifier: SessionSpecifier) -> typing.Optional[CANInputSession]:
         """
         Constant-time lookup. Invoked for every received frame.
         """
-        return self._table[self._compute_index(data_specifier, source_node_id)]
+        return self._table[self._compute_index(specifier)]
 
-    def remove(self,
-               data_specifier: DataSpecifier,
-               source_node_id: typing.Optional[int]) -> None:
+    def remove(self, specifier: SessionSpecifier) -> None:
         """
         This method is used only when an input session is destroyed; performance is not a priority.
         """
-        key = data_specifier, source_node_id
-        self._table[self._compute_index(*key)] = None
-        del self._dict[key]
+        self._table[self._compute_index(specifier)] = None
+        del self._dict[specifier]
 
     @staticmethod
-    def _key(session: CANInputSession) -> typing.Tuple[DataSpecifier, typing.Optional[int]]:
-        ds = session.metadata.data_specifier
-        if isinstance(session, PromiscuousCANInput):
-            return ds, None
-        elif isinstance(session, SelectiveCANInput):
-            return ds, session.source_node_id
-        else:
-            assert False
-
-    @staticmethod
-    def _compute_index(data_specifier: DataSpecifier, source_node_id: typing.Optional[int]) -> int:
-        if isinstance(data_specifier, MessageDataSpecifier):
-            dim1 = data_specifier.subject_id
-        elif isinstance(data_specifier, ServiceDataSpecifier):
-            if data_specifier.role == data_specifier.Role.CLIENT:
-                dim1 = data_specifier.service_id + InputDispatchTable._NUM_SUBJECTS
-            elif data_specifier.role == data_specifier.Role.SERVER:
-                dim1 = data_specifier.service_id + InputDispatchTable._NUM_SUBJECTS + InputDispatchTable._NUM_SERVICES
+    def _compute_index(specifier: SessionSpecifier) -> int:
+        ds, nid = specifier.data_specifier, specifier.remote_node_id
+        if isinstance(ds, MessageDataSpecifier):
+            dim1 = ds.subject_id
+        elif isinstance(ds, ServiceDataSpecifier):
+            if ds.role == ds.Role.CLIENT:
+                dim1 = ds.service_id + InputDispatchTable._NUM_SUBJECTS
+            elif ds.role == ds.Role.SERVER:
+                dim1 = ds.service_id + InputDispatchTable._NUM_SUBJECTS + InputDispatchTable._NUM_SERVICES
             else:
                 assert False
         else:
             assert False
 
         dim2_cardinality = InputDispatchTable._NUM_NODE_IDS + 1
-        dim2 = source_node_id if source_node_id is not None else InputDispatchTable._NUM_NODE_IDS
+        dim2 = nid if nid is not None else InputDispatchTable._NUM_NODE_IDS
 
         point = dim1 * dim2_cardinality + dim2
 
@@ -96,24 +82,23 @@ class InputDispatchTable:
 
 def _unittest_input_dispatch_table() -> None:
     from pytest import raises
-    from pyuavcan.transport import SessionMetadata, PayloadMetadata
-    from ._session import PromiscuousCANInput
+    from pyuavcan.transport import PayloadMetadata
 
     t = InputDispatchTable()
     assert len(list(t.items)) == 0
-    assert t.get(MessageDataSpecifier(1234), None) is None
+    assert t.get(SessionSpecifier(MessageDataSpecifier(1234), None)) is None
     with raises(LookupError):
-        t.remove(MessageDataSpecifier(1234), 123)
+        t.remove(SessionSpecifier(MessageDataSpecifier(1234), 123))
 
-    async def finalizer() -> None:
-        pass    # pragma: no cover
-
-    a = PromiscuousCANInput(SessionMetadata(MessageDataSpecifier(1234), PayloadMetadata(456, 789)), None, finalizer)
+    a = CANInputSession(SessionSpecifier(MessageDataSpecifier(1234), None),
+                        PayloadMetadata(456, 789),
+                        None,
+                        lambda: None)
     t.add(a)
     t.add(a)
     assert list(t.items) == [a]
-    assert t.get(MessageDataSpecifier(1234), None) == a
-    t.remove(MessageDataSpecifier(1234), None)
+    assert t.get(SessionSpecifier(MessageDataSpecifier(1234), None)) == a
+    t.remove(SessionSpecifier(MessageDataSpecifier(1234), None))
     assert len(list(t.items)) == 0
 
 
@@ -122,14 +107,14 @@ def _unittest_slow_input_dispatch_table_index() -> None:
     values: typing.Set[int] = set()
     for node_id in (*range(InputDispatchTable._NUM_NODE_IDS), None):
         for subj in range(InputDispatchTable._NUM_SUBJECTS):
-            out = InputDispatchTable._compute_index(MessageDataSpecifier(subj), node_id)
+            out = InputDispatchTable._compute_index(SessionSpecifier(MessageDataSpecifier(subj), node_id))
             assert out not in values
             values.add(out)
             assert out < InputDispatchTable._TABLE_SIZE
 
         for serv in range(InputDispatchTable._NUM_SERVICES):
             for role in ServiceDataSpecifier.Role:
-                out = InputDispatchTable._compute_index(ServiceDataSpecifier(serv, role), node_id)
+                out = InputDispatchTable._compute_index(SessionSpecifier(ServiceDataSpecifier(serv, role), node_id))
                 assert out not in values
                 values.add(out)
                 assert out < InputDispatchTable._TABLE_SIZE

@@ -54,11 +54,11 @@ def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.Generate
             if not isinstance(model, pydsdl.ServiceType):
                 performance[model] = _test_type(model, _NUM_RANDOM_SAMPLES)
             else:
-                cls = pyuavcan.dsdl.get_class(model)
+                dtype = pyuavcan.dsdl.get_class(model)
                 with pytest.raises(TypeError):
-                    assert list(pyuavcan.dsdl.serialize(cls()))
+                    assert list(pyuavcan.dsdl.serialize(dtype()))
                 with pytest.raises(TypeError):
-                    pyuavcan.dsdl.try_deserialize(cls, [memoryview(b'')])
+                    pyuavcan.dsdl.try_deserialize(dtype, [memoryview(b'')])
 
     _logger.info('Tested types ordered by serialization speed, %d random samples per type', _NUM_RANDOM_SAMPLES)
     _logger.info('Columns: random SR correctness ratio; mean serialization time (us); mean deserialization time (us)')
@@ -84,9 +84,9 @@ def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.Generate
 
 def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTestStatistics:
     _logger.debug('Roundtrip serialization test of %s with %d random samples', model, num_random_samples)
-    cls = pyuavcan.dsdl.get_class(model)
+    dtype = pyuavcan.dsdl.get_class(model)
     samples: typing.List[typing.Tuple[float, float]] = [
-        _serialize_deserialize(cls())
+        _serialize_deserialize(dtype())
     ]
     rand_sr_validness: typing.List[bool] = []
 
@@ -101,8 +101,8 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
         sample_ser = once(_util.make_random_object(model))
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
-        sr = _make_random_fragmented_serialized_representation(pyuavcan.dsdl.get_model(cls).bit_length_set)
-        ob = pyuavcan.dsdl.try_deserialize(cls, sr)
+        sr = _make_random_fragmented_serialized_representation(pyuavcan.dsdl.get_model(dtype).bit_length_set)
+        ob = pyuavcan.dsdl.try_deserialize(dtype, sr)
         rand_sr_validness.append(ob is not None)
         sample_des: typing.Optional[typing.Tuple[float, float]] = None
         if ob:

@@ -10,10 +10,8 @@ from ._timestamp import Timestamp
 
 from ._transfer import Priority, FragmentedPayload, Transfer, TransferFrom
 
-from ._session import SessionMetadata, Statistics, Feedback
+from ._session import SessionSpecifier, Statistics, Feedback
 from ._session import Session, InputSession, OutputSession
-from ._session import PromiscuousInput, SelectiveInput
-from ._session import BroadcastOutput, UnicastOutput
 
 from ._data_specifier import DataSpecifier, MessageDataSpecifier, ServiceDataSpecifier
 

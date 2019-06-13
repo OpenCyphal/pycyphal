@@ -31,21 +31,18 @@ class TransportSpecificFeedback(pyuavcan.transport.Feedback, TransportSpecific):
         raise NotImplementedError
 
 
-class RedundantSession:
-    async def add_transport(self, transport: pyuavcan.transport.Transport) -> None:
+class RedundantSession(abc.ABC):
+    def add_transport(self, transport: pyuavcan.transport.Transport) -> None:
         raise NotImplementedError
 
-    async def remove_transport(self, transport: pyuavcan.transport.Transport) -> None:
+    def remove_transport(self, transport: pyuavcan.transport.Transport) -> None:
         raise NotImplementedError
 
+    def close(self) -> None:
+        raise NotImplementedError
 
-# ------------------------------------- INPUT -------------------------------------
 
 class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
-    pass
-
-
-class PromiscuousRedundantInput(RedundantInputSession, pyuavcan.transport.PromiscuousInput):
     class RedundantTransferFrom(pyuavcan.transport.TransferFrom, TransportSpecific):
         def __init__(self, transport: pyuavcan.transport.Transport):
             self._transport = transport
@@ -54,102 +51,41 @@ class PromiscuousRedundantInput(RedundantInputSession, pyuavcan.transport.Promis
         def transport(self) -> pyuavcan.transport.Transport:
             return self._transport
 
-    @property
-    def metadata(self) -> pyuavcan.transport.SessionMetadata:
-        raise NotImplementedError
-
-    @property
-    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
-        raise NotImplementedError
-
-    async def close(self) -> None:
-        raise NotImplementedError
-
     async def receive(self) -> RedundantTransferFrom:
         raise NotImplementedError
 
     async def try_receive(self, monotonic_deadline: float) -> typing.Optional[RedundantTransferFrom]:
         raise NotImplementedError
 
-
-class SelectiveRedundantInput(RedundantInputSession, pyuavcan.transport.SelectiveInput):
-    class RedundantTransfer(pyuavcan.transport.Transfer, TransportSpecific):
-        def __init__(self, transport: pyuavcan.transport.Transport):
-            self._transport = transport
-
-        @property
-        def transport(self) -> pyuavcan.transport.Transport:
-            return self._transport
-
     @property
-    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+    @abc.abstractmethod
+    def transfer_id_timeout(self) -> float:
+        raise NotImplementedError
+
+    @transfer_id_timeout.setter
+    def transfer_id_timeout(self, value: float) -> None:
         raise NotImplementedError
 
     @property
-    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
-        raise NotImplementedError
-
-    async def close(self) -> None:
-        raise NotImplementedError
-
-    async def receive(self) -> RedundantTransfer:
-        raise NotImplementedError
-
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[RedundantTransfer]:
-        raise NotImplementedError
-
-    @property
-    def source_node_id(self) -> int:
-        raise NotImplementedError
-
-
-# ------------------------------------- OUTPUT -------------------------------------
-
-class RedundantOutputSession(RedundantSession):
-    pass
-
-
-class BroadcastRedundantOutput(RedundantOutputSession, pyuavcan.transport.BroadcastOutput):
-    @property
-    def metadata(self) -> pyuavcan.transport.SessionMetadata:
+    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
         raise NotImplementedError
 
     @property
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         raise NotImplementedError
 
-    async def close(self) -> None:
+    def sample_statistics(self) -> pyuavcan.transport.Statistics:
         raise NotImplementedError
 
-    def enable_transmission_timestamping(self, handler: typing.Callable[[TransportSpecificFeedback], None]) -> None:
+    def close(self) -> None:
+        super(RedundantInputSession, self).close()
+
+
+class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession):
+    def enable_feedback(self, handler: typing.Callable[[TransportSpecificFeedback], None]) -> None:
         raise NotImplementedError
 
-    def disable_transmission_timestamping(self) -> None:
-        raise NotImplementedError
-
-    async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
-        raise NotImplementedError
-
-    async def send_via(self, transfer: pyuavcan.transport.Transfer, transport: pyuavcan.transport.Transport) -> None:
-        raise NotImplementedError
-
-
-class UnicastRedundantOutput(RedundantOutputSession, pyuavcan.transport.UnicastOutput):
-    @property
-    def metadata(self) -> pyuavcan.transport.SessionMetadata:
-        raise NotImplementedError
-
-    @property
-    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
-        raise NotImplementedError
-
-    async def close(self) -> None:
-        raise NotImplementedError
-
-    def enable_transmission_timestamping(self, handler: typing.Callable[[TransportSpecificFeedback], None]) -> None:
-        raise NotImplementedError
-
-    def disable_transmission_timestamping(self) -> None:
+    def disable_feedback(self) -> None:
         raise NotImplementedError
 
     async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
@@ -159,5 +95,15 @@ class UnicastRedundantOutput(RedundantOutputSession, pyuavcan.transport.UnicastO
         raise NotImplementedError
 
     @property
-    def destination_node_id(self) -> int:
+    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
         raise NotImplementedError
+
+    @property
+    def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
+        raise NotImplementedError
+
+    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+        raise NotImplementedError
+
+    def close(self) -> None:
+        super(RedundantOutputSession, self).close()

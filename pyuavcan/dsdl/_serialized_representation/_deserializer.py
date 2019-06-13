@@ -310,13 +310,11 @@ class Deserializer(abc.ABC):
     def _byte_offset(self) -> int:
         return self._bit_offset // 8
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return f'{type(self).__name__}(' \
             f'consumed_bit_length={self.consumed_bit_length}, ' \
             f'remaining_bit_length={self.remaining_bit_length}, ' \
             f'serialized_representation_base64={base64.b64encode(self._buf.tobytes()).decode()!r})'
-
-    __repr__ = __str__
 
 
 class _LittleEndianDeserializer(Deserializer):
