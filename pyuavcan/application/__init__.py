@@ -5,3 +5,5 @@
 #
 
 from ._node import Node, NodeInfo
+
+from . import heartbeat_publisher

@@ -103,7 +103,7 @@ class Media(abc.ABC):
     async def enable_automatic_retransmission(self) -> None:
         """
         By default, automatic retransmission should be disabled to facilitate PnP node ID allocation. This method can
-        be invoked at most once to disable it, which is usually done when the local node obtains a node ID.
+        be invoked at most once to enable it, which is usually done when the local node obtains a node ID.
         """
         raise NotImplementedError
 
