@@ -22,6 +22,10 @@ class ProtocolParameters:
 
 
 class Transport(abc.ABC):
+    """
+    An abstract UAVCAN transport interface.
+    Consider exposing the send timeout via a property here?
+    """
     @property
     @abc.abstractmethod
     def loop(self) -> asyncio.AbstractEventLoop:

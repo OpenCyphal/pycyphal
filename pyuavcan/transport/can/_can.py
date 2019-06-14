@@ -20,6 +20,9 @@ from ._identifier import CANID, generate_filter_configurations
 from ._input_dispatch_table import InputDispatchTable
 
 
+DEFAULT_SEND_TIMEOUT = 1.0
+
+
 _logger = logging.getLogger(__name__)
 
 
@@ -66,12 +69,22 @@ class CANFrameStatistics:
 
 class CANTransport(pyuavcan.transport.Transport):
     def __init__(self,
-                 media: Media,
-                 loop:  typing.Optional[asyncio.AbstractEventLoop] = None):
+                 media:        Media,
+                 send_timeout: float = DEFAULT_SEND_TIMEOUT,
+                 loop:         typing.Optional[asyncio.AbstractEventLoop] = None):
+        """
+        :param media:           The media implementation such as SocketCAN.
+        :param send_timeout:    Raise pyuavcan.transport.SendTimeoutError if media takes more time than this to send.
+        :param loop:            The event loop; uses the default loop by default.
+        """
         self._maybe_media: typing.Optional[Media] = media
         self._local_node_id: typing.Optional[int] = None
         self._media_lock = asyncio.Lock(loop=loop)
+        self._send_timeout = float(send_timeout)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
+
+        if not self._send_timeout > 0:
+            raise ValueError(f'Bad send timeout: {self._send_timeout}')
 
         # Lookup performance for the output registry is not important because it's only used for loopback frames.
         # Hence we don't trade-off memory for speed here.
@@ -195,7 +208,15 @@ class CANTransport(pyuavcan.transport.Transport):
     async def _do_send(self, frames: typing.Iterable[UAVCANFrame]) -> None:
         async with self._media_lock:
             frames, stat_iter = itertools.tee(frames)
-            await self._media.send(x.compile() for x in frames)
+            try:
+                await asyncio.wait_for(self._media.send(x.compile() for x in frames),
+                                       timeout=self._send_timeout,
+                                       loop=self._loop)
+            except asyncio.TimeoutError:
+                raise pyuavcan.transport.SendTimeoutError(
+                    f'The following frames could not be transmitted in {self._send_timeout:0.1f} seconds: '
+                    f'{list(stat_iter)}')
+
             del frames
             for f in stat_iter:
                 self._frame_stats.sent += 1

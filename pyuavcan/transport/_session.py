@@ -187,6 +187,9 @@ class OutputSession(Session):
 
     @abc.abstractmethod
     async def send(self, transfer: Transfer) -> None:
+        """
+        May throw SendTimeoutError.
+        """
         raise NotImplementedError
 
     @property

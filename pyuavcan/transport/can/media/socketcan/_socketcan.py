@@ -6,11 +6,15 @@
 
 import sys
 import enum
+import time
+import errno
 import typing
 import socket
 import struct
+import select
 import asyncio
 import logging
+import threading
 import contextlib
 import pyuavcan.transport
 import pyuavcan.transport.can.media as _media
@@ -52,7 +56,8 @@ class SocketCANMedia(_media.Media):
 
         self._sock = _make_socket(iface_name, can_fd=self._is_fd)
         self._closed = False
-        self._maybe_task: typing.Optional[asyncio.Task[None]] = None
+        self._maybe_thread: typing.Optional[threading.Thread] = None
+        self._loopback_enabled = False
 
         super(SocketCANMedia, self).__init__()
 
@@ -74,15 +79,14 @@ class SocketCANMedia(_media.Media):
         return 512
 
     def set_received_frames_handler(self, handler: _media.Media.ReceivedFramesHandler) -> None:
-        if self._maybe_task is not None:
-            self._maybe_task = self._loop.create_task(self._task_function(handler))
+        if self._maybe_thread is None:
+            self._maybe_thread = threading.Thread(target=self._thread_function, name=str(self), args=(handler,))
         else:
             raise RuntimeError('The RX frame handler is already set up')
 
     def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(repr(self))
-
         _logger.warning('%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! '
                         'Requested configuration: %s', ', '.join(map(str, configuration)))
 
@@ -93,36 +97,77 @@ class SocketCANMedia(_media.Media):
         pass
 
     async def send(self, frames: typing.Iterable[_media.DataFrame]) -> None:
-        if self._closed:
-            raise pyuavcan.transport.ResourceClosedError(repr(self))
-
-        raise NotImplementedError
+        for f in frames:
+            if self._closed:
+                raise pyuavcan.transport.ResourceClosedError(repr(self))
+            self._set_loopback_enabled(f.loopback)
+            await self._loop.sock_sendall(self._sock, self._compile_native_frame(f))
 
     def close(self) -> None:
         self._closed = True
         self._sock.close()
-        if self._maybe_task is not None:
-            self._maybe_task.cancel()
-            self._maybe_task = None
 
-    async def _task_function(self, handler: _media.Media.ReceivedFramesHandler) -> None:
+    async def _thread_function(self, handler: _media.Media.ReceivedFramesHandler) -> None:
+        def handler_wrapper(frs: typing.Sequence[_media.TimestampedDataFrame]) -> None:
+            try:
+                handler(frs)
+            except Exception as exc:
+                _logger.exception('%s unhandled exception in the receive handler: %s; lost frames: %s', self, exc, frs)
+
         while not self._closed:
             try:
-                pass
-                # TODO call recvmsg(); record error if MSG_CTRUNC is set (not supposed to be)
-                # https://stackoverflow.com/questions/38235997/how-to-implement-recvmsg-with-asyncio
-            except asyncio.CancelledError:
-                break
+                select.select((self._sock,), (), (), timeout=1)      # We don't really care about the return values
+                # We don't check the return values because it is guaranteed by design that on a properly functioning
+                # bus we'll always be getting >=1 frame per second. If this expectation is violated, we'll simply
+                # abort the read on EAGAIN, no big deal.
+                frames: typing.List[_media.TimestampedDataFrame] = []
+                try:
+                    while True:
+                        frames.append(self._read_frame())
+                except OSError as ex:
+                    if ex.errno != errno.EAGAIN:
+                        raise
+                if len(frames) > 0:
+                    self._loop.call_soon_threadsafe(handler_wrapper, frames)
             except OSError as ex:
-                _logger.exception('%s task input/output error; stopping: %s', self, ex)
+                if not self._closed:
+                    _logger.exception('%s thread input/output error; stopping: %s', self, ex)
                 break
             except Exception as ex:
-                _logger.exception('%s task failure: %s', self, ex)
+                _logger.exception('%s thread failure: %s', self, ex)
                 await asyncio.sleep(1)      # Is this an adequate failure management strategy?
 
         self._closed = True
-        with contextlib.suppress(Exception):
-            self._sock.close()
+        _logger.info('%s thread is about to exit', self)
+
+    def _read_frame(self) -> _media.TimestampedDataFrame:
+        while True:
+            data, ancdata, msg_flags, _address = self._sock.recvmsg(self._native_frame_size,
+                                                                    socket.CMSG_SPACE(_ANCILLARY_DATA_BUFFER_SIZE))
+            assert msg_flags & socket.MSG_TRUNC == 0, 'The data buffer is not large enough'
+            assert msg_flags & socket.MSG_CTRUNC == 0, 'The ancillary data buffer is not large enough'
+
+            loopback = bool(msg_flags & socket.MSG_CONFIRM)
+
+            ts_system_ns, ts_mono_ns = 0, 0
+            for cmsg_level, cmsg_type, cmsg_data in ancdata:
+                if cmsg_level == socket.SOL_SOCKET and cmsg_type == _SO_TIMESTAMP:
+                    if len(cmsg_data) > _TIMEVAL_STRUCT.size:
+                        cmsg_data = cmsg_data[:_TIMEVAL_STRUCT.size]
+                    sec, usec = _TIMEVAL_STRUCT.unpack(cmsg_data)
+                    ts_system_ns = (sec * 1_000_000 + usec) * 1000
+                    # TODO use the Olson estimator to find the difference between system and monotonic time
+                    # TODO then use the estimated difference to determine the monotonic timestamp
+                    ts_mono_ns = time.monotonic_ns()
+                else:
+                    assert False, f'Unexpected ancillary data: {cmsg_level}, {cmsg_type}, {cmsg_data!r}'
+
+            assert ts_system_ns > 0 and ts_mono_ns > 0, 'Missing the timestamp; does the driver support timestamping?'
+            timestamp = pyuavcan.transport.Timestamp(system_ns=ts_system_ns, monotonic_ns=ts_mono_ns)
+
+            out = SocketCANMedia._try_parse_native_frame(data, loopback=loopback, timestamp=timestamp)
+            if out is not None:
+                return out
 
     def _compile_native_frame(self, source: _media.DataFrame) -> bytes:
         flags = _CANFD_BRS if self._is_fd else 0
@@ -133,9 +178,10 @@ class SocketCANMedia(_media.Media):
         return out
 
     @staticmethod
-    def _parse_native_frame(source: bytes,
-                            loopback: bool,
-                            timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[_media.TimestampedDataFrame]:
+    def _try_parse_native_frame(source: bytes,
+                                loopback: bool,
+                                timestamp: pyuavcan.transport.Timestamp) \
+            -> typing.Optional[_media.TimestampedDataFrame]:
         header_size = _FRAME_HEADER_STRUCT.size
         ident_raw, data_length, _flags = _FRAME_HEADER_STRUCT.unpack(source[:header_size])
         if (ident_raw & _CAN_RTR_FLAG) or (ident_raw & _CAN_ERR_FLAG):  # Unsupported format, ignore silently
@@ -149,6 +195,11 @@ class SocketCANMedia(_media.Media):
                                            format=frame_format,
                                            loopback=loopback,
                                            timestamp=timestamp)
+
+    def _set_loopback_enabled(self, enable: bool) -> None:
+        if enable != self._loopback_enabled:
+            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_RECV_OWN_MSGS, int(enable))
+            self._loopback_enabled = enable
 
 
 class _NativeFrameDataCapacity(enum.IntEnum):
@@ -170,7 +221,10 @@ class _NativeFrameDataCapacity(enum.IntEnum):
 #     __u8    data[CANFD_MAX_DLEN] __attribute__((aligned(8)));
 # };
 _FRAME_HEADER_STRUCT = struct.Struct('=IBB2x')
+_TIMEVAL_STRUCT = struct.Struct('=Ll')
 
+# Used for recvmsg()
+_ANCILLARY_DATA_BUFFER_SIZE = 64
 
 # From the Linux kernel; not exposed via the Python's socket module
 _SO_TIMESTAMP = 29
@@ -189,7 +243,6 @@ def _make_socket(iface_name: str, can_fd: bool) -> socket.SocketType:
     try:
         s.bind((iface_name,))
         s.setsockopt(socket.SOL_SOCKET, _SO_TIMESTAMP, 1)  # timestamping
-        s.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_RECV_OWN_MSGS, 1)  # loopback all frames
         if can_fd:
             s.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)
 

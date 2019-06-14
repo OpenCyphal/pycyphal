@@ -19,3 +19,4 @@ from ._payload_metadata import PayloadMetadata
 
 from ._error import TransportError, UnsupportedSessionConfigurationError, OperationNotDefinedForAnonymousNodeError
 from ._error import InvalidTransportConfigurationError, InvalidMediaConfigurationError, ResourceClosedError
+from ._error import SendTimeoutError

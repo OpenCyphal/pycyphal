@@ -48,3 +48,10 @@ class ResourceClosedError(TransportError):
     The requested operation could not be performed because an associated resource has already been disposed.
     """
     pass
+
+
+class SendTimeoutError(TransportError):
+    """
+    The media has taken too long to transmit the frame and is probably malfunctioning.
+    """
+    pass
