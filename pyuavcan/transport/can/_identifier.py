@@ -35,6 +35,10 @@ class CANID:
     def to_output_session_specifier(self) -> pyuavcan.transport.SessionSpecifier:
         raise NotImplementedError
 
+    def get_destination_node_id(self) -> typing.Optional[int]:
+        """Hides the destination selection logic from users of the abstract type."""
+        raise NotImplementedError
+
     @staticmethod
     def try_parse(identifier: int) -> typing.Optional[CANID]:
         _validate_unsigned_range(identifier, 2 ** 29 - 1)
@@ -101,6 +105,9 @@ class MessageCANID(CANID):
         ds = pyuavcan.transport.MessageDataSpecifier(self.subject_id)
         return pyuavcan.transport.SessionSpecifier(ds, None)
 
+    def get_destination_node_id(self) -> typing.Optional[int]:
+        return None
+
 
 @dataclasses.dataclass(frozen=True)
 class ServiceCANID(CANID):
@@ -141,6 +148,9 @@ class ServiceCANID(CANID):
         role = role_enum.CLIENT if self.request_not_response else role_enum.SERVER
         ds = pyuavcan.transport.ServiceDataSpecifier(self.service_id, role)
         return pyuavcan.transport.SessionSpecifier(ds, self.destination_node_id)
+
+    def get_destination_node_id(self) -> typing.Optional[int]:
+        return self.destination_node_id
 
 
 def _validate_unsigned_range(value: int, max_value: int) -> None:

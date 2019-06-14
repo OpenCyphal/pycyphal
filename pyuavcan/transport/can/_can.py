@@ -228,18 +228,19 @@ class CANTransport(pyuavcan.transport.Transport):
         assert not frame.loopback
         ss = can_id.to_input_session_specifier()
         accepted = False
-
-        session = self._input_dispatch_table.get(ss)
-        if session is not None:
-            session.push_frame(can_id, frame)
-            accepted = True
-
-        if ss.remote_node_id is not None:
-            ss = pyuavcan.transport.SessionSpecifier(ss.data_specifier, None)
+        dest_nid = can_id.get_destination_node_id()
+        if dest_nid is None or dest_nid == self._local_node_id:
             session = self._input_dispatch_table.get(ss)
             if session is not None:
                 session.push_frame(can_id, frame)
                 accepted = True
+
+            if ss.remote_node_id is not None:
+                ss = pyuavcan.transport.SessionSpecifier(ss.data_specifier, None)
+                session = self._input_dispatch_table.get(ss)
+                if session is not None:
+                    session.push_frame(can_id, frame)
+                    accepted = True
 
         return accepted
 
@@ -261,7 +262,7 @@ class CANTransport(pyuavcan.transport.Transport):
             if isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         )
 
-        fcs = generate_filter_configurations(subject_ids, self.local_node_id)
+        fcs = generate_filter_configurations(subject_ids, self._local_node_id)
         assert len(fcs) > len(subject_ids)
         del subject_ids
 
