@@ -2,6 +2,15 @@
 
 status=0
 
+# Initializing the system-wide test environment.
+sudo modprobe can
+sudo modprobe can_raw
+sudo modprobe vcan
+sudo ip link add dev vcan0 type vcan &> /dev/null
+sudo ip link set up vcan0            &> /dev/null
+sudo ip link set vcan0 mtu 72
+sudo ifconfig vcan0 up || exit 1
+
 # Downloading the public regulated types - they are needed for testing.
 if [[ ! -d public_regulated_data_types.cache ]]
 then

@@ -88,21 +88,18 @@ class CANTransport(pyuavcan.transport.Transport):
 
         # Lookup performance for the output registry is not important because it's only used for loopback frames.
         # Hence we don't trade-off memory for speed here.
-        # TODO: Consider using weakref.WeakValueDictionary? Consider traversing using gc.get_referrers()?
         # https://stackoverflow.com/questions/510406/is-there-a-way-to-get-the-current-ref-count-of-an-object-in-python
         self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, CANOutputSession] = {}
 
         # Input lookup must be fast, so we use constant-complexity static lookup table.
-        # TODO: Consider using weakref?
         self._input_dispatch_table = InputDispatchTable()
 
         self._frame_stats = CANFrameStatistics()
 
-        if media.max_data_field_length not in Media.VALID_MAX_DATA_FIELD_LENGTH_SET:
+        if media.mtu not in Media.VALID_MTU_SET:
             raise pyuavcan.transport.InvalidMediaConfigurationError(
-                f'The maximum data field length value {media.max_data_field_length} '
-                f'is not a member of {Media.VALID_MAX_DATA_FIELD_LENGTH_SET}')
-        self._frame_payload_capacity = media.max_data_field_length - 1
+                f'The MTU value {media.mtu} is not a member of {Media.VALID_MTU_SET}')
+        self._frame_payload_capacity = media.mtu - 1
         assert self._frame_payload_capacity > 0
 
         if media.number_of_acceptance_filters < 1:

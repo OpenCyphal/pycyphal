@@ -21,6 +21,7 @@ import pyuavcan.transport.can.media as _media
 
 
 _logger = logging.getLogger(__name__)
+_IS_LINUX = sys.platform == 'linux'
 
 
 class SocketCANMedia(_media.Media):
@@ -30,24 +31,29 @@ class SocketCANMedia(_media.Media):
     (https://stackoverflow.com/questions/36568167/can-fd-support-for-virtual-can-vcan-on-socketcan);
     otherwise, you may observe errno 90 "Message too long". Configuration example:
         ip link set vcan0 mtu 72
-    """
 
-    def __init__(self,
-                 iface_name:            str,
-                 max_data_field_length: int,
-                 loop:                  typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
-        if sys.platform != 'linux':
+    SocketCAN documentation: https://www.kernel.org/doc/Documentation/networking/can.txt
+    """
+    def __init__(self, iface_name: str, mtu: int, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
+        """
+        CAN 2.0/FD is selected automatically based on the MTU. It is not possible to use CAN FD with MTU <= 8 bytes.
+        :param iface_name:  E.g., "can0".
+        :param mtu:         The maximum data field size in bytes. CAN FD is used if this value > 8, CAN 2.0 otherwise.
+                            This value must belong to Media.VALID_MTU_SET.
+        :param loop:        The event loop to use; None to select the default event loop.
+        """
+        if not _IS_LINUX:
             raise RuntimeError('SocketCAN is available only on Linux-based OS')
 
-        max_data_field_length = int(max_data_field_length)
-        if max_data_field_length not in self.VALID_MAX_DATA_FIELD_LENGTH_SET:
-            raise ValueError(f'Invalid MTU: {max_data_field_length} not in {self.VALID_MAX_DATA_FIELD_LENGTH_SET}')
+        mtu = int(mtu)
+        if mtu not in self.VALID_MTU_SET:
+            raise ValueError(f'Invalid MTU: {mtu} not in {self.VALID_MTU_SET}')
 
         self._iface_name = str(iface_name)
-        self._max_data_field_length = int(max_data_field_length)
+        self._mtu = int(mtu)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
-        self._is_fd = self._max_data_field_length > _NativeFrameDataCapacity.CAN_20
+        self._is_fd = self._mtu > _NativeFrameDataCapacity.CAN_20
         self._native_frame_data_capacity = int({
             False: _NativeFrameDataCapacity.CAN_20,
             True:  _NativeFrameDataCapacity.CAN_FD,
@@ -66,13 +72,12 @@ class SocketCANMedia(_media.Media):
         return self._iface_name
 
     @property
-    def max_data_field_length(self) -> int:
-        return self._max_data_field_length
+    def mtu(self) -> int:
+        return self._mtu
 
     @property
     def number_of_acceptance_filters(self) -> int:
         """
-        https://www.kernel.org/doc/Documentation/networking/can.txt
         https://github.com/torvalds/linux/blob/9c7db5004280767566e91a33445bf93aa479ef02/net/can/af_can.c#L327-L348
         https://github.com/torvalds/linux/blob/54dee406374ce8adb352c48e175176247cb8db7c/include/uapi/linux/can.h#L200
         """
@@ -80,7 +85,11 @@ class SocketCANMedia(_media.Media):
 
     def set_received_frames_handler(self, handler: _media.Media.ReceivedFramesHandler) -> None:
         if self._maybe_thread is None:
-            self._maybe_thread = threading.Thread(target=self._thread_function, name=str(self), args=(handler,))
+            self._maybe_thread = threading.Thread(target=self._thread_function,
+                                                  name=str(self),
+                                                  args=(handler,),
+                                                  daemon=True)
+            self._maybe_thread.start()
         else:
             raise RuntimeError('The RX frame handler is already set up')
 
@@ -88,7 +97,8 @@ class SocketCANMedia(_media.Media):
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(repr(self))
         _logger.warning('%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! '
-                        'Requested configuration: %s', ', '.join(map(str, configuration)))
+                        'Requested configuration: %s',
+                        self, ', '.join(map(str, configuration)))
 
     def enable_automatic_retransmission(self) -> None:
         """
@@ -107,7 +117,7 @@ class SocketCANMedia(_media.Media):
         self._closed = True
         self._sock.close()
 
-    async def _thread_function(self, handler: _media.Media.ReceivedFramesHandler) -> None:
+    def _thread_function(self, handler: _media.Media.ReceivedFramesHandler) -> None:
         def handler_wrapper(frs: typing.Sequence[_media.TimestampedDataFrame]) -> None:
             try:
                 handler(frs)
@@ -116,7 +126,8 @@ class SocketCANMedia(_media.Media):
 
         while not self._closed:
             try:
-                select.select((self._sock,), (), (), timeout=1)      # We don't really care about the return values
+                select_timeout = 1.0
+                select.select((self._sock,), (), (), select_timeout)  # We don't really care about the return values
                 # We don't check the return values because it is guaranteed by design that on a properly functioning
                 # bus we'll always be getting >=1 frame per second. If this expectation is violated, we'll simply
                 # abort the read on EAGAIN, no big deal.
@@ -135,7 +146,8 @@ class SocketCANMedia(_media.Media):
                 break
             except Exception as ex:
                 _logger.exception('%s thread failure: %s', self, ex)
-                await asyncio.sleep(1)      # Is this an adequate failure management strategy?
+                if not self._closed:
+                    time.sleep(1)       # Is this an adequate failure management strategy?
 
         self._closed = True
         _logger.info('%s thread is about to exit', self)
@@ -185,11 +197,12 @@ class SocketCANMedia(_media.Media):
         header_size = _FRAME_HEADER_STRUCT.size
         ident_raw, data_length, _flags = _FRAME_HEADER_STRUCT.unpack(source[:header_size])
         if (ident_raw & _CAN_RTR_FLAG) or (ident_raw & _CAN_ERR_FLAG):  # Unsupported format, ignore silently
+            _logger.debug('Frame dropped: id_raw=%08x', ident_raw)
             return None
         frame_format = _media.FrameFormat.EXTENDED if ident_raw & _CAN_EFF_FLAG else _media.FrameFormat.BASE
-        ident = ident_raw & _CAN_EFF_MASK
         data = source[header_size:header_size + data_length]
         assert len(data) == data_length
+        ident = ident_raw & _CAN_EFF_MASK
         return _media.TimestampedDataFrame(identifier=ident,
                                            data=bytearray(data),
                                            format=frame_format,
@@ -200,6 +213,23 @@ class SocketCANMedia(_media.Media):
         if enable != self._loopback_enabled:
             self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_RECV_OWN_MSGS, int(enable))
             self._loopback_enabled = enable
+
+    @staticmethod
+    def list_available_interface_names() -> typing.Iterable[str]:
+        import re
+        import subprocess
+        if _IS_LINUX:
+            try:
+                proc = subprocess.run('ip link show', check=True, timeout=1, text=True, shell=True, capture_output=True)
+                return re.findall(r'\d+?: ([a-z0-9]+?): <[^>]*UP[^>]*>.*\n *link/can', proc.stdout)
+            except Exception as ex:
+                _logger.warning('Could not scrape the output of ip link show, using the fallback method: %s', ex,
+                                exc_info=True)
+                with open('/proc/net/dev') as f:
+                    out = [line.split(':')[0].strip() for line in f if ':' in line and 'can' in line]
+                return sorted(out, key=lambda x: 'can' in x, reverse=True)
+        else:
+            return []
 
 
 class _NativeFrameDataCapacity(enum.IntEnum):

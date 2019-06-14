@@ -14,14 +14,17 @@ from ._filter import FilterConfiguration
 
 class Media(abc.ABC):
     """
-    The transport guarantees that the methods will never be accessed concurrently from different coroutines/tasks,
-    excepting __repr__() and properties.
+    It is recognized that the availability of some of the media implementations may be conditional on the type of
+    platform (e.g., SocketCAN is Linux-only) and the availability of third-party software (e.g., PySerial may be
+    needed for SLCAN). The media protocol requires that the Python packages containing such media implementations
+    must be always importable. Whether all necessary dependencies are satisfied and requirements are met should be
+    checked during class instantiation, not at the time of the import.
     """
 
     # The frames handler is non-blocking and non-yielding; returns immediately.
     ReceivedFramesHandler = typing.Callable[[typing.Iterable[TimestampedDataFrame]], None]
 
-    VALID_MAX_DATA_FIELD_LENGTH_SET = {8, 12, 16, 20, 24, 32, 48, 64}
+    VALID_MTU_SET = {8, 12, 16, 20, 24, 32, 48, 64}
 
     @property
     @abc.abstractmethod
@@ -36,10 +39,9 @@ class Media(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def max_data_field_length(self) -> int:
+    def mtu(self) -> int:
         """
-        Must belong to VALID_MAX_DATA_FIELD_LENGTH_SET.
-
+        Must belong to VALID_MTU_SET.
         Observe that the media interface doesn't care whether we're using CAN FD or CAN 2.0 because the UAVCAN
         CAN transport protocol itself doesn't care. The transport simply does not distinguish them.
         """
@@ -135,4 +137,19 @@ class Media(abc.ABC):
         """
         return pyuavcan.util.repr_attributes(self,
                                              interface_name=self.interface_name,
-                                             max_data_field_length=self.max_data_field_length)
+                                             mtu=self.mtu)
+
+    @staticmethod
+    def list_available_interface_names() -> typing.Iterable[str]:
+        """
+        This static method returns the list of interface names that can be used with the media class implementing it.
+        For example, for the SocketCAN media class it would return the SocketCAN interface names such as "vcan0";
+        for SLCAN it would return the list of serial ports. Implementations should strive to sort the output so that
+        the interfaces that are most likely to be used are listed first -- this helps GUI applications.
+        If the media implementation cannot be used on the local platform (e.g., if this method is invoked on the
+        SocketCAN media class on Windows), the method must return an empty set instead of raising an error.
+        This guarantee supports an important use case where the caller would just iterate over all inheritors
+        of this Media interface and ask each one to yield the list of available interfaces, and then just present
+        that to the user.
+        """
+        raise NotImplementedError

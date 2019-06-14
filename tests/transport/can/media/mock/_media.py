@@ -12,14 +12,11 @@ import pyuavcan.transport.can.media as _media
 
 
 class MockMedia(_media.Media):
-    def __init__(self,
-                 peers:                        typing.Set[MockMedia],
-                 max_data_field_length:        int,
-                 number_of_acceptance_filters: int):
+    def __init__(self, peers: typing.Set[MockMedia], mtu: int, number_of_acceptance_filters: int):
         self._peers = peers
         peers.add(self)
 
-        self._max_data_field_length = int(max_data_field_length)
+        self._mtu = int(mtu)
 
         self._rx_handler: _media.Media.ReceivedFramesHandler = lambda _: None  # pragma: no cover
         self._acceptance_filters = [self._make_dead_filter()  # By default drop (almost) all frames
@@ -36,8 +33,8 @@ class MockMedia(_media.Media):
         return 'mock'
 
     @property
-    def max_data_field_length(self) -> int:
-        return self._max_data_field_length
+    def mtu(self) -> int:
+        return self._mtu
 
     @property
     def number_of_acceptance_filters(self) -> int:
@@ -136,6 +133,10 @@ class MockMedia(_media.Media):
             self._acceptance_filters))
 
     @staticmethod
+    def list_available_interface_names() -> typing.Iterable[str]:
+        return ['mock']
+
+    @staticmethod
     def _make_dead_filter() -> _media.FilterConfiguration:
         fmt = _media.FrameFormat.BASE
         return _media.FilterConfiguration(0, 2 ** int(fmt) - 1, fmt)
@@ -149,10 +150,10 @@ async def _unittest_can_mock_media() -> None:
 
     me = MockMedia(peers, 64, 3)
     assert len(peers) == 1 and me in peers
-    assert me.max_data_field_length == 64
+    assert me.mtu == 64
     assert me.number_of_acceptance_filters == 3
     assert not me.automatic_retransmission_enabled
-    assert str(me) == "MockMedia(interface_name='mock', max_data_field_length=64)"
+    assert str(me) == "MockMedia(interface_name='mock', mtu=64)"
     me.enable_automatic_retransmission()
     assert me.automatic_retransmission_enabled
 
