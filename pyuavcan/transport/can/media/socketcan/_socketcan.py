@@ -45,12 +45,11 @@ class SocketCANMedia(_media.Media):
         if not _IS_LINUX:
             raise RuntimeError('SocketCAN is available only on Linux-based OS')
 
-        mtu = int(mtu)
-        if mtu not in self.VALID_MTU_SET:
-            raise ValueError(f'Invalid MTU: {mtu} not in {self.VALID_MTU_SET}')
+        self._mtu = int(mtu)
+        if self._mtu not in self.VALID_MTU_SET:
+            raise ValueError(f'Invalid MTU: {self._mtu} not in {self.VALID_MTU_SET}')
 
         self._iface_name = str(iface_name)
-        self._mtu = int(mtu)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         self._is_fd = self._mtu > _NativeFrameDataCapacity.CAN_20
@@ -131,10 +130,11 @@ class SocketCANMedia(_media.Media):
                 # We don't check the return values because it is guaranteed by design that on a properly functioning
                 # bus we'll always be getting >=1 frame per second. If this expectation is violated, we'll simply
                 # abort the read on EAGAIN, no big deal.
+                ts_mono_ns = time.monotonic_ns()
                 frames: typing.List[_media.TimestampedDataFrame] = []
                 try:
                     while True:
-                        frames.append(self._read_frame())
+                        frames.append(self._read_frame(ts_mono_ns))
                 except OSError as ex:
                     if ex.errno != errno.EAGAIN:
                         raise
@@ -152,29 +152,22 @@ class SocketCANMedia(_media.Media):
         self._closed = True
         _logger.info('%s thread is about to exit', self)
 
-    def _read_frame(self) -> _media.TimestampedDataFrame:
+    def _read_frame(self, ts_mono_ns: int) -> _media.TimestampedDataFrame:
         while True:
-            data, ancdata, msg_flags, _address = self._sock.recvmsg(self._native_frame_size,
-                                                                    socket.CMSG_SPACE(_ANCILLARY_DATA_BUFFER_SIZE))
+            data, ancdata, msg_flags, _addr = self._sock.recvmsg(self._native_frame_size, _ANCILLARY_DATA_BUFFER_SIZE)
             assert msg_flags & socket.MSG_TRUNC == 0, 'The data buffer is not large enough'
             assert msg_flags & socket.MSG_CTRUNC == 0, 'The ancillary data buffer is not large enough'
 
             loopback = bool(msg_flags & socket.MSG_CONFIRM)
-
-            ts_system_ns, ts_mono_ns = 0, 0
+            ts_system_ns = 0
             for cmsg_level, cmsg_type, cmsg_data in ancdata:
                 if cmsg_level == socket.SOL_SOCKET and cmsg_type == _SO_TIMESTAMP:
-                    if len(cmsg_data) > _TIMEVAL_STRUCT.size:
-                        cmsg_data = cmsg_data[:_TIMEVAL_STRUCT.size]
                     sec, usec = _TIMEVAL_STRUCT.unpack(cmsg_data)
                     ts_system_ns = (sec * 1_000_000 + usec) * 1000
-                    # TODO use the Olson estimator to find the difference between system and monotonic time
-                    # TODO then use the estimated difference to determine the monotonic timestamp
-                    ts_mono_ns = time.monotonic_ns()
                 else:
                     assert False, f'Unexpected ancillary data: {cmsg_level}, {cmsg_type}, {cmsg_data!r}'
 
-            assert ts_system_ns > 0 and ts_mono_ns > 0, 'Missing the timestamp; does the driver support timestamping?'
+            assert ts_system_ns > 0, 'Missing the timestamp; does the driver support timestamping?'
             timestamp = pyuavcan.transport.Timestamp(system_ns=ts_system_ns, monotonic_ns=ts_mono_ns)
 
             out = SocketCANMedia._try_parse_native_frame(data, loopback=loopback, timestamp=timestamp)
@@ -250,11 +243,11 @@ class _NativeFrameDataCapacity(enum.IntEnum):
 #     __u8    __res1;  /* reserved / padding */
 #     __u8    data[CANFD_MAX_DLEN] __attribute__((aligned(8)));
 # };
-_FRAME_HEADER_STRUCT = struct.Struct('=IBB2x')
-_TIMEVAL_STRUCT = struct.Struct('=Ll')
+_FRAME_HEADER_STRUCT = struct.Struct('=IBB2x')  # Using standard size because the native definition relies on stdint.h
+_TIMEVAL_STRUCT = struct.Struct('@Ll')          # Using native size because the native definition uses plain integers
 
 # Used for recvmsg()
-_ANCILLARY_DATA_BUFFER_SIZE = 64
+_ANCILLARY_DATA_BUFFER_SIZE = socket.CMSG_SPACE(_TIMEVAL_STRUCT.size)
 
 # From the Linux kernel; not exposed via the Python's socket module
 _SO_TIMESTAMP = 29
