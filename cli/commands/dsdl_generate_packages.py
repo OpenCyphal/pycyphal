@@ -72,7 +72,7 @@ This option can be specified more than once.
     )
     parser.add_argument(
         '--output', '-O',
-        default=_base.DEFAULT_DSDL_GENERATED_PACKAGES_DIRECTORY,
+        default=_base.DEFAULT_DSDL_GENERATED_PACKAGES_DIR,
         help='''
 Path to the directory where the generated packages will be stored.
 Existing packages will be overwritten entirely.

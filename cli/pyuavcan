@@ -23,7 +23,7 @@ except ImportError:
 # noinspection PyCompatibility
 import commands
 
-sys.path.insert(0, str(commands.DEFAULT_DSDL_GENERATED_PACKAGES_DIRECTORY))
+sys.path.insert(0, str(commands.DEFAULT_DSDL_GENERATED_PACKAGES_DIR))
 
 
 def _main() -> int:
