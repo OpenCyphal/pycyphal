@@ -28,32 +28,49 @@ sys.path.insert(0, str(commands.DEFAULT_DSDL_GENERATED_PACKAGES_DIRECTORY))
 
 def _main() -> int:
     root_parser = argparse.ArgumentParser(
-        description='A command line tool for diagnostics and management of UAVCAN networks built on top of PyUAVCAN.',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description='''
+A command line tool for diagnostics and management of UAVCAN networks.
+This tool is built on top of PyUAVCAN -- a full-featured Python implementation
+of the UAVCAN stack for high-level operating systems.
+Find documentation and support at https://uavcan.org.
+'''.strip(),
+        formatter_class=argparse.RawTextHelpFormatter,
     )
 
     # Register common arguments
-    root_parser.add_argument('--version', '-V',
-                             action='version',
-                             version='%(prog)s ' + '.'.join(map(str, pyuavcan.__version__)),
-                             help='Print the PyUAVCAN version string and exit. '
-                                  'This application is versioned synchronously with the library.')
-
-    root_parser.add_argument('--verbose', '-v',
-                             action='count',
-                             help='Increase the verbosity of the output. Specify twice for extra verbosity.')
+    root_parser.add_argument(
+        '--version', '-V',
+        action='version',
+        version='%(prog)s ' + '.'.join(map(str, pyuavcan.__version__)),
+        help='''
+Print the PyUAVCAN version string and exit.
+This application is versioned synchronously with the library.
+'''.strip(),
+    )
+    root_parser.add_argument(
+        '--verbose', '-v',
+        action='count',
+        help='''
+Increase the verbosity of the output. Specify twice for extra verbosity.
+'''.strip(),
+    )
 
     # Register commands
     subparsers = root_parser.add_subparsers()
     for cmd in commands.COMMANDS:
-        # TODO: help is displayed incorrectly; use custom formatted with defaults, raw examples, unlimited width
+        if cmd.info.examples:
+            epilog = 'Examples:\n' + cmd.info.examples
+        else:
+            epilog = ''
+
         parser = subparsers.add_parser(
             cmd.name,
             help=cmd.info.help,
-            epilog=cmd.info.examples,
+            epilog=epilog,
             aliases=cmd.info.aliases,
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+            formatter_class=argparse.RawTextHelpFormatter,
         )
+
         cmd.register_arguments(parser)
         parser.set_defaults(func=cmd.execute)
 

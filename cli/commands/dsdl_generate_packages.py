@@ -17,22 +17,24 @@ import pyuavcan
 from . import _base
 
 
+_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL = \
+    'https://github.com/UAVCAN/public_regulated_data_types/archive/f468909.zip'
+
+
 INFO = _base.CommandInfo(
     help='''
-Generate PyUAVCAN Python packages from the specified DSDL root namespaces and/or
-from URLs pointing to an archive containing a set of DSDL root namespaces.
-''',
-    examples='''
-pyuavcan -vv dsdl-gen-pkg --lookup https://github.com/UAVCAN/public_regulated_data_types/archive/f468909.zip ~/namespace
-''',
+Generate PyUAVCAN Python packages from the specified DSDL root namespaces
+and/or from URLs pointing to an archive containing a set of DSDL root
+namespaces.
+'''.strip(),
+    examples=f'''
+# Generate a package from the root namespace "~/namespace" which depends on public regulated types:
+pyuavcan -v dsdl-gen-pkg --lookup {_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL} ~/namespace
+'''.strip(),
     aliases=[
         'dsdl-gen-pkg',
     ]
 )
-
-
-_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL = \
-    'https://github.com/UAVCAN/public_regulated_data_types/archive/f468909db282e524eb6410187f02a33720f196d4.zip'
 
 
 _logger = logging.getLogger(__name__)
@@ -43,40 +45,52 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
         'input',
         metavar='INPUT_PATH_OR_URI',
         nargs='+',
-        help='Either a local path or an URI pointing to the source DSDL root namespace(s). '
-             'Can be specified more than once to process multiple namespaces at once. '
-             'If the value is a local path, it must point to a local DSDL root namespace directory or '
-             'to a local archive containing DSDL root namespace directories at the top level. '
-             'If the value is an URI, it must point to an archive containing DSDL root namespace '
-             'directories at the top level (this is convenient for generating packages from namespaces '
-             'hosted in public repositories, e.g., on GitHub). '
-             'Example local path: "~/uavcan/public_regulated_data_types/uavcan/". '
-             f'Example URI: "{_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL}".'
+        help=f'''
+Either a local path or an URI pointing to the source DSDL root namespace(s).
+Can be specified more than once to process multiple namespaces at once.
+If the value is a local path, it must point to a local DSDL root namespace
+directory or to a local archive containing DSDL root namespace directories
+at the top level. If the value is an URI, it must point to an archive
+containing DSDL root namespace directories at the top level (this is
+convenient for generating packages from namespaces hosted in public 
+repositories, e.g., on GitHub).
+Ex. path: ~/uavcan/public_regulated_data_types/uavcan/
+Ex. URI:  {_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL}
+'''.strip(),
     )
     parser.add_argument(
         '--lookup', '-L',
         action='append',
         metavar='LOOKUP_PATH_OR_URI',
-        help='This is like --input, except that the specified DSDL root namespace(s) will be used only for looking up '
-             'dependent data types; nothing will be generated from these. '
-             'If a DSDL root namespace is specified as an input, it is automatically added to the look-up list. '
-             'Can be specified more than once.'
+        help=f'''
+This is like --input, except that the specified DSDL root namespace(s) will
+be used only for looking up dependent data types; nothing will be generated
+from these. If a DSDL root namespace is specified as an input, it is
+automatically added to the look-up list.
+This option can be specified more than once.
+'''.strip(),
     )
     parser.add_argument(
         '--output', '-O',
         default=_base.DEFAULT_DSDL_GENERATED_PACKAGES_DIRECTORY,
-        help='Path to the directory where the generated packages will be stored. '
-             'Existing packages will be overwritten entirely. '
-             'The destination directory should be in PYTHONPATH to use the generated packages; '
-             'the default directory is already added to local package look-up path, '
-             'so if the default directory is used, no additional steps are necessary.'
+        help='''
+Path to the directory where the generated packages will be stored.
+Existing packages will be overwritten entirely.
+The destination directory should be in PYTHONPATH to use the generated
+packages; the default directory is already added to the local package
+look-up list, so if the default directory is used, no additional steps
+are necessary.
+Default: %(default)s
+'''.strip(),
     )
     parser.add_argument(
         '--allow-unregulated-fixed-port-id',
         action='store_true',
-        help='Instruct the DSDL front-end to accept unregulated data types with fixed port identifiers. '
-             'Make sure you understand the implications before using this option. '
-             'If not sure, ask for advice at https://forum.uavcan.org.'
+        help='''
+Instruct the DSDL front-end to accept unregulated data types with fixed port
+identifiers. Make sure you understand the implications before using this
+option. If not sure, ask for advice at https://forum.uavcan.org.
+'''.strip(),
     )
 
 
@@ -103,7 +117,6 @@ def execute(args: argparse.Namespace) -> None:
 
 
 def _fetch_root_namespace_dirs(location: str) -> typing.List[pathlib.Path]:
-    print('location', location)
     if '://' in location:
         dirs = _fetch_archive_dirs(location)
         _logger.info('Resource %r contains the following root namespace directories: %r',
