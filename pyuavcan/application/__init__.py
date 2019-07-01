@@ -4,6 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._node import Node, NodeInfo
+from ._node import Node as Node, NodeInfo as NodeInfo
 
-from . import heartbeat_publisher
+from . import heartbeat_publisher as heartbeat_publisher

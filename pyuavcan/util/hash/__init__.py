@@ -4,4 +4,4 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._crc16_ccitt import CRC16CCITT
+from ._crc16_ccitt import CRC16CCITT as CRC16CCITT

@@ -4,4 +4,4 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._socketcan import SocketCANMedia
+from ._socketcan import SocketCANMedia as SocketCANMedia

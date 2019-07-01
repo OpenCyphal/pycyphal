@@ -11,7 +11,7 @@
 #
 
 {% for t, _ in T.get_nested_types() -%}
-from {{ t|full_reference }} import {{ t|short_reference }}
+from {{ t|full_reference }} import {{ t|short_reference }} as {{ t|short_reference }}
 {% else -%}
 # There are no data types in this namespace. There may be data types in nested namespaces.
 {% endfor -%}

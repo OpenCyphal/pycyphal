@@ -272,6 +272,8 @@ class Presentation:
         return list(self._typed_session_registry.keys())
 
     def _make_finalizer(self, session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
+        done = False
+
         def finalizer(transport_sessions: typing.Iterable[pyuavcan.transport.Session]) -> None:
             # So this is rather messy. Observe that a typed session instance aggregates two distinct resources that
             # MUST be allocated and deallocated SYNCHRONOUSLY: the local registry entry in this class and the
@@ -295,7 +297,6 @@ class Presentation:
                 except Exception as ex:
                     _logger.exception('%s could not close the transport session %s: %s', self, ts, ex)
 
-        done = False
         return finalizer
 
     @staticmethod

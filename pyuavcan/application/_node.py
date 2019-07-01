@@ -32,7 +32,7 @@ class Node:
         self._info = info
         self._heartbeat_publisher = pyuavcan.application.heartbeat_publisher.HeartbeatPublisher(self._presentation)
         self._srv_info = self._presentation.get_server_with_fixed_service_id(uavcan.node.GetInfo_0_1)
-        self._srv_info.serve_in_background(self._handle_get_info_request)  # type: ignore
+        self._srv_info.serve_in_background(self._handle_get_info_request)
 
     @property
     def presentation(self) -> pyuavcan.presentation.Presentation:

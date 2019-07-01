@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._redundant_transport import RedundantTransport
+from ._redundant_transport import RedundantTransport as RedundantTransport
 
-from ._redundant_session import RedundantOutputSession, RedundantInputSession
+from ._redundant_session import RedundantOutputSession as RedundantOutputSession
+from ._redundant_session import RedundantInputSession as RedundantInputSession

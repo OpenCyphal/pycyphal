@@ -4,6 +4,10 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+# TODO: UNDISABLE WHEN THIS IS RESOLVED: https://github.com/python/mypy/issues/7121
+# TODO: SEE ALSO https://github.com/UAVCAN/pyuavcan/issues/61
+# mypy: ignore-errors
+
 from __future__ import annotations
 import time
 import typing

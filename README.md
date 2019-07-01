@@ -45,6 +45,16 @@ implementation in C99 only ~1k LoC large.
 
 ## Development
 
+### Visibility
+
+Name all entities with a leading underscore, including modules and packages,
+excepting those that are part of the API.
+
+When re-exporting entities from a package-level `__init__.py`,
+always use the form `import ... as ...` even if the name is not changed,
+to signal static analysis tools that the name is intended to be reexported
+(unless the aliased name starts with an underscore).
+
 ### Semantic naming conventions
 
 API functions and methods that contain the following parameters should adhere to the semantic naming conventions:

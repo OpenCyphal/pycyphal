@@ -5,8 +5,8 @@
 #
 
 import sys
-from ._serializer import Serializer
-from ._deserializer import Deserializer
+from ._serializer import Serializer as Serializer
+from ._deserializer import Deserializer as Deserializer
 
 if sys.byteorder != 'little':    # pragma: no cover
     raise RuntimeError(

@@ -12,10 +12,11 @@ if sys.version_info[:2] < (3, 7):   # pragma: no cover
 __version__ = 0, 1, 1
 __license__ = 'MIT'
 
-import pyuavcan.util            # noqa
-import pyuavcan.dsdl            # noqa
-import pyuavcan.transport       # noqa
-import pyuavcan.presentation    # noqa
+# The sub-packages are included in the order of their interdependency
+import pyuavcan.util as util                    # noqa
+import pyuavcan.dsdl as dsdl                    # noqa
+import pyuavcan.transport as transport          # noqa
+import pyuavcan.presentation as presentation    # noqa
 
 # pyuavcan.application is not imported by default because it depends on the standard DSDL namespace "uavcan";
 # it is necessary to ensure that the corresponding Python package is generated before importing pyuavcan.application.

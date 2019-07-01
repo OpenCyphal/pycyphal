@@ -4,10 +4,12 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._base import SessionFinalizer
+from ._base import SessionFinalizer as SessionFinalizer
 
-from ._input import CANInputSession
+from ._input import CANInputSession as CANInputSession
 
-from ._output import CANOutputSession, BroadcastCANOutputSession, UnicastCANOutputSession
+from ._output import CANOutputSession as CANOutputSession
+from ._output import BroadcastCANOutputSession as BroadcastCANOutputSession
+from ._output import UnicastCANOutputSession as UnicastCANOutputSession
 
-from ._transfer_receiver import TransferReceptionError
+from ._transfer_receiver import TransferReceptionError as TransferReceptionError
