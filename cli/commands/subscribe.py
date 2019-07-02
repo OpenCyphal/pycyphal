@@ -47,7 +47,7 @@ the argument is not specified and the fixed subject ID is not defined for the
 selected data type, the command will exit immediately with an error.
 '''.strip(),
     )
-    format_choices = ['yaml-verbose', 'json-line', 'tsv']
+    format_choices = ['yaml', 'json-line', 'tsv']
     parser.add_argument(
         '--format',
         choices=format_choices,

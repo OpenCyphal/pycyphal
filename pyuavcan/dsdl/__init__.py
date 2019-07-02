@@ -25,3 +25,6 @@ from ._composite_object import get_max_serialized_representation_size_bytes as \
 
 from ._composite_object import get_attribute as get_attribute
 from ._composite_object import set_attribute as set_attribute
+
+from ._builtin_form import to_builtin as to_builtin
+from ._builtin_form import update_from_builtin as update_from_builtin
