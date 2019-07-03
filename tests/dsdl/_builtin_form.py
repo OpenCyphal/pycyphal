@@ -6,7 +6,13 @@
 
 import pytest
 import typing
+import pydsdl
+import logging
 import pyuavcan.dsdl
+from . import _util
+
+
+_logger = logging.getLogger(__name__)
 
 
 # noinspection PyUnusedLocal
@@ -75,3 +81,31 @@ def _unittest_slow_builtin_form_manual(generated_packages: typing.List[pyuavcan.
             },
         },
     }
+
+    with pytest.raises(ValueError, match='.*field.*'):
+        bi['nonexistent_field'] = 123
+        pyuavcan.dsdl.update_from_builtin(uavcan.register.Access_0_1.Response(), bi)
+
+
+def _unittest_slow_builtin_form_automatic(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+    for info in generated_packages:
+        for model in _util.expand_service_types(info.models):
+            if max(model.bit_length_set) / 8 > 1024 * 1024:
+                _logger.info('Automatic test of %s skipped because the type is too large', model)
+                continue        # Skip large objects because they take forever to convert and test
+
+            obj = _util.make_random_object(model)
+            bi = pyuavcan.dsdl.to_builtin(obj)
+            reconstructed = pyuavcan.dsdl.update_from_builtin(pyuavcan.dsdl.get_class(model)(), bi)
+
+            if str(obj) != str(reconstructed) or repr(obj) != repr(reconstructed):  # pragma: no branch
+                if pydsdl.FloatType.__name__ not in repr(model):  # pragma: no cover
+                    _logger.info('Automatic comparison cannot be performed because the objects of type %s may '
+                                 'contain floats. Please implement proper DSDL object comparison methods and '
+                                 'update this test to use them.',
+                                 model)
+                    _logger.info('Original random object: %r', obj)
+                    _logger.info('Reconstructed object:   %r', reconstructed)
+                    _logger.info('Built-in representation: %r', bi)
+                else:
+                    assert False, f'{obj} != {reconstructed}'
