@@ -29,22 +29,18 @@ _logger = logging.getLogger(__name__)
 
 def register_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        'full_data_type_name_with_version',
+        'data_id',
+        metavar='[subject_id.]full_data_type_name.version_major[.version_minor]',
         help='''
-The full data type name with version. The minor version number may be omitted,
-in which case the newest known version will be used.
-Example: uavcan.node.Heartbeat.1.0
-'''.strip(),
-    )
-    parser.add_argument(
-        'subject_id',
-        type=int,
-        nargs='?',
-        help='''
-The subject ID to subscribe to. If not specified, the fixed subject ID will
-be used, if such is available for the selected version of the data type. If
-the argument is not specified and the fixed subject ID is not defined for the
-selected data type, the command will exit immediately with an error.
+The full data type name with version and optional subject ID.
+If the subject ID is not specified, the fixed subject ID will be used,
+if such is available for the selected version of the data type. If the
+subject ID is not specified and the fixed subject ID is not defined for the
+selected data type version, the command will exit immediately with an error.
+The minor version number may be omitted, in which case the newest known
+version will be used. Examples:
+    1234.uavcan.node.Heartbeat.1.0
+    uavcan.node.Heartbeat.1
 '''.strip(),
     )
     format_choices = ['yaml', 'json-line', 'tsv']
@@ -60,9 +56,7 @@ Default: %(default)s
 
 
 def execute(args: argparse.Namespace) -> int:
-    full_data_type_name_with_version = str(args.full_data_type_name_with_version)
-    subject_id: typing.Optional[int] = int(args.subject_id) if args.subject_id is not None else None
-    print('full_data_type_name_with_version:', full_data_type_name_with_version)
-    print('subject_id:                      ', subject_id)
+    data_id = str(args.data_id)
+    print('data_id:', data_id)
     # TODO implement
     return 1
