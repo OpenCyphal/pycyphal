@@ -35,8 +35,7 @@ fi
 # We postpone type checking until after the tests have run in order to be able to typecheck the
 # generated Python packages as well.
 export MYPYPATH=".test_dsdl_generated"
-if ! mypy --strict --strict-equality --no-implicit-reexport --show-traceback --config-file=setup.cfg \
-         pyuavcan tests .test_dsdl_generated
+if ! mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg pyuavcan tests .test_dsdl_generated
 then
     # TODO: re-enable MyPy enforcement when it's fixed. MyPy 0.701 and 0.711 are broken.
     #status=1
@@ -44,7 +43,7 @@ then
 fi
 
 # PEP8 code style enforcement.
-if ! pycodestyle --show-source pyuavcan tests
+if ! pycodestyle pyuavcan tests
 then
     status=1
 fi
