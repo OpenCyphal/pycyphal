@@ -23,7 +23,7 @@ export PYTHONASYNCIODEBUG=1
 # The directory must exist before coverage.py is invoked in order for it to track it.
 mkdir .test_dsdl_generated 2> /dev/null
 # https://docs.pytest.org/en/latest/pythonpath.html#invoking-pytest-versus-python-m-pytest
-if coverage run --source pyuavcan,tests,.test_dsdl_generated -m pytest -v pyuavcan tests $@
+if coverage run --source pyuavcan,tests,.test_dsdl_generated -m pytest $@
 then
     coverage report
     coverage xml -i -o .coverage.xml
