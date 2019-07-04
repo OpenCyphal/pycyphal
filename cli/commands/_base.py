@@ -39,28 +39,13 @@ class CommandInfo:
     aliases:  typing.Sequence[str] = dataclasses.field(default_factory=list)
 
 
-def add_argument_local_node_id(parser: argparse.ArgumentParser) -> None:
+def add_argument_local_node_id(parser: argparse.ArgumentParser, behavior_doc_when_not_specified: str) -> None:
     parser.add_argument(
         '--local-node-id', '-L',
-        default='naive',
-        metavar='INTEGER_OR_DIRECTIVE',
-        help='''
-Node-ID to use for the requested operation. Could be either a specific integer
-value or one of the special values: "pnp" to perform plug-and-play allocation;
-"naive" to select the highest node-ID which does not seem to be occupied at
-the time when the command is launched.
-Default: %(default)s
-'''.strip(),
-    )
-
-
-def add_argument_iface(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        '--iface', '-i',
-        action='append',
-        required=True,
-        help='''
-Which transport media interface to use.
-Specify more than once to use redundant interfaces.
+        metavar='NODE_ID',
+        type=int,
+        help=f'''
+Node-ID to use for the requested operation.
+{behavior_doc_when_not_specified.strip()}
 '''.strip(),
     )

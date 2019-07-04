@@ -8,7 +8,7 @@ import typing
 import logging
 import argparse
 import pyuavcan
-from . import _base
+from . import _base, _transport
 
 
 INFO = _base.CommandInfo(
@@ -53,10 +53,10 @@ The representation of the data printed into stdout.
 Default: %(default)s
 '''.strip(),
     )
+    _transport.add_argument_transport(parser)
 
 
 def execute(args: argparse.Namespace) -> int:
-    data_id = str(args.data_id)
-    print('data_id:', data_id)
-    # TODO implement
+    transport = _transport.construct_transport(args.transport)
+    print(transport)
     return 1
