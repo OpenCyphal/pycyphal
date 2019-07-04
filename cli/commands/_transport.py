@@ -20,6 +20,7 @@ _logger = logging.getLogger(__name__)
 def add_argument_transport(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--transport', '-T',
+        metavar='TRANSPORT_SPEC',
         action='append',
         required=True,
         help='''
@@ -44,7 +45,7 @@ def construct_transport(specs: typing.Iterable[str]) -> pyuavcan.transport.Trans
                 _logger.exception('Could not close transport %s: %s', t, ex)
         raise
 
-    _logger.info(f'Specs {specs!r} yielded the following transports: {trans!r}')
+    _logger.debug(f'Specs {specs!r} yielded the following transports: {trans!r}')
     if len(trans) < 1:
         raise ValueError('No transports specified')
     elif len(trans) == 1:
@@ -55,7 +56,7 @@ def construct_transport(specs: typing.Iterable[str]) -> pyuavcan.transport.Trans
 
 def _eval_spec(spec: str) -> pyuavcan.transport.Transport:
     module_names = re.findall(r'([a-z]\w*(?:\.[a-zA-Z_]\w*)*)\.[a-zA-Z_]\w*', spec)
-    _logger.info('The transport spec string %r requires importing the following modules: %r', spec, module_names)
+    _logger.debug('The transport spec string %r requires importing the following modules: %r', spec, module_names)
     local_refs: typing.Dict[str, typing.Any] = {
         'pyuavcan.transport': pyuavcan.transport,
     }
