@@ -51,7 +51,9 @@ class Client(ServiceTypedSession[ServiceClass]):
                  loop: asyncio.AbstractEventLoop):
         self._maybe_impl: typing.Optional[ClientImpl[ServiceClass]] = impl
         self._loop = loop
-        self._dtype = impl.dtype  # Permit usage after close()
+        self._dtype = impl.dtype                                        # Permit usage after close()
+        self._input_transport_session = impl.input_transport_session    # Same
+        self._output_transport_session = impl.output_transport_session  # Same
         impl.register_proxy()
         self._response_timeout = self.DEFAULT_RESPONSE_TIMEOUT
         self._priority = DEFAULT_PRIORITY
@@ -70,9 +72,12 @@ class Client(ServiceTypedSession[ServiceClass]):
         Returns the response along with its transfer in the case of successful completion; if the server did not
         provide a valid response on time, returns None.
         """
-        return await self._impl.try_call_with_transfer(request=request,
-                                                       priority=self._priority,
-                                                       response_timeout=self._response_timeout)
+        if self._maybe_impl is None:
+            raise TypedSessionClosedError(repr(self))
+        else:
+            return await self._maybe_impl.try_call_with_transfer(request=request,
+                                                                 priority=self._priority,
+                                                                 response_timeout=self._response_timeout)
 
     @property
     def response_timeout(self) -> float:
@@ -108,38 +113,33 @@ class Client(ServiceTypedSession[ServiceClass]):
 
     @property
     def input_transport_session(self) -> pyuavcan.transport.InputSession:
-        return self._impl.input_transport_session
+        return self._input_transport_session
 
     @property
     def output_transport_session(self) -> pyuavcan.transport.OutputSession:
         """
         The transport session used for request transfers.
         """
-        return self._impl.output_transport_session
+        return self._output_transport_session
 
     def sample_statistics(self) -> ClientStatistics:
-        return ClientStatistics(request_transport_session=self.output_transport_session.sample_statistics(),
-                                response_transport_session=self.input_transport_session.sample_statistics(),
-                                sent_requests=self._impl.sent_request_count,
-                                deserialization_failures=self._impl.deserialization_failure_count,
-                                unexpected_responses=self._impl.unexpected_response_count)
-
-    def close(self) -> None:
-        impl = self._impl
-        self._maybe_impl = None
-        impl.remove_proxy()
-
-    @property
-    def _impl(self) -> ClientImpl[ServiceClass]:
         if self._maybe_impl is None:
             raise TypedSessionClosedError(repr(self))
         else:
-            return self._maybe_impl
+            return ClientStatistics(request_transport_session=self.output_transport_session.sample_statistics(),
+                                    response_transport_session=self.input_transport_session.sample_statistics(),
+                                    sent_requests=self._maybe_impl.sent_request_count,
+                                    deserialization_failures=self._maybe_impl.deserialization_failure_count,
+                                    unexpected_responses=self._maybe_impl.unexpected_response_count)
+
+    def close(self) -> None:
+        impl, self._maybe_impl = self._maybe_impl, None
+        if impl is not None:
+            impl.remove_proxy()
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
             _logger.info('%s has not been disposed of properly; fixing', self)
-            # We can't just call close() here because the object is being deleted
             self._maybe_impl.remove_proxy()
 
 

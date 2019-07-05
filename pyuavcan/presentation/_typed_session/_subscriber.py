@@ -205,8 +205,6 @@ class Subscriber(MessageTypedSession[MessageClass]):
         its transport session instance will be closed. The user should explicitly close all objects before disposing
         of the presentation layer instance.
         """
-        if self._closed:
-            raise TypedSessionClosedError(repr(self))
         self._closed = True
 
         if self._maybe_task is not None:    # The task may be holding the lock.

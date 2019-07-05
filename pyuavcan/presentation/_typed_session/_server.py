@@ -185,18 +185,16 @@ class Server(ServiceTypedSession[ServiceClass]):
         return self._input_transport_session
 
     def close(self) -> None:
-        if self._closed:
-            raise TypedSessionClosedError(repr(self))
-        self._closed = True
+        if not self._closed:
+            self._closed = True
+            if self._maybe_task is not None:    # The task may be holding the lock.
+                try:
+                    self._maybe_task.cancel()   # We don't wait for it to exit because it's pointless.
+                except Exception as ex:
+                    _logger.exception('%s task could not be cancelled: %s', self, ex)
+                self._maybe_task = None
 
-        if self._maybe_task is not None:    # The task may be holding the lock.
-            try:
-                self._maybe_task.cancel()   # We don't wait for it to exit because it's pointless.
-            except Exception as ex:
-                _logger.exception('%s task could not be cancelled: %s', self, ex)
-            self._maybe_task = None
-
-        self._finalizer((self._input_transport_session, *self._output_transport_sessions.values()))
+            self._finalizer((self._input_transport_session, *self._output_transport_sessions.values()))
 
     async def _try_receive_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[ServiceClass.Request, ServiceRequestMetadata]]:

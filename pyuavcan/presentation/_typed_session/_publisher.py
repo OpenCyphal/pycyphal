@@ -28,7 +28,9 @@ class Publisher(MessageTypedSession[MessageClass]):
                  impl: PublisherImpl[MessageClass],
                  loop: asyncio.AbstractEventLoop):
         self._maybe_impl: typing.Optional[PublisherImpl[MessageClass]] = impl
-        self._dtype = impl.dtype   # Permit usage after close()
+        self._dtype = impl.dtype                              # Permit usage after close()
+        self._transport_session = impl.transport_session      # Same
+        self._transfer_id_counter = impl.transfer_id_counter  # Same
         self._loop = loop
         impl.register_proxy()
         self._priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY
@@ -39,7 +41,7 @@ class Publisher(MessageTypedSession[MessageClass]):
 
     @property
     def transport_session(self) -> pyuavcan.transport.OutputSession:
-        return self._impl.transport_session
+        return self._transport_session
 
     @property
     def transfer_id_counter(self) -> OutgoingTransferIDCounter:
@@ -47,7 +49,7 @@ class Publisher(MessageTypedSession[MessageClass]):
         Allows the caller to reach the transfer ID counter object. This may be useful in certain special cases
         such as publication of time synchronization messages.
         """
-        return self._impl.transfer_id_counter
+        return self._transfer_id_counter
 
     @property
     def priority(self) -> pyuavcan.transport.Priority:
@@ -68,7 +70,10 @@ class Publisher(MessageTypedSession[MessageClass]):
         Serializes and publishes the message object at the priority level selected earlier.
         Should not be used simultaneously with publish_soon() because that makes the message ordering undefined.
         """
-        await self._impl.publish(message, self._priority)
+        if self._maybe_impl is None:
+            raise TypedSessionClosedError(repr(self))
+        else:
+            await self._maybe_impl.publish(message, self._priority)
 
     def publish_soon(self, message: MessageClass) -> None:
         """
@@ -84,16 +89,9 @@ class Publisher(MessageTypedSession[MessageClass]):
         asyncio.ensure_future(executor(), loop=self._loop)
 
     def close(self) -> None:
-        impl = self._impl
-        self._maybe_impl = None
-        impl.remove_proxy()
-
-    @property
-    def _impl(self) -> PublisherImpl[MessageClass]:
-        if self._maybe_impl is None:
-            raise TypedSessionClosedError(repr(self))
-        else:
-            return self._maybe_impl
+        impl, self._maybe_impl = self._maybe_impl, None
+        if impl is not None:
+            impl.remove_proxy()
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:

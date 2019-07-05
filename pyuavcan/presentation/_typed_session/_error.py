@@ -10,7 +10,8 @@ import pyuavcan.transport
 class TypedSessionClosedError(pyuavcan.transport.ResourceClosedError):
     """
     Raised when an attempt is made to use a typed session instance that has been closed. Observe that it is a
-    specialization of the corresponding transport-layer error type.
+    specialization of the corresponding transport-layer error type. Double-close is NOT an error, so closing
+    the same instance twice will not result in this exception being raised.
     """
     pass
 

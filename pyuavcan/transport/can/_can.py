@@ -12,7 +12,7 @@ import logging
 import itertools
 import dataclasses
 import pyuavcan.transport
-from .media import Media, TimestampedDataFrame, optimize_filter_configurations
+from .media import Media, TimestampedDataFrame, optimize_filter_configurations, FilterConfiguration
 from ._session import CANInputSession, CANOutputSession
 from ._session import BroadcastCANOutputSession, UnicastCANOutputSession
 from ._frame import UAVCANFrame, TimestampedUAVCANFrame, TRANSFER_ID_MODULO
@@ -94,6 +94,8 @@ class CANTransport(pyuavcan.transport.Transport):
         # Input lookup must be fast, so we use constant-complexity static lookup table.
         self._input_dispatch_table = InputDispatchTable()
 
+        self._last_filter_configuration_set: typing.Optional[typing.Sequence[FilterConfiguration]] = None
+
         self._frame_stats = CANFrameStatistics()
 
         if media.mtu not in Media.VALID_MTU_SET:
@@ -148,8 +150,9 @@ class CANTransport(pyuavcan.transport.Transport):
         return list(self._output_registry.values())
 
     def close(self) -> None:
-        self._media.close()
-        self._maybe_media = None
+        media, self._maybe_media = self._maybe_media, None
+        if media is not None:  # Double-close is NOT an error!
+            media.close()
 
     def sample_frame_statistics(self) -> CANFrameStatistics:
         return copy.copy(self._frame_stats)
@@ -287,7 +290,14 @@ class CANTransport(pyuavcan.transport.Transport):
         num_filters = self._media.number_of_acceptance_filters
         fcs = optimize_filter_configurations(fcs, num_filters)
         assert len(fcs) <= num_filters
-        self._media.configure_acceptance_filters(fcs)
+        if self._last_filter_configuration_set != fcs:
+            try:
+                self._media.configure_acceptance_filters(fcs)
+            except Exception:  # pragma: no cover
+                self._last_filter_configuration_set = None
+                raise
+            else:
+                self._last_filter_configuration_set = fcs
 
     @property
     def _media(self) -> Media:

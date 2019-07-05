@@ -114,6 +114,13 @@ class HeartbeatPublisher:
     def priority(self, value: pyuavcan.transport.Priority) -> None:
         self._publisher.priority = pyuavcan.transport.Priority(value)
 
+    @property
+    def publisher(self) -> pyuavcan.presentation.Publisher[Heartbeat]:
+        """
+        Provides access to the underlying presentation layer publisher instance.
+        """
+        return self._publisher
+
     def add_pre_heartbeat_handler(self, handler: typing.Callable[[], None]) -> None:
         """
         Adds a new handler to be invoked immediately before a heartbeat message is published.

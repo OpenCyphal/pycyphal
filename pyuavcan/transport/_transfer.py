@@ -18,7 +18,7 @@ FragmentedPayload = typing.Sequence[memoryview]
 
 class Priority(enum.IntEnum):
     """
-    We're using integers here in order to allow usage of static lookup tables for conversion into transport-specific
+    We use integers here in order to allow usage of static lookup tables for conversion into transport-specific
     priority values. The particular integer values used here are meaningless.
     """
     EXCEPTIONAL = 0

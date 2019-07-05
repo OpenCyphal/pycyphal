@@ -82,6 +82,10 @@ class Statistics:
 
 
 class Session(abc.ABC):
+    """
+    Properties should not raise exceptions.
+    """
+
     @property
     @abc.abstractmethod
     def specifier(self) -> SessionSpecifier:
@@ -110,7 +114,7 @@ class Session(abc.ABC):
     def close(self) -> None:
         """
         After a session is closed, none of its methods can be used anymore. The behavior or methods after close()
-        is undefined.
+        is undefined. Double-close should not raise exceptions.
         """
         raise NotImplementedError
 

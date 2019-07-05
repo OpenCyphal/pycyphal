@@ -46,6 +46,7 @@ class OperationNotDefinedForAnonymousNodeError(TransportError):
 class ResourceClosedError(TransportError):
     """
     The requested operation could not be performed because an associated resource has already been disposed.
+    Double-close should not raise exceptions.
     """
     pass
 

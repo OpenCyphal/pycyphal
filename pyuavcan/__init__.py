@@ -12,6 +12,11 @@ if sys.version_info[:2] < (3, 7):   # pragma: no cover
 __version__ = 0, 1, 1
 __license__ = 'MIT'
 
+
+# Version of the UAVCAN protocol implemented by this library.
+UAVCAN_SPECIFICATION_VERSION = 1, 0
+
+
 # The sub-packages are included in the order of their interdependency
 import pyuavcan.util as util                    # noqa
 import pyuavcan.dsdl as dsdl                    # noqa

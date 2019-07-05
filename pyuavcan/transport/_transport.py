@@ -24,6 +24,7 @@ class ProtocolParameters:
 class Transport(abc.ABC):
     """
     An abstract UAVCAN transport interface.
+    Properties should not raise exceptions.
     Consider exposing the send timeout via a property here?
     """
     @property
@@ -72,7 +73,7 @@ class Transport(abc.ABC):
         """
         After a transport is closed, none of its methods can be used. The behavior of methods invoked on a closed
         transport is undefined. Generally, when closed, the transport should also close its underlying resources
-        such as media instances.
+        such as media instances. Double-close should not raise exceptions.
         """
         raise NotImplementedError
 
