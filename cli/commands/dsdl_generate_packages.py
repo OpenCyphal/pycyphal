@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import sys
 import http
 import shutil
 import typing
@@ -40,6 +41,13 @@ pyuavcan -v dsdl-gen-pkg --lookup {_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_
 _logger = logging.getLogger(__name__)
 
 
+def make_usage_suggestion_text(root_namespace_name: str) -> str:
+    prefix = f'{sys.argv[0]} {INFO.aliases[0]}'
+    return f'Run "{prefix} DSDL_ROOT_NAMESPACE_PATH_OR_URI" ' \
+        f'to generate the missing Python package from the DSDL namespace {root_namespace_name!r}. ' \
+        f'Run "{prefix} --help" for full usage manual.'
+
+
 def register_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         'input',
@@ -48,12 +56,14 @@ def register_arguments(parser: argparse.ArgumentParser) -> None:
         help=f'''
 Either a local path or an URI pointing to the source DSDL root namespace(s).
 Can be specified more than once to process multiple namespaces at once.
+
 If the value is a local path, it must point to a local DSDL root namespace
 directory or to a local archive containing DSDL root namespace directories
 at the top level. If the value is an URI, it must point to an archive
 containing DSDL root namespace directories at the top level (this is
 convenient for generating packages from namespaces hosted in public 
 repositories, e.g., on GitHub).
+
 Ex. path: ~/uavcan/public_regulated_data_types/uavcan/
 Ex. URI:  {_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL}
 '''.strip(),
@@ -67,6 +77,7 @@ This is like --input, except that the specified DSDL root namespace(s) will
 be used only for looking up dependent data types; nothing will be generated
 from these. If a DSDL root namespace is specified as an input, it is
 automatically added to the look-up list.
+
 This option can be specified more than once.
 '''.strip(),
     )
@@ -76,10 +87,12 @@ This option can be specified more than once.
         help='''
 Path to the directory where the generated packages will be stored.
 Existing packages will be overwritten entirely.
+
 The destination directory should be in PYTHONPATH to use the generated
 packages; the default directory is already added to the local package
 look-up list, so if the default directory is used, no additional steps
 are necessary.
+
 Default: %(default)s
 '''.strip(),
     )

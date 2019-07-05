@@ -1,0 +1,7 @@
+#
+# Runtime dependencies.
+#
+
+ruamel.yaml >= 0.15.97, < 0.16
+
+argparse_utils ~= 1.2

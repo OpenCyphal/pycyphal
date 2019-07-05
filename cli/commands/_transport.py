@@ -7,7 +7,6 @@
 from __future__ import annotations
 import re
 import typing
-import pkgutil
 import logging
 import argparse
 import importlib
@@ -25,7 +24,7 @@ def add_argument_transport(parser: argparse.ArgumentParser) -> None:
         required=True,
         help='''
 Transport construction expression.
-Specify more than once to use redundant interfaces.
+Specify more than once to use redundant transports.
 Example:
     can.CANTransport(can.media.socketcan.SocketCANMedia('vcan0',mtu=64))
 '''.strip(),

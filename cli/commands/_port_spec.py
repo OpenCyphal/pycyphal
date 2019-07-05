@@ -8,6 +8,7 @@ import typing
 import logging
 import importlib
 import pyuavcan.dsdl
+from . import dsdl_generate_packages
 
 
 _logger = logging.getLogger(__name__)
@@ -49,7 +50,8 @@ def construct_port_id_and_type(spec: str) -> typing.Tuple[int, typing.Type[pyuav
             except ImportError:  # We seem to have hit a reserved word; try with an underscore.
                 mod = importlib.import_module(name + '_')
     except ImportError:
-        raise ValueError(f'The data spec string specifies a non-existent namespace: {spec!r}') from None
+        raise ValueError(f'The data spec string specifies a non-existent namespace: {spec!r}. '
+                         f'{dsdl_generate_packages.make_usage_suggestion_text(namespace_components[0])}') from None
 
     try:
         dtype = getattr(mod, f'{short_name}_{major}_{minor}')

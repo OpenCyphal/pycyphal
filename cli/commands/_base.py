@@ -37,15 +37,3 @@ class CommandInfo:
     help:     str
     examples: str = ''
     aliases:  typing.Sequence[str] = dataclasses.field(default_factory=list)
-
-
-def add_argument_local_node_id(parser: argparse.ArgumentParser, behavior_doc_when_not_specified: str) -> None:
-    parser.add_argument(
-        '--local-node-id', '-L',
-        metavar='NODE_ID',
-        type=int,
-        help=f'''
-Node-ID to use for the requested operation.
-{behavior_doc_when_not_specified.strip()}
-'''.strip(),
-    )

@@ -45,6 +45,12 @@ implementation in C99 only ~1k LoC large.
 
 ## Development
 
+### General conventions
+
+Avoid raising exceptions from properties whenever possible.
+Generally, a property should always return its value. If the availability of the value is conditional,
+consider using a getter method instead.
+
 ### Visibility
 
 Name all entities with a leading underscore, including modules and packages,
