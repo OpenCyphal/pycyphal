@@ -660,8 +660,13 @@ async def _unittest_can_transport() -> None:
     subscriber_selective.close()
     tr.close()
     tr2.close()
-    with pytest.raises(ResourceClosedError):
-        tr.close()
+    # Double-close has no effect:
+    client_listener.close()
+    server_listener.close()
+    subscriber_promiscuous.close()
+    subscriber_selective.close()
+    tr.close()
+    tr2.close()
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

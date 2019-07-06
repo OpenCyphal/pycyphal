@@ -53,21 +53,23 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
         # noinspection PyTypeChecker
         pres_a.get_server_with_fixed_service_id(uavcan.node.Heartbeat_1_0)  # type: ignore
 
-    assert pub_heart._impl.proxy_count == 1
+    assert pub_heart._maybe_impl is not None
+    assert pub_heart._maybe_impl.proxy_count == 1
     pub_heart_new = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    assert pub_heart_new._maybe_impl is not None
     assert pub_heart is not pub_heart_new
-    assert pub_heart._impl is pub_heart_new._impl
-    assert pub_heart._impl.proxy_count == 2
+    assert pub_heart._maybe_impl is pub_heart_new._maybe_impl
+    assert pub_heart._maybe_impl.proxy_count == 2
     pub_heart_new.close()
     del pub_heart_new
-    assert pub_heart._impl.proxy_count == 1
+    assert pub_heart._maybe_impl.proxy_count == 1
 
-    pub_heart_impl_old = pub_heart._impl
+    pub_heart_impl_old = pub_heart._maybe_impl
     pub_heart.close()
     assert pub_heart_impl_old.proxy_count == 0
 
     pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
-    assert pub_heart._impl is not pub_heart_impl_old
+    assert pub_heart._maybe_impl is not pub_heart_impl_old
 
     assert pub_heart.transport_session.destination_node_id is None
     assert sub_heart.transport_session.specifier.data_specifier == pub_heart.transport_session.specifier.data_specifier
@@ -188,9 +190,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert pres_b.sessions == []
 
     pres_a.close()
+    pres_a.close()  # Double-close has no effect
     pres_b.close()
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        pres_a.close()
+    pres_b.close()  # Double-close has no effect
 
     # All disposed of?
     assert list(pres_a.sessions) == []

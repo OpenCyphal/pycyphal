@@ -44,10 +44,12 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     client1 = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 123)
     client_dead = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 111)
     assert client0 is not client1
-    assert client0._impl is client1._impl
-    assert client0._impl is not client_dead._impl
-    assert client0._impl.proxy_count == 2
-    assert client_dead._impl.proxy_count == 1
+    assert client0._maybe_impl is not None
+    assert client1._maybe_impl is not None
+    assert client0._maybe_impl is client1._maybe_impl
+    assert client0._maybe_impl is not client_dead._maybe_impl
+    assert client0._maybe_impl.proxy_count == 2
+    assert client_dead._maybe_impl.proxy_count == 1
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
@@ -106,6 +108,11 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     assert last_metadata.transfer_id == 1
     assert last_metadata.priority == Priority.IMMEDIATE
 
+    server.close()
+    client0.close()
+    client1.close()
+    client_dead.close()
+    # Double-close has no effect (no error either):
     server.close()
     client0.close()
     client1.close()
