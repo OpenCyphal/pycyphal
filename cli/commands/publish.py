@@ -195,8 +195,8 @@ class Publication:
         self._publisher.priority = priority
         self._publisher.transfer_id_counter.override(transfer_id)
 
-    def publish(self) -> None:
-        self._publisher.publish_soon(self._message)
+    async def publish(self) -> None:
+        await self._publisher.publish(self._message)
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}({self._message}, {self._publisher})'
@@ -269,8 +269,7 @@ async def _do_execute(args: argparse.Namespace) -> None:
         # All set! Run the publication loop until the specified number of publications is done.
         sleep_until = time.monotonic()
         for c in range(int(args.count)):
-            for p in publications:
-                p.publish()
+            await asyncio.gather(*[p.publish() for p in publications])
             sleep_until += float(args.period)
             _logger.info('Publication cycle %d of %d completed; sleeping for %.3f seconds',
                          c + 1, args.count, sleep_until - time.monotonic())

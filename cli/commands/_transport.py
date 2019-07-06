@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 import typing
 import logging
+import pkgutil
 import argparse
 import importlib
 import pyuavcan.transport
@@ -17,6 +18,7 @@ _logger = logging.getLogger(__name__)
 
 
 def add_argument_transport(parser: argparse.ArgumentParser) -> None:
+    # TODO: better interface; see below
     parser.add_argument(
         '--transport', '-T',
         metavar='TRANSPORT_SPEC',
@@ -66,3 +68,10 @@ def _eval_spec(spec: str) -> pyuavcan.transport.Transport:
     if not isinstance(transport, pyuavcan.transport.Transport):
         raise ValueError(f'The transport spec string does not define a valid transport: {spec!r}')
     return transport
+
+
+# Force import all transport implementations and all recursive sub-modules.
+# This is necessary to discover all transport implementations and their inferior entities such as media support classes.
+for loader, module_name, is_pkg in pkgutil.walk_packages(pyuavcan.transport.__path__):
+    if is_pkg:
+        loader.find_module(module_name).load_module(module_name)

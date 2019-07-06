@@ -112,6 +112,6 @@ if __name__ == '__main__':
         _logger.debug('Stack trace where the program has been interrupted', exc_info=True)
         exit(1)
     except Exception as ex:
-        print('Error (run with -v for more info):', ex, file=sys.stderr)
+        print('Error (run with -v for more info): %s:' % type(ex).__name__, ex, file=sys.stderr)
         _logger.info('Unhandled exception: %s', ex, exc_info=True)
         exit(1)
