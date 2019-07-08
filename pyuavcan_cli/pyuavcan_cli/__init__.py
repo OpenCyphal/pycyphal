@@ -4,6 +4,10 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._main import main
+import os as _os
+from ._main import main as main
 
-__version__ = 0, 1, 0
+with open(_os.path.join(_os.path.dirname(__file__), 'VERSION')) as _version:
+    __version__ = _version.read().strip()
+__version_info__ = tuple(map(int, __version__.split('.')))
+__license__ = 'MIT'

@@ -4,12 +4,15 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import sys
+import os as _os
+import sys as _sys
 
-if sys.version_info[:2] < (3, 7):   # pragma: no cover
+if _sys.version_info[:2] < (3, 7):   # pragma: no cover
     raise RuntimeError('A newer version of Python is required')
 
-__version__ = 0, 1, 1
+with open(_os.path.join(_os.path.dirname(__file__), 'VERSION')) as _version:
+    __version__ = _version.read().strip()
+__version_info__ = tuple(map(int, __version__.split('.')))
 __license__ = 'MIT'
 
 
