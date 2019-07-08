@@ -1,7 +1,0 @@
-#
-# Runtime dependencies.
-#
-
-nunavut  < 2.0
-pydsdl  ~= 1.0
-numpy   ~= 1.16

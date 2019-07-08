@@ -61,7 +61,7 @@ If the value is a local path, it must point to a local DSDL root namespace
 directory or to a local archive containing DSDL root namespace directories
 at the top level. If the value is an URI, it must point to an archive
 containing DSDL root namespace directories at the top level (this is
-convenient for generating packages from namespaces hosted in public 
+convenient for generating packages from namespaces hosted in public
 repositories, e.g., on GitHub).
 
 Ex. path: ~/uavcan/public_regulated_data_types/uavcan/

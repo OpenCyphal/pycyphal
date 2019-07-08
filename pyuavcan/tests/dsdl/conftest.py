@@ -14,9 +14,9 @@ import pyuavcan.dsdl
 
 
 # Please maintain these carefully if you're changing the project's directory structure.
-PROJECT_ROOT_DIR = pathlib.Path(__file__).parent.parent.parent
-DESTINATION_DIRECTORY = PROJECT_ROOT_DIR / pathlib.Path('.test_dsdl_generated')
-PUBLIC_REGULATED_DATA_TYPES = PROJECT_ROOT_DIR / 'public_regulated_data_types.cache'
+LIBRARY_ROOT_DIR = pathlib.Path(__file__).parent.parent.parent
+DESTINATION_DIRECTORY = LIBRARY_ROOT_DIR / pathlib.Path('.test_dsdl_generated')
+PUBLIC_REGULATED_DATA_TYPES = LIBRARY_ROOT_DIR / 'public_regulated_data_types.cache'
 TEST_DATA_TYPES = pathlib.Path(__file__).parent / 'namespaces'
 
 

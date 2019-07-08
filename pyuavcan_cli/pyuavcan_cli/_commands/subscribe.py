@@ -9,7 +9,7 @@ import decimal
 import asyncio
 import logging
 import argparse
-import argparse_utils
+import argparse_utils  # TODO: remove this dependency; implement the necessary action locally
 import pyuavcan
 import contextlib
 from . import _base, _transport, _port_spec, _formatter
@@ -35,7 +35,7 @@ _logger = logging.getLogger(__name__)
 
 
 def register_arguments(parser: argparse.ArgumentParser) -> None:
-    _transport.add_argument_transport(parser)
+    _transport.add_arguments(parser)
 
     parser.add_argument(
         'subject_spec',

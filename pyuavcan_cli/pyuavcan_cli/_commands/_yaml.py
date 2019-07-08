@@ -13,7 +13,7 @@ rest of the code from breaking changes in the YAML library API or from migration
 import io
 import typing
 import decimal
-import ruamel.yaml
+import ruamel.yaml  # TODO: add a fallback option for the standard YAML library if this one is not available.
 
 
 class YAMLDumper:
@@ -39,7 +39,7 @@ class YAMLLoader:
     YAML parsing facade.
     Natively represents decimal.Decimal as floats in the output.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         self._impl = ruamel.yaml.YAML()
 
     def load(self, text: str) -> typing.Any:

@@ -23,7 +23,7 @@ export PYTHONASYNCIODEBUG=1
 # The directory must exist before coverage.py is invoked in order for it to track it.
 mkdir .test_dsdl_generated 2> /dev/null
 # https://docs.pytest.org/en/latest/pythonpath.html#invoking-pytest-versus-python-m-pytest
-if coverage run --source pyuavcan,tests,.test_dsdl_generated -m pytest $@
+if coverage run -m pytest $@
 then
     coverage report
     coverage xml -i -o .coverage.xml
@@ -34,7 +34,6 @@ fi
 # Static type checking.
 # We postpone type checking until after the tests have run in order to be able to typecheck the
 # generated Python packages as well.
-export MYPYPATH=".test_dsdl_generated"
 if ! mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg pyuavcan tests .test_dsdl_generated
 then
     # TODO: re-enable MyPy enforcement when it's fixed. MyPy 0.701 and 0.711 are broken.

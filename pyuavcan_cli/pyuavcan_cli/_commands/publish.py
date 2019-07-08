@@ -10,7 +10,7 @@ import typing
 import asyncio
 import logging
 import argparse
-import argparse_utils
+import argparse_utils  # TODO: remove this dependency; implement the necessary action locally
 import pyuavcan
 import contextlib
 from . import _base, _transport, _port_spec, dsdl_generate_packages, _node
@@ -36,7 +36,7 @@ _logger = logging.getLogger(__name__)
 
 
 def register_arguments(parser: argparse.ArgumentParser) -> None:
-    _transport.add_argument_transport(parser)
+    _transport.add_arguments(parser)
 
     parser.add_argument(
         'subject_spec',
@@ -232,9 +232,8 @@ async def _do_execute(args: argparse.Namespace) -> None:
             args.heartbeat_fields.pop('mode', application.heartbeat_publisher.Mode.OPERATIONAL)
         node.heartbeat_publisher.vendor_specific_status_code = args.heartbeat_fields.pop(
             'vendor_specific_status_code',
-            os.getpid() &
-            (2 ** min(pyuavcan.dsdl.get_model(application.heartbeat_publisher.Heartbeat)['vendor_specific_status_code'].
-                      data_type.bit_length_set) - 1)
+            os.getpid() & (2 ** min(pyuavcan.dsdl.get_model(application.heartbeat_publisher.Heartbeat)
+                                    ['vendor_specific_status_code'].data_type.bit_length_set) - 1)
         )
         node.heartbeat_publisher.priority = args.priority
         node.heartbeat_publisher.period = min(application.heartbeat_publisher.Heartbeat.MAX_PUBLICATION_PERIOD,

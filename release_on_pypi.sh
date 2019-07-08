@@ -9,12 +9,16 @@ function clean()
     rm -rf dist build *.egg-info &> /dev/null
 }
 
-clean
+function release_directory()
+{
+    echo "Releasing directory $@"
+    cd $@
+    clean
+    ./setup.py sdist bdist_wheel   || exit 1
+    python3 -m twine upload dist/* || exit 2
+    clean
+    cd -
+}
 
-python3 -m pip install twine wheel
-
-./setup.py sdist bdist_wheel
-
-python3 -m twine upload dist/*
-
-clean
+release_directory pyuavcan
+release_directory pyuavcan_cli

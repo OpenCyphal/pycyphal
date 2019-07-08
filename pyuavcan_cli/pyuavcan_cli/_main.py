@@ -1,8 +1,11 @@
-#!/usr/bin/env python3
+#
+# Copyright (c) 2019 UAVCAN Development Team
+# This software is distributed under the terms of the MIT License.
+# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+#
 
 import sys
 import time
-import pathlib
 import logging
 import argparse
 
@@ -11,22 +14,28 @@ logging.basicConfig(stream=sys.stderr,
                     level=logging.WARNING,
                     format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s')
 
-_logger = logging.getLogger(__name__.replace('__', ''))
-
-try:
-    import pyuavcan
-except ImportError:
-    _logger.warning('Running from sources')
-    sys.path.append(str(pathlib.Path(__file__).absolute().parent.parent))
-    import pyuavcan
-
-# noinspection PyCompatibility
-import commands
-
-sys.path.insert(0, str(commands.DEFAULT_DSDL_GENERATED_PACKAGES_DIR))
+_logger = logging.getLogger(__name__)
 
 
-def _main() -> int:
+def main() -> None:
+    from ._commands import DEFAULT_DSDL_GENERATED_PACKAGES_DIR
+    sys.path.insert(0, str(DEFAULT_DSDL_GENERATED_PACKAGES_DIR))
+    try:
+        exit(_main_impl())
+    except KeyboardInterrupt:
+        _logger.info('Interrupted')
+        _logger.debug('Stack trace where the program has been interrupted', exc_info=True)
+        exit(1)
+    except Exception as ex:
+        print('Error (run with -v for more info): %s:' % type(ex).__name__, ex, file=sys.stderr)
+        _logger.info('Unhandled exception: %s', ex, exc_info=True)
+        exit(1)
+
+
+def _main_impl() -> int:
+    from . import _commands
+    from . import __version__
+
     root_parser = argparse.ArgumentParser(
         description='''
 A command line tool for diagnostics and management of UAVCAN networks.
@@ -41,7 +50,7 @@ Find documentation and support at https://uavcan.org.
     root_parser.add_argument(
         '--version', '-V',
         action='version',
-        version='%(prog)s ' + '.'.join(map(str, pyuavcan.__version__)),
+        version='%(prog)s ' + '.'.join(map(str, __version__)),
         help='''
 Print the PyUAVCAN version string and exit.
 This application is versioned synchronously with the library.
@@ -57,7 +66,7 @@ Increase the verbosity of the output. Specify twice for extra verbosity.
 
     # Register commands
     subparsers = root_parser.add_subparsers()
-    for cmd in commands.COMMANDS:
+    for cmd in _commands.COMMANDS:
         if cmd.info.examples:
             epilog = 'Examples:\n' + cmd.info.examples
         else:
@@ -83,7 +92,7 @@ Increase the verbosity of the output. Specify twice for extra verbosity.
         2: logging.DEBUG,
     }.get(args.verbose or 0, logging.DEBUG))
 
-    _logger.debug('Available command modules: %s', commands.COMMANDS)
+    _logger.debug('Available command modules: %s', _commands.COMMANDS)
     _logger.debug('Parsed args: %s', args)
 
     if hasattr(args, 'func'):
@@ -96,22 +105,9 @@ Increase the verbosity of the output. Specify twice for extra verbosity.
         print('No command specified, nothing to do. Run with --help for usage help. '
               'Online support: https://forum.uavcan.org.', file=sys.stderr)
         print('Available commands:', file=sys.stderr)
-        for cmd in commands.COMMANDS:
+        for cmd in _commands.COMMANDS:
             text = f'\t{cmd.name}'
             if cmd.info.aliases:
                 text += f' (aliases: {", ".join(cmd.info.aliases)})'
             print(text, file=sys.stderr)
         return 1
-
-
-if __name__ == '__main__':
-    try:
-        exit(_main())
-    except KeyboardInterrupt:
-        _logger.info('Interrupted')
-        _logger.debug('Stack trace where the program has been interrupted', exc_info=True)
-        exit(1)
-    except Exception as ex:
-        print('Error (run with -v for more info): %s:' % type(ex).__name__, ex, file=sys.stderr)
-        _logger.info('Unhandled exception: %s', ex, exc_info=True)
-        exit(1)

@@ -42,7 +42,7 @@ def _make_json_formatter() -> Formatter:
     except ImportError:
         _logger.info('Please install simplejson to avoid numerical precision loss during serialization. '
                      'The command is: pip install simplejson')
-        import json
+        import json  # type: ignore
 
     def json_default(o: object) -> object:
         if isinstance(o, decimal.Decimal):

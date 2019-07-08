@@ -1,0 +1,16 @@
+#
+# These development-only dependencies are shared by all Python packages contained here.
+#
+
+# Testing
+pytest          ~= 4.5
+pytest-asyncio  >= 0.10, < 2.0
+coverage        ~= 4.5
+
+# Static analysis
+mypy        >= 0.711, < 2.0
+pycodestyle ~= 2.5
+
+# Packaging and distribution
+twine
+wheel
