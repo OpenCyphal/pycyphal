@@ -10,7 +10,7 @@ import typing
 import asyncio
 import logging
 import argparse
-import argparse_utils  # TODO: remove this dependency; implement the necessary action locally
+import argparse_utils
 import pyuavcan
 import contextlib
 from . import _base, _transport, _port_spec, dsdl_generate_packages, _node

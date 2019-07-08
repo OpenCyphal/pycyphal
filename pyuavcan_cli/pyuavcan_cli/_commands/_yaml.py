@@ -13,7 +13,7 @@ rest of the code from breaking changes in the YAML library API or from migration
 import io
 import typing
 import decimal
-import ruamel.yaml  # TODO: add a fallback option for the standard YAML library if this one is not available.
+import ruamel.yaml
 
 
 class YAMLDumper:

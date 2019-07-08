@@ -12,6 +12,7 @@ sudo ip link set vcan0 mtu 72
 sudo ifconfig vcan0 up
 
 # Unit testing with coverage.
+rm .coverage*
 export PYTHONASYNCIODEBUG=1
 # https://docs.pytest.org/en/latest/pythonpath.html#invoking-pytest-versus-python-m-pytest
 if coverage run -m pytest $@
