@@ -11,8 +11,8 @@ function clean()
 
 function release_directory()
 {
-    echo "Releasing directory $@"
-    cd $@
+    echo "Releasing directory $1"
+    cd $1
     clean
     ./setup.py sdist bdist_wheel   || exit 1
     python3 -m twine upload dist/* || exit 2

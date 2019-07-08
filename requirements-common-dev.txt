@@ -12,6 +12,6 @@ mypy        >= 0.711, < 2.0
 pycodestyle ~= 2.5
 
 # Packaging and distribution
-setuptools
+setuptools >= 40
 wheel
 twine

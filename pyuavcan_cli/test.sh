@@ -18,7 +18,6 @@ if coverage run -m pytest $@
 then
     coverage combine
     coverage report
-    coverage xml -i -o .coverage.xml
 else
     status=1
 fi
