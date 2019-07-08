@@ -9,39 +9,38 @@ Full-featured UAVCAN stack in Python
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pyuavcan.svg)](https://pypi.org/project/pyuavcan/)
 [![Forum](https://img.shields.io/discourse/https/forum.uavcan.org/users.svg)](https://forum.uavcan.org)
 
-PyUAVCAN is a full-featured implementation of the [UAVCAN protocol stack](https://uavcan.org) in Python.
-PyUAVCAN aims to support all features and transport layers of UAVCAN,
-be portable across all major platforms supporting Python, and
-be extensible to permit low-effort experimentation and testing of new protocol capabilities.
+This mono-repository contains PyUAVCAN --
+a full-featured implementation of the [UAVCAN protocol stack](https://uavcan.org) in Python --
+and related entities.
 
 UAVCAN is an open lightweight data bus standard designed for reliable intravehicular communication
 in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
+The acronym stands for *Uncomplicated Application-level Vehicular Communication And Networking*.
 
-If you have questions, please bring them to the [UAVCAN support forum](https://forum.uavcan.org/).
+If you have questions, please bring them to the [**UAVCAN support forum**](https://forum.uavcan.org/).
 
-## Installation
+## Project structure
 
-Install from PIP: `pip install pyuavcan`.
+This is a mono-repository with the sources of multiple Python packages inside.
+Please find package-specified details inside their respective subdirectories.
 
-Note that a similar library titled `uavcan` is also available from PIP,
-which implements an early experimental version of the protocol known as UAVCAN v0
-that is no longer recommended for new designs.
-It should not be confused with this library (titled `pyuavcan`) which implements the
-long-term stable version of the protocol known as UAVCAN v1.0.
-
-## Usage
-
-The library is currently under active development, and as such, the usage documentation is not yet available.
-Please come back later.
-If you are willing to help, please join the
-[UAVCAN Development & Maintenance forum](https://forum.uavcan.org/c/dev) for coordination.
+There are common top-level maintenance scripts that apply bulk actions to all packages;
+please read their sources for more information.
 
 ## FAQ
 
 **Q:** PyUAVCAN seems complex. Does that mean that UAVCAN is a complex protocol?
 **A:** UAVCAN is a very simple protocol. This particular implementation may appear convoluted because it is very
 generic and provides a very high-level API. For comparison, there is a full-featured UAVCAN-over-CAN
-implementation in C99 only ~1k LoC large.
+implementation in C99 only ~1k SLoC large.
+
+**Q:** The library or the command-line tools complain about missing packages (usually `uavcan`).
+Do I need to install additional packages to get the library working?
+**A:** No. The missing packages are supposed to be auto-generated from DSDL definitions.
+We no longer ship the public regulated DSDL definitions together with UAVCAN implementations
+in order to simplify maintenance and integration; also, this underlines our commitment to make
+vendor-specific (or application-specific) data types first-class citizens in UAVCAN v1.
+Please read the user documentation to learn how to generate Python packages from DSDL namespaces.
 
 ## Development
 
@@ -104,13 +103,19 @@ For more information refer to the PyTest documentation.
 
 ### Running tests and static analysis
 
-The script `test.sh` can be used to run the unit tests and static code analysis tools locally.
-The coverage statistics will be collected and stored in the project root directory.
+The script `test_all.sh` can be used to run the unit tests and static code analysis tools locally for all packages.
+The coverage statistics will be collected from each package,
+combined into one cumulative data file spanning the entire codebase,
+and stored in the project root directory.
 
 After the tests are executed, it is possible to run the [SonarQube](https://sonarqube.org) scanner as follows:
-`sonar-scanner -Dsonar.login=<project-key>`.
+`sonar-scanner -Dsonar.login=<project-key>` (the project key is a 40-digit long hexadecimal number).
 The scanner should not be run before the general test suite since it relies on its coverage data.
+
+### Releasing via PyPI
+
+The script `release_all.sh` packages and pushes all packages whose version numbers have been changed to PyPI.
 
 ## License
 
-The library is available under the terms of the MIT License.
+The contained packages are available under the terms of the MIT License.

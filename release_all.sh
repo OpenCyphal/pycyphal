@@ -3,6 +3,9 @@
 # PyPI release automation.
 # https://gist.github.com/boppreh/ac7522b3a4ac46b4f6010eecddc57f21
 #
+# All packages where the version number is changed will be packaged and published on PyPI.
+# Packages whose version numbers remain unchanged will not be published (push will be rejected by PyPI).
+#
 
 function clean()
 {
