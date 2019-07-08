@@ -24,7 +24,7 @@ function test_one()
 }
 
 
-rm -rf .coverage* htmlcov
+rm -rf .coverage* htmlcov &> /dev/null
 pip install -r requirements-common-dev.txt
 
 for subdir in */

@@ -145,11 +145,10 @@ class PublisherImpl(typing.Generic[MessageClass]):
         self._proxy_count -= 1
         _logger.debug('%s has lost a proxy, new count %s', self, self._proxy_count)
         assert self._proxy_count >= 0
-        if self._proxy_count <= 0:
-            if not self._closed:
-                _logger.info('%s is being closed', self)
-                self._closed = True
-                self._finalizer([self.transport_session])
+        if self._proxy_count <= 0 and not self._closed:
+            _logger.info('%s is being closed', self)
+            self._closed = True
+            self._finalizer([self.transport_session])
 
     @property
     def proxy_count(self) -> int:
