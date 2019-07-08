@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+
 import sys
 import pathlib
 import pyuavcan_cli
+
 if __name__ == '__main__':
-    sys.path.append(str(pathlib.Path(__file__).absolute().parent.parent.parent))
+    lib_src_dir = pathlib.Path(__file__).absolute().parent.parent.parent / 'pyuavcan'
+    sys.path.append(str(lib_src_dir))
     pyuavcan_cli.main()

@@ -10,16 +10,17 @@ import logging
 import argparse
 
 
-logging.basicConfig(stream=sys.stderr,
-                    level=logging.WARNING,
-                    format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s')
-
 _logger = logging.getLogger(__name__)
 
 
 def main() -> None:
     from ._commands import DEFAULT_DSDL_GENERATED_PACKAGES_DIR
     sys.path.insert(0, str(DEFAULT_DSDL_GENERATED_PACKAGES_DIR))
+
+    logging.basicConfig(stream=sys.stderr,
+                        level=logging.WARNING,
+                        format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s')
+
     try:
         exit(_main_impl())
     except KeyboardInterrupt:
@@ -51,17 +52,12 @@ Find documentation and support at https://uavcan.org.
         '--version', '-V',
         action='version',
         version='%(prog)s ' + '.'.join(map(str, __version__)),
-        help='''
-Print the PyUAVCAN version string and exit.
-This application is versioned synchronously with the library.
-'''.strip(),
+        help='Print the version string and exit.',
     )
     root_parser.add_argument(
         '--verbose', '-v',
         action='count',
-        help='''
-Increase the verbosity of the output. Specify twice for extra verbosity.
-'''.strip(),
+        help='Increase the verbosity of the output. Twice for extra verbosity.',
     )
 
     # Register commands

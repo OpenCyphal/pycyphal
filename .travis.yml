@@ -14,12 +14,12 @@ before_script:
 
 script:
   - cd pyuavcan
-  - pip install -r requirements.txt
+  - pip install .
   - ./test.sh
   - cd ..
 
   - cd pyuavcan_cli
-  - pip install -r requirements.txt
+  - pip install .
   - ./test.sh
   - cd ..
 
