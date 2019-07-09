@@ -1,2 +1,0 @@
-# The dependencies are listed in setup.cfg under the key "install_requires".
-.

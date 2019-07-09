@@ -12,7 +12,7 @@ before_script:
   - pip install coveralls  # Intentionally removed from requirements.txt because it's only useful in the CI environment
 
 script:
-  - ./test_all.sh
+  - ./test.sh
   - sonar-scanner
 
 after_success:

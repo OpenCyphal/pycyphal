@@ -1,0 +1,23 @@
+#
+# These dependencies are needed only for development, testing, and releasing.
+# They are not needed to use the library.
+#
+
+# Testing
+pytest          ~= 4.5
+pytest-asyncio  >= 0.10, < 2.0
+coverage        ~= 4.5
+
+# Static analysis
+mypy        >= 0.711, < 2.0
+pycodestyle ~= 2.5
+
+# Documentation
+sphinx           ~= 2.1
+sphinx-argparse  >= 0.2
+sphinx_rtd_theme >= 0.4
+
+# Packaging and distribution
+setuptools >= 40.8
+wheel      >= 0.33, < 2.0
+twine      ~= 1.13

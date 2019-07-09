@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+#
+# Copyright (c) 2019 UAVCAN Development Team
+# This software is distributed under the terms of the MIT License.
+# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+#
+# A simple convenience script for executing the PyUAVCAN CLI tool directly from sources.
+#
+
+import sys
+import pathlib
+
+if __name__ == '__main__':
+    lib_src_dir = pathlib.Path(__file__).absolute().parent.parent.parent
+    sys.path.insert(0, str(lib_src_dir))
+    from pyuavcan import _cli
+    _cli.main()
