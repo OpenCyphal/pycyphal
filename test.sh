@@ -39,8 +39,6 @@ banner ENVIRONMENT CONFIGURATION
 
 ./clean.sh || die "Failed to clean"
 
-# Installing the dependencies.
-pip install -r requirements.txt     || die "Could not install runtime dependencies"
 pip install -r requirements-dev.txt || die "Could not install development dependencies"
 
 # Initializing the system-wide test environment.
@@ -64,16 +62,15 @@ fi
 banner TEST EXECUTION
 
 export PYTHONASYNCIODEBUG=1
+mkdir .test_dsdl_generated 2> /dev/null       # The directory must exist before coverage is invoked
 
-# The directory must exist before coverage.py is invoked in order for it to track it.
-mkdir .test_dsdl_generated 2> /dev/null
-
-# https://docs.pytest.org/en/latest/pythonpath.html#invoking-pytest-versus-python-m-pytest
-coverage run -m pytest           || die "PyTest returned $?"
+pip install .                           || die "Could not install core runtime dependencies"
+coverage run -m pytest                  || die "Core PyTest returned $?"
+pip install .[cli]                      || die "Could not install CLI dependencies"
+coverage run -m pytest pyuavcan/_cli    || die "CLI PyTest returned $?"
 
 coverage combine                 || die "Could not combine coverage data"
 coverage xml -i -o .coverage.xml || die "Could not generate coverage XML (needed for SonarQube)"
-
 coverage html
 coverage report
 

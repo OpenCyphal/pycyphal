@@ -109,3 +109,7 @@ def _add_args_for_can(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--iface-can-socketcan-fd', '--socketcanfd',
     )
+
+
+def _unittest_dummy() -> None:
+    pass
