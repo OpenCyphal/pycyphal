@@ -35,7 +35,7 @@ def main() -> None:
 
 def _main_impl() -> int:
     from . import _commands
-    from . import __version__
+    from pyuavcan import __version__
 
     root_parser = argparse.ArgumentParser(
         description='''

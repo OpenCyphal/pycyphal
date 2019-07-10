@@ -30,6 +30,7 @@ class SocketCANMedia(_media.Media):
     If you are testing with a virtual CAN bus and you need CAN FD, you may need to enable it manually
     (https://stackoverflow.com/questions/36568167/can-fd-support-for-virtual-can-vcan-on-socketcan);
     otherwise, you may observe errno 90 "Message too long". Configuration example:
+
         ip link set vcan0 mtu 72
 
     SocketCAN documentation: https://www.kernel.org/doc/Documentation/networking/can.txt
@@ -37,10 +38,13 @@ class SocketCANMedia(_media.Media):
     def __init__(self, iface_name: str, mtu: int, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
         """
         CAN 2.0/FD is selected automatically based on the MTU. It is not possible to use CAN FD with MTU <= 8 bytes.
-        :param iface_name:  E.g., "can0".
-        :param mtu:         The maximum data field size in bytes. CAN FD is used if this value > 8, CAN 2.0 otherwise.
-                            This value must belong to Media.VALID_MTU_SET.
-        :param loop:        The event loop to use; None to select the default event loop.
+
+        :param iface_name: E.g., "can0".
+
+        :param mtu: The maximum data field size in bytes. CAN FD is used if this value > 8, CAN 2.0 otherwise.
+            This value must belong to Media.VALID_MTU_SET.
+
+        :param loop: The event loop to use; None to select the default event loop.
         """
         if not _IS_LINUX:
             raise RuntimeError('SocketCAN is available only on Linux-based OS')

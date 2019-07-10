@@ -39,7 +39,7 @@ coverage.xml
 .idea/
 
 *.log
-.*_generated
+*_generated
 *.cache
 
 .scannerwork

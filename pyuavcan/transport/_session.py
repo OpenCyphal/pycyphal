@@ -23,12 +23,15 @@ class Feedback(abc.ABC):
         This is the timestamp value supplied when the transfer was created. It can be used by the upper layers
         to match each transmitted transfer with its transmission timestamp.
         Why do we use timestamp for matching? This is because:
-            - Priority is rarely unique, hence unfit for matching.
-            - Transfer ID may be modified by the transport layer by computing its modulus, which is difficult to
-              reliably account for in the application, especially in heterogeneous redundant transports with multiple
-              publishers per session.
-            - The fragmented payload may contain references to the actual memory of the serialized object, meaning
-              that it may actually change after the object is transmitted, also rendering it unfit for matching.
+
+        - Priority is rarely unique, hence unfit for matching.
+
+        - Transfer ID may be modified by the transport layer by computing its modulus, which is difficult to
+          reliably account for in the application, especially in heterogeneous redundant transports with multiple
+          publishers per session.
+
+        - The fragmented payload may contain references to the actual memory of the serialized object, meaning
+          that it may actually change after the object is transmitted, also rendering it unfit for matching.
         """
         raise NotImplementedError
 
@@ -113,7 +116,7 @@ class Session(abc.ABC):
     @abc.abstractmethod
     def close(self) -> None:
         """
-        After a session is closed, none of its methods can be used anymore. The behavior or methods after close()
+        After a session is closed, none of its methods can be used anymore. The behavior of methods after close()
         is undefined. Double-close should not raise exceptions.
         """
         raise NotImplementedError
