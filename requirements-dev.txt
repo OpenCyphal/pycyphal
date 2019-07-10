@@ -14,9 +14,8 @@ pycodestyle ~= 2.5
 pylint      ~= 2.3
 
 # Documentation.
-sphinx                  ~= 2.2
+sphinx                  ~= 2.1
 sphinx-argparse         >= 0.2
-groundwork-sphinx-theme ~= 1.0
 
 # Packaging and distribution.
 setuptools >= 40.8

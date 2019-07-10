@@ -16,6 +16,10 @@ import inspect
 import subprocess
 
 
+GITHUB_USER_REPO = 'UAVCAN', 'pyuavcan'
+
+DESCRIPTION = 'A full-featured implementation of the UAVCAN protocol stack in Python.'
+
 GIT_HASH = subprocess.check_output('git rev-parse HEAD', shell=True).decode().strip()
 
 DOC_ROOT = pathlib.Path(__file__).absolute().parent
@@ -29,6 +33,13 @@ sys.path.insert(0, str(DSDL_GENERATED_ROOT))
 
 import pyuavcan.application
 assert '/site-packages/' not in pyuavcan.__file__, 'Wrong import source'
+
+PACKAGE_ROOT = pathlib.Path(pyuavcan.__file__).absolute().parent
+
+EXTERNAL_LINKS = {
+    'UAVCAN homepage': 'https://uavcan.org/',
+    'Support forum':   'https://forum.uavcan.org/',
+}
 
 # -- Project information -----------------------------------------------------
 
@@ -87,21 +98,52 @@ autodoc_default_options = {
 # For sphinx.ext.todo_
 todo_include_todos = True
 
+graphviz_output_format = 'svg'
+
 inheritance_graph_attrs = {
-    'rankdir': 'LR',
-    'size':    '""',
+    'rankdir':  'LR',
+    'bgcolor':  '"transparent"',    # Transparent background works with any theme.
+}
+# Foreground colors are from the theme; keep them up to date, please.
+inheritance_node_attrs = {
+    'color':     '"#000000"',
+    'fontcolor': '"#000000"',
+}
+inheritance_edge_attrs = {
+    'color': inheritance_node_attrs['color'],
 }
 
 # -- Options for HTML output -------------------------------------------------
 
-import groundwork_sphinx_theme
-html_theme_path = groundwork_sphinx_theme.__path__
-html_theme = 'groundwork'
-sys.path.append(str(pathlib.Path(groundwork_sphinx_theme.__path__[0])))
+html_theme = 'alabaster'
 
 html_theme_options = {
-    'github_fork': None,
-    'github_user': 'UAVCAN',
+    'github_user':          GITHUB_USER_REPO[0],
+    'github_repo':          GITHUB_USER_REPO[1],
+    'description':          DESCRIPTION,
+    'fixed_sidebar':        True,
+    'page_width':           '90%',
+    'sidebar_width':        '300px',
+    'github_button':        True,
+    'extra_nav_links':      EXTERNAL_LINKS,
+    'sidebar_collapse':     False,
+    'body_text':            '#000',  # black on white, no excuses
+    # Fonts:
+    'caption_font_family':  'sans-serif',
+    'font_family':          'sans-serif',
+    'caption_font_size':    '1em',
+    'code_font_size':       '1em',
+    'font_size':            '1em',
+}
+
+html_sidebars = {
+    '**': [
+        'about.html',
+        'navigation.html',
+        'relations.html',
+        'searchbox.html',
+        'donate.html',
+    ]
 }
 
 html_context = {
@@ -153,7 +195,7 @@ def linkcode_resolve(domain: str, info: dict):
     except Exception as ex:
         report_exception(ex)
 
-    return f'https://github.com/UAVCAN/pyuavcan/blob/{GIT_HASH}/{path}'
+    return f'https://github.com/{GITHUB_USER_REPO[0]}/{GITHUB_USER_REPO[1]}/blob/{GIT_HASH}/{path}'
 
 
 for p in map(str, [DSDL_GENERATED_ROOT, REPOSITORY_ROOT]):
@@ -165,8 +207,7 @@ for p in map(str, [DSDL_GENERATED_ROOT, REPOSITORY_ROOT]):
 os.environ['SPHINX_APIDOC_OPTIONS'] = ','.join(k for k, v in autodoc_default_options.items() if v is True or v is None)
 
 subprocess.check_call(
-    f'sphinx-apidoc -o apidoc_generated --force --follow-links --separate --no-toc '
-    f'{REPOSITORY_ROOT / "pyuavcan"}',
+    f'sphinx-apidoc -o apidoc_generated --force --follow-links --separate --no-toc --module-first {PACKAGE_ROOT}',
     env=os.environ,
     shell=True,
 )

@@ -1,0 +1,8 @@
+
+div.body {
+    max-width: unset;
+}
+
+tt.descname, tt.descclassname, code.descname, code.descclassname {
+    font-size: 1em;
+}

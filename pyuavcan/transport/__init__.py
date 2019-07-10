@@ -4,6 +4,11 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+"""
+.. inheritance-diagram:: pyuavcan.transport._error pyuavcan.transport._session pyuavcan.transport._data_specifier
+   :parts: 1
+"""
+
 from ._transport import Transport as Transport
 from ._transport import ProtocolParameters as ProtocolParameters
 

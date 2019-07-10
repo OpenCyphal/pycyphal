@@ -2,11 +2,11 @@ PyUAVCAN documentation
 ======================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
    :caption: Contents:
 
    architecture
-   api
+   apidoc_generated/pyuavcan
    cli
 
 
