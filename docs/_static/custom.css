@@ -13,6 +13,12 @@ div.body {
     max-width: unset;
 }
 
+div.section > dl {
+    margin-bottom: 1em;
+    padding-top: 1em;
+    border-top: 1px solid #eee;
+}
+
 tt.descname, tt.descclassname, code.descname, code.descclassname {
     font-size: 1em;
 }
