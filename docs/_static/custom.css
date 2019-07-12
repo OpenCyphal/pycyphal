@@ -1,29 +1,14 @@
-@import url(
-    'https://fonts.googleapis.com/css?family=Roboto+Mono:400,400i,700,700i|Roboto:400,400i,700,700i&display=swap'
-);
-
-div.sphinxsidebar a,
-div.sphinxsidebar p,
-div.sphinxsidebar h3,
-div.sphinxsidebar h4 {
+body {
     color: #000;
 }
 
-div.body {
+.wy-nav-content {
     max-width: unset;
 }
 
-div.section > dl {
-    margin-bottom: 1em;
-    padding-top: 1em;
-    border-top: 1px solid #eee;
-}
-
-tt.descname, tt.descclassname, code.descname, code.descclassname {
-    font-size: 1em;
-}
-
-table.align-default {
-    margin-left: unset;
-    margin-right: unset;
-}
+/* This is a dirty fix to the layout bug in the RTD theme; see https://github.com/readthedocs/sphinx_rtd_theme/issues/776 */
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5                                                         > a { padding-left:  7em; background: #ddd; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6                                           > a { padding-left:  8em; background: #ccc; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7                             > a { padding-left:  9em; background: #bbb; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7 li.toctree-l8               > a { padding-left: 10em; background: #aaa; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7 li.toctree-l8 li.toctree-l9 > a { padding-left: 11em; background: #999; }

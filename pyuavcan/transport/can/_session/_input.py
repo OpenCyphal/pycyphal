@@ -21,7 +21,7 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
-class ExtendedStatistics(pyuavcan.transport.Statistics):
+class CANInputStatistics(pyuavcan.transport.Statistics):
     reception_error_counters: typing.Dict[_transfer_receiver.TransferReceptionError, int] = \
         dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_receiver.TransferReceptionError})
 
@@ -46,7 +46,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         self._receivers = [_transfer_receiver.TransferReceiver(payload_metadata.max_size_bytes)
                            for _ in _node_id_range()]
 
-        self._statistics = ExtendedStatistics()         # We could easily support per-source-node statistics if needed
+        self._statistics = CANInputStatistics()         # We could easily support per-source-node statistics if needed
 
         super(CANInputSession, self).__init__(finalizer=finalizer)
 
@@ -97,7 +97,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         return self._payload_metadata
 
-    def sample_statistics(self) -> ExtendedStatistics:
+    def sample_statistics(self) -> CANInputStatistics:
         return copy.copy(self._statistics)
 
     @property

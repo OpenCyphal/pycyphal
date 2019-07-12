@@ -20,7 +20,7 @@ SendHandler = typing.Callable[[typing.Iterable[_frame.UAVCANFrame]], typing.Awai
 _logger = logging.getLogger(__name__)
 
 
-class Feedback(pyuavcan.transport.Feedback):
+class CANFeedback(pyuavcan.transport.Feedback):
     def __init__(self,
                  original_transfer_timestamp: pyuavcan.transport.Timestamp,
                  start_of_transfer:           _frame.TimestampedUAVCANFrame):
@@ -72,7 +72,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
                 _logger.debug('No pending feedback entry for frame: %s', frame)
             else:
                 if self._feedback_handler is not None:  # pragma: no cover
-                    feedback = Feedback(original_timestamp, frame)
+                    feedback = CANFeedback(original_timestamp, frame)
                     try:
                         self._feedback_handler(feedback)
                     except Exception as ex:  # pragma: no cover

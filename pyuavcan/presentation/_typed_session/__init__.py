@@ -28,3 +28,4 @@ from ._server import ServiceRequestMetadata as ServiceRequestMetadata
 from ._server import ServiceRequestHandler as ServiceRequestHandler
 
 from ._error import TypedSessionClosedError as TypedSessionClosedError
+from ._error import RequestTransferIDVariabilityExhaustedError as RequestTransferIDVariabilityExhaustedError

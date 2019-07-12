@@ -23,7 +23,7 @@ DESCRIPTION = 'A full-featured implementation of the UAVCAN protocol stack in Py
 
 GIT_HASH = subprocess.check_output('git rev-parse HEAD', shell=True).decode().strip()
 
-APIDOC_GENERATED_ROOT = pathlib.Path('apidoc_generated')
+APIDOC_GENERATED_ROOT = pathlib.Path('.apidoc_generated')
 DOC_ROOT = pathlib.Path(__file__).absolute().parent
 REPOSITORY_ROOT = DOC_ROOT.parent
 
@@ -135,37 +135,13 @@ intersphinx_mapping = {
 
 html_favicon = '_static/favicon.ico'
 
-html_theme = 'alabaster'
+html_theme = 'sphinx_rtd_theme'
 
 html_theme_options = {
-    'github_user':          GITHUB_USER_REPO[0],
-    'github_repo':          GITHUB_USER_REPO[1],
-    'description':          DESCRIPTION,
-    'fixed_sidebar':        True,
-    'page_width':           '90%',
-    'sidebar_width':        '300px',
-    'github_button':        True,
-    'extra_nav_links':      EXTERNAL_LINKS,
-    'body_text':            '#000',  # black on white, no excuses
-    'show_relbars':         True,
-    # Fonts:
-    'caption_font_family':  '"Roboto", sans-serif',
-    'caption_font_size':    '1em',
-    'font_family':          '"Roboto", sans-serif',
-    'font_size':            '1em',
-    'code_font_family':     '"Roboto Mono", monospace',
-    'code_font_size':       '1em',
-    'head_font_family':     '"Roboto", sans-serif',
-}
-
-html_sidebars = {
-    '**': [
-        'about.html',
-        'navigation.html',
-        'relations.html',
-        'searchbox.html',
-        'donate.html',
-    ]
+    'display_version':              True,
+    'prev_next_buttons_location':   'bottom',
+    'style_external_links':         True,
+    'navigation_depth':             -1,
 }
 
 html_context = {
@@ -174,8 +150,10 @@ html_context = {
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = [
-    '_static',
+html_static_path = ['_static']
+
+html_css_files = [
+    'custom.css',
 ]
 
 # ----------------------------------------------------------------------------

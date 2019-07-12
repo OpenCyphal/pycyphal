@@ -4,6 +4,11 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+"""
+.. inheritance-diagram:: pyuavcan.dsdl._composite_object
+   :parts: 1
+"""
+
 from ._compiler import generate_package as generate_package
 from ._compiler import GeneratedPackageInfo as GeneratedPackageInfo
 

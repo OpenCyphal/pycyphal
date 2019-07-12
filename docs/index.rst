@@ -18,10 +18,10 @@ Contents
 
 .. toctree::
 
-   installation
-   architecture
-   cli
-   api
+   pages/installation
+   pages/architecture
+   pages/cli
+   pages/api
 
 
 Indices and tables
