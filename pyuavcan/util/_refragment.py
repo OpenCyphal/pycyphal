@@ -14,7 +14,18 @@ def refragment(input_fragments: typing.Iterable[memoryview], output_fragment_siz
     If the input iterable contains no fragments or all of them are empty, nothing will be yielded.
 
     This function is designed for use in transfer emission logic where it's often needed to split a large
-    payload into several frames.
+    payload into several frames while avoiding unnecessary copying. The best case scenario is when the size
+    of input blocks is a multiple of the output fragment size -- in this case no copy will be done.
+
+    >>> list(map(bytes, refragment([memoryview(b'0123456789'), memoryview(b'abcdef')], 7)))
+    [b'0123456', b'789abcd', b'ef']
+
+    The above example shows a marginally suboptimal case where one copy is required:
+
+    - ``b'0123456789'[0:7]``  --> output    ``b'0123456'``       (slicing, no copy)
+    - ``b'0123456789'[7:10]`` --> temporary ``b'789'``           (slicing, no copy)
+    - ``b'abcdef'[0:4]``      --> output    ``b'789' + b'abcd'`` (copied into the temporary, which is then yielded)
+    - ``b'abcdef'[4:6]``      --> output    ``b'ef'``            (slicing, no copy)
     """
     if output_fragment_size < 1:
         raise ValueError(f'Invalid output fragment size: {output_fragment_size}')

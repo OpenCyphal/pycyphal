@@ -22,6 +22,20 @@ def repr_attributes(obj: object, *anonymous_elements: object, **named_elements: 
 def repr_attributes_noexcept(obj: object, *anonymous_elements: object, **named_elements: object) -> str:
     """
     A robust version of :meth:`repr_attributes` that never raises exceptions.
+
+    >>> class Aa: pass
+    >>> repr_attributes_noexcept(Aa(), 456, foo=123, bar='abc')
+    "Aa(456, foo=123, bar='abc')"
+    >>> class Bb:
+    ...     def __repr__(self) -> str:
+    ...         raise Exception('Ford, you are turning into a penguin')
+    >>> repr_attributes_noexcept(Aa(), foo=Bb())
+    "<REPR FAILED: Exception('Ford, you are turning into a penguin')>"
+    >>> class Cc(Exception):
+    ...     def __repr__(self) -> str:
+    ...         raise Cc()  # Infinite recursion
+    >>> repr_attributes_noexcept(Aa(), foo=Cc())
+    '<REPR FAILED: UNKNOWN ERROR>'
     """
     try:
         return repr_attributes(obj, *anonymous_elements, **named_elements)
@@ -31,15 +45,3 @@ def repr_attributes_noexcept(obj: object, *anonymous_elements: object, **named_e
             return f'<REPR FAILED: {ex!r}>'
         except Exception:
             return '<REPR FAILED: UNKNOWN ERROR>'
-
-
-def _unittest_repr_attributes_noexcept() -> None:
-    class Aa:
-        pass
-
-    class Ee(Exception):
-        def __repr__(self) -> str:
-            raise Ee()
-
-    assert repr_attributes_noexcept(Aa(), 456, foo=123, bar='abc') == "Aa(456, foo=123, bar='abc')"
-    assert repr_attributes_noexcept(Aa(), 456, foo=123, bar='abc', baz=Ee()) == "<REPR FAILED: UNKNOWN ERROR>"

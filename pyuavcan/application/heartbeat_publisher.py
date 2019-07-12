@@ -17,6 +17,7 @@ DEFAULT_PRIORITY = pyuavcan.transport.Priority.SLOW
 
 
 class Health(enum.IntEnum):
+    """Mirrors the health enumeration defined in ``uavcan.node.Heartbeat``."""
     NOMINAL  = Heartbeat.HEALTH_NOMINAL
     ADVISORY = Heartbeat.HEALTH_ADVISORY
     CAUTION  = Heartbeat.HEALTH_CAUTION
@@ -24,6 +25,7 @@ class Health(enum.IntEnum):
 
 
 class Mode(enum.IntEnum):
+    """Mirrors the mode enumeration defined in ``uavcan.node.Heartbeat``."""
     OPERATIONAL     = Heartbeat.MODE_OPERATIONAL
     INITIALIZATION  = Heartbeat.MODE_INITIALIZATION
     MAINTENANCE     = Heartbeat.MODE_MAINTENANCE
@@ -41,11 +43,12 @@ _logger = logging.getLogger(__name__)
 class HeartbeatPublisher:
     """
     This class manages periodic publication of the node heartbeat message. The default states are as follows:
-        - health NOMINAL
-        - mode INITIALIZATION
-        - vendor-specific status code is zero
-        - period MAX_PUBLICATION_PERIOD
-        - priority DEFAULT_PRIORITY
+
+    - health NOMINAL
+    - mode INITIALIZATION
+    - vendor-specific status code is zero
+    - period MAX_PUBLICATION_PERIOD
+    - priority DEFAULT_PRIORITY
     """
 
     def __init__(self, presentation: pyuavcan.presentation.Presentation):
@@ -62,12 +65,14 @@ class HeartbeatPublisher:
 
     @property
     def uptime(self) -> float:
+        """The current amount of time, in seconds, elapsed since the object was instantiated."""
         out = time.monotonic() - self._instantiated_at
         assert out >= 0
         return out
 
     @property
     def health(self) -> Health:
+        """The health value to report with Heartbeat; see :class:`Health`."""
         return self._health
 
     @health.setter
@@ -76,6 +81,7 @@ class HeartbeatPublisher:
 
     @property
     def mode(self) -> Mode:
+        """The mode value to report with Heartbeat; see :class:`Mode`."""
         return self._mode
 
     @mode.setter
@@ -84,6 +90,7 @@ class HeartbeatPublisher:
 
     @property
     def vendor_specific_status_code(self) -> int:
+        """The vendor-specific status code (VSSC) value to report with Heartbeat."""
         return self._vendor_specific_status_code
 
     @vendor_specific_status_code.setter
@@ -96,6 +103,10 @@ class HeartbeatPublisher:
 
     @property
     def period(self) -> float:
+        """
+        How often the Heartbeat messages should be published. The upper limit (i.e., the lowest frequency)
+        is constrained by the UAVCAN specification; please see the DSDL source of ``uavcan.node.Heartbeat``.
+        """
         return self._period
 
     @period.setter
@@ -108,6 +119,9 @@ class HeartbeatPublisher:
 
     @property
     def priority(self) -> pyuavcan.transport.Priority:
+        """
+        The transfer priority level to use when publishing Heartbeat messages.
+        """
         return self._publisher.priority
 
     @priority.setter
@@ -117,31 +131,32 @@ class HeartbeatPublisher:
     @property
     def publisher(self) -> pyuavcan.presentation.Publisher[Heartbeat]:
         """
-        Provides access to the underlying presentation layer publisher instance.
+        Provides access to the underlying presentation layer publisher instance (see constructor).
         """
         return self._publisher
 
     def add_pre_heartbeat_handler(self, handler: typing.Callable[[], None]) -> None:
         """
         Adds a new handler to be invoked immediately before a heartbeat message is published.
+
         The handler can be used to synchronize the heartbeat message data (health, mode, vendor-specific status code)
         with external states. Observe that the handler will be invoked even if the heartbeat is not to be published,
         e.g., if the node is anonymous (does not have a node ID). If the handler throws an exception, it will be
         suppressed and logged. Note that the handler is to be not a coroutine but a regular function.
-        This is also a good method of scheduling periodic status checks on the node.
+
+        This is a good method of scheduling periodic status checks on the node.
         """
         self._pre_heartbeat_handlers.append(handler)
 
     def make_message(self) -> Heartbeat:
-        """
-        Constructs the current heartbeat message.
-        """
+        """Constructs the current heartbeat message."""
         return Heartbeat(uptime=int(self.uptime),  # must floor
                          health=self.health,
                          mode=self.mode,
                          vendor_specific_status_code=self.vendor_specific_status_code)
 
     def close(self) -> None:
+        """Closes the publisher and stops the internal task."""
         if not self._closed:
             self._closed = True
             self._publisher.close()

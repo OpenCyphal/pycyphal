@@ -14,6 +14,15 @@ def mark_last(it: typing.Iterable[ML]) -> typing.Iterable[typing.Tuple[bool, ML]
     """
     This is an iteration helper like :func:`enumerate`. It amends every item with a boolean flag which is False
     for all items except the last one. If the input iterable is empty, yields nothing.
+
+    >>> list(mark_last([]))
+    []
+    >>> list(mark_last([123]))
+    [(True, 123)]
+    >>> list(mark_last([123, 456]))
+    [(False, 123), (True, 456)]
+    >>> list(mark_last([123, 456, 789]))
+    [(False, 123), (False, 456), (True, 789)]
     """
     it = iter(it)
     try:
@@ -25,10 +34,3 @@ def mark_last(it: typing.Iterable[ML]) -> typing.Iterable[typing.Tuple[bool, ML]
             yield False, last
             last = val
         yield True, last
-
-
-def _unittest_util_mark_last() -> None:
-    assert [] == list(mark_last([]))
-    assert [(True, 123)] == list(mark_last([123]))
-    assert [(False, 123), (True, 456)] == list(mark_last([123, 456]))
-    assert [(False, 123), (False, 456), (True, 789)] == list(mark_last([123, 456, 789]))

@@ -4,6 +4,10 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+"""
+The util package contains various entities that are commonly useful in PyUAVCAN-based applications.
+"""
+
 # noinspection PyShadowingBuiltins
 from . import hash as hash
 
