@@ -2,6 +2,7 @@ Full-featured UAVCAN stack in Python
 ====================================
 
 [![Travis CI](https://travis-ci.org/UAVCAN/pyuavcan.svg?branch=uavcan-v1.0)](https://travis-ci.org/UAVCAN/pyuavcan)
+[![RTFD](https://readthedocs.org/projects/pyuavcan/badge/)](https://pyuavcan.readthedocs.io/)
 [![Coverage Status](https://coveralls.io/repos/github/UAVCAN/pyuavcan/badge.svg?branch=uavcan-v1.0)](https://coveralls.io/github/UAVCAN/pyuavcan)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=UAVCAN_pyuavcan&metric=alert_status)](https://sonarcloud.io/dashboard?id=UAVCAN_pyuavcan)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=UAVCAN_pyuavcan&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=UAVCAN_pyuavcan)
@@ -9,23 +10,15 @@ Full-featured UAVCAN stack in Python
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pyuavcan.svg)](https://pypi.org/project/pyuavcan/)
 [![Forum](https://img.shields.io/discourse/https/forum.uavcan.org/users.svg)](https://forum.uavcan.org)
 
-This mono-repository contains PyUAVCAN --
-a full-featured implementation of the [UAVCAN protocol stack](https://uavcan.org) in Python --
-and related entities.
+PyUAVCAN is a full-featured implementation of the UAVCAN protocol stack in Python.
 
 UAVCAN is an open lightweight data bus standard designed for reliable intravehicular communication
 in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
 The acronym stands for *Uncomplicated Application-level Vehicular Communication And Networking*.
 
-If you have questions, please bring them to the [**UAVCAN support forum**](https://forum.uavcan.org/).
-
-## Project structure
-
-This is a mono-repository with the sources of multiple Python packages inside.
-Please find package-specified details inside their respective subdirectories.
-
-There are common top-level maintenance scripts that apply bulk actions to all packages;
-please read their sources for more information.
+- **PYUAVCAN DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**
+- **SUPPORT FORUM: [forum.uavcan.org](https://forum.uavcan.org/)**
+- **UAVCAN WEBSITE: [uavcan.org](https://uavcan.org)**
 
 ## FAQ
 
@@ -43,6 +36,17 @@ vendor-specific (or application-specific) data types first-class citizens in UAV
 Please read the user documentation to learn how to generate Python packages from DSDL namespaces.
 
 ## Development
+
+### Repository layout
+
+The shippable entities are located exclusively inside the directory `pyuavcan`.
+The entirety of the directory, excluding hidden files, if any, is shipped.
+Everything outside of that is auxiliary and is never shipped.
+
+The submodule `public_regulated_data_types_for_testing` is needed only for testing and documentation building,
+which is reflected in the name.
+It should be kept reasonably up-to-date, but remember that it does not affect the final product in any way.
+We no longer ship DSDL namespaces with code for reasons explained in the documentation.
 
 ### General conventions
 
@@ -101,21 +105,12 @@ This will trigger the test executor to skip test functions whose names match the
 
 For more information refer to the PyTest documentation.
 
-### Running tests and static analysis
+### Automation
 
-The script `test_all.sh` can be used to run the unit tests and static code analysis tools locally for all packages.
-The coverage statistics will be collected from each package,
-combined into one cumulative data file spanning the entire codebase,
-and stored in the project root directory.
+The script `test.sh` can be used to run the unit tests and static code analysis tools locally or on a CI server.
 
 After the tests are executed, it is possible to run the [SonarQube](https://sonarqube.org) scanner as follows:
 `sonar-scanner -Dsonar.login=<project-key>` (the project key is a 40-digit long hexadecimal number).
 The scanner should not be run before the general test suite since it relies on its coverage data.
 
-### Releasing via PyPI
-
-The script `release_all.sh` packages and pushes all packages whose version numbers have been changed to PyPI.
-
-## License
-
-The contained packages are available under the terms of the MIT License.
+The script `release.sh` runs the test and then, if successful, uploads the package onto PyPI.

@@ -50,13 +50,6 @@ sudo ip link set up vcan0            &> /dev/null
 sudo ip link set vcan0 mtu 72
 sudo ifconfig vcan0 up
 
-# Downloading the public regulated types - they are needed for testing.
-if [[ ! -d public_regulated_data_types.cache ]]
-then
-    git clone https://github.com/UAVCAN/public_regulated_data_types --branch=uavcan-v1.0 \
-        public_regulated_data_types.cache || die "Could not clone the public regulated DSDL repository for testing"
-fi
-
 # ---------------------------------------------------------------------------------------------------------------------
 
 banner TEST EXECUTION

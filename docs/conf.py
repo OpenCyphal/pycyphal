@@ -13,6 +13,7 @@ import os
 import sys
 import pathlib
 import inspect
+import importlib
 import subprocess
 
 
@@ -28,11 +29,21 @@ REPOSITORY_ROOT = DOC_ROOT.parent
 
 # The generated files are not documented, but they must be importable to import the target package.
 DSDL_GENERATED_ROOT = REPOSITORY_ROOT / '.test_dsdl_generated'
+PUBLIC_REGULATED_DATA_TYPES_ROOT = REPOSITORY_ROOT / 'public_regulated_data_types_for_testing'
 
 sys.path.insert(0, str(REPOSITORY_ROOT))
 sys.path.insert(0, str(DSDL_GENERATED_ROOT))
 
-import pyuavcan.application
+import pyuavcan
+try:
+    import pyuavcan.application
+except ImportError as ex:
+    print('GENERATING DSDL PACKAGE:', ex.name)
+    DSDL_GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
+    pyuavcan.dsdl.generate_package(DSDL_GENERATED_ROOT, PUBLIC_REGULATED_DATA_TYPES_ROOT / ex.name, [])
+    importlib.invalidate_caches()
+    import pyuavcan.application
+
 assert '/site-packages/' not in pyuavcan.__file__, 'Wrong import source'
 
 PACKAGE_ROOT = pathlib.Path(pyuavcan.__file__).absolute().parent
