@@ -2,6 +2,6 @@
 
 rm -rf dist build *.egg-info .coverage* htmlcov .*_generated &> /dev/null
 
-cd docs
+pushd docs
 make clean
-cd -
+popd

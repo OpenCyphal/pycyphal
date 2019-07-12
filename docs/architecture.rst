@@ -1,4 +1,4 @@
-PyUAVCAN architecture
-=====================
+Architecture
+============
 
 

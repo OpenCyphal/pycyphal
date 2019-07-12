@@ -1,4 +1,3 @@
-PyUAVCAN command-line tool
-==========================
-
+Command-line tool
+=================
 

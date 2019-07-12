@@ -39,7 +39,7 @@ banner ENVIRONMENT CONFIGURATION
 
 ./clean.sh || die "Failed to clean"
 
-pip install -r requirements-dev.txt || die "Could not install development dependencies"
+pip install -r requirements.txt || die "Could not install dependencies"
 
 # Initializing the system-wide test environment.
 sudo modprobe can
@@ -64,9 +64,8 @@ banner TEST EXECUTION
 export PYTHONASYNCIODEBUG=1
 mkdir .test_dsdl_generated 2> /dev/null       # The directory must exist before coverage is invoked
 
-pip install .                           || die "Could not install core runtime dependencies"
+# TODO: run the tests with the minimal dependency configuration. Set up a new environment here.
 coverage run -m pytest                  || die "Core PyTest returned $?"
-pip install .[cli]                      || die "Could not install CLI dependencies"
 coverage run -m pytest pyuavcan/_cli    || die "CLI PyTest returned $?"
 
 coverage combine                 || die "Could not combine coverage data"
@@ -90,9 +89,9 @@ pycodestyle pyuavcan tests || die "pycodestyle returned $?"
 
 banner DOCUMENTATION
 
-cd docs
-make html || die "Documentation build returned $?"
-cd -
+pushd docs
+./build.sh || die "Documentation build returned $?"
+popd
 
 # ---------------------------------------------------------------------------------------------------------------------
 

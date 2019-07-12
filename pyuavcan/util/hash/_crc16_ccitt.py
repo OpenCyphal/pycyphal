@@ -8,6 +8,29 @@ import typing
 
 
 class CRC16CCITT:
+    """
+    - Name:           CRC-16/CCITT-FALSE
+    - Initial value:  0xFFFF
+    - Polynomial:     0x1021
+    - Reverse:        No
+    - Output XOR:     0
+    - Residue:        0
+    - Check:          0x29B1
+
+    >>> assert CRC16CCITT().value == 0xFFFF
+    >>> c = CRC16CCITT()
+    >>> c.add(b'123456')
+    >>> c.add(b'789')
+    >>> c.value
+    10673
+    >>> c.add(b'')
+    >>> c.value
+    10673
+    >>> c.add(10673 .to_bytes(2, 'big'))
+    >>> c.value
+    0
+    >>> assert c.value == c.RESIDUE == 0
+    """
     RESIDUE = 0x0000
 
     def __init__(self) -> None:
@@ -57,15 +80,3 @@ class CRC16CCITT:
         0xEF1F, 0xFF3E, 0xCF5D, 0xDF7C, 0xAF9B, 0xBFBA, 0x8FD9, 0x9FF8,
         0x6E17, 0x7E36, 0x4E55, 0x5E74, 0x2E93, 0x3EB2, 0x0ED1, 0x1EF0,
     ]
-
-
-def _unittest_util_hash_crc16_ccitt() -> None:
-    assert CRC16CCITT().value == 0xFFFF
-    c = CRC16CCITT()
-    c.add(b'123456')
-    c.add(b'789')
-    assert c.value == 0x29B1
-    c.add(b'')
-    assert c.value == 0x29B1
-    c.add(b'\x29\xB1')
-    assert c.value == c.RESIDUE

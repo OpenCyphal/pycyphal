@@ -1,3 +1,13 @@
+@import url(
+    'https://fonts.googleapis.com/css?family=Roboto+Mono:400,400i,700,700i|Roboto:400,400i,700,700i&display=swap'
+);
+
+div.sphinxsidebar a,
+div.sphinxsidebar p,
+div.sphinxsidebar h3,
+div.sphinxsidebar h4 {
+    color: #000;
+}
 
 div.body {
     max-width: unset;
@@ -5,4 +15,9 @@ div.body {
 
 tt.descname, tt.descclassname, code.descname, code.descclassname {
     font-size: 1em;
+}
+
+table.align-default {
+    margin-left: unset;
+    margin-right: unset;
 }

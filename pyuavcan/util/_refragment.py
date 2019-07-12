@@ -12,6 +12,9 @@ def refragment(input_fragments: typing.Iterable[memoryview], output_fragment_siz
     Repackages the data from the arbitrarily-sized input fragments into fixed-size output fragments while minimizing
     the amount of data copying. The last fragment is allowed to be smaller than the requested size.
     If the input iterable contains no fragments or all of them are empty, nothing will be yielded.
+
+    This function is designed for use in transfer emission logic where it's often needed to split a large
+    payload into several frames.
     """
     if output_fragment_size < 1:
         raise ValueError(f'Invalid output fragment size: {output_fragment_size}')

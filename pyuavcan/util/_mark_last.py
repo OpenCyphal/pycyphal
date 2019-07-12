@@ -12,7 +12,7 @@ ML = typing.TypeVar('ML')
 
 def mark_last(it: typing.Iterable[ML]) -> typing.Iterable[typing.Tuple[bool, ML]]:
     """
-    This is an iteration helper like enumerate(). It amends every item with a boolean flag which is False
+    This is an iteration helper like :func:`enumerate`. It amends every item with a boolean flag which is False
     for all items except the last one. If the input iterable is empty, yields nothing.
     """
     it = iter(it)

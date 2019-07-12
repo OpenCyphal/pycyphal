@@ -22,6 +22,7 @@ DESCRIPTION = 'A full-featured implementation of the UAVCAN protocol stack in Py
 
 GIT_HASH = subprocess.check_output('git rev-parse HEAD', shell=True).decode().strip()
 
+APIDOC_GENERATED_ROOT = pathlib.Path('apidoc_generated')
 DOC_ROOT = pathlib.Path(__file__).absolute().parent
 REPOSITORY_ROOT = DOC_ROOT.parent
 
@@ -64,12 +65,12 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.linkcode',
     'sphinx.ext.todo',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.inheritance_diagram',
-    'sphinxarg.ext',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = []
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -113,7 +114,13 @@ inheritance_edge_attrs = {
     'color': inheritance_node_attrs['color'],
 }
 
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3', None),
+}
+
 # -- Options for HTML output -------------------------------------------------
+
+html_favicon = '_static/favicon.ico'
 
 html_theme = 'alabaster'
 
@@ -126,14 +133,16 @@ html_theme_options = {
     'sidebar_width':        '300px',
     'github_button':        True,
     'extra_nav_links':      EXTERNAL_LINKS,
-    'sidebar_collapse':     False,
     'body_text':            '#000',  # black on white, no excuses
+    'show_relbars':         True,
     # Fonts:
-    'caption_font_family':  'sans-serif',
-    'font_family':          'sans-serif',
+    'caption_font_family':  '"Roboto", sans-serif',
     'caption_font_size':    '1em',
-    'code_font_size':       '1em',
+    'font_family':          '"Roboto", sans-serif',
     'font_size':            '1em',
+    'code_font_family':     '"Roboto Mono", monospace',
+    'code_font_size':       '1em',
+    'head_font_family':     '"Roboto", sans-serif',
 }
 
 html_sidebars = {
@@ -152,7 +161,9 @@ html_context = {
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = [
+    '_static',
+]
 
 # ----------------------------------------------------------------------------
 
@@ -206,8 +217,15 @@ for p in map(str, [DSDL_GENERATED_ROOT, REPOSITORY_ROOT]):
 
 os.environ['SPHINX_APIDOC_OPTIONS'] = ','.join(k for k, v in autodoc_default_options.items() if v is True or v is None)
 
-subprocess.check_call(
-    f'sphinx-apidoc -o apidoc_generated --force --follow-links --separate --no-toc --module-first {PACKAGE_ROOT}',
-    env=os.environ,
-    shell=True,
-)
+subprocess.check_call([
+    'sphinx-apidoc',
+    '-o', str(APIDOC_GENERATED_ROOT),
+    '--force',
+    '--follow-links',
+    '--separate',
+    '--no-toc',
+    '--module-first',
+    str(PACKAGE_ROOT),
+])
+# We don't need the top-level page, it's maintained manually.
+os.unlink(f'{APIDOC_GENERATED_ROOT}/{pyuavcan.__name__}.rst')

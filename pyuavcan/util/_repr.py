@@ -7,7 +7,8 @@
 
 def repr_attributes(obj: object, *anonymous_elements: object, **named_elements: object) -> str:
     """
-    A simple helper function that constructs a repr() form of an object. Used widely across the library.
+    A simple helper function that constructs a :func:`repr` form of an object. Used widely across the library.
+
     >>> class Aa: pass
     >>> assert repr_attributes(Aa()) == 'Aa()'
     >>> assert repr_attributes(Aa(), 123) == 'Aa(123)'
@@ -20,7 +21,7 @@ def repr_attributes(obj: object, *anonymous_elements: object, **named_elements: 
 
 def repr_attributes_noexcept(obj: object, *anonymous_elements: object, **named_elements: object) -> str:
     """
-    A robust version that never raises exceptions.
+    A robust version of :meth:`repr_attributes` that never raises exceptions.
     """
     try:
         return repr_attributes(obj, *anonymous_elements, **named_elements)
