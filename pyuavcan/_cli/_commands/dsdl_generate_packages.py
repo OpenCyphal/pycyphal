@@ -11,9 +11,11 @@ import typing
 import logging
 import pathlib
 import zipfile
-import requests
 import tempfile
 import argparse
+
+import requests
+
 import pyuavcan
 from . import _base
 

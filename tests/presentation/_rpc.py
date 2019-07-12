@@ -5,8 +5,10 @@
 #
 
 import typing
-import pytest
 import asyncio
+
+import pytest
+
 import pyuavcan
 import pyuavcan.transport.can
 import tests.transport.can

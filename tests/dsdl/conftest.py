@@ -7,9 +7,11 @@
 import sys
 import typing
 import shutil
-import pytest
 import pathlib
 import logging
+
+import pytest
+
 import pyuavcan.dsdl
 
 

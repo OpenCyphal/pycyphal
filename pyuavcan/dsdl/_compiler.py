@@ -8,14 +8,15 @@ import gzip
 import typing
 import pickle
 import base64
-import pydsdl
-import nunavut
-import nunavut.jinja
-import pathlib
 import keyword
+import pathlib
 import builtins
 import itertools
 import dataclasses
+
+import pydsdl
+import nunavut
+import nunavut.jinja
 
 
 _AnyPath = typing.Union[str, pathlib.Path]

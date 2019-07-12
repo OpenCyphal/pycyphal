@@ -6,10 +6,11 @@
 
 import abc
 import sys
-import numpy
 import typing
 import struct
 import base64
+
+import numpy
 
 # We must use uint8 instead of ubyte because uint8 is platform-invariant whereas (u)byte is platform-dependent.
 _Byte = numpy.uint8

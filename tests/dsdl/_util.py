@@ -4,13 +4,15 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import numpy
 import typing
-import pydsdl
 import random
 import struct
 import itertools
 import functools
+
+import numpy
+import pydsdl
+
 import pyuavcan.dsdl
 
 

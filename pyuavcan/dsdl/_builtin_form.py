@@ -4,9 +4,11 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import numpy
 import typing
+
+import numpy
 import pydsdl
+
 from ._composite_object import CompositeObject, get_model, get_attribute, set_attribute, get_class
 from ._composite_object import CompositeObjectTypeVar
 

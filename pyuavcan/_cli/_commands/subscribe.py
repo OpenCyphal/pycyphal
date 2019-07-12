@@ -9,9 +9,11 @@ import decimal
 import asyncio
 import logging
 import argparse
-import argparse_utils
-import pyuavcan
 import contextlib
+
+import argparse_utils
+
+import pyuavcan
 from . import _base, _transport, _port_spec, _formatter
 
 

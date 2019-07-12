@@ -4,10 +4,12 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import pytest
 import typing
-import pydsdl
 import logging
+
+import pytest
+import pydsdl
+
 import pyuavcan.dsdl
 from . import _util
 

@@ -7,13 +7,15 @@
 import os
 import gc
 import time
-import numpy
-import pytest
 import typing
-import pydsdl
 import random
 import logging
 import dataclasses
+
+import numpy
+import pytest
+import pydsdl
+
 import pyuavcan.dsdl
 from . import _util
 

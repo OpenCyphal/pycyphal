@@ -10,9 +10,11 @@ import typing
 import asyncio
 import logging
 import argparse
-import argparse_utils
-import pyuavcan
 import contextlib
+
+import argparse_utils
+
+import pyuavcan
 from . import _base, _transport, _port_spec, dsdl_generate_packages, _node
 from ._yaml import YAMLLoader, YAMLDumper
 

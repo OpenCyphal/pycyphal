@@ -8,11 +8,13 @@ from __future__ import annotations
 import abc
 import gzip
 import typing
-import pydsdl
 import pickle
 import base64
 import logging
 import importlib
+
+import pydsdl
+
 from . import _serialized_representation
 
 

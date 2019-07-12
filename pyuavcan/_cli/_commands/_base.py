@@ -8,9 +8,9 @@ import os
 import sys
 import typing
 import pathlib
-import argparse
-import pyuavcan
 import dataclasses
+
+import pyuavcan
 
 
 # Base data directory. The location is OS-dependent.

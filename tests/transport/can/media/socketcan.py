@@ -7,8 +7,9 @@
 import os
 import sys
 import typing
-import pytest
 import asyncio
+
+import pytest
 
 
 # noinspection PyProtectedMember
