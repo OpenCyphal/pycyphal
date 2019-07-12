@@ -16,6 +16,7 @@ Someone should just fix Autodoc instead of relying on this long-term. Please.
 
 import re
 import os
+import atexit
 import typing
 
 import sphinx.application
@@ -24,8 +25,10 @@ import sphinx.util.nodes
 import docutils.nodes
 
 
-_ACCEPTANCE_PATTERN = r'([a-zA-Z][a-zA-Z0-9_]*\.)+_[a-zA-Z0-9_]*\..+'
+_ACCEPTANCE_PATTERN = r'.*([a-zA-Z][a-zA-Z0-9_]*\.)+_[a-zA-Z0-9_]*\..+'
 _REFTYPES = 'class', 'meth', 'func'
+
+_replacements_made: typing.List[typing.Tuple[str, str]] = []
 
 
 def missing_reference(app:      sphinx.application.Sphinx,
@@ -36,6 +39,7 @@ def missing_reference(app:      sphinx.application.Sphinx,
     if node['reftype'] in _REFTYPES and re.match(_ACCEPTANCE_PATTERN, old_reftarget):
         new_reftarget = re.sub(r'\._[a-zA-Z0-9_]*', '', old_reftarget)
         if new_reftarget != old_reftarget:
+            _replacements_made.append((old_reftarget, new_reftarget))
             attrs = contnode.attributes if isinstance(contnode, docutils.nodes.Element) else {}
             new_refdoc = node['refdoc'].rsplit(os.path.sep, 1)[0] + os.path.sep + new_reftarget.rsplit('.', 1)[0]
             return sphinx.util.nodes.make_refnode(app.builder,
@@ -47,7 +51,43 @@ def missing_reference(app:      sphinx.application.Sphinx,
     return None
 
 
+def doctree_resolved(_app:     sphinx.application.Sphinx,
+                     doctree:  docutils.nodes.document,
+                     _docname: str) -> None:
+    def predicate(n: docutils.nodes.Node) -> bool:
+        if isinstance(n, docutils.nodes.FixedTextElement):
+            is_text_primitive = len(n.children) == 1 and isinstance(n.children[0], docutils.nodes.Text)
+            if is_text_primitive:
+                return is_text_primitive and re.match(_ACCEPTANCE_PATTERN, n.children[0].astext())
+        return False
+
+    def substitute_once(text: str) -> str:
+        out = re.sub(r'\._[a-zA-Z0-9_]*', '', text)
+        _replacements_made.append((text, out))
+        return out
+
+    # The objective here is to replace all references to hidden objects with their exported aliases.
+    # For example: pyuavcan.presentation._typed_session._publisher.Publisher --> pyuavcan.presentation.Publisher
+    for node in doctree.traverse(predicate):
+        assert isinstance(node, docutils.nodes.FixedTextElement)
+        node.children = [
+            docutils.nodes.Text(substitute_once(node.children[0].astext()))
+        ]
+
+
 def setup(app: sphinx.application.Sphinx):
     # app.add_config_value('ref_fixer_pattern', r'.*', True, (str,))
     app.connect('missing-reference', missing_reference)
+    app.connect('doctree-resolved', doctree_resolved)
+
+    def print_report() -> None:
+        print('REF FIXER HACK HAS MADE',
+              len(_replacements_made), 'REPLACEMENTS TOTAL,',
+              len(set(_replacements_made)), 'UNIQUE:')
+        for orig, result in set(_replacements_made):
+            print('\t', orig)
+            print('\t', result)
+            print()
+    atexit.register(print_report)
+
     return {}
