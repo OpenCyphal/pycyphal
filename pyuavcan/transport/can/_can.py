@@ -235,15 +235,18 @@ class CANTransport(pyuavcan.transport.Transport):
                 if cid is not None:                                             # Ignore non-UAVCAN CAN frames
                     ufr = TimestampedUAVCANFrame.try_parse(raw_frame)
                     if ufr is not None:                                         # Ignore non-UAVCAN CAN frames
-                        if not ufr.loopback:
-                            self._frame_stats.received_uavcan += 1
-                            if self._handle_received_frame(cid, ufr):
-                                self._frame_stats.received_uavcan_accepted += 1
-                        else:
-                            self._handle_loopback_frame(cid, ufr)
+                        self._handle_any_frame(cid, ufr)
             except Exception as ex:  # pragma: no cover
                 self._frame_stats.errored += 1
                 _logger.exception(f'Unhandled exception while processing input CAN frame {raw_frame}: {ex}')
+
+    def _handle_any_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> None:
+        if not frame.loopback:
+            self._frame_stats.received_uavcan += 1
+            if self._handle_received_frame(can_id, frame):
+                self._frame_stats.received_uavcan_accepted += 1
+        else:
+            self._handle_loopback_frame(can_id, frame)
 
     def _handle_received_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> bool:
         assert not frame.loopback
