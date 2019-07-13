@@ -80,6 +80,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.inheritance_diagram',
     'sphinx_computron',
+    'sphinxemoji.sphinxemoji',
     'ref_fixer_hack',
 ]
 sys.path.append(str(DOC_ROOT))  # This is for the hack to be importable
@@ -217,7 +218,6 @@ subprocess.check_call([
     '--follow-links',
     '--separate',
     '--no-toc',
-    '--module-first',
     str(PACKAGE_ROOT),
 ])
 # We don't need the top-level page, it's maintained manually.
