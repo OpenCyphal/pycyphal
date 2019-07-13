@@ -21,6 +21,7 @@ pylint      ~= 2.3
 sphinx           ~= 2.1
 sphinx-argparse  >= 0.2
 sphinx_rtd_theme == 0.4.3
+git+https://github.com/pavel-kirienko/sphinx-computron
 
 # Packaging and distribution.
 setuptools >= 40.8

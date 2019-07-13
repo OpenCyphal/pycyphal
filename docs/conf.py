@@ -78,6 +78,7 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.intersphinx',
     'sphinx.ext.inheritance_diagram',
+    'sphinx_computron',
     'ref_fixer_hack',
 ]
 sys.path.append(str(DOC_ROOT))  # This is for the hack to be importable
