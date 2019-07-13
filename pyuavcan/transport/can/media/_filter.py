@@ -37,11 +37,13 @@ class FilterConfiguration:
     @property
     def rank(self) -> int:
         """
-        This is a part of the CAN acceptance filter configuration optimization algorithm.
-        Observe that we return negative rank for configurations which do not distinguish between extended and
-        base frames in order to discourage merger of configurations of different frame types, since they are
-        hard to support in certain CAN controllers. The effect of this is that we guarantee that an ambivalent
-        filter configuration will never appear if the controller has at least one acceptance filter.
+        This is a part of the CAN acceptance filter configuration optimization algorithm;
+        see :func:`optimize_filter_configurations`.
+
+        We return negative rank for configurations which do not distinguish between extended and base frames
+        in order to discourage merger of configurations of different frame types, since they are hard to
+        support in certain CAN controllers. The effect of this is that we guarantee that an ambivalent filter
+        configuration will never appear if the controller has at least two acceptance filters.
         """
         mask_mask = 2 ** self.identifier_bit_length - 1
         rank = bin(self.mask & mask_mask).count('1')
@@ -51,7 +53,13 @@ class FilterConfiguration:
 
     def merge(self, other: FilterConfiguration) -> FilterConfiguration:
         """
-        This is a part of the CAN acceptance filter configuration optimization algorithm.
+        This is a part of the CAN acceptance filter configuration optimization algorithm;
+        see :func:`optimize_filter_configurations`.
+
+        Given two filter configurations ``A`` and ``B``, where ``A`` accepts CAN frames whose identifiers
+        belong to ``Ca`` and likewise ``Cb`` for ``B``, the merge product of ``A`` and ``B`` would be a
+        new filter configuration that accepts CAN frames belonging to a new set which is a superset of
+        the union of ``Ca`` and ``Cb``.
         """
         mask = self.mask & other.mask & ~(self.identifier ^ other.identifier)
         identifier = self.identifier & mask
@@ -69,8 +77,21 @@ class FilterConfiguration:
 def optimize_filter_configurations(configurations: typing.Iterable[FilterConfiguration],
                                    target_number_of_configurations: int) -> typing.List[FilterConfiguration]:
     """
-    Implements the CAN acceptance filter configuration optimization algorithm described in the Specification
-    (originally proposed by P. Kirienko and I. Sheremet).
+    Implements the CAN acceptance filter configuration optimization algorithm described in the Specification.
+    The algorithm was originally proposed by P. Kirienko and I. Sheremet.
+
+    Given a
+    set of ``K``  filter configurations that accept CAN frames whose identifiers belong to the set ``C``,
+    and ``N`` acceptance filters implemented in hardware, where ``1 <= N < K``,
+    find a new
+    set of ``K'`` filter configurations that accept CAN frames whose identifiers belong to the set ``C'``,
+    such that ``K' <= N``, ``C'`` is a superset of ``C``, and ``|C'|`` is minimized.
+
+    The algorithm is not defined for ``N >= K`` because this configuration is considered optimal.
+    The function returns the input set unchanged in this case.
+    If the target number of configurations is not positive, a ValueError is raised.
+
+    The time complexity of this implementation is ``O(K!)`` (sorry).
     """
     if target_number_of_configurations < 1:
         raise ValueError(f'The number of configurations must be positive; found {target_number_of_configurations}')

@@ -68,6 +68,10 @@ class CANFrameStatistics:
 
 
 class CANTransport(pyuavcan.transport.Transport):
+    """
+    CAN 2.0 and CAN FD transport implementation.
+    """
+
     def __init__(self,
                  media:        Media,
                  send_timeout: float = DEFAULT_SEND_TIMEOUT,

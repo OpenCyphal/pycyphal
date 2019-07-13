@@ -21,9 +21,10 @@ class Media(abc.ABC):
     checked during class instantiation, not at the time of the import.
     """
 
-    # The frames handler is non-blocking and non-yielding; returns immediately.
+    #: The frames handler is non-blocking and non-yielding; returns immediately.
     ReceivedFramesHandler = typing.Callable[[typing.Iterable[TimestampedDataFrame]], None]
 
+    #: Valid MTU values for CAN 2.0 and CAN FD.
     VALID_MTU_SET = {8, 12, 16, 20, 24, 32, 48, 64}
 
     @property
@@ -31,9 +32,10 @@ class Media(abc.ABC):
     def interface_name(self) -> str:
         """
         The name of the interface on the local system. For example:
-            - "can0" for SocketCAN
-            - "/dev/serial/by-id/usb-Zubax_Robotics_Zubax_Babel_28002E0001514D593833302000000000-if00" for SLCAN
-            - "COM9" for SLCAN
+
+        - ``can0`` for SocketCAN
+        - ``/dev/serial/by-id/usb-Zubax_Robotics_Zubax_Babel_28002E0001514D593833302000000000-if00`` for SLCAN
+        - ``COM9`` for SLCAN
         """
         raise NotImplementedError
 
@@ -41,7 +43,7 @@ class Media(abc.ABC):
     @abc.abstractmethod
     def mtu(self) -> int:
         """
-        Must belong to VALID_MTU_SET.
+        Must belong to :attr:`VALID_MTU_SET`.
         Observe that the media interface doesn't care whether we're using CAN FD or CAN 2.0 because the UAVCAN
         CAN transport protocol itself doesn't care. The transport simply does not distinguish them.
         """
@@ -127,7 +129,7 @@ class Media(abc.ABC):
     def close(self) -> None:
         """
         After the media instance is closed, none of its methods can be used anymore. The behavior or methods after
-        close() is undefined.
+        :meth:`close` is undefined.
         """
         raise NotImplementedError
 
