@@ -6,6 +6,8 @@
 # Include runtime deps.
 .
 .[cli]
+.[transport_pythoncan]
+.[transport_serial]
 
 # Testing.
 pytest          ~= 4.5
