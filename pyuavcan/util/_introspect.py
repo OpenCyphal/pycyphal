@@ -47,5 +47,5 @@ def import_submodules(root_module: types.ModuleType) -> None:
     >>> pyuavcan.transport.can.media.socketcan.SocketCANMedia
     <class 'pyuavcan.transport.can.media.socketcan...SocketCANMedia'>
     """
-    for _, module_name, _ in pkgutil.walk_packages(root_module.__path__, root_module.__name__ + '.'):
+    for _, module_name, _ in pkgutil.walk_packages(root_module.__path__, root_module.__name__ + '.'):  # type: ignore
         importlib.import_module(module_name)

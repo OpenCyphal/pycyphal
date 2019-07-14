@@ -18,8 +18,9 @@ Contents
 
 .. toctree::
 
-   pages/installation
    pages/architecture
+   pages/installation
+   pages/usage
    pages/cli
    pages/api
 

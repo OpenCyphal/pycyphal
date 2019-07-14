@@ -2,8 +2,6 @@ API reference
 =============
 
 .. toctree::
-   :maxdepth: 1
-   :hidden:
 
    /.apidoc_generated/pyuavcan.dsdl
    /.apidoc_generated/pyuavcan.transport

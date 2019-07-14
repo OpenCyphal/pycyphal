@@ -3,6 +3,9 @@
 Architecture
 ============
 
+PyUAVCAN is a full-featured implementation of the `UAVCAN protocol stack <https://uavcan.org>`_ in Python
+intended for non-embedded applications.
+
 The UAVCAN protocol itself is designed to support multiple transport protocols such as CAN bus, UDP, serial, and so on.
 Generally, a real-time safety-critical implementation of UAVCAN would choose to support a limited subset of
 transports defined by the protocol, which is a valid strategy for high-reliability software.
