@@ -16,7 +16,6 @@ Someone should just fix Autodoc instead of relying on this long-term. Please.
 
 import re
 import os
-import atexit
 import typing
 
 import sphinx.application
@@ -80,6 +79,7 @@ def setup(app: sphinx.application.Sphinx):
     app.connect('missing-reference', missing_reference)
     app.connect('doctree-resolved', doctree_resolved)
 
+    '''
     def print_report() -> None:
         print('REF FIXER HACK HAS MADE',
               len(_replacements_made), 'REPLACEMENTS TOTAL,',
@@ -88,6 +88,9 @@ def setup(app: sphinx.application.Sphinx):
             print('\t', orig)
             print('\t', result)
             print()
+
+    import atexit
     atexit.register(print_report)
+    '''
 
     return {}

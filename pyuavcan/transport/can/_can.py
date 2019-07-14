@@ -20,31 +20,29 @@ from ._identifier import CANID, generate_filter_configurations
 from ._input_dispatch_table import InputDispatchTable
 
 
-DEFAULT_SEND_TIMEOUT = 1.0
-
-
 _logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
 class CANFrameStatistics:
     """
-    Invariants:
+    Invariants::
+
         sent >= loopback_requested
         received >= received_uavcan >= received_uavcan_accepted
         loopback_requested >= loopback_returned
     """
 
-    sent: int = 0                       # Number of frames sent to the media instance
+    sent: int = 0                       #: Number of frames sent to the media instance
 
-    received:                 int = 0   # Number of genuine frames received from the bus (loopback not included)
-    received_uavcan:          int = 0   # Subset of the above that happen to be valid UAVCAN frames
-    received_uavcan_accepted: int = 0   # Subset of the above that are useful for the local application
+    received:                 int = 0   #: Number of genuine frames received from the bus (loopback not included)
+    received_uavcan:          int = 0   #: Subset of the above that happen to be valid UAVCAN frames
+    received_uavcan_accepted: int = 0   #: Subset of the above that are useful for the local application
 
-    loopback_requested: int = 0         # Number of sent frames that we requested loopback for
-    loopback_returned:  int = 0         # Number of loopback frames received from the media instance (not from the bus)
+    loopback_requested: int = 0         #: Number of sent frames that we requested loopback for
+    loopback_returned:  int = 0         #: Number of loopback frames received from the media instance (not from the bus)
 
-    errored: int = 0                    # How many frames of any kind could not be successfully processed
+    errored: int = 0                    #: How many frames of any kind could not be successfully processed
 
     @property
     def media_acceptance_filtering_efficiency(self) -> float:
@@ -72,14 +70,19 @@ class CANTransport(pyuavcan.transport.Transport):
     CAN 2.0 and CAN FD transport implementation.
     """
 
+    DEFAULT_SEND_TIMEOUT = 1.0
+
     def __init__(self,
                  media:        Media,
                  send_timeout: float = DEFAULT_SEND_TIMEOUT,
                  loop:         typing.Optional[asyncio.AbstractEventLoop] = None):
         """
-        :param media:           The media implementation such as SocketCAN.
-        :param send_timeout:    Raise pyuavcan.transport.SendTimeoutError if media takes more time than this to send.
-        :param loop:            The event loop; uses the default loop by default.
+        :param media: The media implementation such as :class:`pyuavcan.transport.can.media.socketcan.SocketCAN`.
+
+        :param send_timeout: Raise :class:`pyuavcan.transport.SendTimeoutError` if the media takes more time than
+            this to send.
+
+        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._maybe_media: typing.Optional[Media] = media
         self._local_node_id: typing.Optional[int] = None

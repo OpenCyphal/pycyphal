@@ -19,8 +19,9 @@ cp.read('../setup.cfg')
 extras: typing.Dict[str, str] = dict(cp['options.extras_require'])
 
 
-print(f'Example: ``pip install pyuavcan[{list(extras)[0]},{list(extras)[-1]}]``')
-print()
+print('If you need full-featured library, use this and read no more::', end='\n\n')
+print(f'   pip install pyuavcan[{",".join(extras.keys())}]', end='\n\n')
+print('If you want to know what exactly you are installing, read on.', end='\n\n')
 
 
 @dataclasses.dataclass(frozen=True)
@@ -37,11 +38,10 @@ transport_options: typing.List[TransportOption] = []
 pyuavcan.util.import_submodules(pyuavcan.transport)
 for cls in pyuavcan.util.iter_descendants(pyuavcan.transport.Transport):
     transport_name = cls.__module__.split('.')[2]   # pyuavcan.transport.X
-    relevant_extras = {
-        k: v
-        for k, v in extras.items()
-        if k.startswith(f'transport_{transport_name}')
-    }
+    relevant_extras: typing.Dict[str, str] = {}
+    for k in list(extras.keys()):
+        if k.startswith(f'transport_{transport_name}'):
+            relevant_extras[k] = extras.pop(k)
 
     transport_module_name = re.sub(r'\._[_a-zA-Z0-9]*', '', cls.__module__)
     transport_class_name = transport_module_name + '.' + cls.__name__
@@ -63,19 +63,24 @@ for to in transport_options:
             print('   .. code-block::', end='\n\n')
             print(textwrap.indent(deps.strip(), ' ' * 6), end='\n\n')
     else:
-        print('This transport requires no installation dependencies, it is always available.')
+        print('This transport has no installation dependencies, it is always available.')
     print()
 
-other_extras = {
-    k: v
-    for k, v in extras.items()
-    if not k.startswith(f'transport_')
-}
+other_extras: typing.Dict[str, str] = {}
+for k in list(extras.keys()):
+    if not k.startswith(f'transport_'):
+        other_extras[k] = extras.pop(k)
+
 if other_extras:
-    print('Non-transport-related installation options' + HEADER_SUFFIX)
+    print('Other installation options' + HEADER_SUFFIX)
+    print('These installation options are not related to any transport.', end='\n\n')
     for key, deps in other_extras.items():
         print(f'{key}')
         print('   This option pulls the following dependencies:', end='\n\n')
         print('   .. code-block::', end='\n\n')
         print(textwrap.indent(deps.strip(), ' ' * 6), end='\n\n')
     print()
+
+if extras:
+    raise RuntimeError(f'No known transports to match the following installation options (typo?): '
+                       f'{list(extras.keys())}')
