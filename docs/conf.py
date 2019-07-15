@@ -79,6 +79,7 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.intersphinx',
     'sphinx.ext.inheritance_diagram',
+    'sphinx.ext.graphviz',
     'sphinx_computron',
     'sphinxemoji.sphinxemoji',
     'ref_fixer_hack',

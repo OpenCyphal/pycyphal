@@ -1,9 +1,38 @@
+/* Gray text is ugly. Text should be black. */
 body {
     color: #000;
 }
 
 .wy-nav-content {
     max-width: unset;
+}
+
+h2 {
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.2em;
+}
+
+p {
+    margin-bottom: 16px;
+}
+
+/* Very large screen optimization. */
+@media (min-width: 1500px) {
+    .wy-nav-content {
+        padding-left:  5em;
+        padding-right: 5em;
+    }
+
+    p {
+        font-size:   18px;
+        line-height: 26px;
+    }
+
+    .rst-content pre.literal-block,
+    .rst-content div[class^="highlight"] pre,
+    .rst-content .linenodiv pre {
+        font-size: 16px;
+    }
 }
 
 /* This is a dirty fix to the layout bug in the RTD theme; see https://github.com/readthedocs/sphinx_rtd_theme/issues/776 */

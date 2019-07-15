@@ -5,6 +5,17 @@
 #
 
 """
+This module is used for automatic generation of Python classes from DSDL type definitions.
+Auto-generated classes have a high-level application-facing API and built-in auto-generated
+serialization and deserialization routines.
+
+The serialization code heavily relies on NumPy and the data alignment analysis implemented in PyDSDL.
+Some of the technical details are covered in the following posts:
+
+- https://forum.uavcan.org/t/pyuavcan-design-thread/504
+- https://github.com/UAVCAN/pydsdl/pull/24
+
+
 .. inheritance-diagram:: pyuavcan.dsdl._composite_object
    :parts: 1
 """

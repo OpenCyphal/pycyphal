@@ -15,10 +15,13 @@ import pyuavcan.transport
 # Same value represents broadcast node ID when transmitting.
 _ANONYMOUS_NODE_ID = 0xFFF
 
+_FRAME_DELIMITER_BYTE = 0x9E
+_ESCAPE_PREFIX_BYTE = 0x8E
+
 
 class SerialTransport(pyuavcan.transport.Transport):
     """
-    **This transport is not yet implemented. Please come back later.**
+    This transport is not yet implemented. Please come back later.
 
     The serial transport is designed for basic raw byte-level low-speed serial links:
 
@@ -50,29 +53,32 @@ class SerialTransport(pyuavcan.transport.Transport):
     encoded into its serialized form using the following packet format (influenced by HDLC, SLIP, POPCOP):
 
     +------------------------+-----------------------+-----------------------+------------------------+
-    |Frame delimiter **0x8E**|Escaped payload        |CRC32C (Castagnoli)    |Frame delimiter **0x8E**|
+    |Frame delimiter **0x9E**|Escaped payload        |CRC32C (Castagnoli)    |Frame delimiter **0x9E**|
     +========================+=======================+=======================+========================+
     |Single-byte frame       |The following bytes are|Four bytes long,       |Same frame delimiter as |
-    |delimiter **0x8E**.     |escaped: **0x8E**      |little-endian byte     |at the start.           |
-    |Begins a new frame and  |(frame delimiter);     |order; bytes 0x8E      |Terminates the current  |
-    |possibly terminates the |**0x9E** (escape       |(frame delimiter) and  |frame and possibly      |
-    |previous frame.         |character). An escaped |0x9E (escape character)|begins the next frame.  |
+    |delimiter **0x9E**.     |escaped: **0x9E**      |little-endian byte     |at the start.           |
+    |Begins a new frame and  |(frame delimiter);     |order; bytes 0x9E      |Terminates the current  |
+    |possibly terminates the |**0x8E** (escape       |(frame delimiter) and  |frame and possibly      |
+    |previous frame.         |character). An escaped |0x8E (escape character)|begins the next frame.  |
     |                        |byte is bitwise        |are escaped like in    |                        |
     |                        |inverted and prepended |the payload.           |                        |
     |                        |with the escape        |The CRC is computed    |                        |
-    |                        |character 0x9E. For    |over the unescaped     |                        |
-    |                        |example: byte 0x8E is  |(i.e., original form)  |                        |
-    |                        |transformed into 0x9E  |payload, not including |                        |
+    |                        |character 0x8E. For    |over the unescaped     |                        |
+    |                        |example: byte 0x9E is  |(i.e., original form)  |                        |
+    |                        |transformed into 0x8E  |payload, not including |                        |
     |                        |followed by 0x71.      |the start delimiter.   |                        |
     +------------------------+-----------------------+-----------------------+------------------------+
 
     There are no magic bytes in this format because the strong CRC and the compact-data-type-ID field render the
     format sufficiently recognizable. The worst case overhead exceeds 50% if every byte of the payload and the CRC
-    is either 0x8E or 0x9E. Despite the overhead, this format is still considered superior to the alternatives
+    is either 0x9E or 0x8E. Despite the overhead, this format is still considered superior to the alternatives
     since it is robust and guarantees a constant recovery time. Consistent-overhead byte stuffing (COBS) is sometimes
     employed for similar tasks, but it should be understood that while it offers a substantially lower overhead,
     it undermines the synchronization recovery properties of the protocol. There is a somewhat relevant discussion
     at https://github.com/vedderb/bldc/issues/79.
+
+    The format can share the same serial medium with ASCII text exchanges such as command-line interfaces or
+    real-time logging. The special byte values employed by the format do not belong to the ASCII character set.
 
     The last four bytes of a multi-frame transfer payload contain the CRC32C (Castagnoli) hash of the transfer
     payload in little-endian byte order.
@@ -90,8 +96,9 @@ class SerialTransport(pyuavcan.transport.Transport):
         :param serial_port: The serial port to communicate over. The caller may configure the transmit timeout as
             necessary. On timeout, :class:`pyuavcan.transport.SendTimeoutError` will be raised.
 
-        :param single_frame_transfer_payload_capacity_bytes: Use single-frame transfers for all transfers containing
-            not more than than this many bytes of payload. Otherwise, use multi-frame transfers. Defaults to
+        :param single_frame_transfer_payload_capacity_bytes: Use single-frame transfers for all outgoing transfers
+            containing not more than than this many bytes of payload. Otherwise, use multi-frame transfers.
+            This setting does not affect transfer reception (any payload size is always accepted). Defaults to
             :attr:`DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES`.
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.

@@ -5,7 +5,7 @@
 #
 
 """
-This transport module contains no media abstraction submodules because the media abstraction
+This transport module contains no media sublayers because the media abstraction
 is handled directly by the PySerial library and the underlying operating system.
 
 .. inheritance-diagram:: pyuavcan.transport.serial._serial
