@@ -7,7 +7,6 @@
 from __future__ import annotations
 import enum
 import typing
-import decimal
 import logging
 
 
@@ -37,22 +36,8 @@ def _make_yaml_formatter() -> Formatter:
 
 
 def _make_json_formatter() -> Formatter:
-    try:
-        import simplejson as json
-    except ImportError:
-        _logger.info('Please install simplejson to avoid numerical precision loss during serialization. '
-                     'The command is: pip install simplejson')
-        import json  # type: ignore
-
-    def json_default(o: object) -> object:
-        if isinstance(o, decimal.Decimal):
-            return float(o)
-        raise TypeError
-
-    return lambda data: json.dumps(data,
-                                   default=json_default,
-                                   ensure_ascii=False,
-                                   separators=(',', ':'))
+    import simplejson as json
+    return lambda data: json.dumps(data, ensure_ascii=False, separators=(',', ':'))
 
 
 def _make_tsv_formatter() -> Formatter:

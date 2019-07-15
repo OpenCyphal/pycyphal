@@ -55,15 +55,14 @@ for to in transport_options:
     print(f'{to.name} transport' + HEADER_SUFFIX)
     print(f'This transport is implemented in the module :mod:`{to.module_name}`, class :class:`{to.class_name}`.')
     if to.extras:
-        print('The following installation options are available for this transport:')
+        print('The following installation options are available:')
         print()
         for key, deps in to.extras.items():
             print(f'{key}')
-            print('   This option pulls the following dependencies:', end='\n\n')
-            print('   .. code-block::', end='\n\n')
+            print('   This option pulls the following dependencies::', end='\n\n')
             print(textwrap.indent(deps.strip(), ' ' * 6), end='\n\n')
     else:
-        print('This transport has no installation dependencies, it is always available.')
+        print('This transport has no installation dependencies.')
     print()
 
 other_extras: typing.Dict[str, str] = {}

@@ -20,7 +20,6 @@ def main() -> None:
     logging.basicConfig(stream=sys.stderr,
                         level=logging.WARNING,
                         format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s')
-
     try:
         exit(_main_impl())
     except KeyboardInterrupt:
@@ -33,7 +32,7 @@ def main() -> None:
         exit(1)
 
 
-def _main_impl() -> int:
+def _construct_argument_parser() -> argparse.ArgumentParser:
     from . import _commands
     from pyuavcan import __version__
 
@@ -51,8 +50,11 @@ Find documentation and support at https://uavcan.org.
     root_parser.add_argument(
         '--version', '-V',
         action='version',
-        version='%(prog)s ' + '.'.join(map(str, __version__)),
-        help='Print the version string and exit.',
+        version=f'%(prog)s {__version__}',
+        help='''
+Print the PyUAVCAN version string and exit.
+The tool is versioned synchronously with the PyUAVCAN library.
+'''.strip(),
     )
     root_parser.add_argument(
         '--verbose', '-v',
@@ -79,8 +81,13 @@ Find documentation and support at https://uavcan.org.
         cmd.register_arguments(parser)
         parser.set_defaults(func=cmd.execute)
 
-    # Parse args and run the command
-    args = root_parser.parse_args()
+    return root_parser
+
+
+def _main_impl() -> int:
+    from . import _commands
+
+    args = _construct_argument_parser().parse_args()
 
     logging.root.setLevel({
         0: logging.WARNING,

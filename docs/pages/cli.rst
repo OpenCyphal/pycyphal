@@ -3,3 +3,7 @@
 Command-line tool
 =================
 
+The information contained here can also be accessed via ``--help``.
+
+.. computron-injection::
+    :filename: cli_help.py

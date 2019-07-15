@@ -93,4 +93,6 @@ def setup(app: sphinx.application.Sphinx):
     atexit.register(print_report)
     '''
 
-    return {}
+    return {
+        'parallel_read_safe': True,
+    }

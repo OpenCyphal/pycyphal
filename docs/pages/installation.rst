@@ -1,4 +1,4 @@
-.. _index:
+.. _installation:
 
 Installation
 ============
@@ -7,10 +7,19 @@ PyUAVCAN requires **Python v3.7** or newer.
 
 Install the library from PIP; the package name is ``pyuavcan``.
 When invoking PIP, specify the installation options (also known as "package extras", in Python speak |:snake:|)
-depending on which UAVCAN transports you are planning to use.
+depending on which UAVCAN transports and features you are planning to use.
 
 Installation options
 --------------------
+
+Most of the installation options enable a particular transport or a particular media sublayer implementation
+for a transport.
+Those options are named uniformly following the pattern
+``transport_<transport-name>_<media-name>``, for example: ``transport_ieee802154_xbee``.
+If there is no media sub-layer, or the media dependencies are shared, or there is a common
+installation option for all media types of the transport, the media part is omitted from the key;
+for example: ``transport_serial``.
+Installation options whose names do not begin with ``transport_`` enable other optional features.
 
 .. computron-injection::
    :filename: installation_option_matrix.py

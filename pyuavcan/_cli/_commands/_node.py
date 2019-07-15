@@ -20,8 +20,8 @@ def make_default_node_info_fields_for_command_module(command_module_name: str) -
             'minor': pyuavcan.UAVCAN_SPECIFICATION_VERSION[1],
         },
         'software_version': {
-            'major': pyuavcan.__version__[0],
-            'minor': pyuavcan.__version__[1],
+            'major': pyuavcan.__version_info__[0],
+            'minor': pyuavcan.__version_info__[1],
         },
         'name': 'org.uavcan.pyuavcan.cli.' + command_name,
     }

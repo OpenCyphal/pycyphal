@@ -14,6 +14,7 @@ T = typing.TypeVar('T', bound=object)
 
 
 def iter_descendants(ty: typing.Type[T]) -> typing.Iterable[typing.Type[T]]:
+    # noinspection PyTypeChecker,PyUnresolvedReferences
     """
     Returns a recursively descending iterator over all subclasses of the argument.
 
@@ -23,10 +24,17 @@ def iter_descendants(ty: typing.Type[T]) -> typing.Iterable[typing.Type[T]]:
     >>> class D(A): pass
     >>> set(iter_descendants(A)) == {B, C, D}
     True
-    >>> set(iter_descendants(D))
-    set()
+    >>> list(iter_descendants(D))
+    []
     >>> bool in set(iter_descendants(int))
     True
+
+    Practical example -- discovering what transports are available:
+
+    >>> import pyuavcan
+    >>> pyuavcan.util.import_submodules(pyuavcan.transport)
+    >>> list(sorted(map(lambda t: t.__name__, pyuavcan.util.iter_descendants(pyuavcan.transport.Transport))))
+    ['CANTransport', 'RedundantTransport', 'SerialTransport']
     """
     # noinspection PyArgumentList
     for t in ty.__subclasses__():

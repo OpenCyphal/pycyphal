@@ -21,7 +21,6 @@ pylint      ~= 2.3
 
 # Documentation.
 sphinx           ~= 2.1
-sphinx-argparse  >= 0.2
 sphinx_rtd_theme == 0.4.3
 sphinxemoji      >= 0.1.4
 git+https://github.com/pavel-kirienko/sphinx-computron
