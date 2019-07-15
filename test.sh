@@ -37,6 +37,8 @@ function banner()
 
 banner ENVIRONMENT CONFIGURATION
 
+which dot || die "Please install graphviz. On Debian-based: apt-get install graphviz"
+
 ./clean.sh || die "Failed to clean"
 
 pip install -r requirements.txt || die "Could not install dependencies"
