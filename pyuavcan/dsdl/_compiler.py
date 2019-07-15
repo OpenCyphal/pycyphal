@@ -23,7 +23,7 @@ _AnyPath = typing.Union[str, pathlib.Path]
 
 _ILLEGAL_IDENTIFIERS: typing.Set[str] = set(map(str, list(keyword.kwlist) + dir(builtins)))
 
-_TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).parent / pathlib.Path('_templates')
+_TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).absolute().parent / pathlib.Path('_templates')
 
 
 @dataclasses.dataclass(frozen=True)

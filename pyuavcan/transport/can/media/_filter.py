@@ -82,8 +82,7 @@ def optimize_filter_configurations(configurations: typing.Iterable[FilterConfigu
 
     Given a
     set of ``K``  filter configurations that accept CAN frames whose identifiers belong to the set ``C``,
-    and ``N`` acceptance filters implemented in hardware, where ``1 <= N < K``,
-    find a new
+    and ``N`` acceptance filters implemented in hardware, where ``1 <= N < K``, find a new
     set of ``K'`` filter configurations that accept CAN frames whose identifiers belong to the set ``C'``,
     such that ``K' <= N``, ``C'`` is a superset of ``C``, and ``|C'|`` is minimized.
 

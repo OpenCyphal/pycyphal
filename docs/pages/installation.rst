@@ -22,7 +22,7 @@ for example: ``transport_serial``.
 Installation options whose names do not begin with ``transport_`` enable other optional features.
 
 .. computron-injection::
-   :filename: installation_option_matrix.py
+   :filename: synth/installation_option_matrix.py
 
 Use from source
 ---------------

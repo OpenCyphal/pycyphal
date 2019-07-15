@@ -81,7 +81,7 @@ The concrete transports implemented in the library are contained in nested submo
 here is the full list of them:
 
 .. computron-injection::
-   :filename: transport_summary.py
+   :filename: synth/transport_summary.py
 
 Users can implement their own custom transports by subclassing :class:`pyuavcan.transport.Transport`.
 
@@ -195,16 +195,15 @@ That is, when creating a new publisher or another network session, the calling c
 directly with the presentation layer (the application layer, if used, serves as a thin proxy
 rather than adding any new abstraction on top).
 
-The main entity of the presentation layer is the controller class :class:`pyuavcan.presentation.Presentation`.
-Specific session types are implemented with:
+The main entity of the presentation layer is the controller class :class:`pyuavcan.presentation.Presentation`;
+specifically, the following methods form pretty much the core of the upper API:
 
-.. autosummary::
-    :nosignatures:
-
-    pyuavcan.presentation.Publisher
-    pyuavcan.presentation.Subscriber
-    pyuavcan.presentation.Client
-    pyuavcan.presentation.Server
+- :meth:`pyuavcan.presentation.Presentation.make_publisher` -- constructs :class:`pyuavcan.presentation.Publisher`.
+- :meth:`pyuavcan.presentation.Presentation.make_subscriber` -- constructs :class:`pyuavcan.presentation.Subscriber`.
+- :meth:`pyuavcan.presentation.Presentation.make_client` -- constructs :class:`pyuavcan.presentation.Client`.
+- :meth:`pyuavcan.presentation.Presentation.get_server` (sic!) -- constructs :class:`pyuavcan.presentation.Server`.
+  The name and semantics are slightly different because servers are unlike other session objects.
+  Read the docs for info.
 
 
 Application layer

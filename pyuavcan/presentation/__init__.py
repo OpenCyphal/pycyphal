@@ -35,3 +35,4 @@ from ._typed_session import ClientStatistics as ClientStatistics
 from ._typed_session import Server as Server
 from ._typed_session import ServerStatistics as ServerStatistics
 from ._typed_session import ServiceRequestMetadata as ServiceRequestMetadata
+from ._typed_session import ServiceRequestHandler as ServiceRequestHandler
