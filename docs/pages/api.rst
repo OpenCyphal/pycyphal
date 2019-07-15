@@ -1,6 +1,9 @@
 API reference
 =============
 
+Please navigate to the desired section from here.
+For a general overview, read :ref:`architecture`.
+
 .. toctree::
 
    /.apidoc_generated/pyuavcan.dsdl
