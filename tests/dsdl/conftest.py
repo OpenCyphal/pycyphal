@@ -16,9 +16,10 @@ import pyuavcan.dsdl
 
 
 # Please maintain these carefully if you're changing the project's directory structure.
-LIBRARY_ROOT_DIR = pathlib.Path(__file__).parent.parent.parent
+TEST_ROOT_DIR = pathlib.Path(__file__).parent.parent
+LIBRARY_ROOT_DIR = TEST_ROOT_DIR.parent
 DESTINATION_DIRECTORY = LIBRARY_ROOT_DIR / pathlib.Path('.test_dsdl_generated')
-PUBLIC_REGULATED_DATA_TYPES = LIBRARY_ROOT_DIR / 'public_regulated_data_types_for_testing'
+PUBLIC_REGULATED_DATA_TYPES = TEST_ROOT_DIR / 'public_regulated_data_types'
 TEST_DATA_TYPES = pathlib.Path(__file__).parent / 'namespaces'
 
 
@@ -49,6 +50,11 @@ def generated_packages() -> typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedP
             [
                 PUBLIC_REGULATED_DATA_TYPES / 'uavcan'
             ]
+        ),
+        pyuavcan.dsdl.generate_package(
+            DESTINATION_DIRECTORY,
+            TEST_DATA_TYPES / 'sirius_cyber_corp',
+            []
         ),
     ]
 

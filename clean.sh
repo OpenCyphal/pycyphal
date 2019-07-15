@@ -3,5 +3,5 @@
 rm -rf dist build *.egg-info .coverage* htmlcov .*_generated &> /dev/null
 
 pushd docs
-make clean
+rm -rf _build
 popd

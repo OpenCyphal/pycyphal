@@ -43,8 +43,7 @@ The shippable entities are located exclusively inside the directory `pyuavcan`.
 The entirety of the directory, excluding hidden files, if any, is shipped.
 Everything outside of that is auxiliary and is never shipped.
 
-The submodule `public_regulated_data_types_for_testing` is needed only for testing and documentation building,
-which is reflected in the name.
+The submodule `tests/public_regulated_data_types` is needed only for testing and documentation building.
 It should be kept reasonably up-to-date, but remember that it does not affect the final product in any way.
 We no longer ship DSDL namespaces with code for reasons explained in the documentation.
 

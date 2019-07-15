@@ -6,7 +6,7 @@
 # Include runtime deps.
 .
 .[cli]
-.[transport_pythoncan]
+.[transport_can_pythoncan]
 .[transport_serial]
 
 # Testing.

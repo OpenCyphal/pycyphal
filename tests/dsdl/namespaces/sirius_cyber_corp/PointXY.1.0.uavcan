@@ -1,0 +1,6 @@
+#
+# This nested type contains 2D point coordinates.
+#
+
+float16 x
+float16 y
