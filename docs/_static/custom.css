@@ -23,11 +23,6 @@ p {
         padding-right: 5em;
     }
 
-    p {
-        font-size:   18px;
-        line-height: 26px;
-    }
-
     .rst-content pre.literal-block,
     .rst-content div[class^="highlight"] pre,
     .rst-content .linenodiv pre {
