@@ -45,12 +45,12 @@ except ImportError:
     # because the standard root namespace contains important basic types), so we include it in the lookup path set.
     # The paths are hard-coded here for the sake of conciseness.
     pyuavcan.dsdl.generate_package(package_parent_directory=dsdl_generated_dir,
-                                   root_namespace_directory='../tests/dsdl/namespaces/sirius_cyber_corp/',
-                                   lookup_directories=['../tests/public_regulated_data_types/uavcan'])
+                                   root_namespace_directory='../dsdl/namespaces/sirius_cyber_corp/',
+                                   lookup_directories=['../public_regulated_data_types/uavcan'])
 
     # Generate the standard namespace. The order actually doesn't matter.
     pyuavcan.dsdl.generate_package(package_parent_directory=dsdl_generated_dir,
-                                   root_namespace_directory='../tests/public_regulated_data_types/uavcan',
+                                   root_namespace_directory='../public_regulated_data_types/uavcan',
                                    lookup_directories=[])
 
     # Okay, we can try importing again. We need to clear the import cache first because Python's import machinery
