@@ -4,4 +4,8 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from . import mock as mock
+import subprocess
+
+
+def _unittest_cli() -> None:
+    pass

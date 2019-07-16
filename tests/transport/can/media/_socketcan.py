@@ -87,6 +87,7 @@ async def _unittest_can_socketcan() -> None:
     await asyncio.sleep(0.1)
     ts_end = Timestamp.now()
 
+    print('rx_a:', rx_a)
     # Three sent back from the other end, two loopback
     assert len(rx_a) == 5
     for f in rx_a:

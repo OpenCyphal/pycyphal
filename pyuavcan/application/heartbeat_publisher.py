@@ -42,13 +42,16 @@ _logger = logging.getLogger(__name__)
 
 class HeartbeatPublisher:
     """
-    This class manages periodic publication of the node heartbeat message. The default states are as follows:
+    This class manages periodic publication of the node heartbeat message. Also it subscribes to heartbeat
+    messages from other nodes and emits error messages into the log if a node-ID conflict is detected.
 
-    - health NOMINAL
-    - mode INITIALIZATION
-    - vendor-specific status code is zero
-    - period MAX_PUBLICATION_PERIOD
-    - priority DEFAULT_PRIORITY
+    The default states are as follows:
+
+    - Health is NOMINAL.
+    - Mode is INITIALIZATION.
+    - Vendor-specific status code is zero.
+    - Period is MAX_PUBLICATION_PERIOD (see the DSDL definition).
+    - Priority is the default defined by the transport layer.
     """
 
     def __init__(self, presentation: pyuavcan.presentation.Presentation):
@@ -58,10 +61,13 @@ class HeartbeatPublisher:
         self._mode = Mode.INITIALIZATION
         self._vendor_specific_status_code = 0
         self._publisher = self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)
+        self._subscriber = self._presentation.make_subscriber_with_fixed_subject_id(Heartbeat)
         self._pre_heartbeat_handlers: typing.List[typing.Callable[[], None]] = []
         self._period = float(Heartbeat.MAX_PUBLICATION_PERIOD)
         self._closed = False
         self._task = presentation.transport.loop.create_task(self._task_function())
+
+        self._subscriber.receive_in_background(self._handle_received_heartbeat)
 
     @property
     def uptime(self) -> float:
@@ -156,9 +162,13 @@ class HeartbeatPublisher:
                          vendor_specific_status_code=self.vendor_specific_status_code)
 
     def close(self) -> None:
-        """Closes the publisher and stops the internal task."""
+        """
+        Closes the publisher, the subscriber, and stops the internal task.
+        Subsequent invocations have no effect.
+        """
         if not self._closed:
             self._closed = True
+            self._subscriber.close()
             self._publisher.close()
             self._task.cancel()
 
@@ -191,6 +201,13 @@ class HeartbeatPublisher:
                 fun()
             except Exception as ex:
                 _logger.exception('%s got an unhandled exception from the pre-heartbeat handler: %s', self, ex)
+
+    async def _handle_received_heartbeat(self, msg: Heartbeat, metadata: pyuavcan.transport.TransferFrom) -> None:
+        local_node_id = self._presentation.transport.local_node_id
+        remote_node_id = metadata.source_node_id
+        if local_node_id is not None and remote_node_id is not None and local_node_id == remote_node_id:
+            _logger.error('NODE-ID CONFLICT: There is another node on the network that uses the same node-ID %d. '
+                          'Its latest heartbeat is %s with transfer metadata %s', remote_node_id, msg, metadata)
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, heartbeat=self.make_message(), publisher=self._publisher)
