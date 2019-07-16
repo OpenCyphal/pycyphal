@@ -126,7 +126,7 @@ class TransferReceiver:
 
 def _unittest_can_transfer_receiver_manual() -> None:
     priority = pyuavcan.transport.Priority.IMMEDIATE
-    source_node_id: typing.Optional[int] = 123
+    source_node_id = 123
     transfer_id_timeout_ns = 900
     can_identifier = 0xbadc0fe
 

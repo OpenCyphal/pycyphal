@@ -50,9 +50,9 @@ def _to_builtin_impl(obj:   typing.Union[CompositeObject, numpy.ndarray, str, bo
     elif isinstance(model, pydsdl.PrimitiveType):
         # The explicit conversions are needed to get rid of NumPy scalar types.
         if isinstance(model, pydsdl.IntegerType):
-            return int(obj)
+            return int(obj)                         # type: ignore
         elif isinstance(model, pydsdl.FloatType):
-            return float(obj)
+            return float(obj)                       # type: ignore
         elif isinstance(model, pydsdl.BooleanType):
             return bool(obj)
         else:

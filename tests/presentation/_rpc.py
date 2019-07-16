@@ -51,6 +51,7 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     assert client0._maybe_impl is client1._maybe_impl
     assert client0._maybe_impl is not client_dead._maybe_impl
     assert client0._maybe_impl.proxy_count == 2
+    assert client_dead._maybe_impl is not None
     assert client_dead._maybe_impl.proxy_count == 1
 
     with pytest.raises(TypeError):
@@ -82,14 +83,12 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
         last_metadata = metadata
         return response
 
-    # TODO: fix the type annotations!
-    server.serve_in_background(server_handler)  # type: ignore
+    server.serve_in_background(server_handler)
 
     last_request = uavcan.register.Access_0_1.Request(
         name=uavcan.register.Name_0_1('Hello world!'),
         value=uavcan.register.Value_0_1(string=uavcan.primitive.String_1_0('Profanity will not be tolerated')))
-    # TODO: fix the type annotations!
-    result = await client0.try_call_with_transfer(last_request)  # type: ignore
+    result = await client0.try_call_with_transfer(last_request)
     assert result is None, 'Expected to fail'
     assert last_metadata.client_node_id == 42
     assert last_metadata.transfer_id == 0
@@ -103,8 +102,7 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
         value=uavcan.register.Value_0_1(string=uavcan.primitive.String_1_0('hunter2'))
     )
     client0.priority = Priority.IMMEDIATE
-    # TODO: fix the type annotations!
-    result = await client0.try_call(last_request)  # type: ignore
+    result = await client0.try_call(last_request)
     assert repr(result) == repr(response)
     assert last_metadata.client_node_id == 42
     assert last_metadata.transfer_id == 1

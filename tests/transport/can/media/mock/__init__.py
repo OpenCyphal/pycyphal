@@ -4,4 +4,5 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._media import MockMedia, FrameCollector
+from ._media import MockMedia as MockMedia
+from ._media import FrameCollector as FrameCollector

@@ -3,7 +3,7 @@
 # A basic PyUAVCAN demo.
 #
 # Distributed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication. To the extent possible under law, the
-# UAVCAN Development Team has waived all copyright and related or neighboring rights to this source code.
+# UAVCAN Development Team has waived all copyright and related or neighboring rights to this work.
 #
 
 import sys
@@ -17,7 +17,6 @@ import pyuavcan
 import pyuavcan.transport.can
 import pyuavcan.transport.can.media.socketcan
 
-#
 # We will need a directory to store the generated Python packages in.
 #
 # It is perfectly acceptable to just use a random temp directory at every run, but the disadvantage of that approach
@@ -29,20 +28,15 @@ import pyuavcan.transport.can.media.socketcan
 #
 # Another sensible location for the generated package directory is somewhere in the application data directory,
 # like "~/.my-app/dsdl/{pyuavcan.__version__}/"; or, for Windows: "%APPDATA%/my-app/dsdl/{pyuavcan.__version__}/".
-#
 dsdl_generated_dir = pathlib.Path(tempfile.gettempdir(), 'dsdl-for-my-program', f'pyuavcan-v{pyuavcan.__version__}')
 dsdl_generated_dir.mkdir(parents=True, exist_ok=True)
-print('Generated DSDL packages will be stored in:', dsdl_generated_dir)
+print('Generated DSDL packages will be stored in:', dsdl_generated_dir, file=sys.stderr)
 
-#
 # We will need to import the packages once they are generated, so we should update the module import look-up path set.
 # If you're using an IDE for development, add this path to its look-up set as well for code completion to work.
-#
 sys.path.insert(0, str(dsdl_generated_dir))
 
-#
 # Now we can import our packages. If import fails, invoke the code generator, then import again.
-#
 try:
     import sirius_cyber_corp     # This is our vendor-specific root namespace. Custom data types.
     import pyuavcan.application  # The application module requires the standard types from the root namespace "uavcan".
@@ -138,6 +132,7 @@ class DemoApplication:
         This is the request handler for the linear least squares service. The request is passed in along with its
         metadata (the second argument); the response is returned back. We can also return None to instruct the library
         that this request need not be answered (as if the request was never received).
+        If this handler raises an exception, it will be suppressed and logged, and no response will be sent back.
         Notice that this is an async function.
         """
         # Publish the message like this. Here, we use await, blocking this task until the message is pushed down to
@@ -180,7 +175,7 @@ class DemoApplication:
         """
         This is another service handler, like the other one.
         """
-        print(f'Got an ExecuteCommand request {request} with metadata {metadata}')
+        print(f'EXECUTE COMMAND REQUEST {request} (with metadata {metadata})')
 
         if request.command == uavcan.node.ExecuteCommand_0_1.Request.COMMAND_POWER_OFF:
             async def do_delayed_shutdown() -> None:
@@ -190,12 +185,19 @@ class DemoApplication:
                 # This is convenient as it relieves the application from having to keep track of all objects.
                 self._node.close()
 
-            # We do a delayed shutdown in order to let the transport emit the response.
-            asyncio.ensure_future(do_delayed_shutdown())
+            asyncio.ensure_future(do_delayed_shutdown())  # Delay shutdown to let the transport emit the response.
             return uavcan.node.ExecuteCommand_0_1.Response(uavcan.node.ExecuteCommand_0_1.Response.STATUS_SUCCESS)
+
         elif request.command == uavcan.node.ExecuteCommand_0_1.Request.COMMAND_EMERGENCY_STOP:
             # We don't send any response because the emergency stop request commands us to stop operation immediately.
             raise SystemExit('Emergency stop request received')
+
+        elif request.command == 23456:
+            # This is a custom application-specific command. Just print the string parameter and do nothing.
+            parameter_text = request.parameter.tobytes().decode(errors='replace')
+            print('CUSTOM COMMAND PARAMETER:', parameter_text)
+            return uavcan.node.ExecuteCommand_0_1.Response(uavcan.node.ExecuteCommand_0_1.Response.STATUS_SUCCESS)
+
         else:
             # Command not supported.
             return uavcan.node.ExecuteCommand_0_1.Response(uavcan.node.ExecuteCommand_0_1.Response.STATUS_BAD_COMMAND)
@@ -207,7 +209,7 @@ class DemoApplication:
         A subscription message handler. This is also an async function, so we can block inside if necessary.
         The received message object is passed in along with the information about the transfer that delivered it.
         """
-        print('TEMPERATURE', msg.kelvin + 273.15, 'C')
+        print('TEMPERATURE', msg.kelvin - 273.15, 'C')
 
         await self._pub_diagnostic_record.publish(uavcan.diagnostic.Record_1_0(
             severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.TRACE),
@@ -223,7 +225,7 @@ if __name__ == '__main__':
     async def list_tasks_periodically() -> None:
         """Print active tasks periodically for demo purposes."""
         while True:
-            print('Active tasks:\n' + '\n'.join(f'  {t}' for t in asyncio.Task.all_tasks()))
+            print('Active tasks:\n' + '\n'.join(f'  {t}' for t in asyncio.Task.all_tasks()), file=sys.stderr)
             await asyncio.sleep(10)
 
     asyncio.get_event_loop().create_task(list_tasks_periodically())
@@ -231,4 +233,3 @@ if __name__ == '__main__':
     # The node and PyUAVCAN objects have created internal tasks, which we need to run now.
     # In this case we want to automatically stop and exit when no tasks are left to run.
     asyncio.get_event_loop().run_until_complete(asyncio.gather(*app_tasks))
-    print('Tasks have finished')

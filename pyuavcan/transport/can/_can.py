@@ -327,6 +327,6 @@ class CANTransport(pyuavcan.transport.Transport):
         else:
             raise pyuavcan.transport.ResourceClosedError(repr(self))
 
-    def _raise_if_closed(self):
+    def _raise_if_closed(self) -> None:
         if self._maybe_media is None:
             raise pyuavcan.transport.ResourceClosedError(repr(self))

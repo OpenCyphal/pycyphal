@@ -73,10 +73,8 @@ coverage report
 banner STATIC ANALYSIS
 
 # We typecheck after the tests have run in order to be able to typecheck the generated Python packages as well.
-# TODO: re-enable MyPy enforcement when it's fixed. MyPy 0.701 and 0.711 are broken.
 mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg pyuavcan tests .test_dsdl_generated \
-    || echo >&2 "!!! WARNING: MYPY HAS FAILED WITH STATUS $? BUT THE FAILURE IS IGNORED !!!"
-#   || die "MyPy returned $?"
+    || die "MyPy returned $?"
 
 pycodestyle pyuavcan tests || die "pycodestyle returned $?"
 

@@ -126,7 +126,7 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
         if len(a) != len(b) or a.dtype != b.dtype:  # pragma: no cover
             return False
         if isinstance(model.element_type, pydsdl.PrimitiveType):
-            return numpy.allclose(a, b, equal_nan=True)  # Drastic speedup for large arrays like images or point clouds
+            return bool(numpy.allclose(a, b, equal_nan=True))  # Speedup for large arrays like images or point clouds
         else:
             return all(itertools.starmap(functools.partial(are_close, model.element_type), zip(a, b)))
 
@@ -136,7 +136,7 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
             32: numpy.float32,
             64: numpy.float64,
         }[model.bit_length]
-        return numpy.allclose(t(a), t(b), equal_nan=True)
+        return bool(numpy.allclose(t(a), t(b), equal_nan=True))
 
     else:
-        return numpy.allclose(a, b)
+        return bool(numpy.allclose(a, b))

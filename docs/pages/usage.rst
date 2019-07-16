@@ -3,8 +3,8 @@
 Usage
 ============
 
-Simple demo application
------------------------
+Basic usage demo
+----------------
 
-.. literalinclude:: ../demo.py
+.. literalinclude:: /../tests/demo/basic_usage.py
    :linenos:
