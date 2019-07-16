@@ -220,15 +220,13 @@ if __name__ == '__main__':
     app = DemoApplication()
     app_tasks = asyncio.Task.all_tasks()
 
-    async def list_tasks() -> None:
+    async def list_tasks_periodically() -> None:
+        """Print active tasks periodically for demo purposes."""
         while True:
-            print('Active tasks:')
-            for t in asyncio.Task.all_tasks():
-                print('\t', t)
+            print('Active tasks:\n' + '\n'.join(f'  {t}' for t in asyncio.Task.all_tasks()))
             await asyncio.sleep(10)
 
-
-    asyncio.get_event_loop().create_task(list_tasks())
+    asyncio.get_event_loop().create_task(list_tasks_periodically())
 
     # The node and PyUAVCAN objects have created internal tasks, which we need to run now.
     # In this case we want to automatically stop and exit when no tasks are left to run.

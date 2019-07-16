@@ -13,6 +13,7 @@ PyUAVCAN consists of a Python library (package) and a simple :abbr:`CLI (command
 tool for basic diagnostics and shell script automation.
 
 The reader should be familiar with the `UAVCAN specification <https://uavcan.org/specification>`_
+and `asynchronous programming in Python <https://docs.python.org/3/library/asyncio-task.html>`_
 to understand this documentation.
 
 The library consists of several loosely coupled submodules,
