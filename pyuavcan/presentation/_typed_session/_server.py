@@ -4,10 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-# TODO: UNDISABLE WHEN THIS IS RESOLVED: https://github.com/python/mypy/issues/7121
-# TODO: SEE ALSO https://github.com/UAVCAN/pyuavcan/issues/61
-# mypy: ignore-errors
-
 from __future__ import annotations
 import time
 import typing
@@ -58,7 +54,16 @@ class Server(ServiceTypedSession[ServiceClass]):
     """
     At most one task can use the server at any given time.
     There can be at most one server instance per data specifier.
+
+    .. note::
+
+        Normally we should use correct generic types ``ServiceClass.Request`` and ``ServiceClass.Response`` in the API;
+        however, MyPy does not support that yet. Please find the context at https://github.com/python/mypy/issues/7121
+        and https://github.com/UAVCAN/pyuavcan/issues/61.
+        We use a tentative workaround for now to silence bogus type errors. When the missing logic is implemented
+        in MyPy, this should be switched back to proper implementation.
     """
+
     def __init__(self,
                  dtype:                            typing.Type[ServiceClass],
                  input_transport_session:          pyuavcan.transport.InputSession,
@@ -81,7 +86,7 @@ class Server(ServiceTypedSession[ServiceClass]):
 
     # ----------------------------------------  MAIN API  ----------------------------------------
 
-    def serve_in_background(self, handler: ServiceRequestHandler[ServiceClass.Request, ServiceClass.Response]) -> None:
+    def serve_in_background(self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass]) -> None:
         """
         Starts a new task and uses that to run the server in the background. The task will be stopped when the server
         is close()d.
@@ -113,7 +118,7 @@ class Server(ServiceTypedSession[ServiceClass]):
         self._maybe_task = self._loop.create_task(task_function())
 
     async def serve_for(self,
-                        handler: ServiceRequestHandler[ServiceClass.Request, ServiceClass.Response],
+                        handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
                         timeout: float) -> None:
         """
         Listen for requests for the specified time or until the instance is closed, then exit.
@@ -125,7 +130,7 @@ class Server(ServiceTypedSession[ServiceClass]):
         return await self.serve_until(handler, monotonic_deadline=time.monotonic() + timeout)
 
     async def serve_until(self,
-                          handler:            ServiceRequestHandler[ServiceClass.Request, ServiceClass.Response],
+                          handler:            ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
                           monotonic_deadline: float) -> None:
         """
         This is like serve_for() except that we exit normally after the specified monotonic deadline (i.e., the
@@ -135,7 +140,8 @@ class Server(ServiceTypedSession[ServiceClass]):
         # it might be that the transfer ID that we obtained from the request may be invalid for some of the transports.
         # This is why we can't reliably aggregate redundant transports with different transfer ID overflow parameters.
         while not self._closed:
-            out = await self._try_receive_until(monotonic_deadline)
+            out: typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, ServiceRequestMetadata]] \
+                = await self._try_receive_until(monotonic_deadline)
             if out is None:
                 break           # Timed out.
 
@@ -143,7 +149,7 @@ class Server(ServiceTypedSession[ServiceClass]):
             # This allows us to minimize the request processing time.
             self._served_request_count += 1
             request, meta = out
-            response: typing.Optional[ServiceClass.Response] = None  # Fallback state
+            response: typing.Optional[ServiceResponseClass] = None  # Fallback state
             assert isinstance(request, self._dtype.Request), 'Internal protocol violation'
             try:
                 response = await handler(request, meta)  # type: ignore
@@ -152,7 +158,7 @@ class Server(ServiceTypedSession[ServiceClass]):
                         f'The application request handler has returned an invalid response: '
                         f'expected an instance of {self._dtype.Response} or None, '
                         f'found {type(response)} instead. '
-                        f'The corresponding request was {request} with metadata {meta}')
+                        f'The corresponding request was {request} with metadata {meta}.')
             except asyncio.CancelledError:
                 raise
             except Exception as ex:
@@ -199,7 +205,7 @@ class Server(ServiceTypedSession[ServiceClass]):
             self._finalizer((self._input_transport_session, *self._output_transport_sessions.values()))
 
     async def _try_receive_until(self, monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[ServiceClass.Request, ServiceRequestMetadata]]:
+            -> typing.Optional[typing.Tuple[ServiceRequestClass, ServiceRequestMetadata]]:
         while True:
             transfer = await self._input_transport_session.try_receive(monotonic_deadline)
             if transfer is None:
@@ -218,7 +224,7 @@ class Server(ServiceTypedSession[ServiceClass]):
                 self._malformed_request_count += 1
 
     @staticmethod
-    async def _do_send(response: ServiceClass.Response,
+    async def _do_send(response: ServiceResponseClass,
                        metadata: ServiceRequestMetadata,
                        session:  pyuavcan.transport.OutputSession) -> None:
         timestamp = pyuavcan.transport.Timestamp.now()

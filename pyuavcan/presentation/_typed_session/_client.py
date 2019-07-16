@@ -4,10 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-# TODO: UNDISABLE WHEN THIS IS RESOLVED: https://github.com/python/mypy/issues/7121
-# TODO: SEE ALSO https://github.com/UAVCAN/pyuavcan/issues/61
-# mypy: ignore-errors
-
 from __future__ import annotations
 import time
 import typing
@@ -43,6 +39,14 @@ class Client(ServiceTypedSession[ServiceClass]):
     share the same client instance across different tasks. ALl client instances sharing the same session specifier
     also share the same underlying implementation object which is reference counted and destroyed automatically when
     the last client instance is closed.
+
+    .. note::
+
+        Normally we should use correct generic types ``ServiceClass.Request`` and ``ServiceClass.Response`` in the API;
+        however, MyPy does not support that yet. Please find the context at https://github.com/python/mypy/issues/7121
+        and https://github.com/UAVCAN/pyuavcan/issues/61.
+        We use a tentative workaround for now to silence bogus type errors. When the missing logic is implemented
+        in MyPy, this should be switched back to proper implementation.
     """
 
     DEFAULT_RESPONSE_TIMEOUT = 1.0       # Default timeout per the Specification
@@ -59,15 +63,15 @@ class Client(ServiceTypedSession[ServiceClass]):
         self._response_timeout = self.DEFAULT_RESPONSE_TIMEOUT
         self._priority = DEFAULT_PRIORITY
 
-    async def try_call(self, request: ServiceClass.Request) -> typing.Optional[ServiceClass.Response]:
+    async def try_call(self, request: pyuavcan.dsdl.CompositeObject) -> typing.Optional[pyuavcan.dsdl.CompositeObject]:
         """
         A simplified version of try_call_with_transfer() that simply returns the response object without any metadata.
         """
         out = await self.try_call_with_transfer(request=request)
         return out[0] if out is not None else None
 
-    async def try_call_with_transfer(self, request: ServiceClass.Request) \
-            -> typing.Optional[typing.Tuple[ServiceClass.Response, pyuavcan.transport.TransferFrom]]:
+    async def try_call_with_transfer(self, request: pyuavcan.dsdl.CompositeObject) \
+            -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         """
         Sends the request to the remote server using the pre-configured priority and response timeout parameters.
         Returns the response along with its transfer in the case of successful completion; if the server did not
@@ -178,15 +182,16 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         self._closed = False
         self._proxy_count = 0
         self._response_futures_by_transfer_id: \
-            typing.Dict[int, asyncio.Future[typing.Tuple[ServiceClass.Response, pyuavcan.transport.TransferFrom]]] = {}
+            typing.Dict[int, asyncio.Future[typing.Tuple[pyuavcan.dsdl.CompositeObject,
+                                                         pyuavcan.transport.TransferFrom]]] = {}
 
         self._task = loop.create_task(self._task_function())
 
     async def try_call_with_transfer(self,
-                                     request:          ServiceClass.Request,
+                                     request:          pyuavcan.dsdl.CompositeObject,
                                      priority:         pyuavcan.transport.Priority,
                                      response_timeout: float) \
-            -> typing.Optional[typing.Tuple[ServiceClass.Response, pyuavcan.transport.TransferFrom]]:
+            -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         async with self._lock:
             self._raise_if_closed()
 
@@ -216,7 +221,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
             response, transfer = await asyncio.wait_for(future, timeout=response_timeout, loop=self._loop)
             assert isinstance(response, self.dtype.Response)
             assert isinstance(transfer, pyuavcan.transport.TransferFrom)
-            return response, transfer  # type: ignore
+            return response, transfer
         except asyncio.TimeoutError:
             return None
         finally:
@@ -249,9 +254,13 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         pass
 
     async def _do_send(self,
-                       request:     ServiceClass.Request,
+                       request:     pyuavcan.dsdl.CompositeObject,
                        transfer_id: int,
                        priority:    pyuavcan.transport.Priority) -> None:
+        if not isinstance(request, self.dtype.Request):
+            raise ValueError(f'Invalid request object: expected an instance of {self.dtype.Request}, '
+                             f'got {type(request)} instead.')
+
         timestamp = pyuavcan.transport.Timestamp.now()
         fragmented_payload = list(pyuavcan.dsdl.serialize(request))
         transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
@@ -280,7 +289,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                                  response, transfer, list(self._response_futures_by_transfer_id.keys()))
                     self.unexpected_response_count += 1
                 else:
-                    fut.set_result((response, transfer))  # type: ignore
+                    fut.set_result((response, transfer))
         except asyncio.CancelledError:
             _logger.info('Cancelling the task of %s', self)
         except Exception as ex:

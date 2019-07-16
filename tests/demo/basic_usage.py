@@ -61,9 +61,9 @@ except ImportError:
 
 # Import other namespaces we're planning to use. Nested namespaces are not auto-imported, so in order to reach,
 # say, "uavcan.node.Heartbeat", you have to do "import uavcan.node".
-import uavcan.node
-import uavcan.diagnostic
-import uavcan.si.temperature
+import uavcan.node              # noqa E402
+import uavcan.diagnostic        # noqa E402
+import uavcan.si.temperature    # noqa E402
 
 
 class DemoApplication:
