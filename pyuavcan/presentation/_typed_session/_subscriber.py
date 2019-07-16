@@ -13,11 +13,12 @@ import dataclasses
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessageTypedSession, MessageClass, TypedSessionFinalizer
+from ._base import MessageTypedSession, MessageClass, TypedSessionFinalizer, Closable
 from ._error import TypedSessionClosedError
 
 
-_RECEIVE_TIMEOUT = 10
+# Shouldn't be too large as this value defines how quickly the task will detect that the underlying transport is closed.
+_RECEIVE_TIMEOUT = 1
 
 
 _logger = logging.getLogger(__name__)
@@ -126,12 +127,14 @@ class Subscriber(MessageTypedSession[MessageClass]):
         """
         Blocks forever until a valid message is received. The received message will be returned along with the
         transfer which delivered it.
+
+        If the underlying transport session is closed while the task is blocked inside,
+        raises :class:`pyuavcan.transport.ResourceClosedError` shortly after the session is closed.
         """
-        self._raise_if_closed_or_failed()
-        message, transfer = await self._rx.queue.get()
-        assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
-        assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
-        return message, transfer
+        while True:
+            out = await self.try_receive_with_transfer_for(_RECEIVE_TIMEOUT)
+            if out is not None:
+                return out
 
     async def try_receive_with_transfer_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
@@ -171,9 +174,13 @@ class Subscriber(MessageTypedSession[MessageClass]):
     # ----------------------------------------  ITERATOR API  ----------------------------------------
 
     def __aiter__(self) -> Subscriber[MessageClass]:
+        """Iterator API support."""
         return self
 
     async def __anext__(self) -> typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]:
+        """
+        This is just a wrapper over :meth:`receive_with_transfer`.
+        """
         try:
             return await self.receive_with_transfer()
         except pyuavcan.transport.ResourceClosedError:
@@ -252,7 +259,7 @@ class _Listener(typing.Generic[MessageClass]):
             self.overrun_count += 1
 
 
-class SubscriberImpl(typing.Generic[MessageClass]):
+class SubscriberImpl(Closable, typing.Generic[MessageClass]):
     """
     This class implements the actual reception and deserialization logic. It is not visible to the user and is not
     part of the API. There is at most one instance per session specifier. It may be shared across multiple users
@@ -303,6 +310,13 @@ class SubscriberImpl(typing.Generic[MessageClass]):
         for rx in self._listeners:
             rx.exception = exception
 
+    def close(self) -> None:
+        self._closed = True
+        try:
+            self._task.cancel()         # Force the task to be stopped ASAP without waiting for timeout
+        except Exception as ex:
+            _logger.debug('Explicit close: could not cancel the task %r: %s', self._task, ex, exc_info=True)
+
     def add_listener(self, rx: _Listener[MessageClass]) -> None:
         self._raise_if_closed()
         self._listeners.append(rx)
@@ -312,7 +326,10 @@ class SubscriberImpl(typing.Generic[MessageClass]):
         self._listeners.remove(rx)
         if len(self._listeners) == 0:
             self._closed = True
-            self._task.cancel()         # Force the task to be stopped ASAP without waiting for timeout
+            try:
+                self._task.cancel()         # Force the task to be stopped ASAP without waiting for timeout
+            except Exception as ex:
+                _logger.debug('Listener removal: could not cancel the task %r: %s', self._task, ex, exc_info=True)
 
     def _raise_if_closed(self) -> None:
         if self._closed:

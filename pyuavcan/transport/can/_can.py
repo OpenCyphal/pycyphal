@@ -157,6 +157,12 @@ class CANTransport(pyuavcan.transport.Transport):
         return list(self._output_registry.values())
 
     def close(self) -> None:
+        for s in (*self.input_sessions, *self.output_sessions):
+            try:
+                s.close()
+            except Exception as ex:
+                _logger.exception('Failed to close session %r: %s', s, ex)
+
         media, self._maybe_media = self._maybe_media, None
         if media is not None:  # Double-close is NOT an error!
             media.close()
@@ -167,6 +173,8 @@ class CANTransport(pyuavcan.transport.Transport):
     def get_input_session(self,
                           specifier:        pyuavcan.transport.SessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANInputSession:
+        self._raise_if_closed()
+
         def finalizer() -> None:
             self._input_dispatch_table.remove(specifier)
             self._reconfigure_acceptance_filters()
@@ -184,6 +192,8 @@ class CANTransport(pyuavcan.transport.Transport):
     def get_output_session(self,
                            specifier:        pyuavcan.transport.SessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANOutputSession:
+        self._raise_if_closed()
+
         try:
             out = self._output_registry[specifier]
             assert out.specifier == specifier
@@ -315,4 +325,8 @@ class CANTransport(pyuavcan.transport.Transport):
         if out is not None:
             return out
         else:
+            raise pyuavcan.transport.ResourceClosedError(repr(self))
+
+    def _raise_if_closed(self):
+        if self._maybe_media is None:
             raise pyuavcan.transport.ResourceClosedError(repr(self))

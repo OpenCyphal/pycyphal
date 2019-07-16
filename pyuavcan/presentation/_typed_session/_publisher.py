@@ -11,7 +11,7 @@ import asyncio
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessageTypedSession, OutgoingTransferIDCounter, MessageClass
+from ._base import MessageTypedSession, OutgoingTransferIDCounter, MessageClass, Closable
 from ._base import DEFAULT_PRIORITY, TypedSessionFinalizer
 from ._error import TypedSessionClosedError
 
@@ -99,7 +99,7 @@ class Publisher(MessageTypedSession[MessageClass]):
             self._maybe_impl.remove_proxy()
 
 
-class PublisherImpl(typing.Generic[MessageClass]):
+class PublisherImpl(Closable, typing.Generic[MessageClass]):
     """
     The publisher implementation. There is at most one such implementation per session specifier. It may be shared
     across multiple users with the help of the proxy class. When the last proxy is closed or garbage collected,
@@ -155,6 +155,10 @@ class PublisherImpl(typing.Generic[MessageClass]):
         """Testing facilitation."""
         assert self._proxy_count >= 0
         return self._proxy_count
+
+    def close(self) -> None:
+        # This is a no-op - we manage closure though reference counting only.
+        pass
 
     def _raise_if_closed(self) -> None:
         if self._closed:

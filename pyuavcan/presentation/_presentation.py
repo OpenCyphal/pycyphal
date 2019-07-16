@@ -7,12 +7,11 @@
 from __future__ import annotations
 import typing
 import logging
-import asyncio
 import collections
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._typed_session import OutgoingTransferIDCounter, TypedSessionFinalizer
+from ._typed_session import OutgoingTransferIDCounter, TypedSessionFinalizer, Closable
 from ._typed_session import Publisher, PublisherImpl
 from ._typed_session import Subscriber, SubscriberImpl
 from ._typed_session import Client, ClientImpl
@@ -44,12 +43,13 @@ class Presentation:
 
     def __init__(self, transport: pyuavcan.transport.Transport) -> None:
         self._transport = transport
+        self._closed = False
 
         self._outgoing_transfer_id_counter_registry: \
             typing.DefaultDict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = \
             collections.defaultdict(OutgoingTransferIDCounter)
 
-        self._typed_session_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, typing.Any] = {}
+        self._typed_session_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, Closable] = {}
 
     @property
     def transport(self) -> pyuavcan.transport.Transport:
@@ -72,6 +72,8 @@ class Presentation:
         """
         if issubclass(dtype, pyuavcan.dsdl.ServiceObject):
             raise TypeError(f'Not a message type: {dtype}')
+
+        self._raise_if_closed()
 
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
@@ -116,6 +118,8 @@ class Presentation:
         if issubclass(dtype, pyuavcan.dsdl.ServiceObject):
             raise TypeError(f'Not a message type: {dtype}')
 
+        self._raise_if_closed()
+
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
         try:
@@ -148,6 +152,8 @@ class Presentation:
         """
         if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
             raise TypeError(f'Not a service type: {dtype}')
+
+        self._raise_if_closed()
 
         def transfer_id_modulo_factory() -> int:
             # This might be a tad slow because the protocol parameters may take some time to compute?
@@ -188,6 +194,8 @@ class Presentation:
         """
         if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
             raise TypeError(f'Not a service type: {dtype}')
+
+        self._raise_if_closed()
 
         def output_transport_session_factory(client_node_id: int) -> pyuavcan.transport.OutputSession:
             _logger.info('%r has requested a new output session to client node %s', impl, client_node_id)
@@ -260,8 +268,15 @@ class Presentation:
 
     def close(self) -> None:
         """
-        Closes the underlying transport instance. Invalidates all existing session instances.
+        Closes the underlying transport instance and all existing session instances.
         """
+        for s in list(self._typed_session_registry.values()):
+            try:
+                s.close()
+            except Exception as ex:
+                _logger.exception('%r.close() could not close session %r: %s', self, s, ex)
+
+        self._closed = True
         self._transport.close()
 
     @property
@@ -269,7 +284,10 @@ class Presentation:
         """
         A view of the active session instances that are currently open.
         """
-        return list(self._typed_session_registry.keys())
+        if not self._closed:
+            return list(self._typed_session_registry.keys())
+        else:
+            return []
 
     def _make_finalizer(self, session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
         done = False
@@ -303,8 +321,11 @@ class Presentation:
     def _make_payload_metadata(dtype: typing.Type[pyuavcan.dsdl.CompositeObject]) -> pyuavcan.transport.PayloadMetadata:
         model = pyuavcan.dsdl.get_model(dtype)
         max_size_bytes = pyuavcan.dsdl.get_max_serialized_representation_size_bytes(dtype)
-        return pyuavcan.transport.PayloadMetadata(compact_data_type_id=model.compact_data_type_id,
-                                                  max_size_bytes=max_size_bytes)
+        return pyuavcan.transport.PayloadMetadata(data_type_hash=model.data_type_hash, max_size_bytes=max_size_bytes)
+
+    def _raise_if_closed(self) -> None:
+        if self._closed:
+            raise pyuavcan.transport.ResourceClosedError(repr(self))
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, transport=self.transport, sessions=self.sessions)

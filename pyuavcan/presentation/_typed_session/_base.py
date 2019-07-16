@@ -37,7 +37,20 @@ class OutgoingTransferIDCounter:
         self._value = int(value)
 
 
-class TypedSession(abc.ABC, typing.Generic[TypeClass]):
+class Closable(abc.ABC):
+    """
+    Base class for closable session resources.
+    """
+
+    @abc.abstractmethod
+    def close(self) -> None:
+        """
+        Invalidates the object and closes the underlying resources if necessary.
+        """
+        raise NotImplementedError
+
+
+class TypedSession(Closable, typing.Generic[TypeClass]):
     @property
     @abc.abstractmethod
     def dtype(self) -> typing.Type[TypeClass]:
@@ -51,13 +64,6 @@ class TypedSession(abc.ABC, typing.Generic[TypeClass]):
     def port_id(self) -> int:
         """
         The subject/service ID of the underlying transport session instance.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def close(self) -> None:
-        """
-        Invalidates the object and closes the underlying resources if necessary.
         """
         raise NotImplementedError
 

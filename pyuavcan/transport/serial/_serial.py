@@ -39,7 +39,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         uint5   version                 # Always zero. Discard the frame if not.
         uint56  transfer ID
 
-        uint64  compact data type ID
+        uint64  data type hash
 
         uint16  data specifier          # Like IEEE 802.15.4.
         uint12  destination node ID     # 0xFFF = broadcast.

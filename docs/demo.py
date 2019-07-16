@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+#
+# A basic PyUAVCAN demo.
+#
+# Distributed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication. To the extent possible under law, the
+# UAVCAN Development Team has waived all copyright and related or neighboring rights to this source code.
+#
 
 import sys
 import typing
@@ -7,6 +13,9 @@ import asyncio
 import tempfile
 import importlib
 import pyuavcan
+# Explicitly import transports and media sub-layers that we're going to use.
+import pyuavcan.transport.can
+import pyuavcan.transport.can.media.socketcan
 
 #
 # We will need a directory to store the generated Python packages in.
@@ -43,9 +52,7 @@ except ImportError:
     # The paths are hard-coded here for the sake of conciseness.
     pyuavcan.dsdl.generate_package(package_parent_directory=dsdl_generated_dir,
                                    root_namespace_directory='../tests/dsdl/namespaces/sirius_cyber_corp/',
-                                   lookup_directories=[
-                                       '../tests/public_regulated_data_types/uavcan',
-                                   ])
+                                   lookup_directories=['../tests/public_regulated_data_types/uavcan'])
 
     # Generate the standard namespace. The order actually doesn't matter.
     pyuavcan.dsdl.generate_package(package_parent_directory=dsdl_generated_dir,
@@ -58,84 +65,172 @@ except ImportError:
     import sirius_cyber_corp
     import pyuavcan.application
 
-
-async def _serve_linear_least_squares_request(request:  sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request,
-                                              metadata: pyuavcan.presentation.ServiceRequestMetadata) \
-        -> typing.Optional[sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response]:
-    """
-    This is the request handler for the linear least squares service. The request is passed in along with its
-    metadata (the second argument); the response is returned back. We can also return None to instruct the library
-    that this request need not be answered (as if the request was never received).
-    Notice that this is an async function.
-    """
-    # TODO: instead of printing, publish diagnostic records.
-    print(f'Least squares request from {metadata.client_node_id} received at {metadata.timestamp.system} '
-          f'with priority {metadata.priority} and transfer-ID {metadata.transfer_id}.')
-    sum_x = sum(map(lambda p: p.x, request.points))
-    sum_y = sum(map(lambda p: p.y, request.points))
-    a = sum_x * sum_y - len(request.points) * sum(map(lambda p: p.x * p.y, request.points))
-    b = sum_x * sum_x - len(request.points) * sum(map(lambda p: p.x ** 2, request.points))
-    try:
-        slope = a / b
-        y_intercept = (sum_y - slope * sum_x) / len(request.points)
-        print(f'Solution for {request.points}: slope={slope}, y_intercept={y_intercept}')
-        return sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response(slope=slope, y_intercept=y_intercept)
-    except ZeroDivisionError:
-        print(f'There is no solution for input set: {request.points}')
-        # We return None, no response will be sent back. This practice is actually discouraged; we do it here
-        # only to demonstrate the library capabilities.
-        return None
+# Import other namespaces we're planning to use. Nested namespaces are not auto-imported, so in order to reach,
+# say, "uavcan.node.Heartbeat", you have to do "import uavcan.node".
+import uavcan.node
+import uavcan.diagnostic
+import uavcan.si.temperature
 
 
-def main() -> None:
-    import pyuavcan.transport.can
-    import pyuavcan.transport.can.media.socketcan
+class DemoApplication:
+    def __init__(self):
+        # Make sure to initialize the virtual CAN interface. For example (run as root):
+        #   modprobe vcan
+        #   ip link add dev vcan0 type vcan
+        #   ip link set up vcan0
+        #   ip link set vcan0 mtu 72
+        #   ifconfig vcan0 up
+        # CAN interfaces can me monitored using can-utils:
+        #   candump -decaxta any
+        media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=64)
+        transport = pyuavcan.transport.can.CANTransport(media)
 
-    # Make sure to initialize the virtual CAN interface. For example (run as root):
-    #   modprobe vcan
-    #   ip link add dev vcan0 type vcan
-    #   ip link set up vcan0
-    #   ip link set vcan0 mtu 72
-    #   ifconfig vcan0 up
-    media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=64)
-    transport = pyuavcan.transport.can.CANTransport(media)
+        # Populate the node info for use with the Node class. Please see the DSDL definition of uavcan.node.GetInfo.
+        node_info = uavcan.node.GetInfo_0_1.Response(
+            # Version of the protocol supported by the library, and hence by our node.
+            protocol_version=uavcan.node.Version_1_0(*pyuavcan.UAVCAN_SPECIFICATION_VERSION),
+            # There is a similar field for hardware version, but we don't populate it because it's a software-only node.
+            software_version=uavcan.node.Version_1_0(major=1, minor=0),
+            # The name of the local node. Should be a reversed Internet domain name, like a Java package.
+            name='org.uavcan.pyuavcan.demo',
+            # We've left the optional fields default-initialized here.
+        )
 
-    # Populate the node info for use with the Node class. Please see the DSDL type definition of uavcan.node.GetInfo.
-    import uavcan.node
-    node_info = uavcan.node.GetInfo_0_1.Response(
-        # Version of the protocol supported by the library, and hence by our node.
-        protocol_version=uavcan.node.Version_1_0(*pyuavcan.UAVCAN_SPECIFICATION_VERSION),
-        # There is a similar field for hardware version, but we don't populate it because it's a software-only node.
-        software_version=uavcan.node.Version_1_0(major=1, minor=0),
-        # The name of the local node. Should be a reversed Internet domain name, like a Java package.
-        name='org.uavcan.pyuavcan.demo',
-        # We've left the optional fields default-initialized here.
-    )
+        # That's it, here is our node, immediately ready to be used. It will serve GetInfo requests and publish its
+        # heartbeat automatically (unless it's anonymous). Read the source code of the Node class for more details.
+        self._node = pyuavcan.application.Node(transport, node_info)
 
-    # That's it, here is our node, immediately ready to be used. It will serve GetInfo requests and publish its
-    # heartbeat automatically (unless it's anonymous). Read the source code of the Node class for more details.
-    node = pyuavcan.application.Node(transport, node_info)
+        # Now we can create our session objects as necessary. They can be created or destroyed later at any point
+        # after initialization. It's not necessary to set everything up during the initialization.
+        srv_least_squares = self._node.get_server(sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0, 123)
+        # Will run until self._node is close()d:
+        srv_least_squares.serve_in_background(self._serve_linear_least_squares_request)
 
-    # Now we can create our session objects as necessary. They can be created or destroyed later at any point
-    # after initialization. It's not necessary to set everything up during the initialization.
-    least_squares_server = node.get_server(sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0, 123)
-    least_squares_server.serve_in_background(_serve_linear_least_squares_request)  # Will run until node is close()d.
+        # Create another server using shorthand for fixed port ID. We could also use it with an application-specific
+        # service-ID as well, of course:
+        #   get_server(uavcan.node.ExecuteCommand_0_1, 42).serve_in_background(self._serve_execute_command)
+        self._node.get_server_with_fixed_service_id(
+            uavcan.node.ExecuteCommand_0_1
+        ).serve_in_background(self._serve_execute_command)
 
-    # By default, the node operates in anonymous mode, without a node-ID.
-    # In this mode, some of the protocol features are unavailable (read Specification for more info).
-    # For example, anonymous node cannot be a server, since without an ID it cannot be addressed.
-    assert node.local_node_id is None
+        # By default, the node operates in anonymous mode, without a node-ID.
+        # In this mode, some of the protocol features are unavailable (read Specification for more info).
+        # For example, anonymous node cannot be a server, since without an ID it cannot be addressed.
+        assert self._node.local_node_id is None
 
-    # Here, we assign a node-ID statically, because this is a simplified demo. Most applications would need this
-    # to be configurable, some may support the plug-and-play node-ID allocation protocol.
-    node.set_local_node_id(42)
+        # Here, we assign a node-ID statically, because this is a simplified demo. Most applications would need this
+        # to be configurable, some may support the plug-and-play node-ID allocation protocol.
+        self._node.set_local_node_id(42)
 
-    # The node and the server objects have created internal tasks, which we need to run now.
-    asyncio.get_event_loop().run_forever()
+        # We'll be publishing diagnostic messages using this publisher instance. The method we use is a shortcut for:
+        #   make_publisher(uavcan.diagnostic.Record_1_0, pyuavcan.dsdl.get_fixed_port_id(uavcan.diagnostic.Record_1_0))
+        self._pub_diagnostic_record = self._node.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 
-    # Don't forget to close the node. This will dispose the underlying transport and media resources as well.
-    node.close()
+        # A message subscription.
+        self._sub_temperature = self._node.make_subscriber(uavcan.si.temperature.Scalar_1_0, 12345)
+        self._sub_temperature.receive_in_background(self._handle_temperature)
+
+    async def _serve_linear_least_squares_request(self,
+                                                  request:  sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request,
+                                                  metadata: pyuavcan.presentation.ServiceRequestMetadata) \
+            -> typing.Optional[sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response]:
+        """
+        This is the request handler for the linear least squares service. The request is passed in along with its
+        metadata (the second argument); the response is returned back. We can also return None to instruct the library
+        that this request need not be answered (as if the request was never received).
+        Notice that this is an async function.
+        """
+        # Publish the message like this. Here, we use await, blocking this task until the message is pushed down to
+        # the media layer.
+        diagnostic_msg = uavcan.diagnostic.Record_1_0(
+            severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.DEBUG),
+            text=f'Least squares request from {metadata.client_node_id} time={metadata.timestamp.system} '
+                 f'tid={metadata.transfer_id} prio={metadata.priority}',
+        )
+        await self._pub_diagnostic_record.publish(diagnostic_msg)
+
+        # This is just the business logic.
+        sum_x = sum(map(lambda p: p.x, request.points))
+        sum_y = sum(map(lambda p: p.y, request.points))
+        a = sum_x * sum_y - len(request.points) * sum(map(lambda p: p.x * p.y, request.points))
+        b = sum_x * sum_x - len(request.points) * sum(map(lambda p: p.x ** 2, request.points))
+        try:
+            slope = a / b
+            y_intercept = (sum_y - slope * sum_x) / len(request.points)
+        except ZeroDivisionError:
+            # The method "publish_soon()" launches a background task instead of waiting for the operation to complete.
+            self._pub_diagnostic_record.publish_soon(uavcan.diagnostic.Record_1_0(
+                severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.WARNING),
+                text=f'There is no solution for input set: {request.points}',
+            ))
+            # We return None, no response will be sent back. This practice is actually discouraged; we do it here
+            # only to demonstrate the library capabilities.
+            return None
+        else:
+            self._pub_diagnostic_record.publish_soon(uavcan.diagnostic.Record_1_0(
+                severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
+                text=f'Solution for {request.points}: slope={slope}, y_intercept={y_intercept}',
+            ))
+            return sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response(slope=slope, y_intercept=y_intercept)
+
+    async def _serve_execute_command(self,
+                                     request:  uavcan.node.ExecuteCommand_0_1.Request,
+                                     metadata: pyuavcan.presentation.ServiceRequestMetadata) \
+            -> uavcan.node.ExecuteCommand_0_1.Response:
+        """
+        This is another service handler, like the other one.
+        """
+        print(f'Got an ExecuteCommand request {request} with metadata {metadata}')
+
+        if request.command == uavcan.node.ExecuteCommand_0_1.Request.COMMAND_POWER_OFF:
+            async def do_delayed_shutdown() -> None:
+                await asyncio.sleep(0.1)
+                # This will close the underlying presentation, transport, and media layer resources.
+                # All pending tasks such as serve_in_background() will notice this and exit automatically.
+                # This is convenient as it relieves the application from having to keep track of all objects.
+                self._node.close()
+
+            # We do a delayed shutdown in order to let the transport emit the response.
+            asyncio.ensure_future(do_delayed_shutdown())
+            return uavcan.node.ExecuteCommand_0_1.Response(uavcan.node.ExecuteCommand_0_1.Response.STATUS_SUCCESS)
+        elif request.command == uavcan.node.ExecuteCommand_0_1.Request.COMMAND_EMERGENCY_STOP:
+            # We don't send any response because the emergency stop request commands us to stop operation immediately.
+            raise SystemExit('Emergency stop request received')
+        else:
+            # Command not supported.
+            return uavcan.node.ExecuteCommand_0_1.Response(uavcan.node.ExecuteCommand_0_1.Response.STATUS_BAD_COMMAND)
+
+    async def _handle_temperature(self,
+                                  msg:      uavcan.si.temperature.Scalar_1_0,
+                                  metadata: pyuavcan.transport.TransferFrom) -> None:
+        """
+        A subscription message handler. This is also an async function, so we can block inside if necessary.
+        The received message object is passed in along with the information about the transfer that delivered it.
+        """
+        print('TEMPERATURE', msg.kelvin + 273.15, 'C')
+
+        await self._pub_diagnostic_record.publish(uavcan.diagnostic.Record_1_0(
+            severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.TRACE),
+            text=f'Temperature {msg} from {metadata.source_node_id} '
+                 f'time={metadata.timestamp.system} tid={metadata.transfer_id} prio={metadata.priority}',
+        ))
 
 
 if __name__ == '__main__':
-    main()
+    app = DemoApplication()
+    app_tasks = asyncio.Task.all_tasks()
+
+    async def list_tasks() -> None:
+        while True:
+            print('Active tasks:')
+            for t in asyncio.Task.all_tasks():
+                print('\t', t)
+            await asyncio.sleep(10)
+
+
+    asyncio.get_event_loop().create_task(list_tasks())
+
+    # The node and PyUAVCAN objects have created internal tasks, which we need to run now.
+    # In this case we want to automatically stop and exit when no tasks are left to run.
+    asyncio.get_event_loop().run_until_complete(asyncio.gather(*app_tasks))
+    print('Tasks have finished')

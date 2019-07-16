@@ -16,12 +16,13 @@ import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import ServiceClass, ServiceTypedSession, TypedSessionFinalizer, OutgoingTransferIDCounter
+from ._base import ServiceClass, ServiceTypedSession, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY
 from ._error import TypedSessionClosedError, RequestTransferIDVariabilityExhaustedError
 
 
-_RECEIVE_TIMEOUT = 10
+# Shouldn't be too large as this value defines how quickly the task will detect that the underlying transport is closed.
+_RECEIVE_TIMEOUT = 1
 
 
 _logger = logging.getLogger(__name__)
@@ -143,7 +144,7 @@ class Client(ServiceTypedSession[ServiceClass]):
             self._maybe_impl.remove_proxy()
 
 
-class ClientImpl(typing.Generic[ServiceClass]):
+class ClientImpl(Closable, typing.Generic[ServiceClass]):
     """
     The client implementation. There is at most one such implementation per session specifier. It may be shared
     across multiple users with the help of the proxy class. When the last proxy is closed or garbage collected,
@@ -242,6 +243,10 @@ class ClientImpl(typing.Generic[ServiceClass]):
         """Testing facilitation."""
         assert self._proxy_count >= 0
         return self._proxy_count
+
+    def close(self) -> None:
+        # This is a no-op - explicit close is not needed for client because it has no work-forever methods.
+        pass
 
     async def _do_send(self,
                        request:     ServiceClass.Request,

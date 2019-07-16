@@ -116,8 +116,11 @@ class Session(abc.ABC):
     @abc.abstractmethod
     def close(self) -> None:
         """
-        After a session is closed, none of its methods can be used anymore. The behavior of methods after close()
-        is undefined. Double-close should not raise exceptions.
+        After a session is closed, none of its methods can be used. The behavior of methods invoked on a closed
+        session is undefined, unless explicitly documented otherwise; subsequent calls to close() will have no effect.
+
+        Methods where a task is blocked (such as receive()) at the time of close() will raise a
+        :class:`pyuavcan.transport.ResourceClosedError` upon next invocation or sooner.
         """
         raise NotImplementedError
 

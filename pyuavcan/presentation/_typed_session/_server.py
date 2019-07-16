@@ -20,6 +20,8 @@ from ._base import ServiceClass, ServiceTypedSession, TypedSessionFinalizer
 from ._error import TypedSessionClosedError
 
 
+# Shouldn't be too large as this value defines how quickly the serving task will detect that the underlying
+# transport is closed.
 _LISTEN_FOREVER_TIMEOUT = 1
 
 

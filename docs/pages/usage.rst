@@ -3,4 +3,8 @@
 Usage
 ============
 
-Come back later.
+Simple demo application
+-----------------------
+
+.. literalinclude:: ../demo.py
+   :linenos:

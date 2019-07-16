@@ -71,9 +71,14 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     def close(self) -> None:
         """
+        Closes all active sessions, underlying media instances, and other resources related to this transport instance.
+
         After a transport is closed, none of its methods can be used. The behavior of methods invoked on a closed
-        transport is undefined. Generally, when closed, the transport should also close its underlying resources
-        such as media instances. Double-close should not raise exceptions.
+        transport is undefined; subsequent calls to close() will have no effect.
+
+        Failure to close any of the resources does not prevent the method from closing other resources (best effort
+        policy). Related exceptions may be suppressed and logged; the last occurred exception may be raised after
+        all resources are closed.
         """
         raise NotImplementedError
 
