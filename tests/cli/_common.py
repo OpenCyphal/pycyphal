@@ -55,7 +55,7 @@ class BackgroundChildProcess:
     A wrapper over :class:`subprocess.Popen`.
 
     >>> p = BackgroundChildProcess('echo', 'Hello world!')
-    >>> p.pop_stdout_lines()
+    >>> p.pop_stdout_lines(0.1)
     ['Hello world!\n']
     >>> p.wait(999)
     0

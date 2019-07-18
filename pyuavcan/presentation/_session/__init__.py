@@ -4,7 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._base import TypedSession as TypedSession
+from ._base import PresentationSession as PresentationSession
 from ._base import Closable as Closable
 from ._base import MessageTypedSession as MessageTypedSession
 from ._base import ServiceTypedSession as ServiceTypedSession

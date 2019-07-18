@@ -50,7 +50,7 @@ class Closable(abc.ABC):
         raise NotImplementedError
 
 
-class TypedSession(Closable, typing.Generic[TypeClass]):
+class PresentationSession(Closable, typing.Generic[TypeClass]):
     @property
     @abc.abstractmethod
     def dtype(self) -> typing.Type[TypeClass]:
@@ -72,7 +72,7 @@ class TypedSession(Closable, typing.Generic[TypeClass]):
         raise NotImplementedError
 
 
-class MessageTypedSession(TypedSession[MessageClass]):
+class MessageTypedSession(PresentationSession[MessageClass]):
     @property
     @abc.abstractmethod
     def transport_session(self) -> pyuavcan.transport.Session:
@@ -93,7 +93,7 @@ class MessageTypedSession(TypedSession[MessageClass]):
                                              transport_session=self.transport_session)
 
 
-class ServiceTypedSession(TypedSession[ServiceClass]):
+class ServiceTypedSession(PresentationSession[ServiceClass]):
     @property
     @abc.abstractmethod
     def input_transport_session(self) -> pyuavcan.transport.InputSession:

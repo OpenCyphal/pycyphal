@@ -11,11 +11,11 @@ import collections
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._typed_session import OutgoingTransferIDCounter, TypedSessionFinalizer, Closable
-from ._typed_session import Publisher, PublisherImpl
-from ._typed_session import Subscriber, SubscriberImpl
-from ._typed_session import Client, ClientImpl
-from ._typed_session import Server
+from ._session import OutgoingTransferIDCounter, TypedSessionFinalizer, Closable, PresentationSession
+from ._session import Publisher, PublisherImpl
+from ._session import Subscriber, SubscriberImpl
+from ._session import Client, ClientImpl
+from ._session import Server
 
 
 MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
@@ -49,7 +49,8 @@ class Presentation:
             typing.DefaultDict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = \
             collections.defaultdict(OutgoingTransferIDCounter)
 
-        self._typed_session_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, Closable] = {}
+        self._registry: typing.Dict[typing.Tuple[typing.Type[PresentationSession], pyuavcan.transport.SessionSpecifier],
+                                    Closable] = {}
 
     @property
     def transport(self) -> pyuavcan.transport.Transport:
@@ -78,7 +79,7 @@ class Presentation:
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
         try:
-            impl = self._typed_session_registry[session_specifier]
+            impl = self._registry[Publisher, session_specifier]
             assert isinstance(impl, PublisherImpl)
         except LookupError:
             transport_session = self._transport.get_output_session(session_specifier,
@@ -86,9 +87,9 @@ class Presentation:
             impl = PublisherImpl(dtype=dtype,
                                  transport_session=transport_session,
                                  transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
-                                 finalizer=self._make_finalizer(session_specifier),
+                                 finalizer=self._make_finalizer(Publisher, session_specifier),
                                  loop=self._transport.loop)
-            self._typed_session_registry[session_specifier] = impl
+            self._registry[Publisher, session_specifier] = impl
 
         assert isinstance(impl, PublisherImpl)
         return Publisher(impl, self._transport.loop)
@@ -123,15 +124,15 @@ class Presentation:
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
         try:
-            impl = self._typed_session_registry[session_specifier]
+            impl = self._registry[Subscriber, session_specifier]
             assert isinstance(impl, SubscriberImpl)
         except LookupError:
             transport_session = self._transport.get_input_session(session_specifier, self._make_payload_metadata(dtype))
             impl = SubscriberImpl(dtype=dtype,
                                   transport_session=transport_session,
-                                  finalizer=self._make_finalizer(session_specifier),
+                                  finalizer=self._make_finalizer(Subscriber, session_specifier),
                                   loop=self._transport.loop)
-            self._typed_session_registry[session_specifier] = impl
+            self._registry[Subscriber, session_specifier] = impl
 
         assert isinstance(impl, SubscriberImpl)
         return Subscriber(impl=impl,
@@ -165,7 +166,7 @@ class Presentation:
         )
         session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, server_node_id)
         try:
-            impl = self._typed_session_registry[session_specifier]
+            impl = self._registry[Client, session_specifier]
             assert isinstance(impl, ClientImpl)
         except LookupError:
             output_transport_session = self._transport.get_output_session(session_specifier,
@@ -177,9 +178,9 @@ class Presentation:
                               output_transport_session=output_transport_session,
                               transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
                               transfer_id_modulo_factory=transfer_id_modulo_factory,
-                              finalizer=self._make_finalizer(session_specifier),
+                              finalizer=self._make_finalizer(Client, session_specifier),
                               loop=self._transport.loop)
-            self._typed_session_registry[session_specifier] = impl
+            self._registry[Client, session_specifier] = impl
 
         assert isinstance(impl, ClientImpl)
         return Client(impl=impl, loop=self._transport.loop)
@@ -209,7 +210,7 @@ class Presentation:
         )
         session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
         try:
-            impl = self._typed_session_registry[session_specifier]
+            impl = self._registry[Server, session_specifier]
             assert isinstance(impl, Server)
         except LookupError:
             input_transport_session = self._transport.get_input_session(session_specifier,
@@ -217,9 +218,9 @@ class Presentation:
             impl = Server(dtype=dtype,
                           input_transport_session=input_transport_session,
                           output_transport_session_factory=output_transport_session_factory,
-                          finalizer=self._make_finalizer(session_specifier=session_specifier),
+                          finalizer=self._make_finalizer(Server, session_specifier),
                           loop=self._transport.loop)
-            self._typed_session_registry[session_specifier] = impl
+            self._registry[Server, session_specifier] = impl
 
         assert isinstance(impl, Server)
         return impl
@@ -270,26 +271,35 @@ class Presentation:
         """
         Closes the underlying transport instance and all existing session instances.
         """
-        for s in list(self._typed_session_registry.values()):
+        for cat, ses in list(self._registry.values()):
             try:
-                s.close()
+                ses.close()
             except Exception as ex:
-                _logger.exception('%r.close() could not close session %r: %s', self, s, ex)
+                _logger.exception('%r.close() could not close session %r of category %s: %s', self, ses, cat, ex)
 
         self._closed = True
         self._transport.close()
 
     @property
-    def sessions(self) -> typing.Sequence[pyuavcan.transport.SessionSpecifier]:
+    def sessions(self) -> typing.Sequence[typing.Tuple[typing.Type[PresentationSession],
+                                                       pyuavcan.transport.SessionSpecifier]]:
         """
-        A view of the active session instances that are currently open.
-        """
-        if not self._closed:
-            return list(self._typed_session_registry.keys())
-        else:
-            return []
+        A view of session specifiers whose sessions are currently open.
 
-    def _make_finalizer(self, session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
+        Neither :class:`pyuavcan.transport.DataSpecifier` nor :class:`pyuavcan.transport.SessionSpecifier`
+        provide sufficient information to uniquely identify a presentation-level session, because the transport
+        layer makes no distinction between publication and subscription on the wire. It makes sense because
+        one node's publication is another node's subscription.
+
+        Locally, however, we should be able to distinguish publishers from subscribers because in the context
+        of local node the difference matters. So we amend each session specifier with the presentation session
+        type to enable such distinction.
+        """
+        return list(self._registry.keys()) if not self._closed else []
+
+    def _make_finalizer(self,
+                        session_type:      typing.Type[PresentationSession],
+                        session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
         done = False
 
         def finalizer(transport_sessions: typing.Iterable[pyuavcan.transport.Session]) -> None:
@@ -297,15 +307,14 @@ class Presentation:
             # MUST be allocated and deallocated SYNCHRONOUSLY: the local registry entry in this class and the
             # corresponding transport session instance. I don't want to plaster our session objects with locks and
             # container references, so instead I decided to pass the associated resources into the finalizer, which
-            # disposes of all resources atomically by acquiring an explicit private lock. This is clearly not very
-            # obvious and in the future we should look for a cleaner design. The cleaner design can be retrofitted
-            # easily while keeping the API unchanged so this should be easy to fix transparently by bumping only
-            # the patch version of the library.
+            # disposes of all resources atomically. This is clearly not very obvious and in the future we should
+            # look for a cleaner design. The cleaner design can be retrofitted easily while keeping the API
+            # unchanged so this should be easy to fix transparently by bumping only the patch version of the library.
             nonlocal done
             assert not done, 'Internal protocol violation: double finalization'
             done = True
             try:
-                self._typed_session_registry.pop(session_specifier)
+                self._registry.pop((session_type, session_specifier))
             except Exception as ex:
                 _logger.exception('Could not remove the session for the specifier %s: %s', session_specifier, ex)
 
