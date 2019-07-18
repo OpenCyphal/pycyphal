@@ -41,11 +41,12 @@ def run_process(*args: str, timeout: typing.Optional[float] = None) -> str:
     subprocess.TimeoutExpired: ...
     """
     # Can't use shell=True with timeout; see https://stackoverflow.com/questions/36952245/subprocess-timeout-failure
-    stdout = subprocess.check_output(args,
+    stdout = subprocess.check_output(args,                  # type: ignore
                                      stderr=sys.stderr,
                                      timeout=timeout,
                                      encoding='utf8',
                                      env=_get_env())
+    assert isinstance(stdout, str)
     return stdout
 
 
