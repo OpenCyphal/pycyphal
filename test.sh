@@ -37,6 +37,19 @@ function banner()
 
 banner ENVIRONMENT CONFIGURATION
 
+cd "${0%/*}"    # cd to this script's directory
+
+# Extend PYTHONPATH to make sitecustomize.py/usercustomize.py importable.
+if [[ -z "${PYTHONPATH:-}" ]]
+then
+    export PYTHONPATH="$PWD"
+else
+    export PYTHONPATH="$PYTHONPATH:$PWD"
+fi
+echo "PYTHONPATH: $PYTHONPATH"
+
+export PYTHONASYNCIODEBUG=1
+
 which dot || die "Please install graphviz. On Debian-based: apt-get install graphviz"
 
 ./clean.sh || die "Failed to clean"
@@ -56,14 +69,20 @@ sudo ifconfig vcan0 up
 
 banner TEST EXECUTION
 
-export PYTHONASYNCIODEBUG=1
 mkdir .test_dsdl_generated 2> /dev/null       # The directory must exist before coverage is invoked
 
 # TODO: run the tests with the minimal dependency configuration. Set up a new environment here.
-coverage run -m pytest                  || die "Core PyTest returned $?"
-coverage run -m pytest pyuavcan/_cli    || die "CLI PyTest returned $?"
+# Note that we do not invoke coverage.py explicitly here; this is handled by usercustomize.py. Relevant docs:
+#   - https://coverage.readthedocs.io/en/coverage-4.2/subprocess.html
+#   - https://pymotw.com/3/site/
+pytest                  || die "Core PyTest returned $?"
+pytest pyuavcan/_cli    || die "CLI PyTest returned $?"
 
-coverage combine                 || die "Could not combine coverage data"
+# Every time we launch a Python process, a new coverage file is created, so there may be a lot of those,
+# possibly nested in sub-directories.
+find */ -name '.coverage*' -type f -print -exec mv {} . \;  || die "Could not lift coverage files"
+coverage combine                                            || die "Could not combine coverage data"
+
 coverage xml -i -o .coverage.xml || die "Could not generate coverage XML (needed for SonarQube)"
 coverage html
 coverage report

@@ -37,6 +37,8 @@ Please read the user documentation to learn how to generate Python packages from
 
 ## Development
 
+TODO: coverage measurement with sitecustomize.py -- quite a big gun
+
 ### Repository layout
 
 The shippable entities are located exclusively inside the directory `pyuavcan`.

@@ -41,3 +41,16 @@ p {
 .wy-table-responsive table th {
     white-space: normal !important;
 }
+
+/* This is needed to make transparent images have the same background color.
+ * https://stackoverflow.com/questions/19616629/css-inherit-for-unknown-background-color-is-actually-transparent
+ */
+div, section, img {
+    background-color: inherit;
+}
+
+.thumby-floaty {
+    float: right;
+    width: 33%;
+    padding: 10px;
+}

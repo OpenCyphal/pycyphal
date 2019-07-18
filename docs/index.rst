@@ -3,7 +3,7 @@ PyUAVCAN documentation
 
 .. raw:: html
 
-   <img src="_static/uavcan-logo.svg" style="float: right; width: 33%; padding: 10px;">
+   <img src="_static/uavcan-logo.svg" class="thumby-floaty">
 
 PyUAVCAN is a full-featured implementation of the `UAVCAN protocol stack <https://uavcan.org>`_ in Python.
 PyUAVCAN aims to support all features and transport layers of UAVCAN,
