@@ -13,7 +13,7 @@ import pyuavcan.transport
 
 
 # Same value represents broadcast node ID when transmitting.
-_ANONYMOUS_NODE_ID = 0xFFF
+_ANONYMOUS_NODE_ID = 0xFFFF
 
 _FRAME_DELIMITER_BYTE = 0x9E
 _ESCAPE_PREFIX_BYTE = 0x8E
@@ -21,39 +21,43 @@ _ESCAPE_PREFIX_BYTE = 0x8E
 
 class SerialTransport(pyuavcan.transport.Transport):
     """
+    The serial transport is experimental and is not yet part of the UAVCAN specification.
+    Future revisions may break wire compatibility until the transport is formally specified.
+    Context: https://forum.uavcan.org/t/alternative-transport-protocols/324, also see the discussion at
+    https://forum.uavcan.org/t/yukon-design-megathread/390/115?u=pavel.kirienko.
+
     This transport is not yet implemented. Please come back later.
 
     The serial transport is designed for basic raw byte-level low-speed serial links:
 
-    - UART, RS-232 (the recommended rate is 115200 baud to maximize compatibility).
-    - RS-485/422.
+    - UART, RS-232/485/422 (the recommended rates are [baud]: 115200, 921600, 3'000'000).
     - USB CDC ACM.
 
     It is also suitable for raw transport log storage, because one-dimensional flat binary files are structurally
     similar to serial byte-level links.
 
-    The packet header is defined as follows (fields are separated into aligned 64-bit groups, 24 bytes total,
-    byte and bit ordering follow the DSDL specification (least significant byte first, most significant bit first))::
+    The packet header is defined as follows (byte and bit ordering follow the DSDL specification (least
+    significant byte first, most significant bit first))::
 
-        uint3   priority                # Like IEEE 802.15.4; 0 = highest, 7 = lowest.
-        uint5   version                 # Always zero. Discard the frame if not.
-        uint56  transfer ID
+        uint8   version                 # Always zero. Discard the frame if not.
+        uint8   priority                # Like IEEE 802.15.4, three most significant bits: 0 = highest, 7 = lowest.
+        uint16  source node ID          # 0xFFFF = anonymous.
+        uint16  destination node ID     # 0xFFFF = broadcast.
+        uint16  data specifier          # Like IEEE 802.15.4.
 
         uint64  data type hash
+        uint64  transfer ID
 
-        uint16  data specifier          # Like IEEE 802.15.4.
-        uint12  destination node ID     # 0xFFF = broadcast.
-        uint12  source node ID          # 0xFFF = anonymous.
-        uint24  frame index EOT         # Like IEEE 802.15.4; MSB set if last frame of the transfer.
+        uint32  frame index EOT         # Like IEEE 802.15.4; MSB set if last frame of the transfer.
+        void32
 
-    The bits at the offset 64...164 (compact data type ID, data specifier, node IDs) can be used for
-    hardware-assisted frame filtering.
+    Total header size: 32 bytes (256 bits).
 
     The header is prepended before the frame payload; the resulting structure is
     encoded into its serialized form using the following packet format (influenced by HDLC, SLIP, POPCOP):
 
     +------------------------+-----------------------+-----------------------+------------------------+
-    |Frame delimiter **0x9E**|Escaped payload        |CRC32C (Castagnoli)    |Frame delimiter **0x9E**|
+    |Frame delimiter **0x9E**|Escaped header+payload |CRC32C (Castagnoli)    |Frame delimiter **0x9E**|
     +========================+=======================+=======================+========================+
     |Single-byte frame       |The following bytes are|Four bytes long,       |Same frame delimiter as |
     |delimiter **0x9E**.     |escaped: **0x9E**      |little-endian byte     |at the start.           |
@@ -70,7 +74,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     +------------------------+-----------------------+-----------------------+------------------------+
 
     There are no magic bytes in this format because the strong CRC and the compact-data-type-ID field render the
-    format sufficiently recognizable. The worst case overhead exceeds 50% if every byte of the payload and the CRC
+    format sufficiently recognizable. The worst case overhead exceeds 100% if every byte of the payload and the CRC
     is either 0x9E or 0x8E. Despite the overhead, this format is still considered superior to the alternatives
     since it is robust and guarantees a constant recovery time. Consistent-overhead byte stuffing (COBS) is sometimes
     employed for similar tasks, but it should be understood that while it offers a substantially lower overhead,
@@ -87,10 +91,10 @@ class SerialTransport(pyuavcan.transport.Transport):
     DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES = 512
 
     def __init__(
-            self,
-            serial_port:                                  serial.SerialBase,
-            single_frame_transfer_payload_capacity_bytes: int = DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
-            loop:                                         typing.Optional[asyncio.AbstractEventLoop] = None
+        self,
+        serial_port:                                  serial.SerialBase,
+        single_frame_transfer_payload_capacity_bytes: int = DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
+        loop:                                         typing.Optional[asyncio.AbstractEventLoop] = None
     ):
         """
         :param serial_port: The serial port to communicate over. The caller may configure the transmit timeout as
@@ -114,7 +118,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
-            transfer_id_modulo=2 ** 56,
+            transfer_id_modulo=2 ** 64,
             node_id_set_cardinality=4096,
             single_frame_transfer_payload_capacity_bytes=self._sft_payload_capacity_bytes
         )
