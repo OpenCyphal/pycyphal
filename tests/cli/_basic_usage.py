@@ -12,20 +12,20 @@ from tests.dsdl.conftest import TEST_DATA_TYPES_DIR, PUBLIC_REGULATED_DATA_TYPES
 
 def _unittest_cli() -> None:
     demo_proc = BackgroundChildProcess('basic_usage.py')
+    try:
+        # Generate DSDL namespace "sirius_cyber_corp"
+        run_process('pyuavcan', '-v', 'dsdl-gen-pkg',
+                    str(TEST_DATA_TYPES_DIR / 'sirius_cyber_corp'),
+                    '--lookup', dsdl_generate_packages.DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
 
-    # Generate DSDL namespace "sirius_cyber_corp"
-    run_process('pyuavcan', '-v', 'dsdl-gen-pkg',
-                str(TEST_DATA_TYPES_DIR / 'sirius_cyber_corp'),
-                '--lookup', dsdl_generate_packages.DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
+        # Generate DSDL namespace "test"
+        run_process('pyuavcan', '-v', 'dsdl-gen-pkg',
+                    str(TEST_DATA_TYPES_DIR / 'test'),
+                    '--lookup', dsdl_generate_packages.DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
 
-    # Generate DSDL namespace "test"
-    run_process('pyuavcan', '-v', 'dsdl-gen-pkg',
-                str(TEST_DATA_TYPES_DIR / 'test'),
-                '--lookup', dsdl_generate_packages.DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
+        # Generate DSDL namespace "uavcan"
+        run_process('pyuavcan', '-v', 'dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
-    # Generate DSDL namespace "uavcan"
-    run_process('pyuavcan', '-v', 'dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
-
-    # TODO: publication and subscription
-
-    demo_proc.kill()
+        # TODO: publication and subscription
+    finally:
+        demo_proc.kill()

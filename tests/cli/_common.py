@@ -104,7 +104,7 @@ class BackgroundChildProcess:
             else:
                 break
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self._inferior.poll() is None:
             self._inferior.kill()
 

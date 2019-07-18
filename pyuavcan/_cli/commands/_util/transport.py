@@ -89,7 +89,7 @@ def make_arg_sequence_parser(*type_default_pairs: typing.Tuple[typing.Type[objec
     """
     # Config validation - abort if default can't be accepted by the type constructor.
     try:
-        _ = [ty(default) for ty, default in type_default_pairs]
+        _ = [ty(default) for ty, default in type_default_pairs]  # type: ignore
     except Exception:
         raise ValueError(f'Invalid arg spec: {type_default_pairs!r}')
 
