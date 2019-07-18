@@ -64,3 +64,32 @@ ruamel.yaml.add_representer(decimal.Decimal,
                             representer=ruamel.yaml.SafeRepresenter)  # type: ignore
 
 _POINT_ZERO_DECIMAL = decimal.Decimal('0.0')
+
+
+def _unittest_yaml() -> None:
+    import pytest
+
+    ref = YAMLDumper(explicit_start=True).dumps({
+        'abc': 123,
+        'def': [
+            456,
+            {
+                'qaz': decimal.Decimal('789'),
+            },
+        ],
+    })
+    assert ref == """---
+abc: 123
+def:
+- 456
+- qaz: 789.0
+"""
+    assert YAMLLoader().load(ref) == {
+        'abc': 123,
+        'def': [
+            456,
+            {
+                'qaz': pytest.approx(789),
+            },
+        ],
+    }

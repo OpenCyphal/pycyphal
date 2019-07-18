@@ -49,7 +49,8 @@ class Presentation:
             typing.DefaultDict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = \
             collections.defaultdict(OutgoingTransferIDCounter)
 
-        self._registry: typing.Dict[typing.Tuple[typing.Type[PresentationSession], pyuavcan.transport.SessionSpecifier],
+        self._registry: typing.Dict[typing.Tuple[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
+                                                 pyuavcan.transport.SessionSpecifier],
                                     Closable] = {}
 
     @property
@@ -271,17 +272,17 @@ class Presentation:
         """
         Closes the underlying transport instance and all existing session instances.
         """
-        for cat, ses in list(self._registry.values()):
+        for s in list(self._registry.values()):
             try:
-                ses.close()
+                s.close()
             except Exception as ex:
-                _logger.exception('%r.close() could not close session %r of category %s: %s', self, ses, cat, ex)
+                _logger.exception('%r.close() could not close session %r: %s', self, s, ex)
 
         self._closed = True
         self._transport.close()
 
     @property
-    def sessions(self) -> typing.Sequence[typing.Tuple[typing.Type[PresentationSession],
+    def sessions(self) -> typing.Sequence[typing.Tuple[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
                                                        pyuavcan.transport.SessionSpecifier]]:
         """
         A view of session specifiers whose sessions are currently open.
@@ -298,7 +299,7 @@ class Presentation:
         return list(self._registry.keys()) if not self._closed else []
 
     def _make_finalizer(self,
-                        session_type:      typing.Type[PresentationSession],
+                        session_type:      typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
                         session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
         done = False
 

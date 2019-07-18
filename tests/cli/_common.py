@@ -66,6 +66,7 @@ class BackgroundChildProcess:
     Traceback (most recent call last):
     ...
     subprocess.TimeoutExpired: ...
+    >>> p.kill()
     """
 
     def __init__(self, *args: str):
