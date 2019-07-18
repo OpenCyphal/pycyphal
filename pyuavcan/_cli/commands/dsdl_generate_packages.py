@@ -20,7 +20,7 @@ import pyuavcan
 from . import _base
 
 
-_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL = \
+DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL = \
     'https://github.com/UAVCAN/public_regulated_data_types/archive/f468909.zip'
 
 
@@ -32,7 +32,7 @@ namespaces.
 '''.strip(),
     examples=f'''
 # Generate a package from the root namespace "~/namespace" which depends on public regulated types:
-pyuavcan -v dsdl-gen-pkg --lookup {_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL} ~/namespace
+pyuavcan -v dsdl-gen-pkg --lookup {DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL} ~/namespace
 '''.strip(),
     aliases=[
         'dsdl-gen-pkg',
@@ -67,7 +67,7 @@ convenient for generating packages from namespaces hosted in public
 repositories, e.g., on GitHub).
 
 Ex. path: ~/uavcan/public_regulated_data_types/uavcan/
-Ex. URI:  {_DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL}
+Ex. URI:  {DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL}
 '''.strip(),
     )
     parser.add_argument(

@@ -6,6 +6,5 @@
 
 from ._main import main as main
 
-# These are exported for automatic documentation generation.
-from ._commands import COMMANDS as COMMANDS
-from ._commands import Command as Command
+# noinspection PyCompatibility
+from . import commands  # This is exported for automatic documentation generation.

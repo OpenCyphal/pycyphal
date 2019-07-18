@@ -14,7 +14,8 @@ _logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    from ._commands import DEFAULT_DSDL_GENERATED_PACKAGES_DIR
+    # noinspection PyCompatibility
+    from .commands import DEFAULT_DSDL_GENERATED_PACKAGES_DIR
     sys.path.insert(0, str(DEFAULT_DSDL_GENERATED_PACKAGES_DIR))
 
     logging.basicConfig(stream=sys.stderr,
@@ -33,7 +34,8 @@ def main() -> None:
 
 
 def _construct_argument_parser() -> argparse.ArgumentParser:
-    from . import _commands
+    # noinspection PyCompatibility
+    from . import commands
     from pyuavcan import __version__
 
     root_parser = argparse.ArgumentParser(
@@ -64,7 +66,7 @@ The tool is versioned synchronously with the PyUAVCAN library.
 
     # Register commands
     subparsers = root_parser.add_subparsers()
-    for cmd in _commands.COMMANDS:
+    for cmd in commands.COMMANDS:
         if cmd.info.examples:
             epilog = 'Examples:\n' + cmd.info.examples
         else:
@@ -85,7 +87,8 @@ The tool is versioned synchronously with the PyUAVCAN library.
 
 
 def _main_impl() -> int:
-    from . import _commands
+    # noinspection PyCompatibility
+    from . import commands
 
     args = _construct_argument_parser().parse_args()
 
@@ -95,7 +98,7 @@ def _main_impl() -> int:
         2: logging.DEBUG,
     }.get(args.verbose or 0, logging.DEBUG))
 
-    _logger.debug('Available command modules: %s', _commands.COMMANDS)
+    _logger.debug('Available command modules: %s', commands.COMMANDS)
     _logger.debug('Parsed args: %s', args)
 
     if hasattr(args, 'func'):
@@ -108,7 +111,7 @@ def _main_impl() -> int:
         print('No command specified, nothing to do. Run with --help for usage help. '
               'Online support: https://forum.uavcan.org.', file=sys.stderr)
         print('Available commands:', file=sys.stderr)
-        for cmd in _commands.COMMANDS:
+        for cmd in commands.COMMANDS:
             text = f'\t{cmd.name}'
             if cmd.info.aliases:
                 text += f' (aliases: {", ".join(cmd.info.aliases)})'

@@ -41,6 +41,6 @@ print_output('--version')
 print_output('--help')
 
 
-for sub in cli.COMMANDS:
+for sub in cli.commands.COMMANDS:
     print(f'Subcommand ``{sub.name}``' + HEADER_SUFFIX)
     print_output(f'{sub.name} --help')

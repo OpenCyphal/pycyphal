@@ -18,9 +18,9 @@ import pyuavcan.dsdl
 # Please maintain these carefully if you're changing the project's directory structure.
 TEST_ROOT_DIR = pathlib.Path(__file__).parent.parent
 LIBRARY_ROOT_DIR = TEST_ROOT_DIR.parent
-DESTINATION_DIRECTORY = LIBRARY_ROOT_DIR / pathlib.Path('.test_dsdl_generated')
-PUBLIC_REGULATED_DATA_TYPES = TEST_ROOT_DIR / 'public_regulated_data_types'
-TEST_DATA_TYPES = pathlib.Path(__file__).parent / 'namespaces'
+DESTINATION_DIR = LIBRARY_ROOT_DIR / pathlib.Path('.test_dsdl_generated')
+PUBLIC_REGULATED_DATA_TYPES_DIR = TEST_ROOT_DIR / 'public_regulated_data_types'
+TEST_DATA_TYPES_DIR = pathlib.Path(__file__).parent / 'namespaces'
 
 
 @pytest.fixture('session')  # type: ignore
@@ -31,29 +31,29 @@ def generated_packages() -> typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedP
     https://docs.pytest.org/en/latest/fixture.html#conftest-py-sharing-fixture-functions
     """
     original_sys_path = sys.path
-    sys.path.insert(0, str(DESTINATION_DIRECTORY))
+    sys.path.insert(0, str(DESTINATION_DIR))
     logging.getLogger('pydsdl').setLevel(logging.WARNING)
 
-    if DESTINATION_DIRECTORY.exists():  # pragma: no cover
-        shutil.rmtree(DESTINATION_DIRECTORY, ignore_errors=True)
-    DESTINATION_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    if DESTINATION_DIR.exists():  # pragma: no cover
+        shutil.rmtree(DESTINATION_DIR, ignore_errors=True)
+    DESTINATION_DIR.mkdir(parents=True, exist_ok=True)
 
     yield [
         pyuavcan.dsdl.generate_package(
-            DESTINATION_DIRECTORY,
-            PUBLIC_REGULATED_DATA_TYPES / 'uavcan',
+            DESTINATION_DIR,
+            PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan',
             []
         ),
         pyuavcan.dsdl.generate_package(
-            DESTINATION_DIRECTORY,
-            TEST_DATA_TYPES / 'test',
+            DESTINATION_DIR,
+            TEST_DATA_TYPES_DIR / 'test',
             [
-                PUBLIC_REGULATED_DATA_TYPES / 'uavcan'
+                PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'
             ]
         ),
         pyuavcan.dsdl.generate_package(
-            DESTINATION_DIRECTORY,
-            TEST_DATA_TYPES / 'sirius_cyber_corp',
+            DESTINATION_DIR,
+            TEST_DATA_TYPES_DIR / 'sirius_cyber_corp',
             []
         ),
     ]
