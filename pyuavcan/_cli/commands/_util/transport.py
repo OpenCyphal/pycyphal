@@ -13,7 +13,7 @@ import importlib
 import itertools
 import dataclasses
 import pyuavcan.transport
-from ._yaml import YAMLLoader
+from .yaml import YAMLLoader
 
 
 _logger = logging.getLogger(__name__)
@@ -71,12 +71,28 @@ def _eval_spec(spec: str) -> pyuavcan.transport.Transport:
     return transport
 
 
-def make_arg_sequence_parser(type_default_pairs: typing.Sequence[typing.Tuple[typing.Type[object], typing.Any]]) \
+def make_arg_sequence_parser(*type_default_pairs: typing.Tuple[typing.Type[object], typing.Any]) \
         -> typing.Callable[[str], typing.Sequence[typing.Any]]:
-    """
+    r"""
     Constructs a callable that transforms a comma-separated list of arguments into the form specified by the
     sequence of (type, default) tuples, or raises a ValueError if the input arguments are non-conforming.
+    The type constructor must be able to accept the default value.
+
+    >>> make_arg_sequence_parser()('')
+    []
+    >>> make_arg_sequence_parser((int, 123), (float, -15))('12')
+    [12, -15.0]
+    >>> make_arg_sequence_parser((int, 123), (float, -15))('12, 16, "abc"')
+    Traceback (most recent call last):
+    ...
+    ValueError: Expected at most 2 values, found 3 in '12, 16, "abc"'
     """
+    # Config validation - abort if default can't be accepted by the type constructor.
+    try:
+        _ = [ty(default) for ty, default in type_default_pairs]
+    except Exception:
+        raise ValueError(f'Invalid arg spec: {type_default_pairs!r}')
+
     def do_parse(arg: str) -> typing.Sequence[typing.Any]:
         values = YAMLLoader().load(f'[ {arg} ]')
         if len(values) <= len(type_default_pairs):
@@ -109,7 +125,3 @@ def _add_args_for_can(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         '--iface-can-socketcan-fd', '--socketcanfd',
     )
-
-
-def _unittest_dummy() -> None:
-    pass

@@ -14,10 +14,10 @@ import contextlib
 import argparse_utils
 
 import pyuavcan
-from . import _base, _transport, _port_spec, _formatter
+from . import _util
 
 
-INFO = _base.CommandInfo(
+INFO = _util.base.CommandInfo(
     help='''
 Subscribe to the specified subject, receive and print messages into stdout.
 This command does not instantiate a local node; the bus is accessed directly
@@ -37,7 +37,7 @@ _logger = logging.getLogger(__name__)
 
 
 def register_arguments(parser: argparse.ArgumentParser) -> None:
-    _transport.add_arguments(parser)
+    _util.transport.add_arguments(parser)
 
     parser.add_argument(
         'subject_spec',
@@ -57,8 +57,8 @@ Examples:
     # noinspection PyTypeChecker
     parser.add_argument(
         '--format',
-        default=next(iter(_formatter.Format)),
-        action=argparse_utils.enum_action(_formatter.Format),
+        default=next(iter(_util.formatter.Format)),
+        action=argparse_utils.enum_action(_util.formatter.Format),
         help='''
 The format of the data printed into stdout. The final representation is
 constructed from an intermediate "builtin-based" representation, which is
@@ -89,12 +89,12 @@ have been received. No limit by default.
 
 
 def execute(args: argparse.Namespace) -> None:
-    transport = _transport.construct_transport(args.transport)
-    subject_specs = [_port_spec.construct_port_id_and_type(ds) for ds in args.subject_spec]
+    transport = _util.transport.construct_transport(args.transport)
+    subject_specs = [_util.port_spec.construct_port_id_and_type(ds) for ds in args.subject_spec]
     asyncio.get_event_loop().run_until_complete(
         _run(transport=transport,
              subject_specs=subject_specs,
-             formatter=_formatter.make_formatter(args.format),
+             formatter=_util.formatter.make_formatter(args.format),
              with_metadata=args.with_metadata,
              count=int(args.count) if args.count is not None else (2 ** 63))
     )
@@ -102,7 +102,7 @@ def execute(args: argparse.Namespace) -> None:
 
 async def _run(transport:     pyuavcan.transport.Transport,
                subject_specs: typing.List[typing.Tuple[int, typing.Type[pyuavcan.dsdl.CompositeObject]]],
-               formatter:     _formatter.Formatter,
+               formatter:     _util.formatter.Formatter,
                with_metadata: bool,
                count:         int) -> None:
     if len(subject_specs) < 1:

@@ -17,14 +17,14 @@ import argparse
 import requests
 
 import pyuavcan
-from . import _base
+from ._util.base import CommandInfo, DEFAULT_DSDL_GENERATED_PACKAGES_DIR
 
 
 DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL = \
     'https://github.com/UAVCAN/public_regulated_data_types/archive/f468909.zip'
 
 
-INFO = _base.CommandInfo(
+INFO = CommandInfo(
     help='''
 Generate PyUAVCAN Python packages from the specified DSDL root namespaces
 and/or from URLs pointing to an archive containing a set of DSDL root
@@ -85,7 +85,7 @@ This option can be specified more than once.
     )
     parser.add_argument(
         '--output', '-O',
-        default=_base.DEFAULT_DSDL_GENERATED_PACKAGES_DIR,
+        default=DEFAULT_DSDL_GENERATED_PACKAGES_DIR,
         help='''
 Path to the directory where the generated packages will be stored.
 Existing packages will be overwritten entirely.

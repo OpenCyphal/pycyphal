@@ -16,7 +16,7 @@ import pyuavcan
 # Base data directory. The location is OS-dependent.
 if hasattr(sys, 'getwindowsversion'):
     _appdata_env = os.getenv('LOCALAPPDATA') or os.getenv('APPDATA')
-    assert _appdata_env, 'App data directory not found'
+    assert _appdata_env, 'Cannot determine location of the app data directory'
     BASE_DATA_DIR = pathlib.Path(_appdata_env, 'UAVCAN', 'PyUAVCAN')
 else:
     BASE_DATA_DIR = pathlib.Path('~/.uavcan/pyuavcan').expanduser()

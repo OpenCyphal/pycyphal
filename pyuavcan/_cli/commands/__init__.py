@@ -7,8 +7,8 @@
 import types
 import typing
 import argparse
-from ._base import CommandInfo as CommandInfo
-from ._base import DEFAULT_DSDL_GENERATED_PACKAGES_DIR as DEFAULT_DSDL_GENERATED_PACKAGES_DIR
+from ._util.base import CommandInfo as CommandInfo
+from ._util.base import DEFAULT_DSDL_GENERATED_PACKAGES_DIR as DEFAULT_DSDL_GENERATED_PACKAGES_DIR
 
 
 class Command:

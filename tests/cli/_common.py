@@ -104,6 +104,10 @@ class BackgroundChildProcess:
             else:
                 break
 
+    def __del__(self):
+        if self._inferior.poll() is None:
+            self._inferior.kill()
+
 
 def _get_env() -> typing.Dict[str, str]:
     env = os.environ.copy()

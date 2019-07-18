@@ -8,7 +8,7 @@ import typing
 import logging
 import importlib
 import pyuavcan.dsdl
-from . import dsdl_generate_packages
+from .. import dsdl_generate_packages
 
 
 _logger = logging.getLogger(__name__)

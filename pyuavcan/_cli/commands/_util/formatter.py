@@ -30,7 +30,7 @@ def make_formatter(format_type: Format) -> Formatter:
 
 
 def _make_yaml_formatter() -> Formatter:
-    from ._yaml import YAMLDumper
+    from .yaml import YAMLDumper
     dumper = YAMLDumper(explicit_start=True)
     return lambda data: dumper.dumps(data)
 
@@ -49,3 +49,23 @@ def _make_tsv_formatter() -> Formatter:
     # Sounds complex. Search for better ways later. We just need a straightforward way of dumping data into a
     # standard tabular format for later processing using third-party software.
     raise NotImplementedError('Sorry, the TSV formatter is not yet implemented')
+
+
+def _unittest_formatter() -> None:
+    obj = {
+        12345: {
+            'abc': {
+                'def': [123, 456, ],
+            },
+            'ghi': 789,
+        }
+    }
+    assert make_formatter(Format.YAML)(obj) == """---
+12345:
+  abc:
+    def:
+    - 123
+    - 456
+  ghi: 789
+"""
+    assert make_formatter(Format.JSON)(obj) == '{"12345":{"abc":{"def":[123,456]},"ghi":789}}'

@@ -74,13 +74,14 @@ mkdir .test_dsdl_generated 2> /dev/null       # The directory must exist before 
 # TODO: run the tests with the minimal dependency configuration. Set up a new environment here.
 # Note that we do not invoke coverage.py explicitly here; this is handled by usercustomize.py. Relevant docs:
 #   - https://coverage.readthedocs.io/en/coverage-4.2/subprocess.html
-#   - https://pymotw.com/3/site/
+#   - https://docs.python.org/3/library/site.html
 pytest                  || die "Core PyTest returned $?"
 pytest pyuavcan/_cli    || die "CLI PyTest returned $?"
 
 # Every time we launch a Python process, a new coverage file is created, so there may be a lot of those,
 # possibly nested in sub-directories.
 find */ -name '.coverage*' -type f -print -exec mv {} . \;  || die "Could not lift coverage files"
+ll .coverage*
 coverage combine                                            || die "Could not combine coverage data"
 
 coverage xml -i -o .coverage.xml || die "Could not generate coverage XML (needed for SonarQube)"

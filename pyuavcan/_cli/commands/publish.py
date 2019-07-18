@@ -15,11 +15,12 @@ import contextlib
 import argparse_utils
 
 import pyuavcan
-from . import _base, _transport, _port_spec, dsdl_generate_packages, _node
-from ._yaml import YAMLLoader, YAMLDumper
+from . import _util
+from ._util.yaml import YAMLLoader, YAMLDumper
+from . import dsdl_generate_packages
 
 
-INFO = _base.CommandInfo(
+INFO = _util.base.CommandInfo(
     help='''
 Publish messages of the specified subject with the fixed contents.
 The local node will also publish heartbeat and respond to GetInfo,
@@ -38,7 +39,7 @@ _logger = logging.getLogger(__name__)
 
 
 def register_arguments(parser: argparse.ArgumentParser) -> None:
-    _transport.add_arguments(parser)
+    _util.transport.add_arguments(parser)
 
     parser.add_argument(
         'subject_spec',
@@ -189,7 +190,7 @@ class Publication:
                  presentation: pyuavcan.presentation.Presentation,
                  transfer_id:  int,
                  priority:     pyuavcan.transport.Priority):
-        subject_id, dtype = _port_spec.construct_port_id_and_type(subject_spec)
+        subject_id, dtype = _util.port_spec.construct_port_id_and_type(subject_spec)
         content = _YAML_LOADER.load(field_spec)
 
         self._message = pyuavcan.dsdl.update_from_builtin(dtype(), content)
@@ -221,8 +222,7 @@ async def _do_execute(args: argparse.Namespace) -> None:
     node_info_fields.update(args.node_info_fields)
     node_info = pyuavcan.dsdl.update_from_builtin(application.NodeInfo(), node_info_fields)
     _logger.info('Node info: %r', node_info)
-    node = application.Node(_transport.construct_transport(args.transport),
-                            info=node_info)
+    node = application.Node(_util.transport.construct_transport(args.transport), info=node_info)
 
     with contextlib.closing(node):
         # Configure the heartbeat publisher.
@@ -278,4 +278,4 @@ async def _do_execute(args: argparse.Namespace) -> None:
 
 
 _YAML_LOADER = YAMLLoader()
-_NODE_INFO_FIELDS = _node.make_default_node_info_fields_for_command_module(__name__)
+_NODE_INFO_FIELDS = _util.node.make_default_node_info_fields_for_command_module(__name__)
