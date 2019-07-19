@@ -113,7 +113,7 @@ def _get_iface_args() -> typing.Sequence[str]:
     """
     Constructs the list of command-line arguments specifying which interfaces to use for testing.
     We could also add a random element here. It is crucial, however, to ensure that the demo script supports
-    and uses those interfaces.
+    and uses those interfaces, so if you change the demo script, update this as well, please.
     """
     import pytest
     # Add more transports when redundancy is supported.
