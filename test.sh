@@ -81,7 +81,7 @@ pytest pyuavcan/_cli    || die "CLI PyTest returned $?"
 # Every time we launch a Python process, a new coverage file is created, so there may be a lot of those,
 # possibly nested in sub-directories.
 find */ -name '.coverage*' -type f -print -exec mv {} . \;  || die "Could not lift coverage files"
-ll .coverage*
+ls -l .coverage*
 coverage combine                                            || die "Could not combine coverage data"
 
 coverage xml -i -o .coverage.xml || die "Could not generate coverage XML (needed for SonarQube)"

@@ -49,39 +49,49 @@ class _TypeTestStatistics:
 
 
 def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
+    # The random test intentionally generates a lot of faulty data, which generates a lot of log messages.
+    # We don't want them to clutter the test output, so we raise the logging level temporarily.
+    pyuavcan_logger = logging.getLogger('pyuavcan.dsdl')
+    original_logging_level = pyuavcan_logger.level
+    pyuavcan_logger.setLevel(logging.WARNING)
 
-    for info in generated_packages:
-        for model in _util.expand_service_types(info.models, keep_services=True):
-            if not isinstance(model, pydsdl.ServiceType):
-                performance[model] = _test_type(model, _NUM_RANDOM_SAMPLES)
-            else:
-                dtype = pyuavcan.dsdl.get_class(model)
-                with pytest.raises(TypeError):
-                    assert list(pyuavcan.dsdl.serialize(dtype()))
-                with pytest.raises(TypeError):
-                    pyuavcan.dsdl.try_deserialize(dtype, [memoryview(b'')])
+    try:
+        performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
 
-    _logger.info('Tested types ordered by serialization speed, %d random samples per type', _NUM_RANDOM_SAMPLES)
-    _logger.info('Columns: random SR correctness ratio; mean serialization time (us); mean deserialization time (us)')
+        for info in generated_packages:
+            for model in _util.expand_service_types(info.models, keep_services=True):
+                if not isinstance(model, pydsdl.ServiceType):
+                    performance[model] = _test_type(model, _NUM_RANDOM_SAMPLES)
+                else:
+                    dtype = pyuavcan.dsdl.get_class(model)
+                    with pytest.raises(TypeError):
+                        assert list(pyuavcan.dsdl.serialize(dtype()))
+                    with pytest.raises(TypeError):
+                        pyuavcan.dsdl.try_deserialize(dtype, [memoryview(b'')])
 
-    for ty, stat in sorted(performance.items(), key=lambda kv: -kv[1].worst_time):  # pragma: no branch
-        assert isinstance(stat, _TypeTestStatistics)
-        suffix = '' if stat.worst_time < 1e-3 else '\tSLOW!'
+        _logger.info('Tested types ordered by serialization speed, %d random samples per type', _NUM_RANDOM_SAMPLES)
+        _logger.info('Columns: random SR correctness ratio; '
+                     'mean serialization time [us]; mean deserialization time [us]')
 
-        _logger.info(f'%-60s %3.0f%% %6.0f %6.0f%s', ty,
-                     stat.random_serialized_representation_correctness_ratio * 100,
-                     stat.mean_serialization_time * 1e6,
-                     stat.mean_deserialization_time * 1e6,
-                     suffix)
+        for ty, stat in sorted(performance.items(), key=lambda kv: -kv[1].worst_time):  # pragma: no branch
+            assert isinstance(stat, _TypeTestStatistics)
+            suffix = '' if stat.worst_time < 1e-3 else '\tSLOW!'
 
-        assert stat.worst_time <= _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME, \
-            f'Serialization performance issues detected in type {ty}'
+            _logger.info(f'%-60s %3.0f%% %6.0f %6.0f%s', ty,
+                         stat.random_serialized_representation_correctness_ratio * 100,
+                         stat.mean_serialization_time * 1e6,
+                         stat.mean_deserialization_time * 1e6,
+                         suffix)
 
-        assert stat.random_serialized_representation_correctness_ratio > 0, \
-            f'At least one random sample must be valid. ' \
-            f'Either the tested code is incorrect, or the number of random samples is too low. ' \
-            f'Failed type: {ty}'
+            assert stat.worst_time <= _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME, \
+                f'Serialization performance issues detected in type {ty}'
+
+            assert stat.random_serialized_representation_correctness_ratio > 0, \
+                f'At least one random sample must be valid. ' \
+                f'Either the tested code is incorrect, or the number of random samples is too low. ' \
+                f'Failed type: {ty}'
+    finally:
+        pyuavcan_logger.setLevel(original_logging_level)
 
 
 def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTestStatistics:

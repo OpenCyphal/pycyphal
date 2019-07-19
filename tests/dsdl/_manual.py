@@ -19,6 +19,9 @@ _logger = logging.getLogger(__name__)
 # noinspection PyUnusedLocal
 def _unittest_slow_manual_a(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import test.str
+
+    assert pyuavcan.dsdl.try_deserialize(test.str.A_1_0, [memoryview(b'')]) is None
+
     obj = pyuavcan.dsdl.try_deserialize(
         test.str.A_1_0,
         _compile_serialized_representation(
@@ -71,6 +74,9 @@ def _unittest_slow_manual_a(generated_packages: typing.List[pyuavcan.dsdl.Genera
 # noinspection PyUnusedLocal
 def _unittest_slow_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import uavcan.node
+
+    assert pyuavcan.dsdl.try_deserialize(uavcan.node.Heartbeat_1_0, [memoryview(b'')]) is None
+
     obj = pyuavcan.dsdl.try_deserialize(
         uavcan.node.Heartbeat_1_0,
         _compile_serialized_representation(
