@@ -29,7 +29,7 @@ function banner()
     printf >&2 '%.0s-' $fill_seq
     printf >&2 '+\n| %s |\n+' "$text"
     printf >&2 '%.0s-' $fill_seq
-    printf >&2 '+\a\n'
+    printf >&2 '+\n'
     [[ -t 0 && -t 1 ]] && printf >&2 '\033[0m'
 }
 
