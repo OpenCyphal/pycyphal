@@ -5,11 +5,12 @@
 #
 
 import os
+import sys
 import pathlib
 import coverage
 
 own_path = pathlib.Path(__file__).absolute()
-print(f'  LOADING {own_path}  '.center(80, '-'))
+print(f'  LOADING {own_path}  '.center(80, '-'), file=sys.stderr)
 
 # Profiling configuration; see https://coverage.readthedocs.io/en/coverage-4.2/subprocess.html
 # This is kind of a big gun because it makes us profile everything we run, even doc generation, but it's acceptable.

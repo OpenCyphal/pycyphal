@@ -8,8 +8,8 @@ import os
 import sys
 import queue
 import typing
+import logging
 import pathlib
-import threading
 import subprocess
 
 # noinspection PyProtectedMember
@@ -19,6 +19,9 @@ import pyuavcan._cli as _cli
 _CLI_TOOL_DIR = pathlib.Path(_cli.__file__).absolute().parent
 
 _DEMO_DIR = pathlib.Path(__file__).absolute().parent.parent / 'demo'
+
+
+_logger = logging.getLogger(__name__)
 
 
 def run_process(*args: str, timeout: typing.Optional[float] = None) -> str:
@@ -40,6 +43,8 @@ def run_process(*args: str, timeout: typing.Optional[float] = None) -> str:
     ...
     subprocess.TimeoutExpired: ...
     """
+    _logger.info('Running process with timeout=%s: %s', timeout if timeout is not None else 'inf', ' '.join(args))
+
     # Can't use shell=True with timeout; see https://stackoverflow.com/questions/36952245/subprocess-timeout-failure
     stdout = subprocess.check_output(args,                  # type: ignore
                                      stderr=sys.stderr,
@@ -53,15 +58,18 @@ def run_process(*args: str, timeout: typing.Optional[float] = None) -> str:
 class BackgroundChildProcess:
     r"""
     A wrapper over :class:`subprocess.Popen`.
+    This wrapper allows collection of stdout upon completion. At first I tried using a background reader
+    thread that was blocked on ``stdout.readlines()``, but that solution ended up being dysfunctional because
+    it is fundamentally incompatible with internal stdio buffering in the monitored process which
+    we have absolutely no control over from our local process. Sure, there exist options to suppress buffering,
+    such as the ``-u`` flag in Python or the PYTHONUNBUFFERED env var, but they would make the test environment
+    unnecessarily fragile, so I opted to use a simpler approach where we just run the process until it's dead
+    and then loot the output from its dead body.
 
     >>> p = BackgroundChildProcess('echo', 'Hello world!')
-    >>> p.pop_stdout_lines(0.1)
-    ['Hello world!\n']
-    >>> p.wait(999)
-    0
+    >>> p.wait(0.1)
+    (0, 'Hello world!\n')
     >>> p = BackgroundChildProcess('sleep', '999')
-    >>> p.pop_stdout_lines()
-    []
     >>> p.wait(1)
     Traceback (most recent call last):
     ...
@@ -70,39 +78,31 @@ class BackgroundChildProcess:
     """
 
     def __init__(self, *args: str):
+        _logger.info('Starting background child process: %s', ' '.join(args))
+
         self._inferior = subprocess.Popen(args,
                                           stdout=subprocess.PIPE,
-                                          encoding='utf8',
                                           stderr=sys.stderr,
+                                          encoding='utf8',
                                           env=_get_env())
 
-        self._stdout_lines: queue.Queue[str] = queue.Queue()
-
-        self._stdout_thread = threading.Thread(target=self._reader_thread_func, daemon=True)
-        self._stdout_thread.start()
-
-    def pop_stdout_lines(self, timeout: typing.Optional[float] = None) -> typing.Sequence[str]:
-        out: typing.List[str] = []
-        while True:
-            try:
-                out.append(self._stdout_lines.get(block=timeout is not None, timeout=timeout))
-            except queue.Empty:
-                break
-        return out
-
-    def wait(self, timeout: float) -> int:
-        return self._inferior.wait(timeout)
+    def wait(self, timeout: float, interrupt: typing.Optional[bool] = False) -> typing.Tuple[int, str]:
+        if interrupt and self._inferior.poll() is None:
+            self.interrupt()
+        stdout = self._inferior.communicate(timeout=timeout)[0]
+        exit_code = int(self._inferior.returncode)
+        return exit_code, stdout
 
     def kill(self) -> None:
         self._inferior.kill()
 
-    def _reader_thread_func(self) -> None:
-        while True:
-            line = self._inferior.stdout.readline()
-            if line:
-                self._stdout_lines.put_nowait(line)
-            else:
-                break
+    def interrupt(self) -> None:
+        import signal
+        self._inferior.send_signal(signal.SIGINT)
+
+    @property
+    def pid(self) -> int:
+        return int(self._inferior.pid)
 
     def __del__(self) -> None:
         if self._inferior.poll() is None:
@@ -111,6 +111,6 @@ class BackgroundChildProcess:
 
 def _get_env() -> typing.Dict[str, str]:
     env = os.environ.copy()
-    for p in [_CLI_TOOL_DIR, _DEMO_DIR]:
-        env['PATH'] += f'{os.pathsep}{p}'
+    for p in [_CLI_TOOL_DIR, _DEMO_DIR]:  # Order matters; our directories are PREPENDED.
+        env['PATH'] = os.pathsep.join([str(p), env['PATH']])
     return env

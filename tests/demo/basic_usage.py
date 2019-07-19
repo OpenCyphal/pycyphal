@@ -6,6 +6,7 @@
 # UAVCAN Development Team has waived all copyright and related or neighboring rights to this work.
 #
 
+import os
 import sys
 import typing
 import pathlib
@@ -68,16 +69,23 @@ import uavcan.si.temperature    # noqa E402
 
 class DemoApplication:
     def __init__(self):
-        # Make sure to initialize the virtual CAN interface. For example (run as root):
-        #   modprobe vcan
-        #   ip link add dev vcan0 type vcan
-        #   ip link set up vcan0
-        #   ip link set vcan0 mtu 72
-        #   ifconfig vcan0 up
-        # CAN interfaces can me monitored using can-utils:
-        #   candump -decaxta any
-        media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=64)
-        transport = pyuavcan.transport.can.CANTransport(media)
+        if sys.platform == 'linux':
+            # Make sure to initialize the virtual CAN interface. For example (run as root):
+            #   modprobe vcan
+            #   ip link add dev vcan0 type vcan
+            #   ip link set up vcan0
+            #   ip link set vcan0 mtu 72
+            #   ifconfig vcan0 up
+            # CAN interfaces can me monitored using can-utils:
+            #   candump -decaxta any
+            media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=64)
+            transport = pyuavcan.transport.can.CANTransport(media)
+
+        elif 'win' in sys.platform:
+            raise RuntimeError('This demo does not yet support MS Windows; please submit patches!')
+
+        else:
+            raise RuntimeError(f'Unknown platform: {sys.platform!r}')
 
         # Populate the node info for use with the Node class. Please see the DSDL definition of uavcan.node.GetInfo.
         node_info = uavcan.node.GetInfo_0_1.Response(
@@ -93,6 +101,13 @@ class DemoApplication:
         # That's it, here is our node, immediately ready to be used. It will serve GetInfo requests and publish its
         # heartbeat automatically (unless it's anonymous). Read the source code of the Node class for more details.
         self._node = pyuavcan.application.Node(transport, node_info)
+
+        # Published heartbeat fields can be configured trivially by assigning them on the heartbeat publisher instance.
+        # In this example here we assign the local process' PID to the vendor-specific status code (VSSC) and make
+        # sure that the valid range is not exceeded.
+        self._node.heartbeat_publisher.vendor_specific_status_code = \
+            os.getpid() & (2 ** min(pyuavcan.dsdl.get_model(uavcan.node.Heartbeat_1_0)[
+                'vendor_specific_status_code'].data_type.bit_length_set) - 1)
 
         # Now we can create our session objects as necessary. They can be created or destroyed later at any point
         # after initialization. It's not necessary to set everything up during the initialization.
@@ -213,7 +228,7 @@ class DemoApplication:
 
         await self._pub_diagnostic_record.publish(uavcan.diagnostic.Record_1_0(
             severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.TRACE),
-            text=f'Temperature {msg} from {metadata.source_node_id} '
+            text=f'Temperature {msg.kelvin:0.3f} K from {metadata.source_node_id} '
                  f'time={metadata.timestamp.system} tid={metadata.transfer_id} prio={metadata.priority}',
         ))
 
@@ -224,8 +239,9 @@ if __name__ == '__main__':
 
     async def list_tasks_periodically() -> None:
         """Print active tasks periodically for demo purposes."""
-        while True:
-            print('Active tasks:\n' + '\n'.join(f'  {t}' for t in asyncio.Task.all_tasks()), file=sys.stderr)
+        while True:  # The splitting and slicing mess here is to abridge the strings to make them fit in one line.
+            print('Active tasks:\n' + '\n'.join('  ' + str(t).split(' wait_for=')[0].split(' cb=')[0][len('<Task '):]
+                                                for t in asyncio.Task.all_tasks()), file=sys.stderr)
             await asyncio.sleep(10)
 
     asyncio.get_event_loop().create_task(list_tasks_periodically())

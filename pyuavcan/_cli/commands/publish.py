@@ -222,7 +222,7 @@ async def _do_execute(args: argparse.Namespace) -> None:
     node_info_fields.update(args.node_info_fields)
     node_info = pyuavcan.dsdl.update_from_builtin(application.NodeInfo(), node_info_fields)
     _logger.info('Node info: %r', node_info)
-    node = application.Node(_util.transport.construct_transport(args.transport), info=node_info)
+    node = application.Node(_util.transport.construct_transport(args), info=node_info)
 
     with contextlib.closing(node):
         # Configure the heartbeat publisher.

@@ -89,7 +89,7 @@ have been received. No limit by default.
 
 
 def execute(args: argparse.Namespace) -> None:
-    transport = _util.transport.construct_transport(args.transport)
+    transport = _util.transport.construct_transport(args)
     subject_specs = [_util.port_spec.construct_port_id_and_type(ds) for ds in args.subject_spec]
     asyncio.get_event_loop().run_until_complete(
         _run(transport=transport,
