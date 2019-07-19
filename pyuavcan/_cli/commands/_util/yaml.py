@@ -51,7 +51,7 @@ def _represent_decimal(self: ruamel.yaml.BaseRepresenter,                   # ty
     if data.is_finite():
         s = str(_POINT_ZERO_DECIMAL + data)  # The zero addition is to force float-like string representation
     elif data.is_nan():
-        s = 'nan'
+        s = '.nan'
     elif data.is_infinite():
         s = '.inf' if data > 0 else '-.inf'
     else:
@@ -70,24 +70,24 @@ def _unittest_yaml() -> None:
     import pytest
 
     ref = YAMLDumper(explicit_start=True).dumps({
-        'abc': 123,
+        'abc': decimal.Decimal('-inf'),
         'def': [
-            456,
+            decimal.Decimal('nan'),
             {
                 'qaz': decimal.Decimal('789'),
             },
         ],
     })
     assert ref == """---
-abc: 123
+abc: -.inf
 def:
-- 456
+- .nan
 - qaz: 789.0
 """
     assert YAMLLoader().load(ref) == {
-        'abc': 123,
+        'abc': -float('inf'),
         'def': [
-            456,
+            pytest.approx(float('nan'), nan_ok=True),
             {
                 'qaz': pytest.approx(789),
             },
