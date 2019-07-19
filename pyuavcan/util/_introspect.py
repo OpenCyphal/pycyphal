@@ -34,7 +34,7 @@ def iter_descendants(ty: typing.Type[T]) -> typing.Iterable[typing.Type[T]]:
     >>> import pyuavcan
     >>> pyuavcan.util.import_submodules(pyuavcan.transport)
     >>> list(sorted(map(lambda t: t.__name__, pyuavcan.util.iter_descendants(pyuavcan.transport.Transport))))
-    ['CANTransport', 'RedundantTransport', 'SerialTransport']
+    [...'CANTransport'...'RedundantTransport'...'SerialTransport'...]
     """
     # noinspection PyArgumentList
     for t in ty.__subclasses__():
