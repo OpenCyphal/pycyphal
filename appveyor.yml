@@ -14,7 +14,7 @@ install:
   - pip install coveralls               # Removed from requirements.txt because it's only useful on the CI.
 
   # GNU/Linux build config
-  - sh: "sudo apt-get install graphviz"
+  - sh: "sudo apt-get install graphviz -y"
 
   # Windows build config
   - cmd: "SET PATH=%PYTHON%;%PATH%"

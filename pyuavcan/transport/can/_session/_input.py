@@ -111,12 +111,6 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         else:
             raise ValueError(f'Invalid value for transfer ID timeout [second]: {value}')
 
-    async def receive(self) -> pyuavcan.transport.TransferFrom:
-        out: typing.Optional[pyuavcan.transport.TransferFrom] = None
-        while out is None:
-            out = await self.try_receive(time.monotonic() + _INFINITE_RECEIVE_RETRY_INTERVAL)
-        return out
-
     async def try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         out = await self._do_try_receive(monotonic_deadline)
         assert out is None or self.specifier.remote_node_id is None \

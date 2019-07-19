@@ -131,16 +131,9 @@ class Session(abc.ABC):
 # noinspection PyAbstractClass
 class InputSession(Session):
     @abc.abstractmethod
-    async def receive(self) -> TransferFrom:
-        """
-        Blocks forever until a transfer is received.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
     async def try_receive(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
         """
-        This is an alternative that will return None if the transfer is not received before the deadline [second].
+        Return None if the transfer is not received before the deadline [second].
         The deadline is compared against time.monotonic().
         If a transfer is received before the deadline, behaves like the non-timeout-capable version.
         If the deadline is in the past, checks once if there is a transfer and then returns immediately, either the

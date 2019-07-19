@@ -188,7 +188,8 @@ async def _unittest_can_transport() -> None:
     assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
         received=2, received_uavcan=2, received_uavcan_accepted=1)
 
-    received: Transfer = await promiscuous_m12345.receive()
+    received = await promiscuous_m12345.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 11
     assert received.source_node_id is None      # The sender is anonymous
@@ -234,7 +235,8 @@ async def _unittest_can_transport() -> None:
     assert fb.original_transfer_timestamp == ts
     assert is_timestamp_valid(fb.first_frame_transmission_timestamp)
 
-    received = await promiscuous_m12345.receive()
+    received = await promiscuous_m12345.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 2
     assert received.source_node_id == 5
@@ -250,7 +252,8 @@ async def _unittest_can_transport() -> None:
     ))
     assert broadcaster.sample_statistics() == Statistics(transfers=4, frames=8, payload_bytes=318)
 
-    received = await promiscuous_m12345.receive()
+    received = await promiscuous_m12345.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 3
     assert received.source_node_id == 5
@@ -278,13 +281,15 @@ async def _unittest_can_transport() -> None:
     # Now, there are a bunch of items awaiting in the selective input for node 5, collect them and check the stats
     assert selective_m12345_5.source_node_id == 5
 
-    received = await selective_m12345_5.receive()
+    received = await selective_m12345_5.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert received.transfer_id == 2
     assert received.priority == Priority.SLOW
     assert is_timestamp_valid(received.timestamp)
     assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x55' * 13  # The 0x55 at the end is padding
 
-    received = await selective_m12345_5.receive()
+    received = await selective_m12345_5.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert received.transfer_id == 3
     assert received.priority == Priority.OPTIONAL
     assert is_timestamp_valid(received.timestamp)
@@ -426,7 +431,8 @@ async def _unittest_can_transport() -> None:
     assert fb.original_transfer_timestamp == ts
     assert is_timestamp_valid(fb.first_frame_transmission_timestamp)
 
-    received = await promiscuous_server_s333.receive()
+    received = await promiscuous_server_s333.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 5
     assert received.transfer_id == 12
@@ -437,7 +443,8 @@ async def _unittest_can_transport() -> None:
     assert b'Until philosophers are kings' in bytes(received.fragmented_payload[0])
     assert b'behold the light of day.' in bytes(received.fragmented_payload[-1])
 
-    received = await selective_server_s333_5.receive()     # Same thing here
+    received = await selective_server_s333_5.try_receive(time.monotonic() + 1.0)     # Same thing here
+    assert received is not None
     assert received.transfer_id == 12
     assert received.priority == Priority.FAST
     assert is_timestamp_valid(received.timestamp)
@@ -555,7 +562,8 @@ async def _unittest_can_transport() -> None:
                                                                    received_uavcan=15,
                                                                    received_uavcan_accepted=14)
 
-    received = await subscriber_promiscuous.receive()
+    received = await subscriber_promiscuous.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123
     assert received.priority == Priority.EXCEPTIONAL
@@ -564,7 +572,8 @@ async def _unittest_can_transport() -> None:
     assert bytes(received.fragmented_payload[0]).startswith(b'Finally')
     assert bytes(received.fragmented_payload[-1]).rstrip(b'\x55').endswith(b'out of his mind.')
 
-    received = await subscriber_selective.receive()
+    received = await subscriber_selective.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert received.priority == Priority.EXCEPTIONAL
     assert received.transfer_id == 7
     assert is_timestamp_valid(received.timestamp)
@@ -595,7 +604,8 @@ async def _unittest_can_transport() -> None:
                                                                    received_uavcan=15,
                                                                    received_uavcan_accepted=14)
 
-    received = await subscriber_promiscuous.receive()
+    received = await subscriber_promiscuous.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123
     assert received.priority == Priority.NOMINAL
@@ -627,7 +637,8 @@ async def _unittest_can_transport() -> None:
     ))
 
     # The promiscuous one is able to receive the transfer since its queue is large enough
-    received = await subscriber_promiscuous.receive()
+    received = await subscriber_promiscuous.try_receive(time.monotonic() + 1.0)
+    assert received is not None
     assert received.priority == Priority.HIGH
     assert received.transfer_id == 8
     assert is_timestamp_valid(received.timestamp)
