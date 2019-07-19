@@ -53,6 +53,8 @@ def _unittest_slow_cli() -> None:
         '--with-metadata', *_get_iface_args()
     )
 
+    time.sleep(1.0)     # Time to let the background processes finish initialization
+
     run_process(
         'pyuavcan', '-v',
         'pub', '12345.uavcan.si.temperature.Scalar.1.0', '{kelvin: 321.5}',
@@ -63,7 +65,7 @@ def _unittest_slow_cli() -> None:
         timeout=3.0
     )
 
-    time.sleep(1.0)     # Timeout to sync up
+    time.sleep(1.0)     # Time to sync up
 
     out_demo_proc = demo_proc.wait(1.0, interrupt=True)[1].splitlines()
     out_sub_heartbeat = proc_sub_heartbeat.wait(1.0, interrupt=True)[1].splitlines()
