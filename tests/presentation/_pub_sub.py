@@ -121,9 +121,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert repr(rx) == repr(heart)
 
     await pub_heart.publish(heart)
-    rx = await sub_heart.try_receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT)
+    rx = await sub_heart.receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT)
     assert repr(rx) == repr(heart)
-    rx = await sub_heart.try_receive_for(_RX_TIMEOUT)
+    rx = await sub_heart.receive_for(_RX_TIMEOUT)
     assert rx is None
 
     sub_heart.close()
@@ -171,7 +171,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
         transfer_id=12,
         fragmented_payload=[memoryview(b'Broken')],
     ), tran_a.loop.time() + 1.0)
-    assert (await sub_record.try_receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT)) is None
+    assert (await sub_record.receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT)) is None
 
     stat = sub_record.sample_statistics()
     assert stat.transport_session.transfers == 2

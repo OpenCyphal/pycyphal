@@ -60,14 +60,14 @@ class Client(ServiceTypedSession[ServiceClass]):
         self._response_timeout = DEFAULT_SERVICE_REQUEST_TIMEOUT
         self._priority = DEFAULT_PRIORITY
 
-    async def try_call(self, request: pyuavcan.dsdl.CompositeObject) -> typing.Optional[pyuavcan.dsdl.CompositeObject]:
+    async def call(self, request: pyuavcan.dsdl.CompositeObject) -> typing.Optional[pyuavcan.dsdl.CompositeObject]:
         """
-        A simplified version of try_call_with_transfer() that simply returns the response object without any metadata.
+        A simplified version of call_with_transfer() that simply returns the response object without any metadata.
         """
-        out = await self.try_call_with_transfer(request=request)
+        out = await self.call_with_transfer(request=request)
         return out[0] if out is not None else None
 
-    async def try_call_with_transfer(self, request: pyuavcan.dsdl.CompositeObject) \
+    async def call_with_transfer(self, request: pyuavcan.dsdl.CompositeObject) \
             -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         """
         Sends the request to the remote server using the pre-configured priority and response timeout parameters.
@@ -77,9 +77,9 @@ class Client(ServiceTypedSession[ServiceClass]):
         if self._maybe_impl is None:
             raise TypedSessionClosedError(repr(self))
         else:
-            return await self._maybe_impl.try_call_with_transfer(request=request,
-                                                                 priority=self._priority,
-                                                                 response_timeout=self._response_timeout)
+            return await self._maybe_impl.call_with_transfer(request=request,
+                                                             priority=self._priority,
+                                                             response_timeout=self._response_timeout)
 
     @property
     def response_timeout(self) -> float:
@@ -191,10 +191,10 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
         self._task = loop.create_task(self._task_function())
 
-    async def try_call_with_transfer(self,
-                                     request:          pyuavcan.dsdl.CompositeObject,
-                                     priority:         pyuavcan.transport.Priority,
-                                     response_timeout: float) \
+    async def call_with_transfer(self,
+                                 request:          pyuavcan.dsdl.CompositeObject,
+                                 priority:         pyuavcan.transport.Priority,
+                                 response_timeout: float) \
             -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         async with self._lock:
             self._raise_if_closed()
@@ -287,7 +287,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                 if transfer is None:
                     continue
 
-                response = pyuavcan.dsdl.try_deserialize(self.dtype.Response, transfer.fragmented_payload)
+                response = pyuavcan.dsdl.deserialize(self.dtype.Response, transfer.fragmented_payload)
                 if response is None:
                     self.deserialization_failure_count += 1
                     continue

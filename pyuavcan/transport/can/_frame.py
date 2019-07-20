@@ -60,7 +60,7 @@ class TimestampedUAVCANFrame(UAVCANFrame):
     timestamp: pyuavcan.transport.Timestamp
 
     @staticmethod
-    def try_parse(source: _media.TimestampedDataFrame) -> typing.Optional[TimestampedUAVCANFrame]:
+    def parse(source: _media.TimestampedDataFrame) -> typing.Optional[TimestampedUAVCANFrame]:
         if source.format != _media.FrameFormat.EXTENDED:
             return None
 
@@ -136,7 +136,7 @@ def _unittest_can_uavcan_frame() -> None:
                                  toggle_bit=False,
                                  loopback=True,
                                  timestamp=ts)
-    assert ref == TimestampedUAVCANFrame.try_parse(
+    assert ref == TimestampedUAVCANFrame.parse(
         TimestampedDataFrame(0, bytearray(b'\x00'), FrameFormat.EXTENDED, loopback=True, timestamp=ts))
 
     ref = TimestampedUAVCANFrame(identifier=123456,
@@ -147,7 +147,7 @@ def _unittest_can_uavcan_frame() -> None:
                                  toggle_bit=True,
                                  loopback=False,
                                  timestamp=ts)
-    assert ref == TimestampedUAVCANFrame.try_parse(
+    assert ref == TimestampedUAVCANFrame.parse(
         TimestampedDataFrame(123456, bytearray(b'Hello\xAC'), FrameFormat.EXTENDED, loopback=False, timestamp=ts))
 
     ref = TimestampedUAVCANFrame(identifier=1234567,
@@ -158,17 +158,17 @@ def _unittest_can_uavcan_frame() -> None:
                                  toggle_bit=True,
                                  loopback=False,
                                  timestamp=ts)
-    assert ref == TimestampedUAVCANFrame.try_parse(
+    assert ref == TimestampedUAVCANFrame.parse(
         TimestampedDataFrame(1234567, bytearray(b'Hello\x6C'), FrameFormat.EXTENDED, loopback=False, timestamp=ts))
 
-    assert TimestampedUAVCANFrame.try_parse(
+    assert TimestampedUAVCANFrame.parse(
         TimestampedDataFrame(1234567, bytearray(b'Hello\xCC'), FrameFormat.EXTENDED, loopback=False, timestamp=ts)
     ) is None   # Bad toggle
 
-    assert TimestampedUAVCANFrame.try_parse(
+    assert TimestampedUAVCANFrame.parse(
         TimestampedDataFrame(1234567, bytearray(b''), FrameFormat.EXTENDED, loopback=False, timestamp=ts)
     ) is None   # No tail byte
 
-    assert TimestampedUAVCANFrame.try_parse(
+    assert TimestampedUAVCANFrame.parse(
         TimestampedDataFrame(123, bytearray(b'Hello\x6C'), FrameFormat.BASE, loopback=False, timestamp=ts)
     ) is None   # Bad frame format

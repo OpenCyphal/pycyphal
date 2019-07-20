@@ -141,7 +141,7 @@ class Server(ServiceTypedSession[ServiceClass]):
         # This is why we can't reliably aggregate redundant transports with different transfer ID overflow parameters.
         while not self._closed:
             out: typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, ServiceRequestMetadata]] \
-                = await self._try_receive_until(monotonic_deadline)
+                = await self._receive_until(monotonic_deadline)
             if out is None:
                 break           # Timed out.
 
@@ -225,7 +225,7 @@ class Server(ServiceTypedSession[ServiceClass]):
 
             self._finalizer((self._input_transport_session, *self._output_transport_sessions.values()))
 
-    async def _try_receive_until(self, monotonic_deadline: float) \
+    async def _receive_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[ServiceRequestClass, ServiceRequestMetadata]]:
         while True:
             transfer = await self._input_transport_session.receive_until(monotonic_deadline)
@@ -236,7 +236,7 @@ class Server(ServiceTypedSession[ServiceClass]):
                                               priority=transfer.priority,
                                               transfer_id=transfer.transfer_id,
                                               client_node_id=transfer.source_node_id)
-                request = pyuavcan.dsdl.try_deserialize(self._dtype.Request, transfer.fragmented_payload)
+                request = pyuavcan.dsdl.deserialize(self._dtype.Request, transfer.fragmented_payload)
                 if request is not None:
                     return request, meta  # type: ignore
                 else:

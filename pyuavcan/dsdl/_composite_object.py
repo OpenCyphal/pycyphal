@@ -123,8 +123,8 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
 
 
 # noinspection PyProtectedMember
-def try_deserialize(dtype: typing.Type[CompositeObjectTypeVar],
-                    fragmented_serialized_representation: typing.Sequence[memoryview]) \
+def deserialize(dtype: typing.Type[CompositeObjectTypeVar],
+                fragmented_serialized_representation: typing.Sequence[memoryview]) \
         -> typing.Optional[CompositeObjectTypeVar]:
     """
     Constructs a Python object representing an instance of the supplied data type from its serialized representation.

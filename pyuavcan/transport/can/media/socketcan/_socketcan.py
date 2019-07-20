@@ -183,7 +183,7 @@ class SocketCANMedia(_media.Media):
             assert ts_system_ns > 0, 'Missing the timestamp; does the driver support timestamping?'
             timestamp = pyuavcan.transport.Timestamp(system_ns=ts_system_ns, monotonic_ns=ts_mono_ns)
 
-            out = SocketCANMedia._try_parse_native_frame(data, loopback=loopback, timestamp=timestamp)
+            out = SocketCANMedia._parse_native_frame(data, loopback=loopback, timestamp=timestamp)
             if out is not None:
                 return out
 
@@ -196,9 +196,9 @@ class SocketCANMedia(_media.Media):
         return out
 
     @staticmethod
-    def _try_parse_native_frame(source: bytes,
-                                loopback: bool,
-                                timestamp: pyuavcan.transport.Timestamp) \
+    def _parse_native_frame(source: bytes,
+                            loopback: bool,
+                            timestamp: pyuavcan.transport.Timestamp) \
             -> typing.Optional[_media.TimestampedDataFrame]:
         header_size = _FRAME_HEADER_STRUCT.size
         ident_raw, data_length, _flags = _FRAME_HEADER_STRUCT.unpack(source[:header_size])

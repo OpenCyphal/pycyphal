@@ -24,7 +24,7 @@ from ._compiler import generate_package as generate_package
 from ._compiler import GeneratedPackageInfo as GeneratedPackageInfo
 
 from ._composite_object import serialize as serialize
-from ._composite_object import try_deserialize as try_deserialize
+from ._composite_object import deserialize as deserialize
 
 from ._composite_object import CompositeObject as CompositeObject
 from ._composite_object import ServiceObject as ServiceObject

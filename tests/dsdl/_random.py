@@ -67,7 +67,7 @@ def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.Generate
                     with pytest.raises(TypeError):
                         assert list(pyuavcan.dsdl.serialize(dtype()))
                     with pytest.raises(TypeError):
-                        pyuavcan.dsdl.try_deserialize(dtype, [memoryview(b'')])
+                        pyuavcan.dsdl.deserialize(dtype, [memoryview(b'')])
 
         _logger.info('Tested types ordered by serialization speed, %d random samples per type', _NUM_RANDOM_SAMPLES)
         _logger.info('Columns: random SR correctness ratio; '
@@ -114,7 +114,7 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
         sr = _make_random_fragmented_serialized_representation(pyuavcan.dsdl.get_model(dtype).bit_length_set)
-        ob = pyuavcan.dsdl.try_deserialize(dtype, sr)
+        ob = pyuavcan.dsdl.deserialize(dtype, sr)
         rand_sr_validness.append(ob is not None)
         sample_des: typing.Optional[typing.Tuple[float, float]] = None
         if ob:
@@ -146,7 +146,7 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
     ser_sample = time.process_time() - ts
 
     ts = time.process_time()
-    d = pyuavcan.dsdl.try_deserialize(type(obj), chunks)  # GC must be disabled while we're in the timed context
+    d = pyuavcan.dsdl.deserialize(type(obj), chunks)  # GC must be disabled while we're in the timed context
     des_sample = time.process_time() - ts
 
     gc.enable()

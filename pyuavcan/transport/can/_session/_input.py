@@ -183,5 +183,3 @@ def _node_id_range() -> typing.Iterable[int]:
 
 
 _NANO = 1e-9
-
-_INFINITE_RECEIVE_RETRY_INTERVAL = 60

@@ -104,20 +104,20 @@ class Subscriber(MessageTypedSession[MessageClass]):
         """
         return (await self.receive_with_transfer())[0]
 
-    async def try_receive_until(self, monotonic_deadline: float) -> typing.Optional[MessageClass]:
+    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[MessageClass]:
         """
-        This is a shortcut for try_receive_with_transfer_until(..)[0]; i.e, this method discards the transfer and
+        This is a shortcut for receive_with_transfer_until(..)[0]; i.e, this method discards the transfer and
         returns only the deserialized message.
         """
-        out = await self.try_receive_with_transfer_until(monotonic_deadline=monotonic_deadline)
+        out = await self.receive_with_transfer_until(monotonic_deadline=monotonic_deadline)
         return out[0] if out else None
 
-    async def try_receive_for(self, timeout: float) -> typing.Optional[MessageClass]:
+    async def receive_for(self, timeout: float) -> typing.Optional[MessageClass]:
         """
-        This is a shortcut for try_receive_with_transfer_for(..)[0]; i.e, this method discards the transfer and
+        This is a shortcut for receive_with_transfer_for(..)[0]; i.e, this method discards the transfer and
         returns only the deserialized message.
         """
-        out = await self.try_receive_with_transfer_for(timeout=timeout)
+        out = await self.receive_with_transfer_for(timeout=timeout)
         return out[0] if out else None
 
     # ----------------------------------------  RECEIVE WITH TRANSFER  ----------------------------------------
@@ -131,11 +131,11 @@ class Subscriber(MessageTypedSession[MessageClass]):
         raises :class:`pyuavcan.transport.ResourceClosedError` shortly after the session is closed.
         """
         while True:
-            out = await self.try_receive_with_transfer_for(_RECEIVE_TIMEOUT)
+            out = await self.receive_with_transfer_for(_RECEIVE_TIMEOUT)
             if out is not None:
                 return out
 
-    async def try_receive_with_transfer_until(self, monotonic_deadline: float) \
+    async def receive_with_transfer_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
         Blocks until either a valid message is received, in which case it is returned along with the transfer
@@ -144,9 +144,9 @@ class Subscriber(MessageTypedSession[MessageClass]):
         If the deadline is in the past (e.g., zero), the method will non-blockingly check if there is any data;
         if there is, it will be returned, otherwise None will be returned immediately.
         """
-        return await self.try_receive_with_transfer_for(timeout=monotonic_deadline - self._loop.time())
+        return await self.receive_with_transfer_for(timeout=monotonic_deadline - self._loop.time())
 
-    async def try_receive_with_transfer_for(self, timeout: float) \
+    async def receive_with_transfer_for(self, timeout: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
         Blocks until either a valid message is received, in which case it is returned along with the transfer
@@ -285,7 +285,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
             while not self._closed:
                 transfer = await self.transport_session.receive_until(self._loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is not None:
-                    message = pyuavcan.dsdl.try_deserialize(self.dtype, transfer.fragmented_payload)
+                    message = pyuavcan.dsdl.deserialize(self.dtype, transfer.fragmented_payload)
                     if message is not None:
                         for rx in self._listeners:
                             rx.push(message, transfer)

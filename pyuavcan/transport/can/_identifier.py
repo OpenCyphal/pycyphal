@@ -40,7 +40,7 @@ class CANID:
         raise NotImplementedError
 
     @staticmethod
-    def try_parse(identifier: int) -> typing.Optional[CANID]:
+    def parse(identifier: int) -> typing.Optional[CANID]:
         _validate_unsigned_range(identifier, 2 ** 29 - 1)
 
         if identifier & 1 != 1:
@@ -309,7 +309,7 @@ def _unittest_can_identifier_parse() -> None:
     from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier, SessionSpecifier
 
     with raises(ValueError):
-        CANID.try_parse(2 ** 29)
+        CANID.parse(2 ** 29)
 
     with raises(ValueError):
         MessageCANID(Priority.HIGH, None, 2 ** 15)
@@ -350,24 +350,24 @@ def _unittest_can_identifier_parse() -> None:
 
     reference_message = MessageCANID(Priority.FAST, 123, 12345)
     reference_message_id = 0b_010_0_0_0011000000111001_1111011_1
-    assert CANID.try_parse(0b_010_0_0_0011000000111001_1111011_0) is None
-    assert CANID.try_parse(reference_message_id) == reference_message
+    assert CANID.parse(0b_010_0_0_0011000000111001_1111011_0) is None
+    assert CANID.parse(reference_message_id) == reference_message
     assert reference_message_id == reference_message.compile([])
     assert reference_message.to_input_session_specifier() == SessionSpecifier(MessageDataSpecifier(12345), 123)
     assert reference_message.to_output_session_specifier() == SessionSpecifier(MessageDataSpecifier(12345), None)
 
     reference_message = MessageCANID(Priority.FAST, None, 4321)
     reference_message_id = 0b_010_0_1_0001000011100001_1111111_1
-    assert CANID.try_parse(0b_010_0_1_0001000011100001_1111111_0) is None
-    assert CANID.try_parse(reference_message_id) == reference_message
+    assert CANID.parse(0b_010_0_1_0001000011100001_1111111_0) is None
+    assert CANID.parse(reference_message_id) == reference_message
     assert reference_message_id == reference_message.compile([memoryview(bytes([100, 27]))])
     assert reference_message.to_input_session_specifier() == SessionSpecifier(MessageDataSpecifier(4321), None)
     assert reference_message.to_output_session_specifier() == SessionSpecifier(MessageDataSpecifier(4321), None)
 
     reference_service = ServiceCANID(Priority.OPTIONAL, 123, 42, 300, True)
     reference_service_id = 0b_111_1_1_100101100_0101010_1111011_1
-    assert CANID.try_parse(0b_111_1_1_100101100_0101010_1111011_0) is None
-    assert CANID.try_parse(reference_service_id) == reference_service
+    assert CANID.parse(0b_111_1_1_100101100_0101010_1111011_0) is None
+    assert CANID.parse(reference_service_id) == reference_service
     assert reference_service_id == reference_service.compile([])
     assert reference_service.to_input_session_specifier() == \
         SessionSpecifier(ServiceDataSpecifier(300, ServiceDataSpecifier.Role.SERVER), 123)
@@ -376,7 +376,7 @@ def _unittest_can_identifier_parse() -> None:
 
     reference_service = ServiceCANID(Priority.OPTIONAL, 42, 123, 255, False)
     reference_service_id = 0b_111_1_0_011111111_1111011_0101010_1
-    assert CANID.try_parse(reference_service_id) == reference_service
+    assert CANID.parse(reference_service_id) == reference_service
     assert reference_service_id == reference_service.compile([])
     assert reference_service.to_input_session_specifier() == \
         SessionSpecifier(ServiceDataSpecifier(255, ServiceDataSpecifier.Role.CLIENT), 42)

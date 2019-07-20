@@ -242,9 +242,9 @@ class CANTransport(pyuavcan.transport.Transport):
                 else:
                     self._frame_stats.received += 1
 
-                cid = CANID.try_parse(raw_frame.identifier)
+                cid = CANID.parse(raw_frame.identifier)
                 if cid is not None:                                             # Ignore non-UAVCAN CAN frames
-                    ufr = TimestampedUAVCANFrame.try_parse(raw_frame)
+                    ufr = TimestampedUAVCANFrame.parse(raw_frame)
                     if ufr is not None:                                         # Ignore non-UAVCAN CAN frames
                         self._handle_any_frame(cid, ufr)
             except Exception as ex:  # pragma: no cover
