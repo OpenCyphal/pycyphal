@@ -5,14 +5,13 @@
 #
 
 from __future__ import annotations
-import time
 import typing
 import asyncio
 import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import ServiceClass, ServiceTypedSession, TypedSessionFinalizer
+from ._base import ServiceClass, ServiceTypedSession, TypedSessionFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import TypedSessionClosedError
 
 
@@ -79,6 +78,7 @@ class Server(ServiceTypedSession[ServiceClass]):
         self._output_transport_sessions: typing.Dict[int, pyuavcan.transport.OutputSession] = {}
         self._maybe_task: typing.Optional[asyncio.Task[None]] = None
         self._closed = False
+        self._send_timeout = DEFAULT_SERVICE_REQUEST_TIMEOUT
 
         self._served_request_count = 0
         self._deserialization_failure_count = 0
@@ -127,14 +127,14 @@ class Server(ServiceTypedSession[ServiceClass]):
         The handler shall return the response or None. If None is returned, the server will not send any response back.
         If the handler throws an exception, it will be suppressed and logged.
         """
-        return await self.serve_until(handler, monotonic_deadline=time.monotonic() + timeout)
+        return await self.serve_until(handler, monotonic_deadline=self._loop.time() + timeout)
 
     async def serve_until(self,
                           handler:            ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
                           monotonic_deadline: float) -> None:
         """
         This is like serve_for() except that we exit normally after the specified monotonic deadline (i.e., the
-        deadline value is compared against time.monotonic()).
+        deadline value is compared against the loop's monotonic time).
         """
         # Observe that if we aggregate redundant transports with different non-monotonic transfer ID modulo values,
         # it might be that the transfer ID that we obtained from the request may be invalid for some of the transports.
@@ -168,9 +168,30 @@ class Server(ServiceTypedSession[ServiceClass]):
 
             # Send the response unless the application has opted out, in which case do nothing.
             if response is not None:
-                await self._do_send(response, meta, response_transport_session)
+                # TODO: make the send timeout configurable.
+                await self._do_send_until(response,
+                                          meta,
+                                          response_transport_session,
+                                          self._loop.time() + self._send_timeout)
 
     # ----------------------------------------  AUXILIARY  ----------------------------------------
+
+    @property
+    def send_timeout(self) -> float:
+        """
+        Every response transfer will have to be sent in this amount of time.
+        If the time is exceeded, the attempt is aborted and a warning is logged.
+        The default value is :data:`DEFAULT_SERVICE_REQUEST_TIMEOUT`.
+        """
+        return self._send_timeout
+
+    @send_timeout.setter
+    def send_timeout(self, value: float) -> None:
+        value = float(value)
+        if 0 < value < float('+inf'):
+            self._send_timeout = value
+        else:
+            raise ValueError(f'Invalid send timeout value: {value}')
 
     def sample_statistics(self) -> ServerStatistics:
         """
@@ -207,7 +228,7 @@ class Server(ServiceTypedSession[ServiceClass]):
     async def _try_receive_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[ServiceRequestClass, ServiceRequestMetadata]]:
         while True:
-            transfer = await self._input_transport_session.try_receive(monotonic_deadline)
+            transfer = await self._input_transport_session.receive_until(monotonic_deadline)
             if transfer is None:
                 return None
             if transfer.source_node_id is not None:
@@ -224,16 +245,17 @@ class Server(ServiceTypedSession[ServiceClass]):
                 self._malformed_request_count += 1
 
     @staticmethod
-    async def _do_send(response: ServiceResponseClass,
-                       metadata: ServiceRequestMetadata,
-                       session:  pyuavcan.transport.OutputSession) -> None:
+    async def _do_send_until(response:           ServiceResponseClass,
+                             metadata:           ServiceRequestMetadata,
+                             session:            pyuavcan.transport.OutputSession,
+                             monotonic_deadline: float) -> bool:
         timestamp = pyuavcan.transport.Timestamp.now()
         fragmented_payload = list(pyuavcan.dsdl.serialize(response))
         transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
                                                priority=metadata.priority,
                                                transfer_id=metadata.transfer_id,
                                                fragmented_payload=fragmented_payload)
-        await session.send(transfer)
+        return await session.send_until(transfer, monotonic_deadline)
 
     def _get_output_transport_session(self, client_node_id: int) -> pyuavcan.transport.OutputSession:
         try:

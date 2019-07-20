@@ -60,13 +60,14 @@ class HeartbeatPublisher:
         self._health = Health.NOMINAL
         self._mode = Mode.INITIALIZATION
         self._vendor_specific_status_code = 0
-        self._publisher = self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)
-        self._subscriber = self._presentation.make_subscriber_with_fixed_subject_id(Heartbeat)
         self._pre_heartbeat_handlers: typing.List[typing.Callable[[], None]] = []
-        self._period = float(Heartbeat.MAX_PUBLICATION_PERIOD)
         self._closed = False
         self._task = presentation.transport.loop.create_task(self._task_function())
 
+        self._publisher = self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)
+        self._publisher.send_timeout = float(Heartbeat.MAX_PUBLICATION_PERIOD)
+
+        self._subscriber = self._presentation.make_subscriber_with_fixed_subject_id(Heartbeat)
         self._subscriber.receive_in_background(self._handle_received_heartbeat)
 
     @property
@@ -112,14 +113,15 @@ class HeartbeatPublisher:
         """
         How often the Heartbeat messages should be published. The upper limit (i.e., the lowest frequency)
         is constrained by the UAVCAN specification; please see the DSDL source of ``uavcan.node.Heartbeat``.
+        The send timeout equals the period.
         """
-        return self._period
+        return self._publisher.send_timeout
 
     @period.setter
     def period(self, value: float) -> None:
         value = float(value)
         if 0 < value <= Heartbeat.MAX_PUBLICATION_PERIOD:
-            self._period = value
+            self._publisher.send_timeout = value
         else:
             raise ValueError(f'Invalid heartbeat period: {value}')
 
@@ -176,11 +178,12 @@ class HeartbeatPublisher:
         next_heartbeat_at = time.monotonic()
         while not self._closed:
             try:
-                next_heartbeat_at += self._period
+                next_heartbeat_at += self._publisher.send_timeout
                 await asyncio.sleep(next_heartbeat_at - time.monotonic())
                 self._call_pre_heartbeat_handlers()
                 if self._presentation.transport.local_node_id is not None:
-                    await self._publisher.publish(self.make_message())
+                    if not await self._publisher.publish(self.make_message()):
+                        _logger.warning('%s heartbeat send timed out', self)
             except asyncio.CancelledError:
                 _logger.debug('%s publisher task cancelled', self)
                 break

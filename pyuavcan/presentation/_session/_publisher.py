@@ -24,6 +24,10 @@ class Publisher(MessageTypedSession[MessageClass]):
     Each task should request its own independent publisher instance from the presentation layer controller. Do not
     share the same publisher instance across different tasks.
     """
+
+    #: Default value for :attr:`send_timeout`. The value is an implementation detail.
+    DEFAULT_SEND_TIMEOUT = 1.0
+
     def __init__(self,
                  impl: PublisherImpl[MessageClass],
                  loop: asyncio.AbstractEventLoop):
@@ -34,6 +38,7 @@ class Publisher(MessageTypedSession[MessageClass]):
         self._loop = loop
         impl.register_proxy()
         self._priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY
+        self._send_timeout = self.DEFAULT_SEND_TIMEOUT
 
     @property
     def dtype(self) -> typing.Type[MessageClass]:
@@ -65,15 +70,38 @@ class Publisher(MessageTypedSession[MessageClass]):
         assert value in pyuavcan.transport.Priority
         self._priority = value
 
-    async def publish(self, message: MessageClass) -> None:
+    @property
+    def send_timeout(self) -> float:
+        """
+        Every outgoing transfer initiated via this proxy instance will have to be sent in this amount of time.
+        If the time is exceeded, the attempt is aborted and False is returned.
+        The default is :attr:`DEFAULT_SEND_TIMEOUT`.
+        The publication logic is roughly as follows::
+
+            return transport_session.send_until(message_transfer, self._loop.time() + self.send_timeout)
+        """
+        return self._send_timeout
+
+    @send_timeout.setter
+    def send_timeout(self, value: float) -> None:
+        value = float(value)
+        if 0 < value < float('+inf'):
+            self._send_timeout = value
+        else:
+            raise ValueError(f'Invalid send timeout value: {value}')
+
+    async def publish(self, message: MessageClass) -> bool:
         """
         Serializes and publishes the message object at the priority level selected earlier.
         Should not be used simultaneously with publish_soon() because that makes the message ordering undefined.
+        Returns False if the publication could not be completed in :attr:`send_timeout`, True otherwise.
         """
         if self._maybe_impl is None:
             raise TypedSessionClosedError(repr(self))
         else:
-            await self._maybe_impl.publish(message, self._priority)
+            return await self._maybe_impl.publish_until(message,
+                                                        self._priority,
+                                                        self._loop.time() + self._send_timeout)
 
     def publish_soon(self, message: MessageClass) -> None:
         """
@@ -82,7 +110,8 @@ class Publisher(MessageTypedSession[MessageClass]):
         """
         async def executor() -> None:
             try:
-                await self.publish(message)
+                if not await self.publish(message):
+                    _logger.info('%s send timeout', self)
             except Exception as ex:
                 _logger.exception('%s deferred publication has failed: %s', self, ex)
 
@@ -114,13 +143,16 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         self.dtype = dtype
         self.transport_session = transport_session
         self.transfer_id_counter = transfer_id_counter
-
         self._finalizer = finalizer
+        self._loop = loop
         self._lock = asyncio.Lock(loop=loop)
         self._proxy_count = 0
         self._closed = False
 
-    async def publish(self, message: MessageClass, priority: pyuavcan.transport.Priority) -> None:
+    async def publish_until(self,
+                            message:            MessageClass,
+                            priority:           pyuavcan.transport.Priority,
+                            monotonic_deadline: float) -> bool:
         if not isinstance(message, self.dtype):
             raise ValueError(f'Expected a message object of type {self.dtype}, found this: {message}')
 
@@ -132,7 +164,7 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
                                                    priority=priority,
                                                    transfer_id=self.transfer_id_counter.get_then_increment(),
                                                    fragmented_payload=fragmented_payload)
-            await self.transport_session.send(transfer)
+            return await self.transport_session.send_until(transfer, monotonic_deadline)
 
     def register_proxy(self) -> None:
         self._raise_if_closed()

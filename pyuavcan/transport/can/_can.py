@@ -33,7 +33,8 @@ class CANFrameStatistics:
         loopback_requested >= loopback_returned
     """
 
-    sent: int = 0                       #: Number of frames sent to the media instance
+    sent: int = 0                       #: Number of frames sent to the media instance successfully
+    unsent: int = 0                     #: Number of frames that were supposed to be sent but timed out
 
     received:                 int = 0   #: Number of genuine frames received from the bus (loopback not included)
     received_uavcan:          int = 0   #: Subset of the above that happen to be valid UAVCAN frames
@@ -70,28 +71,15 @@ class CANTransport(pyuavcan.transport.Transport):
     CAN 2.0 and CAN FD transport implementation.
     """
 
-    DEFAULT_SEND_TIMEOUT = 1.0
-
-    def __init__(self,
-                 media:        Media,
-                 send_timeout: float = DEFAULT_SEND_TIMEOUT,
-                 loop:         typing.Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self, media: Media, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
         """
         :param media: The media implementation such as :class:`pyuavcan.transport.can.media.socketcan.SocketCAN`.
-
-        :param send_timeout: Raise :class:`pyuavcan.transport.SendTimeoutError` if the media takes more time than
-            this to send.
-
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._maybe_media: typing.Optional[Media] = media
         self._local_node_id: typing.Optional[int] = None
         self._media_lock = asyncio.Lock(loop=loop)
-        self._send_timeout = float(send_timeout)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
-
-        if not self._send_timeout > 0:
-            raise ValueError(f'Bad send timeout: {self._send_timeout}')
 
         # Lookup performance for the output registry is not important because it's only used for loopback frames.
         # Hence we don't trade-off memory for speed here.
@@ -210,35 +198,41 @@ class CANTransport(pyuavcan.transport.Transport):
                 BroadcastCANOutputSession(specifier=specifier,
                                           payload_metadata=payload_metadata,
                                           transport=self,
-                                          send_handler=self._do_send,
+                                          send_handler=self._do_send_until,
                                           finalizer=finalizer)
         else:
             session = UnicastCANOutputSession(specifier=specifier,
                                               payload_metadata=payload_metadata,
                                               transport=self,
-                                              send_handler=self._do_send,
+                                              send_handler=self._do_send_until,
                                               finalizer=finalizer)
 
         self._output_registry[specifier] = session
         return session
 
-    async def _do_send(self, frames: typing.Iterable[UAVCANFrame]) -> None:
+    async def _do_send_until(self, frames: typing.Iterable[UAVCANFrame], monotonic_deadline: float) -> bool:
         async with self._media_lock:
-            frames, stat_iter = itertools.tee(frames)
+            frames, stat = itertools.tee(frames)
+            timeout = monotonic_deadline - self._loop.time()
             try:
-                await asyncio.wait_for(self._media.send(x.compile() for x in frames),
-                                       timeout=self._send_timeout,
-                                       loop=self._loop)
+                await asyncio.wait_for(self._media.send(x.compile() for x in frames), timeout=timeout, loop=self._loop)
             except asyncio.TimeoutError:
-                raise pyuavcan.transport.SendTimeoutError(
-                    f'The following frames could not be transmitted in {self._send_timeout:0.1f} seconds: '
-                    f'{list(stat_iter)}')
+                success = False
+                stat_list = list(stat)
+                stat = iter(stat_list)
+                _logger.info('%d frames with the following CAN ID values could not be sent in %.3f seconds: %r',
+                             len(stat_list), timeout, ', '.join(set(f'0x{f.identifier:08x}' for f in stat_list)))
+            else:
+                success = True
 
-            del frames
-            for f in stat_iter:
-                self._frame_stats.sent += 1
+            for f in stat:
                 if f.loopback:
                     self._frame_stats.loopback_requested += 1
+                if success:
+                    self._frame_stats.sent += 1
+                else:
+                    self._frame_stats.unsent += 1
+            return success
 
     def _on_frames_received(self, frames: typing.Iterable[TimestampedDataFrame]) -> None:
         for raw_frame in frames:

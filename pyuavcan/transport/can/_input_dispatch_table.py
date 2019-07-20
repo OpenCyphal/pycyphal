@@ -81,6 +81,7 @@ class InputDispatchTable:
 
 
 def _unittest_input_dispatch_table() -> None:
+    import asyncio
     from pytest import raises
     from pyuavcan.transport import PayloadMetadata
 
@@ -92,7 +93,7 @@ def _unittest_input_dispatch_table() -> None:
 
     a = CANInputSession(SessionSpecifier(MessageDataSpecifier(1234), None),
                         PayloadMetadata(456, 789),
-                        None,
+                        asyncio.get_event_loop(),
                         lambda: None)
     t.add(a)
     t.add(a)

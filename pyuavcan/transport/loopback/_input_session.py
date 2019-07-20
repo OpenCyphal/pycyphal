@@ -4,7 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import time
 import typing
 import asyncio
 
@@ -28,8 +27,8 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue(loop=loop)
         super(LoopbackInputSession, self).__init__()
 
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
-        timeout = monotonic_deadline - time.monotonic()
+    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+        timeout = monotonic_deadline - self._loop.time()
         try:
             if timeout > 0:
                 out = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)

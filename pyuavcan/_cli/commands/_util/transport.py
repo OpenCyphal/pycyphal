@@ -88,31 +88,28 @@ def _add_args_for_can(parser: argparse.ArgumentParser) -> None:
     from pyuavcan.transport.can import CANTransport
     from pyuavcan.transport.can.media.socketcan import SocketCANMedia
 
-    socketcan_parser = _make_arg_sequence_parser((str, ''),
-                                                 (int, 64),
-                                                 (float, CANTransport.DEFAULT_SEND_TIMEOUT))
+    socketcan_parser = _make_arg_sequence_parser((str, ''), (int, 64))
 
-    def make_socketcan(arg_seq: str) -> CANTransport:
-        iface_name, mtu, send_timeout = socketcan_parser(arg_seq)
-        return CANTransport(SocketCANMedia(iface_name, mtu=mtu), send_timeout=send_timeout)
+    def construct_socketcan_transport(arg_seq: str) -> CANTransport:
+        iface_name, mtu = socketcan_parser(arg_seq)
+        return CANTransport(SocketCANMedia(iface_name, mtu=mtu))
 
     parser.add_argument(
         '--iface-can-socketcan', '--socketcan',
         action='append',
         dest='transport',
-        metavar='IFACE_NAME[,MTU[,SEND_TIMEOUT]]',
+        metavar='IFACE_NAME[,MTU]',
         help=f"""
 Use CAN transport over SocketCAN. Arguments:
     - Interface name, string, mandatory; e.g.: "can0".
     - Maximum transmission unit, int; optional, defaults to 64 bytes;
       MTU value of 8 bytes selects CAN 2.0.
-    - Send timeout, float; optional, defaults to {CANTransport.DEFAULT_SEND_TIMEOUT:.01f} s.
 Example; selecting CAN 2.0:
     --socketcan=vcan0,8
 Example; selecting CAN FD with MTU 64 bytes:
     --socketcan=vcan0
 """.strip(),
-        type=make_socketcan,
+        type=construct_socketcan_transport,
     )
 
 

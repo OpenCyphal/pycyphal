@@ -51,7 +51,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         def transport(self) -> pyuavcan.transport.Transport:
             return self._transport
 
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[RedundantTransferFrom]:
+    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[RedundantTransferFrom]:
         raise NotImplementedError
 
     @property
@@ -85,10 +85,13 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
     def disable_feedback(self) -> None:
         raise NotImplementedError
 
-    async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
+    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         raise NotImplementedError
 
-    async def send_via(self, transfer: pyuavcan.transport.Transfer, transport: pyuavcan.transport.Transport) -> None:
+    async def send_via_until(self,
+                             transfer:           pyuavcan.transport.Transfer,
+                             monotonic_deadline: float,
+                             transport:          pyuavcan.transport.Transport) -> bool:
         raise NotImplementedError
 
     @property

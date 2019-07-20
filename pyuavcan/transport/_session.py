@@ -70,7 +70,7 @@ class Statistics:
     frames:        int = 0  # Number of UAVCAN frames
     payload_bytes: int = 0  # Number of transport layer payload bytes, i.e., not including transport metadata or padding
     errors:        int = 0  # Number of failures of any kind, even if they are also logged using other means
-    overruns:      int = 0  # Number of buffer overruns
+    drops:         int = 0  # Number of frames lost to buffer overruns and expired deadlines
 
     def __eq__(self, other: object) -> bool:
         """
@@ -131,10 +131,10 @@ class Session(abc.ABC):
 # noinspection PyAbstractClass
 class InputSession(Session):
     @abc.abstractmethod
-    async def try_receive(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
+    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
         """
         Return None if the transfer is not received before the deadline [second].
-        The deadline is compared against time.monotonic().
+        The deadline is compared against :meth:`asyncio.AbstractEventLoop.time`.
         If a transfer is received before the deadline, behaves like the non-timeout-capable version.
         If the deadline is in the past, checks once if there is a transfer and then returns immediately, either the
         transfer or None if there is none.
@@ -189,9 +189,21 @@ class OutputSession(Session):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def send(self, transfer: Transfer) -> None:
+    async def send_until(self, transfer: Transfer, monotonic_deadline: float) -> bool:
         """
-        May throw SendTimeoutError.
+        Send the transfer; block if necessary until the specified deadline [second].
+        Return when transmission is completed, in which case the return value is True;
+        or return when the deadline is reached, in which case the return value is False.
+        In the case of timeout, a multi-frame transfer may be emitted partially.
+        If the deadline is in the past, attempt to send the frames anyway as long as that doesn't involve blocking.
+
+        Some transports or media sub-layers may be unable to guarantee transmission strictly before the deadline;
+        for example, that may be the case if there is an additional buffering layer under the transport/media
+        implementation (e.g., that could be the case with SLCAN-interfaced CAN bus adapters, IEEE 802.15.4 radios,
+        and so on, where the data is pushed through an intermediary interface and briefly buffered again before
+        being pushed onto the media). This is a design limitation imposed by the underlying non-real-time platform
+        that Python runs on; it is considered acceptable since PyUAVCAN is designed for soft-real-time applications
+        at most.
         """
         raise NotImplementedError
 

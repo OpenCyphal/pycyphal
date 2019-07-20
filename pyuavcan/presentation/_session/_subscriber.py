@@ -5,7 +5,6 @@
 #
 
 from __future__ import annotations
-import time
 import typing
 import logging
 import asyncio
@@ -145,7 +144,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
         If the deadline is in the past (e.g., zero), the method will non-blockingly check if there is any data;
         if there is, it will be returned, otherwise None will be returned immediately.
         """
-        return await self.try_receive_with_transfer_for(timeout=monotonic_deadline - time.monotonic())
+        return await self.try_receive_with_transfer_for(timeout=monotonic_deadline - self._loop.time())
 
     async def try_receive_with_transfer_for(self, timeout: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
@@ -275,6 +274,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         self.transport_session = transport_session
         self.deserialization_failure_count = 0
         self._finalizer = finalizer
+        self._loop = loop
         self._task = loop.create_task(self._task_function())
         self._listeners: typing.List[_Listener[MessageClass]] = []
         self._closed = False
@@ -283,7 +283,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         exception: typing.Optional[Exception] = None
         try:
             while not self._closed:
-                transfer = await self.transport_session.try_receive(time.monotonic() + _RECEIVE_TIMEOUT)
+                transfer = await self.transport_session.receive_until(self._loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is not None:
                     message = pyuavcan.dsdl.try_deserialize(self.dtype, transfer.fragmented_payload)
                     if message is not None:

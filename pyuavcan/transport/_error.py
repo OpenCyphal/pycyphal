@@ -49,10 +49,3 @@ class ResourceClosedError(TransportError):
     Double-close should not raise exceptions.
     """
     pass
-
-
-class SendTimeoutError(TransportError):
-    """
-    The media has taken too long to transmit the frame and is probably malfunctioning.
-    """
-    pass

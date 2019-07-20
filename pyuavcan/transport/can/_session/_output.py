@@ -15,7 +15,7 @@ from .. import _frame, _identifier
 from . import _base, _transfer_sender
 
 
-SendHandler = typing.Callable[[typing.Iterable[_frame.UAVCANFrame]], typing.Awaitable[None]]
+SendHandler = typing.Callable[[typing.Iterable[_frame.UAVCANFrame], float], typing.Awaitable[bool]]
 
 _logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ class _PendingFeedbackKey:
     transfer_id_modulus: int
 
 
+# noinspection PyAbstractClass
 class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
     def __init__(self,
                  transport:        pyuavcan.transport.can.CANTransport,
@@ -100,10 +101,10 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
     def close(self) -> None:
         super(CANOutputSession, self).close()
 
-    async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
-        raise NotImplementedError
-
-    async def _do_send(self, can_id: _identifier.CANID, transfer: pyuavcan.transport.Transfer) -> None:
+    async def _do_send_until(self,
+                             can_id:             _identifier.CANID,
+                             transfer:           pyuavcan.transport.Transfer,
+                             monotonic_deadline: float) -> bool:
         self._raise_if_closed()
 
         # Decompose the outgoing transfer into individual CAN frames
@@ -140,14 +141,17 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
 
         # Emit the frames and update the statistical counters
         try:
-            await self._send_handler(frames)
+            if await self._send_handler(frames, monotonic_deadline):
+                self._statistics.transfers += 1
+                self._statistics.frames += num_frames
+                self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))  # Session level
+                return True
+            else:
+                self._statistics.drops += num_frames
+                return False
         except Exception:
             self._statistics.errors += 1
             raise
-        else:
-            self._statistics.transfers += 1
-            self._statistics.frames += num_frames
-            self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))  # Session level, not transport
 
 
 class BroadcastCANOutputSession(CANOutputSession):
@@ -169,14 +173,13 @@ class BroadcastCANOutputSession(CANOutputSession):
                                                         payload_metadata=payload_metadata,
                                                         finalizer=finalizer)
 
-    async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
+    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         can_id = _identifier.MessageCANID(
             priority=transfer.priority,
             subject_id=self._subject_id,
             source_node_id=self._transport.local_node_id  # May be anonymous
         )
-
-        await self._do_send(can_id, transfer)
+        return await self._do_send_until(can_id, transfer, monotonic_deadline)
 
 
 class UnicastCANOutputSession(CANOutputSession):
@@ -201,11 +204,11 @@ class UnicastCANOutputSession(CANOutputSession):
                                                       payload_metadata=payload_metadata,
                                                       finalizer=finalizer)
 
-    async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
+    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         source_node_id = self._transport.local_node_id
         if source_node_id is None:
             raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
-                'Cannot emit a service transfer because the local node is anonymous (does not have a node ID)')
+                'Cannot emit a service transfer because the local node is anonymous (does not have a node-ID)')
 
         can_id = _identifier.ServiceCANID(
             priority=transfer.priority,
@@ -214,4 +217,4 @@ class UnicastCANOutputSession(CANOutputSession):
             source_node_id=source_node_id,
             destination_node_id=self._destination_node_id
         )
-        await self._do_send(can_id, transfer)
+        return await self._do_send_until(can_id, transfer, monotonic_deadline)

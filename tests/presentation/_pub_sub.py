@@ -4,7 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import time
 import typing
 import asyncio
 
@@ -95,7 +94,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     stat = sub_heart.sample_statistics()
     assert stat.transport_session.transfers == 1
     assert stat.transport_session.frames == 1
-    assert stat.transport_session.overruns == 0
+    assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 0
     assert stat.messages == 1
 
@@ -113,7 +112,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     stat = sub_heart.sample_statistics()
     assert stat.transport_session.transfers == 2
     assert stat.transport_session.frames == 2
-    assert stat.transport_session.overruns == 0
+    assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 0
     assert stat.messages == 2
 
@@ -122,7 +121,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert repr(rx) == repr(heart)
 
     await pub_heart.publish(heart)
-    rx = await sub_heart.try_receive_until(time.monotonic() + _RX_TIMEOUT)
+    rx = await sub_heart.try_receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT)
     assert repr(rx) == repr(heart)
     rx = await sub_heart.try_receive_for(_RX_TIMEOUT)
     assert rx is None
@@ -162,22 +161,22 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     stat = sub_record.sample_statistics()
     assert stat.transport_session.transfers == 1
     assert stat.transport_session.frames == 1
-    assert stat.transport_session.overruns == 0
+    assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 0
     assert stat.messages == 1
 
-    await pub_record.transport_session.send(pyuavcan.transport.Transfer(
+    await pub_record.transport_session.send_until(pyuavcan.transport.Transfer(
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=Priority.NOMINAL,
         transfer_id=12,
         fragmented_payload=[memoryview(b'Broken')],
-    ))
-    assert (await sub_record.try_receive_until(time.monotonic() + _RX_TIMEOUT)) is None
+    ), tran_a.loop.time() + 1.0)
+    assert (await sub_record.try_receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT)) is None
 
     stat = sub_record.sample_statistics()
     assert stat.transport_session.transfers == 2
     assert stat.transport_session.frames == 2
-    assert stat.transport_session.overruns == 0
+    assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 1
     assert stat.messages == 1
 

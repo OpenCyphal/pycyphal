@@ -5,7 +5,6 @@
 #
 
 from __future__ import annotations
-import time
 import typing
 import asyncio
 import logging
@@ -13,7 +12,7 @@ import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
 from ._base import ServiceClass, ServiceTypedSession, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
-from ._base import DEFAULT_PRIORITY
+from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import TypedSessionClosedError, RequestTransferIDVariabilityExhaustedError
 
 
@@ -49,8 +48,6 @@ class Client(ServiceTypedSession[ServiceClass]):
         in MyPy, this should be switched back to proper implementation.
     """
 
-    DEFAULT_RESPONSE_TIMEOUT = 1.0       # Default timeout per the Specification
-
     def __init__(self,
                  impl: ClientImpl[ServiceClass],
                  loop: asyncio.AbstractEventLoop):
@@ -60,7 +57,7 @@ class Client(ServiceTypedSession[ServiceClass]):
         self._input_transport_session = impl.input_transport_session    # Same
         self._output_transport_session = impl.output_transport_session  # Same
         impl.register_proxy()
-        self._response_timeout = self.DEFAULT_RESPONSE_TIMEOUT
+        self._response_timeout = DEFAULT_SERVICE_REQUEST_TIMEOUT
         self._priority = DEFAULT_PRIORITY
 
     async def try_call(self, request: pyuavcan.dsdl.CompositeObject) -> typing.Optional[pyuavcan.dsdl.CompositeObject]:
@@ -90,13 +87,19 @@ class Client(ServiceTypedSession[ServiceClass]):
         The response timeout value used for requests emitted via this proxy instance.
         This parameter is configured separately per proxy instance; i.e., it is not shared across different client
         instances under the same session specifier.
+        The same value is also used as send timeout for the underlying call to
+        :meth:`pyuavcan.transport.OutputSession.send_until`.
         The default value is set according to the recommendations provided in the Specification.
         """
         return self._response_timeout
 
     @response_timeout.setter
     def response_timeout(self, value: float) -> None:
-        self._response_timeout = float(value)
+        value = float(value)
+        if 0 < value < float('+inf'):
+            self._response_timeout = float(value)
+        else:
+            raise ValueError(f'Invalid response timeout value: {value}')
 
     @property
     def priority(self) -> pyuavcan.transport.Priority:
@@ -167,6 +170,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         self.output_transport_session = output_transport_session
 
         self.sent_request_count = 0
+        self.unsent_request_count = 0
         self.deserialization_failure_count = 0
         self.unexpected_response_count = 0
 
@@ -205,10 +209,10 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                 future = self._loop.create_future()
                 self._response_futures_by_transfer_id[transfer_id] = future
                 # The lock is still taken, this is intentional. Serialize access to the transport.
-                await self._do_send(request=request,
-                                    transfer_id=transfer_id,
-                                    priority=priority)
-                self.sent_request_count += 1
+                send_result = await self._do_send_until(request=request,
+                                                        transfer_id=transfer_id,
+                                                        priority=priority,
+                                                        monotonic_deadline=self._loop.time() + response_timeout)
             except BaseException:
                 self._forget_future(transfer_id)
                 raise
@@ -218,10 +222,15 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         # otherwise the user will get a false exception when the same transfer ID is reused (which only happens
         # with some low-capability transports such as CAN bus though).
         try:
-            response, transfer = await asyncio.wait_for(future, timeout=response_timeout, loop=self._loop)
-            assert isinstance(response, self.dtype.Response)
-            assert isinstance(transfer, pyuavcan.transport.TransferFrom)
-            return response, transfer
+            if send_result:
+                self.sent_request_count += 1
+                response, transfer = await asyncio.wait_for(future, timeout=response_timeout, loop=self._loop)
+                assert isinstance(response, self.dtype.Response)
+                assert isinstance(transfer, pyuavcan.transport.TransferFrom)
+                return response, transfer
+            else:
+                self.unsent_request_count += 1
+                return None
         except asyncio.TimeoutError:
             return None
         finally:
@@ -253,10 +262,11 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         # This is a no-op - explicit close is not needed for client because it has no work-forever methods.
         pass
 
-    async def _do_send(self,
-                       request:     pyuavcan.dsdl.CompositeObject,
-                       transfer_id: int,
-                       priority:    pyuavcan.transport.Priority) -> None:
+    async def _do_send_until(self,
+                             request:            pyuavcan.dsdl.CompositeObject,
+                             transfer_id:        int,
+                             priority:           pyuavcan.transport.Priority,
+                             monotonic_deadline: float) -> bool:
         if not isinstance(request, self.dtype.Request):
             raise ValueError(f'Invalid request object: expected an instance of {self.dtype.Request}, '
                              f'got {type(request)} instead.')
@@ -267,13 +277,13 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                                                priority=priority,
                                                transfer_id=transfer_id,
                                                fragmented_payload=fragmented_payload)
-        await self.output_transport_session.send(transfer)
+        return await self.output_transport_session.send_until(transfer, monotonic_deadline)
 
     async def _task_function(self) -> None:
         exception: typing.Optional[Exception] = None
         try:
             while not self._closed:
-                transfer = await self.input_transport_session.try_receive(time.monotonic() + _RECEIVE_TIMEOUT)
+                transfer = await self.input_transport_session.receive_until(self._loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is None:
                     continue
 

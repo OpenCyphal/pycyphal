@@ -134,6 +134,8 @@ class DemoApplication:
         # We'll be publishing diagnostic messages using this publisher instance. The method we use is a shortcut for:
         #   make_publisher(uavcan.diagnostic.Record_1_0, pyuavcan.dsdl.get_fixed_port_id(uavcan.diagnostic.Record_1_0))
         self._pub_diagnostic_record = self._node.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+        self._pub_diagnostic_record.priority = pyuavcan.transport.Priority.OPTIONAL
+        self._pub_diagnostic_record.send_timeout = 2.0
 
         # A message subscription.
         self._sub_temperature = self._node.make_subscriber(uavcan.si.temperature.Scalar_1_0, 12345)
@@ -157,7 +159,9 @@ class DemoApplication:
             text=f'Least squares request from {metadata.client_node_id} time={metadata.timestamp.system} '
                  f'tid={metadata.transfer_id} prio={metadata.priority}',
         )
-        await self._pub_diagnostic_record.publish(diagnostic_msg)
+        if not await self._pub_diagnostic_record.publish(diagnostic_msg):
+            print('Diagnostic message could not be sent in', self._pub_diagnostic_record.send_timeout, 'seconds',
+                  file=sys.stderr)
 
         # This is just the business logic.
         sum_x = sum(map(lambda p: p.x, request.points))
@@ -226,11 +230,13 @@ class DemoApplication:
         """
         print('TEMPERATURE', msg.kelvin - 273.15, 'C')
 
-        await self._pub_diagnostic_record.publish(uavcan.diagnostic.Record_1_0(
+        if not await self._pub_diagnostic_record.publish(uavcan.diagnostic.Record_1_0(
             severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.TRACE),
             text=f'Temperature {msg.kelvin:0.3f} K from {metadata.source_node_id} '
                  f'time={metadata.timestamp.system} tid={metadata.transfer_id} prio={metadata.priority}',
-        ))
+        )):
+            print('Diagnostic message could not be sent in', self._pub_diagnostic_record.send_timeout, 'seconds',
+                  file=sys.stderr)
 
 
 if __name__ == '__main__':

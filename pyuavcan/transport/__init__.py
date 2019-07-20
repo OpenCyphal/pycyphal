@@ -39,4 +39,3 @@ from ._error import OperationNotDefinedForAnonymousNodeError as OperationNotDefi
 from ._error import InvalidTransportConfigurationError as InvalidTransportConfigurationError
 from ._error import InvalidMediaConfigurationError as InvalidMediaConfigurationError
 from ._error import ResourceClosedError as ResourceClosedError
-from ._error import SendTimeoutError as SendTimeoutError

@@ -97,8 +97,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         loop:                                         typing.Optional[asyncio.AbstractEventLoop] = None
     ):
         """
-        :param serial_port: The serial port to communicate over. The caller may configure the transmit timeout as
-            necessary. On timeout, :class:`pyuavcan.transport.SendTimeoutError` will be raised.
+        :param serial_port: The serial port instance to communicate over.
 
         :param single_frame_transfer_payload_capacity_bytes: Use single-frame transfers for all outgoing transfers
             containing not more than than this many bytes of payload. Otherwise, use multi-frame transfers.

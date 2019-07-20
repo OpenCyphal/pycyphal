@@ -10,7 +10,7 @@ import asyncio
 import pyuavcan.transport
 
 
-TransferRouter = typing.Callable[[pyuavcan.transport.Transfer], typing.Awaitable[None]]
+TransferRouter = typing.Callable[[pyuavcan.transport.Transfer, float], typing.Awaitable[bool]]
 
 
 class LoopbackFeedback(pyuavcan.transport.Feedback):
@@ -47,15 +47,18 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
     def disable_feedback(self) -> None:
         self._feedback_handler = None
 
-    async def send(self, transfer: pyuavcan.transport.Transfer) -> None:
-        await self._router(transfer)
+    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
+        out = await self._router(transfer, monotonic_deadline)
+        if out:
+            self._stats.transfers += 1
+            self._stats.frames += 1
+            self._stats.payload_bytes += sum(map(len, transfer.fragmented_payload))
+            if self._feedback_handler is not None:
+                self._feedback_handler(LoopbackFeedback(transfer.timestamp))
+        else:
+            self._stats.drops += 1
 
-        self._stats.transfers += 1
-        self._stats.frames += 1
-        self._stats.payload_bytes += sum(map(len, transfer.fragmented_payload))
-
-        if self._feedback_handler is not None:
-            self._feedback_handler(LoopbackFeedback(transfer.timestamp))
+        return out
 
     @property
     def specifier(self) -> pyuavcan.transport.SessionSpecifier:
@@ -82,7 +85,7 @@ def _unittest_session() -> None:
         nonlocal closed
         closed = True
 
-    async def do_route(_: pyuavcan.transport.Transfer) -> None:
+    async def do_route(_a: pyuavcan.transport.Transfer, _b: float) -> bool:
         raise NotImplementedError
 
     ses = LoopbackOutputSession(specifier=specifier,

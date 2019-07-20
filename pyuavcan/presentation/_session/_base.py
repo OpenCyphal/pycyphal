@@ -12,9 +12,11 @@ import pyuavcan.dsdl
 import pyuavcan.transport
 
 
-# This value is not mandated by the Specification.
+#: This value is not mandated by Specification, it is an implementation detail.
 DEFAULT_PRIORITY = pyuavcan.transport.Priority.NOMINAL
 
+#: This value is recommended by Specification.
+DEFAULT_SERVICE_REQUEST_TIMEOUT = 1.0
 
 TypedSessionFinalizer = typing.Callable[[typing.Iterable[pyuavcan.transport.Session]], None]
 

@@ -123,16 +123,16 @@ async def _unittest_can_transport() -> None:
     ts = Timestamp.now()
 
     def is_timestamp_valid(timestamp: Timestamp) -> bool:
-        mon = ts.monotonic < timestamp.monotonic < time.monotonic()
+        mon = ts.monotonic < timestamp.monotonic < tr.loop.time()
         sys = ts.system < timestamp.system < time.time()
         return mon and sys
 
-    await broadcaster.send(Transfer(
+    assert await broadcaster.send_until(Transfer(
         timestamp=ts,
         priority=Priority.IMMEDIATE,
         transfer_id=32 + 11,            # Modulus 11
         fragmented_payload=[_mem('abc'), _mem('def')]
-    ))
+    ), tr.loop.time() + 1.0)
     assert broadcaster.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=6)
 
     assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=1)
@@ -155,19 +155,20 @@ async def _unittest_can_transport() -> None:
 
     # Can't send anonymous service transfers
     with pytest.raises(OperationNotDefinedForAnonymousNodeError):
-        await client_requester.send(Transfer(
-            timestamp=ts, priority=Priority.IMMEDIATE, transfer_id=0, fragmented_payload=[]
-        ))
+        assert await client_requester.send_until(
+            Transfer(timestamp=ts, priority=Priority.IMMEDIATE, transfer_id=0, fragmented_payload=[]),
+            tr.loop.time() + 1.0,
+        )
     assert client_requester.sample_statistics() == Statistics()   # Not incremented!
 
     # Can't send multiframe anonymous messages
     with pytest.raises(OperationNotDefinedForAnonymousNodeError):
-        await broadcaster.send(Transfer(
+        assert await broadcaster.send_until(Transfer(
             timestamp=ts,
             priority=Priority.SLOW,
             transfer_id=2,
             fragmented_payload=[_mem('qwe'), _mem('rty')] * 50  # Lots of data here, very multiframe
-        ))
+        ), tr.loop.time() + 1.0)
 
     #
     # Broadcast exchange with input dispatch test
@@ -176,19 +177,19 @@ async def _unittest_can_transport() -> None:
     selective_m12345_9 = tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 9), meta)
     promiscuous_m12345 = tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
-    await broadcaster.send(Transfer(
+    assert await broadcaster.send_until(Transfer(
         timestamp=ts,
         priority=Priority.IMMEDIATE,
         transfer_id=32 + 11,            # Modulus 11
         fragmented_payload=[_mem('abc'), _mem('def')]
-    ))
+    ), tr.loop.time() + 1.0)
     assert broadcaster.sample_statistics() == Statistics(transfers=2, frames=2, payload_bytes=12)
 
     assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=2)
     assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
         received=2, received_uavcan=2, received_uavcan_accepted=1)
 
-    received = await promiscuous_m12345.try_receive(time.monotonic() + 1.0)
+    received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 11
@@ -218,12 +219,12 @@ async def _unittest_can_transport() -> None:
     feedback_collector = _FeedbackCollector()
 
     broadcaster.enable_feedback(feedback_collector.give)
-    await broadcaster.send(Transfer(
+    assert await broadcaster.send_until(Transfer(
         timestamp=ts,
         priority=Priority.SLOW,
         transfer_id=2,
         fragmented_payload=[_mem('qwe'), _mem('rty')] * 50  # Lots of data here, very multiframe
-    ))
+    ), tr.loop.time() + 1.0)
     assert broadcaster.sample_statistics() == Statistics(transfers=3, frames=7, payload_bytes=312)
     broadcaster.disable_feedback()
 
@@ -235,7 +236,7 @@ async def _unittest_can_transport() -> None:
     assert fb.original_transfer_timestamp == ts
     assert is_timestamp_valid(fb.first_frame_transmission_timestamp)
 
-    received = await promiscuous_m12345.try_receive(time.monotonic() + 1.0)
+    received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 2
@@ -244,15 +245,15 @@ async def _unittest_can_transport() -> None:
     assert is_timestamp_valid(received.timestamp)
     assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x55' * 13  # The 0x55 at the end is padding
 
-    await broadcaster.send(Transfer(
+    assert await broadcaster.send_until(Transfer(
         timestamp=ts,
         priority=Priority.OPTIONAL,
         transfer_id=3,
         fragmented_payload=[_mem('qwe'), _mem('rty')]
-    ))
+    ), tr.loop.time() + 1.0)
     assert broadcaster.sample_statistics() == Statistics(transfers=4, frames=8, payload_bytes=318)
 
-    received = await promiscuous_m12345.try_receive(time.monotonic() + 1.0)
+    received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 3
@@ -269,26 +270,28 @@ async def _unittest_can_transport() -> None:
 
     broadcaster.close()
     with pytest.raises(ResourceClosedError):
-        await broadcaster.send(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4, fragmented_payload=[]))
+        assert await broadcaster.send_until(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4,
+                                                     fragmented_payload=[]),
+                                            tr.loop.time() + 1.0)
     broadcaster.close()   # Does nothing
 
     # Final checks for the broadcaster - make sure nothing is left in the queue
-    assert (await promiscuous_m12345.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_m12345.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
 
     # The selective listener was not supposed to pick up anything because it's selective for node 9, not 5
-    assert (await selective_m12345_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await selective_m12345_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
 
     # Now, there are a bunch of items awaiting in the selective input for node 5, collect them and check the stats
     assert selective_m12345_5.source_node_id == 5
 
-    received = await selective_m12345_5.try_receive(time.monotonic() + 1.0)
+    received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert received.transfer_id == 2
     assert received.priority == Priority.SLOW
     assert is_timestamp_valid(received.timestamp)
     assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x55' * 13  # The 0x55 at the end is padding
 
-    received = await selective_m12345_5.try_receive(time.monotonic() + 1.0)
+    received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert received.transfer_id == 3
     assert received.priority == Priority.OPTIONAL
@@ -315,24 +318,24 @@ async def _unittest_can_transport() -> None:
         SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), None), meta)
 
     # No one is listening, this one will be lost.
-    await client_requester.send(Transfer(
+    assert await client_requester.send_until(Transfer(
         timestamp=ts,
         priority=Priority.FAST,
         transfer_id=11,
         fragmented_payload=[]
-    ))
+    ), tr.loop.time() + 1.0)
     assert client_requester.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=0)
 
-    assert (await selective_server_s333_5.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
-    assert (await selective_server_s333_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
-    assert (await promiscuous_server_s333.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await selective_server_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_server_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_server_s333.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert selective_server_s333_5.sample_statistics() == Statistics()
     assert selective_server_s333_9.sample_statistics() == Statistics()
     assert promiscuous_server_s333.sample_statistics() == Statistics()
 
-    assert (await selective_client_s333_5.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
-    assert (await selective_client_s333_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
-    assert (await promiscuous_client_s333.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_client_s333.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert selective_client_s333_5.sample_statistics() == Statistics()
     assert selective_client_s333_9.sample_statistics() == Statistics()
     assert promiscuous_client_s333.sample_statistics() == Statistics()
@@ -353,12 +356,12 @@ async def _unittest_can_transport() -> None:
     # Will fail with an error; make sure it's counted properly. The feedback registry entry will remain pending!
     media.raise_on_send_once(RuntimeError('Induced failure'))
     with pytest.raises(RuntimeError, match='Induced failure'):
-        await client_requester.send(Transfer(
+        assert await client_requester.send_until(Transfer(
             timestamp=ts,
             priority=Priority.FAST,
             transfer_id=12,
             fragmented_payload=[]
-        ))
+        ), tr.loop.time() + 1.0)
     assert client_requester.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=0, errors=1)
 
     # Some malformed feedback frames which will be ignored
@@ -392,7 +395,7 @@ async def _unittest_can_transport() -> None:
 
     # Now, this transmission will succeed, but a pending loopback registry entry will be overwritten, which will be
     # reflected in the error counter.
-    await client_requester.send(Transfer(
+    assert await client_requester.send_until(Transfer(
         timestamp=ts,
         priority=Priority.FAST,
         transfer_id=12,
@@ -404,7 +407,7 @@ async def _unittest_can_transport() -> None:
             _mem('- no, nor the human race, as I believe - '),
             _mem('and then only will this our State have a possibility of life and behold the light of day.'),
         ]
-    ))
+    ), tr.loop.time() + 1.0)
     client_requester.disable_feedback()
     assert client_requester.sample_statistics() == Statistics(transfers=2, frames=8, payload_bytes=438, errors=2)
 
@@ -425,13 +428,15 @@ async def _unittest_can_transport() -> None:
 
     client_requester.close()
     with pytest.raises(ResourceClosedError):
-        await client_requester.send(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4, fragmented_payload=[]))
+        assert await client_requester.send_until(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4,
+                                                          fragmented_payload=[]),
+                                                 tr.loop.time() + 1.0)
 
     fb = feedback_collector.take()
     assert fb.original_transfer_timestamp == ts
     assert is_timestamp_valid(fb.first_frame_transmission_timestamp)
 
-    received = await promiscuous_server_s333.try_receive(time.monotonic() + 1.0)
+    received = await promiscuous_server_s333.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 5
@@ -443,7 +448,7 @@ async def _unittest_can_transport() -> None:
     assert b'Until philosophers are kings' in bytes(received.fragmented_payload[0])
     assert b'behold the light of day.' in bytes(received.fragmented_payload[-1])
 
-    received = await selective_server_s333_5.try_receive(time.monotonic() + 1.0)     # Same thing here
+    received = await selective_server_s333_5.receive_until(tr.loop.time() + 1.0)     # Same thing here
     assert received is not None
     assert received.transfer_id == 12
     assert received.priority == Priority.FAST
@@ -454,12 +459,12 @@ async def _unittest_can_transport() -> None:
     assert b'behold the light of day.' in bytes(received.fragmented_payload[-1])
 
     # Nothing is received - non-matching node ID selector
-    assert (await selective_server_s333_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await selective_server_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
 
     # Nothing is received - non-matching role (not server)
-    assert (await selective_client_s333_5.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
-    assert (await selective_client_s333_9.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
-    assert (await promiscuous_client_s333.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_client_s333.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert selective_client_s333_5.sample_statistics() == Statistics()
     assert selective_client_s333_9.sample_statistics() == Statistics()
     assert promiscuous_client_s333.sample_statistics() == Statistics()
@@ -540,7 +545,7 @@ async def _unittest_can_transport() -> None:
         subscriber_selective.queue_capacity = 0
     assert subscriber_selective.queue_capacity == 2
 
-    await pub_m2222.send(Transfer(
+    assert await pub_m2222.send_until(Transfer(
         timestamp=ts,
         priority=Priority.EXCEPTIONAL,
         transfer_id=7,
@@ -548,7 +553,7 @@ async def _unittest_can_transport() -> None:
             _mem('Finally, from so little sleeping and so much reading, '),
             _mem('his brain dried up and he went completely out of his mind.'),  # Two frames.
         ]
-    ))
+    ), tr.loop.time() + 1.0)
 
     assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16,
                                                                   received=4,
@@ -562,7 +567,7 @@ async def _unittest_can_transport() -> None:
                                                                    received_uavcan=15,
                                                                    received_uavcan_accepted=14)
 
-    received = await subscriber_promiscuous.try_receive(time.monotonic() + 1.0)
+    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123
@@ -572,7 +577,7 @@ async def _unittest_can_transport() -> None:
     assert bytes(received.fragmented_payload[0]).startswith(b'Finally')
     assert bytes(received.fragmented_payload[-1]).rstrip(b'\x55').endswith(b'out of his mind.')
 
-    received = await subscriber_selective.try_receive(time.monotonic() + 1.0)
+    received = await subscriber_selective.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert received.priority == Priority.EXCEPTIONAL
     assert received.transfer_id == 7
@@ -585,12 +590,12 @@ async def _unittest_can_transport() -> None:
                                                                     frames=2,
                                                                     payload_bytes=124)  # Includes padding!
 
-    await pub_m2222.send(Transfer(
+    assert await pub_m2222.send_until(Transfer(
         timestamp=ts,
         priority=Priority.NOMINAL,
         transfer_id=7,                  # Same transfer ID, will be accepted only by the instance with low TID timeout
         fragmented_payload=[]
-    ))
+    ), tr.loop.time() + 1.0)
 
     assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16,
                                                                   received=5,
@@ -604,7 +609,7 @@ async def _unittest_can_transport() -> None:
                                                                    received_uavcan=15,
                                                                    received_uavcan_accepted=14)
 
-    received = await subscriber_promiscuous.try_receive(time.monotonic() + 1.0)
+    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123
@@ -618,13 +623,13 @@ async def _unittest_can_transport() -> None:
                                                                     payload_bytes=124)
 
     # Discarded because of the same transfer ID
-    assert (await subscriber_selective.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await subscriber_selective.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
                                                                   frames=3,
                                                                   payload_bytes=124,
                                                                   errors=1)     # Error due to the repeated transfer ID
 
-    await pub_m2222.send(Transfer(
+    assert await pub_m2222.send_until(Transfer(
         timestamp=ts,
         priority=Priority.HIGH,
         transfer_id=8,
@@ -634,10 +639,10 @@ async def _unittest_can_transport() -> None:
             _mem('c' * 63),
             _mem('d' * 62),  # Tricky case - one of the CRC bytes spills over into the fifth frame
         ]
-    ))
+    ), tr.loop.time() + 1.0)
 
     # The promiscuous one is able to receive the transfer since its queue is large enough
-    received = await subscriber_promiscuous.try_receive(time.monotonic() + 1.0)
+    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert received.priority == Priority.HIGH
     assert received.transfer_id == 8
@@ -653,12 +658,12 @@ async def _unittest_can_transport() -> None:
                                                                     payload_bytes=375)
 
     # The selective one is unable to do so since its RX queue is too small; it is reflected in the error counter
-    assert (await subscriber_selective.try_receive(time.monotonic() + _RX_TIMEOUT)) is None
+    assert (await subscriber_selective.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
                                                                   frames=5,
                                                                   payload_bytes=124,
                                                                   errors=1,
-                                                                  overruns=3)  # Overruns!
+                                                                  drops=3)  # Overruns!
 
     #
     # Finalization.

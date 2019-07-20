@@ -5,7 +5,6 @@
 #
 
 import os
-import time
 import typing
 import asyncio
 import logging
@@ -108,6 +107,7 @@ of heartbeat is defined as min((--period), MAX_PUBLICATION_PERIOD); i.e.,
 unless this value exceeds the maximum period defined for heartbeat by the
 specification, it is used for heartbeat as well. Note that anonymous nodes
 do not publish heartbeat, see the local node-ID argument for more info.
+The send timeout for all publishers will equal the publication period.
 Default: %(default)s
 '''.strip(),
     )
@@ -189,7 +189,8 @@ class Publication:
                  field_spec:   str,
                  presentation: pyuavcan.presentation.Presentation,
                  transfer_id:  int,
-                 priority:     pyuavcan.transport.Priority):
+                 priority:     pyuavcan.transport.Priority,
+                 send_timeout: float):
         subject_id, dtype = _util.port_spec.construct_port_id_and_type(subject_spec)
         content = _YAML_LOADER.load(field_spec)
 
@@ -197,9 +198,10 @@ class Publication:
         self._publisher = presentation.make_publisher(dtype, subject_id)
         self._publisher.priority = priority
         self._publisher.transfer_id_counter.override(transfer_id)
+        self._publisher.send_timeout = send_timeout
 
-    async def publish(self) -> None:
-        await self._publisher.publish(self._message)
+    async def publish(self) -> bool:
+        return await self._publisher.publish(self._message)
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}({self._message}, {self._publisher})'
@@ -264,17 +266,24 @@ async def _do_execute(args: argparse.Namespace) -> None:
                                             field_spec=field_spec,
                                             presentation=node.presentation,
                                             transfer_id=args.transfer_id,
-                                            priority=args.priority))
+                                            priority=args.priority,
+                                            send_timeout=args.period))
         _logger.info('Publication set: %r', publications)
 
         # All set! Run the publication loop until the specified number of publications is done.
-        sleep_until = time.monotonic()
+        sleep_until = asyncio.get_event_loop().time()
         for c in range(int(args.count)):
-            await asyncio.gather(*[p.publish() for p in publications])
+            out = await asyncio.gather(*[p.publish() for p in publications])
+            assert len(out) == len(publications)
+            assert all(isinstance(x, bool) for x in out)
+            if not all(out):
+                _logger.error('The following publications have timed out:\n\t',
+                              '\n\t'.join(f'#{idx}: {publications[idx]}' for idx, res in enumerate(out) if not res))
+
             sleep_until += float(args.period)
             _logger.info('Publication cycle %d of %d completed; sleeping for %.3f seconds',
-                         c + 1, args.count, sleep_until - time.monotonic())
-            await asyncio.sleep(sleep_until - time.monotonic())
+                         c + 1, args.count, sleep_until - asyncio.get_event_loop().time())
+            await asyncio.sleep(sleep_until - asyncio.get_event_loop().time())
 
 
 _YAML_LOADER = YAMLLoader()

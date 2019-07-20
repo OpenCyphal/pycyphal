@@ -96,9 +96,10 @@ class LoopbackTransport(pyuavcan.transport.Transport):
             except LookupError:
                 pass
 
-        async def do_route(tr: pyuavcan.transport.Transfer) -> None:
+        async def do_route(tr: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
+            del monotonic_deadline      # Unused, all operations always successful and instantaneous.
             if specifier.remote_node_id not in {self.local_node_id, None}:
-                return  # Drop the transfer.
+                return True  # Drop the transfer.
 
             tr_from = pyuavcan.transport.TransferFrom(
                 timestamp=tr.timestamp,
@@ -129,6 +130,8 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                     pass
                 else:
                     await destination_session.push(tr_from)
+
+            return True
 
         try:
             sess = self._output_sessions[specifier]

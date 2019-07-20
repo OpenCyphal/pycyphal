@@ -25,7 +25,6 @@ class Transport(abc.ABC):
     """
     An abstract UAVCAN transport interface.
     Properties should not raise exceptions.
-    Consider exposing the send timeout via a property here?
     """
     @property
     @abc.abstractmethod

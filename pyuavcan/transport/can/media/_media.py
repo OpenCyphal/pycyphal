@@ -119,9 +119,10 @@ class Media(abc.ABC):
         The method should avoid yielding the execution flow; instead, it is recommended to unload the frames
         into an internal transmission queue and return ASAP, as that minimizes the likelihood of inner
         priority inversion.
-        The amount of time allocated on execution of this method is limited per the transport configuration.
-        If the function does not complete in time, it will be cancelled and the transport will report an error.
-        This allows the transport to detect when the interface is stuck in the bus-off state.
+
+        The amount of time allocated on execution of this method may be limited. If the function does not complete
+        in time, it will be cancelled. This allows the transport to detect when the interface is stuck in the
+        bus-off state.
         """
         raise NotImplementedError
 

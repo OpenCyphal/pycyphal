@@ -10,8 +10,7 @@ stack: python %PYTHON%
 
 install:
   - git submodule update --init --recursive
-  - python -V
-  - pip install coveralls               # Removed from requirements.txt because it's only useful on the CI.
+  - pip install pyyaml coveralls  # Removed from requirements.txt because it's only useful on the CI.
 
   # GNU/Linux build config
   - sh: "sudo apt-get install graphviz -y"
