@@ -325,7 +325,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         # Removal is always possible, even if closed.
         try:
             self._listeners.remove(rx)
-        except LookupError:
+        except ValueError:
             _logger.exception('%r does not have listener %r', self, rx)
         if len(self._listeners) == 0 and not self._closed:
             self._closed = True
