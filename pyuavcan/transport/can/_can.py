@@ -211,28 +211,28 @@ class CANTransport(pyuavcan.transport.Transport):
         return session
 
     async def _do_send_until(self, frames: typing.Iterable[UAVCANFrame], monotonic_deadline: float) -> bool:
+        """
+        All frames shall share the same CAN ID value.
+        """
+        frames_list = list(frames)
+        del frames
         async with self._media_lock:
-            frames, stat = itertools.tee(frames)
-            timeout = monotonic_deadline - self._loop.time()
-            try:
-                await asyncio.wait_for(self._media.send(x.compile() for x in frames), timeout=timeout, loop=self._loop)
-            except asyncio.TimeoutError:
-                success = False
-                stat_list = list(stat)
-                stat = iter(stat_list)
-                _logger.info('%d frames with the following CAN ID values could not be sent in %.3f seconds: %r',
-                             len(stat_list), timeout, ', '.join(set(f'0x{f.identifier:08x}' for f in stat_list)))
-            else:
-                success = True
+            num_sent = await self._media.send_until((x.compile() for x in frames_list), monotonic_deadline)
+            assert 0 <= num_sent <= len(frames_list), 'Media sub-layer API contract violation'
+            sent_frames, unsent_frames = frames_list[:num_sent], frames_list[num_sent:]
 
-            for f in stat:
-                if f.loopback:
-                    self._frame_stats.loopback_requested += 1
-                if success:
-                    self._frame_stats.sent += 1
-                else:
-                    self._frame_stats.unsent += 1
-            return success
+            self._frame_stats.sent += len(sent_frames)
+            self._frame_stats.unsent += len(unsent_frames)
+            self._frame_stats.loopback_requested += sum(1 for f in sent_frames if f.loopback)
+
+        if unsent_frames:
+            can_id_int_set = set(f.identifier for f in unsent_frames)
+            assert len(can_id_int_set) == 1, 'CAN transport layer internal contract violation'
+            can_id_int, = can_id_int_set
+            _logger.info('% frames of %d total with CAN ID 0x%08x could not be sent before the deadline',
+                         len(unsent_frames), num_sent, can_id_int)
+
+        return not unsent_frames
 
     def _on_frames_received(self, frames: typing.Iterable[TimestampedDataFrame]) -> None:
         for raw_frame in frames:

@@ -112,7 +112,7 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def send(self, frames: typing.Iterable[DataFrame]) -> None:
+    async def send_until(self, frames: typing.Iterable[DataFrame], monotonic_deadline: float) -> int:
         """
         All frames are guaranteed to share the same CAN ID. This guarantee may enable some optimizations.
         The frames MUST be delivered to the bus in the same order. The iterable is guaranteed to be non-empty.
@@ -120,9 +120,10 @@ class Media(abc.ABC):
         into an internal transmission queue and return ASAP, as that minimizes the likelihood of inner
         priority inversion.
 
-        The amount of time allocated on execution of this method may be limited. If the function does not complete
-        in time, it will be cancelled. This allows the transport to detect when the interface is stuck in the
-        bus-off state.
+        The method returns when the deadline is reached even if some of the frames could not be transmitted.
+        The returned value is the number of frames that have been sent. If the returned number is lower than
+        the number of supplied frames, the outer transport logic will register an error, which is then propagated
+        upwards all the way to the application level.
         """
         raise NotImplementedError
 

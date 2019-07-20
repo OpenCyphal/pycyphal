@@ -44,7 +44,7 @@ class PythonCANMedia(_media.Media):
     def enable_automatic_retransmission(self) -> None:
         raise NotImplementedError
 
-    async def send(self, frames: typing.Iterable[_media.DataFrame]) -> None:
+    async def send_until(self, frames: typing.Iterable[_media.DataFrame], monotonic_deadline: float) -> int:
         raise NotImplementedError
 
     def close(self) -> None:

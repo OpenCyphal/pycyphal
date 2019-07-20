@@ -3,8 +3,9 @@ environment:
     - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
       PYTHON: "3.7"
 
-    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
-      PYTHON: "3.8"
+# NumPy is not yet compatible with Python 3.8; see https://github.com/cython/cython/issues/2938
+#    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
+#      PYTHON: "3.8"
 
 stack: python %PYTHON%
 

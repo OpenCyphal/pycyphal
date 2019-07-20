@@ -109,12 +109,21 @@ class SocketCANMedia(_media.Media):
         """
         pass
 
-    async def send(self, frames: typing.Iterable[_media.DataFrame]) -> None:
+    async def send_until(self, frames: typing.Iterable[_media.DataFrame], monotonic_deadline: float) -> int:
+        num_sent = 0
         for f in frames:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(repr(self))
             self._set_loopback_enabled(f.loopback)
-            await self._loop.sock_sendall(self._sock, self._compile_native_frame(f))
+            try:
+                await asyncio.wait_for(self._loop.sock_sendall(self._sock, self._compile_native_frame(f)),
+                                       timeout=monotonic_deadline - self._loop.time(),
+                                       loop=self._loop)
+            except asyncio.TimeoutError:
+                break
+            else:
+                num_sent += 1
+        return num_sent
 
     def close(self) -> None:
         self._closed = True

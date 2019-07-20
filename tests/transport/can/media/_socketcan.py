@@ -59,7 +59,7 @@ async def _unittest_can_socketcan() -> None:
     def on_rx_b(frames: typing.Iterable[TimestampedDataFrame]) -> None:
         frames = list(frames)
         print('RX B:', frames)
-        asyncio.ensure_future(media_b.send(frames))
+        asyncio.ensure_future(media_b.send_until(frames, asyncio.get_event_loop().time() + 1.0))
 
     media_a.set_received_frames_handler(on_rx_a)
     media_b.set_received_frames_handler(on_rx_b)
@@ -70,7 +70,7 @@ async def _unittest_can_socketcan() -> None:
     await asyncio.sleep(2.0)    # This wait is needed to ensure that the RX thread handles select() timeout properly
 
     ts_begin = Timestamp.now()
-    await media_a.send([
+    await media_a.send_until([
         DataFrame(identifier=0xbadc0fe,
                   data=bytearray(range(8)),
                   format=FrameFormat.EXTENDED,
@@ -83,7 +83,7 @@ async def _unittest_can_socketcan() -> None:
                   data=bytearray(range(6)),
                   format=FrameFormat.BASE,
                   loopback=True),
-    ])
+    ], asyncio.get_event_loop().time() + 1.0)
     await asyncio.sleep(0.1)
     ts_end = Timestamp.now()
 
