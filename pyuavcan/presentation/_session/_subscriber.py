@@ -322,9 +322,12 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         self._listeners.append(rx)
 
     def remove_listener(self, rx: _Listener[MessageClass]) -> None:
-        self._raise_if_closed()
-        self._listeners.remove(rx)
-        if len(self._listeners) == 0:
+        # Removal is always possible, even if closed.
+        try:
+            self._listeners.remove(rx)
+        except LookupError:
+            _logger.exception('%r does not have listener %r', self, rx)
+        if len(self._listeners) == 0 and not self._closed:
             self._closed = True
             try:
                 self._task.cancel()         # Force the task to be stopped ASAP without waiting for timeout

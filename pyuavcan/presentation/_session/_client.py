@@ -243,14 +243,17 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         _logger.debug('%s got a new proxy, new count %s', self, self._proxy_count)
 
     def remove_proxy(self) -> None:
-        self._raise_if_closed()
+        # Removal is always possible, even if closed.
         self._proxy_count -= 1
         _logger.debug('%s has lost a proxy, new count %s', self, self._proxy_count)
         assert self._proxy_count >= 0
-        if self._proxy_count <= 0:
+        if self._proxy_count <= 0 and not self._closed:
             _logger.info('%s is being closed', self)
             self._closed = True
-            self._task.cancel()
+            try:
+                self._task.cancel()
+            except Exception as ex:
+                _logger.debug('Proxy removal: could not cancel the task %r: %s', self._task, ex, exc_info=True)
 
     @property
     def proxy_count(self) -> int:

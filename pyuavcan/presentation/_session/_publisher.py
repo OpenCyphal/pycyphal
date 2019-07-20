@@ -173,7 +173,6 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         _logger.debug('%s got a new proxy, new count %s', self, self._proxy_count)
 
     def remove_proxy(self) -> None:
-        self._raise_if_closed()
         self._proxy_count -= 1
         _logger.debug('%s has lost a proxy, new count %s', self, self._proxy_count)
         assert self._proxy_count >= 0

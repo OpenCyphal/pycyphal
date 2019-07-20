@@ -68,29 +68,17 @@ Examples:
 
     parser.add_argument(
         '--local-node-id', '-L',
-        metavar='NODE_ID_OR_DIRECTIVE',
-        default='none',
+        metavar='NATURAL',
+        type=int,
         help=f'''
 Node-ID to use for the requested operation.
-Accepted values are non-negative integers or special directives:
-
-- An integer is directly used as the local node-ID.
-
-- Directive "none" does not assign any node-ID to the local node. On most
-  transports this results in the node running in the anonymous mode; some
-  transports, however, may have a default node-ID value assigned by the
-  transport layer, in which case that node-ID will be used. Beware that
-  anonymous transfers may have limitations; for example, some transports
-  don't support multi-frame anonymous transfers.
-
-- Directive "auto" triggers a simplified unsafe automatic node-ID look-up
-  before the command is executed: listen for heartbeat messages for a few
-  seconds, randomly pick a node-ID value not currently in use, and use it.
-  This allocation method is collision-prone and should not be used in
-  production; it is suitable only for development and testing. If the
-  transport provides a default node-ID, that node-ID will be used and this
-  directive will have no effect.
-
+If not specified, no node-ID will be assigned to the local node. On most
+transports this results in the node running in the anonymous mode; some
+transports, however, may have a default node-ID value assigned by the
+transport layer, in which case that node-ID will be used. Beware that
+anonymous transfers may have limitations; for example, some transports
+don't support multi-frame anonymous transfers.
+Also see the command pick-node-id.
 Default: %(default)s
 '''.strip(),
     )
@@ -248,12 +236,8 @@ async def _do_execute(args: argparse.Namespace) -> None:
             raise ValueError(f'Unrecognized heartbeat fields: {args.heartbeat_fields}')
 
         # Configure the node-ID.
-        try:
-            local_node_id = int(args.local_node_id)
-        except ValueError:
-            pass  # TODO DIRECTIVES
-        else:
-            node.set_local_node_id(local_node_id)
+        if args.local_node_id is not None:
+            node.set_local_node_id(args.local_node_id)
 
         # Configure the publication set.
         raw_ss = args.subject_spec

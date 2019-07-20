@@ -99,9 +99,9 @@ class SocketCANMedia(_media.Media):
     def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(repr(self))
-        _logger.warning('%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! '
-                        'Requested configuration: %s',
-                        self, ', '.join(map(str, configuration)))
+        _logger.info('%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! '
+                     'Requested configuration: %s',
+                     self, ', '.join(map(str, configuration)))
 
     def enable_automatic_retransmission(self) -> None:
         """
@@ -229,8 +229,8 @@ class SocketCANMedia(_media.Media):
                 proc = subprocess.run('ip link show', check=True, timeout=1, text=True, shell=True, capture_output=True)
                 return re.findall(r'\d+?: ([a-z0-9]+?): <[^>]*UP[^>]*>.*\n *link/can', proc.stdout)
             except Exception as ex:
-                _logger.warning('Could not scrape the output of ip link show, using the fallback method: %s', ex,
-                                exc_info=True)
+                _logger.info('Could not scrape the output of ip link show, using the fallback method: %s', ex,
+                             exc_info=True)
                 with open('/proc/net/dev') as f:
                     out = [line.split(':')[0].strip() for line in f if ':' in line and 'can' in line]
                 return sorted(out, key=lambda x: 'can' in x, reverse=True)

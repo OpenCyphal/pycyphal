@@ -56,7 +56,7 @@ Examples:
 
     # noinspection PyTypeChecker
     parser.add_argument(
-        '--format',
+        '--format', '-F',
         default=next(iter(_util.formatter.Format)),
         action=argparse_utils.enum_action(_util.formatter.Format),
         help='''
@@ -73,7 +73,7 @@ Default: %(default)s
         '--with-metadata', '-M',
         action='store_true',
         help='''
-Emit metadata together with each message.
+Emit transfer metadata together with each message.
 '''.strip(),
     )
 
@@ -113,8 +113,8 @@ async def _run(transport:     pyuavcan.transport.Transport,
         # TODO: add support for multi-subject synchronous subscribers https://github.com/UAVCAN/pyuavcan/issues/65
         raise NotImplementedError('Multi-subject subscription is not yet implemented, sorry!')
 
-    _logger.debug(f'Starting the subscriber with transport={transport}, subject_specs={subject_specs}, '
-                  f'formatter={formatter}, with_metadata={with_metadata}')
+    _logger.info(f'Starting the subscriber with transport={transport}, subject_specs={subject_specs}, '
+                 f'formatter={formatter}, with_metadata={with_metadata}')
 
     pres = pyuavcan.presentation.Presentation(transport)
     with contextlib.closing(pres):
