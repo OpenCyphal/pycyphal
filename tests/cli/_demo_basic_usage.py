@@ -17,7 +17,7 @@ from pyuavcan._cli.commands import dsdl_generate_packages
 from tests.dsdl.conftest import TEST_DATA_TYPES_DIR, PUBLIC_REGULATED_DATA_TYPES_DIR
 
 
-def _unittest_slow_cli() -> None:
+def _unittest_slow_cli_demo_basic_usage() -> None:
     """
     This test is KINDA FRAGILE. It makes assumptions about particular data types and their port IDs and other
     aspects of the demo application. If you change anything in the demo, this test may break, so please keep

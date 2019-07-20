@@ -79,7 +79,6 @@ class BackgroundChildProcess:
 
     def __init__(self, *args: str):
         _logger.info('Starting background child process: %s', ' '.join(args))
-
         self._inferior = subprocess.Popen(args,
                                           stdout=subprocess.PIPE,
                                           stderr=sys.stderr,
@@ -103,6 +102,10 @@ class BackgroundChildProcess:
     @property
     def pid(self) -> int:
         return int(self._inferior.pid)
+
+    @property
+    def alive(self) -> bool:
+        return self._inferior.poll() is None
 
     def __del__(self) -> None:
         if self._inferior.poll() is None:
