@@ -39,12 +39,12 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
 
     assert pres_a.transport is tran_a
 
-    server = pres_a.get_server_with_fixed_service_id(uavcan.register.Access_0_1)
-    assert server is pres_a.get_server_with_fixed_service_id(uavcan.register.Access_0_1)
+    server = pres_a.get_server_with_fixed_service_id(uavcan.register.Access_1_0)
+    assert server is pres_a.get_server_with_fixed_service_id(uavcan.register.Access_1_0)
 
-    client0 = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 123)
-    client1 = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 123)
-    client_dead = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_0_1, 111)
+    client0 = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_1_0, 123)
+    client1 = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_1_0, 123)
+    client_dead = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_1_0, 111)
     assert client0 is not client1
     assert client0._maybe_impl is not None
     assert client1._maybe_impl is not None
@@ -56,50 +56,50 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        pres_a.make_publisher_with_fixed_subject_id(uavcan.register.Access_0_1)  # type: ignore
+        pres_a.make_publisher_with_fixed_subject_id(uavcan.register.Access_1_0)  # type: ignore
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        pres_a.make_subscriber_with_fixed_subject_id(uavcan.register.Access_0_1)  # type: ignore
+        pres_a.make_subscriber_with_fixed_subject_id(uavcan.register.Access_1_0)  # type: ignore
 
     assert client0.response_timeout == pytest.approx(1.0)
     client0.response_timeout = 0.1
     assert client0.response_timeout == pytest.approx(0.1)
     client0.priority = Priority.SLOW
 
-    last_request = uavcan.register.Access_0_1.Request()
+    last_request = uavcan.register.Access_1_0.Request()
     last_metadata = pyuavcan.presentation.ServiceRequestMetadata(timestamp=Timestamp(0, 0),
                                                                  priority=Priority(0),
                                                                  transfer_id=0,
                                                                  client_node_id=0)
-    response: typing.Optional[uavcan.register.Access_0_1.Response] = None
+    response: typing.Optional[uavcan.register.Access_1_0.Response] = None
 
-    async def server_handler(request: uavcan.register.Access_0_1.Request,
+    async def server_handler(request: uavcan.register.Access_1_0.Request,
                              metadata: pyuavcan.presentation.ServiceRequestMetadata) \
-            -> typing.Optional[uavcan.register.Access_0_1.Response]:
+            -> typing.Optional[uavcan.register.Access_1_0.Response]:
         nonlocal last_metadata
         print('SERVICE REQUEST:', request, metadata)
-        assert isinstance(request, server.dtype.Request) and isinstance(request, uavcan.register.Access_0_1.Request)
+        assert isinstance(request, server.dtype.Request) and isinstance(request, uavcan.register.Access_1_0.Request)
         assert repr(last_request) == repr(request)
         last_metadata = metadata
         return response
 
     server.serve_in_background(server_handler)
 
-    last_request = uavcan.register.Access_0_1.Request(
-        name=uavcan.register.Name_0_1('Hello world!'),
-        value=uavcan.register.Value_0_1(string=uavcan.primitive.String_1_0('Profanity will not be tolerated')))
+    last_request = uavcan.register.Access_1_0.Request(
+        name=uavcan.register.Name_1_0('Hello world!'),
+        value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0('Profanity will not be tolerated')))
     result_a = await client0.call_with_transfer(last_request)
     assert result_a is None, 'Expected to fail'
     assert last_metadata.client_node_id == 42
     assert last_metadata.transfer_id == 0
     assert last_metadata.priority == Priority.SLOW
 
-    last_request = uavcan.register.Access_0_1.Request(name=uavcan.register.Name_0_1('security.uber_secure_password'))
-    response = uavcan.register.Access_0_1.Response(
+    last_request = uavcan.register.Access_1_0.Request(name=uavcan.register.Name_1_0('security.uber_secure_password'))
+    response = uavcan.register.Access_1_0.Response(
         timestamp=uavcan.time.SynchronizedTimestamp_1_0(123456789),
         mutable=True,
         persistent=False,
-        value=uavcan.register.Value_0_1(string=uavcan.primitive.String_1_0('hunter2'))
+        value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0('hunter2'))
     )
     client0.priority = Priority.IMMEDIATE
     result_b = await client0.call(last_request)

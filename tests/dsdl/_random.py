@@ -29,8 +29,11 @@ _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 30e-3
 # and be killed, especially so in cloud-hosted CI systems which are always memory-impaired.
 _MAX_RANDOM_SERIALIZED_REPRESENTATION_FRAGMENTS = 1000
 
-_NUM_RANDOM_SAMPLES = int(os.environ.get('PYUAVCAN_TEST_NUM_RANDOM_SAMPLES', 100))
-assert _NUM_RANDOM_SAMPLES >= 20, 'Invalid configuration: low number of random samples may trigger a false-negative.'
+# Values lower than this may trigger a false-negative, so we don't run stat checks if there are fewer samples than this.
+_MIN_RANDOM_SAMPLES_FOR_STATISTICAL_CORRECTNESS_CHECK = 50
+# Set this environment variable to a lower value to speed up the test (random tests take a very long time to run).
+_NUM_RANDOM_SAMPLES = int(os.environ.get('PYUAVCAN_TEST_NUM_RANDOM_SAMPLES',
+                                         _MIN_RANDOM_SAMPLES_FOR_STATISTICAL_CORRECTNESS_CHECK * 2))
 
 
 _logger = logging.getLogger(__name__)
@@ -83,13 +86,16 @@ def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.Generate
                          stat.mean_deserialization_time * 1e6,
                          suffix)
 
-            assert stat.worst_time <= _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME, \
-                f'Serialization performance issues detected in type {ty}'
+            if _NUM_RANDOM_SAMPLES >= _MIN_RANDOM_SAMPLES_FOR_STATISTICAL_CORRECTNESS_CHECK:
+                assert stat.worst_time <= _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME, \
+                    f'Serialization performance issues detected in type {ty}'
 
-            assert stat.random_serialized_representation_correctness_ratio > 0, \
-                f'At least one random sample must be valid. ' \
-                f'Either the tested code is incorrect, or the number of random samples is too low. ' \
-                f'Failed type: {ty}'
+                assert stat.random_serialized_representation_correctness_ratio > 0, \
+                    f'At least one random sample must be valid. ' \
+                    f'Either the tested code is incorrect, or the number of random samples is too low. ' \
+                    f'Failed type: {ty}'
+            else:
+                _logger.warning('Statistical checks skipped because the number of samples is low.')
     finally:
         pyuavcan_logger.setLevel(original_logging_level)
 

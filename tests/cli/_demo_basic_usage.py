@@ -11,18 +11,28 @@ import time
 import json
 import typing
 import pytest
+import pathlib
+import pyuavcan
 from ._subprocess import run_process, BackgroundChildProcess
 # noinspection PyProtectedMember
 from pyuavcan._cli.commands import dsdl_generate_packages
-from tests.dsdl.conftest import TEST_DATA_TYPES_DIR, PUBLIC_REGULATED_DATA_TYPES_DIR
+from tests.dsdl.conftest import TEST_DATA_TYPES_DIR, PUBLIC_REGULATED_DATA_TYPES_DIR, generated_packages
 
 
-def _unittest_slow_cli_demo_basic_usage() -> None:
+def _unittest_slow_cli_demo_basic_usage(
+        generated_packages: typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedPackageInfo]]) -> None:
     """
     This test is KINDA FRAGILE. It makes assumptions about particular data types and their port IDs and other
     aspects of the demo application. If you change anything in the demo, this test may break, so please keep
     an eye out.
     """
+    import uavcan.node
+    del generated_packages
+    try:
+        pathlib.Path('/tmp/dsdl-for-my-program').rmdir()    # Where the demo script puts its generated packages
+    except OSError:
+        pass
+
     # Generate DSDL namespace "sirius_cyber_corp"
     run_process('pyuavcan', 'dsdl-gen-pkg',
                 str(TEST_DATA_TYPES_DIR / 'sirius_cyber_corp'),
@@ -53,7 +63,9 @@ def _unittest_slow_cli_demo_basic_usage() -> None:
         '--with-metadata', *_get_iface_args()
     )
 
-    time.sleep(1.0)     # Time to let the background processes finish initialization
+    # Time to let the background processes finish initialization.
+    # The usage script might take a long time to start because it may have to generate packages first.
+    time.sleep(10.0)
 
     run_process(
         'pyuavcan', '-v',
@@ -67,17 +79,57 @@ def _unittest_slow_cli_demo_basic_usage() -> None:
 
     time.sleep(1.0)     # Time to sync up
 
-    out_demo_proc = demo_proc.wait(1.0, interrupt=True)[1].splitlines()
     out_sub_heartbeat = proc_sub_heartbeat.wait(1.0, interrupt=True)[1].splitlines()
     out_sub_temperature = proc_sub_temperature.wait(1.0, interrupt=True)[1].splitlines()
     out_sub_diagnostic = proc_sub_diagnostic.wait(1.0, interrupt=True)[1].splitlines()
+
+    # Run service tests while the demo process is still running.
+    node_info_text = run_process('pyuavcan', '-v', 'call', '42', 'uavcan.node.GetInfo.1.0', '{}',
+                                 '--local-node-id', '123', '--format', 'JSON', '--with-metadata',
+                                 '--priority', 'SLOW', '--transfer-id', '12', '--timeout', '3.0',
+                                 *_get_iface_args(),
+                                 timeout=5.0)
+    print('node_info_text:', node_info_text)
+    node_info = json.loads(node_info_text)
+    assert node_info['430']['_metadata_']['source_node_id'] == 42
+    assert node_info['430']['_metadata_']['transfer_id'] == 12
+    assert 'slow' in node_info['430']['_metadata_']['priority'].lower()
+    assert node_info['430']['name'] == 'org.uavcan.pyuavcan.demo.basic_usage'
+    assert node_info['430']['protocol_version']['major'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
+    assert node_info['430']['protocol_version']['minor'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[1]
+
+    command_response = json.loads(run_process(
+        'pyuavcan', '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0',
+        f'{{command: {uavcan.node.ExecuteCommand_1_0.Request.COMMAND_STORE_PERSISTENT_STATES} }}',
+        '--local-node-id', '123', '--format', 'JSON', *_get_iface_args(), timeout=5.0
+    ))
+    assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND
+
+    # Next request - increment the transfer-ID!
+    command_response = json.loads(run_process(
+        'pyuavcan', '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0', '{command: 23456}',
+        '--local-node-id', '123', '--format', 'JSON', '--transfer-id', '1', *_get_iface_args(), timeout=5.0
+    ))
+    assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
+
+    # Next request - increment the transfer-ID!
+    command_response = json.loads(run_process(
+        'pyuavcan', '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0',
+        f'{{command: {uavcan.node.ExecuteCommand_1_0.Request.COMMAND_POWER_OFF} }}',
+        '--local-node-id', '123', '--format', 'JSON', '--transfer-id', '2', *_get_iface_args(), timeout=5.0
+    ))
+    assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
+
+    # We've just asked the node to terminate, wait for it here.
+    out_demo_proc = demo_proc.wait(2.0)[1].splitlines()
 
     print('out_demo_proc:', *out_demo_proc, sep='\n\t')
     print('out_sub_heartbeat:', *out_sub_heartbeat, sep='\n\t')
     print('out_sub_temperature:', *out_sub_temperature, sep='\n\t')
     print('out_sub_diagnostic:', *out_sub_diagnostic, sep='\n\t')
 
-    assert all(re.match(r'TEMPERATURE \d+\.\d+ C', s) for s in out_demo_proc)
+    assert out_demo_proc
+    assert any(re.match(r'TEMPERATURE \d+\.\d+ C', s) for s in out_demo_proc)
 
     # We receive three heartbeats in order to eliminate possible edge cases due to timing jitter.
     # Sort by source node ID and eliminate the middle; thus we eliminate the uncertainty.

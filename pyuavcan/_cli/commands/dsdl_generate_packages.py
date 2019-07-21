@@ -21,7 +21,7 @@ from ._util.base import CommandInfo, DEFAULT_DSDL_GENERATED_PACKAGES_DIR
 
 
 DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL = \
-    'https://github.com/UAVCAN/public_regulated_data_types/archive/f468909.zip'
+    'https://github.com/UAVCAN/public_regulated_data_types/archive/a532bfa7.zip'
 
 
 INFO = CommandInfo(

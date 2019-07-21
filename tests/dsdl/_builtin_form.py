@@ -35,7 +35,7 @@ def _unittest_slow_builtin_form_manual(generated_packages: typing.List[pyuavcan.
         'vendor_specific_status_code': 2989,
     }
 
-    bi = pyuavcan.dsdl.to_builtin(uavcan.node.GetInfo_0_1.Response(
+    bi = pyuavcan.dsdl.to_builtin(uavcan.node.GetInfo_1_0.Response(
         protocol_version=uavcan.node.Version_1_0(1, 2),
         hardware_version=uavcan.node.Version_1_0(3, 4),
         software_version=uavcan.node.Version_1_0(5, 6),
@@ -58,11 +58,11 @@ def _unittest_slow_builtin_form_manual(generated_packages: typing.List[pyuavcan.
         'certificate_of_authenticity': bytes(range(100)).decode('unicode_escape'),
     }
 
-    bi = pyuavcan.dsdl.to_builtin(uavcan.register.Access_0_1.Response(
+    bi = pyuavcan.dsdl.to_builtin(uavcan.register.Access_1_0.Response(
         timestamp=uavcan.time.SynchronizedTimestamp_1_0(1234567890),
         mutable=True,
         persistent=False,
-        value=uavcan.register.Value_0_1(real32=uavcan.primitive.array.Real32_1_0([
+        value=uavcan.register.Value_1_0(real32=uavcan.primitive.array.Real32_1_0([
             123.456,
             -789.123,
             float('+inf'),
@@ -86,7 +86,7 @@ def _unittest_slow_builtin_form_manual(generated_packages: typing.List[pyuavcan.
 
     with pytest.raises(ValueError, match='.*field.*'):
         bi['nonexistent_field'] = 123
-        pyuavcan.dsdl.update_from_builtin(uavcan.register.Access_0_1.Response(), bi)
+        pyuavcan.dsdl.update_from_builtin(uavcan.register.Access_1_0.Response(), bi)
 
 
 def _unittest_slow_builtin_form_automatic(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:

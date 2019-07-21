@@ -29,6 +29,8 @@ import pyuavcan.transport.can.media.socketcan
 #
 # Another sensible location for the generated package directory is somewhere in the application data directory,
 # like "~/.my-app/dsdl/{pyuavcan.__version__}/"; or, for Windows: "%APPDATA%/my-app/dsdl/{pyuavcan.__version__}/".
+#
+# Beware that the directory may have to be cleaned manually when you update any of your namespaces.
 dsdl_generated_dir = pathlib.Path(tempfile.gettempdir(), 'dsdl-for-my-program', f'pyuavcan-v{pyuavcan.__version__}')
 dsdl_generated_dir.mkdir(parents=True, exist_ok=True)
 print('Generated DSDL packages will be stored in:', dsdl_generated_dir, file=sys.stderr)
@@ -42,18 +44,21 @@ try:
     import sirius_cyber_corp     # This is our vendor-specific root namespace. Custom data types.
     import pyuavcan.application  # The application module requires the standard types from the root namespace "uavcan".
 except ImportError:
+    script_path = os.path.abspath(os.path.dirname(__file__))
     # Generate our vendor-specific namespace. It may make use of the standard data types (most namespaces do,
     # because the standard root namespace contains important basic types), so we include it in the lookup path set.
     # The paths are hard-coded here for the sake of conciseness.
-    pyuavcan.dsdl.generate_package(package_parent_directory=dsdl_generated_dir,
-                                   root_namespace_directory='../dsdl/namespaces/sirius_cyber_corp/',
-                                   lookup_directories=['../public_regulated_data_types/uavcan'])
-
+    pyuavcan.dsdl.generate_package(
+        package_parent_directory=dsdl_generated_dir,
+        root_namespace_directory=os.path.join(script_path, '../dsdl/namespaces/sirius_cyber_corp/'),
+        lookup_directories=[os.path.join(script_path, '../public_regulated_data_types/uavcan')]
+    )
     # Generate the standard namespace. The order actually doesn't matter.
-    pyuavcan.dsdl.generate_package(package_parent_directory=dsdl_generated_dir,
-                                   root_namespace_directory='../public_regulated_data_types/uavcan',
-                                   lookup_directories=[])
-
+    pyuavcan.dsdl.generate_package(
+        package_parent_directory=dsdl_generated_dir,
+        root_namespace_directory=os.path.join(script_path, '../public_regulated_data_types/uavcan'),
+        lookup_directories=[]
+    )
     # Okay, we can try importing again. We need to clear the import cache first because Python's import machinery
     # requires that; see the docs for importlib.invalidate_caches() for more info.
     importlib.invalidate_caches()
@@ -88,13 +93,13 @@ class DemoApplication:
             raise RuntimeError(f'Unknown platform: {sys.platform!r}')
 
         # Populate the node info for use with the Node class. Please see the DSDL definition of uavcan.node.GetInfo.
-        node_info = uavcan.node.GetInfo_0_1.Response(
+        node_info = uavcan.node.GetInfo_1_0.Response(
             # Version of the protocol supported by the library, and hence by our node.
             protocol_version=uavcan.node.Version_1_0(*pyuavcan.UAVCAN_SPECIFICATION_VERSION),
             # There is a similar field for hardware version, but we don't populate it because it's a software-only node.
             software_version=uavcan.node.Version_1_0(major=1, minor=0),
             # The name of the local node. Should be a reversed Internet domain name, like a Java package.
-            name='org.uavcan.pyuavcan.demo',
+            name='org.uavcan.pyuavcan.demo.basic_usage',
             # We've left the optional fields default-initialized here.
         )
 
@@ -118,9 +123,9 @@ class DemoApplication:
 
         # Create another server using shorthand for fixed port ID. We could also use it with an application-specific
         # service-ID as well, of course:
-        #   get_server(uavcan.node.ExecuteCommand_0_1, 42).serve_in_background(self._serve_execute_command)
+        #   get_server(uavcan.node.ExecuteCommand_1_0, 42).serve_in_background(self._serve_execute_command)
         self._node.get_server_with_fixed_service_id(
-            uavcan.node.ExecuteCommand_0_1
+            uavcan.node.ExecuteCommand_1_0
         ).serve_in_background(self._serve_execute_command)
 
         # By default, the node operates in anonymous mode, without a node-ID.
@@ -189,38 +194,34 @@ class DemoApplication:
             return sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response(slope=slope, y_intercept=y_intercept)
 
     async def _serve_execute_command(self,
-                                     request:  uavcan.node.ExecuteCommand_0_1.Request,
+                                     request:  uavcan.node.ExecuteCommand_1_0.Request,
                                      metadata: pyuavcan.presentation.ServiceRequestMetadata) \
-            -> uavcan.node.ExecuteCommand_0_1.Response:
+            -> uavcan.node.ExecuteCommand_1_0.Response:
         """
         This is another service handler, like the other one.
         """
         print(f'EXECUTE COMMAND REQUEST {request} (with metadata {metadata})')
 
-        if request.command == uavcan.node.ExecuteCommand_0_1.Request.COMMAND_POWER_OFF:
+        if request.command == uavcan.node.ExecuteCommand_1_0.Request.COMMAND_POWER_OFF:
             async def do_delayed_shutdown() -> None:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(1.0)
                 # This will close the underlying presentation, transport, and media layer resources.
                 # All pending tasks such as serve_in_background() will notice this and exit automatically.
                 # This is convenient as it relieves the application from having to keep track of all objects.
                 self._node.close()
 
             asyncio.ensure_future(do_delayed_shutdown())  # Delay shutdown to let the transport emit the response.
-            return uavcan.node.ExecuteCommand_0_1.Response(uavcan.node.ExecuteCommand_0_1.Response.STATUS_SUCCESS)
-
-        elif request.command == uavcan.node.ExecuteCommand_0_1.Request.COMMAND_EMERGENCY_STOP:
-            # We don't send any response because the emergency stop request commands us to stop operation immediately.
-            raise SystemExit('Emergency stop request received')
+            return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS)
 
         elif request.command == 23456:
             # This is a custom application-specific command. Just print the string parameter and do nothing.
             parameter_text = request.parameter.tobytes().decode(errors='replace')
             print('CUSTOM COMMAND PARAMETER:', parameter_text)
-            return uavcan.node.ExecuteCommand_0_1.Response(uavcan.node.ExecuteCommand_0_1.Response.STATUS_SUCCESS)
+            return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS)
 
         else:
             # Command not supported.
-            return uavcan.node.ExecuteCommand_0_1.Response(uavcan.node.ExecuteCommand_0_1.Response.STATUS_BAD_COMMAND)
+            return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND)
 
     async def _handle_temperature(self,
                                   msg:      uavcan.si.temperature.Scalar_1_0,

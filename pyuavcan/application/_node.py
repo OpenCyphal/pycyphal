@@ -12,7 +12,7 @@ import pyuavcan.application
 import uavcan.node
 
 
-NodeInfo = uavcan.node.GetInfo_0_1.Response
+NodeInfo = uavcan.node.GetInfo_1_0.Response
 
 MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
 ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)
@@ -50,7 +50,7 @@ class Node:
         self._presentation = pyuavcan.presentation.Presentation(transport)
         self._info = info
         self._heartbeat_publisher = pyuavcan.application.heartbeat_publisher.HeartbeatPublisher(self._presentation)
-        self._srv_info = self._presentation.get_server_with_fixed_service_id(uavcan.node.GetInfo_0_1)
+        self._srv_info = self._presentation.get_server_with_fixed_service_id(uavcan.node.GetInfo_1_0)
         self._srv_info.serve_in_background(self._handle_get_info_request)
 
     @property
@@ -145,7 +145,7 @@ class Node:
             self._presentation.close()
 
     async def _handle_get_info_request(self,
-                                       _: uavcan.node.GetInfo_0_1.Request,
+                                       _: uavcan.node.GetInfo_1_0.Request,
                                        metadata: pyuavcan.presentation.ServiceRequestMetadata) -> NodeInfo:
         _logger.debug('%s got a node info request: %s', self, metadata)
         return self._info
