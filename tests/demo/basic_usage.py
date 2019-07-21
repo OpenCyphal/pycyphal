@@ -189,7 +189,7 @@ class DemoApplication:
         else:
             self._pub_diagnostic_record.publish_soon(uavcan.diagnostic.Record_1_0(
                 severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
-                text=f'Solution for {request.points}: slope={slope}, y_intercept={y_intercept}',
+                text=f'Solution for {",".join(f"({p.x},{p.y})" for p in request.points)}: {slope}, {y_intercept}',
             ))
             return sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response(slope=slope, y_intercept=y_intercept)
 
