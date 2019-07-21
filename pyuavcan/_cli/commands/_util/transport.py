@@ -112,10 +112,25 @@ Examples:
     )
 
 
+def _add_args_for_loopback(parser: argparse.ArgumentParser) -> None:
+    from pyuavcan.transport.loopback import LoopbackTransport
+    parser.add_argument(
+        '--iface-loopback', '--loopback',
+        action='append_const',
+        dest='transport',
+        const=LoopbackTransport(),
+        help=f"""
+Use process-local loopback transport. This transport is only useful for
+testing. It is not possible to exchange data between different nodes and/or
+processes using this transport.
+""".strip(),
+    )
+
+
 # When writing initializers, the full (non-abridged) argument name pattern should be as follows:
 #   --iface-<transport-name>[-media-name][-further-specifiers]
 # Abridged names may be arbitrary.
-# The result shall be stored into the field "transport" and the action shall be "append".
+# The result shall be stored into the field "transport" and the action shall be "append" or "append_const".
 #
 # TODO: This approach is fragile and does not scale well because it requires much manual coding per transport/media.
 #
@@ -135,4 +150,5 @@ Examples:
 #   can,socketcan,"~/serial-port-name,with-comma",64,1.5
 _INITIALIZERS: typing.Sequence[typing.Callable[[argparse.ArgumentParser], None]] = [
     _add_args_for_can,
+    _add_args_for_loopback,
 ]
