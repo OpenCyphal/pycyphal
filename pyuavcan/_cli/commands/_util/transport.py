@@ -5,11 +5,10 @@
 #
 
 from __future__ import annotations
-import re
 import typing
+import decimal
 import logging
 import argparse
-import importlib
 import itertools
 import dataclasses
 import pyuavcan.transport
@@ -48,6 +47,19 @@ def construct_transport(args: argparse.Namespace) -> pyuavcan.transport.Transpor
     else:
         # TODO: initialize a RedundantTransport!
         raise NotImplementedError('Sorry, redundant transport construction is not yet implemented')
+
+
+def convert_transfer_metadata_to_builtin(transfer: pyuavcan.transport.TransferFrom) -> typing.Dict[str, typing.Any]:
+    millionth = decimal.Decimal('0.000001')
+    return {
+        'timestamp': {
+            'system':    transfer.timestamp.system.quantize(millionth),
+            'monotonic': transfer.timestamp.monotonic.quantize(millionth),
+        },
+        'priority':       transfer.priority.name.lower(),
+        'transfer_id':    transfer.transfer_id,
+        'source_node_id': transfer.source_node_id,
+    }
 
 
 def _make_arg_sequence_parser(*type_default_pairs: typing.Tuple[typing.Type[object], typing.Any]) \
@@ -137,17 +149,17 @@ processes using this transport.
 # Consider defining an URI scheme per transport, add a static factory method per transport implementation? Roughly:
 #   <transport>://<transport-specific initialization arguments>
 # For example:
-#   can:///dev/ttyACM0:slcan?send_timeout=1.5
-#   can://vcan0:socketcan?mtu=32&send_timeout=1.5
+#   can:///dev/ttyACM0:slcan
+#   can://vcan0:socketcan?mtu=32
 #   serial:///dev/ttyACM0
 #
 # While generic and extensible, URI are hard to type manually, which harms usability. Not good. Should we search for a
 # middle ground solution that would combine the genericity of URI and conciseness of hand-coded arguments? We could,
 # perhaps, invent a custom spec string format? It could be as simple as a sequence of comma-separated parameters:
-#   can,socketcan,/dev/ttyACM0,64,1.5
+#   can,socketcan,/dev/ttyACM0,64
 # The spec string could be made a valid YAML string by adding square brackets on either side, so that quoted strings
 # could be used:
-#   can,socketcan,"~/serial-port-name,with-comma",64,1.5
+#   can,socketcan,"~/serial-port-name,with-comma",64
 _INITIALIZERS: typing.Sequence[typing.Callable[[argparse.ArgumentParser], None]] = [
     _add_args_for_can,
     _add_args_for_loopback,

@@ -59,17 +59,17 @@ def _unittest_slow_cli_pub_sub_a() -> None:
 
     assert len(heartbeats) in (2, 3)    # Fuzzy because the last one might be dropped
     for index, m in enumerate(heartbeats):
-        assert 'slow' in m['32085']['_transfer_']['priority'].lower()
-        assert m['32085']['_transfer_']['transfer_id'] == 27 + index
-        assert m['32085']['_transfer_']['source_node_id'] == 51
+        assert 'slow' in m['32085']['_metadata_']['priority'].lower()
+        assert m['32085']['_metadata_']['transfer_id'] == 27 + index
+        assert m['32085']['_metadata_']['source_node_id'] == 51
         assert m['32085']['uptime'] in (0, 1)
         assert m['32085']['vendor_specific_status_code'] == 54321
 
     assert len(diagnostics) == 3
     for index, m in enumerate(diagnostics):
-        assert 'slow' in m['4321']['_transfer_']['priority'].lower()
-        assert m['4321']['_transfer_']['transfer_id'] == 27 + index
-        assert m['4321']['_transfer_']['source_node_id'] == 51
+        assert 'slow' in m['4321']['_metadata_']['priority'].lower()
+        assert m['4321']['_metadata_']['transfer_id'] == 27 + index
+        assert m['4321']['_metadata_']['source_node_id'] == 51
         assert m['4321']['timestamp']['microsecond'] == 123456
         assert m['4321']['text'] == 'Hello world!'
 
@@ -111,9 +111,9 @@ def _unittest_slow_cli_pub_sub_b() -> None:
     diagnostics = list(json.loads(s) for s in proc_sub_diagnostic_with_meta.wait(1.0, interrupt=True)[1].splitlines())
     assert len(diagnostics) == 2
     for index, m in enumerate(diagnostics):
-        assert 'nominal' in m['32760']['_transfer_']['priority'].lower()
-        assert m['32760']['_transfer_']['transfer_id'] == index
-        assert m['32760']['_transfer_']['source_node_id'] is None
+        assert 'nominal' in m['32760']['_metadata_']['priority'].lower()
+        assert m['32760']['_metadata_']['transfer_id'] == index
+        assert m['32760']['_metadata_']['source_node_id'] is None
         assert m['32760']['timestamp']['microsecond'] == 0
         assert m['32760']['text'] == ''
 

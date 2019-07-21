@@ -57,7 +57,7 @@ Examples:
         '--with-metadata', '-M',
         action='store_true',
         help='''
-Emit transfer metadata together with each message.
+Emit metadata together with each message.
 '''.strip(),
     )
 
@@ -108,17 +108,7 @@ async def _run(transport:     pyuavcan.transport.Transport,
 
             bi: typing.Dict[str, typing.Any] = {}  # We use updates to ensure proper dict ordering: metadata before data
             if with_metadata:
-                bi.update({
-                    '_transfer_': {
-                        'timestamp': {
-                            'system':    transfer.timestamp.system.quantize(_1EM6),
-                            'monotonic': transfer.timestamp.monotonic.quantize(_1EM6),
-                        },
-                        'priority':       transfer.priority.name.lower(),
-                        'transfer_id':    transfer.transfer_id,
-                        'source_node_id': transfer.source_node_id,  # None if anonymous
-                    },
-                })
+                bi['_metadata_'] = _util.transport.convert_transfer_metadata_to_builtin(transfer)
             bi.update(pyuavcan.dsdl.to_builtin(msg))
             outer[subject_id] = bi
 
@@ -128,6 +118,3 @@ async def _run(transport:     pyuavcan.transport.Transport,
             if count <= 0:
                 _logger.info('Reached the specified message count, stopping')
                 break
-
-
-_1EM6 = decimal.Decimal('0.000001')

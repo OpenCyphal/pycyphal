@@ -82,25 +82,25 @@ def _unittest_slow_cli_demo_basic_usage() -> None:
     # We receive three heartbeats in order to eliminate possible edge cases due to timing jitter.
     # Sort by source node ID and eliminate the middle; thus we eliminate the uncertainty.
     heartbeats_ordered_by_nid = list(sorted((json.loads(s) for s in out_sub_heartbeat),
-                                            key=lambda x: x['32085']['_transfer_']['source_node_id']))
+                                            key=lambda x: x['32085']['_metadata_']['source_node_id']))
     heartbeat_pub, heartbeat_demo = heartbeats_ordered_by_nid[0], heartbeats_ordered_by_nid[-1]
     print('heartbeat_pub :', heartbeat_pub)
     print('heartbeat_demo:', heartbeat_demo)
 
-    assert 'slow' in heartbeat_pub['32085']['_transfer_']['priority'].lower()
-    assert heartbeat_pub['32085']['_transfer_']['transfer_id'] == 27
-    assert heartbeat_pub['32085']['_transfer_']['source_node_id'] == 0
+    assert 'slow' in heartbeat_pub['32085']['_metadata_']['priority'].lower()
+    assert heartbeat_pub['32085']['_metadata_']['transfer_id'] == 27
+    assert heartbeat_pub['32085']['_metadata_']['source_node_id'] == 0
     assert heartbeat_pub['32085']['uptime'] in (0, 1)
     assert heartbeat_pub['32085']['vendor_specific_status_code'] == 123456
 
-    assert 'nominal' in heartbeat_demo['32085']['_transfer_']['priority'].lower()
-    assert heartbeat_demo['32085']['_transfer_']['source_node_id'] == 42
+    assert 'nominal' in heartbeat_demo['32085']['_metadata_']['priority'].lower()
+    assert heartbeat_demo['32085']['_metadata_']['source_node_id'] == 42
     assert heartbeat_demo['32085']['vendor_specific_status_code'] == demo_proc.pid
 
     for index, parsed in enumerate(json.loads(s) for s in out_sub_temperature):
-        assert 'slow' in parsed['12345']['_transfer_']['priority'].lower()
-        assert parsed['12345']['_transfer_']['transfer_id'] == 27 + index
-        assert parsed['12345']['_transfer_']['source_node_id'] == 0
+        assert 'slow' in parsed['12345']['_metadata_']['priority'].lower()
+        assert parsed['12345']['_metadata_']['transfer_id'] == 27 + index
+        assert parsed['12345']['_metadata_']['source_node_id'] == 0
         assert parsed['12345']['kelvin'] == pytest.approx(321.5)
 
     assert len(out_sub_diagnostic) >= 1

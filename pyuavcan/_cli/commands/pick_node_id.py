@@ -51,6 +51,12 @@ def execute(args: argparse.Namespace) -> None:
 async def _run(transport: pyuavcan.transport.Transport) -> None:
     import uavcan.node
     node_id_set_cardinality = transport.protocol_parameters.node_id_set_cardinality
+    if node_id_set_cardinality >= 2 ** 32:
+        # Special case: for very large sets just pick a random number. Very large sets are only possible with test
+        # transports such as loopback so it's acceptable. If necessary, later we could develop a more robust solution.
+        print(random.randint(0, node_id_set_cardinality - 1))
+        return
+
     candidates = set(range(node_id_set_cardinality))
     pres = pyuavcan.presentation.Presentation(transport)
     with contextlib.closing(pres):

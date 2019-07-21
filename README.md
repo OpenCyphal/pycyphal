@@ -40,6 +40,8 @@ Please read the user documentation to learn how to generate Python packages from
 
 TODO: coverage measurement with sitecustomize.py -- quite a big gun
 
+TODO: style
+
 ### Repository layout
 
 The shippable entities are located exclusively inside the directory `pyuavcan`.
@@ -105,6 +107,9 @@ Since some of them may take a considerable time to run,
 the developer may want to temporarily disable slow tests by setting the environment variable
 `PYUAVCAN_TEST_SKIP_SLOW=1`.
 This will trigger the test executor to skip test functions whose names match the pattern `_unittest_slow_*`.
+
+Certain tests require real-time execution. If they appear to be failing with timeout errors, consider
+re-running them on a faster system.
 
 For more information refer to the PyTest documentation.
 

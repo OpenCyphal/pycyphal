@@ -36,6 +36,16 @@ _logger = logging.getLogger(__name__)
 
 def register_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
+        'server_node_id',
+        metavar='SERVER_NODE_ID',
+        type=int,
+        help=f'''
+The node ID of the server that the request will be sent to.
+Valid values range from zero (inclusive) to a transport-specific upper limit.
+'''.strip(),
+    )
+
+    parser.add_argument(
         'service_spec',
         metavar='[SERVICE_ID.]FULL_SERVICE_TYPE_NAME.MAJOR.MINOR',
         help='''
@@ -57,16 +67,6 @@ request object. Missing fields will be left at their default values.
 Use empty dict as "{}" to construct a default-initialized request object.
 For more info about the YAML representation, read the PyUAVCAN documentation
 on builtin-based representations.
-'''.strip(),
-    )
-
-    parser.add_argument(
-        'server_node_id',
-        metavar='SERVER_NODE_ID',
-        type=int,
-        help=f'''
-The node ID of the server that the request will be sent to.
-Valid values range from zero (inclusive) to a transport-specific upper limit.
 '''.strip(),
     )
 
@@ -111,7 +111,7 @@ Default: %(default)s
         '--with-metadata', '-M',
         action='store_true',
         help='''
-Emit transfer metadata together with the response.
+Emit metadata together with the response.
 '''.strip(),
     )
 
@@ -144,26 +144,26 @@ async def _do_execute(args: argparse.Namespace) -> int:
         client.priority = args.priority
         client.transfer_id_counter.override(args.transfer_id)
 
-        request_ts_transport_layer: typing.Optional[pyuavcan.transport.Timestamp] = None
+        request_ts_transport: typing.Optional[pyuavcan.transport.Timestamp] = None
 
         def on_transfer_feedback(fb: pyuavcan.transport.Feedback) -> None:
-            nonlocal request_ts_transport_layer
-            request_ts_transport_layer = fb.first_frame_transmission_timestamp
+            nonlocal request_ts_transport
+            request_ts_transport = fb.first_frame_transmission_timestamp
 
         client.output_transport_session.enable_feedback(on_transfer_feedback)
 
         # Perform the call.
-        request_ts_application_layer = pyuavcan.transport.Timestamp.now()
+        request_ts_application = pyuavcan.transport.Timestamp.now()
         result = await client.call_with_transfer(request)
-        response_ts_application_layer = pyuavcan.transport.Timestamp.now()
+        response_ts_application = pyuavcan.transport.Timestamp.now()
 
         # Print the results.
         if result is None:
-            print(f'Did not receive a response in {client.response_timeout:0.1f} seconds', file=sys.stderr)
+            print(f'The request has timed out after {client.response_timeout:0.1f} seconds', file=sys.stderr)
             return 1
         else:
-            if not request_ts_transport_layer:  # pragma: no cover
-                request_ts_transport_layer = request_ts_application_layer
+            if not request_ts_transport:  # pragma: no cover
+                request_ts_transport = request_ts_application
                 _logger.error('The transport implementation is misbehaving: feedback was never emitted; '
                               'falling back to software timestamping. '
                               'Please submit a bug report. Involved instances: node=%r, client=%r, result=%r',
@@ -171,47 +171,40 @@ async def _do_execute(args: argparse.Namespace) -> int:
 
             response, transfer = result
 
-            transport_layer_duration = transfer.timestamp.monotonic - request_ts_transport_layer.monotonic
-            application_layer_duration = \
-                response_ts_application_layer.monotonic - request_ts_application_layer.monotonic
+            transport_duration = transfer.timestamp.monotonic - request_ts_transport.monotonic
+            application_duration = response_ts_application.monotonic - request_ts_application.monotonic
+            _logger.info('Request duration [second]: '
+                         'transport layer: %.6f, application layer: %.6f, application layer overhead: %.6f',
+                         transport_duration, application_duration, application_duration - transport_duration)
 
-            bi: typing.Dict[str, typing.Any] = {}  # We use updates to ensure proper dict ordering: metadata before data
-            if args.with_metadata:
-                bi.update({
-                    '_transfer_': {
-                        'timestamp': {
-                            'system':    transfer.timestamp.system.quantize(_1EM6),
-                            'monotonic': transfer.timestamp.monotonic.quantize(_1EM6),
-                        },
-                        'priority':       transfer.priority.name.lower(),
-                        'transfer_id':    transfer.transfer_id,
-                        'source_node_id': transfer.source_node_id,
-                    },
-                    '_request_timing_': {
-                        'transport_layer': {
-                            'timestamp': {
-                                'system':    request_ts_transport_layer.system.quantize(_1EM6),
-                                'monotonic': request_ts_transport_layer.monotonic.quantize(_1EM6),
-                            },
-                            'duration': transport_layer_duration.quantize(_1EM6),
-                        },
-                        'application_layer': {
-                            'timestamp': {
-                                'system':    request_ts_application_layer.system.quantize(_1EM6),
-                                'monotonic': request_ts_application_layer.monotonic.quantize(_1EM6),
-                            },
-                            'duration': application_layer_duration.quantize(_1EM6),
-                            'local_overhead': (application_layer_duration - transport_layer_duration).quantize(_1EM6),
-                        },
-                    }
-                })
-            bi.update(pyuavcan.dsdl.to_builtin(response))
-
-            print(formatter({
-                service_id: bi,
-            }))
-
+            _print_result(service_id=service_id,
+                          response=response,
+                          transfer=transfer,
+                          formatter=formatter,
+                          request_transfer_ts=request_ts_transport,
+                          app_layer_duration=application_duration,
+                          with_metadata=args.with_metadata)
     return 0
 
 
-_1EM6 = decimal.Decimal('0.000001')
+def _print_result(service_id:          int,
+                  response:            pyuavcan.dsdl.CompositeObject,
+                  transfer:            pyuavcan.transport.TransferFrom,
+                  formatter:           _util.formatter.Formatter,
+                  request_transfer_ts: pyuavcan.transport.Timestamp,
+                  app_layer_duration:  decimal.Decimal,
+                  with_metadata:       bool) -> None:
+    bi: typing.Dict[str, typing.Any] = {}  # We use updates to ensure proper dict ordering: metadata before data
+    if with_metadata:
+        rtt_quantizer = decimal.Decimal('0.000001')
+        meta = _util.transport.convert_transfer_metadata_to_builtin(transfer)
+        meta['roundtrip_time'] = {
+            'transport_layer':   (transfer.timestamp.monotonic - request_transfer_ts.monotonic).quantize(rtt_quantizer),
+            'application_layer': app_layer_duration.quantize(rtt_quantizer),
+        }
+        bi['_metadata_'] = meta
+    bi.update(pyuavcan.dsdl.to_builtin(response))
+
+    print(formatter({
+        service_id: bi,
+    }))

@@ -21,7 +21,8 @@ class YAMLDumper:
     YAML generation facade.
     """
     def __init__(self, explicit_start: bool = False):
-        self._impl = ruamel.yaml.YAML(typ='safe')
+        # We need to use the roundtrip representer to retain ordering of mappings, which is important for usability.
+        self._impl = ruamel.yaml.YAML(typ='rt')
         self._impl.explicit_start = explicit_start    # type: ignore
         self._impl.default_flow_style = False
 
@@ -61,7 +62,7 @@ def _represent_decimal(self: ruamel.yaml.BaseRepresenter,                   # ty
 
 ruamel.yaml.add_representer(decimal.Decimal,
                             _represent_decimal,
-                            representer=ruamel.yaml.SafeRepresenter)  # type: ignore
+                            representer=ruamel.yaml.RoundTripRepresenter)  # type: ignore
 
 _POINT_ZERO_DECIMAL = decimal.Decimal('0.0')
 
