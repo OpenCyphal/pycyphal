@@ -127,8 +127,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert rx is None
 
     sub_heart.close()
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        sub_heart.close()
+    sub_heart.close()       # Shall not raise.
 
     record_handler_output: typing.List[typing.Tuple[uavcan.diagnostic.Record_1_0, pyuavcan.transport.TransferFrom]] = []
 

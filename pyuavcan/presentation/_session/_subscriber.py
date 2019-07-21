@@ -211,16 +211,15 @@ class Subscriber(MessageTypedSession[MessageClass]):
         its transport session instance will be closed. The user should explicitly close all objects before disposing
         of the presentation layer instance.
         """
-        self._closed = True
-
-        if self._maybe_task is not None:    # The task may be holding the lock.
-            try:
-                self._maybe_task.cancel()   # We don't wait for it to exit because it's pointless.
-            except Exception as ex:
-                _logger.exception('%s task could not be cancelled: %s', self, ex)
-            self._maybe_task = None
-
-        self._impl.remove_listener(self._rx)
+        if not self._closed:
+            self._closed = True
+            self._impl.remove_listener(self._rx)
+            if self._maybe_task is not None:    # The task may be holding the lock.
+                try:
+                    self._maybe_task.cancel()   # We don't wait for it to exit because it's pointless.
+                except Exception as ex:
+                    _logger.exception('%s task could not be cancelled: %s', self, ex)
+                self._maybe_task = None
 
     def _raise_if_closed_or_failed(self) -> None:
         if self._closed:
