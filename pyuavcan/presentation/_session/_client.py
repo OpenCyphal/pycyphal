@@ -56,6 +56,7 @@ class Client(ServiceTypedSession[ServiceClass]):
         self._dtype = impl.dtype                                        # Permit usage after close()
         self._input_transport_session = impl.input_transport_session    # Same
         self._output_transport_session = impl.output_transport_session  # Same
+        self._transfer_id_counter = impl.transfer_id_counter            # Same
         impl.register_proxy()
         self._response_timeout = DEFAULT_SERVICE_REQUEST_TIMEOUT
         self._priority = DEFAULT_PRIORITY
@@ -120,6 +121,13 @@ class Client(ServiceTypedSession[ServiceClass]):
         return self._dtype
 
     @property
+    def transfer_id_counter(self) -> OutgoingTransferIDCounter:
+        """
+        Allows the caller to reach the transfer ID counter object.
+        """
+        return self._transfer_id_counter
+
+    @property
     def input_transport_session(self) -> pyuavcan.transport.InputSession:
         return self._input_transport_session
 
@@ -174,7 +182,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         self.deserialization_failure_count = 0
         self.unexpected_response_count = 0
 
-        self._transfer_id_counter = transfer_id_counter
+        self.transfer_id_counter = transfer_id_counter
         # The transfer ID modulo may change if the transport is reconfigured at runtime. This is certainly not a
         # common use case, but it makes sense supporting it in this library since it's supposed to be usable with
         # diagnostic and inspection tools.
@@ -201,7 +209,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
             # We have to compute the modulus here manually instead of just letting the transport do that because
             # the response will use the modulus instead of the full TID and we have to match it with the request.
-            transfer_id = self._transfer_id_counter.get_then_increment() % self._transfer_id_modulo_factory()
+            transfer_id = self.transfer_id_counter.get_then_increment() % self._transfer_id_modulo_factory()
             if transfer_id in self._response_futures_by_transfer_id:
                 raise RequestTransferIDVariabilityExhaustedError(repr(self))
 

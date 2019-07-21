@@ -4,7 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import os
 import typing
 import asyncio
 import logging
@@ -15,8 +14,7 @@ import argparse_utils
 
 import pyuavcan
 from . import _util
-from ._util.yaml import YAMLLoader, YAMLDumper
-from . import dsdl_generate_packages
+from ._util.yaml import YAMLLoader
 
 
 INFO = _util.base.CommandInfo(
@@ -38,8 +36,6 @@ _logger = logging.getLogger(__name__)
 
 
 def register_arguments(parser: argparse.ArgumentParser) -> None:
-    _util.transport.add_arguments(parser)
-
     parser.add_argument(
         'subject_spec',
         metavar='[SUBJECT_ID.]FULL_MESSAGE_TYPE_NAME.MAJOR.MINOR YAML_FIELDS',
@@ -66,22 +62,7 @@ Examples:
 '''.strip(),
     )
 
-    parser.add_argument(
-        '--local-node-id', '-L',
-        metavar='NATURAL',
-        type=int,
-        help=f'''
-Node-ID to use for the requested operation.
-If not specified, no node-ID will be assigned to the local node. On most
-transports this results in the node running in the anonymous mode; some
-transports, however, may have a default node-ID value assigned by the
-transport layer, in which case that node-ID will be used. Beware that
-anonymous transfers may have limitations; for example, some transports
-don't support multi-frame anonymous transfers.
-Also see the command pick-node-id.
-Default: %(default)s
-'''.strip(),
-    )
+    _util.node.add_arguments(parser, __name__, allow_anonymous=True)
 
     parser.add_argument(
         '--period', '-P',
@@ -133,45 +114,10 @@ Default: %(default)s
 '''.strip(),
     )
 
-    parser.add_argument(
-        '--heartbeat-fields',
-        default='{}',
-        metavar='YAML_FIELDS',
-        type=_YAML_LOADER.load,
-        help='''
-Value of the heartbeat message uavcan.node.Heartbeat published by the node.
-The uptime will be overridden so specifying it here will have no effect.
-Has no effect if the node is anonymous (i.e., without a local node-ID)
-because anonymous nodes do not publish their heartbeat.
-
-For more info about the YAML representation, read the PyUAVCAN documentation
-on builtin-based representations.
-
-Unless overridden, the following defaults are used:
-- Mode operational.
-- Health nominal.
-- Vendor-specific status code equals the process ID (PID) of the command.
-Default: %(default)s
-'''.strip(),
-    )
-
-    parser.add_argument(
-        '--node-info-fields',
-        default='{}',
-        type=_YAML_LOADER.load,
-        metavar='YAML_FIELDS',
-        help=f'''
-Value of the node info response uavcan.node.GetInfo returned by the node.
-This argument overrides the following defaults per-field:
-{YAMLDumper().dumps(_NODE_INFO_FIELDS)}
-For more info about the YAML representation, read the PyUAVCAN documentation
-on builtin-based representations.
-Default: %(default)s
-'''.strip(),
-    )
-
 
 class Publication:
+    _YAML_LOADER = YAMLLoader()
+
     def __init__(self,
                  subject_spec: str,
                  field_spec:   str,
@@ -180,7 +126,7 @@ class Publication:
                  priority:     pyuavcan.transport.Priority,
                  send_timeout: float):
         subject_id, dtype = _util.port_spec.construct_port_id_and_type(subject_spec)
-        content = _YAML_LOADER.load(field_spec)
+        content = self._YAML_LOADER.load(field_spec)
 
         self._message = pyuavcan.dsdl.update_from_builtin(dtype(), content)
         self._publisher = presentation.make_publisher(dtype, subject_id)
@@ -200,46 +146,15 @@ def execute(args: argparse.Namespace) -> None:
 
 
 async def _do_execute(args: argparse.Namespace) -> None:
-    # If the application submodule fails to import with an import error, the standard DSDL data type package
-    # probably needs to be generated first, which we suggest the user to do.
-    try:
-        from pyuavcan import application
-    except ImportError:
-        raise ImportError(dsdl_generate_packages.make_usage_suggestion_text('uavcan')) from None
+    with contextlib.closing(_util.node.construct_node(args)) as node:
+        import pyuavcan.application
+        assert isinstance(node, pyuavcan.application.Node)
 
-    # Construct the node instance.
-    node_info_fields = _NODE_INFO_FIELDS.copy()
-    node_info_fields.update(args.node_info_fields)
-    node_info = pyuavcan.dsdl.update_from_builtin(application.NodeInfo(), node_info_fields)
-    _logger.info('Node info: %r', node_info)
-    node = application.Node(_util.transport.construct_transport(args), info=node_info)
-
-    with contextlib.closing(node):
-        # Configure the heartbeat publisher.
-        if args.heartbeat_fields.pop('uptime', None) is not None:
-            _logger.warning('Specifying uptime has no effect because it will be overridden by the node.')
-        node.heartbeat_publisher.health = \
-            args.heartbeat_fields.pop('health', application.heartbeat_publisher.Health.NOMINAL)
-        node.heartbeat_publisher.mode = \
-            args.heartbeat_fields.pop('mode', application.heartbeat_publisher.Mode.OPERATIONAL)
-        node.heartbeat_publisher.vendor_specific_status_code = args.heartbeat_fields.pop(
-            'vendor_specific_status_code',
-            os.getpid() & (2 ** min(pyuavcan.dsdl.get_model(application.heartbeat_publisher.Heartbeat)
-                                    ['vendor_specific_status_code'].data_type.bit_length_set) - 1)
-        )
         node.heartbeat_publisher.priority = args.priority
-        node.heartbeat_publisher.period = min(application.heartbeat_publisher.Heartbeat.MAX_PUBLICATION_PERIOD,
+        node.heartbeat_publisher.period = min(pyuavcan.application.heartbeat_publisher.Heartbeat.MAX_PUBLICATION_PERIOD,
                                               args.period)
         node.heartbeat_publisher.publisher.transfer_id_counter.override(args.transfer_id)
-        _logger.info('Node heartbeat: %r', node.heartbeat_publisher.make_message())
-        if args.heartbeat_fields:
-            raise ValueError(f'Unrecognized heartbeat fields: {args.heartbeat_fields}')
 
-        # Configure the node-ID.
-        if args.local_node_id is not None:
-            node.set_local_node_id(args.local_node_id)
-
-        # Configure the publication set.
         raw_ss = args.subject_spec
         if len(raw_ss) % 2 != 0:
             raise argparse.ArgumentError('Mismatching arguments: '
@@ -268,7 +183,3 @@ async def _do_execute(args: argparse.Namespace) -> None:
             _logger.info('Publication cycle %d of %d completed; sleeping for %.3f seconds',
                          c + 1, args.count, sleep_until - asyncio.get_event_loop().time())
             await asyncio.sleep(sleep_until - asyncio.get_event_loop().time())
-
-
-_YAML_LOADER = YAMLLoader()
-_NODE_INFO_FIELDS = _util.node.make_default_node_info_fields_for_command_module(__name__)

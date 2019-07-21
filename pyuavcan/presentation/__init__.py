@@ -19,6 +19,7 @@ from ._session import OutgoingTransferIDCounter as OutgoingTransferIDCounter
 from ._session import TypedSessionClosedError as TypedSessionClosedError
 from ._session import RequestTransferIDVariabilityExhaustedError as RequestTransferIDVariabilityExhaustedError
 from ._session import DEFAULT_PRIORITY as DEFAULT_PRIORITY
+from ._session import DEFAULT_SERVICE_REQUEST_TIMEOUT as DEFAULT_SERVICE_REQUEST_TIMEOUT
 
 from ._session import PresentationSession as PresentationSession
 from ._session import MessageTypedSession as MessageTypedSession

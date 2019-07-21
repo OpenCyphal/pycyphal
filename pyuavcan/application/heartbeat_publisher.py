@@ -178,12 +178,13 @@ class HeartbeatPublisher:
         next_heartbeat_at = time.monotonic()
         while not self._closed:
             try:
-                next_heartbeat_at += self._publisher.send_timeout
-                await asyncio.sleep(next_heartbeat_at - time.monotonic())
                 self._call_pre_heartbeat_handlers()
                 if self._presentation.transport.local_node_id is not None:
                     if not await self._publisher.publish(self.make_message()):
                         _logger.warning('%s heartbeat send timed out', self)
+
+                next_heartbeat_at += self._publisher.send_timeout
+                await asyncio.sleep(next_heartbeat_at - time.monotonic())
             except asyncio.CancelledError:
                 _logger.debug('%s publisher task cancelled', self)
                 break
@@ -192,7 +193,6 @@ class HeartbeatPublisher:
                 break
             except Exception as ex:
                 _logger.exception('%s publisher task exception: %s', self, ex)
-
         try:
             self._publisher.close()
         except pyuavcan.transport.TransportError:

@@ -11,8 +11,6 @@ import logging
 import argparse
 import contextlib
 
-import argparse_utils
-
 import pyuavcan
 from . import _util
 
@@ -37,8 +35,6 @@ _logger = logging.getLogger(__name__)
 
 
 def register_arguments(parser: argparse.ArgumentParser) -> None:
-    _util.transport.add_arguments(parser)
-
     parser.add_argument(
         'subject_spec',
         metavar='[SUBJECT_ID.]FULL_MESSAGE_TYPE_NAME.MAJOR.MINOR',
@@ -54,20 +50,8 @@ Examples:
 '''.strip(),
     )
 
-    # noinspection PyTypeChecker
-    parser.add_argument(
-        '--format', '-F',
-        default=next(iter(_util.formatter.Format)),
-        action=argparse_utils.enum_action(_util.formatter.Format),
-        help='''
-The format of the data printed into stdout. The final representation is
-constructed from an intermediate "builtin-based" representation, which is
-a simplified form that is stripped of the detailed DSDL type information,
-like JSON. For the background info please read the PyUAVCAN documentation
-on builtin-based representations.
-Default: %(default)s
-'''.strip(),
-    )
+    _util.transport.add_arguments(parser)
+    _util.formatter.add_arguments(parser)
 
     parser.add_argument(
         '--with-metadata', '-M',
@@ -94,7 +78,7 @@ def execute(args: argparse.Namespace) -> None:
     asyncio.get_event_loop().run_until_complete(
         _run(transport=transport,
              subject_specs=subject_specs,
-             formatter=_util.formatter.make_formatter(args.format),
+             formatter=_util.formatter.construct_formatter(args),
              with_metadata=args.with_metadata,
              count=int(args.count) if args.count is not None else (2 ** 63))
     )

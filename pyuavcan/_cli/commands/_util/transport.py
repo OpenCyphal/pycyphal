@@ -104,10 +104,9 @@ Use CAN transport over SocketCAN. Arguments:
     - Interface name, string, mandatory; e.g.: "can0".
     - Maximum transmission unit, int; optional, defaults to 64 bytes;
       MTU value of 8 bytes selects CAN 2.0.
-Example; selecting CAN 2.0:
-    --socketcan=vcan0,8
-Example; selecting CAN FD with MTU 64 bytes:
-    --socketcan=vcan0
+Examples:
+    --socketcan=vcan0,8     # Selects CAN 2.0
+    --socketcan=vcan0       # Selects CAN FD with MTU 64 bytes
 """.strip(),
         type=construct_socketcan_transport,
     )

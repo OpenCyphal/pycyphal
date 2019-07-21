@@ -8,6 +8,8 @@ from __future__ import annotations
 import enum
 import typing
 import logging
+import argparse
+import argparse_utils
 
 
 Formatter = typing.Callable[[typing.Dict[int, typing.Dict[str, typing.Any]]], str]
@@ -15,18 +17,35 @@ Formatter = typing.Callable[[typing.Dict[int, typing.Dict[str, typing.Any]]], st
 _logger = logging.getLogger(__name__)
 
 
-class Format(enum.Enum):
+def add_arguments(parser: argparse.ArgumentParser) -> None:
+    # noinspection PyTypeChecker
+    parser.add_argument(
+        '--format', '-F',
+        default=next(iter(_Format)),
+        action=argparse_utils.enum_action(_Format),
+        help='''
+The format of the data printed into stdout. The final representation is
+constructed from an intermediate "builtin-based" representation, which is
+a simplified form that is stripped of the detailed DSDL type information,
+like JSON. For the background info please read the PyUAVCAN documentation
+on builtin-based representations.
+Default: %(default)s
+        '''.strip(),
+    )
+
+
+def construct_formatter(args: argparse.Namespace) -> Formatter:
+    return {
+        _Format.YAML: _make_yaml_formatter,
+        _Format.JSON: _make_json_formatter,
+        _Format.TSV:  _make_tsv_formatter,
+    }[args.format]()
+
+
+class _Format(enum.Enum):
     YAML = enum.auto()
     JSON = enum.auto()
     TSV = enum.auto()
-
-
-def make_formatter(format_type: Format) -> Formatter:
-    return {
-        Format.YAML: _make_yaml_formatter,
-        Format.JSON: _make_json_formatter,
-        Format.TSV:  _make_tsv_formatter,
-    }[format_type]()
 
 
 def _make_yaml_formatter() -> Formatter:
@@ -60,7 +79,7 @@ def _unittest_formatter() -> None:
             'ghi': 789,
         }
     }
-    assert make_formatter(Format.YAML)(obj) == """---
+    assert construct_formatter(argparse.Namespace(format=_Format.YAML))(obj) == """---
 12345:
   abc:
     def:
@@ -68,4 +87,5 @@ def _unittest_formatter() -> None:
     - 456
   ghi: 789
 """
-    assert make_formatter(Format.JSON)(obj) == '{"12345":{"abc":{"def":[123,456]},"ghi":789}}'
+    assert construct_formatter(argparse.Namespace(format=_Format.JSON))(obj) == \
+        '{"12345":{"abc":{"def":[123,456]},"ghi":789}}'

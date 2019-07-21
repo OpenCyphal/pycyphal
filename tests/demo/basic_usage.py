@@ -103,6 +103,7 @@ class DemoApplication:
         self._node = pyuavcan.application.Node(transport, node_info)
 
         # Published heartbeat fields can be configured trivially by assigning them on the heartbeat publisher instance.
+        self._node.heartbeat_publisher.mode = uavcan.node.Heartbeat_1_0.MODE_OPERATIONAL
         # In this example here we assign the local process' PID to the vendor-specific status code (VSSC) and make
         # sure that the valid range is not exceeded.
         self._node.heartbeat_publisher.vendor_specific_status_code = \

@@ -9,6 +9,7 @@ from ._base import Closable as Closable
 from ._base import MessageTypedSession as MessageTypedSession
 from ._base import ServiceTypedSession as ServiceTypedSession
 from ._base import DEFAULT_PRIORITY as DEFAULT_PRIORITY
+from ._base import DEFAULT_SERVICE_REQUEST_TIMEOUT as DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._base import OutgoingTransferIDCounter as OutgoingTransferIDCounter
 from ._base import TypedSessionFinalizer as TypedSessionFinalizer
 
