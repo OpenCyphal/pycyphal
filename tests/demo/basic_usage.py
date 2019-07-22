@@ -159,7 +159,8 @@ class DemoApplication:
         Notice that this is an async function.
         """
         # Publish the message like this. Here, we use await, blocking this task until the message is pushed down to
-        # the media layer.
+        # the media layer. This normally should not be done from within a service handler because it may make the
+        # service call to time out. Instead use publish_soon(), as shown below.
         diagnostic_msg = uavcan.diagnostic.Record_1_0(
             severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.DEBUG),
             text=f'Least squares request from {metadata.client_node_id} time={metadata.timestamp.system} '

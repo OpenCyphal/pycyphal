@@ -15,7 +15,7 @@ import pathlib
 import pyuavcan
 from ._subprocess import run_process, BackgroundChildProcess
 # noinspection PyProtectedMember
-from pyuavcan._cli.commands import dsdl_generate_packages
+from pyuavcan._cli import DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
 from tests.dsdl.conftest import TEST_DATA_TYPES_DIR, PUBLIC_REGULATED_DATA_TYPES_DIR, generated_packages
 
 
@@ -36,12 +36,12 @@ def _unittest_slow_cli_demo_basic_usage(
     # Generate DSDL namespace "sirius_cyber_corp"
     run_process('pyuavcan', 'dsdl-gen-pkg',
                 str(TEST_DATA_TYPES_DIR / 'sirius_cyber_corp'),
-                '--lookup', dsdl_generate_packages.DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
+                '--lookup', DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
 
     # Generate DSDL namespace "test"
     run_process('pyuavcan', 'dsdl-gen-pkg',
                 str(TEST_DATA_TYPES_DIR / 'test'),
-                '--lookup', dsdl_generate_packages.DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
+                '--lookup', DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
 
     # Generate DSDL namespace "uavcan"
     run_process('pyuavcan', 'dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))

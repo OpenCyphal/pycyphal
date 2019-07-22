@@ -9,6 +9,8 @@ import typing
 import argparse
 from ._util.base import CommandInfo as CommandInfo
 from ._util.base import DEFAULT_DSDL_GENERATED_PACKAGES_DIR as DEFAULT_DSDL_GENERATED_PACKAGES_DIR
+from ._util.base import DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL as \
+    DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
 
 
 class Command:

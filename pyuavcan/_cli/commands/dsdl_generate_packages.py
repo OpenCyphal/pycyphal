@@ -17,11 +17,8 @@ import argparse
 import requests
 
 import pyuavcan
-from ._util.base import CommandInfo, DEFAULT_DSDL_GENERATED_PACKAGES_DIR
-
-
-DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL = \
-    'https://github.com/UAVCAN/public_regulated_data_types/archive/a532bfa7.zip'
+from ._util.base import CommandInfo
+from ._util.base import DEFAULT_DSDL_GENERATED_PACKAGES_DIR, DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
 
 
 INFO = CommandInfo(
