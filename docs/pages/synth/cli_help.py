@@ -41,6 +41,7 @@ print_output('--version')
 print_output('--help')
 
 
-for sub in cli.commands.COMMANDS:
-    print(f'Subcommand ``{sub.name}``' + HEADER_SUFFIX)
-    print_output(f'{sub.name} --help')
+for cls in cli.commands.get_available_command_classes():
+    cmd = cls()
+    print(f'Subcommand ``{cmd.names[0]}``' + HEADER_SUFFIX)
+    print_output(f'{cmd.names[0]} --help')

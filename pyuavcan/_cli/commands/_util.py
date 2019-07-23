@@ -72,13 +72,15 @@ def construct_port_id_and_type(spec: str) -> typing.Tuple[int, typing.Type[pyuav
 
 
 def convert_transfer_metadata_to_builtin(transfer: pyuavcan.transport.TransferFrom) -> typing.Dict[str, typing.Any]:
-    millionth = decimal.Decimal('0.000001')
     return {
         'timestamp': {
-            'system':    transfer.timestamp.system.quantize(millionth),
-            'monotonic': transfer.timestamp.monotonic.quantize(millionth),
+            'system':    transfer.timestamp.system.quantize(_MICRO),
+            'monotonic': transfer.timestamp.monotonic.quantize(_MICRO),
         },
         'priority':       transfer.priority.name.lower(),
         'transfer_id':    transfer.transfer_id,
         'source_node_id': transfer.source_node_id,
     }
+
+
+_MICRO = decimal.Decimal('0.000001')
