@@ -13,12 +13,14 @@ Full-featured UAVCAN stack in Python
 
 PyUAVCAN is a full-featured implementation of the UAVCAN protocol stack in Python.
 
-UAVCAN is an open lightweight data bus standard designed for reliable intravehicular communication
-in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
+[UAVCAN](https://uavcan.org) is an open lightweight data bus standard designed for reliable intravehicular
+communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
 The acronym stands for *Uncomplicated Application-level Vehicular Communication And Networking*.
 
-- **PYUAVCAN DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**
-- **SUPPORT FORUM: [forum.uavcan.org](https://forum.uavcan.org/)**
-- **UAVCAN WEBSITE: [uavcan.org](https://uavcan.org)**
+<big>**READ THE DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**</big>
 
-<img src="docs/_static/uavcan-logo.svg" style="width:100%; margin:10px;">
+**ASK QUESTIONS: [forum.uavcan.org](https://forum.uavcan.org/)**
+
+<a href="https://pyuavcan.readthedocs.io/">
+<img src="docs/_static/uavcan-logo.svg" width="60%" hspace="20%" vspace="5%" align="center">
+</a>

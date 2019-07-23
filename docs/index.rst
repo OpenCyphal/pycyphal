@@ -12,6 +12,8 @@ be extensible to permit low-effort experimentation and testing of new protocol c
 
 If you have questions, please bring them to the `UAVCAN support forum <https://forum.uavcan.org/>`_.
 
+Contributors, please read the :ref:`dev`!
+
 
 Contents
 --------

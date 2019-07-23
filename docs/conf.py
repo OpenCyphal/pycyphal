@@ -60,8 +60,8 @@ project = 'PyUAVCAN'
 copyright = '2019, UAVCAN Development Team'
 author = 'UAVCAN Development Team'
 
-# The short X.Y version
-version = '.'.join(map(str, pyuavcan.__version_info__[:2]))
+# The short semantic version
+version = '.'.join(map(str, pyuavcan.__version_info__))
 # The full version, including alpha/beta/rc tags
 release = pyuavcan.__version__
 
