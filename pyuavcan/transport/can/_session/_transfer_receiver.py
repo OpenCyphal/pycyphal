@@ -99,8 +99,9 @@ class TransferReceiver:
                 else:
                     cutoff = _frame.TRANSFER_CRC_LENGTH_BYTES - len(fragmented_payload[-1])
                     assert cutoff >= 0
-                    fragmented_payload = fragmented_payload[:-1]                # Drop the last fragment
-                    fragmented_payload[-1] = fragmented_payload[-1][:-cutoff]   # Truncate the previous fragment
+                    fragmented_payload = fragmented_payload[:-1]                    # Drop the last fragment
+                    if cutoff > 0:
+                        fragmented_payload[-1] = fragmented_payload[-1][:-cutoff]   # Truncate the previous fragment
                 assert expected_length == sum(map(len, fragmented_payload))
 
             return pyuavcan.transport.TransferFrom(timestamp=self._timestamp,
