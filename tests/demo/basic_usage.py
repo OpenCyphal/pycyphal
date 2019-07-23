@@ -103,9 +103,12 @@ class DemoApplication:
             # We've left the optional fields default-initialized here.
         )
 
-        # That's it, here is our node, immediately ready to be used. It will serve GetInfo requests and publish its
+        # The transport layer is ready; next layer up the protocol stack is the presentation layer. Construct it here.
+        presentation = pyuavcan.presentation.Presentation(transport)
+
+        # The application layer is next -- construct the node instance. It will serve GetInfo requests and publish its
         # heartbeat automatically (unless it's anonymous). Read the source code of the Node class for more details.
-        self._node = pyuavcan.application.Node(transport, node_info)
+        self._node = pyuavcan.application.Node(presentation, node_info)
 
         # Published heartbeat fields can be configured trivially by assigning them on the heartbeat publisher instance.
         self._node.heartbeat_publisher.mode = uavcan.node.Heartbeat_1_0.MODE_OPERATIONAL
@@ -146,6 +149,9 @@ class DemoApplication:
         # A message subscription.
         self._sub_temperature = self._node.make_subscriber(uavcan.si.temperature.Scalar_1_0, 12345)
         self._sub_temperature.receive_in_background(self._handle_temperature)
+
+        # When all is initialized, don't forget to start the node!
+        self._node.start()
 
     async def _serve_linear_least_squares_request(self,
                                                   request:  sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request,

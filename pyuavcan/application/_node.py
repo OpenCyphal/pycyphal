@@ -35,23 +35,37 @@ class Node:
     module :mod:`pyuavcan.presentation`.
     Users are also supposed to build their applications on top of the presentation layer,
     so this class can be used a collection of its usage examples.
+
+    The logic must be manually started when initialization is finished by invoking :meth:`start`.
     """
 
     def __init__(self,
-                 transport: pyuavcan.transport.Transport,
-                 info:      NodeInfo):
+                 presentation: pyuavcan.presentation.Presentation,
+                 info:         NodeInfo):
         """
-        The node takes ownership of the supplied transport instance.
-        Ownership here implies that the instance will be closed when the node instance is closed.
+        The node takes ownership of the supplied presentation controller.
+        Ownership here means that the controller will be closed (along with all sessions and other resources)
+        when the node is closed.
 
         The info structure is sent as a response to requests of type ``uavcan.node.GetInfo``;
         the corresponding server instance is established and run by the node class automatically.
         """
-        self._presentation = pyuavcan.presentation.Presentation(transport)
+        self._presentation = presentation
         self._info = info
         self._heartbeat_publisher = pyuavcan.application.heartbeat_publisher.HeartbeatPublisher(self._presentation)
         self._srv_info = self._presentation.get_server_with_fixed_service_id(uavcan.node.GetInfo_1_0)
-        self._srv_info.serve_in_background(self._handle_get_info_request)
+        self._started = False
+
+    def start(self) -> None:
+        """
+        Start the GetInfo server in the background, the heartbeat publisher, etc.
+        Those will be automatically terminated when the node is close()d.
+        Subsequent calls to start() will have no effect.
+        """
+        if not self._started:
+            self._srv_info.serve_in_background(self._handle_get_info_request)
+            self._heartbeat_publisher.start()
+            self._started = True
 
     @property
     def presentation(self) -> pyuavcan.presentation.Presentation:

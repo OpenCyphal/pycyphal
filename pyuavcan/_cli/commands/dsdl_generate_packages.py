@@ -13,46 +13,47 @@ import pathlib
 import zipfile
 import tempfile
 import argparse
-
 import requests
-
 import pyuavcan
-from ._util.base import CommandInfo
-from ._util.base import DEFAULT_DSDL_GENERATED_PACKAGES_DIR, DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
-
-
-INFO = CommandInfo(
-    help='''
-Generate PyUAVCAN Python packages from the specified DSDL root namespaces
-and/or from URLs pointing to an archive containing a set of DSDL root
-namespaces.
-'''.strip(),
-    examples=f'''
-# Generate a package from the root namespace "~/namespace" which depends on public regulated types:
-pyuavcan -v dsdl-gen-pkg --lookup {DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL} ~/namespace
-'''.strip(),
-    aliases=[
-        'dsdl-gen-pkg',
-    ]
-)
+from ._base import Command, DEFAULT_DSDL_GENERATED_PACKAGES_DIR, DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
+from ._subsystems import SubsystemFactory
 
 
 _logger = logging.getLogger(__name__)
 
 
-def make_usage_suggestion_text(root_namespace_name: str) -> str:
-    prefix = f'{sys.argv[0]} {INFO.aliases[0]}'
-    return f'Run "{prefix} DSDL_ROOT_NAMESPACE_PATH_OR_URI" ' \
-        f'to generate the missing Python package from the DSDL namespace {root_namespace_name!r}. ' \
-        f'Run "{prefix} --help" for full usage manual.'
+class DSDLGeneratePackagesCommand(Command):
+    _SHORT_NAME = 'dsdl-gen-pkg'
 
+    @property
+    def names(self) -> typing.Sequence[str]:
+        return ['dsdl-generate-packages', self._SHORT_NAME]
 
-def register_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        'input',
-        metavar='INPUT_PATH_OR_URI',
-        nargs='+',
-        help=f'''
+    @property
+    def help(self) -> str:
+        return '''
+Generate PyUAVCAN Python packages from the specified DSDL root namespaces
+and/or from URLs pointing to an archive containing a set of DSDL root
+namespaces.
+'''.strip()
+
+    @property
+    def examples(self) -> typing.Optional[str]:
+        return f'''
+# Generate a package from the root namespace "~/namespace" which depends on public regulated types:
+pyuavcan -v dsdl-gen-pkg --lookup {DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL} ~/namespace
+'''.strip()
+
+    @property
+    def subsystem_factories(self) -> typing.Sequence[SubsystemFactory]:
+        return []
+
+    def register_arguments(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            'input',
+            metavar='INPUT_PATH_OR_URI',
+            nargs='+',
+            help=f'''
 Either a local path or an URI pointing to the source DSDL root namespace(s).
 Can be specified more than once to process multiple namespaces at once.
 
@@ -65,25 +66,23 @@ repositories, e.g., on GitHub).
 
 Ex. path: ~/uavcan/public_regulated_data_types/uavcan/
 Ex. URI:  {DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL}
-'''.strip(),
-    )
-    parser.add_argument(
-        '--lookup', '-L',
-        action='append',
-        metavar='LOOKUP_PATH_OR_URI',
-        help=f'''
+'''.strip())
+        parser.add_argument(
+            '--lookup', '-L',
+            action='append',
+            metavar='LOOKUP_PATH_OR_URI',
+            help=f'''
 This is like --input, except that the specified DSDL root namespace(s) will
 be used only for looking up dependent data types; nothing will be generated
 from these. If a DSDL root namespace is specified as an input, it is
 automatically added to the look-up list.
 
 This option can be specified more than once.
-'''.strip(),
-    )
-    parser.add_argument(
-        '--output', '-O',
-        default=DEFAULT_DSDL_GENERATED_PACKAGES_DIR,
-        help='''
+'''.strip())
+        parser.add_argument(
+            '--output', '-O',
+            default=DEFAULT_DSDL_GENERATED_PACKAGES_DIR,
+            help='''
 Path to the directory where the generated packages will be stored.
 Existing packages will be overwritten entirely.
 
@@ -93,94 +92,99 @@ look-up list, so if the default directory is used, no additional steps
 are necessary.
 
 Default: %(default)s
-'''.strip(),
-    )
-    parser.add_argument(
-        '--allow-unregulated-fixed-port-id',
-        action='store_true',
-        help='''
+'''.strip())
+        parser.add_argument(
+            '--allow-unregulated-fixed-port-id',
+            action='store_true',
+            help='''
 Instruct the DSDL front-end to accept unregulated data types with fixed port
 identifiers. Make sure you understand the implications before using this
 option. If not sure, ask for advice at https://forum.uavcan.org.
-'''.strip(),
-    )
+'''.strip())
 
+    def execute(self, args: argparse.Namespace, _subsystems: typing.Sequence[object]) -> int:
+        output = pathlib.Path(args.output)
+        allow_unregulated_fixed_port_id = bool(args.allow_unregulated_fixed_port_id)
 
-def execute(args: argparse.Namespace) -> None:
-    output = pathlib.Path(args.output)
-    allow_unregulated_fixed_port_id = bool(args.allow_unregulated_fixed_port_id)
+        inputs: typing.List[pathlib.Path] = []
+        for location in args.input:
+            inputs += self._fetch_root_namespace_dirs(location)
+        _logger.info('Input DSDL root namespace directories: %r', list(map(str, inputs)))
 
-    inputs: typing.List[pathlib.Path] = []
-    for location in args.input:
-        inputs += _fetch_root_namespace_dirs(location)
-    _logger.info('Input DSDL root namespace directories: %r', list(map(str, inputs)))
+        lookup: typing.List[pathlib.Path] = []
+        for location in (args.lookup or []):
+            lookup += self._fetch_root_namespace_dirs(location)
+        _logger.info('Lookup DSDL root namespace directories: %r', list(map(str, lookup)))
 
-    lookup: typing.List[pathlib.Path] = []
-    for location in (args.lookup or []):
-        lookup += _fetch_root_namespace_dirs(location)
-    _logger.info('Lookup DSDL root namespace directories: %r', list(map(str, lookup)))
+        gpi_list = self._generate_dsdl_packages(source_root_namespace_dirs=inputs,
+                                                lookup_root_namespace_dirs=lookup,
+                                                generated_packages_dir=output,
+                                                allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
+        for gpi in gpi_list:
+            _logger.info('Generated package %r with %d data types at %r', gpi.name, len(gpi.models), str(gpi.path))
+        return 0
 
-    gpi_list = _generate_dsdl_packages(source_root_namespace_dirs=inputs,
-                                       lookup_root_namespace_dirs=lookup,
-                                       generated_packages_dir=output,
-                                       allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
-    for gpi in gpi_list:
-        _logger.info('Generated package %r with %d data types at %r', gpi.name, len(gpi.models), str(gpi.path))
+    @staticmethod
+    def make_usage_suggestion_text(root_namespace_name: str) -> str:
+        prefix = f'{sys.argv[0]} {DSDLGeneratePackagesCommand._SHORT_NAME}'
+        return f'Run "{prefix} DSDL_ROOT_NAMESPACE_PATH_OR_URI" ' \
+            f'to generate the missing Python package from the DSDL namespace {root_namespace_name!r}. ' \
+            f'Run "{prefix} --help" for full usage manual.'
 
+    @staticmethod
+    def _fetch_root_namespace_dirs(location: str) -> typing.List[pathlib.Path]:
+        if '://' in location:
+            dirs = DSDLGeneratePackagesCommand._fetch_archive_dirs(location)
+            _logger.info('Resource %r contains the following root namespace directories: %r',
+                         location, list(map(str, dirs)))
+            return dirs
+        else:
+            return [pathlib.Path(location)]
 
-def _fetch_root_namespace_dirs(location: str) -> typing.List[pathlib.Path]:
-    if '://' in location:
-        dirs = _fetch_archive_dirs(location)
-        _logger.info('Resource %r contains the following root namespace directories: %r',
-                     location, list(map(str, dirs)))
-        return dirs
-    else:
-        return [pathlib.Path(location)]
+    @staticmethod
+    def _fetch_archive_dirs(archive_url: str) -> typing.List[pathlib.Path]:
+        """
+        Downloads an archive from the specified URL, unpacks it into a temporary directory, and returns the list of
+        directories in the root of the unpacked archive.
+        """
+        # TODO: autodetect the type of the archive
+        arch_dir = tempfile.mkdtemp(prefix='pyuavcan-cli-dsdl')
+        arch_file = str(pathlib.Path(arch_dir) / 'dsdl.zip')
 
+        _logger.info('Downloading the archive from %r into %r...', archive_url, arch_file)
+        response = requests.get(archive_url)
+        if response.status_code != http.HTTPStatus.OK:
+            raise RuntimeError(f'Could not download the archive; HTTP error {response.status_code}')
+        with open(arch_file, 'wb') as f:
+            f.write(response.content)
 
-def _fetch_archive_dirs(archive_url: str) -> typing.List[pathlib.Path]:
-    """
-    Downloads an archive from the specified URL, unpacks it into a temporary directory, and returns the list of
-    directories in the root of the unpacked archive.
-    """
-    # TODO: autodetect the type of the archive
-    arch_dir = tempfile.mkdtemp(prefix='pyuavcan-cli-dsdl')
-    arch_file = str(pathlib.Path(arch_dir) / 'dsdl.zip')
+        _logger.info('Extracting the archive into %r...', arch_dir)
+        with zipfile.ZipFile(arch_file) as zf:
+            zf.extractall(arch_dir)
 
-    _logger.debug('Downloading the archive from %r into %r...', archive_url, arch_file)
-    response = requests.get(archive_url)
-    if response.status_code != http.HTTPStatus.OK:
-        raise RuntimeError(f'Could not download the archive; HTTP error {response.status_code}')
-    with open(arch_file, 'wb') as f:
-        f.write(response.content)
+        inner, = [d for d in pathlib.Path(arch_dir).iterdir() if d.is_dir()]  # Strip the outer layer, we don't need it
 
-    _logger.debug('Extracting the archive into %r...', arch_dir)
-    with zipfile.ZipFile(arch_file) as zf:
-        zf.extractall(arch_dir)
+        assert isinstance(inner, pathlib.Path)
+        return [d for d in inner.iterdir() if d.is_dir()]
 
-    inner, = [d for d in pathlib.Path(arch_dir).iterdir() if d.is_dir()]  # Strip the outer layer, we don't need it
+    @staticmethod
+    def _generate_dsdl_packages(source_root_namespace_dirs:      typing.Iterable[pathlib.Path],
+                                lookup_root_namespace_dirs:      typing.Iterable[pathlib.Path],
+                                generated_packages_dir:          pathlib.Path,
+                                allow_unregulated_fixed_port_id: bool) \
+            -> typing.Sequence[pyuavcan.dsdl.GeneratedPackageInfo]:
+        lookup_root_namespace_dirs = frozenset(list(lookup_root_namespace_dirs) + list(source_root_namespace_dirs))
+        generated_packages_dir.mkdir(parents=True, exist_ok=True)
 
-    assert isinstance(inner, pathlib.Path)
-    return [d for d in inner.iterdir() if d.is_dir()]
-
-
-def _generate_dsdl_packages(source_root_namespace_dirs:      typing.Iterable[pathlib.Path],
-                            lookup_root_namespace_dirs:      typing.Iterable[pathlib.Path],
-                            generated_packages_dir:          pathlib.Path,
-                            allow_unregulated_fixed_port_id: bool) \
-        -> typing.Sequence[pyuavcan.dsdl.GeneratedPackageInfo]:
-    lookup_root_namespace_dirs = frozenset(list(lookup_root_namespace_dirs) + list(source_root_namespace_dirs))
-    generated_packages_dir.mkdir(parents=True, exist_ok=True)
-
-    out: typing.List[pyuavcan.dsdl.GeneratedPackageInfo] = []
-    for ns in source_root_namespace_dirs:
-        dest_dir = generated_packages_dir / ns.name
-        _logger.info('Generating DSDL package %r from root namespace %r with lookup dirs: %r',
-                     dest_dir, ns, list(map(str, lookup_root_namespace_dirs)))
-        shutil.rmtree(dest_dir, ignore_errors=True)
-        gpi = pyuavcan.dsdl.generate_package(package_parent_directory=generated_packages_dir,
-                                             root_namespace_directory=ns,
-                                             lookup_directories=lookup_root_namespace_dirs,
-                                             allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
-        out.append(gpi)
-    return out
+        out: typing.List[pyuavcan.dsdl.GeneratedPackageInfo] = []
+        for ns in source_root_namespace_dirs:
+            dest_dir = generated_packages_dir / ns.name
+            _logger.info('Generating DSDL package %r from root namespace %r with lookup dirs: %r',
+                         dest_dir, ns, list(map(str, lookup_root_namespace_dirs)))
+            shutil.rmtree(dest_dir, ignore_errors=True)
+            gpi = pyuavcan.dsdl.generate_package(package_parent_directory=generated_packages_dir,
+                                                 root_namespace_directory=ns,
+                                                 lookup_directories=lookup_root_namespace_dirs,
+                                                 allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
+            out.append(gpi)
+        return out

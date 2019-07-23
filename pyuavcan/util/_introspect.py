@@ -10,7 +10,7 @@ import pkgutil
 import importlib
 
 
-T = typing.TypeVar('T', bound=object)
+T = typing.TypeVar('T', bound=object)  # https://github.com/python/mypy/issues/5374
 
 
 def iter_descendants(ty: typing.Type[T]) -> typing.Iterable[typing.Type[T]]:

@@ -10,6 +10,8 @@ import typing
 import logging
 import argparse
 import argparse_utils
+from ._base import SubsystemFactory
+from .._yaml import YAMLDumper  # Reaching to an upper-level module like this is not great, do something about it.
 
 
 Formatter = typing.Callable[[typing.Dict[int, typing.Dict[str, typing.Any]]], str]
@@ -17,39 +19,37 @@ Formatter = typing.Callable[[typing.Dict[int, typing.Dict[str, typing.Any]]], st
 _logger = logging.getLogger(__name__)
 
 
-def add_arguments(parser: argparse.ArgumentParser) -> None:
-    # noinspection PyTypeChecker
-    parser.add_argument(
-        '--format', '-F',
-        default=next(iter(_Format)),
-        action=argparse_utils.enum_action(_Format),
-        help='''
+class FormatterFactory(SubsystemFactory):
+    def register_arguments(self, parser: argparse.ArgumentParser) -> None:
+        # noinspection PyTypeChecker
+        parser.add_argument(
+            '--format', '-F',
+            default=next(iter(_Format)),
+            action=argparse_utils.enum_action(_Format),
+            help='''
 The format of the data printed into stdout. The final representation is
 constructed from an intermediate "builtin-based" representation, which is
 a simplified form that is stripped of the detailed DSDL type information,
 like JSON. For the background info please read the PyUAVCAN documentation
 on builtin-based representations.
 Default: %(default)s
-        '''.strip(),
-    )
+'''.strip())
 
-
-def construct_formatter(args: argparse.Namespace) -> Formatter:
-    return {
-        _Format.YAML: _make_yaml_formatter,
-        _Format.JSON: _make_json_formatter,
-        _Format.TSV:  _make_tsv_formatter,
-    }[args.format]()
+    def construct_subsystem(self, args: argparse.Namespace) -> Formatter:
+        return {
+            _Format.YAML: _make_yaml_formatter,
+            _Format.JSON: _make_json_formatter,
+            _Format.TSV:  _make_tsv_formatter,
+        }[args.format]()
 
 
 class _Format(enum.Enum):
     YAML = enum.auto()
     JSON = enum.auto()
-    TSV = enum.auto()
+    TSV  = enum.auto()
 
 
 def _make_yaml_formatter() -> Formatter:
-    from .yaml import YAMLDumper
     dumper = YAMLDumper(explicit_start=True)
     return lambda data: dumper.dumps(data)
 
@@ -79,7 +79,7 @@ def _unittest_formatter() -> None:
             'ghi': 789,
         }
     }
-    assert construct_formatter(argparse.Namespace(format=_Format.YAML))(obj) == """---
+    assert FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.YAML))(obj) == """---
 12345:
   abc:
     def:
@@ -87,5 +87,5 @@ def _unittest_formatter() -> None:
     - 456
   ghi: 789
 """
-    assert construct_formatter(argparse.Namespace(format=_Format.JSON))(obj) == \
+    assert FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.JSON))(obj) == \
         '{"12345":{"abc":{"def":[123,456]},"ghi":789}}'

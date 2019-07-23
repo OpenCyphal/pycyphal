@@ -6,60 +6,37 @@
 
 from __future__ import annotations
 import typing
-import decimal
 import logging
 import argparse
 import itertools
-import dataclasses
 import pyuavcan.transport
-from .yaml import YAMLLoader
+from .._yaml import YAMLLoader
+from ._base import SubsystemFactory
 
 
 _logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(frozen=True)
-class _IfaceArgument:
-    argparse_dest: str
-    constructor:   typing.Callable[[str], pyuavcan.transport.Transport]
+class TransportFactory(SubsystemFactory):
+    def register_arguments(self, parser: argparse.ArgumentParser) -> None:
+        for ini in _INITIALIZERS:
+            ini(parser)
 
+    def construct_subsystem(self, args: argparse.Namespace) -> pyuavcan.transport.Transport:
+        trans: typing.List[pyuavcan.transport.Transport] = args.transport
+        if not trans:
+            raise ValueError('At least one transport must be specified.')
+        assert isinstance(trans, list)
+        assert all(map(lambda t: isinstance(t, pyuavcan.transport.Transport), trans))
 
-def add_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    Adds arguments for all supported transports and interfaces to the specified parser.
-    """
-    for ini in _INITIALIZERS:
-        ini(parser)
-
-
-def construct_transport(args: argparse.Namespace) -> pyuavcan.transport.Transport:
-    trans: typing.List[pyuavcan.transport.Transport] = args.transport
-    if not trans:
-        raise ValueError('At least one transport must be specified.')
-    assert isinstance(trans, list)
-    assert all(map(lambda t: isinstance(t, pyuavcan.transport.Transport), trans))
-
-    _logger.debug(f'Using the following transports: {trans!r}')
-    if len(trans) < 1:
-        raise ValueError('No transports specified')
-    elif len(trans) == 1:
-        return trans[0]  # Non-redundant transport
-    else:
-        # TODO: initialize a RedundantTransport!
-        raise NotImplementedError('Sorry, redundant transport construction is not yet implemented')
-
-
-def convert_transfer_metadata_to_builtin(transfer: pyuavcan.transport.TransferFrom) -> typing.Dict[str, typing.Any]:
-    millionth = decimal.Decimal('0.000001')
-    return {
-        'timestamp': {
-            'system':    transfer.timestamp.system.quantize(millionth),
-            'monotonic': transfer.timestamp.monotonic.quantize(millionth),
-        },
-        'priority':       transfer.priority.name.lower(),
-        'transfer_id':    transfer.transfer_id,
-        'source_node_id': transfer.source_node_id,
-    }
+        _logger.debug(f'Using the following transports: {trans!r}')
+        if len(trans) < 1:
+            raise ValueError('No transports specified')
+        elif len(trans) == 1:
+            return trans[0]  # Non-redundant transport
+        else:
+            # TODO: initialize a RedundantTransport!
+            raise NotImplementedError('Sorry, redundant transport construction is not yet implemented')
 
 
 def _make_arg_sequence_parser(*type_default_pairs: typing.Tuple[typing.Type[object], typing.Any]) \
@@ -111,6 +88,7 @@ def _add_args_for_can(parser: argparse.ArgumentParser) -> None:
         action='append',
         dest='transport',
         metavar='IFACE_NAME[,MTU]',
+        type=construct_socketcan_transport,
         help=f"""
 Use CAN transport over SocketCAN. Arguments:
     - Interface name, string, mandatory; e.g.: "can0".
@@ -119,9 +97,7 @@ Use CAN transport over SocketCAN. Arguments:
 Examples:
     --socketcan=vcan0,8     # Selects CAN 2.0
     --socketcan=vcan0       # Selects CAN FD with MTU 64 bytes
-""".strip(),
-        type=construct_socketcan_transport,
-    )
+""".strip())
 
 
 def _add_args_for_loopback(parser: argparse.ArgumentParser) -> None:
@@ -135,8 +111,7 @@ def _add_args_for_loopback(parser: argparse.ArgumentParser) -> None:
 Use process-local loopback transport. This transport is only useful for
 testing. It is not possible to exchange data between different nodes and/or
 processes using this transport.
-""".strip(),
-    )
+""".strip())
 
 
 # When writing initializers, the full (non-abridged) argument name pattern should be as follows:

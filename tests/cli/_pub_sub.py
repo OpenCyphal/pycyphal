@@ -57,7 +57,7 @@ def _unittest_slow_cli_pub_sub_a() -> None:
     print('heartbeats:', *heartbeats, sep='\n\t')
     print('diagnostics:', *diagnostics, sep='\n\t')
 
-    assert len(heartbeats) in (2, 3)    # Fuzzy because the last one might be dropped
+    assert len(heartbeats) in (2, 3, 4)    # Fuzzy because the last one might be dropped
     for index, m in enumerate(heartbeats):
         assert 'slow' in m['32085']['_metadata_']['priority'].lower()
         assert m['32085']['_metadata_']['transfer_id'] == 27 + index

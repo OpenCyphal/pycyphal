@@ -4,9 +4,8 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from . import base as base
+from ._base import SubsystemFactory as SubsystemFactory
+
 from . import node as node
-from . import yaml as yaml
 from . import formatter as formatter
-from . import port_spec as port_spec
 from . import transport as transport

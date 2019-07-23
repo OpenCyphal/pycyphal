@@ -6,9 +6,10 @@
 
 import typing
 import logging
+import decimal
 import importlib
 import pyuavcan.dsdl
-from .. import dsdl_generate_packages
+from .dsdl_generate_packages import DSDLGeneratePackagesCommand
 
 
 _logger = logging.getLogger(__name__)
@@ -16,7 +17,8 @@ _logger = logging.getLogger(__name__)
 
 def construct_port_id_and_type(spec: str) -> typing.Tuple[int, typing.Type[pyuavcan.dsdl.CompositeObject]]:
     """
-    Parses a data specifier string of the form [port_id.]full_data_type_name.major_version.minor_version.
+    Parses a data specifier string of the form ``[port_id.]full_data_type_name.major_version.minor_version``.
+    Raises ValueError, possibly with suggestions, if such type is non-reachable.
     """
     components = spec.strip().split('.')
 
@@ -51,7 +53,7 @@ def construct_port_id_and_type(spec: str) -> typing.Tuple[int, typing.Type[pyuav
                 mod = importlib.import_module(name + '_')
     except ImportError:
         raise ValueError(f'The data spec string specifies a non-existent namespace: {spec!r}. '
-                         f'{dsdl_generate_packages.make_usage_suggestion_text(namespace_components[0])}') from None
+                         f'{DSDLGeneratePackagesCommand.make_usage_suggestion_text(namespace_components[0])}') from None
 
     try:
         dtype = getattr(mod, f'{short_name}_{major}_{minor}')
@@ -67,3 +69,16 @@ def construct_port_id_and_type(spec: str) -> typing.Tuple[int, typing.Type[pyuav
         return port_id, dtype
     else:
         raise ValueError(f'The data spec does not specify a valid type: {spec!r}')
+
+
+def convert_transfer_metadata_to_builtin(transfer: pyuavcan.transport.TransferFrom) -> typing.Dict[str, typing.Any]:
+    millionth = decimal.Decimal('0.000001')
+    return {
+        'timestamp': {
+            'system':    transfer.timestamp.system.quantize(millionth),
+            'monotonic': transfer.timestamp.monotonic.quantize(millionth),
+        },
+        'priority':       transfer.priority.name.lower(),
+        'transfer_id':    transfer.transfer_id,
+        'source_node_id': transfer.source_node_id,
+    }

@@ -4,57 +4,15 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import types
 import typing
-import argparse
-from ._util.base import CommandInfo as CommandInfo
-from ._util.base import DEFAULT_DSDL_GENERATED_PACKAGES_DIR as DEFAULT_DSDL_GENERATED_PACKAGES_DIR
-from ._util.base import DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL as \
-    DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
+from ._base import Command as Command, SubsystemFactory as SubsystemFactory
+from ._base import DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL as DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
+from ._base import DEFAULT_DSDL_GENERATED_PACKAGES_DIR as DEFAULT_DSDL_GENERATED_PACKAGES_DIR
 
 
-class Command:
-    def __init__(self, module: types.ModuleType):
-        self._module = module
-        assert self.info.help, 'Malformed module'
-
-    @property
-    def name(self) -> str:
-        return self._module.__name__.split('.')[-1].replace('_', '-')
-
-    @property
-    def info(self) -> CommandInfo:
-        obj = getattr(self._module, 'INFO')
-        assert isinstance(obj, CommandInfo), 'Malformed module'
-        return obj
-
-    def register_arguments(self, parser: argparse.ArgumentParser) -> None:
-        obj = getattr(self._module, 'register_arguments')
-        assert callable(obj), 'Malformed module'
-        obj(parser)
-
-    def execute(self, args: argparse.Namespace) -> int:
-        obj = getattr(self._module, 'execute')
-        assert callable(obj), 'Malformed module'
-        out = obj(args)
-        return int(out) if out is not None else 0
-
-    def __repr__(self) -> str:
-        return f'Command(module={self._module}, name={self.name!r}, aliases={self.info.aliases})'
-
-
-def _load_commands() -> typing.List[Command]:
-    import pathlib
-    import importlib
-
-    out: typing.List[Command] = []
-    for mod in pathlib.Path(__file__).parent.iterdir():
-        if mod.name.endswith('.py') and not mod.name.startswith('_'):
-            module_name = mod.stem
-            module = importlib.import_module('.' + module_name, __name__)
-            out.append(Command(module))
-
-    return out
-
-
-COMMANDS = _load_commands()
+def get_available_command_classes() -> typing.Sequence[typing.Type[Command]]:
+    import pyuavcan._cli
+    # noinspection PyTypeChecker
+    pyuavcan.util.import_submodules(pyuavcan._cli)
+    # https://github.com/python/mypy/issues/5374
+    return list(pyuavcan.util.iter_descendants(Command))  # type: ignore

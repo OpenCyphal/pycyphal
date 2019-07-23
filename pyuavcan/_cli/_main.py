@@ -6,16 +6,18 @@
 
 import sys
 import time
+import typing
 import logging
 import argparse
-
+# noinspection PyCompatibility
+from . import commands
 
 _logger = logging.getLogger(__name__)
 
 
 def main() -> None:
     # noinspection PyCompatibility
-    from .commands import DEFAULT_DSDL_GENERATED_PACKAGES_DIR
+    from . import DEFAULT_DSDL_GENERATED_PACKAGES_DIR
     sys.path.insert(0, str(DEFAULT_DSDL_GENERATED_PACKAGES_DIR))
 
     logging.basicConfig(stream=sys.stderr,
@@ -33,64 +35,10 @@ def main() -> None:
         exit(1)
 
 
-def _construct_argument_parser() -> argparse.ArgumentParser:
-    # noinspection PyCompatibility
-    from . import commands
-    from pyuavcan import __version__
-
-    root_parser = argparse.ArgumentParser(
-        description='''
-A command line tool for diagnostics and management of UAVCAN networks.
-This tool is built on top of PyUAVCAN -- a full-featured Python implementation
-of the UAVCAN stack for high-level operating systems.
-Find documentation and support at https://uavcan.org.
-'''.strip(),
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-
-    # Register common arguments
-    root_parser.add_argument(
-        '--version', '-V',
-        action='version',
-        version=f'%(prog)s {__version__}',
-        help='''
-Print the PyUAVCAN version string and exit.
-The tool is versioned synchronously with the PyUAVCAN library.
-'''.strip(),
-    )
-    root_parser.add_argument(
-        '--verbose', '-v',
-        action='count',
-        help='Increase the verbosity of the output. Twice for extra verbosity.',
-    )
-
-    # Register commands
-    subparsers = root_parser.add_subparsers()
-    for cmd in commands.COMMANDS:
-        if cmd.info.examples:
-            epilog = 'Examples:\n' + cmd.info.examples
-        else:
-            epilog = ''
-
-        parser = subparsers.add_parser(
-            cmd.name,
-            help=cmd.info.help,
-            epilog=epilog,
-            aliases=cmd.info.aliases,
-            formatter_class=argparse.RawTextHelpFormatter,
-        )
-
-        cmd.register_arguments(parser)
-        parser.set_defaults(func=cmd.execute)
-
-    return root_parser
-
-
 def _main_impl() -> int:
-    # noinspection PyCompatibility
-    from . import commands
+    command_instances: typing.Sequence[commands.Command] = [cls() for cls in commands.get_available_command_classes()]
 
-    args = _construct_argument_parser().parse_args()
+    args = _construct_argument_parser(command_instances).parse_args()
 
     logging.root.setLevel({
         0: logging.WARNING,
@@ -98,7 +46,7 @@ def _main_impl() -> int:
         2: logging.DEBUG,
     }.get(args.verbose or 0, logging.DEBUG))
 
-    _logger.debug('Available command modules: %s', commands.COMMANDS)
+    _logger.debug('Available commands: %s', command_instances)
     _logger.debug('Parsed args: %s', args)
 
     if hasattr(args, 'func'):
@@ -108,8 +56,8 @@ def _main_impl() -> int:
         except ImportError as ex:
             # If the application submodule fails to import with an import error, a DSDL data type package
             # probably needs to be generated first, which we suggest the user to do.
-            from .commands.dsdl_generate_packages import make_usage_suggestion_text
-            raise ImportError(make_usage_suggestion_text(ex.name))
+            from .commands.dsdl_generate_packages import DSDLGeneratePackagesCommand
+            raise ImportError(DSDLGeneratePackagesCommand.make_usage_suggestion_text(ex.name))
 
         _logger.debug('Command executed in %.1f seconds', time.monotonic() - started_at)
         assert isinstance(result, int)
@@ -118,9 +66,77 @@ def _main_impl() -> int:
         print('No command specified, nothing to do. Run with --help for usage help. '
               'Online support: https://forum.uavcan.org.', file=sys.stderr)
         print('Available commands:', file=sys.stderr)
-        for cmd in commands.COMMANDS:
-            text = f'\t{cmd.name}'
-            if cmd.info.aliases:
-                text += f' (aliases: {", ".join(cmd.info.aliases)})'
+        for cmd in command_instances:
+            text = f'\t{cmd.names[0]}'
+            if len(cmd.names) > 1:
+                text += f' (aliases: {", ".join(cmd.names[1:])})'
             print(text, file=sys.stderr)
         return 1
+
+
+def _construct_argument_parser(command_instances: typing.Sequence[commands.Command]) -> argparse.ArgumentParser:
+    from pyuavcan import __version__
+
+    root_parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawTextHelpFormatter,
+        description='''
+A command line tool for diagnostics and management of UAVCAN networks.
+This tool is built on top of PyUAVCAN -- a full-featured Python implementation
+of the UAVCAN stack for high-level operating systems.
+Find documentation and support at https://uavcan.org.
+'''.strip())
+
+    # Register common arguments
+    root_parser.add_argument(
+        '--version', '-V',
+        action='version',
+        version=f'%(prog)s {__version__}',
+        help='''
+Print the PyUAVCAN version string and exit.
+The tool is versioned synchronously with the PyUAVCAN library.
+'''.strip())
+    root_parser.add_argument(
+        '--verbose', '-v',
+        action='count',
+        help='Increase the verbosity of the output. Twice for extra verbosity.',
+    )
+
+    # Register commands
+    subparsers = root_parser.add_subparsers()
+    for cmd in command_instances:
+        if cmd.examples:
+            epilog = 'Examples:\n' + cmd.examples
+        else:
+            epilog = ''
+
+        parser = subparsers.add_parser(
+            cmd.names[0],
+            help=cmd.help,
+            epilog=epilog,
+            aliases=cmd.names[1:],
+            formatter_class=argparse.RawTextHelpFormatter,
+        )
+        cmd.register_arguments(parser)
+        for sf in cmd.subsystem_factories:
+            sf.register_arguments(parser)
+
+        parser.set_defaults(func=_make_executor(cmd))
+
+    return root_parser
+
+
+def _make_executor(cmd: commands.Command) -> typing.Callable[[argparse.Namespace], int]:
+    def execute(args: argparse.Namespace) -> int:
+        subsystems: typing.List[object] = []
+        for sf in cmd.subsystem_factories:
+            try:
+                ss = sf.construct_subsystem(args)
+            except Exception as ex:
+                raise RuntimeError(f'Subsystem factory {type(sf).__name__!r} for command {cmd.names[0]!r} '
+                                   f'has failed: {ex}')
+            else:
+                subsystems.append(ss)
+        _logger.debug('Invoking %r with subsystems %r and arguments %r', cmd, subsystems, args)
+        return cmd.execute(args, subsystems)
+
+    return execute

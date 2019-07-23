@@ -7,6 +7,7 @@
 from __future__ import annotations
 import typing
 import logging
+import asyncio
 import collections
 import pyuavcan.util
 import pyuavcan.dsdl
@@ -61,6 +62,13 @@ class Presentation:
         """
         return self._transport
 
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        """
+        A wrapper for :attr:`pyuavcan.transport.Transport.loop`.
+        """
+        return self._transport.loop
+
     # ----------------------------------------  SESSION FACTORY METHODS  ----------------------------------------
 
     def make_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) -> Publisher[MessageClass]:
@@ -89,11 +97,11 @@ class Presentation:
                                  transport_session=transport_session,
                                  transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
                                  finalizer=self._make_finalizer(Publisher, session_specifier),
-                                 loop=self._transport.loop)
+                                 loop=self.loop)
             self._registry[Publisher, session_specifier] = impl
 
         assert isinstance(impl, PublisherImpl)
-        return Publisher(impl, self._transport.loop)
+        return Publisher(impl, self.loop)
 
     def make_subscriber(self,
                         dtype:          typing.Type[MessageClass],
@@ -132,12 +140,12 @@ class Presentation:
             impl = SubscriberImpl(dtype=dtype,
                                   transport_session=transport_session,
                                   finalizer=self._make_finalizer(Subscriber, session_specifier),
-                                  loop=self._transport.loop)
+                                  loop=self.loop)
             self._registry[Subscriber, session_specifier] = impl
 
         assert isinstance(impl, SubscriberImpl)
         return Subscriber(impl=impl,
-                          loop=self._transport.loop,
+                          loop=self.loop,
                           queue_capacity=queue_capacity)
 
     def make_client(self,
@@ -180,11 +188,11 @@ class Presentation:
                               transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
                               transfer_id_modulo_factory=transfer_id_modulo_factory,
                               finalizer=self._make_finalizer(Client, session_specifier),
-                              loop=self._transport.loop)
+                              loop=self.loop)
             self._registry[Client, session_specifier] = impl
 
         assert isinstance(impl, ClientImpl)
-        return Client(impl=impl, loop=self._transport.loop)
+        return Client(impl=impl, loop=self.loop)
 
     def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) -> Server[ServiceClass]:
         """
@@ -220,7 +228,7 @@ class Presentation:
                           input_transport_session=input_transport_session,
                           output_transport_session_factory=output_transport_session_factory,
                           finalizer=self._make_finalizer(Server, session_specifier),
-                          loop=self._transport.loop)
+                          loop=self.loop)
             self._registry[Server, session_specifier] = impl
 
         assert isinstance(impl, Server)

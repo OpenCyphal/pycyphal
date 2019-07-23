@@ -45,6 +45,8 @@ class HeartbeatPublisher:
     This class manages periodic publication of the node heartbeat message. Also it subscribes to heartbeat
     messages from other nodes and emits error messages into the log if a node-ID conflict is detected.
 
+    The logic must be manually started when initialization is finished by invoking :meth:`start`.
+
     The default states are as follows:
 
     - Health is NOMINAL.
@@ -61,14 +63,21 @@ class HeartbeatPublisher:
         self._mode = Mode.INITIALIZATION
         self._vendor_specific_status_code = 0
         self._pre_heartbeat_handlers: typing.List[typing.Callable[[], None]] = []
-        self._closed = False
-        self._task = presentation.transport.loop.create_task(self._task_function())
+        self._maybe_task: typing.Optional[asyncio.Task[None]] = None
 
         self._publisher = self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)
         self._publisher.send_timeout = float(Heartbeat.MAX_PUBLICATION_PERIOD)
 
         self._subscriber = self._presentation.make_subscriber_with_fixed_subject_id(Heartbeat)
-        self._subscriber.receive_in_background(self._handle_received_heartbeat)
+
+    def start(self) -> None:
+        """
+        Starts the background publishing task. It will be stopped automatically when close()d.
+        Subsequent calls will have no effect.
+        """
+        if not self._maybe_task:
+            self._subscriber.receive_in_background(self._handle_received_heartbeat)
+            self._maybe_task = self._presentation.loop.create_task(self._task_function())
 
     @property
     def uptime(self) -> float:
@@ -168,15 +177,15 @@ class HeartbeatPublisher:
         Closes the publisher, the subscriber, and stops the internal task.
         Subsequent invocations have no effect.
         """
-        if not self._closed:
-            self._closed = True
+        if self._maybe_task:
             self._subscriber.close()
             self._publisher.close()
-            self._task.cancel()
+            self._maybe_task.cancel()
+            self._maybe_task = None
 
     async def _task_function(self) -> None:
         next_heartbeat_at = time.monotonic()
-        while not self._closed:
+        while self._maybe_task:
             try:
                 self._call_pre_heartbeat_handlers()
                 if self._presentation.transport.local_node_id is not None:
