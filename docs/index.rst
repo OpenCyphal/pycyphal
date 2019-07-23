@@ -22,7 +22,9 @@ Contents
    pages/installation
    pages/usage
    pages/cli
+   pages/faq
    pages/api
+   pages/dev
 
 
 Indices and tables

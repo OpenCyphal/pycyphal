@@ -36,7 +36,7 @@ The local node will also publish heartbeat and respond to GetInfo.
     @property
     def examples(self) -> typing.Optional[str]:
         return '''
-pyuavcan call uavcan.node.GetInfo.1.0 '{}'
+pyuavcan call 42 uavcan.node.GetInfo.1.0 '{}'
 '''.strip()
 
     @property

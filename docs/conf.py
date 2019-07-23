@@ -37,10 +37,10 @@ sys.path.insert(0, str(DSDL_GENERATED_ROOT))
 import pyuavcan
 try:
     import pyuavcan.application
-except ImportError as ex:
-    print('GENERATING DSDL PACKAGE:', ex.name)
+except (ImportError, AttributeError) as ex:
+    print('GENERATING DSDL PACKAGE; EXCEPTION:', ex)
     DSDL_GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
-    pyuavcan.dsdl.generate_package(DSDL_GENERATED_ROOT, PUBLIC_REGULATED_DATA_TYPES_ROOT / ex.name, [])
+    pyuavcan.dsdl.generate_package(DSDL_GENERATED_ROOT, PUBLIC_REGULATED_DATA_TYPES_ROOT / 'uavcan', [])
     importlib.invalidate_caches()
     import pyuavcan.application
 
