@@ -29,8 +29,6 @@ import pyuavcan.transport.can.media.socketcan
 #
 # Another sensible location for the generated package directory is somewhere in the application data directory,
 # like "~/.my-app/dsdl/{pyuavcan.__version__}/"; or, for Windows: "%APPDATA%/my-app/dsdl/{pyuavcan.__version__}/".
-#
-# Beware that the directory may have to be cleaned manually when you update any of your namespaces.
 dsdl_generated_dir = pathlib.Path(tempfile.gettempdir(), 'dsdl-for-my-program', f'pyuavcan-v{pyuavcan.__version__}')
 dsdl_generated_dir.mkdir(parents=True, exist_ok=True)
 print('Generated DSDL packages will be stored in:', dsdl_generated_dir, file=sys.stderr)
@@ -43,7 +41,7 @@ sys.path.insert(0, str(dsdl_generated_dir))
 try:
     import sirius_cyber_corp     # This is our vendor-specific root namespace. Custom data types.
     import pyuavcan.application  # The application module requires the standard types from the root namespace "uavcan".
-except ImportError:
+except (ImportError, AttributeError):
     script_path = os.path.abspath(os.path.dirname(__file__))
     # Generate our vendor-specific namespace. It may make use of the standard data types (most namespaces do,
     # because the standard root namespace contains important basic types), so we include it in the lookup path set.
