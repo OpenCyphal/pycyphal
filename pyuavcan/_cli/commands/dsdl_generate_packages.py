@@ -64,8 +64,11 @@ containing DSDL root namespace directories at the top level (this is
 convenient for generating packages from namespaces hosted in public
 repositories, e.g., on GitHub).
 
-Ex. path: ~/uavcan/public_regulated_data_types/uavcan/
-Ex. URI:  {DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL}
+Example path:
+    ~/uavcan/public_regulated_data_types/uavcan/
+
+Example URI:
+    {DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL}
 '''.strip())
         parser.add_argument(
             '--lookup', '-L',
@@ -89,7 +92,9 @@ Existing packages will be overwritten entirely.
 The destination directory should be in PYTHONPATH to use the generated
 packages; the default directory is already added to the local package
 look-up list, so if the default directory is used, no additional steps
-are necessary.
+are necessary. Note that the default directory is computed individually
+per local system; the default value shown here may be different on another
+computer.
 
 Default: %(default)s
 '''.strip())

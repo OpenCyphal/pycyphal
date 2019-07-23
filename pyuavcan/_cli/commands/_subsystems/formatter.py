@@ -32,6 +32,16 @@ constructed from an intermediate "builtin-based" representation, which is
 a simplified form that is stripped of the detailed DSDL type information,
 like JSON. For the background info please read the PyUAVCAN documentation
 on builtin-based representations.
+
+YAML is the default option as it is easy to process for humans and other
+machines alike. Each YAML-formatted object is separated from its siblings
+by an explicit document start marker: "---".
+
+JSON output is optimized for machine parsing, strictly one object per line.
+
+TSV (tab separated values) output is intended for use with third-party
+software such as computer algebra systems or spreadsheet processors.
+
 Default: %(default)s
 '''.strip())
 

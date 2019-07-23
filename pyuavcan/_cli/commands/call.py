@@ -102,6 +102,11 @@ The transfer-ID value to use for the request transfer.
 The value will be also used as the initial value of heartbeat publications.
 You will need to increment this value manually if you're invoking the same
 service on the same node more than once in a short period of time.
+
+The protocol stack will compute the modulus automatically as necessary; e.g.,
+in the case of a transport where the transfer-ID modulo equals 32, supplying
+123 here would result in the transfer-ID value of 123 %% 32 = 27.
+
 Default: %(default)s
 '''.strip())
         parser.add_argument(
@@ -109,6 +114,7 @@ Default: %(default)s
             action='store_true',
             help='''
 Emit metadata together with the response.
+The metadata fields will be contained under the key "_metadata_".
 '''.strip())
 
     def execute(self, args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:
@@ -192,13 +198,14 @@ def _print_result(service_id:          int,
                   with_metadata:       bool) -> None:
     bi: typing.Dict[str, typing.Any] = {}  # We use updates to ensure proper dict ordering: metadata before data
     if with_metadata:
-        rtt_quantizer = decimal.Decimal('0.000001')
-        meta = _util.convert_transfer_metadata_to_builtin(transfer)
-        meta['roundtrip_time'] = {
-            'transport_layer':   (transfer.timestamp.monotonic - request_transfer_ts.monotonic).quantize(rtt_quantizer),
-            'application_layer': app_layer_duration.quantize(rtt_quantizer),
-        }
-        bi['_metadata_'] = meta
+        rtt_qnt = decimal.Decimal('0.000001')
+        bi.update(_util.convert_transfer_metadata_to_builtin(
+            transfer,
+            roundtrip_time={
+                'transport_layer':   (transfer.timestamp.monotonic - request_transfer_ts.monotonic).quantize(rtt_qnt),
+                'application_layer': app_layer_duration.quantize(rtt_qnt),
+            }
+        ))
     bi.update(pyuavcan.dsdl.to_builtin(response))
 
     print(formatter({

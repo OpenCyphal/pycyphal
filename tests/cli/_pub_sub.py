@@ -6,6 +6,7 @@
 
 import time
 import json
+import pytest
 from tests.dsdl.conftest import PUBLIC_REGULATED_DATA_TYPES_DIR
 from ._subprocess import run_process, BackgroundChildProcess
 from ._common_args import make_iface_args
@@ -26,16 +27,27 @@ def _unittest_slow_cli_pub_sub_a() -> None:
     )
 
     proc_sub_diagnostic_wrong_pid = BackgroundChildProcess(
-        'pyuavcan', 'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=JSON',
+        'pyuavcan', 'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=YAML',
         '--with-metadata', *make_iface_args()
+    )
+
+    proc_sub_temperature = BackgroundChildProcess(
+        'pyuavcan', 'sub', '555.uavcan.si.temperature.Scalar.1.0', '--count=3', '--format=JSON',
+        *make_iface_args()
     )
 
     time.sleep(1.0)     # Time to let the background processes finish initialization
 
     run_process(
-        'pyuavcan', '-v',
-        'pub', '4321.uavcan.diagnostic.Record.1.0',
+        'pyuavcan', '-v', 'pub',
+
+        '4321.uavcan.diagnostic.Record.1.0',
         '{severity: {value: 6}, timestamp: {microsecond: 123456}, text: "Hello world!"}',
+
+        '1234.uavcan.diagnostic.Record.1.0', '{text: "Goodbye world."}',
+
+        '555.uavcan.si.temperature.Scalar.1.0', '{kelvin: 123.456}',
+
         '--count=3', '--period=0.1', '--priority=SLOW', '--local-node-id=51',
         '--transfer-id=123',    # Modulo 32: 27
         '--heartbeat-fields={vendor_specific_status_code: 54321}',
@@ -47,15 +59,19 @@ def _unittest_slow_cli_pub_sub_a() -> None:
 
     out_sub_heartbeat = proc_sub_heartbeat.wait(1.0, interrupt=True)[1].splitlines()
     out_sub_diagnostic = proc_sub_diagnostic.wait(1.0, interrupt=True)[1].splitlines()
+    proc_sub_temperature = proc_sub_temperature.wait(1.0, interrupt=True)[1].splitlines()
 
     print('out_sub_heartbeat:', *out_sub_heartbeat, sep='\n\t')
     print('out_sub_diagnostic:', *out_sub_diagnostic, sep='\n\t')
+    print('proc_sub_temperature:', *proc_sub_temperature, sep='\n\t')
 
-    heartbeats = list(json.loads(s) for s in out_sub_heartbeat)
-    diagnostics = list(json.loads(s) for s in out_sub_diagnostic)
+    heartbeats = list(map(json.loads, out_sub_heartbeat))
+    diagnostics = list(map(json.loads, out_sub_diagnostic))
+    temperatures = list(map(json.loads, proc_sub_temperature))
 
     print('heartbeats:', *heartbeats, sep='\n\t')
     print('diagnostics:', *diagnostics, sep='\n\t')
+    print('temperatures:', *temperatures, sep='\n\t')
 
     assert len(heartbeats) in (2, 3, 4)    # Fuzzy because the last one might be dropped
     for index, m in enumerate(heartbeats):
@@ -72,6 +88,9 @@ def _unittest_slow_cli_pub_sub_a() -> None:
         assert m['4321']['_metadata_']['source_node_id'] == 51
         assert m['4321']['timestamp']['microsecond'] == 123456
         assert m['4321']['text'] == 'Hello world!'
+
+    assert len(temperatures) == 3
+    assert all(map(lambda mt: mt['555']['kelvin'] == pytest.approx(123.456), temperatures))
 
     assert proc_sub_diagnostic_wrong_pid.alive
     assert proc_sub_diagnostic_wrong_pid.wait(1.0, interrupt=True)[1].strip() == ''

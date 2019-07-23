@@ -63,6 +63,7 @@ Examples:
             action='store_true',
             help='''
 Emit metadata together with each message.
+The metadata fields will be contained under the key "_metadata_".
 '''.strip())
         parser.add_argument(
             '--count', '-C',
@@ -113,7 +114,7 @@ async def _run(transport:     pyuavcan.transport.Transport,
 
             bi: typing.Dict[str, typing.Any] = {}  # We use updates to ensure proper dict ordering: metadata before data
             if with_metadata:
-                bi['_metadata_'] = _util.convert_transfer_metadata_to_builtin(transfer)
+                bi.update(_util.convert_transfer_metadata_to_builtin(transfer))
             bi.update(pyuavcan.dsdl.to_builtin(msg))
             outer[subject_id] = bi
 

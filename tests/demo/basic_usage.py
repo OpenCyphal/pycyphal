@@ -81,7 +81,8 @@ class DemoApplication:
             #   ifconfig vcan0 up
             # CAN interfaces can me monitored using can-utils:
             #   candump -decaxta any
-            media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=64)
+            # Here we select CAN 2.0 by setting MTU=8 bytes. We can switch to CAN FD by simply increasing the MTU.
+            media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=8)
             transport = pyuavcan.transport.can.CANTransport(media)
 
         elif 'win' in sys.platform:

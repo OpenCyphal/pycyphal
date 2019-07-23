@@ -52,10 +52,10 @@ pyuavcan pub uavcan.diagnostic.Record.1.0 '{text: "Hello world!"}'
             help='''
 The full message type name with version and optional subject-ID, followed
 by the YAML (or JSON, which is a subset of YAML)-formatted contents of the
-message. Missing fields will be left at their default values. Use empty dict
-as "{}" to construct a default-initialized message. For more info about the
-YAML representation, read the PyUAVCAN documentation on builtin-based
-representations.
+message (separated by whitespace). Missing fields will be left at their
+default values. Use empty dict as "{}" to construct a default-initialized
+message. For more info about the YAML representation, read the PyUAVCAN
+documentation on builtin-based representations.
 
 The subject-ID can be omitted if a fixed one is defined for the data type.
 
@@ -81,7 +81,9 @@ of heartbeat is defined as min((--period), MAX_PUBLICATION_PERIOD); i.e.,
 unless this value exceeds the maximum period defined for heartbeat by the
 specification, it is used for heartbeat as well. Note that anonymous nodes
 do not publish heartbeat, see the local node-ID argument for more info.
+
 The send timeout for all publishers will equal the publication period.
+
 Default: %(default)s
 '''.strip())
         parser.add_argument(
@@ -110,6 +112,11 @@ Default: %(default)s
 The initial transfer-ID value. The same initial value will be shared for all
 subjects, including heartbeat. You will need to increment this value manually
 if you're publishing on the same subject repeatedly in a short period of time.
+
+The protocol stack will compute the modulus automatically as necessary; e.g.,
+in the case of a transport where the transfer-ID modulo equals 32, supplying
+123 here would result in the transfer-ID value of 123 %% 32 = 27.
+
 Default: %(default)s
 '''.strip())
 

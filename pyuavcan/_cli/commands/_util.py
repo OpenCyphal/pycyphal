@@ -71,8 +71,9 @@ def construct_port_id_and_type(spec: str) -> typing.Tuple[int, typing.Type[pyuav
         raise ValueError(f'The data spec does not specify a valid type: {spec!r}')
 
 
-def convert_transfer_metadata_to_builtin(transfer: pyuavcan.transport.TransferFrom) -> typing.Dict[str, typing.Any]:
-    return {
+def convert_transfer_metadata_to_builtin(transfer: pyuavcan.transport.TransferFrom,
+                                         **extra_fields: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.Any]:
+    out = {
         'timestamp': {
             'system':    transfer.timestamp.system.quantize(_MICRO),
             'monotonic': transfer.timestamp.monotonic.quantize(_MICRO),
@@ -80,6 +81,10 @@ def convert_transfer_metadata_to_builtin(transfer: pyuavcan.transport.TransferFr
         'priority':       transfer.priority.name.lower(),
         'transfer_id':    transfer.transfer_id,
         'source_node_id': transfer.source_node_id,
+    }
+    out.update(extra_fields)
+    return {
+        '_metadata_': out
     }
 
 
