@@ -94,6 +94,17 @@ Use CAN transport over SocketCAN. Arguments:
     - Interface name, string, mandatory; e.g.: "can0".
     - Maximum transmission unit, int; optional, defaults to 64 bytes;
       MTU value of 8 bytes selects CAN 2.0.
+
+Caveat emptor: The application may fail to communicate if the MTU is
+configured incorrectly. The UAVCAN protocol itself is invariant to the MTU
+configuration; in fact, it doesn't even differentiate between CAN 2.0 and
+CAN FD, the only difference is the amount of data transferred per frame
+(i.e., MTU). The SocketCAN stack, however, is very sensitive to the
+correctness of this setting. For example, given a set of nodes connected to
+a local vcan (virtual CAN) bus, those that are configured to use CAN 2.0
+will be unable to receive messages from those that are set up to use CAN FD.
+The latter will be able to receive all messages.
+
 Examples:
     --socketcan=vcan0,8     # Selects CAN 2.0
     --socketcan=vcan0       # Selects CAN FD with MTU 64 bytes

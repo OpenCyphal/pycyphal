@@ -59,15 +59,15 @@ def _unittest_slow_cli_pub_sub_a() -> None:
 
     out_sub_heartbeat = proc_sub_heartbeat.wait(1.0, interrupt=True)[1].splitlines()
     out_sub_diagnostic = proc_sub_diagnostic.wait(1.0, interrupt=True)[1].splitlines()
-    proc_sub_temperature = proc_sub_temperature.wait(1.0, interrupt=True)[1].splitlines()
+    out_sub_temperature = proc_sub_temperature.wait(1.0, interrupt=True)[1].splitlines()
 
     print('out_sub_heartbeat:', *out_sub_heartbeat, sep='\n\t')
     print('out_sub_diagnostic:', *out_sub_diagnostic, sep='\n\t')
-    print('proc_sub_temperature:', *proc_sub_temperature, sep='\n\t')
+    print('proc_sub_temperature:', *out_sub_temperature, sep='\n\t')
 
     heartbeats = list(map(json.loads, out_sub_heartbeat))
     diagnostics = list(map(json.loads, out_sub_diagnostic))
-    temperatures = list(map(json.loads, proc_sub_temperature))
+    temperatures = list(map(json.loads, out_sub_temperature))
 
     print('heartbeats:', *heartbeats, sep='\n\t')
     print('diagnostics:', *diagnostics, sep='\n\t')
@@ -90,7 +90,7 @@ def _unittest_slow_cli_pub_sub_a() -> None:
         assert m['4321']['text'] == 'Hello world!'
 
     assert len(temperatures) == 3
-    assert all(map(lambda mt: mt['555']['kelvin'] == pytest.approx(123.456), temperatures))
+    assert all(map(lambda mt: mt['555']['kelvin'] == pytest.approx(123.456), temperatures))  # type: ignore
 
     assert proc_sub_diagnostic_wrong_pid.alive
     assert proc_sub_diagnostic_wrong_pid.wait(1.0, interrupt=True)[1].strip() == ''

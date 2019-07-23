@@ -230,7 +230,7 @@ layer, so in that case importing this submodule at initialization time would be 
 As one might guess, if the submodule is imported before the ``uavcan`` root namespace package is generated,
 an :class:`ImportError` is raised (with ``name='uavcan'``).
 Applications may choose to catch that exception to implement lazy code generation.
-For a hands-on guide on how to do that read the :ref:`usage` chapter
+For a hands-on guide on how to do that read the :ref:`basic_usage` chapter
 and the API documentation for :mod:`pyuavcan.dsdl`.
 
 
