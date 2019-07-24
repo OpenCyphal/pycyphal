@@ -29,16 +29,104 @@ _logger = logging.getLogger(__name__)
 
 
 class Presentation:
-    """
+    r"""
     This is the presentation layer controller. The presentation layer is a thin wrapper around the transport layer
     that manages DSDL object serialization and provides a convenient API for the application. The presentation layer
     also performs data sharing across multiple consumers in the application; for example, when the application
     creates more than one subscriber for a given subject, the presentation layer will take care to distribute the
     received messages into every subscription instance requested by the application.
 
-    Methods named "make_*()" create a new instance upon every invocation. Methods named "get_*()" create a new instance
-    only the first time they are invoked for the particular key parameter; the same instance is returned for every
-    subsequent call for the same key parameter until it is manually closed by the caller.
+    Methods named ``make_*()`` create a new instance upon every invocation. Such instances implement the RAII pattern,
+    managing the life cycle of the underlying resource automatically, so the user does not necessarily have to call
+    ``close()`` manually, although it is recommended for determinism.
+
+    Methods named ``get_*()`` create a new instance only the first time they are invoked for the
+    particular key parameter; the same instance is returned for every subsequent call for the same
+    key parameter until it is manually closed by the caller.
+
+    Here's a minimal example. First, we need to make sure that the DSDL type definitions that we're
+    going to be using have been processed into Python packages:
+
+    >>> import logging; logging.getLogger('pydsdl').setLevel('WARNING')  # Hide irrelevant debug messages from PyDSDL.
+    >>> import pyuavcan                                  # Generate Python packages from DSDL namespace "uavcan"
+    >>> pyuavcan.dsdl.generate_package('.test_dsdl_generated', 'tests/public_regulated_data_types/uavcan', [])
+    GeneratedPackageInfo(...)
+    >>> import importlib; importlib.invalidate_caches()  # Clear the cache to let Python find the generated package.
+    >>> import uavcan.node, uavcan.diagnostic            # Import what we need from our new freshly generated package.
+
+    Here's how we configure a presentation instance. In this example we are using a simple loopback transport
+    that does not interact with the outside world at all (it doesn't even perform any kind of IO with the OS),
+    which makes it well-suited for demo needs:
+
+    >>> import pyuavcan.transport.loopback
+    >>> transport = pyuavcan.transport.loopback.LoopbackTransport()  # Using loopback as a stub for real transport.
+    >>> presentation = pyuavcan.presentation.Presentation(transport)
+
+    Having prepared a presentation layer controller, we can create presentation-layer sessions.
+    They are the main points of interaction with the bus for any UAVCAN application that uses PyUAVCAN.
+    Let's start with a publisher and a subscriber:
+
+    >>> pub_record = presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    >>> sub_record = presentation.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+
+    Publish a message and receive it also (the loopback transport will just send it back to us):
+
+    >>> import asyncio
+    >>> run_until_complete = asyncio.get_event_loop().run_until_complete
+    >>> record = uavcan.diagnostic.Record_1_0(
+    ...     severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
+    ...     text='Neither man nor animal can be influenced by anything but suggestion.')
+    >>> run_until_complete(pub_record.publish(record))  # publish() returns False on timeout.
+    True
+    >>> message, metadata = run_until_complete(sub_record.receive_with_transfer())
+    >>> message.text.tobytes().decode()
+    'Neither man nor animal can be influenced by anything but suggestion.'
+    >>> metadata.transfer_id, metadata.source_node_id, metadata.timestamp
+    (0, None, Timestamp(system_ns=..., monotonic_ns=...))
+
+    We can use custom subject-ID with any data type, even if there is a fixed subject-ID provided
+    (the background is explained in Specification, please read it). Here is an example; we also show here
+    that when a receive call times out, it returns None:
+
+    >>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_0, subject_id=12345)
+    >>> run_until_complete(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
+
+    You can see above that the node-ID of the received transfer metadata is set to None,
+    that's because it is actually an anonymous transfer, and it is so because our node is an anonymous node;
+    i.e., it doesn't have a node-ID. Before using services, let's configure the node-ID:
+
+    >>> presentation.transport.local_node_id is None    # Yup. It's anonymous.
+    True
+    >>> presentation.transport.set_local_node_id(1234)  # The set of valid node-ID values is transport-dependent.
+
+    Having assigned a node-ID, let's set up a service and invoke it:
+
+    >>> async def on_request(request: uavcan.node.ExecuteCommand_1_0.Request,
+    ...                      metadata: pyuavcan.presentation.ServiceRequestMetadata) \
+    ...         -> uavcan.node.ExecuteCommand_1_0.Response:
+    ...     print(f'Received command {request.command} from node {metadata.client_node_id}')
+    ...     return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND)
+    >>> srv_exec_command = presentation.get_server_with_fixed_service_id(uavcan.node.ExecuteCommand_1_0)
+    >>> srv_exec_command.serve_in_background(on_request)
+    >>> client_exec_command = presentation.make_client_with_fixed_service_id(uavcan.node.ExecuteCommand_1_0,
+    ...                                                                      1234)      # The server's node-ID value.
+    >>> request_object = uavcan.node.ExecuteCommand_1_0.Request(
+    ...     uavcan.node.ExecuteCommand_1_0.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
+    ...     '/path/to/the/firmware/image.bin')
+    >>> received_response = run_until_complete(client_exec_command.call(request_object))
+    Received command 65533 from node 1234
+    >>> received_response
+    uavcan.node.ExecuteCommand.Response.1.0(status=3)
+
+    Methods that receive data from the network return None on timeout.
+    For example, here we create a client for a nonexistent service; the call times out and returns None:
+
+    >>> bad_client = presentation.make_client(uavcan.node.ExecuteCommand_1_0,
+    ...                                       service_id=234,       # There is no such service.
+    ...                                       server_node_id=321)   # There is no such server.
+    >>> bad_client.response_timeout = 0.1                           # Override the default.
+    >>> bad_client.priority = pyuavcan.transport.Priority.HIGH      # Override the default.
+    >>> run_until_complete(bad_client.call(request_object))         # Times out and returns None.
     """
 
     def __init__(self, transport: pyuavcan.transport.Transport) -> None:
