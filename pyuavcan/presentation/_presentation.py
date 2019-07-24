@@ -44,9 +44,7 @@ class Presentation:
     def __init__(self, transport: pyuavcan.transport.Transport) -> None:
         self._transport = transport
         self._closed = False
-
         self._emitted_transfer_id_map: typing.Dict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = {}
-
         self._registry: typing.Dict[typing.Tuple[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
                                                  pyuavcan.transport.SessionSpecifier],
                                     Closable] = {}
@@ -372,4 +370,4 @@ class Presentation:
             raise pyuavcan.transport.ResourceClosedError(repr(self))
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, transport=self.transport, sessions=self.sessions)
+        return pyuavcan.util.repr_attributes(self, self.transport, sessions=self.sessions)

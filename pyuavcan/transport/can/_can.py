@@ -104,7 +104,8 @@ class CANTransport(pyuavcan.transport.Transport):
                 f'The number of acceptance filters is too low: {media.number_of_acceptance_filters}')
 
         media_name = type(media).__name__.lower()[:-len('Media')]
-        self._descriptor = f'<can media="{media_name}" mtu="{media.mtu}">{media.interface_name}</can>'
+        self._descriptor = \
+            f'<can><{media_name} mtu="{media.mtu}">{media.interface_name}</{media_name}></can>'
 
         media.set_received_frames_handler(self._on_frames_received)   # Starts the transport.
 

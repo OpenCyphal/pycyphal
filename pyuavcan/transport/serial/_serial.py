@@ -169,9 +169,5 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def descriptor(self) -> str:
         return \
-            f'<serial ' \
-            f'baudrate="{self._port.baudrate}" ' \
-            f'sft_payload_capacity="{self._sft_payload_capacity_bytes}" ' \
-            f'service_transfer_multiplier="{self._service_transfer_multiplier}">' \
-            f'{self._port.name}' \
-            f'</serial>'
+            f'<serial baudrate="{self._port.baudrate}" sft_capacity="{self._sft_payload_capacity_bytes}" ' \
+            f'srv_mult="{self._service_transfer_multiplier}">{self._port.name}</serial>'

@@ -65,6 +65,12 @@ don't support multi-frame anonymous transfers.
 Node-ID to use for the requested operation. Also see the command pick-node-id.
 Valid values range from zero (inclusive) to a transport-specific upper limit.
 
+The emitted transfer-ID map is stored on disk, keyed by node-ID; the path is:
+{EMITTED_TRANSFER_ID_MAP_DIR}
+The map files are managed automatically. They can be removed to reset all
+transfer-ID counters to zero. Files that are more than {_EMITTED_TRANSFER_ID_MAP_MAX_AGE} seconds
+old are no longer used.
+
 {local_node_id_epilogue}
 '''.strip())
         parser.add_argument(

@@ -123,18 +123,23 @@ class Transport(abc.ABC):
         configuration in a human-readable XML-like format. The format is currently very unstable;
         it is probably going to change significantly in the future, so applications should not depend on it yet.
 
-        The returned string shall contain exactly one XML element. The tag name of the element shall match
+        The returned string shall contain exactly one top-level XML element. The tag name of the element shall match
         the name of the transport class in lower case without the "transport" suffix; e.g:
         "CANTransport" - "can", "SerialTransport" - "serial". The element should contain the name of the OS
-        resource associated with the interface, if there is any, e.g., serial port name, network iface name, etc.
-        If it is a pseudo-transport, the element should contain nested elements of the contained transports,
+        resource associated with the interface, if there is any, e.g., serial port name, network iface name, etc;
+        or another element, e.g., further specifying the media layer or similar, which in turn contains the name
+        of the associated OS resource in it.
+        If it is a pseudo-transport, the element should contain nested elements describing the contained transports,
         if there are any. The attributes of a transport element should contain the values of applicable
         configuration parameters. The charset is ASCII.
-        Examples:
 
-        - ``<can media="socketcan" mtu="64">vcan0</can>``
-        - ``<serial baudrate="115200">/dev/ttyACM0</serial>``
-        - ``<redundant><can media="socketcan" mtu="64">can0</can><serial baudrate="115200">COM9</serial></redundant>``
+        In general, one can view this as an XML-based representation of a Python expression containing a constructor
+        invocation, where the first argument is represented as the XML element data, and all followed arguments
+        are represented as named XML attributes. This is not a hard requirement though. See the following examples:
+        ``<can><socketcan mtu="64">vcan0</socketcan></can>``,
+        ``<serial baudrate="115200">/dev/ttyACM0</serial>``,
+        ``<ieee802154><xbee>/dev/ttyACM0</xbee></ieee802154>``,
+        ``<redundant><can><socketcan mtu="8">can0</socketcan></can><serial baudrate="115200">COM9</serial></redundant>``
 
         We should consider defining a reverse static factory method that attempts to locate the necessary transport
         implementation class and instantiate it from a supplied descriptor. This would benefit transport-agnostic
