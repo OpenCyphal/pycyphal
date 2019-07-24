@@ -38,6 +38,9 @@ class OutgoingTransferIDCounter:
     def override(self, value: int) -> None:
         self._value = int(value)
 
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(self, self._value)
+
 
 class Closable(abc.ABC):
     """

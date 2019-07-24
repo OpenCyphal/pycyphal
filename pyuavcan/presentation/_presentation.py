@@ -8,7 +8,6 @@ from __future__ import annotations
 import typing
 import logging
 import asyncio
-import collections
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
@@ -46,13 +45,36 @@ class Presentation:
         self._transport = transport
         self._closed = False
 
-        self._outgoing_transfer_id_counter_registry: \
-            typing.DefaultDict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = \
-            collections.defaultdict(OutgoingTransferIDCounter)
+        self._emitted_transfer_id_map: typing.Dict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = {}
 
         self._registry: typing.Dict[typing.Tuple[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
                                                  pyuavcan.transport.SessionSpecifier],
                                     Closable] = {}
+
+    @property
+    def emitted_transfer_id_map(self) -> typing.Dict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter]:
+        """
+        This property is designed for very short-lived processes like CLI tools. Most applications will not
+        benefit from it and should not use it. The term "emitted transfer-ID map" is borrowed from Specification.
+
+        Access to the emitted transfer ID map allows short-running applications, such as CLI tools,
+        to store/restore the map to/from a persistent storage that retains data across restarts of the application.
+        That may allow applications with very short life cycles (around several seconds) to adhere to the
+        transfer-ID computation requirements presented in the specification. If the requirement were to be violated,
+        then upon restart a process using the same node-ID could be unable to initiate communication using same
+        port-ID until the receiving nodes reached the transfer-ID timeout state.
+
+        The typical usage pattern is as follows: Upon launch, check if there is a transfer-ID map stored in a
+        predefined location (e.g., a file or a database). If there is, and the storage was last written recently
+        (no point restoring a map that is definitely obsolete), load it and commit to this instance by invoking
+        :meth:`dict.update` on the object returned by this property. If there isn't, do nothing. When the application
+        is finished running (e.g., this could be implemented via :func:`atexit.register`), access the map via this
+        property and write it to the predefined storage location atomically. Make sure to shard the location by
+        node-ID because nodes that use different node-ID values obviously shall not share their transfer-ID maps.
+        Nodes sharing the same node-ID cannot exist on the same transport, but the local system might be running
+        nodes under the same node-ID on different transports concurrently, so this needs to be accounted for.
+        """
+        return self._emitted_transfer_id_map
 
     @property
     def transport(self) -> pyuavcan.transport.Transport:
@@ -93,9 +115,11 @@ class Presentation:
         except LookupError:
             transport_session = self._transport.get_output_session(session_specifier,
                                                                    self._make_payload_metadata(dtype))
+            transfer_id_counter = self._emitted_transfer_id_map.setdefault(session_specifier,
+                                                                           OutgoingTransferIDCounter())
             impl = PublisherImpl(dtype=dtype,
                                  transport_session=transport_session,
-                                 transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
+                                 transfer_id_counter=transfer_id_counter,
                                  finalizer=self._make_finalizer(Publisher, session_specifier),
                                  loop=self.loop)
             self._registry[Publisher, session_specifier] = impl
@@ -182,10 +206,12 @@ class Presentation:
                                                                           self._make_payload_metadata(dtype.Request))
             input_transport_session = self._transport.get_input_session(session_specifier,
                                                                         self._make_payload_metadata(dtype.Response))
+            transfer_id_counter = self._emitted_transfer_id_map.setdefault(session_specifier,
+                                                                           OutgoingTransferIDCounter())
             impl = ClientImpl(dtype=dtype,
                               input_transport_session=input_transport_session,
                               output_transport_session=output_transport_session,
-                              transfer_id_counter=self._outgoing_transfer_id_counter_registry[session_specifier],
+                              transfer_id_counter=transfer_id_counter,
                               transfer_id_modulo_factory=transfer_id_modulo_factory,
                               finalizer=self._make_finalizer(Client, session_specifier),
                               loop=self.loop)
