@@ -14,15 +14,27 @@ from . import commands
 
 _logger = logging.getLogger(__name__)
 
+_LOG_FORMAT = '%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s'
+
 
 def main() -> None:
     # noinspection PyCompatibility
     from . import DEFAULT_DSDL_GENERATED_PACKAGES_DIR
     sys.path.insert(0, str(DEFAULT_DSDL_GENERATED_PACKAGES_DIR))
 
-    logging.basicConfig(stream=sys.stderr,
-                        level=logging.WARNING,
-                        format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s')
+    logging.root.setLevel(logging.WARNING)      # This is the default; it may be overridden later.
+
+    try:
+        # This is not listed among the deps because the availability on other platforms is questionable and it's not
+        # actually required at all. See https://stackoverflow.com/a/16847935/1007777.
+        import coloredlogs
+        # The level spec applies to the handler, not the root logger! This is different from basicConfig().
+        coloredlogs.install(level=logging.DEBUG, fmt=_LOG_FORMAT)
+    except Exception as ex:
+        logging.basicConfig(format=_LOG_FORMAT)
+        _logger.debug('Colored logs are not available: %s: %s', type(ex), ex)
+        _logger.info('Consider installing "coloredlogs" from PyPI to make log messages look better')
+
     try:
         exit(_main_impl())
     except KeyboardInterrupt:
@@ -30,7 +42,7 @@ def main() -> None:
         _logger.debug('Stack trace where the program has been interrupted', exc_info=True)
         exit(1)
     except Exception as ex:
-        print('Error (run with -v for more info): %s:' % type(ex).__name__, ex, file=sys.stderr)
+        print('Error: %s:' % type(ex).__name__, ex, file=sys.stderr)
         _logger.info('Unhandled exception: %s', ex, exc_info=True)
         exit(1)
 
