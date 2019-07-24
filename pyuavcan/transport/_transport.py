@@ -115,13 +115,33 @@ class Transport(abc.ABC):
         """
         raise NotImplementedError
 
+    @property
+    @abc.abstractmethod
+    def descriptor(self) -> str:
+        """
+        Returns a transport-specific spec string containing sufficient information to recreate the current
+        configuration in a human-readable XML-like format. The format is currently very unstable;
+        it is probably going to change significantly in the future, so applications should not depend on it yet.
+
+        The returned string shall contain exactly one XML element. The tag name of the element shall match
+        the name of the transport class in lower case without the "transport" suffix; e.g:
+        "CANTransport" - "can", "SerialTransport" - "serial". The element should contain the name of the OS
+        resource associated with the interface, if there is any, e.g., serial port name, network iface name, etc.
+        If it is a pseudo-transport, the element should contain nested elements of the contained transports,
+        if there are any. The attributes of a transport element should contain the values of applicable
+        configuration parameters. The charset is ASCII.
+        Examples:
+
+        - ``<can media="socketcan" mtu="64">vcan0</can>``
+        - ``<serial baudrate="115200">/dev/ttyACM0</serial>``
+        - ``<redundant><can media="socketcan" mtu="64">can0</can><serial baudrate="115200">COM9</serial></redundant>``
+
+        We should consider defining a reverse static factory method that attempts to locate the necessary transport
+        implementation class and instantiate it from a supplied descriptor. This would benefit transport-agnostic
+        applications greatly.
+        """
+        raise NotImplementedError
+
     def __repr__(self) -> str:
-        """
-        Prints the basic transport information. May be overridden if there is more relevant info to display.
-        """
-        # TODO: somehow obtain the media information and print it here. Add a basic media info property of type str?
-        return pyuavcan.util.repr_attributes(self,
-                                             protocol_parameters=self.protocol_parameters,
-                                             local_node_id=self.local_node_id,
-                                             input_sessions=', '.join(map(str, self.input_sessions)),
-                                             output_sessions=', '.join(map(str, self.output_sessions)))
+        return pyuavcan.util.repr_attributes(self, self.descriptor, self.protocol_parameters,
+                                             local_node_id=self.local_node_id)

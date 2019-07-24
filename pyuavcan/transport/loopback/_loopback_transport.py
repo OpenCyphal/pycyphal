@@ -151,3 +151,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     @property
     def output_sessions(self) -> typing.Sequence[pyuavcan.transport.OutputSession]:
         return list(self._output_sessions.values())
+
+    @property
+    def descriptor(self) -> str:
+        return '<loopback/>'

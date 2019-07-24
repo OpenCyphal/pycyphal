@@ -103,6 +103,9 @@ class CANTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidMediaConfigurationError(
                 f'The number of acceptance filters is too low: {media.number_of_acceptance_filters}')
 
+        media_name = type(media).__name__.lower()[:-len('Media')]
+        self._descriptor = f'<can media="{media_name}" mtu="{media.mtu}">{media.interface_name}</can>'
+
         media.set_received_frames_handler(self._on_frames_received)   # Starts the transport.
 
     @property
@@ -143,6 +146,10 @@ class CANTransport(pyuavcan.transport.Transport):
     @property
     def output_sessions(self) -> typing.List[pyuavcan.transport.OutputSession]:
         return list(self._output_registry.values())
+
+    @property
+    def descriptor(self) -> str:
+        return self._descriptor
 
     def close(self) -> None:
         for s in (*self.input_sessions, *self.output_sessions):

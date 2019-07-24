@@ -94,6 +94,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         self,
         serial_port:                                  serial.SerialBase,
         single_frame_transfer_payload_capacity_bytes: int = DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
+        service_transfer_multiplier:                  int = 1,
         loop:                                         typing.Optional[asyncio.AbstractEventLoop] = None
     ):
         """
@@ -104,11 +105,26 @@ class SerialTransport(pyuavcan.transport.Transport):
             This setting does not affect transfer reception (any payload size is always accepted). Defaults to
             :attr:`DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES`.
 
+        :param service_transfer_multiplier: Specifies the number of times each outgoing service transfer will be
+            repeated. The duplicates are emitted subsequently immediately following the original. This feature
+            can be used to reduce the likelihood of service transfer loss over unreliable links. Assuming that
+            the probability of transfer loss ``P`` is time-invariant, the influence of the multiplier ``M`` can
+            be approximately modeled as ``P' = P^M``. For example, given a link that successfully delivers 90%
+            of transfers, and the probabilities of adjacent transfer loss are uncorrelated, the multiplication
+            factor of 2 can increase the link reliability up to ``100% - (100% - 90%)^2 = 99%``. Removal of
+            duplicate transfers at the opposite end of the link is natively guaranteed by the UAVCAN protocol;
+            no special activities are needed there (read the UAVCAN Specification for background). This setting
+            does not affect message transfers.
+
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._port = serial_port
         self._sft_payload_capacity_bytes = int(single_frame_transfer_payload_capacity_bytes)
+        self._service_transfer_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
+
+        if self._service_transfer_multiplier < 1:
+            raise ValueError(f'Invalid service transfer multiplier: {self._service_transfer_multiplier}')
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -149,3 +165,13 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def output_sessions(self) -> typing.Sequence[pyuavcan.transport.OutputSession]:
         raise NotImplementedError
+
+    @property
+    def descriptor(self) -> str:
+        return \
+            f'<serial ' \
+            f'baudrate="{self._port.baudrate}" ' \
+            f'sft_payload_capacity="{self._sft_payload_capacity_bytes}" ' \
+            f'service_transfer_multiplier="{self._service_transfer_multiplier}">' \
+            f'{self._port.name}' \
+            f'</serial>'

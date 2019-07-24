@@ -13,6 +13,7 @@ import typing
 import logging
 import pathlib
 import argparse
+import xml.etree.ElementTree
 import pyuavcan
 from .._yaml import YAMLLoader, YAMLDumper
 from .._paths import EMITTED_TRANSFER_ID_MAP_DIR
@@ -164,7 +165,8 @@ Default: %(default)s
             # provided later. This behavior is acceptable for CLI; a regular UAVCAN application will not need
             # to deal with saving/restoration at all since this use case is specific to CLI only.
             if node.local_node_id is not None:
-                tid_map_path = self._get_emitted_transfer_id_file_path(node.local_node_id)
+                tid_map_path = _get_emitted_transfer_id_file_path(node.local_node_id,
+                                                                  node.presentation.transport.descriptor)
                 _logger.debug('Emitted TID map file: %s', tid_map_path)
                 tid_map = self._restore_emitted_transfer_id_map(tid_map_path)
                 _logger.info('Emitted TID map with %d records from %s', len(tid_map), tid_map_path)
@@ -206,9 +208,9 @@ Default: %(default)s
     @staticmethod
     def _register_emitted_transfer_id_map_save_at_exit(presentation: pyuavcan.presentation.Presentation) -> None:
         def do_save_at_exit() -> None:
-            local_node_id = presentation.transport.local_node_id
-            if local_node_id is not None:
-                file_path = NodeFactory._get_emitted_transfer_id_file_path(local_node_id)
+            if presentation.transport.local_node_id is not None:
+                file_path = _get_emitted_transfer_id_file_path(presentation.transport.local_node_id,
+                                                               presentation.transport.descriptor)
                 tmp_path = f'{file_path}.{os.getpid()}.{time.time_ns()}.tmp'
                 _logger.debug('Emitted TID map save: %s --> %s', tmp_path, file_path)
                 with open(tmp_path, 'wb') as f:
@@ -224,9 +226,33 @@ Default: %(default)s
 
         atexit.register(do_save_at_exit)
 
-    @staticmethod
-    def _get_emitted_transfer_id_file_path(local_node_id: int) -> pathlib.Path:
-        # TODO: Shard by transport interface; e.g., there may be independent networks on /dev/ttyACM0 and can0,
-        # TODO: we shouldn't share the emitted transfer-ID map across them.
-        EMITTED_TRANSFER_ID_MAP_DIR.mkdir(parents=True, exist_ok=True)
-        return EMITTED_TRANSFER_ID_MAP_DIR / f'nid{local_node_id}.pickle'
+
+def _get_emitted_transfer_id_file_path(local_node_id: int, transport_descriptor: str) -> pathlib.Path:
+    replacement_char = '-'
+    fname = ','.join(
+        sorted(map(lambda s: re.sub(r'[\\/*?:"<>| ]+', replacement_char, s).strip(replacement_char),
+                   xml.etree.ElementTree.fromstring(transport_descriptor).itertext()))
+    ) or 'unnamed'
+    directory = EMITTED_TRANSFER_ID_MAP_DIR / f'node-id-{local_node_id}'
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / f'{fname}.pickle'
+
+
+def _unittest_emitted_tid_file_path() -> None:
+    assert _get_emitted_transfer_id_file_path(
+        123,
+        '<redundant><can media="socketcan" mtu="64">can0</can><serial baudrate="115200">COM9</serial></redundant>'
+    ).stem == 'COM9,can0'
+
+    # It MUST be order-invariant
+    assert _get_emitted_transfer_id_file_path(
+        123,
+        '<redundant>'
+        '<serial baudrate="115200">/dev/ttyACM0</serial>'
+        '<can media="socketcan" mtu="64">can0</can>'
+        '</redundant>'
+    ).stem == 'can0,dev-ttyACM0'
+
+    assert _get_emitted_transfer_id_file_path(123, '<serial baudrate="115200">COM9</serial>').stem == 'COM9'
+
+    assert _get_emitted_transfer_id_file_path(123456, '<loopback/>').stem == 'unnamed'
