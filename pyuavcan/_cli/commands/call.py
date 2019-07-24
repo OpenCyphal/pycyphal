@@ -94,22 +94,6 @@ Priority of the request transfer. Applies to the heartbeat as well.
 Default: %(default)s
 '''.strip())
         parser.add_argument(
-            '--transfer-id',
-            default=0,
-            type=int,
-            help='''
-The transfer-ID value to use for the request transfer.
-The value will be also used as the initial value of heartbeat publications.
-You will need to increment this value manually if you're invoking the same
-service on the same node more than once in a short period of time.
-
-The protocol stack will compute the modulus automatically as necessary; e.g.,
-in the case of a transport where the transfer-ID modulo equals 32, supplying
-123 here would result in the transfer-ID value of 123 %% 32 = 27.
-
-Default: %(default)s
-'''.strip())
-        parser.add_argument(
             '--with-metadata', '-M',
             action='store_true',
             help='''
@@ -129,7 +113,6 @@ async def _do_execute(args: argparse.Namespace, subsystems: typing.Sequence[obje
 
     with contextlib.closing(node):
         node.heartbeat_publisher.priority = args.priority
-        node.heartbeat_publisher.publisher.transfer_id_counter.override(args.transfer_id)
 
         # Construct the request object.
         service_id, dtype = _util.construct_port_id_and_type(args.service_spec)
@@ -143,7 +126,6 @@ async def _do_execute(args: argparse.Namespace, subsystems: typing.Sequence[obje
         client = node.make_client(dtype, service_id, args.server_node_id)
         client.response_timeout = args.timeout
         client.priority = args.priority
-        client.transfer_id_counter.override(args.transfer_id)
 
         request_ts_transport: typing.Optional[pyuavcan.transport.Timestamp] = None
 

@@ -72,7 +72,6 @@ def _unittest_slow_cli_demo_basic_usage(
             'pyuavcan', '-v',
             'pub', '12345.uavcan.si.temperature.Scalar.1.0', '{kelvin: 321.5}',
             '--count=3', '--period=0.1', '--priority=SLOW', '--local-node-id=0',
-            '--transfer-id=123',    # Modulo 32: 27
             '--heartbeat-fields={vendor_specific_status_code: 123456}',
             *_get_iface_args(),
             timeout=3.0
@@ -87,13 +86,13 @@ def _unittest_slow_cli_demo_basic_usage(
         # Run service tests while the demo process is still running.
         node_info_text = run_process('pyuavcan', '-v', 'call', '42', 'uavcan.node.GetInfo.1.0', '{}',
                                      '--local-node-id', '123', '--format', 'JSON', '--with-metadata',
-                                     '--priority', 'SLOW', '--transfer-id', '12', '--timeout', '3.0',
+                                     '--priority', 'SLOW', '--timeout', '3.0',
                                      *_get_iface_args(),
                                      timeout=5.0)
         print('node_info_text:', node_info_text)
         node_info = json.loads(node_info_text)
         assert node_info['430']['_metadata_']['source_node_id'] == 42
-        assert node_info['430']['_metadata_']['transfer_id'] == 12
+        assert node_info['430']['_metadata_']['transfer_id'] >= 0
         assert 'slow' in node_info['430']['_metadata_']['priority'].lower()
         assert node_info['430']['name'] == 'org.uavcan.pyuavcan.demo.basic_usage'
         assert node_info['430']['protocol_version']['major'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
@@ -106,18 +105,18 @@ def _unittest_slow_cli_demo_basic_usage(
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND
 
-        # Next request - increment the transfer-ID!
+        # Next request - this fails if the EMITTED TRANSFER-ID MAP save/restore logic is not working.
         command_response = json.loads(run_process(
             'pyuavcan', '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0', '{command: 23456}',
-            '--local-node-id', '123', '--format', 'JSON', '--transfer-id', '1', *_get_iface_args(), timeout=5.0
+            '--local-node-id', '123', '--format', 'JSON', *_get_iface_args(), timeout=5.0
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
 
-        # Next request - increment the transfer-ID!
+        # Next request - this fails if the EMITTED TRANSFER-ID MAP save/restore logic is not working.
         command_response = json.loads(run_process(
             'pyuavcan', '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0',
             f'{{command: {uavcan.node.ExecuteCommand_1_0.Request.COMMAND_POWER_OFF} }}',
-            '--local-node-id', '123', '--format', 'JSON', '--transfer-id', '2', *_get_iface_args(), timeout=5.0
+            '--local-node-id', '123', '--format', 'JSON', *_get_iface_args(), timeout=5.0
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
 
@@ -149,7 +148,7 @@ def _unittest_slow_cli_demo_basic_usage(
         print('heartbeat_demo:', heartbeat_demo)
 
         assert 'slow' in heartbeat_pub['32085']['_metadata_']['priority'].lower()
-        assert heartbeat_pub['32085']['_metadata_']['transfer_id'] == 27
+        assert heartbeat_pub['32085']['_metadata_']['transfer_id'] >= 0
         assert heartbeat_pub['32085']['_metadata_']['source_node_id'] == 0
         assert heartbeat_pub['32085']['uptime'] in (0, 1)
         assert heartbeat_pub['32085']['vendor_specific_status_code'] == 123456
@@ -158,9 +157,9 @@ def _unittest_slow_cli_demo_basic_usage(
         assert heartbeat_demo['32085']['_metadata_']['source_node_id'] == 42
         assert heartbeat_demo['32085']['vendor_specific_status_code'] == demo_proc.pid
 
-        for index, parsed in enumerate(json.loads(s) for s in out_sub_temperature):
+        for parsed in (json.loads(s) for s in out_sub_temperature):
             assert 'slow' in parsed['12345']['_metadata_']['priority'].lower()
-            assert parsed['12345']['_metadata_']['transfer_id'] == 27 + index
+            assert parsed['12345']['_metadata_']['transfer_id'] >= 0
             assert parsed['12345']['_metadata_']['source_node_id'] == 0
             assert parsed['12345']['kelvin'] == pytest.approx(321.5)
 

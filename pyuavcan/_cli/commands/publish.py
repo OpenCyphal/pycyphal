@@ -104,21 +104,6 @@ Default: %(default)s
 Priority of published message transfers. Applies to the heartbeat as well.
 Default: %(default)s
 '''.strip())
-        parser.add_argument(
-            '--transfer-id',
-            default=0,
-            type=int,
-            help='''
-The initial transfer-ID value. The same initial value will be shared for all
-subjects, including heartbeat. You will need to increment this value manually
-if you're publishing on the same subject repeatedly in a short period of time.
-
-The protocol stack will compute the modulus automatically as necessary; e.g.,
-in the case of a transport where the transfer-ID modulo equals 32, supplying
-123 here would result in the transfer-ID value of 123 %% 32 = 27.
-
-Default: %(default)s
-'''.strip())
 
     def execute(self, args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:
         asyncio.get_event_loop().run_until_complete(self._do_execute(args, subsystems))
@@ -134,7 +119,6 @@ Default: %(default)s
             node.heartbeat_publisher.priority = args.priority
             node.heartbeat_publisher.period = \
                 min(pyuavcan.application.heartbeat_publisher.Heartbeat.MAX_PUBLICATION_PERIOD, args.period)
-            node.heartbeat_publisher.publisher.transfer_id_counter.override(args.transfer_id)
 
             raw_ss = args.subject_spec
             if len(raw_ss) % 2 != 0:
@@ -145,7 +129,6 @@ Default: %(default)s
                 publications.append(Publication(subject_spec=subject_spec,
                                                 field_spec=field_spec,
                                                 presentation=node.presentation,
-                                                transfer_id=args.transfer_id,
                                                 priority=args.priority,
                                                 send_timeout=args.period))
             _logger.info('Publication set: %r', publications)
@@ -175,7 +158,6 @@ class Publication:
                  subject_spec: str,
                  field_spec:   str,
                  presentation: pyuavcan.presentation.Presentation,
-                 transfer_id:  int,
                  priority:     pyuavcan.transport.Priority,
                  send_timeout: float):
         subject_id, dtype = _util.construct_port_id_and_type(subject_spec)
@@ -184,7 +166,6 @@ class Publication:
         self._message = pyuavcan.dsdl.update_from_builtin(dtype(), content)
         self._publisher = presentation.make_publisher(dtype, subject_id)
         self._publisher.priority = priority
-        self._publisher.transfer_id_counter.override(transfer_id)
         self._publisher.send_timeout = send_timeout
 
     async def publish(self) -> bool:

@@ -15,7 +15,8 @@ import tempfile
 import argparse
 import requests
 import pyuavcan
-from ._base import Command, DEFAULT_DSDL_GENERATED_PACKAGES_DIR, DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
+from ._base import Command
+from ._paths import DEFAULT_DSDL_GENERATED_PACKAGES_DIR, DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
 from ._subsystems import SubsystemFactory
 
 

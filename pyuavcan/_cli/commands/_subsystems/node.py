@@ -6,13 +6,21 @@
 
 import os
 import re
+import time
+import atexit
+import pickle
 import typing
 import logging
+import pathlib
 import argparse
 import pyuavcan
 from .._yaml import YAMLLoader, YAMLDumper
+from .._paths import EMITTED_TRANSFER_ID_MAP_DIR
 from .transport import TransportFactory
 from ._base import SubsystemFactory
+
+
+_EMITTED_TRANSFER_ID_MAP_MAX_AGE = 10.0
 
 
 _logger = logging.getLogger(__name__)
@@ -148,7 +156,77 @@ Default: %(default)s
                     raise ValueError('The specified transport does not have a predefined node-ID, '
                                      'and the command cannot be used with an anonymous node. '
                                      'Please specify the node-ID explicitly, or use a different transport.')
+
+            # Configure the transfer-ID map.
+            # Register save on exit even if we're anonymous because the local node-ID may be provided later.
+            self._register_emitted_transfer_id_map_save_at_exit(node.presentation)
+            # Restore if we have a node-ID. If we don't, no restoration will take place even if the node-ID is
+            # provided later. This behavior is acceptable for CLI; a regular UAVCAN application will not need
+            # to deal with saving/restoration at all since this use case is specific to CLI only.
+            if node.local_node_id is not None:
+                tid_map_path = self._get_emitted_transfer_id_file_path(node.local_node_id)
+                _logger.debug('Emitted TID map file: %s', tid_map_path)
+                tid_map = self._restore_emitted_transfer_id_map(tid_map_path)
+                _logger.info('Emitted TID map with %d records from %s', len(tid_map), tid_map_path)
+                _logger.debug('Emitted TID map dump: %r', tid_map)
+                # noinspection PyTypeChecker
+                presentation.emitted_transfer_id_map.update(tid_map)  # type: ignore
+            else:
+                _logger.info('Emitted TID map not restored because the local node is anonymous.')
+
             return node
         except Exception:
             node.close()
             raise
+
+    @staticmethod
+    def _restore_emitted_transfer_id_map(file_path: pathlib.Path) \
+            -> typing.Dict[object, pyuavcan.presentation.OutgoingTransferIDCounter]:
+        try:
+            with open(str(file_path), 'rb') as f:
+                tid_map = pickle.load(f)
+        except Exception as ex:
+            _logger.info('Emitted TID map: Could not restore from file %s: %s: %s', file_path, type(ex).__name__, ex)
+            return {}
+
+        mtime_abs_diff = abs(file_path.stat().st_mtime - time.time())
+        if mtime_abs_diff > _EMITTED_TRANSFER_ID_MAP_MAX_AGE:
+            _logger.info('Emitted TID map: File %s is valid but too old: mtime age diff %.0f s',
+                         file_path, mtime_abs_diff)
+            return {}
+
+        if isinstance(tid_map, dict) and all(isinstance(v, pyuavcan.presentation.OutgoingTransferIDCounter)
+                                             for v in tid_map.values()):
+            return tid_map
+        else:
+            _logger.warning('Emitted TID map file %s contains invalid data of type %s',
+                            file_path, type(tid_map).__name__)
+            return {}
+
+    @staticmethod
+    def _register_emitted_transfer_id_map_save_at_exit(presentation: pyuavcan.presentation.Presentation) -> None:
+        def do_save_at_exit() -> None:
+            local_node_id = presentation.transport.local_node_id
+            if local_node_id is not None:
+                file_path = NodeFactory._get_emitted_transfer_id_file_path(local_node_id)
+                tmp_path = f'{file_path}.{os.getpid()}.{time.time_ns()}.tmp'
+                _logger.debug('Emitted TID map save: %s --> %s', tmp_path, file_path)
+                with open(tmp_path, 'wb') as f:
+                    pickle.dump(presentation.emitted_transfer_id_map, f)
+                # We use replace for compatibility reasons. On POSIX, a call to rename() will be made, which is
+                # guaranteed to be atomic. On Windows this may fall back to non-atomic copy, which is still
+                # acceptable for us here. If the file ends up being damaged, we'll simply ignore it at next startup.
+                os.replace(tmp_path, file_path)
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+        atexit.register(do_save_at_exit)
+
+    @staticmethod
+    def _get_emitted_transfer_id_file_path(local_node_id: int) -> pathlib.Path:
+        # TODO: Shard by transport interface; e.g., there may be independent networks on /dev/ttyACM0 and can0,
+        # TODO: we shouldn't share the emitted transfer-ID map across them.
+        EMITTED_TRANSFER_ID_MAP_DIR.mkdir(parents=True, exist_ok=True)
+        return EMITTED_TRANSFER_ID_MAP_DIR / f'nid{local_node_id}.pickle'
