@@ -24,6 +24,8 @@ Source code
 -----------
 
 The source code relies on the custom data types presented above.
+In order to run the demo, please copy-paste its source code into a file on your computer
+and update the DSDL paths to match your environment.
 
 .. literalinclude:: /../tests/demo/basic_usage.py
    :linenos:
