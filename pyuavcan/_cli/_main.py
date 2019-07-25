@@ -95,6 +95,12 @@ def _construct_argument_parser(command_instances: typing.Sequence[commands.Comma
 A command line tool for diagnostics and management of UAVCAN networks.
 This tool is built on top of PyUAVCAN -- a full-featured Python implementation
 of the UAVCAN stack for high-level operating systems.
+
+The tool is designed for use either directly by humans or from automation
+scripts. The data printed into stdout follows well-defined formats so that it
+is machine-readable. The stderr output is designed to be human-readable;
+most of it is suppressed by default but it can be enabled with '-v'.
+
 Find documentation and support at https://uavcan.org.
 '''.strip())
 
