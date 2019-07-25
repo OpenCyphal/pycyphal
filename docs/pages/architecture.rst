@@ -225,10 +225,9 @@ The main entity of the application layer is the node class :class:`pyuavcan.appl
 There are also several submodules containing implementations of various higher-level functions of the protocol,
 one submodule per function; for example, :class:`pyuavcan.application.heartbeat_publisher`.
 
-The node class is essentially a helper class.
-It does not provide any new abstractions; its API is just a proxy over the presentation layer.
-The higher-level functions provided at this level can be implemented on top of the presentation layer
-in the user's application; there are no internal/private APIs used.
+The node class is essentially a helper class, it does not provide any new abstractions.
+The higher-level functions provided at this level are implemented directly on top of the presentation layer;
+there are no internal/private APIs used.
 Since the submodule relies exclusively on the public library API,
 it can be studied as a solid collection of usage examples and best practices.
 

@@ -9,7 +9,6 @@ import copy
 import typing
 import asyncio
 import logging
-import itertools
 import dataclasses
 import pyuavcan.transport
 from .media import Media, TimestampedDataFrame, optimize_filter_configurations, FilterConfiguration

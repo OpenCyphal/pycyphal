@@ -14,12 +14,6 @@ import uavcan.node
 
 NodeInfo = uavcan.node.GetInfo_1_0.Response
 
-MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
-ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)
-
-FixedPortMessageClass = typing.TypeVar('FixedPortMessageClass', bound=pyuavcan.dsdl.FixedPortCompositeObject)
-FixedPortServiceClass = typing.TypeVar('FixedPortServiceClass', bound=pyuavcan.dsdl.FixedPortServiceObject)
-
 
 _logger = logging.getLogger(__name__)
 
@@ -90,63 +84,6 @@ class Node:
     def heartbeat_publisher(self) -> pyuavcan.application.heartbeat_publisher.HeartbeatPublisher:
         """Provides access to the heartbeat publisher instance of this node."""
         return self._heartbeat_publisher
-
-    # ---------------------------------------- MESSAGE PUBLISHER FACTORY ----------------------------------------
-
-    def make_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) \
-            -> pyuavcan.presentation.Publisher[MessageClass]:
-        """Wrapper for :meth:`pyuavcan.presentation.Presentation.make_publisher`."""
-        return self._presentation.make_publisher(dtype, subject_id)
-
-    def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
-            -> pyuavcan.presentation.Publisher[FixedPortMessageClass]:
-        """Wrapper for :meth:`pyuavcan.presentation.Presentation.make_publisher_with_fixed_subject_id`."""
-        return self._presentation.make_publisher_with_fixed_subject_id(dtype)
-
-    # ---------------------------------------- MESSAGE SUBSCRIBER FACTORY ----------------------------------------
-
-    def make_subscriber(self,
-                        dtype:          typing.Type[MessageClass],
-                        subject_id:     int,
-                        queue_capacity: typing.Optional[int] = None) -> \
-            pyuavcan.presentation.Subscriber[MessageClass]:
-        """Wrapper for :meth:`pyuavcan.presentation.Presentation.make_subscriber`."""
-        return self._presentation.make_subscriber(dtype, subject_id, queue_capacity)
-
-    def make_subscriber_with_fixed_subject_id(self,
-                                              dtype:          typing.Type[FixedPortMessageClass],
-                                              queue_capacity: typing.Optional[int] = None) \
-            -> pyuavcan.presentation.Subscriber[FixedPortMessageClass]:
-        """Wrapper for :meth:`pyuavcan.presentation.Presentation.make_subscriber_with_fixed_subject_id`."""
-        return self._presentation.make_subscriber_with_fixed_subject_id(dtype, queue_capacity)
-
-    # ---------------------------------------- SERVICE CLIENT FACTORY ----------------------------------------
-
-    def make_client(self,
-                    dtype:          typing.Type[ServiceClass],
-                    service_id:     int,
-                    server_node_id: int) -> pyuavcan.presentation.Client[ServiceClass]:
-        """Wrapper for :meth:`pyuavcan.presentation.Presentation.make_client`."""
-        return self._presentation.make_client(dtype, service_id, server_node_id)
-
-    def make_client_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int) \
-            -> pyuavcan.presentation.Client[FixedPortServiceClass]:
-        """Wrapper for :meth:`pyuavcan.presentation.Presentation.make_client_with_fixed_service_id`."""
-        return self._presentation.make_client_with_fixed_service_id(dtype, server_node_id)
-
-    # ---------------------------------------- SERVICE SERVER FACTORY ----------------------------------------
-
-    def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) \
-            -> pyuavcan.presentation.Server[ServiceClass]:
-        """Wrapper for :meth:`pyuavcan.presentation.Presentation.get_server`."""
-        return self._presentation.get_server(dtype, service_id)
-
-    def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
-            -> pyuavcan.presentation.Server[FixedPortServiceClass]:
-        """Wrapper for :meth:`pyuavcan.presentation.Presentation.get_server_with_fixed_service_id`."""
-        return self._presentation.get_server_with_fixed_service_id(dtype)
-
-    # ---------------------------------------- AUXILIARY ----------------------------------------
 
     def close(self) -> None:
         """

@@ -123,7 +123,7 @@ async def _do_execute(args: argparse.Namespace, subsystems: typing.Sequence[obje
         _logger.info('Request object: %r', request)
 
         # Initialize the client instance.
-        client = node.make_client(dtype, service_id, args.server_node_id)
+        client = node.presentation.make_client(dtype, service_id, args.server_node_id)
         client.response_timeout = args.timeout
         client.priority = args.priority
 

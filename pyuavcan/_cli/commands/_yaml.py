@@ -23,6 +23,7 @@ class YAMLDumper:
     def __init__(self, explicit_start: bool = False):
         # We need to use the roundtrip representer to retain ordering of mappings, which is important for usability.
         self._impl = ruamel.yaml.YAML(typ='rt')
+        # noinspection PyTypeHints
         self._impl.explicit_start = explicit_start    # type: ignore
         self._impl.default_flow_style = False
 

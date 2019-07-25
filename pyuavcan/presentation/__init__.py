@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+# noinspection PyUnresolvedReferences
 r"""
 The presentation layer provides a high-level object-oriented interface on top of the transport layer.
 This is the level of abstraction presented to the user of the library.

@@ -104,6 +104,7 @@ class PresentationSession(Closable, typing.Generic[TypeClass]):
         raise NotImplementedError
 
 
+# noinspection DuplicatedCode
 class MessageTypedSession(PresentationSession[MessageClass]):
     """
     The base class for publishers and subscribers.
@@ -129,6 +130,7 @@ class MessageTypedSession(PresentationSession[MessageClass]):
                                              transport_session=self.transport_session)
 
 
+# noinspection DuplicatedCode
 class ServiceTypedSession(PresentationSession[ServiceClass]):
     @property
     @abc.abstractmethod

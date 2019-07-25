@@ -119,14 +119,14 @@ class DemoApplication:
 
         # Now we can create our session objects as necessary. They can be created or destroyed later at any point
         # after initialization. It's not necessary to set everything up during the initialization.
-        srv_least_squares = self._node.get_server(sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0, 123)
+        srv_least_squares = self._node.presentation.get_server(sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0, 123)
         # Will run until self._node is close()d:
         srv_least_squares.serve_in_background(self._serve_linear_least_squares_request)
 
         # Create another server using shorthand for fixed port ID. We could also use it with an application-specific
         # service-ID as well, of course:
         #   get_server(uavcan.node.ExecuteCommand_1_0, 42).serve_in_background(self._serve_execute_command)
-        self._node.get_server_with_fixed_service_id(
+        self._node.presentation.get_server_with_fixed_service_id(
             uavcan.node.ExecuteCommand_1_0
         ).serve_in_background(self._serve_execute_command)
 
@@ -141,12 +141,13 @@ class DemoApplication:
 
         # We'll be publishing diagnostic messages using this publisher instance. The method we use is a shortcut for:
         #   make_publisher(uavcan.diagnostic.Record_1_0, pyuavcan.dsdl.get_fixed_port_id(uavcan.diagnostic.Record_1_0))
-        self._pub_diagnostic_record = self._node.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+        self._pub_diagnostic_record = \
+            self._node.presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
         self._pub_diagnostic_record.priority = pyuavcan.transport.Priority.OPTIONAL
         self._pub_diagnostic_record.send_timeout = 2.0
 
         # A message subscription.
-        self._sub_temperature = self._node.make_subscriber(uavcan.si.temperature.Scalar_1_0, 12345)
+        self._sub_temperature = self._node.presentation.make_subscriber(uavcan.si.temperature.Scalar_1_0, 12345)
         self._sub_temperature.receive_in_background(self._handle_temperature)
 
         # When all is initialized, don't forget to start the node!
