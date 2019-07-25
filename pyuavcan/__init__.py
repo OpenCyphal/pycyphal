@@ -4,6 +4,22 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+r"""
+The following submodules are auto-imported when the root module ``pyuavcan`` is imported:
+
+- :mod:`pyuavcan.dsdl`
+
+- :mod:`pyuavcan.transport`, but not concrete transport implementation submodules.
+  For example, if you need the CAN transport, import :mod:`pyuavcan.transport.can` manually.
+
+- :mod:`pyuavcan.presentation`
+
+- :mod:`pyuavcan.util`
+
+The submodule :mod:`pyuavcan.application` is not auto-imported because in order to have it imported
+the DSDL-generated package ``uavcan`` containing the standard data types must be generated first.
+"""
+
 import os as _os
 import sys as _sys
 
@@ -16,15 +32,13 @@ __version_info__ = tuple(map(int, __version__.split('.')))
 __license__ = 'MIT'
 
 
-# Version of the UAVCAN protocol implemented by this library.
+#: Version of the UAVCAN protocol implemented by this library.
+#: Use this value to populate the corresponding field in ``uavcan.node.GetInfo.Response``.
 UAVCAN_SPECIFICATION_VERSION = 1, 0
 
 
-# The sub-packages are included in the order of their interdependency
+# The sub-packages are imported in the order of their interdependency.
 import pyuavcan.util as util                    # noqa
 import pyuavcan.dsdl as dsdl                    # noqa
 import pyuavcan.transport as transport          # noqa
 import pyuavcan.presentation as presentation    # noqa
-
-# pyuavcan.application is not imported by default because it depends on the standard DSDL namespace "uavcan";
-# it is necessary to ensure that the corresponding Python package is generated before importing pyuavcan.application.

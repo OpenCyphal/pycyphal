@@ -15,6 +15,7 @@ Some of the technical details are covered in the following posts:
 - https://forum.uavcan.org/t/pyuavcan-design-thread/504
 - https://github.com/UAVCAN/pydsdl/pull/24
 
+The main entity of this module is the function :func:`generate_package`.
 
 .. inheritance-diagram:: pyuavcan.dsdl._composite_object
    :parts: 1

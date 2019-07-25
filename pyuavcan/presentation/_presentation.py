@@ -30,11 +30,8 @@ _logger = logging.getLogger(__name__)
 
 class Presentation:
     r"""
-    This is the presentation layer controller. The presentation layer is a thin wrapper around the transport layer
-    that manages DSDL object serialization and provides a convenient API for the application. The presentation layer
-    also performs data sharing across multiple consumers in the application; for example, when the application
-    creates more than one subscriber for a given subject, the presentation layer will take care to distribute the
-    received messages into every subscription instance requested by the application.
+    This is the presentation layer controller. This is the main access point for the application to a UAVCAN network.
+    Please read the module documentation for detailed usage information.
 
     Methods named ``make_*()`` create a new instance upon every invocation. Such instances implement the RAII pattern,
     managing the life cycle of the underlying resource automatically, so the user does not necessarily have to call
@@ -43,86 +40,14 @@ class Presentation:
     Methods named ``get_*()`` create a new instance only the first time they are invoked for the
     particular key parameter; the same instance is returned for every subsequent call for the same
     key parameter until it is manually closed by the caller.
-
-    Here's how we configure a presentation instance. In this example we are using a simple loopback transport
-    that does not interact with the outside world at all (it doesn't even perform any kind of IO with the OS),
-    which makes it well-suited for demo needs:
-
-    >>> import tests; tests.dsdl.generate_packages()  # DSDL generation not shown; see the pyuavcan.dsdl docs for info.
-    [...]
-    >>> import uavcan.node, uavcan.diagnostic         # Import what we need from DSDL-generated packages.
-    >>> import pyuavcan.transport.loopback
-    >>> transport = pyuavcan.transport.loopback.LoopbackTransport()  # Using loopback as a stub for real transport.
-    >>> presentation = pyuavcan.presentation.Presentation(transport)
-
-    Having prepared a presentation layer controller, we can create presentation-layer sessions.
-    They are the main points of interaction with the bus for any UAVCAN application that uses PyUAVCAN.
-    Let's start with a publisher and a subscriber:
-
-    >>> pub_record = presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
-    >>> sub_record = presentation.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
-
-    Publish a message and receive it also (the loopback transport will just send it back to us):
-
-    >>> import asyncio
-    >>> run_until_complete = asyncio.get_event_loop().run_until_complete
-    >>> record = uavcan.diagnostic.Record_1_0(
-    ...     severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
-    ...     text='Neither man nor animal can be influenced by anything but suggestion.')
-    >>> run_until_complete(pub_record.publish(record))  # publish() returns False on timeout.
-    True
-    >>> message, metadata = run_until_complete(sub_record.receive_with_transfer())
-    >>> message.text.tobytes().decode()
-    'Neither man nor animal can be influenced by anything but suggestion.'
-    >>> metadata.transfer_id, metadata.source_node_id, metadata.timestamp
-    (0, None, Timestamp(system_ns=..., monotonic_ns=...))
-
-    We can use custom subject-ID with any data type, even if there is a fixed subject-ID provided
-    (the background is explained in Specification, please read it). Here is an example; we also show here
-    that when a receive call times out, it returns None:
-
-    >>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_0, subject_id=12345)
-    >>> run_until_complete(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
-
-    You can see above that the node-ID of the received transfer metadata is set to None,
-    that's because it is actually an anonymous transfer, and it is so because our node is an anonymous node;
-    i.e., it doesn't have a node-ID. Before using services, let's configure the node-ID:
-
-    >>> presentation.transport.local_node_id is None    # Yup. It's anonymous.
-    True
-    >>> presentation.transport.set_local_node_id(1234)  # The set of valid node-ID values is transport-dependent.
-
-    Having assigned a node-ID, let's set up a service and invoke it:
-
-    >>> async def on_request(request: uavcan.node.ExecuteCommand_1_0.Request,
-    ...                      metadata: pyuavcan.presentation.ServiceRequestMetadata) \
-    ...         -> uavcan.node.ExecuteCommand_1_0.Response:
-    ...     print(f'Received command {request.command} from node {metadata.client_node_id}')
-    ...     return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND)
-    >>> srv_exec_command = presentation.get_server_with_fixed_service_id(uavcan.node.ExecuteCommand_1_0)
-    >>> srv_exec_command.serve_in_background(on_request)
-    >>> client_exec_command = presentation.make_client_with_fixed_service_id(uavcan.node.ExecuteCommand_1_0,
-    ...                                                                      1234)      # The server's node-ID value.
-    >>> request_object = uavcan.node.ExecuteCommand_1_0.Request(
-    ...     uavcan.node.ExecuteCommand_1_0.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
-    ...     '/path/to/the/firmware/image.bin')
-    >>> received_response = run_until_complete(client_exec_command.call(request_object))
-    Received command 65533 from node 1234
-    >>> received_response
-    uavcan.node.ExecuteCommand.Response.1.0(status=3)
-
-    Methods that receive data from the network return None on timeout.
-    For example, here we create a client for a nonexistent service; the call times out and returns None:
-
-    >>> bad_client = presentation.make_client(uavcan.node.ExecuteCommand_1_0,
-    ...                                       service_id=234,       # There is no such service.
-    ...                                       server_node_id=321)   # There is no such server.
-    >>> bad_client.response_timeout = 0.1                           # Override the default.
-    >>> bad_client.priority = pyuavcan.transport.Priority.HIGH      # Override the default.
-    >>> run_until_complete(bad_client.call(request_object))         # Times out and returns None.
     """
 
     def __init__(self, transport: pyuavcan.transport.Transport) -> None:
+        """
+        The presentation controller takes ownership of the supplied transport.
+        When the presentation instance is closed, its transport is also closed
+        (and so are all dependent resources such as input/output sessions).
+        """
         self._transport = transport
         self._closed = False
         self._emitted_transfer_id_map: typing.Dict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = {}
@@ -136,7 +61,7 @@ class Presentation:
         This property is designed for very short-lived processes like CLI tools. Most applications will not
         benefit from it and should not use it. The term "emitted transfer-ID map" is borrowed from Specification.
 
-        Access to the emitted transfer ID map allows short-running applications, such as CLI tools,
+        Access to the emitted transfer-ID map allows short-running applications, such as CLI tools,
         to store/restore the map to/from a persistent storage that retains data across restarts of the application.
         That may allow applications with very short life cycles (around several seconds) to adhere to the
         transfer-ID computation requirements presented in the specification. If the requirement were to be violated,
@@ -158,8 +83,9 @@ class Presentation:
     @property
     def transport(self) -> pyuavcan.transport.Transport:
         """
-        Direct reference to the underlying transport implementation. This instance is used for exchanging serialized
-        representations over the network. The presentation layer instance takes ownership of the transport.
+        Direct reference to the underlying transport implementation.
+        This instance is used for exchanging serialized representations over the network.
+        The presentation layer instance owns its transport.
         """
         return self._transport
 
@@ -174,12 +100,14 @@ class Presentation:
 
     def make_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) -> Publisher[MessageClass]:
         """
-        Creates a new publisher instance for the specified subject ID. All publishers created for a specific subject
-        share the same underlying implementation object which is hidden from the user; the implementation is
-        reference counted and it is destroyed automatically along with its underlying transport level session
-        instance when the last publisher is closed. The publisher instance will be close()d automatically from
-        the finalizer when garbage collected if the user did not bother to do that manually; every such occurrence
-        will be logged.
+        Creates a new publisher instance for the specified subject-ID. All publishers created for a specific
+        subject share the same underlying implementation object which is hidden from the user;
+        the implementation is reference counted and it is destroyed automatically along with its
+        underlying transport level session instance when the last publisher is closed.
+        The publisher instance will be closed automatically from the finalizer when garbage collected
+        if the user did not bother to do that manually. This logic follows the RAII pattern.
+
+        See :class:`Publisher` for further information about publishers.
         """
         if issubclass(dtype, pyuavcan.dsdl.ServiceObject):
             raise TypeError(f'Not a message type: {dtype}')
@@ -211,22 +139,25 @@ class Presentation:
                         subject_id:     int,
                         queue_capacity: typing.Optional[int] = None) -> Subscriber[MessageClass]:
         """
-        Creates a new subscriber instance for the specified subject ID. All subscribers created with a specific
+        Creates a new subscriber instance for the specified subject-ID. All subscribers created for a specific
         subject share the same underlying implementation object which is hidden from the user; the implementation
         is reference counted and it is destroyed automatically along with its underlying transport level session
-        instance when the last subscriber is closed. The subscriber instance will be close()d automatically from
-        the finalizer when garbage collected if the user did not bother to do that manually; every such occurrence
-        will be logged.
+        instance when the last subscriber is closed. The subscriber instance will be closed automatically from
+        the finalizer when garbage collected if the user did not bother to do that manually.
+        This logic follows the RAII pattern.
+
+        Whenever a message is received from a subject, it is deserialized once and the resulting object is
+        passed by reference into each subscriber instance. If there is more than one subscriber instance for
+        a subject, accidental mutation of the object by one consumer may affect other consumers. To avoid this,
+        the application should either avoid mutating received message objects or clone them beforehand.
 
         By default, the size of the input queue is unlimited; the user may provide a positive integer value to override
-        this. If the user is not reading the messages quickly enough and the size of the queue is limited (technically
-        it is always limited at least by the amount of the available memory), the queue may become full in which case
-        newer messages will be dropped and the overrun counter will be incremented once per dropped message.
+        this. If the user is not reading the received messages quickly enough and the size of the queue is limited
+        (technically, it is always limited at least by the amount of the available memory),
+        the queue may become full in which case newer messages will be dropped and the overrun counter
+        will be incremented once per dropped message.
 
-        Beware of data sharing issues: if the application uses more than one subscriber for a subject, every received
-        message will be passed into each subscriber for the subject. If the object is accidentally mutated by the
-        application, it will affect other subscribers. To avoid this, either do not mutate the received message
-        objects or clone them beforehand.
+        See :class:`Subscriber` for further information about subscribers.
         """
         if issubclass(dtype, pyuavcan.dsdl.ServiceObject):
             raise TypeError(f'Not a message type: {dtype}')
@@ -256,12 +187,19 @@ class Presentation:
                     service_id:     int,
                     server_node_id: int) -> Client[ServiceClass]:
         """
-        Creates a new client instance for the specified server ID and the remote server node ID.
-        All clients created with a specific combination of service ID and server node ID share the same
-        underlying implementation object which is hidden from the user; the implementation is reference counted
-        and it is destroyed automatically along with its underlying transport level session instances when the
-        last client is closed. The client instance will be close()d automatically from the finalizer when garbage
-        collected if the  user did not bother to do that manually; every such occurrence will be logged.
+        Creates a new client instance for the specified service-ID and the remote server node-ID.
+        The number of such instances can be arbitrary. For example, one or different tasks may
+        simultaneously create and use client instances invoking the same service on the same server node.
+
+        All clients created with a specific combination of service-ID and server node-ID share the same
+        underlying implementation object which is hidden from the user.
+        The implementation instance is reference counted and it is destroyed automatically along with its
+        underlying transport level session instances when its last client is closed.
+        The client instance will be closed automatically from its finalizer when garbage
+        collected if the user did not bother to do that manually.
+        This logic follows the RAII pattern.
+
+        See :class:`Client` for further information about clients.
         """
         if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
             raise TypeError(f'Not a service type: {dtype}')
@@ -269,7 +207,6 @@ class Presentation:
         self._raise_if_closed()
 
         def transfer_id_modulo_factory() -> int:
-            # This might be a tad slow because the protocol parameters may take some time to compute?
             return self._transport.protocol_parameters.transfer_id_modulo
 
         data_specifier = pyuavcan.transport.ServiceDataSpecifier(
@@ -301,11 +238,18 @@ class Presentation:
 
     def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) -> Server[ServiceClass]:
         """
-        Returns the server instance for the specified service ID. If such instance does not exist, it will be
-        created. The instance should be used from one task only. Observe that unlike other typed session instances,
-        the server instance is returned as-is without any intermediate proxy objects. The server instance will not
-        be garbage collected as long as its presentation layer controller exists, hence it is the responsibility
-        of the user to close unwanted servers manually.
+        Returns the server instance for the specified service-ID. If such instance does not exist, it will be
+        created. The instance should be used from one task only.
+
+        Observe that unlike other typed session instances, the server instance is returned as-is without
+        any intermediate proxy objects, and this interface does NOT implement the RAII pattern.
+        The server instance will not be garbage collected as long as its presentation layer controller exists,
+        hence it is the responsibility of the user to close unwanted servers manually.
+        However, when the parent presentation layer controller is closed (see :meth:`close`),
+        all of its session instances are also closed, servers are no exception, so the application does not
+        really have to hunt down every server to terminate a UAVCAN stack properly.
+
+        See :class:`Server` for further information about servers.
         """
         if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
             raise TypeError(f'Not a service type: {dtype}')
@@ -344,8 +288,8 @@ class Presentation:
     def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Publisher[FixedPortMessageClass]:
         """
-        A wrapper for make_publisher() which uses the fixed port ID associated with this type.
-        Raises a TypeError if the type has no fixed port ID.
+        A wrapper for :meth:`make_publisher` which uses the fixed subject-ID associated with this type.
+        Raises a TypeError if the type has no fixed subject-ID.
         """
         return self.make_publisher(dtype=dtype, subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
 
@@ -354,8 +298,8 @@ class Presentation:
                                               queue_capacity: typing.Optional[int] = None) \
             -> Subscriber[FixedPortMessageClass]:
         """
-        A wrapper for make_subscriber() which uses the fixed port ID associated with this type.
-        Raises a TypeError if the type has no fixed port ID.
+        A wrapper for :meth:`make_subscriber` which uses the fixed subject-ID associated with this type.
+        Raises a TypeError if the type has no fixed subject-ID.
         """
         return self.make_subscriber(dtype=dtype,
                                     subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype),
@@ -364,8 +308,8 @@ class Presentation:
     def make_client_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int) \
             -> Client[FixedPortServiceClass]:
         """
-        A wrapper for make_client() which uses the fixed port ID associated with this type.
-        Raises a TypeError if the type has no fixed port ID.
+        A wrapper for :meth:`make_client` which uses the fixed service-ID associated with this type.
+        Raises a TypeError if the type has no fixed service-ID.
         """
         return self.make_client(dtype=dtype,
                                 service_id=pyuavcan.dsdl.get_fixed_port_id(dtype),
@@ -374,8 +318,8 @@ class Presentation:
     def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
             -> Server[FixedPortServiceClass]:
         """
-        A wrapper for get_server() which uses the fixed port ID associated with this type.
-        Raises a TypeError if the type has no fixed port ID.
+        A wrapper for :meth:`get_server` which uses the fixed service-ID associated with this type.
+        Raises a TypeError if the type has no fixed service-ID.
         """
         return self.get_server(dtype=dtype, service_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
 
@@ -384,6 +328,7 @@ class Presentation:
     def close(self) -> None:
         """
         Closes the underlying transport instance and all existing session instances.
+        I.e., the application is not required to close every session instance explicitly.
         """
         for s in list(self._registry.values()):
             try:
@@ -398,16 +343,19 @@ class Presentation:
     def sessions(self) -> typing.Sequence[typing.Tuple[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
                                                        pyuavcan.transport.SessionSpecifier]]:
         """
-        A view of session specifiers whose sessions are currently open.
+        An immutable view of session specifiers whose sessions are currently open.
 
         Neither :class:`pyuavcan.transport.DataSpecifier` nor :class:`pyuavcan.transport.SessionSpecifier`
         provide sufficient information to uniquely identify a presentation-level session, because the transport
         layer makes no distinction between publication and subscription on the wire. It makes sense because
-        one node's publication is another node's subscription.
+        one node's publication is another node's subscription. Read the specification for background.
 
         Locally, however, we should be able to distinguish publishers from subscribers because in the context
         of local node the difference matters. So we amend each session specifier with the presentation session
         type to enable such distinction.
+
+        At the time of writing Sphinx could not display the type information for properties, so here it is:
+        ``Sequence[Tuple[Type[PresentationSession], pyuavcan.transport.SessionSpecifier]]``.
         """
         return list(self._registry.keys()) if not self._closed else []
 
@@ -418,7 +366,7 @@ class Presentation:
 
         def finalizer(transport_sessions: typing.Iterable[pyuavcan.transport.Session]) -> None:
             # So this is rather messy. Observe that a typed session instance aggregates two distinct resources that
-            # MUST be allocated and deallocated SYNCHRONOUSLY: the local registry entry in this class and the
+            # must be allocated and deallocated atomically: the local registry entry in this class and the
             # corresponding transport session instance. I don't want to plaster our session objects with locks and
             # container references, so instead I decided to pass the associated resources into the finalizer, which
             # disposes of all resources atomically. This is clearly not very obvious and in the future we should

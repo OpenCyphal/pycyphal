@@ -5,7 +5,12 @@
 #
 
 """
-.. inheritance-diagram:: pyuavcan.transport._error pyuavcan.transport._session pyuavcan.transport._data_specifier
+The main entity of this module is the class :class:`Transport`. Please read its documentation carefully.
+
+.. inheritance-diagram:: pyuavcan.transport._transport
+                         pyuavcan.transport._error
+                         pyuavcan.transport._session
+                         pyuavcan.transport._data_specifier
    :parts: 1
 """
 

@@ -1,8 +1,20 @@
 API reference
 =============
 
-Please navigate to the desired section from here.
-For a general overview, read :ref:`architecture`.
+For a general library overview, read :ref:`architecture`.
+
+pyuavcan root module
+--------------------
+
+.. automodule:: pyuavcan
+   :members:
+   :undoc-members:
+   :imported-members:
+   :inherited-members:
+   :show-inheritance:
+
+Library API reference contents
+------------------------------
 
 .. toctree::
 

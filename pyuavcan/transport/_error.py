@@ -8,6 +8,8 @@
 class TransportError(RuntimeError):
     """
     This is the root exception class for all transport-related errors.
+    Exception types defined at the higher layers up the protocol stack
+    (presentation, application) may also inherit from this type.
     """
     pass
 
@@ -38,7 +40,7 @@ class UnsupportedSessionConfigurationError(TransportError):
 class OperationNotDefinedForAnonymousNodeError(TransportError):
     """
     The requested action would normally be possible, but it is currently not because the transport instance does not
-    have a node ID assigned.
+    have a node-ID assigned.
     """
     pass
 

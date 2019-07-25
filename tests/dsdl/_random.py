@@ -20,9 +20,9 @@ import pyuavcan.dsdl
 from . import _util
 
 
-# Fail the test if any type takes longer than this to serialize or deserialize.
+# Fail the test if any type takes longer than this to serialize or deserialize on average.
 # This may appear huge but it's necessary to avoid false positives in the CI environment.
-_MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 30e-3
+_MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 90e-3
 
 # When generating random serialized representations, limit the number of fragments to this value
 # for performance reasons. Also, a large number of fragments may occasionally cause the test to run out of memory
@@ -148,11 +148,11 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
     gc.disable()        # Must be disabled, otherwise it induces spurious false-positive performance warnings
 
     ts = time.process_time()
-    chunks = list(pyuavcan.dsdl.serialize(obj))           # GC must be disabled while we're in the timed context
+    chunks = list(pyuavcan.dsdl.serialize(obj))         # GC must be disabled while we're in the timed context
     ser_sample = time.process_time() - ts
 
     ts = time.process_time()
-    d = pyuavcan.dsdl.deserialize(type(obj), chunks)  # GC must be disabled while we're in the timed context
+    d = pyuavcan.dsdl.deserialize(type(obj), chunks)    # GC must be disabled while we're in the timed context
     des_sample = time.process_time() - ts
 
     gc.enable()

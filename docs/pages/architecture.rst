@@ -15,6 +15,7 @@ tool for basic diagnostics and shell script automation.
 The reader should be familiar with the `UAVCAN specification <https://uavcan.org/specification>`_
 and `asynchronous programming in Python <https://docs.python.org/3/library/asyncio-task.html>`_
 to understand this documentation.
+The latter is quite important because **PyUAVCAN provides a coroutine-based async API**.
 
 The library consists of several loosely coupled submodules,
 each implementing a well-segregated part of the protocol.
@@ -165,8 +166,8 @@ Please read the module API documentation for more info.
 Presentation layer
 ------------------
 
-The presentation layer submodule is the first submodule among the reviewed so far that depends on
-other submodules (barring the utility submodule, which is an implicit dependency so it's not mentioned).
+The presentation layer submodule :mod:`pyuavcan.presentation` is the first submodule among the reviewed so far that
+depends on other submodules (barring the utility submodule, which is an implicit dependency so it's not mentioned).
 The internal dependency relations can be visualized as follows:
 
 .. graphviz::
