@@ -16,13 +16,14 @@ set -o nounset
 
 function die()
 {
-    echo >&2 "FAILURE: $@"
+    echo >&2 "FAILURE: $*"
     exit 1
 }
 
 function banner()
 {
-    local text="$@"
+    local text="$*"
+    # shellcheck disable=SC2155
     local fill_seq=$(seq 1 $((${#text} + 2)))
     [[ -t 0 && -t 1 ]] && printf >&2 '\033[1;36m'
     printf >&2 '+'
@@ -37,7 +38,7 @@ function banner()
 
 banner ENVIRONMENT CONFIGURATION
 
-cd "${0%/*}"    # cd to this script's directory
+cd "${0%/*}" || die "Couldn't cd"  # cd to this script's directory
 
 # Extend PYTHONPATH to make sitecustomize.py/usercustomize.py importable.
 if [[ -z "${PYTHONPATH:-}" ]]
@@ -102,9 +103,9 @@ pycodestyle pyuavcan tests || die "pycodestyle returned $?"
 
 banner DOCUMENTATION
 
-pushd docs
+pushd docs || die "Couldn't change directory"
 ./build.sh || die "Documentation build returned $?"
-popd
+popd       || die "Couldn't change directory"
 
 # ---------------------------------------------------------------------------------------------------------------------
 
