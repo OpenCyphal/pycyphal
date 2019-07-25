@@ -50,7 +50,6 @@ at run time; for most use cases it is unlikely to exceed three seconds.
 
     def register_arguments(self, parser: argparse.ArgumentParser) -> None:
         del parser
-        pass
 
     def execute(self, args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:
         transport, = subsystems
