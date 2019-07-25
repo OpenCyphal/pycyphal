@@ -13,8 +13,8 @@ pyuavcan root module
    :inherited-members:
    :show-inheritance:
 
-Library API reference contents
-------------------------------
+Submodules
+----------
 
 .. toctree::
 

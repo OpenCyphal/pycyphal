@@ -5,7 +5,8 @@
 #
 
 """
-This module is used for automatic generation of Python classes from DSDL type definitions.
+This module is used for automatic generation of Python classes from DSDL type definitions and
+also for various manipulations on them.
 Auto-generated classes have a high-level application-facing API and built-in auto-generated
 serialization and deserialization routines.
 

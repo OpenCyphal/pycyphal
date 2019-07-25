@@ -32,7 +32,7 @@ __version_info__ = tuple(map(int, __version__.split('.')))
 __license__ = 'MIT'
 
 
-#: Version of the UAVCAN protocol implemented by this library.
+#: Version of the UAVCAN protocol implemented by this library, major and minor.
 #: Use this value to populate the corresponding field in ``uavcan.node.GetInfo.Response``.
 UAVCAN_SPECIFICATION_VERSION = 1, 0
 

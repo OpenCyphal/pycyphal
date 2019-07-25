@@ -33,10 +33,26 @@ class GeneratedPackageInfo:
     name:   str
 
 
-def generate_package(package_parent_directory: _AnyPath,
-                     root_namespace_directory: _AnyPath,
-                     lookup_directories: typing.Iterable[_AnyPath],
+def generate_package(package_parent_directory:        _AnyPath,
+                     root_namespace_directory:        _AnyPath,
+                     lookup_directories:              typing.Iterable[_AnyPath],
                      allow_unregulated_fixed_port_id: bool = False) -> GeneratedPackageInfo:
+    """
+    This function runs the DSDL compiler, converting a specified DSDL root namespace into a Python package.
+
+    :param package_parent_directory: A Python package is a directory containing ``__init__.py``. The generated
+        package will be placed into this directory. For example, if this argument equals ``/foo/bar``,
+        and the DSDL root namespace name is ``uavcan``, the top-level ``__init__.py`` of the generated package
+        will end up in ``/foo/bar/uavcan/__init__.py``.
+
+    :param root_namespace_directory:
+
+    :param lookup_directories:
+
+    :param allow_unregulated_fixed_port_id:
+
+    :return:
+    """
     # Read the DSDL definitions
     composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
                                             lookup_directories=list(map(str, lookup_directories)),

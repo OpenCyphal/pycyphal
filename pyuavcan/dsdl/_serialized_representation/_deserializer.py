@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+from __future__ import annotations
 import abc
 import sys
 import typing
@@ -29,7 +30,7 @@ class Deserializer(abc.ABC):
 
     def __init__(self, source_bytes: typing.Union[bytearray, numpy.ndarray]):
         """
-        Do not call this directly. Use .new() to instantiate.
+        Do not call this directly. Use :meth:`new` to instantiate.
         """
         if not isinstance(source_bytes, numpy.ndarray):
             source_bytes = numpy.frombuffer(source_bytes, dtype=_Byte)  # Zero-copy! The buffer is NOT copied here.
@@ -48,12 +49,13 @@ class Deserializer(abc.ABC):
         assert self.consumed_bit_length + self.remaining_bit_length == self._buf_bit_length
 
     @staticmethod
-    def new(source_bytes: typing.Union[bytearray, numpy.ndarray]) -> 'Deserializer':
+    def new(source_bytes: typing.Union[bytearray, numpy.ndarray]) -> Deserializer:
         """
         :param source_bytes: The source serialized representation. The deserializer will attempt to avoid copying
-                             any data from the serialized representation, establishing direct references to its
-                             memory instead. If the source buffer is read-only, some of the deserialized array-typed
-                             values may end up being read-only as well. If that is undesirable, use writeable buffer.
+            any data from the serialized representation, establishing direct references to its memory instead.
+            If the source buffer is read-only, some of the deserialized array-typed values may end up being
+            read-only as well. If that is undesirable, use writeable buffer.
+
         :return: A new instance of Deserializer, either little-endian or big-endian, depending on the platform.
         """
         return _PlatformSpecificDeserializer(source_bytes)  # type: ignore
@@ -68,10 +70,10 @@ class Deserializer(abc.ABC):
 
     def require_remaining_bit_length(self, inclusive_minimum: int) -> None:
         """
-        Raises Deserializer.FormatError if the remaining bit length is strictly less than the specified minimum.
-        Users must invoke this method before beginning deserialization. Failure to invoke this method beforehand
-        may result in IndexError being thrown later during deserialization if the serialized representation is
-        shorter than expected.
+        Raises :class:`Deserializer.FormatError` if the remaining bit length is strictly less than the
+        specified minimum. Users must invoke this method before beginning deserialization.
+        Failure to invoke this method beforehand may result in :class:`IndexError` being raised later during
+        deserialization if the serialized representation is shorter than expected.
         """
         if self.remaining_bit_length < inclusive_minimum:
             assert self.consumed_bit_length + self.remaining_bit_length == self._buf_bit_length
@@ -105,7 +107,7 @@ class Deserializer(abc.ABC):
         """
         Quickly decodes an aligned array of bits using the numpy's fast bit unpacking routine.
         A new array is always created (the memory cannot be shared with the buffer due to the layout transformation).
-        The returned array is of dtype numpy.bool.
+        The returned array is of dtype :class:`numpy.bool`.
         """
         assert self._bit_offset % 8 == 0
         bs = self._buf[self._byte_offset:self._byte_offset + (count + 7) // 8]
@@ -219,7 +221,7 @@ class Deserializer(abc.ABC):
     def fetch_unaligned_bytes(self, count: int) -> numpy.ndarray:
         if count > 0:
             if self._bit_offset % 8 != 0:
-                # This is a faster variation of the Ben Dyer's unaligned bit copy algorithm:
+                # This is a faster variant of Ben Dyer's unaligned bit copy algorithm:
                 # https://github.com/UAVCAN/libuavcan/blob/fd8ba19bc9c09/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12
                 # It is faster because here we are aware that the destination is always aligned, which we take
                 # advantage of. This algorithm breaks for byte-aligned offset, so we have to delegate the aligned

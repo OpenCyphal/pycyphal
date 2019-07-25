@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+from __future__ import annotations
 import abc
 import sys
 import typing
@@ -25,7 +26,7 @@ class Serializer(abc.ABC):
 
     def __init__(self, buffer_size_in_bytes: int):
         """
-        Do not call this directly. Use .new() to instantiate.
+        Do not call this directly. Use :meth:`new` to instantiate.
         """
         # We extend the requested buffer size by one because some of the non-byte-aligned write operations
         # require us to temporarily use one extra byte after the current byte.
@@ -34,7 +35,7 @@ class Serializer(abc.ABC):
         self._bit_offset = 0
 
     @staticmethod
-    def new(buffer_size_in_bytes: int) -> 'Serializer':
+    def new(buffer_size_in_bytes: int) -> Serializer:
         return _PlatformSpecificSerializer(buffer_size_in_bytes)  # type: ignore
 
     @property
@@ -60,14 +61,15 @@ class Serializer(abc.ABC):
     @abc.abstractmethod
     def add_aligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
         """
-        Accepts an array of (u?int|float)(8|16|32|64) and encodes it into the destination.
-        On little-endian platforms this may be implemented as memcpy(). The current bit offset must be byte-aligned.
+        Accepts an array of ``(u?int|float)(8|16|32|64)`` and encodes it into the destination.
+        On little-endian platforms this may be implemented virtually through ``memcpy()``.
+        The current bit offset must be byte-aligned.
         """
         raise NotImplementedError
 
     def add_aligned_array_of_bits(self, x: numpy.ndarray) -> None:
         """
-        Accepts an array of bool's and encodes it into the destination using fast native serialization routine
+        Accepts an array of bools and encodes it into the destination using fast native serialization routine
         implemented in numpy. The current bit offset must be byte-aligned.
         """
         assert x.dtype in (numpy.bool, numpy.bool_)
@@ -159,7 +161,7 @@ class Serializer(abc.ABC):
 
     def add_unaligned_bytes(self, value: numpy.ndarray) -> None:
         assert value.dtype == _Byte
-        # This is a faster variation of the Ben Dyer's unaligned bit copy algorithm:
+        # This is a faster variant of Ben Dyer's unaligned bit copy algorithm:
         # https://github.com/UAVCAN/libuavcan/blob/fd8ba19bc9c09c05a/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12
         # It is faster because here we are aware that the source is always aligned, which we take advantage of.
         right = self._bit_offset % 8
