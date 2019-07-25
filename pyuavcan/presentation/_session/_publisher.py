@@ -25,7 +25,7 @@ class Publisher(MessageTypedSession[MessageClass]):
     share the same publisher instance across different tasks.
     """
 
-    #: Default value for :attr:`send_timeout`. The value is an implementation detail.
+    #: Default value for :attr:`send_timeout`. The value is an implementation detail, not required by Specification.
     DEFAULT_SEND_TIMEOUT = 1.0
 
     def __init__(self,

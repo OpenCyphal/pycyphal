@@ -8,8 +8,12 @@
 class TransportError(RuntimeError):
     """
     This is the root exception class for all transport-related errors.
-    Exception types defined at the higher layers up the protocol stack
-    (presentation, application) may also inherit from this type.
+    Exception types defined at the higher layers up the protocol stack (e.g., the presentation layer)
+    also inherit from this type, so the application may use this type as the base exception type for all
+    UAVCAN-related errors that occur at runtime.
+
+    This exception type hierarchy is intentionally separated from DSDL-related errors that may occur at
+    code generation time.
     """
     pass
 

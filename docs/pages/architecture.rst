@@ -87,6 +87,12 @@ here is the full list of them:
 
 Users can implement their own custom transports by subclassing :class:`pyuavcan.transport.Transport`.
 
+Whenever the API documentation refers to *monotonic time*, the time system of
+:meth:`asyncio.AbstractEventLoop.time` is implied.
+Per asyncio, it defaults to :func:`time.monotonic`,
+but it can be overridden by the user on a per-loop basis if necessary (read the asyncio docs for details).
+This principle is valid for all other components of the library; for example, the presentation layer.
+
 Media sub-layers
 ++++++++++++++++
 
@@ -206,6 +212,8 @@ specifically, the following methods form pretty much the core of the upper API:
 - :meth:`pyuavcan.presentation.Presentation.get_server` (sic!) -- constructs :class:`pyuavcan.presentation.Server`.
   The name and semantics are slightly different because servers are unlike other session objects.
   Read the docs for info.
+
+The presentation layer is the main part of the library API.
 
 
 Application layer

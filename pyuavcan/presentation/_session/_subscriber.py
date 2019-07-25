@@ -303,7 +303,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
-            _logger.exception(f'Failed to finalize %s: %s', self, ex)
+            _logger.exception('Failed to finalize %s: %s', self, ex)
 
         exception = exception if exception is not None else PresentationSessionClosedError(repr(self))
         for rx in self._listeners:

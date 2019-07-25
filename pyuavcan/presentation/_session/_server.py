@@ -30,21 +30,30 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class ServerStatistics:
+    #: There is only one input transport session per server.
     request_transport_session:   pyuavcan.transport.Statistics
+
+    #: This is a mapping keyed by the remote client node-ID value. One transport session per client.
     response_transport_sessions: typing.Dict[int, pyuavcan.transport.Statistics]
+
     served_requests:             int
-    deserialization_failures:    int
-    malformed_requests:          int
+    deserialization_failures:    int    #: Requests that could not be received because of bad input transfers.
+    malformed_requests:          int    #: Problems at the transport layer.
 
 
 @dataclasses.dataclass
 class ServiceRequestMetadata:
-    timestamp:      pyuavcan.transport.Timestamp
-    priority:       pyuavcan.transport.Priority
-    transfer_id:    int
-    client_node_id: int
+    """
+    This structure is supplied with every received request for informational purposes.
+    The application is not required to do anything with it.
+    """
+    timestamp:      pyuavcan.transport.Timestamp  #: Timestamp of the first frame of the request transfer.
+    priority:       pyuavcan.transport.Priority   #: Same priority will be used for the response (see Specification).
+    transfer_id:    int                           #: Same transfer-ID will be used for the response (see Specification).
+    client_node_id: int                           #: The response will be sent back to this node.
 
 
+#: Signature of the async request handler callable.
 ServiceRequestHandler = typing.Callable[[ServiceRequestClass, ServiceRequestMetadata],
                                         typing.Awaitable[typing.Optional[ServiceResponseClass]]]
 
@@ -52,13 +61,12 @@ ServiceRequestHandler = typing.Callable[[ServiceRequestClass, ServiceRequestMeta
 class Server(ServiceTypedSession[ServiceClass]):
     """
     At most one task can use the server at any given time.
-    There can be at most one server instance per data specifier.
+    The instance must be closed manually to stop the server.
 
     .. note::
-
         Normally we should use correct generic types ``ServiceClass.Request`` and ``ServiceClass.Response`` in the API;
-        however, MyPy does not support that yet. Please find the context at https://github.com/python/mypy/issues/7121
-        and https://github.com/UAVCAN/pyuavcan/issues/61.
+        however, MyPy does not support that yet. Please find the context at
+        https://github.com/python/mypy/issues/7121 (please upvote!) and https://github.com/UAVCAN/pyuavcan/issues/61.
         We use a tentative workaround for now to silence bogus type errors. When the missing logic is implemented
         in MyPy, this should be switched back to proper implementation.
     """
@@ -69,6 +77,9 @@ class Server(ServiceTypedSession[ServiceClass]):
                  output_transport_session_factory: OutputTransportSessionFactory,
                  finalizer:                        TypedSessionFinalizer,
                  loop:                             asyncio.AbstractEventLoop):
+        """
+        Do not call this directly! Use :meth:`Presentation.get_server`.
+        """
         self._dtype = dtype
         self._input_transport_session = input_transport_session
         self._output_transport_session_factory = output_transport_session_factory
@@ -88,14 +99,16 @@ class Server(ServiceTypedSession[ServiceClass]):
 
     def serve_in_background(self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass]) -> None:
         """
-        Starts a new task and uses that to run the server in the background. The task will be stopped when the server
-        is close()d.
-        When a request is received, the handler will be invoked with the request object and the associated
-        metadata (which contains auxiliary information such as the client's node ID).
-        The handler shall return the response or None. If None is returned, the server will not send any response back.
-        If the handler throws an exception, it will be suppressed and logged.
+        Start a new task and use it to run the server in the background.
+        The task will be stopped when the server is closed.
+
+        When a request is received, the supplied handler callable will be invoked with the request object
+        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
+        The handler shall return the response or None. If None is returned, the server will not send any response back
+        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
+
         If the background task is already running, it will be cancelled and a new one will be started instead.
-        This method of serving requests shall not be used concurrently with the async methods.
+        This method of serving requests shall not be used concurrently with other methods.
         """
         async def task_function() -> None:
             while not self._closed:
@@ -122,10 +135,11 @@ class Server(ServiceTypedSession[ServiceClass]):
                         timeout: float) -> None:
         """
         Listen for requests for the specified time or until the instance is closed, then exit.
-        When a request is received, the handler will be invoked with the request object and the associated
-        metadata (which contains auxiliary information such as the client's node ID).
-        The handler shall return the response or None. If None is returned, the server will not send any response back.
-        If the handler throws an exception, it will be suppressed and logged.
+
+        When a request is received, the supplied handler callable will be invoked with the request object
+        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
+        The handler shall return the response or None. If None is returned, the server will not send any response back
+        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
         """
         return await self.serve_until(handler, monotonic_deadline=self._loop.time() + timeout)
 
@@ -133,20 +147,18 @@ class Server(ServiceTypedSession[ServiceClass]):
                           handler:            ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
                           monotonic_deadline: float) -> None:
         """
-        This is like serve_for() except that we exit normally after the specified monotonic deadline (i.e., the
-        deadline value is compared against the loop's monotonic time).
+        This is like :meth:`serve_for` except that it exits normally after the specified monotonic deadline is reached.
+        The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
         """
         # Observe that if we aggregate redundant transports with different non-monotonic transfer ID modulo values,
         # it might be that the transfer ID that we obtained from the request may be invalid for some of the transports.
-        # This is why we can't reliably aggregate redundant transports with different transfer ID overflow parameters.
+        # This is why we can't reliably aggregate redundant transports with different transfer-ID overflow parameters.
         while not self._closed:
             out: typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, ServiceRequestMetadata]] \
                 = await self._receive_until(monotonic_deadline)
             if out is None:
                 break           # Timed out.
 
-            # Launch a concurrent task to retrieve the response session while the application's handler is running.
-            # This allows us to minimize the request processing time.
             self._served_request_count += 1
             request, meta = out
             response: typing.Optional[ServiceResponseClass] = None  # Fallback state
@@ -195,8 +207,8 @@ class Server(ServiceTypedSession[ServiceClass]):
 
     def sample_statistics(self) -> ServerStatistics:
         """
-        Returns the statistical counters of this server, including the statistical metrics of the underlying
-        transport sessions.
+        Returns the statistical counters of this server instance,
+        including the statistical metrics of the underlying transport sessions.
         """
         return ServerStatistics(request_transport_session=self._input_transport_session.sample_statistics(),
                                 response_transport_sessions={nid: ts.sample_statistics()

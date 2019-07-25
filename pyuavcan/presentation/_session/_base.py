@@ -68,7 +68,13 @@ class Closable(abc.ABC):
     def close(self) -> None:
         """
         Invalidates the object and closes the underlying resources if necessary.
-        If the object has no disposable resources, this method may do nothing.
+
+        If the closed object had a blocked task waiting for data, the task will raise a
+        :class:`pyuavcan.presentation.PresentationSessionClosedError` shortly after close;
+        or, if the task was started by the closed instance itself, it will be silently cancelled.
+        At the moment the library provides no guarantees regarding how quickly the exception will be raised
+        or the task cancelled; it is only guaranteed that it will happen automatically eventually, the
+        application need not be involved in that.
         """
         raise NotImplementedError
 

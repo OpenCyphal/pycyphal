@@ -25,25 +25,34 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class ClientStatistics:
+    """
+    The counters are maintained at the hidden client instance which is not accessible to the user.
+    As such, clients with the same session specifier will share the same set of statistical counters.
+    """
     request_transport_session:  pyuavcan.transport.Statistics
     response_transport_session: pyuavcan.transport.Statistics
     sent_requests:              int
-    deserialization_failures:   int
-    unexpected_responses:       int
+    deserialization_failures:   int  #: Response transfers that could not be deserialized into a response object.
+    unexpected_responses:       int  #: Response transfers that could not be matched with a request state.
 
 
 class Client(ServiceTypedSession[ServiceClass]):
     """
-    Each task should request its own independent client instance from the presentation layer controller. Do not
-    share the same client instance across different tasks. ALl client instances sharing the same session specifier
-    also share the same underlying implementation object which is reference counted and destroyed automatically when
-    the last client instance is closed.
+    Each task should request its own client instance from the presentation layer controller.
+    Do not share the same client instance across different tasks.
+    This class implements the RAII pattern.
+
+    Implementation detail: aLl client instances sharing the same session specifier also share the same
+    underlying implementation object which is reference counted and destroyed automatically when the
+    last client instance is closed; the user code cannot access it and generally shouldn't care.
+    None of the settings of a client instance, such as timeout or priority, can affect other client instances;
+    this does not apply to the transfer-ID counter objects though because they are transport-layer entities
+    and therefore are shared per session specifier.
 
     .. note::
-
         Normally we should use correct generic types ``ServiceClass.Request`` and ``ServiceClass.Response`` in the API;
-        however, MyPy does not support that yet. Please find the context at https://github.com/python/mypy/issues/7121
-        and https://github.com/UAVCAN/pyuavcan/issues/61.
+        however, MyPy does not support that yet. Please find the context at
+        https://github.com/python/mypy/issues/7121 (please upvote!) and https://github.com/UAVCAN/pyuavcan/issues/61.
         We use a tentative workaround for now to silence bogus type errors. When the missing logic is implemented
         in MyPy, this should be switched back to proper implementation.
     """
@@ -51,6 +60,9 @@ class Client(ServiceTypedSession[ServiceClass]):
     def __init__(self,
                  impl: ClientImpl[ServiceClass],
                  loop: asyncio.AbstractEventLoop):
+        """
+        Do not call this directly! Use :meth:`Presentation.make_client`.
+        """
         self._maybe_impl: typing.Optional[ClientImpl[ServiceClass]] = impl
         self._loop = loop
         self._dtype = impl.dtype                                        # Permit usage after close()
@@ -63,7 +75,7 @@ class Client(ServiceTypedSession[ServiceClass]):
 
     async def call(self, request: pyuavcan.dsdl.CompositeObject) -> typing.Optional[pyuavcan.dsdl.CompositeObject]:
         """
-        A simplified version of call_with_transfer() that simply returns the response object without any metadata.
+        A simplified wrapper for :meth:`call_with_transfer` that drops the response transfer info.
         """
         out = await self.call_with_transfer(request=request)
         return out[0] if out is not None else None
@@ -72,8 +84,12 @@ class Client(ServiceTypedSession[ServiceClass]):
             -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         """
         Sends the request to the remote server using the pre-configured priority and response timeout parameters.
-        Returns the response along with its transfer in the case of successful completion; if the server did not
-        provide a valid response on time, returns None.
+        Returns the response along with its transfer info in the case of successful completion.
+        If the server did not provide a valid response on time, returns None.
+
+        On certain feature-limited transfers (such as CAN) the call may raise
+        :class:`pyuavcan.presentation.RequestTransferIDVariabilityExhaustedError`
+        if there are too many concurrent requests.
         """
         if self._maybe_impl is None:
             raise PresentationSessionClosedError(repr(self))
@@ -87,10 +103,12 @@ class Client(ServiceTypedSession[ServiceClass]):
         """
         The response timeout value used for requests emitted via this proxy instance.
         This parameter is configured separately per proxy instance; i.e., it is not shared across different client
-        instances under the same session specifier.
+        instances under the same session specifier, so that, for example, different tasks invoking the same service
+        on the same server node can have different timeout settings.
         The same value is also used as send timeout for the underlying call to
         :meth:`pyuavcan.transport.OutputSession.send_until`.
-        The default value is set according to the recommendations provided in the Specification.
+        The default value is set according to the recommendations provided in the Specification,
+        which is :data:`DEFAULT_SERVICE_REQUEST_TIMEOUT`.
         """
         return self._response_timeout
 
@@ -113,8 +131,7 @@ class Client(ServiceTypedSession[ServiceClass]):
 
     @priority.setter
     def priority(self, value: pyuavcan.transport.Priority) -> None:
-        assert value in pyuavcan.transport.Priority
-        self._priority = value
+        self._priority = pyuavcan.transport.Priority(value)
 
     @property
     def dtype(self) -> typing.Type[ServiceClass]:
@@ -123,7 +140,10 @@ class Client(ServiceTypedSession[ServiceClass]):
     @property
     def transfer_id_counter(self) -> OutgoingTransferIDCounter:
         """
-        Allows the caller to reach the transfer ID counter object.
+        Allows the caller to reach the transfer-ID counter instance.
+        The instance is shared for clients under the same session.
+        I.e., if there are two clients that use the same service-ID and same server node-ID,
+        they will share the same transfer-ID counter.
         """
         return self._transfer_id_counter
 
@@ -139,6 +159,10 @@ class Client(ServiceTypedSession[ServiceClass]):
         return self._output_transport_session
 
     def sample_statistics(self) -> ClientStatistics:
+        """
+        The statistics are counted at the hidden implementation instance.
+        Clients that use the same session specifier will have the same set of statistical counters.
+        """
         if self._maybe_impl is None:
             raise PresentationSessionClosedError(repr(self))
         else:
