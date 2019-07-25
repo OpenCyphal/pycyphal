@@ -29,5 +29,5 @@ from ._server import ServerStatistics as ServerStatistics
 from ._server import ServiceRequestMetadata as ServiceRequestMetadata
 from ._server import ServiceRequestHandler as ServiceRequestHandler
 
-from ._error import TypedSessionClosedError as TypedSessionClosedError
+from ._error import PresentationSessionClosedError as PresentationSessionClosedError
 from ._error import RequestTransferIDVariabilityExhaustedError as RequestTransferIDVariabilityExhaustedError

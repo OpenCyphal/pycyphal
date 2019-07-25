@@ -7,11 +7,11 @@
 import pyuavcan.transport
 
 
-class TypedSessionClosedError(pyuavcan.transport.ResourceClosedError):
+class PresentationSessionClosedError(pyuavcan.transport.ResourceClosedError):
     """
-    Raised when an attempt is made to use a typed session instance that has been closed. Observe that it is a
-    specialization of the corresponding transport-layer error type. Double-close is NOT an error, so closing
-    the same instance twice will not result in this exception being raised.
+    Raised when an attempt is made to use a presentation-layer session instance that has been closed.
+    Observe that it is a specialization of the corresponding transport-layer error type.
+    Double-close is NOT an error, so closing the same instance twice will not result in this exception being raised.
     """
     pass
 
@@ -19,6 +19,7 @@ class TypedSessionClosedError(pyuavcan.transport.ResourceClosedError):
 class RequestTransferIDVariabilityExhaustedError(pyuavcan.transport.TransportError):
     """
     Raised when an attempt is made to invoke more concurrent requests that supported by the transport layer.
-    For CAN, the number is 32; for some transports the number is unlimited.
+    For CAN, the number is 32; for some transports the number is unlimited (technically, there is always a limit,
+    but for some transports, such as the serial transport, it is unreachable in practice).
     """
     pass

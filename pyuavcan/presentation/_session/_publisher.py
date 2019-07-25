@@ -13,7 +13,7 @@ import pyuavcan.dsdl
 import pyuavcan.transport
 from ._base import MessageTypedSession, OutgoingTransferIDCounter, MessageClass, Closable
 from ._base import DEFAULT_PRIORITY, TypedSessionFinalizer
-from ._error import TypedSessionClosedError
+from ._error import PresentationSessionClosedError
 
 
 _logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ class Publisher(MessageTypedSession[MessageClass]):
         Returns False if the publication could not be completed in :attr:`send_timeout`, True otherwise.
         """
         if self._maybe_impl is None:
-            raise TypedSessionClosedError(repr(self))
+            raise PresentationSessionClosedError(repr(self))
         else:
             return await self._maybe_impl.publish_until(message,
                                                         self._priority,
@@ -193,7 +193,7 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            raise TypedSessionClosedError(repr(self))
+            raise PresentationSessionClosedError(repr(self))
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,

@@ -13,7 +13,7 @@ import pyuavcan.dsdl
 import pyuavcan.transport
 from ._base import ServiceClass, ServiceTypedSession, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
-from ._error import TypedSessionClosedError, RequestTransferIDVariabilityExhaustedError
+from ._error import PresentationSessionClosedError, RequestTransferIDVariabilityExhaustedError
 
 
 # Shouldn't be too large as this value defines how quickly the task will detect that the underlying transport is closed.
@@ -76,7 +76,7 @@ class Client(ServiceTypedSession[ServiceClass]):
         provide a valid response on time, returns None.
         """
         if self._maybe_impl is None:
-            raise TypedSessionClosedError(repr(self))
+            raise PresentationSessionClosedError(repr(self))
         else:
             return await self._maybe_impl.call_with_transfer(request=request,
                                                              priority=self._priority,
@@ -140,7 +140,7 @@ class Client(ServiceTypedSession[ServiceClass]):
 
     def sample_statistics(self) -> ClientStatistics:
         if self._maybe_impl is None:
-            raise TypedSessionClosedError(repr(self))
+            raise PresentationSessionClosedError(repr(self))
         else:
             return ClientStatistics(request_transport_session=self.output_transport_session.sample_statistics(),
                                     response_transport_session=self.input_transport_session.sample_statistics(),
@@ -326,7 +326,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
             _logger.exception(f'Failed to finalize %s: %s', self, ex)
 
-        exception = exception if exception is not None else TypedSessionClosedError(repr(self))
+        exception = exception if exception is not None else PresentationSessionClosedError(repr(self))
         for fut in self._response_futures_by_transfer_id.values():
             try:
                 fut.set_exception(exception)
@@ -342,7 +342,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            raise TypedSessionClosedError(repr(self))
+            raise PresentationSessionClosedError(repr(self))
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,

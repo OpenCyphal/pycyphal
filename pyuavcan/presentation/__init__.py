@@ -134,7 +134,7 @@ from ._session import MessageTypedSession as MessageTypedSession
 from ._session import ServiceTypedSession as ServiceTypedSession
 
 from ._session import OutgoingTransferIDCounter as OutgoingTransferIDCounter
-from ._session import TypedSessionClosedError as TypedSessionClosedError
+from ._session import PresentationSessionClosedError as PresentationSessionClosedError
 from ._session import RequestTransferIDVariabilityExhaustedError as RequestTransferIDVariabilityExhaustedError
 from ._session import DEFAULT_PRIORITY as DEFAULT_PRIORITY
 from ._session import DEFAULT_SERVICE_REQUEST_TIMEOUT as DEFAULT_SERVICE_REQUEST_TIMEOUT
