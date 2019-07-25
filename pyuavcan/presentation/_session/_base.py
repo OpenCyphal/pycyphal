@@ -27,16 +27,34 @@ ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)
 
 
 class OutgoingTransferIDCounter:
+    """
+    A member of the *emitted transfer-ID map*; see the specification for technical details.
+    Essentially this is just a boxed integer.
+    """
+
     def __init__(self) -> None:
+        """
+        Initializes the counter to zero.
+        """
         self._value: int = 0
 
     def get_then_increment(self) -> int:
+        """
+        Samples the counter with post-increment; i.e., like ``i++``.
+        """
         out = self._value
         self._value += 1
         return out
 
     def override(self, value: int) -> None:
-        self._value = int(value)
+        """
+        Assigns a new value. Raises a :class:`ValueError` if the value is not a non-negative integer.
+        """
+        value = int(value)
+        if value >= 0:
+            self._value = value
+        else:
+            raise ValueError(f'Not a valid transfer-ID value: {value}')
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, self._value)
@@ -46,16 +64,19 @@ class Closable(abc.ABC):
     """
     Base class for closable session resources.
     """
-
     @abc.abstractmethod
     def close(self) -> None:
         """
         Invalidates the object and closes the underlying resources if necessary.
+        If the object has no disposable resources, this method may do nothing.
         """
         raise NotImplementedError
 
 
 class PresentationSession(Closable, typing.Generic[TypeClass]):
+    """
+    The base class for any presentation layer session such as publisher, subscriber, client, or server.
+    """
     @property
     @abc.abstractmethod
     def dtype(self) -> typing.Type[TypeClass]:
@@ -68,7 +89,7 @@ class PresentationSession(Closable, typing.Generic[TypeClass]):
     @abc.abstractmethod
     def port_id(self) -> int:
         """
-        The subject/service ID of the underlying transport session instance.
+        The immutable subject-/service-ID of the underlying transport session instance.
         """
         raise NotImplementedError
 
@@ -78,11 +99,14 @@ class PresentationSession(Closable, typing.Generic[TypeClass]):
 
 
 class MessageTypedSession(PresentationSession[MessageClass]):
+    """
+    The base class for publishers and subscribers.
+    """
     @property
     @abc.abstractmethod
     def transport_session(self) -> pyuavcan.transport.Session:
         """
-        The underlying transport session instance.
+        The underlying transport session instance. Input for subscribers, output for publishers.
         """
         raise NotImplementedError
 
@@ -103,8 +127,8 @@ class ServiceTypedSession(PresentationSession[ServiceClass]):
     @abc.abstractmethod
     def input_transport_session(self) -> pyuavcan.transport.InputSession:
         """
-        The underlying transport session instance used for the input transfers (requests for servers, responses
-        for clients).
+        The underlying transport session instance used for the input transfers
+        (requests for servers, responses for clients).
         """
         raise NotImplementedError
 
