@@ -6,7 +6,9 @@
 
 import typing
 import pytest
-from .dsdl.conftest import generated_packages  # noqa
+
+# The fixture is imported here to make it visible to other tests in this suite.
+from .dsdl.conftest import generated_packages as generated_packages  # noqa
 
 
 def pytest_collection_modifyitems(items: typing.Iterable[pytest.Item]) -> None:

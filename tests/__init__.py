@@ -5,6 +5,7 @@
 #
 
 import os as _os
+from . import dsdl as dsdl
 
 
 SKIP_SLOW = bool(_os.environ.get('PYUAVCAN_TEST_SKIP_SLOW', False))

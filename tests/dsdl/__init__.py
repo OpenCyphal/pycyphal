@@ -5,3 +5,4 @@
 #
 
 from ._util import make_random_object, are_close, expand_service_types
+from .conftest import generate_packages as generate_packages

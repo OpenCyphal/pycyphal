@@ -44,20 +44,13 @@ class Presentation:
     particular key parameter; the same instance is returned for every subsequent call for the same
     key parameter until it is manually closed by the caller.
 
-    Here's a minimal example. First, we need to make sure that the DSDL type definitions that we're
-    going to be using have been processed into Python packages:
-
-    >>> import logging; logging.getLogger('pydsdl').setLevel('WARNING')  # Hide irrelevant debug messages from PyDSDL.
-    >>> import pyuavcan                                  # Generate Python packages from DSDL namespace "uavcan"
-    >>> pyuavcan.dsdl.generate_package('.test_dsdl_generated', 'tests/public_regulated_data_types/uavcan', [])
-    GeneratedPackageInfo(...)
-    >>> import importlib; importlib.invalidate_caches()  # Clear the cache to let Python find the generated package.
-    >>> import uavcan.node, uavcan.diagnostic            # Import what we need from our new freshly generated package.
-
     Here's how we configure a presentation instance. In this example we are using a simple loopback transport
     that does not interact with the outside world at all (it doesn't even perform any kind of IO with the OS),
     which makes it well-suited for demo needs:
 
+    >>> import tests; tests.dsdl.generate_packages()  # DSDL generation not shown; see the pyuavcan.dsdl docs for info.
+    [...]
+    >>> import uavcan.node, uavcan.diagnostic         # Import what we need from DSDL-generated packages.
     >>> import pyuavcan.transport.loopback
     >>> transport = pyuavcan.transport.loopback.LoopbackTransport()  # Using loopback as a stub for real transport.
     >>> presentation = pyuavcan.presentation.Presentation(transport)
