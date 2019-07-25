@@ -22,18 +22,7 @@ def main() -> None:
     from . import DEFAULT_DSDL_GENERATED_PACKAGES_DIR
     sys.path.insert(0, str(DEFAULT_DSDL_GENERATED_PACKAGES_DIR))
 
-    logging.root.setLevel(logging.WARNING)      # This is the default; it may be overridden later.
-
-    try:
-        # This is not listed among the deps because the availability on other platforms is questionable and it's not
-        # actually required at all. See https://stackoverflow.com/a/16847935/1007777.
-        import coloredlogs
-        # The level spec applies to the handler, not the root logger! This is different from basicConfig().
-        coloredlogs.install(level=logging.DEBUG, fmt=_LOG_FORMAT)
-    except Exception as ex:
-        logging.basicConfig(format=_LOG_FORMAT)
-        _logger.debug('Colored logs are not available: %s: %s', type(ex), ex)
-        _logger.info('Consider installing "coloredlogs" from PyPI to make log messages look better')
+    logging.basicConfig(format=_LOG_FORMAT)  # Using the default log level; it will be overridden later.
 
     try:
         exit(_main_impl())
@@ -52,11 +41,7 @@ def _main_impl() -> int:
 
     args = _construct_argument_parser(command_instances).parse_args()
 
-    logging.root.setLevel({
-        0: logging.WARNING,
-        1: logging.INFO,
-        2: logging.DEBUG,
-    }.get(args.verbose or 0, logging.DEBUG))
+    _configure_logging(args.verbose)
 
     _logger.debug('Available commands: %s', command_instances)
     _logger.debug('Parsed args: %s', args)
@@ -158,3 +143,27 @@ def _make_executor(cmd: commands.Command) -> typing.Callable[[argparse.Namespace
         return cmd.execute(args, subsystems)
 
     return execute
+
+
+def _configure_logging(verbosity_level: int) -> None:
+    """
+    Until this function is invoked we're running the bootstrap default configuration.
+    This function changes the configuration to use the correct production settings as specified.
+    """
+    log_level = {
+        0: logging.WARNING,
+        1: logging.INFO,
+        2: logging.DEBUG,
+    }.get(verbosity_level or 0, logging.DEBUG)
+
+    logging.root.setLevel(log_level)
+
+    try:
+        # This is not listed among the deps because the availability on other platforms is questionable and it's not
+        # actually required at all. See https://stackoverflow.com/a/16847935/1007777.
+        import coloredlogs
+        # The level spec applies to the handler, not the root logger! This is different from basicConfig().
+        coloredlogs.install(level=log_level, fmt=_LOG_FORMAT)
+    except Exception as ex:
+        _logger.debug('Colored logs are not available: %s: %s', type(ex), ex)
+        _logger.info('Consider installing "coloredlogs" from PyPI to make log messages look better')
