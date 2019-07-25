@@ -23,26 +23,48 @@ _RECEIVE_TIMEOUT = 1
 _logger = logging.getLogger(__name__)
 
 
+#: Type of the async received message handler callable.
 ReceivedMessageHandler = typing.Callable[[MessageClass, pyuavcan.transport.TransferFrom], typing.Awaitable[None]]
 
 
 @dataclasses.dataclass
 class SubscriberStatistics:
-    transport_session:        pyuavcan.transport.Statistics
-    messages:                 int
-    overruns:                 int
-    deserialization_failures: int
+    transport_session:        pyuavcan.transport.Statistics  #: Shared for all subscribers with same session specifier.
+    messages:                 int  #: Number of received messages, individual per subscriber.
+    overruns:                 int  #: Number of messages lost to queue overruns; individual per subscriber.
+    deserialization_failures: int  #: Number of messages lost to deserialization errors; shared per session specifier.
 
 
 class Subscriber(MessageTypedSession[MessageClass]):
     """
-    Normally, every task should request its own subscriber instance. An attempt to reuse the same instance across
-    different consumer tasks may lead to unpredictable message distribution.
+    A task should request its own independent subscriber instance from the presentation layer controller.
+    Do not share the same subscriber instance across different tasks. This class implements the RAII pattern.
+
+    Whenever a message is received from a subject, it is deserialized once and the resulting object is
+    passed by reference into each subscriber instance. If there is more than one subscriber instance for
+    a subject, accidental mutation of the object by one consumer may affect other consumers. To avoid this,
+    the application should either avoid mutating received message objects or clone them beforehand.
+
+    This class implements the async iterator protocol yielding received messages.
+    Iteration stops shortly after the subscriber is closed.
+    It can be used as follows::
+
+        async for message, transfer in subscriber:
+            ...  # Handle the message.
+        # The loop will be stopped when the subscriber is closed.
+
+    Implementation info: all subscribers sharing the same session specifier also share the same
+    underlying implementation object containing the transport session which is reference counted and destroyed
+    automatically when the last subscriber with that session specifier is closed;
+    the user code cannot access it and generally shouldn't care.
     """
     def __init__(self,
                  impl:           SubscriberImpl[MessageClass],
                  loop:           asyncio.AbstractEventLoop,
                  queue_capacity: typing.Optional[int]):
+        """
+        Do not call this directly! Use :meth:`Presentation.make_subscriber`.
+        """
         if queue_capacity is None:
             queue_capacity = 0      # This case is defined by the Queue API. Means unlimited.
         else:
@@ -61,12 +83,17 @@ class Subscriber(MessageTypedSession[MessageClass]):
 
     def receive_in_background(self, handler: ReceivedMessageHandler[MessageClass]) -> None:
         """
-        Configures the subscriber to invoke the specified handler whenever a message is received. If the caller
-        attempts to configure multiple handlers by invoking this method several times, only the last configured
-        handler will be active (the old ones will be forgotten). If the handler throws an exception, it will be
-        suppressed and logged.
-        This method of handling messages shall not be used with the plain async receive API; an attempt to do so
-        may lead to unpredictable message distribution between consumers.
+        Configures the subscriber to invoke the specified handler whenever a message is received.
+
+        If the caller attempts to configure multiple handlers by invoking this method repeatedly,
+        only the last configured handler will be active (the old ones will be forgotten).
+        If the handler throws an exception, it will be suppressed and logged.
+
+        This method internally starts a new task. If the subscriber is closed while the task is running,
+        the task will be silently cancelled automatically; the application need not get involved.
+
+        This method of handling messages should not be used with the plain async receive API;
+        an attempt to do so may lead to unpredictable message distribution between consumers.
         """
         async def task_function() -> None:
             # This could be an interesting opportunity for optimization: instead of using the queue, just let the
@@ -99,23 +126,23 @@ class Subscriber(MessageTypedSession[MessageClass]):
 
     async def receive(self) -> MessageClass:
         """
-        This is a shortcut for receive_with_transfer()[0]; i.e, this method discards the transfer and
-        returns only the deserialized message.
+        This is a wrapper for :meth:`receive_with_transfer`
+        that drops the transfer info and returns only the message.
         """
         return (await self.receive_with_transfer())[0]
 
     async def receive_until(self, monotonic_deadline: float) -> typing.Optional[MessageClass]:
         """
-        This is a shortcut for receive_with_transfer_until(..)[0]; i.e, this method discards the transfer and
-        returns only the deserialized message.
+        This is a wrapper for :meth:`receive_with_transfer_until`
+        that drops the transfer info and returns only the message.
         """
         out = await self.receive_with_transfer_until(monotonic_deadline=monotonic_deadline)
         return out[0] if out else None
 
     async def receive_for(self, timeout: float) -> typing.Optional[MessageClass]:
         """
-        This is a shortcut for receive_with_transfer_for(..)[0]; i.e, this method discards the transfer and
-        returns only the deserialized message.
+        This is a wrapper for :meth:`receive_with_transfer_for`
+        that drops the transfer info and returns only the message.
         """
         out = await self.receive_with_transfer_for(timeout=timeout)
         return out[0] if out else None
@@ -124,11 +151,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
 
     async def receive_with_transfer(self) -> typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]:
         """
-        Blocks forever until a valid message is received. The received message will be returned along with the
-        transfer which delivered it.
-
-        If the underlying transport session is closed while the task is blocked inside,
-        raises :class:`pyuavcan.transport.ResourceClosedError` shortly after the session is closed.
+        This is like :meth:`receive_with_transfer_for` with an infinite timeout.
         """
         while True:
             out = await self.receive_with_transfer_for(_RECEIVE_TIMEOUT)
@@ -138,22 +161,25 @@ class Subscriber(MessageTypedSession[MessageClass]):
     async def receive_with_transfer_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
-        Blocks until either a valid message is received, in which case it is returned along with the transfer
-        which delivered it; or until the deadline is reached, in which case None is returned.
-        The method will never return None unless the deadline is reached.
-        If the deadline is in the past (e.g., zero), the method will non-blockingly check if there is any data;
-        if there is, it will be returned, otherwise None will be returned immediately.
+        This is like :meth:`receive_with_transfer_for` with deadline instead of timeout.
+        The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
+        A deadline that is in the past translates into negative timeout.
         """
         return await self.receive_with_transfer_for(timeout=monotonic_deadline - self._loop.time())
 
     async def receive_with_transfer_for(self, timeout: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
-        Blocks until either a valid message is received, in which case it is returned along with the transfer
-        which delivered it; or until the timeout is expired, in which case None is returned.
-        The method will never return None unless the timeout has expired.
-        If the timeout is non-positive, the method will non-blockingly check if there is any data; if there is,
-        it will be returned, otherwise None will be returned immediately.
+        Blocks until either a valid message is received,
+        in which case it is returned along with the transfer which delivered it;
+        or until the timeout is expired, in which case None is returned.
+
+        The method will never return None unless the timeout has expired;
+        in order words, a premature cancellation cannot occur.
+
+        If the timeout is non-positive, the method will non-blockingly check if there is any data;
+        if there is, it will be returned, otherwise None will be returned immediately.
+        It is guaranteed that no context switch will occur if the timeout is negative, as if the method was not async.
         """
         self._raise_if_closed_or_failed()
         try:
@@ -198,7 +224,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
     def sample_statistics(self) -> SubscriberStatistics:
         """
         Returns the statistical counters of this subscriber, including the statistical metrics of the underlying
-        transport session, which is shared among all subscribers of the same session specifier.
+        transport session, which is shared across all subscribers with the same session specifier.
         """
         return SubscriberStatistics(transport_session=self.transport_session.sample_statistics(),
                                     messages=self._rx.push_count,
@@ -206,11 +232,6 @@ class Subscriber(MessageTypedSession[MessageClass]):
                                     overruns=self._rx.overrun_count)
 
     def close(self) -> None:
-        """
-        If this is the last subscriber instance for this session specifier, the underlying implementation object and
-        its transport session instance will be closed. The user should explicitly close all objects before disposing
-        of the presentation layer instance.
-        """
         if not self._closed:
             self._closed = True
             self._impl.remove_listener(self._rx)

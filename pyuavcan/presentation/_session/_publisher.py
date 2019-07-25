@@ -21,8 +21,16 @@ _logger = logging.getLogger(__name__)
 
 class Publisher(MessageTypedSession[MessageClass]):
     """
-    Each task should request its own independent publisher instance from the presentation layer controller. Do not
-    share the same publisher instance across different tasks.
+    A task should request its own independent publisher instance from the presentation layer controller.
+    Do not share the same publisher instance across different tasks. This class implements the RAII pattern.
+
+    Implementation info: aLl publishers sharing the same session specifier also share the same
+    underlying implementation object containing the transport session which is reference counted and destroyed
+    automatically when the last publisher with that session specifier is closed;
+    the user code cannot access it and generally shouldn't care.
+    None of the settings of a publisher instance, such as send timeout or priority, can affect other publishers;
+    this does not apply to the transfer-ID counter objects though because they are transport-layer entities
+    and therefore are shared per session specifier.
     """
 
     #: Default value for :attr:`send_timeout`. The value is an implementation detail, not required by Specification.
@@ -31,6 +39,9 @@ class Publisher(MessageTypedSession[MessageClass]):
     def __init__(self,
                  impl: PublisherImpl[MessageClass],
                  loop: asyncio.AbstractEventLoop):
+        """
+        Do not call this directly! Use :meth:`Presentation.make_publisher`.
+        """
         self._maybe_impl: typing.Optional[PublisherImpl[MessageClass]] = impl
         self._dtype = impl.dtype                              # Permit usage after close()
         self._transport_session = impl.transport_session      # Same
@@ -51,15 +62,16 @@ class Publisher(MessageTypedSession[MessageClass]):
     @property
     def transfer_id_counter(self) -> OutgoingTransferIDCounter:
         """
-        Allows the caller to reach the transfer ID counter object. This may be useful in certain special cases
-        such as publication of time synchronization messages.
+        Allows the caller to reach the transfer-ID counter object of this session (shared per session specifier).
+        This may be useful in certain special cases such as publication of time synchronization messages,
+        where it may be necessary to override the transfer-ID manually.
         """
         return self._transfer_id_counter
 
     @property
     def priority(self) -> pyuavcan.transport.Priority:
         """
-        The priority level used for transfers published via this proxy instance.
+        The priority level used for transfers published via this instance.
         This parameter is configured separately per proxy instance; i.e., it is not shared across different publisher
         instances under the same session specifier.
         """
@@ -74,11 +86,12 @@ class Publisher(MessageTypedSession[MessageClass]):
     def send_timeout(self) -> float:
         """
         Every outgoing transfer initiated via this proxy instance will have to be sent in this amount of time.
-        If the time is exceeded, the attempt is aborted and False is returned.
+        If the time is exceeded, the attempt is aborted and False is returned. Read the transport layer docs for
+        an in-depth information on send timeout handling.
         The default is :attr:`DEFAULT_SEND_TIMEOUT`.
         The publication logic is roughly as follows::
 
-            return transport_session.send_until(message_transfer, self._loop.time() + self.send_timeout)
+            return transport_session.send_until(message_transfer, self.loop.time() + self.send_timeout)
         """
         return self._send_timeout
 
@@ -93,7 +106,7 @@ class Publisher(MessageTypedSession[MessageClass]):
     async def publish(self, message: MessageClass) -> bool:
         """
         Serializes and publishes the message object at the priority level selected earlier.
-        Should not be used simultaneously with publish_soon() because that makes the message ordering undefined.
+        Should not be used simultaneously with :meth:`publish_soon` because that makes the message ordering undefined.
         Returns False if the publication could not be completed in :attr:`send_timeout`, True otherwise.
         """
         if self._maybe_impl is None:
@@ -105,8 +118,11 @@ class Publisher(MessageTypedSession[MessageClass]):
 
     def publish_soon(self, message: MessageClass) -> None:
         """
-        Serializes and publishes the message object at the priority level selected earlier. Does so without blocking.
-        Should not be used simultaneously with publish() because that makes the message ordering undefined.
+        Serializes and publishes the message object at the priority level selected earlier.
+        Does so without blocking (observe that this method is not async).
+        Should not be used simultaneously with :meth:`publish` because that makes the message ordering undefined.
+        The send timeout is still in effect here -- if the operation cannot complete in the selected time,
+        send will be cancelled and a low-severity log message will be emitted.
         """
         async def executor() -> None:
             try:

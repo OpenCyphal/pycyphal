@@ -53,7 +53,7 @@ class ServiceRequestMetadata:
     client_node_id: int                           #: The response will be sent back to this node.
 
 
-#: Signature of the async request handler callable.
+#: Type of the async request handler callable.
 ServiceRequestHandler = typing.Callable[[ServiceRequestClass, ServiceRequestMetadata],
                                         typing.Awaitable[typing.Optional[ServiceResponseClass]]]
 

@@ -146,11 +146,6 @@ class Presentation:
         the finalizer when garbage collected if the user did not bother to do that manually.
         This logic follows the RAII pattern.
 
-        Whenever a message is received from a subject, it is deserialized once and the resulting object is
-        passed by reference into each subscriber instance. If there is more than one subscriber instance for
-        a subject, accidental mutation of the object by one consumer may affect other consumers. To avoid this,
-        the application should either avoid mutating received message objects or clone them beforehand.
-
         By default, the size of the input queue is unlimited; the user may provide a positive integer value to override
         this. If the user is not reading the received messages quickly enough and the size of the queue is limited
         (technically, it is always limited at least by the amount of the available memory),

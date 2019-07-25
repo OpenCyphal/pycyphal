@@ -113,6 +113,7 @@ class MessageTypedSession(PresentationSession[MessageClass]):
     def transport_session(self) -> pyuavcan.transport.Session:
         """
         The underlying transport session instance. Input for subscribers, output for publishers.
+        One instance per session specifier.
         """
         raise NotImplementedError
 
@@ -134,7 +135,7 @@ class ServiceTypedSession(PresentationSession[ServiceClass]):
     def input_transport_session(self) -> pyuavcan.transport.InputSession:
         """
         The underlying transport session instance used for the input transfers
-        (requests for servers, responses for clients).
+        (requests for servers, responses for clients). One instance per session specifier.
         """
         raise NotImplementedError
 

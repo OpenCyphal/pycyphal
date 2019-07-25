@@ -38,13 +38,13 @@ class ClientStatistics:
 
 class Client(ServiceTypedSession[ServiceClass]):
     """
-    Each task should request its own client instance from the presentation layer controller.
-    Do not share the same client instance across different tasks.
-    This class implements the RAII pattern.
+    A task should request its own client instance from the presentation layer controller.
+    Do not share the same client instance across different tasks. This class implements the RAII pattern.
 
-    Implementation detail: aLl client instances sharing the same session specifier also share the same
-    underlying implementation object which is reference counted and destroyed automatically when the
-    last client instance is closed; the user code cannot access it and generally shouldn't care.
+    Implementation info: aLl client instances sharing the same session specifier also share the same
+    underlying implementation object containing the transport sessions which is reference counted and
+    destroyed automatically when the last client instance is closed;
+    the user code cannot access it and generally shouldn't care.
     None of the settings of a client instance, such as timeout or priority, can affect other client instances;
     this does not apply to the transfer-ID counter objects though because they are transport-layer entities
     and therefore are shared per session specifier.
