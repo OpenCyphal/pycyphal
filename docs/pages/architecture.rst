@@ -7,10 +7,12 @@ Overview
 --------
 
 PyUAVCAN is a full-featured implementation of the `UAVCAN protocol stack <https://uavcan.org>`_
-intended for user-facing applications such as GUI software, diagnostic tools, automation scripts,
-and various R&D uses.
+intended for non-embedded, user-facing applications such as GUI software, diagnostic tools,
+automation scripts, prototypes, and various R&D cases.
 PyUAVCAN consists of a Python library (package) and a simple :abbr:`CLI (command line interface)`
 tool for basic diagnostics and shell script automation.
+
+It is designed to support **GNU/Linux**, **MS Windows**, and **OS X** as first-class target platforms.
 
 The reader should be familiar with the `UAVCAN specification <https://uavcan.org/specification>`_
 and `asynchronous programming in Python <https://docs.python.org/3/library/asyncio-task.html>`_
