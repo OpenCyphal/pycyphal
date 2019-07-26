@@ -120,11 +120,10 @@ def _unittest_slow_cli_demo_basic_usage(
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
 
-        # Larger timeout is needed here because it tends to randomly fail on slower systems.
         least_squares_response = json.loads(run_process(
             'pyuavcan', '-v', 'call', '42', '123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0',
-            '{points: [{x: 1, y: 2}, {x: 10, y: 20}]}', '--timeout=9',
-            '--local-node-id', '123', '--format', 'JSON', *_get_iface_args(), timeout=10.0
+            '{points: [{x: 1, y: 2}, {x: 10, y: 20}]}', '--timeout=5',
+            '--local-node-id', '123', '--format', 'JSON', *_get_iface_args(), timeout=6.0
         ))
         assert least_squares_response['123']['slope'] == pytest.approx(2.0)
         assert least_squares_response['123']['y_intercept'] == pytest.approx(0.0)
