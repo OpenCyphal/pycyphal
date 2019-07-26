@@ -121,7 +121,6 @@ def _unittest_slow_cli_demo_basic_usage(
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
 
         # Larger timeout is needed here because it tends to randomly fail on slower systems.
-        # Oh, why our computers are so slow?
         least_squares_response = json.loads(run_process(
             'pyuavcan', '-v', 'call', '42', '123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0',
             '{points: [{x: 1, y: 2}, {x: 10, y: 20}]}', '--timeout=9',

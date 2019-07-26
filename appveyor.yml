@@ -16,8 +16,7 @@ install:
   # GNU/Linux build config
   - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
   - sh: 'echo $extras_pkg'
-  - sh: 'sudo apt-get install $extras_pkg -y'
-  - sh: 'sudo apt-get install graphviz -y'
+  - sh: 'sudo apt-get install -y $extras_pkg graphviz can-utils'
 
   # Windows build config
   - cmd: 'SET PATH=%PYTHON%;%PATH%'
