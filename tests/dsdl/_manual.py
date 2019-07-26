@@ -64,10 +64,10 @@ def _unittest_slow_manual_a(generated_packages: typing.List[pyuavcan.dsdl.Genera
     assert obj.x[1].x[1].y == 1
     assert len(obj.y) == 0
 
-    with pytest.raises(AttributeError, match='nonexistent_'):
+    with pytest.raises(AttributeError, match='nonexistent'):
         pyuavcan.dsdl.get_attribute(obj, 'nonexistent')
 
-    with pytest.raises(AttributeError, match='nonexistent_'):
+    with pytest.raises(AttributeError, match='nonexistent'):
         pyuavcan.dsdl.set_attribute(obj, 'nonexistent', 123)
 
 
@@ -92,10 +92,10 @@ def _unittest_slow_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsd
     assert obj.mode == uavcan.node.Heartbeat_1_0.MODE_MAINTENANCE
     assert obj.vendor_specific_status_code == 0x7FFFF
 
-    with pytest.raises(AttributeError, match='nonexistent_'):
+    with pytest.raises(AttributeError, match='nonexistent'):
         pyuavcan.dsdl.get_attribute(obj, 'nonexistent')
 
-    with pytest.raises(AttributeError, match='nonexistent_'):
+    with pytest.raises(AttributeError, match='nonexistent'):
         pyuavcan.dsdl.set_attribute(obj, 'nonexistent', 123)
 
 
