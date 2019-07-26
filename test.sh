@@ -70,11 +70,6 @@ sudo ifconfig vcan0 up
 
 banner TEST EXECUTION
 
-# Launch the background candump logger.
-# Hide Heartbeat frames because we just don't care.
-candump -decaxta any | grep -iv 7D55 &
-candump_pid="$!"
-
 mkdir .test_dsdl_generated 2> /dev/null       # The directory must exist before coverage is invoked
 
 # TODO: run the tests with the minimal dependency configuration. Set up a new environment here.
@@ -93,8 +88,6 @@ coverage combine                                              || die "Could not 
 coverage xml -i -o .coverage.xml || die "Could not generate coverage XML (needed for SonarQube)"
 coverage html
 coverage report
-
-kill $candump_pid || echo "Couldn't kill candump. Who cares?"
 
 # ---------------------------------------------------------------------------------------------------------------------
 
