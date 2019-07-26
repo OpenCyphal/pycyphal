@@ -21,11 +21,12 @@ from . import _serialized_representation
 _logger = logging.getLogger(__name__)
 
 
-class CompositeObject(abc.ABC):
+class CompositeObject(abc.ABC):  # Members are surrounded with underscores to avoid collisions with DSDL attributes.
     """
-    Base class of an instance of a DSDL composite type.
-    The entities follow the naming pattern "_.*_" to avoid collisions with DSDL attributes.
+    This is the base class for all Python classes generated from DSDL definitions.
+    It does not have any public members.
     """
+
     # Type definition as provided by PyDSDL.
     _MODEL_: pydsdl.CompositeType
 
@@ -68,10 +69,15 @@ class CompositeObject(abc.ABC):
 
 class ServiceObject(CompositeObject):
     """
-    Base class of an instance of a DSDL service type. Remember that a service is a special case of a composite type.
+    This is the base class for all Python classes generated from DSDL service type definitions.
+    Observe that it inherits from the composite object class, just like the nested types Request and Response.
     """
-    # Implementations of the nested types provided in the generated implementations.
+    #: Nested request type. Inherits from :class:`CompositeObject`.
+    #: The base class provides a stub which is overridden in generated classes.
     Request: typing.Type[CompositeObject]
+
+    #: Nested response type. Inherits from :class:`CompositeObject`.
+    #: The base class provides a stub which is overridden in generated classes.
     Response: typing.Type[CompositeObject]
 
     _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_ = 0
@@ -85,6 +91,9 @@ class ServiceObject(CompositeObject):
 
 
 class FixedPortObject(abc.ABC):
+    """
+    This is the base class for all Python classes generated from DSDL types that have a fixed port identifier.
+    """
     _FIXED_PORT_ID_: int
 
 
@@ -110,10 +119,11 @@ CompositeObjectTypeVar = typing.TypeVar('CompositeObjectTypeVar', bound=Composit
 def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     """
     Constructs a serialized representation of the provided top-level object.
-    The resulting serialized representation is padded to one byte in accordance with the Specification.
+    The resulting serialized representation is padded to one byte in accordance with the UAVCAN specification.
     The constructed serialized representation is returned as a sequence of byte-aligned fragments which must be
-    concatenated in order to obtain the final representation. The objective of this model is to avoid copying data
-    into a temporary buffer when possible. Each yielded fragment is of type memoryview pointing to raw unsigned bytes.
+    concatenated in order to obtain the final representation.
+    The objective of this model is to avoid copying data into a temporary buffer when possible.
+    Each yielded fragment is of type :class:`memoryview` pointing to raw unsigned bytes.
     It is guaranteed that at least one fragment is always returned (which may be empty).
     """
     # TODO: update the Serializer class to emit an iterable of fragments.
@@ -127,17 +137,18 @@ def deserialize(dtype: typing.Type[CompositeObjectTypeVar],
                 fragmented_serialized_representation: typing.Sequence[memoryview]) \
         -> typing.Optional[CompositeObjectTypeVar]:
     """
-    Constructs a Python object representing an instance of the supplied data type from its serialized representation.
+    Constructs an instance of the supplied DSDL-generated data type from its serialized representation.
     Returns None if the provided serialized representation is invalid.
+
     This function will never raise an exception for invalid input data; the only possible outcome of an invalid data
     being supplied is None at the output. A raised exception can only indicate an error in the deserialization logic.
 
-    SAFETY WARNING: THE CONSTRUCTED OBJECT MAY CONTAIN ARRAYS REFERENCING THE MEMORY ALLOCATED FOR THE SERIALIZED
-                    REPRESENTATION. THEREFORE, IN ORDER TO AVOID UNINTENDED DATA CORRUPTION, THE CALLER MUST DESTROY
-                    ALL REFERENCES TO THE SERIALIZED REPRESENTATION IMMEDIATELY AFTER THE INVOCATION.
+    .. important:: The constructed object may contain arrays referencing the memory allocated for the serialized
+        representation. Therefore, in order to avoid unintended data corruption, the caller should destroy all
+        references to the serialized representation immediately after the invocation.
 
-    USAGE WARNING: The supplied fragments of the serialized representation should be writeable. If they are not,
-                   some of the array-typed fields of the constructed object may be read-only.
+    .. important:: The supplied fragments of the serialized representation should be writeable.
+        If they are not, some of the array-typed fields of the constructed object may be read-only.
     """
     # TODO: update the Deserializer class to support fragmented input.
     # join() on one element will create a copy, so that is very expensive.
@@ -158,7 +169,8 @@ def deserialize(dtype: typing.Type[CompositeObjectTypeVar],
 
 def get_model(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> pydsdl.CompositeType:
     """
-    This is the inverse of get_class().
+    Obtains a PyDSDL model of the supplied DSDL-generated class or its instance.
+    This is the inverse of :func:`get_class`.
     """
     # noinspection PyProtectedMember
     out = class_or_instance._MODEL_
@@ -168,10 +180,11 @@ def get_model(class_or_instance: typing.Union[typing.Type[CompositeObject], Comp
 
 def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
     """
-    This is the inverse of get_model().
-    Returns the native class implementing the specified DSDL type represented by its PyDSDL model object.
-    Assumes that the Python package containing the implementation is in the import lookup path set, otherwise
-    raises ImportError. If the package is found but it does not contain the requested type, raises AttributeError.
+    Returns a generated native class implementing the specified DSDL type represented by its PyDSDL model object.
+    This is the inverse of :func:`get_model`.
+
+    :raises: :class:`ImportError` if the generated package or subpackage cannot be found;
+        :class:`AttributeError` if the package is found but it does not contain the requested type.
     """
     if model.parent_service is not None:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
         out = get_class(model.parent_service)
@@ -199,24 +212,32 @@ def get_max_serialized_representation_size_bytes(class_or_instance: typing.Union
     return int(class_or_instance._MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_)
 
 
-def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[FixedPortObject], FixedPortObject]) -> int:
+def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[FixedPortObject],
+                                                      FixedPortObject]) -> typing.Optional[int]:
     """
-    Raises a TypeError if the type has no fixed port ID.
+    Returns None if the supplied type has no fixed port-ID.
     """
-    # noinspection PyProtectedMember
-    out = int(class_or_instance._FIXED_PORT_ID_)
-    if (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)) or \
-            isinstance(class_or_instance, CompositeObject):  # pragma: no branch
-        assert out == get_model(class_or_instance).fixed_port_id
-    return out
+    try:
+        # noinspection PyProtectedMember
+        out = int(class_or_instance._FIXED_PORT_ID_)
+    except TypeError:
+        return None
+    else:
+        if (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)) or \
+                isinstance(class_or_instance, CompositeObject):  # pragma: no branch
+            assert out == get_model(class_or_instance).fixed_port_id
+        return out
 
 
 def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject]],
                   name: str) -> typing.Any:
     """
-    DSDL type attributes whose names can't be represented in Python (such as ``def``) are suffixed with an underscore.
-    This function allows the caller to read arbitrary attributes referring to them by their original DSDL names,
-    e.g., ``def`` instead of ``def_``.
+    DSDL type attributes whose names can't be represented in Python (such as ``def`` or ``type``)
+    are suffixed with an underscore.
+    This function allows the caller to read arbitrary attributes referring to them by their original
+    DSDL names, e.g., ``def`` instead of ``def_``.
+
+    This function behaves like :func:`getattr` if the attribute does not exist.
     """
     try:
         return getattr(obj, name)
@@ -226,9 +247,12 @@ def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject
 
 def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
     """
-    DSDL type attributes whose names can't be represented in Python (such as ``def``) are suffixed with an underscore.
+    DSDL type attributes whose names can't be represented in Python (such as ``def`` or ``type``)
+    are suffixed with an underscore.
     This function allows the caller to assign arbitrary attributes referring to them by their original DSDL names,
     e.g., ``def`` instead of ``def_``.
+
+    If the attribute does not exist, raises :class:`AttributeError`.
     """
     suffixed = name + '_'
     # We can't call setattr() without asking first because if it doesn't exist it will be created,
@@ -238,4 +262,4 @@ def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
     elif hasattr(obj, suffixed):
         setattr(obj, suffixed, value)
     else:
-        raise AttributeError(suffixed)
+        raise AttributeError(name)

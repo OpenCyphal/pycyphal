@@ -286,7 +286,7 @@ class Presentation:
         A wrapper for :meth:`make_publisher` which uses the fixed subject-ID associated with this type.
         Raises a TypeError if the type has no fixed subject-ID.
         """
-        return self.make_publisher(dtype=dtype, subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
+        return self.make_publisher(dtype=dtype, subject_id=self._get_fixed_port_id(dtype))
 
     def make_subscriber_with_fixed_subject_id(self,
                                               dtype:          typing.Type[FixedPortMessageClass],
@@ -297,7 +297,7 @@ class Presentation:
         Raises a TypeError if the type has no fixed subject-ID.
         """
         return self.make_subscriber(dtype=dtype,
-                                    subject_id=pyuavcan.dsdl.get_fixed_port_id(dtype),
+                                    subject_id=self._get_fixed_port_id(dtype),
                                     queue_capacity=queue_capacity)
 
     def make_client_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int) \
@@ -307,7 +307,7 @@ class Presentation:
         Raises a TypeError if the type has no fixed service-ID.
         """
         return self.make_client(dtype=dtype,
-                                service_id=pyuavcan.dsdl.get_fixed_port_id(dtype),
+                                service_id=self._get_fixed_port_id(dtype),
                                 server_node_id=server_node_id)
 
     def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
@@ -316,7 +316,7 @@ class Presentation:
         A wrapper for :meth:`get_server` which uses the fixed service-ID associated with this type.
         Raises a TypeError if the type has no fixed service-ID.
         """
-        return self.get_server(dtype=dtype, service_id=pyuavcan.dsdl.get_fixed_port_id(dtype))
+        return self.get_server(dtype=dtype, service_id=self._get_fixed_port_id(dtype))
 
     # ----------------------------------------  AUXILIARY ENTITIES  ----------------------------------------
 
@@ -392,6 +392,13 @@ class Presentation:
     def _raise_if_closed(self) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(repr(self))
+
+    @staticmethod
+    def _get_fixed_port_id(dtype: typing.Type[pyuavcan.dsdl.FixedPortObject]) -> int:
+        port_id = pyuavcan.dsdl.get_fixed_port_id(dtype)
+        if port_id is None:
+            raise TypeError(f'{dtype} has no fixed port-ID')
+        return port_id
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, self.transport, sessions=self.sessions)

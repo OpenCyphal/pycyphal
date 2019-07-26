@@ -17,7 +17,26 @@ def to_builtin(obj: CompositeObject) -> typing.Dict[str, typing.Any]:
     """
     Accepts a DSDL object (an instance of a Python class auto-generated from a DSDL definition),
     returns its value represented using only native built-in types: dict, list, bool, int, float, str.
+    Ordering of dict elements is guaranteed to match the field ordering of the source definition.
+    Keys of dicts representing DSDL objects use the original unstropped names from the source DSDL definition;
+    e.g., ``if``, not ``if_``.
+
     This is intended for use with JSON, YAML, and other serialization formats.
+
+    >>> import tests; tests.dsdl.generate_packages()  # DSDL package generation not shown in this example.
+    [...]
+    >>> import json
+    >>> import uavcan.primitive.array
+    >>> json.dumps(to_builtin(uavcan.primitive.array.Integer32_1_0([-123, 456, 0])))
+    '{"value": [-123, 456, 0]}'
+    >>> import uavcan.register
+    >>> request = uavcan.register.Access_1_0.Request(
+    ...     uavcan.register.Name_1_0('my.register'),
+    ...     uavcan.register.Value_1_0(integer16=uavcan.primitive.array.Integer16_1_0([1, 2, +42, -10_000]))
+    ... )
+    >>> to_builtin(request)  # doctest: +NORMALIZE_WHITESPACE
+    {'name':  {'name': 'my.register'},
+     'value': {'integer16': {'value': [1, 2, 42, -10000]}}}
     """
     model = get_model(obj)
     _raise_if_service_type(model)
@@ -66,20 +85,46 @@ def _to_builtin_impl(obj:   typing.Union[CompositeObject, numpy.ndarray, str, bo
 def update_from_builtin(destination: CompositeObjectTypeVar,
                         source:      typing.Dict[str, typing.Any]) -> CompositeObjectTypeVar:
     """
-    Updates a provided DSDL object (an instance of a Python class auto-generated from a DSDL definition)
+    Updates the provided DSDL object (an instance of a Python class auto-generated from a DSDL definition)
     with the values from a native representation, where DSDL objects are represented as dicts, arrays
-    are lists, and primitives are represented by int/float/bool. This is the reverse of to_builtin().
-    Values that are not specified in the source are not updated (left at their original values).
+    are lists, and primitives are represented as int/float/bool. This is the reverse of :func:`to_builtin`.
+    Values that are not specified in the source are not updated (left at their original values),
+    so an empty source will leave the input object unchanged.
 
-    Source field names must match the names provided in the original DSDL definition (no stropping);
+    Source field names shall match the original unstropped names provided in the DSDL definition;
     e.g., `if`, not `if_`. If there is more than one variant specified for a union type, the last
     specified variant takes precedence.
 
-    Raises:
-        ValueError      If the provided source values cannot be applied to the destination object,
-                        also if the source contains fields that are not present in the destination object.
+    :param destination: The object to update. The update will be done in-place. If you don't want the source
+        object modified, clone it beforehand.
 
-        TypeError       If an entity of the source cannot be converted into the type expected by the destination.
+    :param source: The :class:`dict` instance containing the values to update the destination object with.
+
+    :return: A reference to destination (not a copy).
+
+    :raises: :class:`ValueError` if the provided source values cannot be applied to the destination object,
+        or if the source contains fields that are not present in the destination object.
+        :class:`TypeError` if an entity of the source cannot be converted into the type expected by the destination.
+
+    >>> import tests; tests.dsdl.generate_packages()  # DSDL package generation not shown in this example.
+    [...]
+    >>> import json
+    >>> import uavcan.primitive.array
+    >>> import uavcan.register
+    >>> request = uavcan.register.Access_1_0.Request(
+    ...     uavcan.register.Name_1_0('my.register'),
+    ...     uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0('Hello world!'))
+    ... )
+    >>> request
+    uavcan.register.Access.Request...name='my.register'...value='Hello world!'...
+    >>> update_from_builtin(request, {  # Switch the Value union from string to int16; keep the name unchanged.
+    ...     'value': {
+    ...         'integer16': {
+    ...             'value': [1, 2, 42, -10000]
+    ...         }
+    ...     }
+    ... })  # doctest: +NORMALIZE_WHITESPACE
+    uavcan.register.Access.Request...name='my.register'...value=[ 1, 2, 42,-10000]...
     """
     source = dict(source)   # Create copy to prevent mutation of the original
 

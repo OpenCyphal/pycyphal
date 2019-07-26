@@ -19,9 +19,10 @@ mypy        >= 0.720, < 2.0
 pycodestyle ~= 2.5
 pylint      ~= 2.3
 
-# Documentation.
-# TODO: Update Sphinx to master; see https://github.com/sphinx-doc/sphinx/issues/6574 and linked pull requests there.
-sphinx           ~= 2.1
+# Documentation. Sphinx is not the most reliable piece of software out there:
+#   - https://github.com/sphinx-doc/sphinx/issues/6574
+#   - https://github.com/sphinx-doc/sphinx/issues/6607
+git+https://github.com/tk0miya/sphinx@6574_autodoc_member_order_for_imports
 sphinx_rtd_theme == 0.4.3
 sphinxemoji      >= 0.1.4
 git+https://github.com/pavel-kirienko/sphinx-computron

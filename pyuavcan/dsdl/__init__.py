@@ -34,9 +34,9 @@ from ._composite_object import deserialize as deserialize
 from ._composite_object import CompositeObject as CompositeObject
 from ._composite_object import ServiceObject as ServiceObject
 
+from ._composite_object import FixedPortObject as FixedPortObject
 from ._composite_object import FixedPortCompositeObject as FixedPortCompositeObject
 from ._composite_object import FixedPortServiceObject as FixedPortServiceObject
-from ._composite_object import FixedPortObject as FixedPortObject
 
 from ._composite_object import get_fixed_port_id as get_fixed_port_id
 from ._composite_object import get_model as get_model
