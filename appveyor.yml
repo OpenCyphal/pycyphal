@@ -14,11 +14,14 @@ install:
   - pip install pyyaml coveralls  # Removed from requirements.txt because it's only useful on the CI.
 
   # GNU/Linux build config
-  - sh: "sudo apt-get install graphviz -y"
+  - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
+  - sh: 'echo $extras_pkg'
+  - sh: 'sudo apt-get install $extras_pkg -y'
+  - sh: 'sudo apt-get install graphviz -y'
 
   # Windows build config
-  - cmd: "SET PATH=%PYTHON%;%PATH%"
-  - cmd: "SET PATH=C:\\Python37-x64\\Scripts;%PATH%"
+  - cmd: 'SET PATH=%PYTHON%;%PATH%'
+  - cmd: 'SET PATH=C:\\Python37-x64\\Scripts;%PATH%'
 
 build: off
 

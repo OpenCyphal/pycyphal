@@ -9,8 +9,16 @@ python:
 #  - '3.8-dev'    # TODO: Compatibility issues with MyPy, see https://travis-ci.org/UAVCAN/pydsdl/jobs/519988157
 
 before_script:
-  - sudo apt-get install graphviz   # Needed for documentation build
-  - pip install coveralls  # Intentionally removed from requirements.txt because it's only useful in the CI environment.
+  # Set up support for vcan (virtual SocketCAN iface).
+  - export extras_pkg="linux-*-extra-$(uname -r)"
+  - echo $extras_pkg
+  - sudo apt-get install $extras_pkg -y
+
+  # Graphviz is needed for documentation build.
+  - sudo apt-get install graphviz
+
+  # Intentionally removed from requirements.txt because it's only useful in the CI environment.
+  - pip install coveralls
 
 script:
   - ./test.sh
