@@ -115,6 +115,14 @@ def _unittest_slow_cli_demo_basic_usage(
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
 
+        least_squares_response = json.loads(run_process(
+            'pyuavcan', '-vv', 'call', '42', '123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0',
+            '{points: [{x: 1, y: 2}, {x: 10, y: 20}]}', '--timeout=5',
+            '--local-node-id', '123', '--format', 'JSON', *_get_iface_args(), timeout=6.0
+        ))
+        assert least_squares_response['123']['slope'] == pytest.approx(2.0)
+        assert least_squares_response['123']['y_intercept'] == pytest.approx(0.0)
+
         # Next request - this fails if the EMITTED TRANSFER-ID MAP save/restore logic is not working.
         command_response = json.loads(run_process(
             'pyuavcan', '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0',
@@ -122,14 +130,6 @@ def _unittest_slow_cli_demo_basic_usage(
             '--local-node-id', '123', '--format', 'JSON', *_get_iface_args(), timeout=5.0
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
-
-        least_squares_response = json.loads(run_process(
-            'pyuavcan', '-v', 'call', '42', '123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0',
-            '{points: [{x: 1, y: 2}, {x: 10, y: 20}]}', '--timeout=5',
-            '--local-node-id', '123', '--format', 'JSON', *_get_iface_args(), timeout=6.0
-        ))
-        assert least_squares_response['123']['slope'] == pytest.approx(2.0)
-        assert least_squares_response['123']['y_intercept'] == pytest.approx(0.0)
 
         # We've just asked the node to terminate, wait for it here.
         out_demo_proc = demo_proc.wait(2.0)[1].splitlines()
