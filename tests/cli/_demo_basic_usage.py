@@ -46,7 +46,10 @@ def _unittest_slow_cli_demo_basic_usage(
     # Generate DSDL namespace "uavcan"
     run_process('pyuavcan', 'dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
-    demo_proc = BackgroundChildProcess('basic_usage.py')
+    demo_proc = BackgroundChildProcess(
+        'basic_usage.py',
+        environment_variables={'PYUAVCAN_LOGLEVEL': 'DEBUG'}
+    )
 
     proc_sub_heartbeat = BackgroundChildProcess(
         'pyuavcan', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited

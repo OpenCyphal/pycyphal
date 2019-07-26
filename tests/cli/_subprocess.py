@@ -77,13 +77,13 @@ class BackgroundChildProcess:
     >>> p.kill()
     """
 
-    def __init__(self, *args: str):
+    def __init__(self, *args: str, environment_variables: typing.Optional[typing.Dict[str, str]] = None):
         _logger.info('Starting background child process: %s', ' '.join(args))
         self._inferior = subprocess.Popen(args,
                                           stdout=subprocess.PIPE,
                                           stderr=sys.stderr,
                                           encoding='utf8',
-                                          env=_get_env())
+                                          env=_get_env(environment_variables))
 
     def wait(self, timeout: float, interrupt: typing.Optional[bool] = False) -> typing.Tuple[int, str]:
         if interrupt and self._inferior.poll() is None:
@@ -112,8 +112,9 @@ class BackgroundChildProcess:
             self._inferior.kill()
 
 
-def _get_env() -> typing.Dict[str, str]:
+def _get_env(environment_variables: typing.Optional[typing.Dict[str, str]] = None) -> typing.Dict[str, str]:
     env = os.environ.copy()
+    env.update(environment_variables or {})
     for p in [_CLI_TOOL_DIR, _DEMO_DIR]:  # Order matters; our directories are PREPENDED.
         env['PATH'] = os.pathsep.join([str(p), env['PATH']])
     return env
