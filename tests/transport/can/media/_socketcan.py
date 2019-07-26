@@ -25,11 +25,6 @@ async def _unittest_can_socketcan() -> None:
         assert list(available) == [], 'Must return an empty set when not on a Linux-based system'
         pytest.skip('SocketCAN test skipped because we do not seem to be on a Linux-based system')
 
-    if 0 != os.system('lsmod | grep -q vcan'):
-        # TODO Remove this check once we've stopped using Travis-CI. This is because Travis does not allow us to
-        # TODO load the vcan module, which is required for testing this media implementation.
-        pytest.skip('SocketCAN test skipped because the vcan module does not seem to be loaded')
-
     assert 'vcan0' in available, \
         'Either the interface listing method is not working or the environment is not configured correctly. ' \
         'Please ensure that the virtual SocketCAN interface "vcan0" is available, and its MTU is set to 64+8.'

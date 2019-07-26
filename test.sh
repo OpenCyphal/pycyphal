@@ -64,7 +64,7 @@ sudo modprobe vcan
 sudo ip link add dev vcan0 type vcan &> /dev/null
 sudo ip link set up vcan0            &> /dev/null
 sudo ip link set vcan0 mtu 72
-sudo ifconfig vcan0 up
+sudo ifconfig vcan0 up               || die "Could not bring up vcan0"
 
 # ---------------------------------------------------------------------------------------------------------------------
 

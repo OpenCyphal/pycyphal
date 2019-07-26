@@ -186,8 +186,6 @@ def _get_iface_args() -> typing.Sequence[str]:
     import pytest
     # Add more transports when redundancy is supported.
     if sys.platform == 'linux':
-        if 0 != os.system('lsmod | grep -q vcan'):
-            pytest.skip('Test skipped because the SocketCAN "vcan" module does not seem to be loaded. Please fix.')
         return '--socketcan=vcan0,8',   # The demo uses CAN 2.0!
     else:
         pytest.skip('CLI test skipped because it does not yet support non-GNU/Linux-based systems. Please fix.')
