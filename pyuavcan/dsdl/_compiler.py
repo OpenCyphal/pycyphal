@@ -18,19 +18,31 @@ import pydsdl
 import nunavut
 import nunavut.jinja
 
+#: Set of identifier names that are automatically stropped by the DSDL compiler.
+#: The stropping is necessary because these identifiers cannot be safely overridden in a Python program.
+#: Stropping is implemented by the addition of one underscore at the end of a disallowed identifier;
+#: e.g., ``if`` transforms into ``if_``. This applies to all entities, including module names.
+#: This is not to be confused with identifiers reserved by the DSDL language itself -- those are managed entirely
+#: by the DSDL front-end, this library is not concerned with that at all.
+ILLEGAL_IDENTIFIERS: typing.Set[str] = set(map(str, list(keyword.kwlist) + dir(builtins)))
 
 _AnyPath = typing.Union[str, pathlib.Path]
-
-_ILLEGAL_IDENTIFIERS: typing.Set[str] = set(map(str, list(keyword.kwlist) + dir(builtins)))
 
 _TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).absolute().parent / pathlib.Path('_templates')
 
 
 @dataclasses.dataclass(frozen=True)
 class GeneratedPackageInfo:
-    path:   pathlib.Path
+    #: Path to the directory that contains the top-level ``__init__.py``.
+    path: pathlib.Path
+
+    #: List of PyDSDL objects describing the source DSDL definitions.
+    #: This can be used for arbitrarily complex introspection and reflection.
     models: typing.List[pydsdl.CompositeType]
-    name:   str
+
+    #: The name of the generated package, which is the same as the name of the DSDL root namespace unless
+    #: the name had to be stropped. See :data:`ILLEGAL_IDENTIFIERS`.
+    name: str
 
 
 def generate_package(package_parent_directory:        _AnyPath,
@@ -39,25 +51,82 @@ def generate_package(package_parent_directory:        _AnyPath,
                      allow_unregulated_fixed_port_id: bool = False) -> GeneratedPackageInfo:
     """
     This function runs the DSDL compiler, converting a specified DSDL root namespace into a Python package.
+    In the generated package, DSDL namespaces are represented as Python subpackages, DSDL types as Python classes,
+    type version numbers as class name suffixes separated via underscores (like ``Type_1_0``),
+    constants as class attributes, fields as instance properties. For a more detailed
+    information on how to use generated types, just generate them and read the resulting code -- it is made
+    to be human-readable. You can even automatically generate documentation for it using Sphinx!
 
-    :param package_parent_directory: A Python package is a directory containing ``__init__.py``. The generated
-        package will be placed into this directory. For example, if this argument equals ``/foo/bar``,
-        and the DSDL root namespace name is ``uavcan``, the top-level ``__init__.py`` of the generated package
-        will end up in ``/foo/bar/uavcan/__init__.py``.
+    Generated packages do not automatically import their nested subpackages. For example, if the application
+    needs to use ``uavcan.node.Heartbeat.1.0``, it has to ``import uavcan.node`` explicitly; doing just
+    ``import uavcan`` is not sufficient.
 
-    :param root_namespace_directory:
+    If the source definition contains identifiers, type names, namespace components, or other entities whose
+    names are listed in :data:`ILLEGAL_IDENTIFIERS`, the compiler applies stropping by suffixing such entities
+    with an underscore ``_``.
 
-    :param lookup_directories:
+    A small subset of applications may require access to a generated entity without knowing in advance whether
+    its name is a reserved identifier or not. To simplify usage, this submodule provides helper functions
+    :func:`pyuavcan.dsdl.get_attribute` and :func:`pyuavcan.dsdl.set_attribute` that provide access to generated
+    class/object attributes using their original names before stropping. Please read their docs for details.
+    Likewise, the function :func:`pyuavcan.dsdl.get_model` can find a generated type even if any of its name
+    components are stropped; e.g., a DSDL type ``str.Type.1.0`` would be imported as ``str_.Type_1_0``.
 
-    :param allow_unregulated_fixed_port_id:
+    The above, however, is irrelevant for an application that does not require genericity (vast majority of
+    applications don't), so a much easier approach in that case is just to look at the generated code and see
+    if there are any stropped identifiers in it, and then just use appropriate names statically.
 
-    :return:
+    Having generated a package, consider adding it to the include path set of your Python IDE to take advantage
+    of code completion and static type checking.
+
+    :param package_parent_directory: The generated Python package directory will be placed into this directory.
+        For example, if this argument equals ``foo/bar``, and the DSDL root namespace name is ``uavcan``,
+        the top-level ``__init__.py`` of the generated package will end up in ``foo/bar/uavcan/__init__.py``.
+        The directory tree will be created automatically if it does not exist (like ``mkdir -p``).
+        If the destination exists, it will be silently written over.
+
+    :param root_namespace_directory: The source DSDL root namespace directory path. The last component of the path
+        is the name of the root namespace. For example, to generate package for the root namespace ``uavcan``,
+        the path would be like ``foo/bar/uavcan``.
+
+    :param lookup_directories: An iterable of DSDL root namespace directory paths where to search for referred DSDL
+        definitions. The format of each path is the same as for the previous parameter; i.e., the last component
+        of each path is a DSDL root namespace name. If you are generating code for a vendor-specific DSDL root
+        namespace, make sure to provide at least the path to the standard ``uavcan`` namespace directory here.
+
+    :param allow_unregulated_fixed_port_id: If True, the DSDL processing front-end would not reject unregulated
+        data types with fixed port-ID. If you are not sure what it means, do not use it, and read the UAVCAN
+        specification first. The default is False.
+
+    :return: An instance of :class:`GeneratedPackageInfo` describing the generated package.
+
+    :raises: :class:`OSError` if required operations on the file system could not be performed;
+        ``pydsdl.InvalidDefinitionError`` if the source DSDL definitions are invalid;
+        ``pydsdl.InternalError`` if there is a bug in the DSDL processing front-end;
+        :class:`ValueError` if any of the arguments are otherwise invalid.
+
+    The following table is an excerpt from the UAVCAN specification. Observe that *unregulated fixed port identifiers*
+    are prohibited by default, but it can be overridden.
+
+    +-------+---------------------------------------------------+----------------------------------------------+
+    |Scope  | Regulated                                         | Unregulated                                  |
+    +=======+===================================================+==============================================+
+    |Public |Standard and contributed (e.g., vendor-specific)   |Definitions distributed separately from the   |
+    |       |definitions. Fixed port identifiers are allowed;   |UAVCAN specification. Fixed port identifiers  |
+    |       |they are called *"regulated port-IDs"*.            |are *not allowed*.                            |
+    +-------+---------------------------------------------------+----------------------------------------------+
+    |Private|Nonexistent category.                              |Definitions that are not available to anyone  |
+    |       |                                                   |except their authors. Fixed port identifiers  |
+    |       |                                                   |are permitted (although not recommended); they|
+    |       |                                                   |are called *"unregulated fixed port-IDs"*.    |
+    +-------+---------------------------------------------------+----------------------------------------------+
     """
     # Read the DSDL definitions
     composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
                                             lookup_directories=list(map(str, lookup_directories)),
                                             allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
     root_namespace_name, = set(map(lambda x: x.root_namespace, composite_types))  # type: str,
+    # TODO: the root namespace name may have to be stropped. For example, if it's named "if", it'd break.
 
     # Template primitives
     filters = {
@@ -77,6 +146,7 @@ def generate_package(package_parent_directory:        _AnyPath,
     tests['saturated'] = _test_if_saturated
 
     # Generate code
+    # TODO: add support for stropping; see https://github.com/UAVCAN/nunavut/issues/23.
     root_ns = nunavut.build_namespace_tree(types=composite_types,
                                            root_namespace_dir=root_namespace_directory,
                                            output_dir=str(package_parent_directory),
@@ -96,7 +166,7 @@ def generate_package(package_parent_directory:        _AnyPath,
 
 
 def _make_identifier(a: pydsdl.Attribute) -> str:
-    out = (a.name + '_') if a.name in _ILLEGAL_IDENTIFIERS else a.name
+    out = (a.name + '_') if a.name in ILLEGAL_IDENTIFIERS else a.name
     assert isinstance(out, str)
     return out
 
