@@ -140,6 +140,18 @@ import {{ n }}
 {%- set full_class_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
 # noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection
 class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}CompositeObject):
+    """
+    Generated property settings use relaxed type signatures, accepting a large variety of
+    possible representations of the value, which are automatically converted to a well-defined
+    internal representation. When accessing a property, this strict well-defined internal
+    representation is always returned. The implicit strictification enables more precise static
+    type analysis.
+
+    The value returned by the __repr__() method may be invariant to some of the field values,
+    and its format is not guaranteed to be stable. Therefore, the returned string representation
+    can be used only for displaying purposes; any kind of automation build on top of that will
+    be fragile and prone to mismaintenance.
+    """
 {#-
  # CONSTANTS
 -#}
@@ -295,7 +307,16 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     {%- if type is UnionType -%}
         ]
     {%- endif -%}:
-        """{{ f }}"""
+        """
+        {{ f }}
+    {%- if f.data_type is VariableLengthArrayType and f.data_type.string_like %}
+        DSDL does not support strings natively yet. To interpret this array as a string,
+        use tobytes() to convert the NumPy array to bytes, and then decode() to convert bytes to string:
+        .{{ f|id }}.tobytes().decode()
+        When assigning a string to this property, no manual conversion is necessary (it will happen automatically).
+    {%- endif %}
+        The setter raises ValueError if the supplied value exceeds the valid range or otherwise inapplicable.
+        """
         return self._{{ f|id }}
 
     @{{ f|id }}.setter
