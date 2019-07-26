@@ -147,11 +147,13 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                     # Anonymous transfer - no reconstruction needed
                     self._statistics.transfers += 1
                     self._statistics.payload_bytes += len(frame.padded_payload)
-                    return pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
-                                                           priority=canid.priority,
-                                                           transfer_id=frame.transfer_id,
-                                                           fragmented_payload=[frame.padded_payload],
-                                                           source_node_id=None)
+                    out = pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
+                                                          priority=canid.priority,
+                                                          transfer_id=frame.transfer_id,
+                                                          fragmented_payload=[frame.padded_payload],
+                                                          source_node_id=None)
+                    _logger.debug('%s: Received anonymous transfer: %s; current stats: %s', self, out, self._statistics)
+                    return out
 
             elif isinstance(canid, _identifier.ServiceCANID):
                 assert isinstance(self._specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
@@ -168,9 +170,12 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
             if isinstance(result, _transfer_receiver.TransferReceptionError):
                 self._statistics.errors += 1
                 self._statistics.reception_error_counters[result] += 1
+                _logger.debug('%s: Rejecting CAN frame %s because %s; current stats: %s',
+                              self, frame, result, self._statistics)
             elif isinstance(result, pyuavcan.transport.TransferFrom):
                 self._statistics.transfers += 1
                 self._statistics.payload_bytes += sum(map(len, result.fragmented_payload))
+                _logger.debug('%s: Received transfer: %s; current stats: %s', self, result, self._statistics)
                 return result
             elif result is None:
                 pass        # Nothing to do - expecting more frames
