@@ -29,6 +29,11 @@ Subscribe to the specified subject, receive and print messages into stdout.
 This command does not instantiate a local node; the bus is accessed directly
 at the presentation layer, so many instances can be cheaply executed
 concurrently to subscribe to multiple message streams.
+
+Each emitted output unit is a key-value mapping where the number of elements
+equals the number of subjects the command is asked to subscribe to; the keys
+are subject-IDs and values are the received message objects.
+The output format is configurable.
 '''.strip()
 
     @property

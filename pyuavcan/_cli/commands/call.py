@@ -31,6 +31,10 @@ class CallCommand(Command):
         return '''
 Invoke a service using a specified request object and print the response.
 The local node will also publish heartbeat and respond to GetInfo.
+
+Each emitted output unit is a key-value mapping of one element where the
+key is the service-ID and the value is the received response object.
+The output format is configurable.
 '''.strip()
 
     @property
