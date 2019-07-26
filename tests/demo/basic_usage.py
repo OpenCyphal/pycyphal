@@ -169,6 +169,7 @@ class DemoApplication:
             text=f'Least squares request from {metadata.client_node_id} time={metadata.timestamp.system} '
                  f'tid={metadata.transfer_id} prio={metadata.priority}',
         )
+        print('Least squares request:', request, file=sys.stderr)
         self._pub_diagnostic_record.publish_soon(diagnostic_msg)
 
         # This is just the business logic.
