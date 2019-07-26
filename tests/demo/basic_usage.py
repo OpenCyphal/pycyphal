@@ -163,17 +163,13 @@ class DemoApplication:
         If this handler raises an exception, it will be suppressed and logged, and no response will be sent back.
         Notice that this is an async function.
         """
-        # Publish the message like this. Here, we use await, blocking this task until the message is pushed down to
-        # the media layer. This normally should not be done from within a service handler because it may make the
-        # service call to time out. Instead use publish_soon(), as shown below.
+        # Publish the message asynchronously using publish_soon() because we don't want to block the service handler.
         diagnostic_msg = uavcan.diagnostic.Record_1_0(
             severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.DEBUG),
             text=f'Least squares request from {metadata.client_node_id} time={metadata.timestamp.system} '
                  f'tid={metadata.transfer_id} prio={metadata.priority}',
         )
-        if not await self._pub_diagnostic_record.publish(diagnostic_msg):
-            print('Diagnostic message could not be sent in', self._pub_diagnostic_record.send_timeout, 'seconds',
-                  file=sys.stderr)
+        self._pub_diagnostic_record.publish_soon(diagnostic_msg)
 
         # This is just the business logic.
         sum_x = sum(map(lambda p: p.x, request.points))
@@ -238,6 +234,8 @@ class DemoApplication:
         """
         print('TEMPERATURE', msg.kelvin - 273.15, 'C')
 
+        # Publish the message synchronously, using await, blocking this task until the message is pushed down to
+        # the media layer.
         if not await self._pub_diagnostic_record.publish(uavcan.diagnostic.Record_1_0(
             severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.TRACE),
             text=f'Temperature {msg.kelvin:0.3f} K from {metadata.source_node_id} '
