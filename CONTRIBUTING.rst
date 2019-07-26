@@ -93,7 +93,7 @@ visibility scope of the module is sufficiently narrow.
 
 ::
 
-    from pyuavcan.transport import Transport    # Don't do this.
+    from pyuavcan.transport import Transport    # Avoid this.
     import pyuavcan.transport                   # Good. Use like: pyuavcan.transport.Transport
 
 
@@ -109,21 +109,22 @@ Example: ``start()`` -- do nothing if already started; ``close()`` -- do nothing
 
 API functions and methods that contain the following parameters should adhere to the semantic naming conventions:
 
-+-----------------------------------------+-------------------------+---------------------------------------------------------------------------------------------------+
-|Type                                     | Name                    | Purpose                                                                                           |
-+=========================================+=========================+===================================================================================================+
-|``pydsdl.*Type``                         | ``model``               | PyDSDL type model (descriptor).                                                                   |
-+-----------------------------------------+-------------------------+---------------------------------------------------------------------------------------------------+
-|``pyuavcan.dsdl.*Object``                | ``obj``                 | Instance of a generated class implementing a DSDL type.                                           |
-+-----------------------------------------+-------------------------+---------------------------------------------------------------------------------------------------+
-|``typing.Type[pyuavcan.dsdl.*Object]``   | ``dtype``               | Generated class implementing a DSDL type.                                                         |
-+-----------------------------------------+-------------------------+---------------------------------------------------------------------------------------------------+
-|``float``                                | ``monotonic_deadline``  | Abort operation if not completed **by** this time. Time system is ``AbstractEventLoop.time()``.   |
-+-----------------------------------------+-------------------------+---------------------------------------------------------------------------------------------------+
-|``float``                                | ``timeout``             | Abort operation if not completed **in** this time.                                                |
-+-----------------------------------------+-------------------------+---------------------------------------------------------------------------------------------------+
-|``int``                                  | ``node_id``             | A node identifier.                                                                                |
-+-----------------------------------------+-------------------------+---------------------------------------------------------------------------------------------------+
++-----------------------------------------+-------------------------+-----------------------------------------------------------+
+|Type                                     | Name                    | Purpose                                                   |
++=========================================+=========================+===========================================================+
+|``pydsdl.*Type``                         | ``model``               | PyDSDL type model (descriptor).                           |
++-----------------------------------------+-------------------------+-----------------------------------------------------------+
+|``pyuavcan.dsdl.*Object``                | ``obj``                 | Instance of a generated class implementing a DSDL type.   |
++-----------------------------------------+-------------------------+-----------------------------------------------------------+
+|``typing.Type[pyuavcan.dsdl.*Object]``   | ``dtype``               | Generated class implementing a DSDL type.                 |
++-----------------------------------------+-------------------------+-----------------------------------------------------------+
+|``float``                                | ``monotonic_deadline``  | Abort operation if not completed **by** this time.        |
+|                                         |                         | Time system is ``AbstractEventLoop.time()``.              |
++-----------------------------------------+-------------------------+-----------------------------------------------------------+
+|``float``                                | ``timeout``             | Abort operation if not completed **in** this time.        |
++-----------------------------------------+-------------------------+-----------------------------------------------------------+
+|``int``                                  | ``node_id``             | A node identifier.                                        |
++-----------------------------------------+-------------------------+-----------------------------------------------------------+
 
 
 Documentation
@@ -172,8 +173,7 @@ After the tests are executed, it is possible to run the `SonarQube <https://sona
 ``sonar-scanner -Dsonar.login=<project-key>`` (the project key is a 40-digit long hexadecimal number).
 The scanner should not be run before the full general test suite since it relies on its coverage data.
 
-When writing tests, aim to cover 100% of the code in the branch coverage mode,
-excepting the DSDL generated packages (at least for now)
+When writing tests, aim to cover at least 90% of branches, excepting the DSDL generated packages (at least for now)
 (the DSDL test data is synthesized at run time).
 
 Write unit tests as functions without arguments prefixed with ``_unittest_``;
