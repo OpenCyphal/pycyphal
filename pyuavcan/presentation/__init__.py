@@ -131,8 +131,8 @@ from ._session import ServiceRequestMetadata as ServiceRequestMetadata
 from ._session import ServiceRequestHandler as ServiceRequestHandler
 
 from ._session import PresentationSession as PresentationSession
-from ._session import MessageTypedSession as MessageTypedSession
-from ._session import ServiceTypedSession as ServiceTypedSession
+from ._session import MessagePresentationSession as MessagePresentationSession
+from ._session import ServicePresentationSession as ServicePresentationSession
 
 from ._session import OutgoingTransferIDCounter as OutgoingTransferIDCounter
 from ._session import PresentationSessionClosedError as PresentationSessionClosedError
