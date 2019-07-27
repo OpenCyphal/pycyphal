@@ -14,10 +14,13 @@ from ._output_session import LoopbackOutputSession
 
 class LoopbackTransport(pyuavcan.transport.Transport):
     """
-    The loopback transport is intended for testing and API usage demonstrations.
+    The loopback transport is intended for basic testing and API usage demonstrations.
     It works by short-circuiting input and output sessions together as if there was an underlying network.
-    Service transfers are a special case: in order to allow usage of service transfers, the loopback
-    transport flips the role from SERVER to CLIENT and back when routing the short-circuit data.
+    Service transfers are a special case: in order to allow usage of service calls,
+    the transport flips the role from SERVER to CLIENT and back when routing the short-circuit data.
+
+    It is not possible to exchange data between different nodes using this transport.
+    The only valid usage is sending and receiving same data on the same node.
     """
 
     def __init__(self, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
