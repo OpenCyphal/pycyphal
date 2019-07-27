@@ -4,4 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._socketcan import SocketCANMedia as SocketCANMedia
+from sys import platform as _platform
+
+if _platform == 'linux':
+    from ._socketcan import SocketCANMedia as SocketCANMedia
