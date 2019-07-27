@@ -6,5 +6,6 @@
 
 from ._redundant_transport import RedundantTransport as RedundantTransport
 
+from ._redundant_session import RedundantSession as RedundantSession
 from ._redundant_session import RedundantOutputSession as RedundantOutputSession
 from ._redundant_session import RedundantInputSession as RedundantInputSession

@@ -6,14 +6,20 @@
 
 import abc
 import typing
+import logging
 import pyuavcan.transport
+
+
+_logger = logging.getLogger(__name__)
 
 
 class TransportSpecific(abc.ABC):
     @property
     @abc.abstractmethod
     def transport(self) -> pyuavcan.transport.Transport:
-        """The transport over which the entity has been or to be transferred."""
+        """
+        The transport over which the entity has been or to be transferred.
+        """
         raise NotImplementedError
 
 
@@ -32,14 +38,25 @@ class TransportSpecificFeedback(pyuavcan.transport.Feedback, TransportSpecific):
 
 
 class RedundantSession(abc.ABC):
-    def add_transport(self, transport: pyuavcan.transport.Transport) -> None:
+    @property
+    @abc.abstractmethod
+    def inferiors(self) -> typing.Sequence[pyuavcan.transport.Session]:
         raise NotImplementedError
 
-    def remove_transport(self, transport: pyuavcan.transport.Transport) -> None:
+    @abc.abstractmethod
+    def add_inferior(self, transport: pyuavcan.transport.Transport) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def remove_inferior(self, transport: pyuavcan.transport.Transport) -> None:
         raise NotImplementedError
 
     def close(self) -> None:
-        raise NotImplementedError
+        for s in self.inferiors:
+            try:
+                s.close()
+            except Exception as ex:
+                _logger.exception('%s could not close inferior %s: %s', self, s, ex)
 
 
 class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
