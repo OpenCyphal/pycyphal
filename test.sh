@@ -38,7 +38,9 @@ function banner()
 
 banner ENVIRONMENT CONFIGURATION
 
-cd "${0%/*}" || die "Couldn't cd"  # cd to this script's directory
+python -c "import sys; exit('linux' not in sys.platform)" || die "This script can only be run on GNU/Linux"
+
+cd "${0%/*}" || die "Couldn't cd into this script's directory"
 
 # Extend PYTHONPATH to make sitecustomize.py/usercustomize.py importable.
 if [[ -z "${PYTHONPATH:-}" ]]
@@ -51,19 +53,18 @@ echo "PYTHONPATH: $PYTHONPATH"
 
 export PYTHONASYNCIODEBUG=1
 
-which dot || die "Please install graphviz. On Debian-based: apt-get install graphviz"
+command -v dot || die "Please install graphviz. On Debian-based: apt-get install graphviz"
 
 ./clean.sh || die "Failed to clean"
 
 pip install -r requirements.txt || die "Could not install dependencies"
 
 # Initializing the system-wide test environment.
-sudo modprobe can
-sudo modprobe can_raw
-sudo modprobe vcan
+sudo modprobe can can_raw vcan
 sudo ip link add dev vcan0 type vcan &> /dev/null
 sudo ip link set up vcan0            &> /dev/null
-sudo ip link set vcan0 mtu 72
+sudo ifconfig vcan0 down             &> /dev/null
+sudo ip link set vcan0 mtu 72        || die "Could not configure MTU on vcan0"
 sudo ifconfig vcan0 up               || die "Could not bring up vcan0"
 
 # ---------------------------------------------------------------------------------------------------------------------
