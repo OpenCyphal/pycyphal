@@ -4,7 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import sys
 import enum
 import time
 import errno
@@ -21,7 +20,6 @@ import pyuavcan.transport.can.media as _media
 
 
 _logger = logging.getLogger(__name__)
-_IS_LINUX = sys.platform == 'linux'
 
 
 class SocketCANMedia(_media.Media):
@@ -46,9 +44,6 @@ class SocketCANMedia(_media.Media):
 
         :param loop: The event loop to use; None to select the default event loop.
         """
-        if not _IS_LINUX:
-            raise RuntimeError('SocketCAN is available only on Linux-based OS')
-
         self._mtu = int(mtu)
         if self._mtu not in self.VALID_MTU_SET:
             raise ValueError(f'Invalid MTU: {self._mtu} not in {self.VALID_MTU_SET}')
@@ -67,6 +62,8 @@ class SocketCANMedia(_media.Media):
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._loopback_enabled = False
+
+        self._ancillary_data_buffer_size = socket.CMSG_SPACE(_TIMEVAL_STRUCT.size)  # Used for recvmsg()
 
         super(SocketCANMedia, self).__init__()
 
@@ -167,7 +164,8 @@ class SocketCANMedia(_media.Media):
 
     def _read_frame(self, ts_mono_ns: int) -> _media.TimestampedDataFrame:
         while True:
-            data, ancdata, msg_flags, _addr = self._sock.recvmsg(self._native_frame_size, _ANCILLARY_DATA_BUFFER_SIZE)
+            data, ancdata, msg_flags, _addr = self._sock.recvmsg(self._native_frame_size,
+                                                                 self._ancillary_data_buffer_size)
             assert msg_flags & socket.MSG_TRUNC == 0, 'The data buffer is not large enough'
             assert msg_flags & socket.MSG_CTRUNC == 0, 'The ancillary data buffer is not large enough'
 
@@ -224,18 +222,15 @@ class SocketCANMedia(_media.Media):
     def list_available_interface_names() -> typing.Iterable[str]:
         import re
         import subprocess
-        if _IS_LINUX:
-            try:
-                proc = subprocess.run('ip link show', check=True, timeout=1, text=True, shell=True, capture_output=True)
-                return re.findall(r'\d+?: ([a-z0-9]+?): <[^>]*UP[^>]*>.*\n *link/can', proc.stdout)
-            except Exception as ex:
-                _logger.info('Could not scrape the output of ip link show, using the fallback method: %s', ex,
-                             exc_info=True)
-                with open('/proc/net/dev') as f:
-                    out = [line.split(':')[0].strip() for line in f if ':' in line and 'can' in line]
-                return sorted(out, key=lambda x: 'can' in x, reverse=True)
-        else:
-            return []
+        try:
+            proc = subprocess.run('ip link show', check=True, timeout=1, text=True, shell=True, capture_output=True)
+            return re.findall(r'\d+?: ([a-z0-9]+?): <[^>]*UP[^>]*>.*\n *link/can', proc.stdout)
+        except Exception as ex:
+            _logger.info('Could not scrape the output of ip link show, using the fallback method: %s', ex,
+                         exc_info=True)
+            with open('/proc/net/dev') as f:
+                out = [line.split(':')[0].strip() for line in f if ':' in line and 'can' in line]
+            return sorted(out, key=lambda x: 'can' in x, reverse=True)
 
 
 class _NativeFrameDataCapacity(enum.IntEnum):
@@ -258,9 +253,6 @@ class _NativeFrameDataCapacity(enum.IntEnum):
 # };
 _FRAME_HEADER_STRUCT = struct.Struct('=IBB2x')  # Using standard size because the native definition relies on stdint.h
 _TIMEVAL_STRUCT = struct.Struct('@Ll')          # Using native size because the native definition uses plain integers
-
-# Used for recvmsg()
-_ANCILLARY_DATA_BUFFER_SIZE = socket.CMSG_SPACE(_TIMEVAL_STRUCT.size)
 
 # From the Linux kernel; not exposed via the Python's socket module
 _SO_TIMESTAMP = 29

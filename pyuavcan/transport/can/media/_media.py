@@ -18,7 +18,7 @@ class Media(abc.ABC):
     platform (e.g., SocketCAN is Linux-only) and the availability of third-party software (e.g., PySerial may be
     needed for SLCAN). The media protocol requires that the Python packages containing such media implementations
     must be always importable. Whether all necessary dependencies are satisfied and requirements are met should be
-    checked during class instantiation, not at the time of the import.
+    checked later, not at the time of the import.
     """
 
     #: The frames handler is non-blocking and non-yielding; returns immediately.
