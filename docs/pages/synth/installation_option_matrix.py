@@ -27,7 +27,6 @@ print('If you want to know what exactly you are installing, read on.', end='\n\n
 @dataclasses.dataclass(frozen=True)
 class TransportOption:
     name:        str
-    module_name: str
     class_name:  str
     extras:      typing.Dict[str, str]
 
@@ -47,13 +46,12 @@ for cls in pyuavcan.util.iter_descendants(pyuavcan.transport.Transport):
     transport_class_name = transport_module_name + '.' + cls.__name__
 
     transport_options.append(TransportOption(name=transport_name,
-                                             module_name=transport_module_name,
                                              class_name=transport_class_name,
                                              extras=relevant_extras))
 
 for to in transport_options:
     print(f'{to.name} transport' + HEADER_SUFFIX)
-    print(f'This transport is implemented in the module :mod:`{to.module_name}`, class :class:`{to.class_name}`.')
+    print(f'This transport is implemented by :class:`{to.class_name}`.')
     if to.extras:
         print('The following installation options are available:')
         print()

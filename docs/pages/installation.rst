@@ -5,8 +5,8 @@ Installation
 
 PyUAVCAN requires **Python v3.7** or newer.
 
-Install the library from PIP; the package name is ``pyuavcan``.
-When invoking PIP, specify the installation options (also known as "package extras", in Python speak |:snake:|)
+Install the library from PyPI; the package name is ``pyuavcan``.
+Specify the installation options (known as "package extras" in parseltongue |:snake:|)
 depending on which UAVCAN transports and features you are planning to use.
 
 Installation options
@@ -15,7 +15,7 @@ Installation options
 Most of the installation options enable a particular transport or a particular media sublayer implementation
 for a transport.
 Those options are named uniformly following the pattern
-``transport_<transport-name>_<media-name>``, for example: ``transport_ieee802154_xbee``.
+``transport_<transport-name>_<media-name>``, for example: ``transport_can_pythoncan``.
 If there is no media sub-layer, or the media dependencies are shared, or there is a common
 installation option for all media types of the transport, the media part is omitted from the key;
 for example: ``transport_serial``.
@@ -46,11 +46,11 @@ and make sure to include at least its core dependencies, which are:
 Legacy considerations
 ---------------------
 
-A similar library titled ``uavcan`` (note the lack of the ``py`` prefix) is also available from PIP,
+A legacy library titled ``uavcan`` (note the lack of the ``py`` prefix) is also available from PyPI,
 which implements an early experimental version of the protocol known as UAVCAN v0
 that is no longer recommended for new designs.
-It should not be confused with this library (titled ``pyuavcan``, mind the difference)
-which implements the long-term stable version of the protocol known as UAVCAN v1.
+It should not be confused with this library which implements the long-term stable version
+of the protocol known as UAVCAN v1.
 
 Having both ``pyuavcan`` and the old ``uavcan`` libraries installed in the same environment is not recommended,
 because PyUAVCAN generates Python packages from DSDL namespaces,

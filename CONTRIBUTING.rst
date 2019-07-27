@@ -16,11 +16,11 @@ When adding new tools and such, please put all their configuration there to keep
 All shippable entities are located exclusively inside the directory ``pyuavcan/``.
 The entirety of the directory is shipped.
 
-The submodule ``tests/public_regulated_data_types/`` is needed only for testing and documentation building.
+The directory ``tests/public_regulated_data_types/`` is needed only for testing and documentation building.
 It should be kept reasonably up-to-date, but remember that it does not affect the final product in any way.
 We no longer ship DSDL namespaces with code for reasons explained in the user documentation.
 
-Please desist from adding any new submodules.
+Please desist from adding any new VCS submodules or subtrees.
 
 The usage demo scripts that are included in the user documentation are located under ``tests/demo/``.
 This is probably mildly surprising since one would expect to find docs under ``docs/``,
