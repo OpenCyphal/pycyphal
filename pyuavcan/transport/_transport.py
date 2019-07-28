@@ -56,8 +56,7 @@ class Transport(abc.ABC):
         In that case, the value is None. In general, None is used to represent unspecified node-ID across the library.
 
         While in the anonymous mode, some transports may choose to operate in a particular mode to facilitate
-        plug-and-play node ID allocation. For example, a CAN transport may disable automatic retransmission as
-        dictated by the Specification.
+        plug-and-play node ID allocation. For example, a CAN transport may disable automatic retransmission.
 
         Some transports, however, may initialize with a node-ID already set if such is dictated by
         the media configuration (for example, a UDP transfer may initialize with the node-ID

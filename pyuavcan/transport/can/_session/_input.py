@@ -21,8 +21,8 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class CANInputStatistics(pyuavcan.transport.Statistics):
-    reception_error_counters: typing.Dict[_transfer_receiver.TransferReceptionError, int] = \
-        dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_receiver.TransferReceptionError})
+    reception_error_counters: typing.Dict[_transfer_receiver.TransferReceptionErrorID, int] = \
+        dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_receiver.TransferReceptionErrorID})
 
 
 class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
@@ -167,7 +167,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
 
             receiver = self._receivers[source_node_id]
             result = receiver.process_frame(canid.priority, source_node_id, frame, self._transfer_id_timeout_ns)
-            if isinstance(result, _transfer_receiver.TransferReceptionError):
+            if isinstance(result, _transfer_receiver.TransferReceptionErrorID):
                 self._statistics.errors += 1
                 self._statistics.reception_error_counters[result] += 1
                 _logger.debug('%s: Rejecting CAN frame %s because %s; current stats: %s',

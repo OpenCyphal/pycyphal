@@ -25,24 +25,25 @@ _logger = logging.getLogger(__name__)
 @dataclasses.dataclass
 class CANFrameStatistics:
     """
-    Invariants::
+    These stats are unrelated to the abstract transport layer interface; they are purely CAN-specific.
+    The following invariants apply::
 
         sent >= loopback_requested
         received >= received_uavcan >= received_uavcan_accepted
         loopback_requested >= loopback_returned
     """
 
-    sent: int = 0                       #: Number of frames sent to the media instance successfully
-    unsent: int = 0                     #: Number of frames that were supposed to be sent but timed out
+    sent: int = 0    #: Number of frames sent to the media instance successfully.
+    unsent: int = 0  #: Number of frames that were supposed to be sent but timed out.
 
-    received:                 int = 0   #: Number of genuine frames received from the bus (loopback not included)
-    received_uavcan:          int = 0   #: Subset of the above that happen to be valid UAVCAN frames
-    received_uavcan_accepted: int = 0   #: Subset of the above that are useful for the local application
+    received:                 int = 0  #: Number of genuine frames received from the bus (loopback not included).
+    received_uavcan:          int = 0  #: Subset of the above that happen to be valid UAVCAN frames.
+    received_uavcan_accepted: int = 0  #: Subset of the above that are useful for the local application.
 
-    loopback_requested: int = 0         #: Number of sent frames that we requested loopback for
-    loopback_returned:  int = 0         #: Number of loopback frames received from the media instance (not from the bus)
+    loopback_requested: int = 0  #: Number of sent frames that we requested loopback for.
+    loopback_returned:  int = 0  #: Number of loopback frames received from the media instance (not from the bus).
 
-    errored: int = 0                    #: How many frames of any kind could not be successfully processed
+    errored: int = 0  #: How many frames of any kind could not be successfully processed.
 
     @property
     def media_acceptance_filtering_efficiency(self) -> float:
@@ -61,6 +62,7 @@ class CANFrameStatistics:
         The value may transiently increase to small values if the counters happened to be sampled while the loopback
         frames reside in the transmission queue of the CAN controller awaiting being processed. If the value remains
         positive for long periods of time, the media driver is probably misbehaving.
+        A negative value means that the media instance is sending more loopback frames than requested (bad).
         """
         return self.loopback_requested - self.loopback_returned
 
@@ -122,10 +124,19 @@ class CANTransport(pyuavcan.transport.Transport):
 
     @property
     def frame_payload_capacity(self) -> int:
+        """
+        This is the MTU minus one; i.e., 7 for CAN 2.0.
+        """
         return self._frame_payload_capacity
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
+        """
+        The local node-ID is always unset (None) by default.
+        While a node-ID is not assigned, automatic retransmission in the media implementation is disabled to
+        facilitate plug-and-play node-ID allocation.
+        Anonymous transfers are always single-frame transfers, so their payload carrying capacity is very limited.
+        """
         return self._local_node_id
 
     def set_local_node_id(self, node_id: int) -> None:
