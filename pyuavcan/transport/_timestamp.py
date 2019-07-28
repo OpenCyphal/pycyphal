@@ -23,8 +23,8 @@ class Timestamp:
 
     def __init__(self, system_ns: int, monotonic_ns: int) -> None:
         """
-        :param system_ns:       Belongs to the domain of time.time_ns().
-        :param monotonic_ns:    Belongs to the domain of time.monotonic_ns().
+        :param system_ns:       Belongs to the domain of :func:`time.time_ns`.
+        :param monotonic_ns:    Belongs to the domain of :func:`time.monotonic_ns`.
         """
         self._system_ns = int(system_ns)
         self._monotonic_ns = int(monotonic_ns)

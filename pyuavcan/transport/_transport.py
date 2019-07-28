@@ -72,12 +72,15 @@ class Transport(abc.ABC):
         """
         Closes all active sessions, underlying media instances, and other resources related to this transport instance.
 
-        After a transport is closed, none of its methods can be used. The behavior of methods invoked on a closed
-        transport is undefined; subsequent calls to close() will have no effect.
+        After a transport is closed, none of its methods nor dependent objects (such as sessions) can be used.
+        Methods invoked on a closed transport or any of its dependent objects should immediately
+        raise :class:`pyuavcan.transport.ResourceClosedError`.
+        Subsequent calls to close() will have no effect.
 
-        Failure to close any of the resources does not prevent the method from closing other resources (best effort
-        policy). Related exceptions may be suppressed and logged; the last occurred exception may be raised after
-        all resources are closed.
+        Failure to close any of the resources does not prevent the method from closing other resources
+        (best effort policy).
+        Related exceptions may be suppressed and logged; the last occurred exception may be raised after
+        all resources are closed if such behavior is considered to be meaningful.
         """
         raise NotImplementedError
 
