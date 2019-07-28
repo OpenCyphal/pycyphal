@@ -6,6 +6,9 @@
 
 # noinspection PyUnresolvedReferences
 r"""
+Presentation layer overview
++++++++++++++++++++++++++++
+
 The presentation layer provides a high-level object-oriented interface on top of the transport layer.
 This is the level of abstraction presented to the user of the library.
 That is, when creating a new publisher or another network session, the calling code will interact
@@ -25,6 +28,10 @@ For example, when the application creates more than one subscriber for a given s
 layer will distribute received messages into every subscription instance requested by the application.
 Likewise, different components of the application may publish messages over the same subject
 or invoke the same service on the same remote server node.
+
+
+Usage example
++++++++++++++
 
 The main entity of the presentation layer is the class :class:`pyuavcan.presentation.Presentation`;
 the following demo shows how it can be used.
