@@ -15,7 +15,6 @@ class PayloadMetadata:
     Normally, it does not participate in runtime data management at the transport layer or lower.
     """
 
-    #: Maximum value of the 64-bit data type hash.
     DATA_TYPE_HASH_MASK = 2 ** 64 - 1
 
     #: Obtainable from DSDL; https://forum.uavcan.org/t/alternative-transport-protocols/324.

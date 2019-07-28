@@ -16,17 +16,26 @@ from ._payload_metadata import PayloadMetadata
 
 
 class Feedback(abc.ABC):
+    """
+    Abstract output transfer feedback for transmission timestamping.
+    If feedback is enabled for an output session, an instance of this class is delivered back to the application
+    via a callback soon after the first frame of the transfer is emitted.
+
+    The upper layers can match a feedback object with its transfer by the transfer creation timestamp.
+    """
+
     @property
     @abc.abstractmethod
     def original_transfer_timestamp(self) -> Timestamp:
         """
-        This is the timestamp value supplied when the transfer was created. It can be used by the upper layers
-        to match each transmitted transfer with its transmission timestamp.
+        This is the timestamp value of the original outgoing transfer object;
+        normally it is the transfer creation timestamp.
+        This value can be used by the upper layers to match each transmitted transfer with its transmission timestamp.
         Why do we use timestamp for matching? This is because:
 
-        - Priority is rarely unique, hence unfit for matching.
+        - The priority is rarely unique, hence unfit for matching.
 
-        - Transfer ID may be modified by the transport layer by computing its modulus, which is difficult to
+        - Transfer-ID may be modified by the transport layer by computing its modulus, which is difficult to
           reliably account for in the application, especially in heterogeneous redundant transports with multiple
           publishers per session.
 
@@ -39,10 +48,11 @@ class Feedback(abc.ABC):
     @abc.abstractmethod
     def first_frame_transmission_timestamp(self) -> Timestamp:
         """
-        This is the best-effort transmission timestamp. Transport implementations are not required to adhere to
-        any specific accuracy goals. They may use either software or hardware timestamping under the hood,
+        This is the best-effort estimate of the transmission timestamp.
+        Transport implementations are not required to adhere to any specific accuracy goals.
+        They may use either software or hardware timestamping under the hood,
         depending on the capabilities of the underlying media driver.
-        The timestamp of a multi-frame transfer equals the timestamp of its first frame.
+        The timestamp of a multi-frame transfer is the timestamp of its first frame.
         The overall stack latency can be computed by subtracting the original transfer timestamp from this value.
         """
         raise NotImplementedError
@@ -51,31 +61,45 @@ class Feedback(abc.ABC):
 @dataclasses.dataclass(frozen=True)
 class SessionSpecifier:
     """
-    This is like a regular session specifier except that we assume that one end of a session terminates at the
-    local node. If the remote node ID is not set, then for output sessions this implies broadcast and for input
-    sessions this implies promiscuity. If set, then output sessions will be unicast to that node ID and input
-    sessions will ignore all transfers except those originating from the specified node ID.
+    This is like a regular session specifier (https://forum.uavcan.org/t/alternative-transport-protocols/324)
+    except that we assume that one end of a session terminates at the local node.
+
+    If the remote node-ID is not set, then for output sessions this implies broadcast and for input
+    sessions this implies promiscuity.
+    If it is set, then output sessions will be unicast to that node-ID and input sessions will ignore
+    all transfers except those originating from the specified node-ID.
     """
+    #: See :class:`pyuavcan.transport.DataSpecifier`.
     data_specifier: DataSpecifier
+
+    #: If not None: output sessions are unicast to that node-ID, and input sessions ignore all transfers
+    #: except those that originate from the specified remote node-ID.
+    #: If None: output sessions are broadcast and input sessions are promiscuous.
     remote_node_id: typing.Optional[int]
 
     def __post_init__(self) -> None:
         if self.remote_node_id is not None and self.remote_node_id < 0:
-            raise ValueError(f'Invalid remote node ID: {self.remote_node_id}')
+            raise ValueError(f'Invalid remote node-ID: {self.remote_node_id}')
 
 
 @dataclasses.dataclass
 class Statistics:
-    transfers:     int = 0  # Number of UAVCAN transfers
-    frames:        int = 0  # Number of UAVCAN frames
-    payload_bytes: int = 0  # Number of transport layer payload bytes, i.e., not including transport metadata or padding
-    errors:        int = 0  # Number of failures of any kind, even if they are also logged using other means
-    drops:         int = 0  # Number of frames lost to buffer overruns and expired deadlines
+    """
+    Abstract transport-agnostic session statistics.
+    Transport implementations are encouraged to extend this class to add more transport-specific information.
+    The statistical counters start from zero when a session is first instantiated.
+    """
+    transfers:     int = 0  #: UAVCAN transfer count.
+    frames:        int = 0  #: UAVCAN transport frame count (CAN frames, UDP packets, wireless frames, etc).
+    payload_bytes: int = 0  #: Transport layer payload bytes, i.e., not including transport metadata or padding.
+    errors:        int = 0  #: Failures of any kind, even if they are also logged using other means.
+    drops:         int = 0  #: Frames lost to buffer overruns and expired deadlines.
 
     def __eq__(self, other: object) -> bool:
         """
-        The statistic comparison operator is defined for any combination of derived classes. It compares only
-        those fields that are available in both operands, ignoring unique fields. This is useful for testing.
+        The statistic comparison operator is defined for any combination of derived classes.
+        It compares only those fields that are available in both operands, ignoring unique fields.
+        This is useful for testing.
         """
         if isinstance(other, Statistics):
             fds = set(f.name for f in dataclasses.fields(self)) & set(f.name for f in dataclasses.fields(other))
@@ -86,30 +110,26 @@ class Statistics:
 
 class Session(abc.ABC):
     """
+    Abstract session base class. This is further specialized by input and output.
     Properties should not raise exceptions.
     """
 
     @property
     @abc.abstractmethod
     def specifier(self) -> SessionSpecifier:
-        """
-        Data specifier plus the remote node ID. The latter is optional.
-        """
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
     def payload_metadata(self) -> PayloadMetadata:
-        """
-        Identifies the properties of the payload exchanged through this session.
-        """
         raise NotImplementedError
 
     @abc.abstractmethod
     def sample_statistics(self) -> Statistics:
         """
-        The current approximated statistic sample. We say "approximated" because we do not require the implementations
-        to sample the statistical counters atomically, although normally they should strive to do so when possible.
+        Samples and returns the approximated statistics.
+        We say "approximated" because implementations are not required to sample the counters atomically,
+        although normally they should strive to do so when possible.
         """
         raise NotImplementedError
 
@@ -133,14 +153,21 @@ class Session(abc.ABC):
 
 # noinspection PyAbstractClass
 class InputSession(Session):
+    """
+    Either promiscuous or selective input session.
+    The configuration cannot be changed once instantiated.
+
+    Users shall never construct instances themselves;
+    instead, the factory method :meth:`pyuavcan.transport.Transport.get_input_session` shall be used.
+    """
     @abc.abstractmethod
     async def receive_until(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
         """
-        Return None if the transfer is not received before the deadline [second].
+        Attempts to receive the transfer before the deadline [second].
+        Returns None if the transfer is not received before the deadline.
         The deadline is compared against :meth:`asyncio.AbstractEventLoop.time`.
-        If a transfer is received before the deadline, behaves like the non-timeout-capable version.
-        If the deadline is in the past, checks once if there is a transfer and then returns immediately, either the
-        transfer or None if there is none.
+        If the deadline is in the past, checks once if there is a transfer and then returns immediately
+        without context switching.
         """
         raise NotImplementedError
 
@@ -148,39 +175,63 @@ class InputSession(Session):
     @abc.abstractmethod
     def transfer_id_timeout(self) -> float:
         """
-        By default, the transfer ID timeout is initialized with the default value provided in the Specification.
-        It can be overridden using this interface if necessary (rarely is). The units are seconds.
+        By default, the transfer-ID timeout [second] is initialized with the default value provided in the
+        UAVCAN specification.
+        It can be overridden using this interface if necessary (rarely is).
+        An attempt to assign an invalid timestamp value raises :class:`ValueError`.
         """
         raise NotImplementedError
 
     @transfer_id_timeout.setter
     def transfer_id_timeout(self, value: float) -> None:
-        """
-        Raises ValueError if the value is not positive.
-        """
         raise NotImplementedError
 
     @property
     def source_node_id(self) -> typing.Optional[int]:
+        """
+        Alias for ``.specifier.remote_node_id``.
+        For promiscuous sessions this is always None.
+        For selective sessions this is the node-ID of the source.
+        """
         return self.specifier.remote_node_id
 
 
 # noinspection PyAbstractClass
 class OutputSession(Session):
+    """
+    Either broadcast or unicast output session.
+    The configuration cannot be changed once instantiated.
+
+    Users shall never construct instances themselves;
+    instead, the factory method :meth:`pyuavcan.transport.Transport.get_output_session` shall be used.
+    """
     @abc.abstractmethod
     def enable_feedback(self, handler: typing.Callable[[Feedback], None]) -> None:
         """
-        Output feedback is disabled by default. It can be enabled by invoking this method. While the feedback is
-        enabled, the performance of the transport may be reduced, possibly resulting in higher input/output
-        latencies and increased CPU load.
+        The output feedback feature makes the transport invoke the specified handler soon after the first
+        frame of each transfer originating from this session instance is delivered to the network interface
+        or similar underlying logic (not to be confused with delivery to the destination node!).
+        This is designed for transmission timestamping, which in turn is necessary for certain protocol features
+        such as highly accurate time synchronization.
 
+        The handler is invoked with one argument of type :class:`pyuavcan.transport.Feedback`
+        which contains the timing information.
         The transport implementation is allowed to invoke the handler from any context, possibly from another thread.
         The caller should ensure adequate synchronization.
+        The actual delay between the emission of the first frame and invocation of the callback is
+        implementation-defined, but implementations should strive to minimize it.
 
-        We avoid full-transfer loopback on purpose because that would make it impossible for us to timestamp outgoing
-        transfers independently per transport interface (assuming redundant transports here), since the transport
-        aggregation logic would deduplicate redundant received transfers, thus making the valuable timing
-        information unavailable.
+        Output feedback is disabled by default. It can be enabled by invoking this method.
+        While the feedback is enabled, the performance of the transport in general (not just this session instance)
+        may be reduced, possibly resulting in higher input/output latencies and increased CPU load.
+
+        When feedback is already enabled at the time of invocation, this method removes the old callback
+        and installs the new one instead.
+
+        Design motivation: We avoid full-transfer loopback such as used in Libuavcan (at least in its old version)
+        on purpose because that would make it impossible for us to timestamp outgoing transfers independently
+        per transport interface (assuming redundant transports here), since the transport aggregation logic
+        would deduplicate redundant received transfers, thus making the valuable timing information unavailable.
         """
         raise NotImplementedError
 
@@ -188,28 +239,36 @@ class OutputSession(Session):
     def disable_feedback(self) -> None:
         """
         Restores the original state.
+        Does nothing if the callback is already disabled.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     async def send_until(self, transfer: Transfer, monotonic_deadline: float) -> bool:
         """
-        Send the transfer; block if necessary until the specified deadline [second].
+        Sends the transfer; block if necessary until the specified deadline [second].
         Return when transmission is completed, in which case the return value is True;
         or return when the deadline is reached, in which case the return value is False.
-        In the case of timeout, a multi-frame transfer may be emitted partially.
-        If the deadline is in the past, attempt to send the frames anyway as long as that doesn't involve blocking.
+        In the case of timeout, a multi-frame transfer may be emitted partially,
+        thereby rendering the receiving end unable to process it.
+        If the deadline is in the past, the method attempts to send the frames anyway as long as that
+        doesn't involve blocking (i.e., task context switching).
 
         Some transports or media sub-layers may be unable to guarantee transmission strictly before the deadline;
         for example, that may be the case if there is an additional buffering layer under the transport/media
         implementation (e.g., that could be the case with SLCAN-interfaced CAN bus adapters, IEEE 802.15.4 radios,
         and so on, where the data is pushed through an intermediary interface and briefly buffered again before
-        being pushed onto the media). This is a design limitation imposed by the underlying non-real-time platform
-        that Python runs on; it is considered acceptable since PyUAVCAN is designed for soft-real-time applications
-        at most.
+        being pushed onto the media).
+        This is a design limitation imposed by the underlying non-real-time platform that Python runs on;
+        it is considered acceptable since PyUAVCAN is designed for soft-real-time applications at most.
         """
         raise NotImplementedError
 
     @property
     def destination_node_id(self) -> typing.Optional[int]:
+        """
+        Alias for ``.specifier.remote_node_id``.
+        For broadcast sessions this is always None.
+        For unicast sessions this is the node-ID of the destination.
+        """
         return self.specifier.remote_node_id

@@ -21,7 +21,7 @@ class ProtocolParameters:
 
     Normally, the values should never change for a particular transport instance.
     This is not a hard guarantee, however.
-    For example, the redundant transport aggregator may return a different set of parameters after
+    For example, a redundant transport aggregator may return a different set of parameters after
     the set of aggregated transports is changed (e.g., a transport is added or removed).
     """
     transfer_id_modulo:                           int   #: E.g., 32 for CAN, 2**56 for UDP.
@@ -46,9 +46,6 @@ class Transport(abc.ABC):
     @property
     @abc.abstractmethod
     def protocol_parameters(self) -> ProtocolParameters:
-        """
-        See :class:`ProtocolParameters`.
-        """
         raise NotImplementedError
 
     @property
@@ -98,6 +95,7 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     def get_input_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
         """
+        This factory method is the only valid way of constructing input session instances.
         The transport will always return the same instance unless there is no session object with the requested
         specifier, in which case it will be created and stored internally until closed.
         The payload metadata parameter is used only when a new instance is created, ignored otherwise.
@@ -108,6 +106,7 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     def get_output_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
         """
+        This factory method is the only valid way of constructing output session instances.
         The transport will always return the same instance unless there is no session object with the requested
         specifier, in which case it will be created and stored internally until closed.
         The payload metadata parameter is used only when a new instance is created, ignored otherwise.
@@ -119,7 +118,7 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     def input_sessions(self) -> typing.Sequence[InputSession]:
         """
-        Immutable view of all active input sessions.
+        Immutable view of all input sessions that are currently open.
         """
         raise NotImplementedError
 
@@ -127,7 +126,7 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     def output_sessions(self) -> typing.Sequence[OutputSession]:
         """
-        Immutable view of all active output sessions.
+        Immutable view of all output sessions that are currently open.
         """
         raise NotImplementedError
 
