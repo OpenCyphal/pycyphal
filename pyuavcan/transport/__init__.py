@@ -27,7 +27,8 @@ The following transfer metadata taxonomy table is the essence of the model;
 one can map it onto aforementioned auxiliary definitions:
 
 +----------------------+-------------------+-------------------+---------------------------------------+
-|Trn. metadata taxonomy|     Messages      |     Services      | Comments                              |
+|      Transfer        |                   |                   |                                       |
+|  metadata taxonomy   |     Messages      |     Services      |              Comments                 |
 +======================+===================+===================+=======================================+
 |                      |          Transfer priority            | Not used above the transport layer.   |
 +----------+-----------+-------------------+-------------------+---------------------------------------+
