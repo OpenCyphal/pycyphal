@@ -105,13 +105,15 @@ autoclass_content = 'bysource'
 autodoc_member_order = 'bysource'
 autodoc_inherit_docstrings = False
 autodoc_default_options = {
-    'members':              True,
-    'undoc-members':        True,
-    'special-members':      '__init__',
-    'imported-members':     True,
-    'inherited-members':    False,
-    'show-inheritance':     True,
-    'member-order':         'bysource',
+    'members':          True,
+    'undoc-members':    True,
+    'special-members':  True,
+    'imported-members': True,
+    'show-inheritance': True,
+    'member-order':     'bysource',
+    'exclude-members':
+        '__weakref__, __module__, __dict__, __dataclass_fields__, __dataclass_params__, __annotations__, '
+        '__abstractmethods__, __orig_bases__, __parameters__',
 }
 
 # For sphinx.ext.todo_
