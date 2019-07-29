@@ -103,12 +103,13 @@ master_doc = 'index'
 # Autodoc
 autoclass_content = 'bysource'
 autodoc_member_order = 'bysource'
+autodoc_inherit_docstrings = False
 autodoc_default_options = {
     'members':              True,
     'undoc-members':        True,
     'special-members':      '__init__',
     'imported-members':     True,
-    'inherited-members':    True,
+    'inherited-members':    False,
     'show-inheritance':     True,
     'member-order':         'bysource',
 }
