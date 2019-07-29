@@ -13,9 +13,9 @@ from ._frame import FrameFormat
 
 @dataclasses.dataclass(frozen=True)
 class FilterConfiguration:
-    identifier: int
-    mask:       int
-    format:     typing.Optional[FrameFormat]  # None means no preference
+    identifier: int                             #: CAN ID value.
+    mask:       int                             #: Mask applies to the identifier only.
+    format:     typing.Optional[FrameFormat]    #: None means no preference.
 
     def __post_init__(self) -> None:
         max_bit_length = 2 ** self.identifier_bit_length - 1
@@ -37,6 +37,7 @@ class FilterConfiguration:
     @property
     def rank(self) -> int:
         """
+        This is the number of set bits in the mask.
         This is a part of the CAN acceptance filter configuration optimization algorithm;
         see :func:`optimize_filter_configurations`.
 
@@ -44,6 +45,8 @@ class FilterConfiguration:
         in order to discourage merger of configurations of different frame types, since they are hard to
         support in certain CAN controllers. The effect of this is that we guarantee that an ambivalent filter
         configuration will never appear if the controller has at least two acceptance filters.
+        Negative rank is computed by subtracting the number of bits in the CAN ID
+        (or 29 if the filter accepts both base and extended identifiers) from the original rank.
         """
         mask_mask = 2 ** self.identifier_bit_length - 1
         rank = bin(self.mask & mask_mask).count('1')
@@ -75,7 +78,7 @@ class FilterConfiguration:
 
 
 def optimize_filter_configurations(configurations: typing.Iterable[FilterConfiguration],
-                                   target_number_of_configurations: int) -> typing.List[FilterConfiguration]:
+                                   target_number_of_configurations: int) -> typing.Sequence[FilterConfiguration]:
     """
     Implements the CAN acceptance filter configuration optimization algorithm described in the Specification.
     The algorithm was originally proposed by P. Kirienko and I. Sheremet.
@@ -90,7 +93,7 @@ def optimize_filter_configurations(configurations: typing.Iterable[FilterConfigu
     The function returns the input set unchanged in this case.
     If the target number of configurations is not positive, a ValueError is raised.
 
-    The time complexity of this implementation is ``O(K!)`` (sorry).
+    The time complexity of this implementation is ``O(K!)``; it should be optimized.
     """
     if target_number_of_configurations < 1:
         raise ValueError(f'The number of configurations must be positive; found {target_number_of_configurations}')

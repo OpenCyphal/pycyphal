@@ -79,10 +79,12 @@ class Timestamp:
 
     @property
     def system(self) -> decimal.Decimal:
+        """System time in seconds."""
         return self._ns_to_second(self._system_ns)
 
     @property
     def monotonic(self) -> decimal.Decimal:
+        """Monotonic time in seconds."""
         return self._ns_to_second(self._monotonic_ns)
 
     @property

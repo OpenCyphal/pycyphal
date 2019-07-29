@@ -14,13 +14,13 @@ CAN 2.0 is essentially treated as CAN FD with MTU of 8 bytes.
 """
 
 # Please keep the elements well-ordered because the order is reflected in the docs.
-# Core components.
+# Core components first.
 from ._can import CANTransport as CANTransport
 
 from ._session import CANInputSession as CANInputSession
 from ._session import CANOutputSession as CANOutputSession
 
-# Statistics
+# Statistics.
 from ._can import CANFrameStatistics as CANFrameStatistics
 
 from ._session import CANInputStatistics as CANInputStatistics

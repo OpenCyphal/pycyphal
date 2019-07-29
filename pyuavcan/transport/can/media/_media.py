@@ -14,11 +14,11 @@ from ._filter import FilterConfiguration
 
 class Media(abc.ABC):
     """
+    CAN hardware abstraction interface.
+
     It is recognized that the availability of some of the media implementations may be conditional on the type of
     platform (e.g., SocketCAN is Linux-only) and the availability of third-party software (e.g., PySerial may be
-    needed for SLCAN). The media protocol requires that the Python packages containing such media implementations
-    must be always importable. Whether all necessary dependencies are satisfied and requirements are met should be
-    checked later, not at the time of the import.
+    needed for SLCAN). Python packages containing such media implementations must be always importable.
     """
 
     #: The frames handler is non-blocking and non-yielding; returns immediately.
@@ -33,9 +33,9 @@ class Media(abc.ABC):
         """
         The name of the interface on the local system. For example:
 
-        - ``can0`` for SocketCAN
-        - ``/dev/serial/by-id/usb-Zubax_Robotics_Zubax_Babel_28002E0001514D593833302000000000-if00`` for SLCAN
-        - ``COM9`` for SLCAN
+        - ``can0`` for SocketCAN;
+        - ``/dev/serial/by-id/usb-Zubax_Robotics_Zubax_Babel_28002E0001514D593833302000000000-if00`` for SLCAN;
+        - ``COM9`` for SLCAN.
         """
         raise NotImplementedError
 
@@ -43,7 +43,7 @@ class Media(abc.ABC):
     @abc.abstractmethod
     def mtu(self) -> int:
         """
-        Must belong to :attr:`VALID_MTU_SET`.
+        The value belongs to :attr:`VALID_MTU_SET`.
         Observe that the media interface doesn't care whether we're using CAN FD or CAN 2.0 because the UAVCAN
         CAN transport protocol itself doesn't care. The transport simply does not distinguish them.
         """
@@ -53,27 +53,20 @@ class Media(abc.ABC):
     @abc.abstractmethod
     def number_of_acceptance_filters(self) -> int:
         """
-        The number of hardware acceptance filters supported by the underlying CAN controller. Some media drivers,
-        such as SocketCAN, may implement acceptance filtering in software instead of hardware. In such case, the
-        number of available filters may be unlimited (since they're all virtual), so this method should return the
-        optimal number of filters which can be used without degrading the performance of the media driver. It is
-        safe to err towards a smaller number (this may result in an increased processing load for the library);
-        however, it is best to ensure that the underlying controller supports not less than four filters.
-
-        If the underlying CAN protocol implementation does not support acceptance filtering (neither in software
-        nor in hardware), its media driver must emulate it in software.
-
-        The returned value not be less than one.
+        The number of hardware acceptance filters supported by the underlying CAN controller.
+        Some media drivers, such as SocketCAN, may implement acceptance filtering in software instead of hardware.
+        The returned value shall be a positive integer. If the hardware does not support filtering at all,
+        the media driver shall emulate at least one filter in software.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     def set_received_frames_handler(self, handler: ReceivedFramesHandler) -> None:
         """
-        Every received frame must be timestamped. Both monotonic and system timestamps are required.
+        Every received frame shall be timestamped. Both monotonic and system timestamps are required.
         There are no timestamping accuracy requirements. An empty set of frames should never be reported.
 
-        The media implementation must drop all non-data frames (RTR frames, error frames, etc.).
+        The media implementation shall drop all non-data frames (RTR frames, error frames, etc.).
 
         If the set contains more than one frame, all frames must be ordered by the time of their arrival,
         which also should be reflected in their timestamps; that is, the timestamp of a frame at index N
@@ -84,10 +77,11 @@ class Media(abc.ABC):
         The implementation should strive to return as many frames per call as possible as long as that
         does not increase the worst case latency.
 
-        The handler shall be invoked on the same event loop.
+        The handler shall be invoked on the event loop of the parent transport (pass it to the constructor).
 
-        The transport is guaranteed to invoke this method at least once during initialization; it can be used
-        to perform a lazy start of the receive loop task.
+        The transport is guaranteed to invoke this method exactly once during (or shortly after) initialization;
+        it can be used to perform a lazy start of the receive loop task/thread/whatever.
+        It is undefined behavior to invoke this method more than once on the same instance.
         """
         raise NotImplementedError
 
@@ -95,7 +89,7 @@ class Media(abc.ABC):
     def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         """
         This method is invoked whenever the subscription set is changed in order to communicate to the underlying
-        CAN controller hardware which CAN frames should be picked up and which ones should be ignored.
+        CAN controller hardware which CAN frames should be accepted and which ones should be ignored.
 
         An empty set of configurations means that the transport is not interested in any frames, i.e., all frames
         should be rejected by the controller. That is also the recommended default configuration (ignore all frames
@@ -106,54 +100,58 @@ class Media(abc.ABC):
     @abc.abstractmethod
     def enable_automatic_retransmission(self) -> None:
         """
-        By default, automatic retransmission should be disabled to facilitate PnP node ID allocation. This method can
-        be invoked at most once to enable it, which is usually done when the local node obtains a node ID.
+        By default, automatic retransmission should be disabled to facilitate PnP node-ID allocation.
+        This method is invoked by the transport at most once to enable it,
+        which is usually done when the local node obtains a node-ID.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     async def send_until(self, frames: typing.Iterable[DataFrame], monotonic_deadline: float) -> int:
         """
-        All frames are guaranteed to share the same CAN ID. This guarantee may enable some optimizations.
-        The frames MUST be delivered to the bus in the same order. The iterable is guaranteed to be non-empty.
-        The method should avoid yielding the execution flow; instead, it is recommended to unload the frames
-        into an internal transmission queue and return ASAP, as that minimizes the likelihood of inner
-        priority inversion.
+        All passed frames are guaranteed to share the same CAN-ID. This guarantee may enable some optimizations.
+        The frames shall be delivered to the bus in the same order. The iterable is guaranteed to be non-empty.
 
         The method returns when the deadline is reached even if some of the frames could not be transmitted.
         The returned value is the number of frames that have been sent. If the returned number is lower than
         the number of supplied frames, the outer transport logic will register an error, which is then propagated
         upwards all the way to the application level.
+
+        The method should avoid yielding the execution flow; instead, it is recommended to unload the frames
+        into an internal transmission queue and return ASAP, as that minimizes the likelihood of inner
+        priority inversion. If that approach is used, implementations are advised to keep track of transmission
+        deadline on a per-frame basis to meet the timing requirements imposed by the application.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     def close(self) -> None:
         """
-        After the media instance is closed, none of its methods can be used anymore. The behavior or methods after
-        :meth:`close` is undefined.
+        After the media instance is closed, none of its methods can be used anymore.
+        If a method is invoked after close, :class:`pyuavcan.transport.ResourceClosedError` should be raised.
+        This method is an exception to that rule: if invoked on a closed instance, it shall do nothing.
         """
         raise NotImplementedError
-
-    def __repr__(self) -> str:
-        """
-        Prints the basic media information. Can be overridden if there is more relevant info to display.
-        """
-        return pyuavcan.util.repr_attributes(self,
-                                             interface_name=self.interface_name,
-                                             mtu=self.mtu)
 
     @staticmethod
     def list_available_interface_names() -> typing.Iterable[str]:
         """
-        This static method returns the list of interface names that can be used with the media class implementing it.
+        Returns the list of interface names that can be used with the media class implementing it.
         For example, for the SocketCAN media class it would return the SocketCAN interface names such as "vcan0";
-        for SLCAN it would return the list of serial ports. Implementations should strive to sort the output so that
-        the interfaces that are most likely to be used are listed first -- this helps GUI applications.
-        If the media implementation cannot be used on the local platform (e.g., if this method is invoked on the
-        SocketCAN media class on Windows), the method must return an empty set instead of raising an error.
+        for SLCAN it would return the list of serial ports.
+
+        Implementations should strive to sort the output so that the interfaces that are most likely to be used
+        are listed first -- this helps GUI applications.
+
+        If the media implementation cannot be used on the local platform,
+        the method shall return an empty set instead of raising an error.
         This guarantee supports an important use case where the caller would just iterate over all inheritors
-        of this Media interface and ask each one to yield the list of available interfaces, and then just present
-        that to the user.
+        of this Media interface and ask each one to yield the list of available interfaces,
+        and then just present that to the user.
         """
         raise NotImplementedError
+
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(self,
+                                             interface_name=self.interface_name,
+                                             mtu=self.mtu)

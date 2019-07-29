@@ -70,11 +70,14 @@ class CANFrameStatistics:
 class CANTransport(pyuavcan.transport.Transport):
     """
     CAN 2.0 and CAN FD transport implementation.
+    Whether CAN 2.0 or CAN FD is used is determined by the underlying media instance.
+    This class makes no distinction between the two; as such, a CAN 2.0 bus and a CAN FD bus with MTU 8 bytes
+    are identical to this class.
     """
 
     def __init__(self, media: Media, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
         """
-        :param media: The media implementation such as :class:`pyuavcan.transport.can.media.socketcan.SocketCAN`.
+        :param media: The media implementation.
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._maybe_media: typing.Optional[Media] = media
@@ -119,11 +122,11 @@ class CANTransport(pyuavcan.transport.Transport):
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=TRANSFER_ID_MODULO,
             node_id_set_cardinality=CANID.NODE_ID_MASK + 1,
-            single_frame_transfer_payload_capacity_bytes=self.frame_payload_capacity
+            single_frame_transfer_payload_capacity_bytes=self.frame_payload_capacity_bytes
         )
 
     @property
-    def frame_payload_capacity(self) -> int:
+    def frame_payload_capacity_bytes(self) -> int:
         """
         This is the MTU minus one; i.e., 7 for CAN 2.0.
         """
@@ -174,11 +177,19 @@ class CANTransport(pyuavcan.transport.Transport):
             media.close()
 
     def sample_frame_statistics(self) -> CANFrameStatistics:
+        """
+        Samples the statistics atomically and returns an unbound copy.
+        """
         return copy.copy(self._frame_stats)
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.SessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANInputSession:
+        """
+        See the base class docs for background.
+        Whenever an input session is created or destroyed, the hardware acceptance filters are reconfigured
+        automatically; computation of a new configuration and its deployment on the CAN controller may be slow.
+        """
         self._raise_if_closed()
 
         def finalizer() -> None:
@@ -285,14 +296,16 @@ class CANTransport(pyuavcan.transport.Transport):
         if dest_nid is None or dest_nid == self._local_node_id:
             session = self._input_dispatch_table.get(ss)
             if session is not None:
-                session.push_frame(can_id, frame)
+                # noinspection PyProtectedMember
+                session._push_frame(can_id, frame)
                 accepted = True
 
             if ss.remote_node_id is not None:
                 ss = pyuavcan.transport.SessionSpecifier(ss.data_specifier, None)
                 session = self._input_dispatch_table.get(ss)
                 if session is not None:
-                    session.push_frame(can_id, frame)
+                    # noinspection PyProtectedMember
+                    session._push_frame(can_id, frame)
                     accepted = True
 
         return accepted
@@ -307,7 +320,8 @@ class CANTransport(pyuavcan.transport.Transport):
                          'Either the session has just been closed or the media driver is misbehaving.',
                          frame, can_id, ss)
         else:
-            session.handle_loopback_frame(frame)
+            # noinspection PyProtectedMember
+            session._handle_loopback_frame(frame)
 
     def _reconfigure_acceptance_filters(self) -> None:
         subject_ids = set(

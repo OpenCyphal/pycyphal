@@ -45,12 +45,17 @@ class _PendingFeedbackKey:
 
 # noinspection PyAbstractClass
 class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
+    """
+    This is actually an abstract class, but its concrete inheritors are hidden from the API.
+    The implementation is chosen according to the type of the session requested: broadcast or unicast.
+    """
     def __init__(self,
                  transport:        pyuavcan.transport.can.CANTransport,
                  send_handler:     SendHandler,
                  specifier:        pyuavcan.transport.SessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  finalizer:        _base.SessionFinalizer):
+        """Use the factory method."""
         self._transport = transport
         self._send_handler = send_handler
         self._specifier = specifier
@@ -63,7 +68,12 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
 
         super(CANOutputSession, self).__init__(finalizer=finalizer)
 
-    def handle_loopback_frame(self, frame: _frame.TimestampedUAVCANFrame) -> None:
+    def _handle_loopback_frame(self, frame: _frame.TimestampedUAVCANFrame) -> None:
+        """
+        This is a part of the transport-internal API. It's a public method despite the name because Python's
+        visibility handling capabilities are limited. I guess we could define a private abstract base to
+        handle this but it feels like too much work. Why can't we have protected visibility in Python?
+        """
         assert frame.loopback, 'Internal API misuse'
         if frame.start_of_transfer:
             key = _PendingFeedbackKey(compiled_identifier=frame.identifier, transfer_id_modulus=frame.transfer_id)
@@ -72,7 +82,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
             except KeyError:
                 _logger.debug('No pending feedback entry for frame: %s', frame)
             else:
-                if self._feedback_handler is not None:  # pragma: no cover
+                if self._feedback_handler is not None:
                     feedback = CANFeedback(original_timestamp, frame)
                     try:
                         self._feedback_handler(feedback)
@@ -112,7 +122,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
             compiled_identifier=can_id.compile(transfer.fragmented_payload),
             transfer_id=transfer.transfer_id,
             fragmented_payload=transfer.fragmented_payload,
-            max_frame_payload_bytes=self._transport.frame_payload_capacity,
+            max_frame_payload_bytes=self._transport.frame_payload_capacity_bytes,
             loopback_first_frame=self._feedback_handler is not None
         ))
         first_frame = next(auxiliary_iter)
@@ -161,6 +171,7 @@ class BroadcastCANOutputSession(CANOutputSession):
                  transport:        pyuavcan.transport.can.CANTransport,
                  send_handler:     SendHandler,
                  finalizer:        _base.SessionFinalizer):
+        """Use the factory method."""
         assert specifier.remote_node_id is None, 'Internal protocol violation: expected broadcast'
         if not isinstance(specifier.data_specifier, pyuavcan.transport.MessageDataSpecifier):
             raise pyuavcan.transport.UnsupportedSessionConfigurationError(
@@ -189,6 +200,7 @@ class UnicastCANOutputSession(CANOutputSession):
                  transport:        pyuavcan.transport.can.CANTransport,
                  send_handler:     SendHandler,
                  finalizer:        _base.SessionFinalizer):
+        """Use the factory method."""
         assert isinstance(specifier.remote_node_id, int), 'Internal protocol violation: expected unicast'
         self._destination_node_id = int(specifier.remote_node_id)
         if not isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier):

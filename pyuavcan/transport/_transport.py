@@ -95,6 +95,8 @@ class Transport(abc.ABC):
     def get_input_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
         """
         This factory method is the only valid way of constructing input session instances.
+        Beware that construction and retirement of sessions may be costly.
+
         The transport will always return the same instance unless there is no session object with the requested
         specifier, in which case it will be created and stored internally until closed.
         The payload metadata parameter is used only when a new instance is created, ignored otherwise.
@@ -106,6 +108,8 @@ class Transport(abc.ABC):
     def get_output_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
         """
         This factory method is the only valid way of constructing output session instances.
+        Beware that construction and retirement of sessions may be costly.
+
         The transport will always return the same instance unless there is no session object with the requested
         specifier, in which case it will be created and stored internally until closed.
         The payload metadata parameter is used only when a new instance is created, ignored otherwise.
