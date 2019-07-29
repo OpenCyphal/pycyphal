@@ -107,6 +107,10 @@ class CANTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidMediaConfigurationError(
                 f'The number of acceptance filters is too low: {media.number_of_acceptance_filters}')
 
+        if media.loop is not self._loop:
+            raise pyuavcan.transport.InvalidMediaConfigurationError(
+                f'The media instance cannot use a different event loop: {media.loop} is not {self._loop}')
+
         media_name = type(media).__name__.lower()[:-len('Media')]
         self._descriptor = \
             f'<can><{media_name} mtu="{media.mtu}">{media.interface_name}</{media_name}></can>'

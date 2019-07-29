@@ -160,7 +160,7 @@ def _validate_unsigned_range(value: int, max_value: int) -> None:
 
 def generate_filter_configurations(subject_id_list: typing.Iterable[int],
                                    local_node_id:   typing.Optional[int]) \
-        -> typing.List[pyuavcan.transport.can.media.FilterConfiguration]:
+        -> typing.Sequence[pyuavcan.transport.can.media.FilterConfiguration]:
     from .media import FrameFormat, FilterConfiguration
 
     def ext(idn: int, msk: int) -> FilterConfiguration:

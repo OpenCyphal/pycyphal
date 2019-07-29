@@ -4,6 +4,10 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+"""
+The module is always importable but is functional only on GNU/Linux.
+"""
+
 from sys import platform as _platform
 
 if _platform == 'linux':

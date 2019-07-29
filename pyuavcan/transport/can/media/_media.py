@@ -7,6 +7,7 @@
 from __future__ import annotations
 import abc
 import typing
+import asyncio
 import pyuavcan.util
 from ._frame import DataFrame, TimestampedDataFrame
 from ._filter import FilterConfiguration
@@ -26,6 +27,15 @@ class Media(abc.ABC):
 
     #: Valid MTU values for CAN 2.0 and CAN FD.
     VALID_MTU_SET = {8, 12, 16, 20, 24, 32, 48, 64}
+
+    @property
+    @abc.abstractmethod
+    def loop(self) -> asyncio.AbstractEventLoop:
+        """
+        The asyncio event loop used to operate the media instance.
+        Shall be the same one as that of the parent transport.
+        """
+        raise NotImplementedError
 
     @property
     @abc.abstractmethod
@@ -77,7 +87,7 @@ class Media(abc.ABC):
         The implementation should strive to return as many frames per call as possible as long as that
         does not increase the worst case latency.
 
-        The handler shall be invoked on the event loop of the parent transport (pass it to the constructor).
+        The handler shall be invoked on the event loop returned by :attr:`loop`.
 
         The transport is guaranteed to invoke this method exactly once during (or shortly after) initialization;
         it can be used to perform a lazy start of the receive loop task/thread/whatever.
