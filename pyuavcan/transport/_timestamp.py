@@ -30,6 +30,7 @@ class Timestamp:
         """
         Manual construction is rarely needed, except when implementing network drivers.
         See the static factory methods.
+
         :param system_ns:       Belongs to the domain of :func:`time.time_ns`. Units are nanoseconds.
         :param monotonic_ns:    Belongs to the domain of :func:`time.monotonic_ns`. Units are nanoseconds.
         """
@@ -40,7 +41,7 @@ class Timestamp:
             raise ValueError(f'Neither of the timestamp samples can be negative; found this: {self!r}')
 
     @staticmethod
-    def from_second(system: _AnyScalar, monotonic: _AnyScalar) -> Timestamp:
+    def from_seconds(system: _AnyScalar, monotonic: _AnyScalar) -> Timestamp:
         """
         Both inputs are in seconds (not nanoseconds) of any numerical type.
         """
@@ -133,7 +134,7 @@ def _unittest_timestamp() -> None:
     with raises(ValueError):
         Timestamp(0, -1)
 
-    ts = Timestamp.from_second(Decimal('5.123456789'), Decimal('123.456789'))
+    ts = Timestamp.from_seconds(Decimal('5.123456789'), Decimal('123.456789'))
     assert ts.system_ns == 5123456789
     assert ts.monotonic_ns == 123456789000
     assert ts.system == Decimal('5.123456789')
