@@ -30,8 +30,8 @@ _logger = logging.getLogger(__name__)
 
 class Presentation:
     r"""
-    This is the presentation layer controller. This is the main access point for the application to a UAVCAN network.
-    Please read the module documentation for detailed usage information.
+    This is the presentation layer controller.
+    It weaves the fabric of peace and maintains balance even when it looks like the darkest of skies spins above.
 
     Methods named ``make_*()`` create a new instance upon every invocation. Such instances implement the RAII pattern,
     managing the life cycle of the underlying resource automatically, so the user does not necessarily have to call

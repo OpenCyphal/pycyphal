@@ -51,7 +51,7 @@ def _unittest_slow_cli_pub_sub_a() -> None:
         '--count=3', '--period=0.1', '--priority=SLOW', '--local-node-id=51',
         '--heartbeat-fields={vendor_specific_status_code: 54321}',
         *make_iface_args(),
-        timeout=3.0
+        timeout=10.0
     )
 
     time.sleep(1.0)     # Time to sync up

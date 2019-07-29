@@ -132,11 +132,11 @@ class DemoApplication:
         # By default, the node operates in anonymous mode, without a node-ID.
         # In this mode, some of the protocol features are unavailable (read Specification for more info).
         # For example, anonymous node cannot be a server, since without an ID it cannot be addressed.
-        assert self._node.local_node_id is None
+        assert self._node.presentation.transport.local_node_id is None
 
         # Here, we assign a node-ID statically, because this is a simplified demo. Most applications would need this
         # to be configurable, some may support the plug-and-play node-ID allocation protocol.
-        self._node.set_local_node_id(42)
+        self._node.presentation.transport.set_local_node_id(42)
 
         # We'll be publishing diagnostic messages using this publisher instance. The method we use is a shortcut for:
         #   make_publisher(uavcan.diagnostic.Record_1_0, pyuavcan.dsdl.get_fixed_port_id(uavcan.diagnostic.Record_1_0))

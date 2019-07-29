@@ -5,7 +5,6 @@
 #
 
 from __future__ import annotations
-import typing
 import logging
 import pyuavcan
 import pyuavcan.application
@@ -21,16 +20,11 @@ _logger = logging.getLogger(__name__)
 class Node:
     """
     This is the top-level abstraction representing a UAVCAN node on the bus.
-
-    Essentially this is just a convenience wrapper over the lower levels of the library
+    This class is just a minor addition on top of the lower-level abstractions of the library
     implementing commonly-used/mandatory functions of the protocol such as heartbeat reporting and responding
     to node info requests ``uavcan.node.GetInfo``.
-    This functionality is built on top of the abstractions provided by the presentation level
-    module :mod:`pyuavcan.presentation`.
-    Users are also supposed to build their applications on top of the presentation layer,
-    so this class can be used a collection of its usage examples.
 
-    The logic must be manually started when initialization is finished by invoking :meth:`start`.
+    Start the instance when initialization is finished by invoking :meth:`start`.
     """
 
     def __init__(self,
@@ -50,17 +44,6 @@ class Node:
         self._srv_info = self._presentation.get_server_with_fixed_service_id(uavcan.node.GetInfo_1_0)
         self._started = False
 
-    def start(self) -> None:
-        """
-        Start the GetInfo server in the background, the heartbeat publisher, etc.
-        Those will be automatically terminated when the node is close()d.
-        Subsequent calls to start() will have no effect.
-        """
-        if not self._started:
-            self._srv_info.serve_in_background(self._handle_get_info_request)
-            self._heartbeat_publisher.start()
-            self._started = True
-
     @property
     def presentation(self) -> pyuavcan.presentation.Presentation:
         """Provides access to the underlying instance of :class:`pyuavcan.presentation.Presentation`."""
@@ -72,22 +55,25 @@ class Node:
         return self._info
 
     @property
-    def local_node_id(self) -> typing.Optional[int]:
-        """Wrapper for :attr:`pyuavcan.transport.Transport.local_node_id`."""
-        return self._presentation.transport.local_node_id
-
-    def set_local_node_id(self, node_id: int) -> None:
-        """Wrapper for :meth:`pyuavcan.transport.Transport.set_local_node_id`."""
-        self._presentation.transport.set_local_node_id(node_id)
-
-    @property
     def heartbeat_publisher(self) -> pyuavcan.application.heartbeat_publisher.HeartbeatPublisher:
         """Provides access to the heartbeat publisher instance of this node."""
         return self._heartbeat_publisher
 
+    def start(self) -> None:
+        """
+        Starts the GetInfo server in the background, the heartbeat publisher, etc.
+        Those will be automatically terminated when the node is closed.
+        Does nothing if already started.
+        """
+        if not self._started:
+            self._srv_info.serve_in_background(self._handle_get_info_request)
+            self._heartbeat_publisher.start()
+            self._started = True
+
     def close(self) -> None:
         """
-        Closes the underlying presentation instance and all other entities.
+        Closes the underlying presentation instance, application-level functions, and all other entities.
+        Does nothing if already closed.
         """
         try:
             self._heartbeat_publisher.close()
