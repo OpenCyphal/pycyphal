@@ -113,7 +113,7 @@ autodoc_default_options = {
     'member-order':     'bysource',
     'exclude-members':
         '__weakref__, __module__, __dict__, __dataclass_fields__, __dataclass_params__, __annotations__, '
-        '__abstractmethods__, __orig_bases__, __parameters__',
+        '__abstractmethods__, __orig_bases__, __parameters__, __post_init__',
 }
 
 # For sphinx.ext.todo_
