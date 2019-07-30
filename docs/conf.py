@@ -178,6 +178,8 @@ def linkcode_resolve(domain: str, info: dict):
     for part in info['fullname'].split('.'):
         try:
             obj = getattr(obj, part)
+        except AttributeError:
+            return None
         except Exception as ex:
             report_exception(ex)
             return None
@@ -201,6 +203,8 @@ def linkcode_resolve(domain: str, info: dict):
     try:
         source_lines, lineno = inspect.getsourcelines(obj)
         path += f'#L{lineno}-L{lineno + len(source_lines) - 1}'
+    except OSError:
+        pass
     except Exception as ex:
         report_exception(ex)
 
