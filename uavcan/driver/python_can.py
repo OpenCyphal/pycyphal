@@ -24,28 +24,20 @@ except ImportError:
 
 logger = getLogger(__name__)
 
-try:
-    import can
-except ImportError:
-    logger.info("no module 'can' available, please install python-can")
-    can = None
+import can
 
-
-class PythonCan(AbstractDriver):
+class PythonCAN(AbstractDriver):
     TX_QUEUE_SIZE = 1000
 
-    def __init__(self):
-        super(PythonCan, self).__init__()
-
-        if can is None:
-            logger.error("To use this driver, make sure the module python-can is installed")
-            raise ValueError("python-can must be installed.")
+    def __init__(self, channel, **_extras):
+        super(PythonCAN, self).__init__()
 
         try:
-            self._bus = can.interface.Bus()
+            if channel is None:
+                self._bus = can.interface.Bus() # get bus from environment's config file
+            else:
+                self._bus = can.interface.Bus(channel=channel, bustype=_extras['bustype'], bitrate=_extras['bitrate'])
         except Exception as ex:
-            logger.info("Please make sure you have a valid can.ini file located in the current working directory.")
-            logger.info("See also: https://python-can.readthedocs.io/en/master/configuration.html#configuration-file")
             logger.exception("Could not instantiate a python-can driver")
             raise
 
