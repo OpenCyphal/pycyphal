@@ -73,14 +73,7 @@ class Client(ServicePresentationSession[ServiceClass]):
         self._response_timeout = DEFAULT_SERVICE_REQUEST_TIMEOUT
         self._priority = DEFAULT_PRIORITY
 
-    async def call(self, request: pyuavcan.dsdl.CompositeObject) -> typing.Optional[pyuavcan.dsdl.CompositeObject]:
-        """
-        A simplified wrapper for :meth:`call_with_transfer` that drops the response transfer info.
-        """
-        out = await self.call_with_transfer(request=request)
-        return out[0] if out is not None else None
-
-    async def call_with_transfer(self, request: pyuavcan.dsdl.CompositeObject) \
+    async def call(self, request: pyuavcan.dsdl.CompositeObject) \
             -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         """
         Sends the request to the remote server using the pre-configured priority and response timeout parameters.
@@ -94,9 +87,9 @@ class Client(ServicePresentationSession[ServiceClass]):
         if self._maybe_impl is None:
             raise PresentationSessionClosedError(repr(self))
         else:
-            return await self._maybe_impl.call_with_transfer(request=request,
-                                                             priority=self._priority,
-                                                             response_timeout=self._response_timeout)
+            return await self._maybe_impl.call(request=request,
+                                               priority=self._priority,
+                                               response_timeout=self._response_timeout)
 
     @property
     def response_timeout(self) -> float:
@@ -223,10 +216,10 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
         self._task = loop.create_task(self._task_function())
 
-    async def call_with_transfer(self,
-                                 request:          pyuavcan.dsdl.CompositeObject,
-                                 priority:         pyuavcan.transport.Priority,
-                                 response_timeout: float) \
+    async def call(self,
+                   request:          pyuavcan.dsdl.CompositeObject,
+                   priority:         pyuavcan.transport.Priority,
+                   response_timeout: float) \
             -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         async with self._lock:
             self._raise_if_closed()

@@ -60,7 +60,7 @@ Publish a message and receive it also (the loopback transport just sends it back
 ...     text='Neither man nor animal can be influenced by anything but suggestion.')
 >>> run_until_complete(pub_record.publish(record))  # publish() returns False on timeout.
 True
->>> message, metadata = run_until_complete(sub_record.receive_with_transfer())
+>>> message, metadata = run_until_complete(sub_record.receive())
 >>> message.text.tobytes().decode()  # Calling .tobytes().decode() won't be needed when DSDL supports strings natively.
 'Neither man nor animal can be influenced by anything but suggestion.'
 >>> metadata.transfer_id, metadata.source_node_id, metadata.timestamp
@@ -97,7 +97,7 @@ Having assigned a node-ID, let's set up a service and invoke it:
 >>> request_object = uavcan.node.ExecuteCommand_1_0.Request(
 ...     uavcan.node.ExecuteCommand_1_0.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
 ...     '/path/to/the/firmware/image.bin')
->>> received_response = run_until_complete(client_exec_command.call(request_object))
+>>> received_response, response_transfer = run_until_complete(client_exec_command.call(request_object))
 Received command 65533 from node 1234
 >>> received_response
 uavcan.node.ExecuteCommand.Response.1.0(status=3)
@@ -110,7 +110,7 @@ For example, here we create a client for a nonexistent service; the call times o
 ...                                       server_node_id=321)   # There is no such server.
 >>> bad_client.response_timeout = 0.1                           # Override the default.
 >>> bad_client.priority = pyuavcan.transport.Priority.HIGH      # Override the default.
->>> run_until_complete(bad_client.call(request_object))         # Times out and returns None.
+>>> run_until_complete(bad_client.call(request_object))  # Times out and returns None.
 
 Inheritance diagram for the presentation layer is shown below.
 Classes named ``*Impl`` are not accessible to the user; their instances are managed automatically by the

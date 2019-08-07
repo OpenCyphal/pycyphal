@@ -142,7 +142,7 @@ async def _do_execute(args: argparse.Namespace, subsystems: typing.Sequence[obje
         # Ready to do the job now.
         node.start()
         request_ts_application = pyuavcan.transport.Timestamp.now()
-        result = await client.call_with_transfer(request)
+        result = await client.call(request)
         response_ts_application = pyuavcan.transport.Timestamp.now()
 
         # Print the results.
