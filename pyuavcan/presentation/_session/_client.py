@@ -41,7 +41,7 @@ class Client(ServicePresentationSession[ServiceClass]):
     A task should request its own client instance from the presentation layer controller.
     Do not share the same client instance across different tasks. This class implements the RAII pattern.
 
-    Implementation info: aLl client instances sharing the same session specifier also share the same
+    Implementation info: all client instances sharing the same session specifier also share the same
     underlying implementation object containing the transport sessions which is reference counted and
     destroyed automatically when the last client instance is closed;
     the user code cannot access it and generally shouldn't care.

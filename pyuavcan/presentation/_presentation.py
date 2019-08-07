@@ -45,8 +45,7 @@ class Presentation:
     def __init__(self, transport: pyuavcan.transport.Transport) -> None:
         """
         The presentation controller takes ownership of the supplied transport.
-        When the presentation instance is closed, its transport is also closed
-        (and so are all dependent resources such as input/output sessions).
+        When the presentation instance is closed, its transport is also closed (and so are all its sessions).
         """
         self._transport = transport
         self._closed = False
@@ -61,9 +60,9 @@ class Presentation:
         This property is designed for very short-lived processes like CLI tools. Most applications will not
         benefit from it and should not use it. The term "emitted transfer-ID map" is borrowed from Specification.
 
-        Access to the emitted transfer-ID map allows short-running applications, such as CLI tools,
+        Access to the emitted transfer-ID map allows short-running applications
         to store/restore the map to/from a persistent storage that retains data across restarts of the application.
-        That may allow applications with very short life cycles (around several seconds) to adhere to the
+        That may allow applications with very short life cycles (typically under several seconds) to adhere to the
         transfer-ID computation requirements presented in the specification. If the requirement were to be violated,
         then upon restart a process using the same node-ID could be unable to initiate communication using same
         port-ID until the receiving nodes reached the transfer-ID timeout state.
@@ -83,8 +82,7 @@ class Presentation:
     @property
     def transport(self) -> pyuavcan.transport.Transport:
         """
-        Direct reference to the underlying transport implementation.
-        This instance is used for exchanging serialized representations over the network.
+        Direct reference to the underlying transport instance.
         The presentation layer instance owns its transport.
         """
         return self._transport
@@ -183,8 +181,9 @@ class Presentation:
                     server_node_id: int) -> Client[ServiceClass]:
         """
         Creates a new client instance for the specified service-ID and the remote server node-ID.
-        The number of such instances can be arbitrary. For example, one or different tasks may
-        simultaneously create and use client instances invoking the same service on the same server node.
+        The number of such instances can be arbitrary.
+        For example, different tasks may simultaneously create and use client instances
+        invoking the same service on the same server node.
 
         All clients created with a specific combination of service-ID and server node-ID share the same
         underlying implementation object which is hidden from the user.
@@ -236,7 +235,7 @@ class Presentation:
         Returns the server instance for the specified service-ID. If such instance does not exist, it will be
         created. The instance should be used from one task only.
 
-        Observe that unlike other typed session instances, the server instance is returned as-is without
+        Observe that unlike other sessions, the server instance is returned as-is without
         any intermediate proxy objects, and this interface does NOT implement the RAII pattern.
         The server instance will not be garbage collected as long as its presentation layer controller exists,
         hence it is the responsibility of the user to close unwanted servers manually.
@@ -283,7 +282,7 @@ class Presentation:
     def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
             -> Publisher[FixedPortMessageClass]:
         """
-        A wrapper for :meth:`make_publisher` which uses the fixed subject-ID associated with this type.
+        A wrapper for :meth:`make_publisher` that uses the fixed subject-ID associated with this type.
         Raises a TypeError if the type has no fixed subject-ID.
         """
         return self.make_publisher(dtype=dtype, subject_id=self._get_fixed_port_id(dtype))
@@ -293,7 +292,7 @@ class Presentation:
                                               queue_capacity: typing.Optional[int] = None) \
             -> Subscriber[FixedPortMessageClass]:
         """
-        A wrapper for :meth:`make_subscriber` which uses the fixed subject-ID associated with this type.
+        A wrapper for :meth:`make_subscriber` that uses the fixed subject-ID associated with this type.
         Raises a TypeError if the type has no fixed subject-ID.
         """
         return self.make_subscriber(dtype=dtype,
@@ -303,7 +302,7 @@ class Presentation:
     def make_client_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int) \
             -> Client[FixedPortServiceClass]:
         """
-        A wrapper for :meth:`make_client` which uses the fixed service-ID associated with this type.
+        A wrapper for :meth:`make_client` that uses the fixed service-ID associated with this type.
         Raises a TypeError if the type has no fixed service-ID.
         """
         return self.make_client(dtype=dtype,
@@ -313,7 +312,7 @@ class Presentation:
     def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
             -> Server[FixedPortServiceClass]:
         """
-        A wrapper for :meth:`get_server` which uses the fixed service-ID associated with this type.
+        A wrapper for :meth:`get_server` that uses the fixed service-ID associated with this type.
         Raises a TypeError if the type has no fixed service-ID.
         """
         return self.get_server(dtype=dtype, service_id=self._get_fixed_port_id(dtype))
@@ -346,8 +345,10 @@ class Presentation:
         one node's publication is another node's subscription. Read the specification for background.
 
         Locally, however, we should be able to distinguish publishers from subscribers because in the context
-        of local node the difference matters. So we amend each session specifier with the presentation session
-        type to enable such distinction.
+        of local node the difference matters.
+        So we amend each session specifier with the presentation session type to enable such distinction.
+        One could think that returning the sessions themselves would be easier,
+        but that would interfere with the RAII paradigm, and weak references are too cumbersome to deal with.
 
         At the time of writing Sphinx could not display the type information for properties, so here it is:
         ``Sequence[Tuple[Type[PresentationSession], pyuavcan.transport.SessionSpecifier]]``.

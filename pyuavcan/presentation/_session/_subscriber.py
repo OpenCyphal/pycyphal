@@ -149,8 +149,8 @@ class Subscriber(MessagePresentationSession[MessageClass]):
         in which case it is returned along with the transfer which delivered it;
         or until the timeout is expired, in which case None is returned.
 
-        The method will never return None unless the timeout has expired;
-        in order words, a premature cancellation cannot occur.
+        The method will never return None unless the timeout has expired or its session is closed;
+        in order words, a spurious premature cancellation cannot occur.
 
         If the timeout is non-positive, the method will non-blockingly check if there is any data;
         if there is, it will be returned, otherwise None will be returned immediately.
