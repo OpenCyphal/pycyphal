@@ -11,7 +11,7 @@ import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import ServiceClass, ServiceTypedSession, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
+from ._base import ServiceClass, ServicePresentationSession, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PresentationSessionClosedError, RequestTransferIDVariabilityExhaustedError
 
@@ -36,12 +36,12 @@ class ClientStatistics:
     unexpected_responses:       int  #: Response transfers that could not be matched with a request state.
 
 
-class Client(ServiceTypedSession[ServiceClass]):
+class Client(ServicePresentationSession[ServiceClass]):
     """
     A task should request its own client instance from the presentation layer controller.
     Do not share the same client instance across different tasks. This class implements the RAII pattern.
 
-    Implementation info: aLl client instances sharing the same session specifier also share the same
+    Implementation info: all client instances sharing the same session specifier also share the same
     underlying implementation object containing the transport sessions which is reference counted and
     destroyed automatically when the last client instance is closed;
     the user code cannot access it and generally shouldn't care.
@@ -73,14 +73,7 @@ class Client(ServiceTypedSession[ServiceClass]):
         self._response_timeout = DEFAULT_SERVICE_REQUEST_TIMEOUT
         self._priority = DEFAULT_PRIORITY
 
-    async def call(self, request: pyuavcan.dsdl.CompositeObject) -> typing.Optional[pyuavcan.dsdl.CompositeObject]:
-        """
-        A simplified wrapper for :meth:`call_with_transfer` that drops the response transfer info.
-        """
-        out = await self.call_with_transfer(request=request)
-        return out[0] if out is not None else None
-
-    async def call_with_transfer(self, request: pyuavcan.dsdl.CompositeObject) \
+    async def call(self, request: pyuavcan.dsdl.CompositeObject) \
             -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         """
         Sends the request to the remote server using the pre-configured priority and response timeout parameters.
@@ -94,9 +87,9 @@ class Client(ServiceTypedSession[ServiceClass]):
         if self._maybe_impl is None:
             raise PresentationSessionClosedError(repr(self))
         else:
-            return await self._maybe_impl.call_with_transfer(request=request,
-                                                             priority=self._priority,
-                                                             response_timeout=self._response_timeout)
+            return await self._maybe_impl.call(request=request,
+                                               priority=self._priority,
+                                               response_timeout=self._response_timeout)
 
     @property
     def response_timeout(self) -> float:
@@ -223,10 +216,10 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
         self._task = loop.create_task(self._task_function())
 
-    async def call_with_transfer(self,
-                                 request:          pyuavcan.dsdl.CompositeObject,
-                                 priority:         pyuavcan.transport.Priority,
-                                 response_timeout: float) \
+    async def call(self,
+                   request:          pyuavcan.dsdl.CompositeObject,
+                   priority:         pyuavcan.transport.Priority,
+                   response_timeout: float) \
             -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         async with self._lock:
             self._raise_if_closed()

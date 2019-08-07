@@ -31,15 +31,30 @@ p {
 }
 
 /* This is a dirty fix to the layout bug in the RTD theme; see https://github.com/readthedocs/sphinx_rtd_theme/issues/776 */
-.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5                                                         > a { padding-left:  7em; background: #ddd; }
-.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6                                           > a { padding-left:  8em; background: #ccc; }
-.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7                             > a { padding-left:  9em; background: #bbb; }
-.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7 li.toctree-l8               > a { padding-left: 10em; background: #aaa; }
-.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7 li.toctree-l8 li.toctree-l9 > a { padding-left: 11em; background: #999; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5                                                                        > a { padding-left:  7em; background: #ddd; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6                                                          > a { padding-left:  8em; background: #ccc; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7                                            > a { padding-left:  9em; background: #bbb; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7 li.toctree-l8                              > a { padding-left: 10em; background: #aaa; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7 li.toctree-l8 li.toctree-l9                > a { padding-left: 11em; background: #999; }
+.wy-menu-vertical li.toctree-l3 li.toctree-l4 li.toctree-l5 li.toctree-l6 li.toctree-l7 li.toctree-l8 li.toctree-l9 li.toctree-l10 > a { padding-left: 12em; background: #888; }
 
 .wy-table-responsive table td,
 .wy-table-responsive table th {
     white-space: normal !important;
+}
+
+.rst-content table.docutils {
+    border: solid 1px #555;
+}
+.rst-content table.docutils td {
+    border: solid 1px #555;
+}
+.rst-content table.docutils thead th {
+    border: solid 1px #555;
+    border-bottom: solid 2px #555;
+}
+.rst-content table.docutils thead th p {
+    margin: 0;
 }
 
 /* This is needed to make transparent images have the same background color.

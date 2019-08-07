@@ -7,6 +7,7 @@
 from __future__ import annotations
 import typing
 import pytest
+import asyncio
 import pyuavcan.transport
 import pyuavcan.transport.can.media as _media
 
@@ -27,6 +28,10 @@ class MockMedia(_media.Media):
         self._raise_on_send_once: typing.Optional[Exception] = None
 
         super(MockMedia, self).__init__()
+
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        return asyncio.get_event_loop()
 
     @property
     def interface_name(self) -> str:

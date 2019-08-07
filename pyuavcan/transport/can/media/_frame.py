@@ -18,10 +18,10 @@ class FrameFormat(enum.IntEnum):
 
 @dataclasses.dataclass(frozen=True)
 class DataFrame:
-    identifier: int
-    data:       bytearray
-    format:     FrameFormat
-    loopback:   bool        # Indicates a loopback request for outgoing frames; marks loopback for received frames.
+    identifier: int             #: CAN ID value.
+    data:       bytearray       #: Frame payload.
+    format:     FrameFormat     #:
+    loopback:   bool            #: Loopback request for outgoing frames; loopback indicator for received frames.
 
     def __post_init__(self) -> None:
         assert isinstance(self.format, FrameFormat)
@@ -32,11 +32,12 @@ class DataFrame:
             raise ValueError(f'Unsupported data length: {len(self.data)}')
 
     @property
-    def data_length_code(self) -> int:
+    def dlc(self) -> int:
+        """Not to be confused with ``len(data)``."""
         return _LENGTH_TO_DLC[len(self.data)]       # The length is checked at the time of construction
 
     @staticmethod
-    def convert_data_length_code_to_length(dlc: int) -> int:
+    def convert_dlc_to_length(dlc: int) -> int:
         try:
             return _DLC_TO_LENGTH[dlc]
         except LookupError:
@@ -44,6 +45,14 @@ class DataFrame:
 
     @staticmethod
     def get_required_padding(data_length: int) -> int:
+        """
+        Computes padding for nearest valid CAN FD frame size.
+
+        >>> DataFrame.get_required_padding(6)
+        0
+        >>> DataFrame.get_required_padding(61)
+        3
+        """
         supremum = next(x for x in _DLC_TO_LENGTH if x >= data_length)  # pragma: no branch
         assert supremum >= data_length
         return supremum - data_length
@@ -51,9 +60,9 @@ class DataFrame:
     def is_same_manifestation(self, other: DataFrame) -> bool:
         """
         Compares two frames ignoring the information that is not representable on the physical layer.
-        That means that only the CAN ID, data, and the format are compared. This can be used to ensure
-        equality ignoring timestamps, loopback, and other properties that are not representable outside
-        of this model.
+        That means that only the CAN ID, data, and the format are compared.
+        This can be used to ensure equality ignoring timestamps, loopback, and other properties that are
+        not representable outside of this model.
         """
         return self.identifier == other.identifier \
             and self.data == other.data \
@@ -72,7 +81,7 @@ class DataFrame:
 
 @dataclasses.dataclass(frozen=True)
 class TimestampedDataFrame(DataFrame):
-    timestamp: pyuavcan.transport.Timestamp
+    timestamp: pyuavcan.transport.Timestamp  #:
 
     def __str__(self) -> str:
         return f'{self.timestamp}: {super(TimestampedDataFrame, self).__str__()}'
@@ -120,7 +129,7 @@ def _unittest_can_media_frame() -> None:
         DataFrame(123, bytearray(b'a' * 9), FrameFormat.EXTENDED, True)
 
     with raises(ValueError):
-        DataFrame.convert_data_length_code_to_length(16)
+        DataFrame.convert_dlc_to_length(16)
 
     for sz in range(100):
         try:
@@ -128,4 +137,4 @@ def _unittest_can_media_frame() -> None:
         except ValueError:
             pass
         else:
-            assert f.convert_data_length_code_to_length(f.data_length_code) == sz
+            assert f.convert_dlc_to_length(f.dlc) == sz

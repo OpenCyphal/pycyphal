@@ -2,6 +2,11 @@ API reference
 =============
 
 For a general library overview, read :ref:`architecture`.
+Navigation resources:
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
 
 pyuavcan root module
 --------------------

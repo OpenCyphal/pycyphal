@@ -157,9 +157,9 @@ Default: %(default)s
 
             # Configure the node-ID.
             if args.local_node_id is not None:
-                node.set_local_node_id(args.local_node_id)
+                node.presentation.transport.set_local_node_id(args.local_node_id)
             else:
-                if not self._allow_anonymous and node.local_node_id is None:
+                if not self._allow_anonymous and node.presentation.transport.local_node_id is None:
                     raise ValueError('The specified transport does not have a predefined node-ID, '
                                      'and the command cannot be used with an anonymous node. '
                                      'Please specify the node-ID explicitly, or use a different transport.')
@@ -170,8 +170,8 @@ Default: %(default)s
             # Restore if we have a node-ID. If we don't, no restoration will take place even if the node-ID is
             # provided later. This behavior is acceptable for CLI; a regular UAVCAN application will not need
             # to deal with saving/restoration at all since this use case is specific to CLI only.
-            if node.local_node_id is not None:
-                tid_map_path = _get_emitted_transfer_id_file_path(node.local_node_id,
+            if node.presentation.transport.local_node_id is not None:
+                tid_map_path = _get_emitted_transfer_id_file_path(node.presentation.transport.local_node_id,
                                                                   node.presentation.transport.descriptor)
                 _logger.debug('Emitted TID map file: %s', tid_map_path)
                 tid_map = self._restore_emitted_transfer_id_map(tid_map_path)

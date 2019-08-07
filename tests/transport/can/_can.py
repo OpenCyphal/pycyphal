@@ -45,7 +45,7 @@ async def _unittest_can_transport() -> None:
         node_id_set_cardinality=128,
         single_frame_transfer_payload_capacity_bytes=63
     )
-    assert tr.frame_payload_capacity == 63
+    assert tr.frame_payload_capacity_bytes == 63
     assert tr.local_node_id is None
     assert tr.protocol_parameters == tr2.protocol_parameters
 
@@ -541,11 +541,11 @@ async def _unittest_can_transport() -> None:
     assert subscriber_selective.transfer_id_timeout == pytest.approx(1.0)
 
     # Queue capacity configuration
-    assert subscriber_selective.queue_capacity is None      # Unlimited by default
-    subscriber_selective.queue_capacity = 2
+    assert subscriber_selective.frame_queue_capacity is None      # Unlimited by default
+    subscriber_selective.frame_queue_capacity = 2
     with pytest.raises(ValueError):
-        subscriber_selective.queue_capacity = 0
-    assert subscriber_selective.queue_capacity == 2
+        subscriber_selective.frame_queue_capacity = 0
+    assert subscriber_selective.frame_queue_capacity == 2
 
     assert await pub_m2222.send_until(Transfer(
         timestamp=ts,

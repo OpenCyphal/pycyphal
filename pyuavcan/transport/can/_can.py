@@ -25,24 +25,25 @@ _logger = logging.getLogger(__name__)
 @dataclasses.dataclass
 class CANFrameStatistics:
     """
-    Invariants::
+    These stats are unrelated to the abstract transport layer interface; they are purely CAN-specific.
+    The following invariants apply::
 
         sent >= loopback_requested
         received >= received_uavcan >= received_uavcan_accepted
         loopback_requested >= loopback_returned
     """
 
-    sent: int = 0                       #: Number of frames sent to the media instance successfully
-    unsent: int = 0                     #: Number of frames that were supposed to be sent but timed out
+    sent: int = 0    #: Number of frames sent to the media instance successfully.
+    unsent: int = 0  #: Number of frames that were supposed to be sent but timed out.
 
-    received:                 int = 0   #: Number of genuine frames received from the bus (loopback not included)
-    received_uavcan:          int = 0   #: Subset of the above that happen to be valid UAVCAN frames
-    received_uavcan_accepted: int = 0   #: Subset of the above that are useful for the local application
+    received:                 int = 0  #: Number of genuine frames received from the bus (loopback not included).
+    received_uavcan:          int = 0  #: Subset of the above that happen to be valid UAVCAN frames.
+    received_uavcan_accepted: int = 0  #: Subset of the above that are useful for the local application.
 
-    loopback_requested: int = 0         #: Number of sent frames that we requested loopback for
-    loopback_returned:  int = 0         #: Number of loopback frames received from the media instance (not from the bus)
+    loopback_requested: int = 0  #: Number of sent frames that we requested loopback for.
+    loopback_returned:  int = 0  #: Number of loopback frames received from the media instance (not from the bus).
 
-    errored: int = 0                    #: How many frames of any kind could not be successfully processed
+    errored: int = 0  #: How many frames of any kind could not be successfully processed.
 
     @property
     def media_acceptance_filtering_efficiency(self) -> float:
@@ -61,6 +62,7 @@ class CANFrameStatistics:
         The value may transiently increase to small values if the counters happened to be sampled while the loopback
         frames reside in the transmission queue of the CAN controller awaiting being processed. If the value remains
         positive for long periods of time, the media driver is probably misbehaving.
+        A negative value means that the media instance is sending more loopback frames than requested (bad).
         """
         return self.loopback_requested - self.loopback_returned
 
@@ -68,11 +70,14 @@ class CANFrameStatistics:
 class CANTransport(pyuavcan.transport.Transport):
     """
     CAN 2.0 and CAN FD transport implementation.
+    Whether CAN 2.0 or CAN FD is used is determined by the underlying media instance.
+    This class makes no distinction between the two; as such, a CAN 2.0 bus and a CAN FD bus with MTU 8 bytes
+    are identical to this class.
     """
 
     def __init__(self, media: Media, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
         """
-        :param media: The media implementation such as :class:`pyuavcan.transport.can.media.socketcan.SocketCAN`.
+        :param media: The media implementation.
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._maybe_media: typing.Optional[Media] = media
@@ -102,6 +107,10 @@ class CANTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidMediaConfigurationError(
                 f'The number of acceptance filters is too low: {media.number_of_acceptance_filters}')
 
+        if media.loop is not self._loop:
+            raise pyuavcan.transport.InvalidMediaConfigurationError(
+                f'The media instance cannot use a different event loop: {media.loop} is not {self._loop}')
+
         media_name = type(media).__name__.lower()[:-len('Media')]
         self._descriptor = \
             f'<can><{media_name} mtu="{media.mtu}">{media.interface_name}</{media_name}></can>'
@@ -117,15 +126,24 @@ class CANTransport(pyuavcan.transport.Transport):
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=TRANSFER_ID_MODULO,
             node_id_set_cardinality=CANID.NODE_ID_MASK + 1,
-            single_frame_transfer_payload_capacity_bytes=self.frame_payload_capacity
+            single_frame_transfer_payload_capacity_bytes=self.frame_payload_capacity_bytes
         )
 
     @property
-    def frame_payload_capacity(self) -> int:
+    def frame_payload_capacity_bytes(self) -> int:
+        """
+        This is the MTU minus one; i.e., 7 for CAN 2.0.
+        """
         return self._frame_payload_capacity
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
+        """
+        The local node-ID is always unset (None) by default.
+        While a node-ID is not assigned, automatic retransmission in the media implementation is disabled to
+        facilitate plug-and-play node-ID allocation.
+        Anonymous transfers are always single-frame transfers, so their payload carrying capacity is very limited.
+        """
         return self._local_node_id
 
     def set_local_node_id(self, node_id: int) -> None:
@@ -163,11 +181,19 @@ class CANTransport(pyuavcan.transport.Transport):
             media.close()
 
     def sample_frame_statistics(self) -> CANFrameStatistics:
+        """
+        Samples the statistics atomically and returns an unbound copy.
+        """
         return copy.copy(self._frame_stats)
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.SessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANInputSession:
+        """
+        See the base class docs for background.
+        Whenever an input session is created or destroyed, the hardware acceptance filters are reconfigured
+        automatically; computation of a new configuration and its deployment on the CAN controller may be slow.
+        """
         self._raise_if_closed()
 
         def finalizer() -> None:
@@ -274,14 +300,16 @@ class CANTransport(pyuavcan.transport.Transport):
         if dest_nid is None or dest_nid == self._local_node_id:
             session = self._input_dispatch_table.get(ss)
             if session is not None:
-                session.push_frame(can_id, frame)
+                # noinspection PyProtectedMember
+                session._push_frame(can_id, frame)
                 accepted = True
 
             if ss.remote_node_id is not None:
                 ss = pyuavcan.transport.SessionSpecifier(ss.data_specifier, None)
                 session = self._input_dispatch_table.get(ss)
                 if session is not None:
-                    session.push_frame(can_id, frame)
+                    # noinspection PyProtectedMember
+                    session._push_frame(can_id, frame)
                     accepted = True
 
         return accepted
@@ -296,7 +324,8 @@ class CANTransport(pyuavcan.transport.Transport):
                          'Either the session has just been closed or the media driver is misbehaving.',
                          frame, can_id, ss)
         else:
-            session.handle_loopback_frame(frame)
+            # noinspection PyProtectedMember
+            session._handle_loopback_frame(frame)
 
     def _reconfigure_acceptance_filters(self) -> None:
         subject_ids = set(

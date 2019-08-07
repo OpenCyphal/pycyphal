@@ -21,12 +21,13 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class CANInputStatistics(pyuavcan.transport.Statistics):
-    reception_error_counters: typing.Dict[_transfer_receiver.TransferReceptionError, int] = \
-        dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_receiver.TransferReceptionError})
+    reception_error_counters: typing.Dict[_transfer_receiver.TransferReceptionErrorID, int] = \
+        dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_receiver.TransferReceptionErrorID})
 
 
 class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
-    DEFAULT_TRANSFER_ID_TIMEOUT = 2     # [second] Per the Specification.
+    #: Per the UAVCAN specification. Units are seconds. Can be overridden after instantiation if needed.
+    DEFAULT_TRANSFER_ID_TIMEOUT = 2
 
     _QueueItem = typing.Tuple[_identifier.CANID, _frame.TimestampedUAVCANFrame]
 
@@ -35,6 +36,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  loop:             asyncio.AbstractEventLoop,
                  finalizer:        _base.SessionFinalizer):
+        """Use the factory method."""
         self._specifier = specifier
         self._payload_metadata = payload_metadata
 
@@ -50,10 +52,11 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
 
         super(CANInputSession, self).__init__(finalizer=finalizer)
 
-    def push_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+    def _push_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
         """
-        Pushes a newly received frame for later processing.
-        This method must be non-blocking and non-yielding (hence it's not async).
+        This is a part of the transport-internal API. It's a public method despite the name because Python's
+        visibility handling capabilities are limited. I guess we could define a private abstract base to
+        handle this but it feels like too much work. Why can't we have protected visibility in Python?
         """
         try:
             self._queue.put_nowait((can_id, frame))
@@ -63,21 +66,20 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                          self, frame, can_id)
 
     @property
-    def queue_capacity(self) -> typing.Optional[int]:
+    def frame_queue_capacity(self) -> typing.Optional[int]:
         """
-        Returns the capacity of the input frame queue. None means that the capacity is unlimited, which is the default.
+        Capacity of the input frame queue. None means that the capacity is unlimited, which is the default.
+        This may deplete the heap if input transfers are not consumed quickly enough so beware.
+
+        If the capacity is changed and the new value is smaller than the number of frames currently in the queue,
+        the newest frames will be discarded and the number of queue overruns will be incremented accordingly.
+        The complexity of a queue capacity change may be up to linear of the number of frames currently in the queue.
+        If the value is not None, it must be a positive integer, otherwise you get a :class:`ValueError`.
         """
         return self._queue.maxsize if self._queue.maxsize > 0 else None
 
-    @queue_capacity.setter
-    def queue_capacity(self, value: typing.Optional[int]) -> None:
-        """
-        Changes the input frame queue capacity. If the argument is None, the new capacity will be unlimited.
-        If the new capacity is smaller than the number of frames currently in the queue, the newest frames will
-        be discarded and the number of queue overruns will be incremented accordingly.
-        The complexity may be up to linear on the number of frames currently in the queue.
-        If the value is not None, it must be a positive integer.
-        """
+    @frame_queue_capacity.setter
+    def frame_queue_capacity(self, value: typing.Optional[int]) -> None:
         if value is not None and not value > 0:
             raise ValueError(f'Invalid value for queue capacity: {value}')
 
@@ -85,7 +87,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         self._queue = asyncio.Queue(int(value) if value is not None else 0, loop=self._loop)
         try:
             while True:
-                self.push_frame(*old_queue.get_nowait())
+                self._push_frame(*old_queue.get_nowait())
         except asyncio.QueueEmpty:
             pass
 
@@ -167,7 +169,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
 
             receiver = self._receivers[source_node_id]
             result = receiver.process_frame(canid.priority, source_node_id, frame, self._transfer_id_timeout_ns)
-            if isinstance(result, _transfer_receiver.TransferReceptionError):
+            if isinstance(result, _transfer_receiver.TransferReceptionErrorID):
                 self._statistics.errors += 1
                 self._statistics.reception_error_counters[result] += 1
                 _logger.debug('%s: Rejecting CAN frame %s because %s; current stats: %s',

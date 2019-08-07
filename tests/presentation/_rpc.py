@@ -88,7 +88,7 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     last_request = uavcan.register.Access_1_0.Request(
         name=uavcan.register.Name_1_0('Hello world!'),
         value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0('Profanity will not be tolerated')))
-    result_a = await client0.call_with_transfer(last_request)
+    result_a = await client0.call(last_request)
     assert result_a is None, 'Expected to fail'
     assert last_metadata.client_node_id == 42
     assert last_metadata.transfer_id == 0
@@ -102,7 +102,7 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
         value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0('hunter2'))
     )
     client0.priority = Priority.IMMEDIATE
-    result_b = await client0.call(last_request)
+    result_b = (await client0.call(last_request))[0]  # type: ignore
     assert repr(result_b) == repr(response)
     assert last_metadata.client_node_id == 42
     assert last_metadata.transfer_id == 1

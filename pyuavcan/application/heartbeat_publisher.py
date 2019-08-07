@@ -17,7 +17,10 @@ DEFAULT_PRIORITY = pyuavcan.transport.Priority.SLOW
 
 
 class Health(enum.IntEnum):
-    """Mirrors the health enumeration defined in ``uavcan.node.Heartbeat``."""
+    """
+    Mirrors the health enumeration defined in ``uavcan.node.Heartbeat``.
+    When enumerations are natively supported in DSDL, this will be replaced with an alias.
+    """
     NOMINAL  = Heartbeat.HEALTH_NOMINAL
     ADVISORY = Heartbeat.HEALTH_ADVISORY
     CAUTION  = Heartbeat.HEALTH_CAUTION
@@ -25,7 +28,10 @@ class Health(enum.IntEnum):
 
 
 class Mode(enum.IntEnum):
-    """Mirrors the mode enumeration defined in ``uavcan.node.Heartbeat``."""
+    """
+    Mirrors the mode enumeration defined in ``uavcan.node.Heartbeat``.
+    When enumerations are natively supported in DSDL, this will be replaced with an alias.
+    """
     OPERATIONAL     = Heartbeat.MODE_OPERATIONAL
     INITIALIZATION  = Heartbeat.MODE_INITIALIZATION
     MAINTENANCE     = Heartbeat.MODE_MAINTENANCE
@@ -42,25 +48,26 @@ _logger = logging.getLogger(__name__)
 
 class HeartbeatPublisher:
     """
-    This class manages periodic publication of the node heartbeat message. Also it subscribes to heartbeat
-    messages from other nodes and emits error messages into the log if a node-ID conflict is detected.
+    This class manages periodic publication of the node heartbeat message.
+    Also it subscribes to heartbeat messages from other nodes and logs cautionary messages
+    if a node-ID conflict is detected on the bus.
 
-    The logic must be manually started when initialization is finished by invoking :meth:`start`.
+    Instances must be manually started when initialization is finished by invoking :meth:`start`.
 
     The default states are as follows:
 
     - Health is NOMINAL.
-    - Mode is INITIALIZATION.
+    - Mode is OPERATIONAL.
     - Vendor-specific status code is zero.
     - Period is MAX_PUBLICATION_PERIOD (see the DSDL definition).
-    - Priority is the default defined by the transport layer.
+    - Priority is :data:`DEFAULT_PRIORITY`.
     """
 
     def __init__(self, presentation: pyuavcan.presentation.Presentation):
         self._presentation = presentation
         self._instantiated_at = time.monotonic()
         self._health = Health.NOMINAL
-        self._mode = Mode.INITIALIZATION
+        self._mode = Mode.OPERATIONAL
         self._vendor_specific_status_code = 0
         self._pre_heartbeat_handlers: typing.List[typing.Callable[[], None]] = []
         self._maybe_task: typing.Optional[asyncio.Task[None]] = None
@@ -72,8 +79,8 @@ class HeartbeatPublisher:
 
     def start(self) -> None:
         """
-        Starts the background publishing task. It will be stopped automatically when close()d.
-        Subsequent calls will have no effect.
+        Starts the background publishing task on the presentation's event loop.
+        It will be stopped automatically when closed. Does nothing if already started.
         """
         if not self._maybe_task:
             self._subscriber.receive_in_background(self._handle_received_heartbeat)
@@ -130,7 +137,7 @@ class HeartbeatPublisher:
     def period(self, value: float) -> None:
         value = float(value)
         if 0 < value <= Heartbeat.MAX_PUBLICATION_PERIOD:
-            self._publisher.send_timeout = value
+            self._publisher.send_timeout = value  # This is not a typo! Send timeout equals period here.
         else:
             raise ValueError(f'Invalid heartbeat period: {value}')
 
@@ -155,6 +162,10 @@ class HeartbeatPublisher:
     def add_pre_heartbeat_handler(self, handler: typing.Callable[[], None]) -> None:
         """
         Adds a new handler to be invoked immediately before a heartbeat message is published.
+        The number of such handlers is unlimited.
+        The handler invocation order follows the order of their registration.
+        Handlers are invoked from a task running on the presentation's event loop.
+        Handlers are not invoked until the instance is started.
 
         The handler can be used to synchronize the heartbeat message data (health, mode, vendor-specific status code)
         with external states. Observe that the handler will be invoked even if the heartbeat is not to be published,
@@ -166,7 +177,7 @@ class HeartbeatPublisher:
         self._pre_heartbeat_handlers.append(handler)
 
     def make_message(self) -> Heartbeat:
-        """Constructs the current heartbeat message."""
+        """Constructs a new heartbeat message from the object's state."""
         return Heartbeat(uptime=int(self.uptime),  # must floor
                          health=self.health,
                          mode=self.mode,

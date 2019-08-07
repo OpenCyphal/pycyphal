@@ -103,14 +103,17 @@ master_doc = 'index'
 # Autodoc
 autoclass_content = 'bysource'
 autodoc_member_order = 'bysource'
+autodoc_inherit_docstrings = False
 autodoc_default_options = {
-    'members':              True,
-    'undoc-members':        True,
-    'special-members':      '__init__',
-    'imported-members':     True,
-    'inherited-members':    True,
-    'show-inheritance':     True,
-    'member-order':         'bysource',
+    'members':          True,
+    'undoc-members':    True,
+    'special-members':  True,
+    'imported-members': True,
+    'show-inheritance': True,
+    'member-order':     'bysource',
+    'exclude-members':
+        '__weakref__, __module__, __dict__, __dataclass_fields__, __dataclass_params__, __annotations__, '
+        '__abstractmethods__, __orig_bases__, __parameters__, __post_init__',
 }
 
 # For sphinx.ext.todo_
@@ -175,6 +178,8 @@ def linkcode_resolve(domain: str, info: dict):
     for part in info['fullname'].split('.'):
         try:
             obj = getattr(obj, part)
+        except AttributeError:
+            return None
         except Exception as ex:
             report_exception(ex)
             return None
@@ -198,6 +203,8 @@ def linkcode_resolve(domain: str, info: dict):
     try:
         source_lines, lineno = inspect.getsourcelines(obj)
         path += f'#L{lineno}-L{lineno + len(source_lines) - 1}'
+    except OSError:
+        pass
     except Exception as ex:
         report_exception(ex)
 

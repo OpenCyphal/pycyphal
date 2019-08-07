@@ -30,6 +30,7 @@ class OutgoingTransferIDCounter:
     """
     A member of the *emitted transfer-ID map*; see the specification for technical details.
     Essentially this is just a boxed integer.
+    The value is monotonically increasing; transport-specific modulus is computed by the underlying transport(s).
     """
 
     def __init__(self) -> None:
@@ -105,7 +106,7 @@ class PresentationSession(Closable, typing.Generic[TypeClass]):
 
 
 # noinspection DuplicatedCode
-class MessageTypedSession(PresentationSession[MessageClass]):
+class MessagePresentationSession(PresentationSession[MessageClass]):
     """
     The base class for publishers and subscribers.
     """
@@ -131,7 +132,7 @@ class MessageTypedSession(PresentationSession[MessageClass]):
 
 
 # noinspection DuplicatedCode
-class ServiceTypedSession(PresentationSession[ServiceClass]):
+class ServicePresentationSession(PresentationSession[ServiceClass]):
     @property
     @abc.abstractmethod
     def input_transport_session(self) -> pyuavcan.transport.InputSession:

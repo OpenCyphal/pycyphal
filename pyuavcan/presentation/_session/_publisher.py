@@ -11,7 +11,7 @@ import asyncio
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessageTypedSession, OutgoingTransferIDCounter, MessageClass, Closable
+from ._base import MessagePresentationSession, OutgoingTransferIDCounter, MessageClass, Closable
 from ._base import DEFAULT_PRIORITY, TypedSessionFinalizer
 from ._error import PresentationSessionClosedError
 
@@ -19,12 +19,12 @@ from ._error import PresentationSessionClosedError
 _logger = logging.getLogger(__name__)
 
 
-class Publisher(MessageTypedSession[MessageClass]):
+class Publisher(MessagePresentationSession[MessageClass]):
     """
     A task should request its own independent publisher instance from the presentation layer controller.
     Do not share the same publisher instance across different tasks. This class implements the RAII pattern.
 
-    Implementation info: aLl publishers sharing the same session specifier also share the same
+    Implementation info: all publishers sharing the same session specifier (i.e., subject-ID) also share the same
     underlying implementation object containing the transport session which is reference counted and destroyed
     automatically when the last publisher with that session specifier is closed;
     the user code cannot access it and generally shouldn't care.

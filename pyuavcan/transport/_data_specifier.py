@@ -11,6 +11,10 @@ import dataclasses
 
 @dataclasses.dataclass(frozen=True)
 class DataSpecifier:
+    """
+    The data specifier defines what category and type of data is exchanged over a transport session.
+    See the abstract transport model for details.
+    """
     pass
 
 

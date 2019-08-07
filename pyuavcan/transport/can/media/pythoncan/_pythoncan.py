@@ -6,6 +6,7 @@
 
 import typing
 import logging
+import asyncio
 import pyuavcan.transport.can.media as _media
 
 
@@ -19,6 +20,10 @@ class PythonCANMedia(_media.Media):
     """
 
     def __init__(self) -> None:
+        raise NotImplementedError
+
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
         raise NotImplementedError
 
     @property

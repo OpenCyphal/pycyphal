@@ -9,6 +9,8 @@ environment:
 
 stack: python %PYTHON%
 
+build: off
+
 install:
   - git submodule update --init --recursive
   - pip install pyyaml coveralls  # Removed from requirements.txt because it's only useful on the CI.
@@ -21,8 +23,6 @@ install:
   # Windows build config
   - cmd: 'SET PATH=%PYTHON%;%PATH%'
   - cmd: 'SET PATH=C:\\Python37-x64\\Scripts;%PATH%'
-
-build: off
 
 test_script:
   - sh: "./test.sh"

@@ -85,7 +85,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     pub_heart.priority = Priority.SLOW
     assert pub_heart.priority == Priority.SLOW
     await pub_heart.publish(heart)
-    rx, transfer = await sub_heart.receive_with_transfer()  # type: typing.Any, pyuavcan.transport.TransferFrom
+    rx, transfer = await sub_heart.receive()  # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id is None
     assert transfer.priority == Priority.SLOW
@@ -103,7 +103,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     pub_heart.transfer_id_counter.override(23)
     await pub_heart.publish(heart)
-    rx, transfer = await sub_heart.receive_with_transfer()
+    rx, transfer = await sub_heart.receive()
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id == 123
     assert transfer.priority == Priority.SLOW
@@ -117,11 +117,11 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert stat.messages == 2
 
     await pub_heart.publish(heart)
-    rx = await sub_heart.receive()
+    rx = (await sub_heart.receive())[0]
     assert repr(rx) == repr(heart)
 
     await pub_heart.publish(heart)
-    rx = await sub_heart.receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT)
+    rx = (await sub_heart.receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT))[0]  # type: ignore
     assert repr(rx) == repr(heart)
     rx = await sub_heart.receive_for(_RX_TIMEOUT)
     assert rx is None
@@ -150,7 +150,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     pub_record.publish_soon(record)
     await asyncio.sleep(0.1)                # Need to make the deferred publication get the message out
-    rx, transfer = await sub_record.receive_with_transfer()
+    rx, transfer = await sub_record.receive()
     assert repr(rx) == repr(record)
     assert transfer.source_node_id == 42
     assert transfer.priority == Priority.NOMINAL

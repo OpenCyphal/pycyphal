@@ -18,6 +18,8 @@ The following submodules are auto-imported when the root module ``pyuavcan`` is 
 
 The submodule :mod:`pyuavcan.application` is not auto-imported because in order to have it imported
 the DSDL-generated package ``uavcan`` containing the standard data types must be generated first.
+
+There are no internal (hidden) API between the submodules; they rely only on each other's public API.
 """
 
 import os as _os

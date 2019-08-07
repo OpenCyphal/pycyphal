@@ -27,7 +27,7 @@ class SocketCANMedia(_media.Media):
     This media implementation provides a simple interface for the standard Linux SocketCAN media layer.
     If you are testing with a virtual CAN bus and you need CAN FD, you may need to enable it manually
     (https://stackoverflow.com/questions/36568167/can-fd-support-for-virtual-can-vcan-on-socketcan);
-    otherwise, you may observe errno 90 "Message too long". Configuration example:
+    otherwise, you may observe errno 90 "Message too long". Configuration example::
 
         ip link set vcan0 mtu 72
 
@@ -35,14 +35,14 @@ class SocketCANMedia(_media.Media):
     """
     def __init__(self, iface_name: str, mtu: int, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
         """
-        CAN 2.0/FD is selected automatically based on the MTU. It is not possible to use CAN FD with MTU <= 8 bytes.
+        CAN 2.0/FD is selected automatically based on the MTU. It is not possible to use CAN FD with MTU of 8 bytes.
 
-        :param iface_name: E.g., "can0".
+        :param iface_name: E.g., ``can0``.
 
         :param mtu: The maximum data field size in bytes. CAN FD is used if this value > 8, CAN 2.0 otherwise.
             This value must belong to Media.VALID_MTU_SET.
 
-        :param loop: The event loop to use; None to select the default event loop.
+        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._mtu = int(mtu)
         if self._mtu not in self.VALID_MTU_SET:
@@ -68,6 +68,10 @@ class SocketCANMedia(_media.Media):
         super(SocketCANMedia, self).__init__()
 
     @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        return self._loop
+
+    @property
     def interface_name(self) -> str:
         return self._iface_name
 
@@ -78,8 +82,10 @@ class SocketCANMedia(_media.Media):
     @property
     def number_of_acceptance_filters(self) -> int:
         """
-        https://github.com/torvalds/linux/blob/9c7db5004280767566e91a33445bf93aa479ef02/net/can/af_can.c#L327-L348
-        https://github.com/torvalds/linux/blob/54dee406374ce8adb352c48e175176247cb8db7c/include/uapi/linux/can.h#L200
+        512 for SocketCAN.
+
+        - https://github.com/torvalds/linux/blob/9c7db5004280767566e91a33445bf93aa479ef02/net/can/af_can.c#L327-L348
+        - https://github.com/torvalds/linux/blob/54dee406374ce8adb352c48e175176247cb8db7c/include/uapi/linux/can.h#L200
         """
         return 512
 

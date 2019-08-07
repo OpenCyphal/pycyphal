@@ -28,7 +28,3 @@ The acronym stands for *Uncomplicated Application-level Vehicular Communication 
 <big>**READ THE DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**</big>
 
 **Ask questions: [forum.uavcan.org](https://forum.uavcan.org/)**
-
-<a href="https://pyuavcan.readthedocs.io/">
-<img src="docs/_static/uavcan-logo.svg" width="60%" hspace="20%" vspace="20" align="center">
-</a>

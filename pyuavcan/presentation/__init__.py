@@ -6,30 +6,49 @@
 
 # noinspection PyUnresolvedReferences
 r"""
-The presentation layer provides a high-level object-oriented interface on top of the transport layer.
-This is the level of abstraction presented to the user of the library.
-That is, when creating a new publisher or another network session, the calling code will interact
-directly with the presentation layer.
-The application layer, if used, serves as a thin proxy with some of the commonly used
-high-level protocol functions implemented rather than adding any new abstraction on top.
+Presentation layer overview
++++++++++++++++++++++++++++
 
-The presentation layer uses the term *presentation layer session*, or just *session*,
+The presentation layer provides a high-level object-oriented interface on top of the transport layer.
+This is the highest level of abstraction available to the user of the library.
+When creating a new network session instance (e.g., a publisher), the calling code will always interact
+directly with the presentation layer.
+The application layer functions provided on top of the presentation layer by the respective submodule are
+entirely optional; it is expected that some applications will bypass the application layer entirely.
+
+The presentation layer uses the term *presentation layer session* (or just *session*)
 to refer to an instance of publisher, subscriber, service client, or service server
-for a specific subject or service (see the inheritance diagram).
+for a specific subject or service (see the inheritance diagram below).
 The presentation layer allows the application to create multiple presentation layer session instances
-concurrently that access the same underlying transport layer instance, taking care of all of the related
+that access the same underlying transport layer instance concurrently, taking care of all related
 data management and synchronization issues automatically.
-This enables minimal logical coupling between different components
+This minimizes the logical coupling between different components
 of the application that have to rely on the same UAVCAN network resource.
 For example, when the application creates more than one subscriber for a given subject, the presentation
 layer will distribute received messages into every subscription instance requested by the application.
 Likewise, different components of the application may publish messages over the same subject
 or invoke the same service on the same remote server node.
 
+Inheritance diagram for the presentation layer is shown below.
+Classes named ``*Impl`` are not accessible to the user; their instances are managed automatically by the
+presentation layer controller class.
+Trivial types may be omitted from the diagram.
+
+.. inheritance-diagram:: pyuavcan.presentation._session._publisher
+                         pyuavcan.presentation._session._subscriber
+                         pyuavcan.presentation._session._server
+                         pyuavcan.presentation._session._client
+                         pyuavcan.presentation._session._error
+   :parts: 1
+
+
+Usage example
++++++++++++++
+
 The main entity of the presentation layer is the class :class:`pyuavcan.presentation.Presentation`;
 the following demo shows how it can be used.
-This example is based on a simple loopback transport that does not interact with the outside world at all
-(it doesn't even perform any kind of IO with the OS), which makes it well-suited for demo needs.
+This example is based on a simple loopback transport that does not interact with the outside world
+(it doesn't perform IO with the OS), which makes it well-suited for demo needs.
 
 >>> import tests; tests.dsdl.generate_packages()  # DSDL generation not shown; see the pyuavcan.dsdl docs for info.
 [...]
@@ -39,12 +58,13 @@ This example is based on a simple loopback transport that does not interact with
 >>> presentation = pyuavcan.presentation.Presentation(transport)
 
 Having prepared a presentation layer controller, we can create presentation-layer sessions.
-They are the main points bus access for the application. Let's start with a publisher and a subscriber:
+They are the main points of network access for the application.
+Let's start with a publisher and a subscriber:
 
 >>> pub_record = presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 >>> sub_record = presentation.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 
-Publish a message and receive it also (the loopback transport just sends it back):
+Publish a message and receive it also (the loopback transport just returns all outgoing transfers back):
 
 >>> import asyncio
 >>> run_until_complete = asyncio.get_event_loop().run_until_complete
@@ -53,15 +73,15 @@ Publish a message and receive it also (the loopback transport just sends it back
 ...     text='Neither man nor animal can be influenced by anything but suggestion.')
 >>> run_until_complete(pub_record.publish(record))  # publish() returns False on timeout.
 True
->>> message, metadata = run_until_complete(sub_record.receive_with_transfer())
+>>> message, metadata = run_until_complete(sub_record.receive())
 >>> message.text.tobytes().decode()  # Calling .tobytes().decode() won't be needed when DSDL supports strings natively.
 'Neither man nor animal can be influenced by anything but suggestion.'
 >>> metadata.transfer_id, metadata.source_node_id, metadata.timestamp
 (0, None, Timestamp(system_ns=..., monotonic_ns=...))
 
 We can use custom subject-ID with any data type, even if there is a fixed subject-ID provided
-(the background is explained in Specification, please read it). Here is an example; we also show here
-that when a receive call times out, it returns None:
+(the background is explained in Specification, please read it).
+Here is an example; we also show here that when a receive call times out, it returns None:
 
 >>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_0, subject_id=12345)
 >>> run_until_complete(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
@@ -90,7 +110,7 @@ Having assigned a node-ID, let's set up a service and invoke it:
 >>> request_object = uavcan.node.ExecuteCommand_1_0.Request(
 ...     uavcan.node.ExecuteCommand_1_0.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
 ...     '/path/to/the/firmware/image.bin')
->>> received_response = run_until_complete(client_exec_command.call(request_object))
+>>> received_response, response_transfer = run_until_complete(client_exec_command.call(request_object))
 Received command 65533 from node 1234
 >>> received_response
 uavcan.node.ExecuteCommand.Response.1.0(status=3)
@@ -104,17 +124,6 @@ For example, here we create a client for a nonexistent service; the call times o
 >>> bad_client.response_timeout = 0.1                           # Override the default.
 >>> bad_client.priority = pyuavcan.transport.Priority.HIGH      # Override the default.
 >>> run_until_complete(bad_client.call(request_object))         # Times out and returns None.
-
-Inheritance diagram for the presentation layer is shown below.
-Classes named ``*Impl`` are not accessible to the user; their instances are managed automatically by the
-presentation controller.
-
-.. inheritance-diagram:: pyuavcan.presentation._session._publisher
-                         pyuavcan.presentation._session._subscriber
-                         pyuavcan.presentation._session._server
-                         pyuavcan.presentation._session._client
-                         pyuavcan.presentation._session._error
-   :parts: 1
 """
 
 from ._presentation import Presentation as Presentation
@@ -131,8 +140,8 @@ from ._session import ServiceRequestMetadata as ServiceRequestMetadata
 from ._session import ServiceRequestHandler as ServiceRequestHandler
 
 from ._session import PresentationSession as PresentationSession
-from ._session import MessageTypedSession as MessageTypedSession
-from ._session import ServiceTypedSession as ServiceTypedSession
+from ._session import MessagePresentationSession as MessagePresentationSession
+from ._session import ServicePresentationSession as ServicePresentationSession
 
 from ._session import OutgoingTransferIDCounter as OutgoingTransferIDCounter
 from ._session import PresentationSessionClosedError as PresentationSessionClosedError

@@ -22,7 +22,7 @@ pylint      ~= 2.3
 # Documentation. Sphinx is not the most reliable piece of software out there:
 #   - https://github.com/sphinx-doc/sphinx/issues/6574
 #   - https://github.com/sphinx-doc/sphinx/issues/6607
-git+https://github.com/tk0miya/sphinx@6574_autodoc_member_order_for_imports
+git+https://github.com/sphinx-doc/sphinx@47cd262b3e50ed650a82f272ba128a1f872cda4d
 sphinx_rtd_theme == 0.4.3
 sphinxemoji      >= 0.1.4
 git+https://github.com/pavel-kirienko/sphinx-computron

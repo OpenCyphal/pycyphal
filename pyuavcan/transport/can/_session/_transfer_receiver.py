@@ -12,7 +12,11 @@ import pyuavcan.transport
 from .. import _frame
 
 
-class TransferReceptionError(enum.Enum):
+class TransferReceptionErrorID(enum.Enum):
+    """
+    Transfer reception error codes. Used in the extended error statistics.
+    See the UAVCAN specification for background info.
+    """
     MISSED_START_OF_TRANSFER = enum.auto()
     UNEXPECTED_TOGGLE_BIT    = enum.auto()
     UNEXPECTED_TRANSFER_ID   = enum.auto()
@@ -33,7 +37,7 @@ class TransferReceiver:
                       source_node_id:         int,
                       frame:                  _frame.TimestampedUAVCANFrame,
                       transfer_id_timeout_ns: int) \
-            -> typing.Union[None, TransferReceptionError, pyuavcan.transport.TransferFrom]:
+            -> typing.Union[None, TransferReceptionErrorID, pyuavcan.transport.TransferFrom]:
         """
         Observe that occasionally newer frames may have lower timestamp values due to error variations in the time
         recovery algorithms, depending on the methods of timestamping. This class therefore does not check if the
@@ -52,16 +56,16 @@ class TransferReceiver:
             self._transfer_id = frame.transfer_id
             self._toggle_bit = frame.toggle_bit
             if not frame.start_of_transfer:
-                return TransferReceptionError.MISSED_START_OF_TRANSFER
+                return TransferReceptionErrorID.MISSED_START_OF_TRANSFER
 
         # SECOND STAGE - DROP UNEXPECTED FRAMES.
         # A properly functioning CAN bus may occasionally replicate frames (see the Specification for background).
         # We combat these issues by checking the transfer ID and the toggle bit.
         if frame.transfer_id != self._transfer_id:
-            return TransferReceptionError.UNEXPECTED_TRANSFER_ID
+            return TransferReceptionErrorID.UNEXPECTED_TRANSFER_ID
 
         if frame.toggle_bit != self._toggle_bit:
-            return TransferReceptionError.UNEXPECTED_TOGGLE_BIT
+            return TransferReceptionErrorID.UNEXPECTED_TOGGLE_BIT
 
         # THIRD STAGE - PAYLOAD REASSEMBLY AND VERIFICATION.
         # Collect the data and check its correctness.
@@ -90,7 +94,7 @@ class TransferReceiver:
                 for frag in fragmented_payload:
                     crc.add(frag)
                 if crc.value != crc.RESIDUE:
-                    return TransferReceptionError.TRANSFER_CRC_MISMATCH
+                    return TransferReceptionErrorID.TRANSFER_CRC_MISMATCH
 
                 # Cut off the CRC
                 expected_length = sum(map(len, fragmented_payload)) - _frame.TRANSFER_CRC_LENGTH_BYTES
@@ -116,7 +120,7 @@ class TransferReceiver:
                 # resulting transfer size.
                 self._prepare_for_next_transfer()
                 self._fragmented_payload.clear()
-                return TransferReceptionError.PAYLOAD_TOO_LARGE
+                return TransferReceptionErrorID.PAYLOAD_TOO_LARGE
 
             return None     # Expect more frames to come
 
@@ -131,15 +135,15 @@ def _unittest_can_transfer_receiver_manual() -> None:
     transfer_id_timeout_ns = 900
     can_identifier = 0xbadc0fe
 
-    err = TransferReceptionError
+    err = TransferReceptionErrorID
 
     def proc(frame: _frame.TimestampedUAVCANFrame) \
-            -> typing.Union[None, TransferReceptionError, pyuavcan.transport.TransferFrom]:
+            -> typing.Union[None, TransferReceptionErrorID, pyuavcan.transport.TransferFrom]:
         away = rx.process_frame(priority=priority,
                                 source_node_id=source_node_id,
                                 frame=frame,
                                 transfer_id_timeout_ns=transfer_id_timeout_ns)
-        assert away is None or isinstance(away, (TransferReceptionError, pyuavcan.transport.TransferFrom))
+        assert away is None or isinstance(away, (TransferReceptionErrorID, pyuavcan.transport.TransferFrom))
         return away
 
     def frm(monotonic_ns:      int,

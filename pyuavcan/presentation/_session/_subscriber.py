@@ -12,7 +12,7 @@ import dataclasses
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessageTypedSession, MessageClass, TypedSessionFinalizer, Closable
+from ._base import MessagePresentationSession, MessageClass, TypedSessionFinalizer, Closable
 from ._error import PresentationSessionClosedError
 
 
@@ -35,7 +35,7 @@ class SubscriberStatistics:
     deserialization_failures: int  #: Number of messages lost to deserialization errors; shared per session specifier.
 
 
-class Subscriber(MessageTypedSession[MessageClass]):
+class Subscriber(MessagePresentationSession[MessageClass]):
     """
     A task should request its own independent subscriber instance from the presentation layer controller.
     Do not share the same subscriber instance across different tasks. This class implements the RAII pattern.
@@ -51,7 +51,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
 
         async for message, transfer in subscriber:
             ...  # Handle the message.
-        # The loop will be stopped when the subscriber is closed.
+        # The loop will be stopped shortly after the subscriber is closed.
 
     Implementation info: all subscribers sharing the same session specifier also share the same
     underlying implementation object containing the transport session which is reference counted and destroyed
@@ -100,7 +100,7 @@ class Subscriber(MessageTypedSession[MessageClass]):
             # implementation class invoke the handler from its own receive task directly. Eliminates extra indirection.
             while not self._closed:
                 try:
-                    message, transfer = await self.receive_with_transfer()
+                    message, transfer = await self.receive()
                     try:
                         await handler(message, transfer)
                     except asyncio.CancelledError:
@@ -122,60 +122,35 @@ class Subscriber(MessageTypedSession[MessageClass]):
 
         self._maybe_task = self._loop.create_task(task_function())
 
-    # ----------------------------------------  NAKED RECEIVE  ----------------------------------------
+    # ----------------------------------------  DIRECT RECEIVE  ----------------------------------------
 
-    async def receive(self) -> MessageClass:
+    async def receive(self) -> typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]:
         """
-        This is a wrapper for :meth:`receive_with_transfer`
-        that drops the transfer info and returns only the message.
-        """
-        return (await self.receive_with_transfer())[0]
-
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[MessageClass]:
-        """
-        This is a wrapper for :meth:`receive_with_transfer_until`
-        that drops the transfer info and returns only the message.
-        """
-        out = await self.receive_with_transfer_until(monotonic_deadline=monotonic_deadline)
-        return out[0] if out else None
-
-    async def receive_for(self, timeout: float) -> typing.Optional[MessageClass]:
-        """
-        This is a wrapper for :meth:`receive_with_transfer_for`
-        that drops the transfer info and returns only the message.
-        """
-        out = await self.receive_with_transfer_for(timeout=timeout)
-        return out[0] if out else None
-
-    # ----------------------------------------  RECEIVE WITH TRANSFER  ----------------------------------------
-
-    async def receive_with_transfer(self) -> typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]:
-        """
-        This is like :meth:`receive_with_transfer_for` with an infinite timeout.
+        This is like :meth:`receive_for` with an infinite timeout.
         """
         while True:
-            out = await self.receive_with_transfer_for(_RECEIVE_TIMEOUT)
+            out = await self.receive_for(_RECEIVE_TIMEOUT)
             if out is not None:
                 return out
 
-    async def receive_with_transfer_until(self, monotonic_deadline: float) \
+    async def receive_until(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
-        This is like :meth:`receive_with_transfer_for` with deadline instead of timeout.
+        This is like :meth:`receive_for` with deadline instead of timeout.
         The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
         A deadline that is in the past translates into negative timeout.
         """
-        return await self.receive_with_transfer_for(timeout=monotonic_deadline - self._loop.time())
+        return await self.receive_for(timeout=monotonic_deadline - self._loop.time())
 
-    async def receive_with_transfer_for(self, timeout: float) \
+    async def receive_for(self, timeout: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
         Blocks until either a valid message is received,
         in which case it is returned along with the transfer which delivered it;
         or until the timeout is expired, in which case None is returned.
 
-        The method will never return None unless the timeout has expired;
-        in order words, a premature cancellation cannot occur.
+        The method will never return None unless the timeout has expired or its session is closed;
+        in order words, a spurious premature cancellation cannot occur.
 
         If the timeout is non-positive, the method will non-blockingly check if there is any data;
         if there is, it will be returned, otherwise None will be returned immediately.
@@ -199,15 +174,17 @@ class Subscriber(MessageTypedSession[MessageClass]):
     # ----------------------------------------  ITERATOR API  ----------------------------------------
 
     def __aiter__(self) -> Subscriber[MessageClass]:
-        """Iterator API support."""
+        """
+        Iterator API support. Returns self unchanged.
+        """
         return self
 
     async def __anext__(self) -> typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]:
         """
-        This is just a wrapper over :meth:`receive_with_transfer`.
+        This is just a wrapper over :meth:`receive`.
         """
         try:
-            return await self.receive_with_transfer()
+            return await self.receive()
         except pyuavcan.transport.ResourceClosedError:
             raise StopAsyncIteration
 

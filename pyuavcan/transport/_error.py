@@ -20,14 +20,16 @@ class TransportError(RuntimeError):
 
 class InvalidTransportConfigurationError(TransportError):
     """
-    The transport could not be initialized because the specified configuration is invalid.
+    The transport could not be initialized or the operation could not be performed
+    because the specified configuration is invalid.
     """
     pass
 
 
 class InvalidMediaConfigurationError(InvalidTransportConfigurationError):
     """
-    The transport could not be initialized because the specified media configuration is invalid.
+    The transport could not be initialized or the operation could not be performed
+    because the specified media configuration is invalid.
     """
     pass
 
@@ -51,7 +53,7 @@ class OperationNotDefinedForAnonymousNodeError(TransportError):
 
 class ResourceClosedError(TransportError):
     """
-    The requested operation could not be performed because an associated resource has already been disposed.
+    The requested operation could not be performed because an associated resource has already been terminated.
     Double-close should not raise exceptions.
     """
     pass

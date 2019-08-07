@@ -13,10 +13,10 @@ from . import hash as hash
 
 from ._refragment import refragment as refragment
 
+from ._introspect import import_submodules as import_submodules
+from ._introspect import iter_descendants as iter_descendants
+
 from ._mark_last import mark_last as mark_last
 
 from ._repr import repr_attributes as repr_attributes
 from ._repr import repr_attributes_noexcept as repr_attributes_noexcept
-
-from ._introspect import iter_descendants as iter_descendants
-from ._introspect import import_submodules as import_submodules
