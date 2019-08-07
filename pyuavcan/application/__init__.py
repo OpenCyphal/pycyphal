@@ -13,7 +13,7 @@ This module is not imported automatically because:
   in which case having it imported would be counter-productive due to increased initialization time, memory footprint,
   and possible reliability issues. The presentation level is the main abstraction layer provided by this library.
   The functionality of this application-level module is built on top of the public user-facing API of the
-  presentation layer. See :mod:`pyuavcan.presentation`.
+  presentation layer (no internal interfaces between modules exist). See :mod:`pyuavcan.presentation`.
 
 - The module depends on DSDL generated packages, particularly on that of the standard root namespace ``uavcan``,
   so this module cannot be imported until the required code is generated.
