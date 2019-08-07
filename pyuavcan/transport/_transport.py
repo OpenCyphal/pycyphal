@@ -69,7 +69,7 @@ class Transport(abc.ABC):
         """
         This method can be invoked only if the local node-ID is not assigned;
         otherwise, :class:`pyuavcan.transport.InvalidTransportConfigurationError` will be raised.
-        Once a local node ID is assigned, this method shall not be invoked anymore.
+        Once a local node ID is assigned, this method should not be invoked anymore.
         In other words, it can be successfully invoked at most once.
         """
         raise NotImplementedError

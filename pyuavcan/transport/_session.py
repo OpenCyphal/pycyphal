@@ -36,8 +36,7 @@ class Feedback(abc.ABC):
         - The priority is rarely unique, hence unfit for matching.
 
         - Transfer-ID may be modified by the transport layer by computing its modulus, which is difficult to
-          reliably account for in the application, especially in heterogeneous redundant transports with multiple
-          publishers per session.
+          reliably account for in the application, especially in heterogeneous redundant transports.
 
         - The fragmented payload may contain references to the actual memory of the serialized object, meaning
           that it may actually change after the object is transmitted, also rendering it unfit for matching.
@@ -53,7 +52,7 @@ class Feedback(abc.ABC):
         They may use either software or hardware timestamping under the hood,
         depending on the capabilities of the underlying media driver.
         The timestamp of a multi-frame transfer is the timestamp of its first frame.
-        The overall stack latency can be computed by subtracting the original transfer timestamp from this value.
+        The overall TX latency can be computed by subtracting the original transfer timestamp from this value.
         """
         raise NotImplementedError
 
@@ -92,7 +91,7 @@ class Statistics:
     transfers:     int = 0  #: UAVCAN transfer count.
     frames:        int = 0  #: UAVCAN transport frame count (CAN frames, UDP packets, wireless frames, etc).
     payload_bytes: int = 0  #: Transport layer payload bytes, i.e., not including transport metadata or padding.
-    errors:        int = 0  #: Failures of any kind, even if they are also logged using other means.
+    errors:        int = 0  #: Failures of any kind, even if they are also logged using other means, excepting drops.
     drops:         int = 0  #: Frames lost to buffer overruns and expired deadlines.
 
     def __eq__(self, other: object) -> bool:
@@ -246,9 +245,10 @@ class OutputSession(Session):
     @abc.abstractmethod
     async def send_until(self, transfer: Transfer, monotonic_deadline: float) -> bool:
         """
-        Sends the transfer; block if necessary until the specified deadline [second].
-        Return when transmission is completed, in which case the return value is True;
-        or return when the deadline is reached, in which case the return value is False.
+        Sends the transfer; blocks if necessary until the specified deadline [second].
+        The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
+        Returns when transmission is completed, in which case the return value is True;
+        or when the deadline is reached, in which case the return value is False.
         In the case of timeout, a multi-frame transfer may be emitted partially,
         thereby rendering the receiving end unable to process it.
         If the deadline is in the past, the method attempts to send the frames anyway as long as that

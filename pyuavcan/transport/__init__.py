@@ -101,7 +101,7 @@ submodule under :mod:`pyuavcan.transport`.
 The name of the submodule should be the lowercase name of the transport.
 The name of the implementation class that inherits from :class:`pyuavcan.transport.Transport`
 should begin with capitalized name of the submodule followed by ``Transport``.
-If the new transport contains media sub-layer, the media interface class should be at
+If the new transport contains a media sub-layer, the media interface class should be at
 ``pyuavcan.transport.*.media.Media``, where the asterisk is the transport name placeholder;
 the media sub-layer should follow the same organization patterns as the transport layer.
 See the CAN transport as an example.
@@ -114,7 +114,7 @@ A highly generic, transport-agnostic application may benefit from the helper fun
 are not auto-imported and whose names are not known in advance.
 
 Users can define their custom transports and/or media sub-layers outside of the library scope.
-The library itself is invariant to the location of its components.
+The library itself does not care about the location of its components.
 
 
 Class inheritance diagram
