@@ -29,11 +29,11 @@ class CRC16CCITT:
     >>> c.add(10673 .to_bytes(2, 'big'))
     >>> c.value
     0
-    >>> assert c.value == c.RESIDUE == 0
+    >>> c.check_residue()
+    True
     """
-    RESIDUE = 0x0000
-
     def __init__(self) -> None:
+        assert len(self._TABLE) == 256
         self._value = 0xFFFF
 
     def add(self, data: typing.Union[bytes, bytearray, memoryview]) -> None:
@@ -45,6 +45,9 @@ class CRC16CCITT:
     @property
     def value(self) -> int:
         return self._value
+
+    def check_residue(self) -> bool:
+        return self._value == 0
 
     _TABLE = [
         0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7,

@@ -5,3 +5,4 @@
 #
 
 from ._crc16_ccitt import CRC16CCITT as CRC16CCITT
+from ._crc32c import CRC32C as CRC32C

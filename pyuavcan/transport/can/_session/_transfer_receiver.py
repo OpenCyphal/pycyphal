@@ -93,7 +93,7 @@ class TransferReceiver:
                 crc = pyuavcan.util.hash.CRC16CCITT()
                 for frag in fragmented_payload:
                     crc.add(frag)
-                if crc.value != crc.RESIDUE:
+                if not crc.check_residue():
                     return TransferReceptionErrorID.TRANSFER_CRC_MISMATCH
 
                 # Cut off the CRC
