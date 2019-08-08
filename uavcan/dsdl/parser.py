@@ -457,13 +457,16 @@ class Parser:
         return full_name, version, default_dtid
 
     def _locate_compound_type_definition(self, referencing_filename, typename):
-        def locate_namespace_directory(ns):
+        def locate_namespace_directories(ns):
+            namespace_dirs = []
             namespace_components = ns.split('.')
             root_namespace, sub_namespace_components = namespace_components[0], namespace_components[1:]
             for d in self.search_dirs:
                 if d.split(os.path.sep)[-1] == root_namespace:
-                    return os.path.join(d, *sub_namespace_components)
-            error('Unknown namespace [%s]', ns)
+                    namespace_dirs.append(os.path.join(d, *sub_namespace_components))
+            if len(namespace_dirs) == 0:
+                error('Unknown namespace [%s]', ns)
+            return namespace_dirs
 
         if '.' not in typename:
             current_namespace = self._namespace_from_filename(referencing_filename)
@@ -471,18 +474,21 @@ class Parser:
         else:
             full_typename = typename
         namespace = '.'.join(full_typename.split('.')[:-1])
-        directory = locate_namespace_directory(namespace)
-        logger.debug('Searching for [%s] in [%s]', full_typename, directory)
+        directories = locate_namespace_directories(namespace)
 
-        for fn in os.listdir(directory):
-            fn = os.path.join(directory, fn)
-            if os.path.isfile(fn):
-                try:
-                    fn_full_typename, _version, _dtid = self._full_typename_version_and_dtid_from_filename(fn)
-                    if full_typename == fn_full_typename:
-                        return fn
-                except Exception as ex:
-                    logger.debug('Unknown file [%s], skipping... [%s]', pretty_filename(fn), ex)
+        for directory in directories:
+            logger.debug('Searching for [%s] in [%s]', full_typename, directory)
+            if not os.path.isdir(directory):
+                continue
+            for fn in os.listdir(directory):
+                fn = os.path.join(directory, fn)
+                if os.path.isfile(fn):
+                    try:
+                        fn_full_typename, _version, _dtid = self._full_typename_version_and_dtid_from_filename(fn)
+                        if full_typename == fn_full_typename:
+                            return fn
+                    except Exception as ex:
+                        logger.debug('Unknown file [%s], skipping... [%s]', pretty_filename(fn), ex)
         error('Type definition not found [%s]', typename)
 
     # noinspection PyUnusedLocal
@@ -748,8 +754,6 @@ def validate_search_directories(dirnames):
             if d1 == d2:
                 continue
             enforce(not d1.startswith(d2), 'Nested search directories are not allowed [%s] [%s]', d1, d2)
-            enforce(d1.split(os.path.sep)[-1] != d2.split(os.path.sep)[-1],
-                    'Namespace roots must be unique [%s] [%s]', d1, d2)
     return dirnames
 
 
@@ -849,10 +853,16 @@ def parse_namespaces(source_dirs, search_dirs=None):
             return
         key = t.kind, t.default_dtid
         if key in all_default_dtid:
-            first = pretty_filename(all_default_dtid[key])
+            value = all_default_dtid[key]
+            first = pretty_filename(value[0])
             second = pretty_filename(filename)
-            error('Default data type ID collision: [%s] [%s]', first, second)
-        all_default_dtid[key] = filename
+            if t.get_dsdl_signature() != value[1].get_dsdl_signature():
+                error('Redefinition of data type ID: [%s] [%s]', first, second)
+            else:
+                logger.debug('ignoring duplicate definition of %s', t.full_name)
+                return
+
+        all_default_dtid[key] = (filename, t)
 
     parser = Parser(source_dirs + (search_dirs or []))
     output_types = []
