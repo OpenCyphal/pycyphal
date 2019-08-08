@@ -68,3 +68,10 @@ target/
 
 # IntelliJ
 .idea/
+
+# VS code
+.vscode
+
+# virtualenv
+.pyenv
+
