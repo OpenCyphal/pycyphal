@@ -8,6 +8,17 @@
 This transport module contains no media sublayers because the media abstraction
 is handled directly by the PySerial library and the underlying operating system.
 
+For testing, use serial-over-TCP tunneling implemented in PySerial
+(details: https://pythonhosted.org/pyserial/url_handlers.html#socket)
+with ncat in TCP broker mode
+(details: https://nmap.org/ncat/guide/ncat-broker.html)::
+
+    ncat --broker --listen -p 50905
+
+This closely emulates an RS-485 bus one could say.
+
+Inheritance diagram:
+
 .. inheritance-diagram:: pyuavcan.transport.serial._serial
    :parts: 1
 """
