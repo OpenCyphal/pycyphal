@@ -11,6 +11,8 @@ import pyuavcan
 
 
 class HighOverheadTransferReassembler:
+    TRANSFER_CRC_LENGTH_BYTES = 4
+
     class ErrorID(enum.Enum):
         MISSED_START_OF_TRANSFER = enum.auto()
         MISSING_FRAMES           = enum.auto()
@@ -19,7 +21,7 @@ class HighOverheadTransferReassembler:
         PAYLOAD_TOO_LARGE        = enum.auto()
 
     def __init__(self, max_payload_size_bytes: int):
-        self._max_payload_size_bytes_with_crc = int(max_payload_size_bytes) + 4
+        self._max_payload_size_bytes_with_crc = int(max_payload_size_bytes) + self.TRANSFER_CRC_LENGTH_BYTES
 
     def process_frame(self,
                       timestamp:              pyuavcan.transport.Timestamp,

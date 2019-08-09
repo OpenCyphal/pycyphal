@@ -5,7 +5,7 @@
 #
 
 """
-This is not a transport.
+This is not a transport, and it is not a part of the abstract model.
 This submodule contains a collection of software components implementing common logic reusable
 with different transport implementations.
 Some transport implementations may be too specialized to rely on these, which is expected and natural.
