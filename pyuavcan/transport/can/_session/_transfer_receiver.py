@@ -7,8 +7,7 @@
 from __future__ import annotations
 import enum
 import typing
-import pyuavcan.util
-import pyuavcan.transport
+import pyuavcan
 from .. import _frame
 
 
@@ -90,7 +89,7 @@ class TransferReceiver:
                 assert len(fragmented_payload) == 1     # Single-frame transfer, additional checks not needed
             else:
                 assert len(fragmented_payload) > 1      # Multi-frame transfer, check and remove the trailing CRC
-                crc = pyuavcan.util.hash.CRC16CCITT()
+                crc = pyuavcan.transport.commons.crc.CRC16CCITT()
                 for frag in fragmented_payload:
                     crc.add(frag)
                 if not crc.check_residue():

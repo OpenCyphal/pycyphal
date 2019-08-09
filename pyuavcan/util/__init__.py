@@ -8,11 +8,6 @@
 The util package contains various entities that are commonly useful in PyUAVCAN-based applications.
 """
 
-# noinspection PyShadowingBuiltins
-from . import hash as hash
-
-from ._refragment import refragment as refragment
-
 from ._introspect import import_submodules as import_submodules
 from ._introspect import iter_descendants as iter_descendants
 
