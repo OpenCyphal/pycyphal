@@ -9,6 +9,7 @@
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import sys
+from .python_can import PythonCAN
 from .slcan import SLCAN
 from .common import DriverError, CANFrame
 
@@ -16,12 +17,6 @@ if sys.platform.startswith('linux'):
     from .socketcan import SocketCAN
 else:
     SocketCAN = None
-
-try:
-    import can
-    from .python_can import PythonCAN
-except ImportError:
-    PythonCAN = None
 
 __all__ = ['make_driver', 'DriverError', 'CANFrame']
 
