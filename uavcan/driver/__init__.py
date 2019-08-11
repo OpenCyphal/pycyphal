@@ -19,10 +19,9 @@ else:
 
 try:
     import can
+    from .python_can import PythonCAN
 except ImportError:
     PythonCAN = None
-else:
-    from .python_can import PythonCAN
 
 __all__ = ['make_driver', 'DriverError', 'CANFrame']
 
