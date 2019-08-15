@@ -6,17 +6,20 @@
 
 import typing
 import asyncio
+import logging
+import threading
+import concurrent.futures
 
 import serial
 
 import pyuavcan.transport
+from ._frame import Frame, TimestampedFrame
 
 
-# Same value represents broadcast node ID when transmitting.
-_ANONYMOUS_NODE_ID = 0xFFFF
+_SERIAL_PORT_READ_TIMEOUT = 1.0
 
-_FRAME_DELIMITER_BYTE = 0x9E
-_ESCAPE_PREFIX_BYTE = 0x8E
+
+_logger = logging.getLogger(__name__)
 
 
 class SerialTransport(pyuavcan.transport.Transport):
@@ -36,8 +39,8 @@ class SerialTransport(pyuavcan.transport.Transport):
     It is also suitable for raw transport log storage, because one-dimensional flat binary files are structurally
     similar to serial byte-level links.
 
-    The packet header is defined as follows (byte and bit ordering follow the DSDL specification (least
-    significant byte first, most significant bit first))::
+    The packet header is defined as follows (byte and bit ordering follow the DSDL specification:
+    least significant byte first, most significant bit first)::
 
         uint8   version                 # Always zero. Discard the frame if not.
         uint8   priority                # Like IEEE 802.15.4, three most significant bits: 0 = highest, 7 = lowest.
@@ -49,7 +52,13 @@ class SerialTransport(pyuavcan.transport.Transport):
         uint64  transfer ID
 
         uint32  frame index EOT         # Like IEEE 802.15.4; MSB set if last frame of the transfer.
-        void32
+        void32                          # Set to zero when sending, ignore when receiving.
+
+    For message frames, the data specifier field contains the subject-ID value,
+    so that the most significant bit is always cleared.
+    For service frames, the most significant bit (15th) is always set,
+    and the second-to-most-significant bit (14th) is set for response transfers only;
+    the remaining 14 least significant bits contain the service-ID value.
 
     Total header size: 32 bytes (256 bits).
 
@@ -92,13 +101,15 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     def __init__(
         self,
-        serial_port:                                  serial.SerialBase,
+        serial_port:                                  typing.Union[str, serial.SerialBase],
         single_frame_transfer_payload_capacity_bytes: int = DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
         service_transfer_multiplier:                  int = 1,
         loop:                                         typing.Optional[asyncio.AbstractEventLoop] = None
     ):
         """
-        :param serial_port: The serial port instance to communicate over.
+        :param serial_port: The serial port instance to communicate over, or its name.
+            In the latter case, the port will be constructed via :func:`serial.serial_for_url`.
+            The new instance takes ownership of the port; when the instance is closed, its port will also be closed.
 
         :param single_frame_transfer_payload_capacity_bytes: Use single-frame transfers for all outgoing transfers
             containing not more than than this many bytes of payload. Otherwise, use multi-frame transfers.
@@ -118,13 +129,32 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
-        self._port = serial_port
         self._sft_payload_capacity_bytes = int(single_frame_transfer_payload_capacity_bytes)
         self._service_transfer_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         if self._service_transfer_multiplier < 1:
             raise ValueError(f'Invalid service transfer multiplier: {self._service_transfer_multiplier}')
+
+        self._port_lock = asyncio.Lock(loop=loop)
+        self._local_node_id: typing.Optional[int] = None
+
+        # The serialization buffer is pre-allocated for performance reasons;
+        # it is needed to store frame contents before they are emitted into the serial port.
+        self._serialization_buffer = bytearray(0 for _ in range(self._sft_payload_capacity_bytes * 3))
+
+        if not isinstance(serial_port, serial.SerialBase):
+            serial_port = serial.serial_for_url(serial_port)
+        assert isinstance(serial_port, serial.SerialBase)
+        if not serial_port.is_open:
+            raise pyuavcan.transport.InvalidMediaConfigurationError('The serial port instance is not open')
+        serial_port.timeout = _SERIAL_PORT_READ_TIMEOUT
+        self._serial_port = serial_port
+
+        self._background_executor = concurrent.futures.ThreadPoolExecutor()
+
+        self._reader_thread = threading.Thread(target=self._reader_thread_func, daemon=True)
+        self._reader_thread.start()
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -133,20 +163,28 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
-            transfer_id_modulo=2 ** 64,
-            node_id_set_cardinality=4096,
+            transfer_id_modulo=Frame.TRANSFER_ID_MASK + 1,
+            node_id_set_cardinality=Frame.NODE_ID_MASK,  # The last one is reserved for anonymous, so 4095
             single_frame_transfer_payload_capacity_bytes=self._sft_payload_capacity_bytes
         )
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
-        raise NotImplementedError
+        return self._local_node_id
 
     def set_local_node_id(self, node_id: int) -> None:
-        raise NotImplementedError
+        if self._local_node_id is None:
+            if 0 <= node_id < self.protocol_parameters.node_id_set_cardinality:
+                self._local_node_id = int(node_id)
+            else:
+                raise ValueError(f'Invalid node ID for serial: {node_id}')
+        else:
+            raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     def close(self) -> None:
-        raise NotImplementedError
+        # TODO: close sessions
+        if self._serial_port.is_open:
+            self._serial_port.close()
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.SessionSpecifier,
@@ -169,5 +207,53 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def descriptor(self) -> str:
         return \
-            f'<serial baudrate="{self._port.baudrate}" sft_capacity="{self._sft_payload_capacity_bytes}" ' \
-            f'srv_mult="{self._service_transfer_multiplier}">{self._port.name}</serial>'
+            f'<serial baudrate="{self._serial_port.baudrate}" sft_capacity="{self._sft_payload_capacity_bytes}" ' \
+            f'srv_mult="{self._service_transfer_multiplier}">{self._serial_port.name}</serial>'
+
+    @property
+    def serial_port(self) -> serial.SerialBase:
+        assert isinstance(self._serial_port, serial.SerialBase)
+        return self._serial_port
+
+    def _handle_received_frame(self, frame: TimestampedFrame) -> None:
+        pass
+
+    async def _send_transfer(self, frames: typing.Iterable[Frame], monotonic_deadline: float) \
+            -> typing.Optional[pyuavcan.transport.Timestamp]:
+        """
+        Emits the frames belonging to the same transfer, returns the first frame transmission timestamp.
+        The returned timestamp can be used for transfer feedback implementation.
+        Aborts if the frames cannot be emitted before the deadline or if a write call fails.
+        :returns: The first frame transmission timestamp if all frames are sent successfully.
+            None on timeout or on write failure.
+        """
+        tx_ts: typing.Optional[pyuavcan.transport.Timestamp] = None
+        for fr in frames:
+            compiled = fr.compile_into(self._serialization_buffer)
+            with self._port_lock:       # TODO: the lock acquisition should be prioritized by frame priority!
+                timeout = monotonic_deadline - self._loop.time()
+                if timeout <= 0:
+                    return None    # Timed out
+                self._serial_port.write_timeout = timeout
+                num_written = await self._loop.run_in_executor(self._background_executor,
+                                                               self._serial_port.write,
+                                                               compiled)
+                tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
+
+            num_written = len(compiled) if num_written is None else num_written
+            if num_written < len(compiled):
+                return None    # Write failed
+
+        assert tx_ts is not None
+        return tx_ts
+
+    def _reader_thread_func(self) -> None:
+        try:
+            while self._serial_port.is_open:
+                assert abs(self._serial_port.timeout - _SERIAL_PORT_READ_TIMEOUT) < 0.1
+                chunk = self._serial_port.read(max(1, self._serial_port.inWaiting()))
+                self._loop.call_soon_threadsafe(self._handle_received_frame, None)
+                raise NotImplementedError
+        except Exception as ex:
+            _logger.exception('Reader thread has failed, the instance will be terminated: %s', ex)
+            self._serial_port.close()
