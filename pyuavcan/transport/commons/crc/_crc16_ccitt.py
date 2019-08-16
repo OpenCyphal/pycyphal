@@ -26,7 +26,7 @@ class CRC16CCITT:
     >>> c.add(b'')
     >>> c.value
     10673
-    >>> c.add(10673 .to_bytes(2, 'big'))
+    >>> c.add(c.value_as_bytes)
     >>> c.value
     0
     >>> c.check_residue()
@@ -42,12 +42,16 @@ class CRC16CCITT:
             val = ((val << 8) & 0xFFFF) ^ self._TABLE[(val >> 8) ^ x]
         self._value = val
 
+    def check_residue(self) -> bool:
+        return self._value == 0
+
     @property
     def value(self) -> int:
         return self._value
 
-    def check_residue(self) -> bool:
-        return self._value == 0
+    @property
+    def value_as_bytes(self) -> bytes:
+        return self.value.to_bytes(2, 'big')
 
     _TABLE = [
         0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7,

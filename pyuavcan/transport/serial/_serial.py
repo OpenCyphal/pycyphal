@@ -14,9 +14,11 @@ import serial
 
 import pyuavcan.transport
 from ._frame import Frame, TimestampedFrame
+from ._stream_parser import StreamParser
 
 
 _SERIAL_PORT_READ_TIMEOUT = 1.0
+_MAX_RECEIVE_PAYLOAD_SIZE_BYTES = 1024 * 100
 
 
 _logger = logging.getLogger(__name__)
@@ -33,7 +35,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     The serial transport is designed for basic raw byte-level low-speed serial links:
 
-    - UART, RS-232/485/422 (the recommended rates are [baud]: 115200, 921600, 3'000'000).
+    - UART, RS-232/485/422 (the recommended baud rates are: 115200, 921600, 3'000'000).
     - USB CDC ACM.
 
     It is also suitable for raw transport log storage, because one-dimensional flat binary files are structurally
@@ -82,7 +84,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     |                        |followed by 0x71.      |the start delimiter.   |                        |
     +------------------------+-----------------------+-----------------------+------------------------+
 
-    There are no magic bytes in this format because the strong CRC and the compact-data-type-ID field render the
+    There are no magic bytes in this format because the strong CRC and the data type hash field render the
     format sufficiently recognizable. The worst case overhead exceeds 100% if every byte of the payload and the CRC
     is either 0x9E or 0x8E. Despite the overhead, this format is still considered superior to the alternatives
     since it is robust and guarantees a constant recovery time. Consistent-overhead byte stuffing (COBS) is sometimes
@@ -218,6 +220,15 @@ class SerialTransport(pyuavcan.transport.Transport):
     def _handle_received_frame(self, frame: TimestampedFrame) -> None:
         pass
 
+    @staticmethod
+    def _handle_received_unparsed_data(data: memoryview) -> None:
+        printable: typing.Union[str, bytes] = bytes(data)
+        try:
+            printable = printable.decode('utf8')
+        except ValueError:
+            pass
+        _logger.warning('Unparsed data: %s', printable)
+
     async def _send_transfer(self, frames: typing.Iterable[Frame], monotonic_deadline: float) \
             -> typing.Optional[pyuavcan.transport.Timestamp]:
         """
@@ -248,12 +259,22 @@ class SerialTransport(pyuavcan.transport.Transport):
         return tx_ts
 
     def _reader_thread_func(self) -> None:
+        def callback(item: typing.Union[TimestampedFrame, memoryview]) -> None:
+            if isinstance(item, TimestampedFrame):
+                handler = self._handle_received_frame
+            elif isinstance(item, memoryview):
+                handler = self._handle_received_unparsed_data
+            else:
+                assert False
+            self._loop.call_soon_threadsafe(handler, item)
+
         try:
+            parser = StreamParser(callback, _MAX_RECEIVE_PAYLOAD_SIZE_BYTES)
+            assert abs(self._serial_port.timeout - _SERIAL_PORT_READ_TIMEOUT) < 0.1
             while self._serial_port.is_open:
-                assert abs(self._serial_port.timeout - _SERIAL_PORT_READ_TIMEOUT) < 0.1
                 chunk = self._serial_port.read(max(1, self._serial_port.inWaiting()))
-                self._loop.call_soon_threadsafe(self._handle_received_frame, None)
-                raise NotImplementedError
+                timestamp = pyuavcan.transport.Timestamp.now()
+                parser.process_next_chunk(chunk, timestamp)
         except Exception as ex:
             _logger.exception('Reader thread has failed, the instance will be terminated: %s', ex)
             self._serial_port.close()

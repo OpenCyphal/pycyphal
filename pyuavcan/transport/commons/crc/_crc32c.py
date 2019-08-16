@@ -25,7 +25,7 @@ class CRC32C:
     >>> c.add(b'')
     >>> c.value
     3808858755
-    >>> c.add(3808858755 .to_bytes(4, 'little'))
+    >>> c.add(c.value_as_bytes)
     >>> c.value  # Inverted residue
     1214729159
     >>> c.check_residue()
@@ -41,13 +41,17 @@ class CRC32C:
             val = (val >> 8) ^ self._TABLE[x ^ (val & 0xFF)]
         self._value = val
 
+    def check_residue(self) -> bool:
+        return self._value == 0xB798B438    # Checked before the output XOR is applied.
+
     @property
     def value(self) -> int:
         assert 0 <= self._value <= 0xFFFFFFFF
         return self._value ^ 0xFFFFFFFF
 
-    def check_residue(self) -> bool:
-        return self._value == 0xB798B438    # Checked before the output XOR is applied.
+    @property
+    def value_as_bytes(self) -> bytes:
+        return self.value.to_bytes(4, 'little')
 
     _TABLE = [
         0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4, 0xC79A971F, 0x35F1141C, 0x26A1E7E8, 0xD4CA64EB,
