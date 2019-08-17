@@ -25,7 +25,7 @@ pylint      ~= 2.3
 git+https://github.com/sphinx-doc/sphinx@47cd262b3e50ed650a82f272ba128a1f872cda4d
 sphinx_rtd_theme == 0.4.3
 sphinxemoji      >= 0.1.4
-git+https://github.com/pavel-kirienko/sphinx-computron
+sphinx-computron >= 0.1.0
 
 # Packaging and distribution.
 setuptools >= 40.8
