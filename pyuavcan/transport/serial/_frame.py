@@ -131,9 +131,6 @@ class Frame:
         return memoryview(out_buffer)[:next_byte_index]
 
 
-assert Frame.HEADER_STRUCT.size == 32
-
-
 @dataclasses.dataclass(frozen=True)
 class TimestampedFrame(Frame):
     timestamp: pyuavcan.transport.Timestamp
@@ -187,6 +184,11 @@ class TimestampedFrame(Frame):
                                     timestamp=timestamp)
         except ValueError:
             return None
+
+
+# ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
+
+assert Frame.HEADER_STRUCT.size == 32
 
 
 def _unittest_frame_compile_message() -> None:

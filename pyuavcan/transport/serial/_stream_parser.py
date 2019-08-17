@@ -10,8 +10,18 @@ from ._frame import TimestampedFrame
 
 
 class StreamParser:
+    """
+    A stream parser is fed with bytes received from the channel.
+    The parser maintains internal parsing state machine; whenever the machine detects that a valid frame is received,
+    the callback is invoked. When the state machine identifies that a received block of data cannot possibly
+    contain or be part of a valid frame, the raw bytes are delivered into the callback as-is for optional processing.
+    The raw bytes are always unescaped and never contain the frame delimiter bytes; that is, the parser does not
+    guarantee that extraneous data (i.e., data not belonging to the protocol set) is retained in its original form.
+    An empty sequence of raw bytes is never reported.
+    The raw data reporting can be useful if the same serial port is used both for UAVCAN and as a text console.
+    """
     def __init__(self,
-                 callback:               typing.Callable[[typing.Union[TimestampedFrame, memoryview]], None],
+                 callback: typing.Callable[[typing.Union[TimestampedFrame, memoryview]], None],
                  max_payload_size_bytes: int):
         """
         :param callback: Invoked when a new frame is parsed or when a block of data could not be recognized as a frame.
@@ -40,9 +50,7 @@ class StreamParser:
         for b in chunk:
             self._process_byte(b, timestamp)
 
-        has_data = len(self._frame_buffer) > 0
-        shall_abort = (not self._is_inside_frame()) or (len(self._frame_buffer) > self._max_frame_size_bytes)
-        if has_data and shall_abort:
+        if (not self._is_inside_frame()) or (len(self._frame_buffer) > self._max_frame_size_bytes):
             self._finalize(known_invalid=True)
 
     def _process_byte(self, b: int, timestamp: pyuavcan.transport.Timestamp) -> None:
@@ -75,8 +83,81 @@ class StreamParser:
             if (not known_invalid) and len(mv) <= self._max_frame_size_bytes:
                 assert self._current_frame_timestamp is not None
                 parsed = TimestampedFrame.parse_from_unescaped_image(mv, self._current_frame_timestamp)
-            self._callback(parsed if parsed is not None else mv)
+            if parsed:
+                self._callback(parsed)
+            elif mv:
+                self._callback(mv)
+            else:
+                pass    # Empty - nothing to report.
         finally:
             self._unescape_next = False
             self._current_frame_timestamp = None
             self._frame_buffer = bytearray()    # There are memoryview instances pointing to the old buffer!
+
+
+def _unittest_stream_parser() -> None:
+    from pytest import raises
+    from pyuavcan.transport import Priority, MessageDataSpecifier
+    from ._frame import Frame
+
+    ts = pyuavcan.transport.Timestamp.now()
+
+    outputs: typing.List[typing.Union[TimestampedFrame, memoryview]] = []
+
+    with raises(ValueError):
+        sp = StreamParser(outputs.append, 0)
+
+    sp = StreamParser(outputs.append, 4)
+
+    def proc(b: typing.Union[bytes, memoryview]) -> typing.Sequence[typing.Union[TimestampedFrame, memoryview]]:
+        sp.process_next_chunk(b, ts)
+        out = outputs[:]
+        outputs.clear()
+        return out
+
+    assert not outputs
+    assert [b'abcdef'] == proc(b'abcdef')
+    assert [] == proc(b'')
+
+    # The frame is well-delimited, but the content is invalid. Notice the unescaping in action.
+    assert [] == proc(b'\x9E\x8E\x61')
+    assert [b'\x9E\x8E'] == proc(b'\x8E\x71\x9E')
+
+    # Valid frame.
+    f1 = Frame(priority=Priority.HIGH,
+               source_node_id=Frame.FRAME_DELIMITER_BYTE,
+               destination_node_id=Frame.ESCAPE_PREFIX_BYTE,
+               data_specifier=MessageDataSpecifier(12345),
+               data_type_hash=0xdead_beef_bad_c0ffe,
+               transfer_id=1234567890123456789,
+               frame_index=1234567,
+               end_of_transfer=True,
+               payload=memoryview(b'ab\x9E\x8E'))  # 4 bytes of payload.
+    result = proc(f1.compile_into(bytearray(100)))
+    assert len(result) == 1
+    assert isinstance(result[0], TimestampedFrame)
+    assert Frame.__eq__(f1, result)
+
+    # Second valid frame is too long.
+    f2 = Frame(priority=Priority.HIGH,
+               source_node_id=Frame.FRAME_DELIMITER_BYTE,
+               destination_node_id=Frame.ESCAPE_PREFIX_BYTE,
+               data_specifier=MessageDataSpecifier(12345),
+               data_type_hash=0xdead_beef_bad_c0ffe,
+               transfer_id=1234567890123456789,
+               frame_index=1234567,
+               end_of_transfer=True,
+               payload=f1.compile_into(bytearray(1000)))
+    assert len(f2.payload) == 46
+    result = proc(f2.compile_into(bytearray(1000)))
+    assert len(result) == 1
+    assert isinstance(result[0], memoryview)
+
+    # Create new instance with much larger frame size limit; feed both frames but let the first one be incomplete.
+    sp = StreamParser(outputs.append, 10**6)
+    assert [] == proc(f1.compile_into(bytearray(100))[:-2])     # First one is ended abruptly.
+    result = proc(f2.compile_into(bytearray(100)))              # Then the second frame begins.
+    assert len(result) == 2                                     # Make sure the second one is retrieved correctly.
+    assert isinstance(result[0], memoryview)
+    assert isinstance(result[1], TimestampedFrame)
+    assert Frame.__eq__(f2, result)
