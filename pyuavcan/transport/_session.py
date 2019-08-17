@@ -205,6 +205,28 @@ class OutputSession(Session):
     instead, the factory method :meth:`pyuavcan.transport.Transport.get_output_session` shall be used.
     """
     @abc.abstractmethod
+    async def send_until(self, transfer: Transfer, monotonic_deadline: float) -> bool:
+        """
+        Sends the transfer; blocks if necessary until the specified deadline [second].
+        The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
+        Returns when transmission is completed, in which case the return value is True;
+        or when the deadline is reached, in which case the return value is False.
+        In the case of timeout, a multi-frame transfer may be emitted partially,
+        thereby rendering the receiving end unable to process it.
+        If the deadline is in the past, the method attempts to send the frames anyway as long as that
+        doesn't involve blocking (i.e., task context switching).
+
+        Some transports or media sub-layers may be unable to guarantee transmission strictly before the deadline;
+        for example, that may be the case if there is an additional buffering layer under the transport/media
+        implementation (e.g., that could be the case with SLCAN-interfaced CAN bus adapters, IEEE 802.15.4 radios,
+        and so on, where the data is pushed through an intermediary interface and briefly buffered again before
+        being pushed onto the media).
+        This is a design limitation imposed by the underlying non-real-time platform that Python runs on;
+        it is considered acceptable since PyUAVCAN is designed for soft-real-time applications at most.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def enable_feedback(self, handler: typing.Callable[[Feedback], None]) -> None:
         """
         The output feedback feature makes the transport invoke the specified handler soon after the first
@@ -239,28 +261,6 @@ class OutputSession(Session):
         """
         Restores the original state.
         Does nothing if the callback is already disabled.
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    async def send_until(self, transfer: Transfer, monotonic_deadline: float) -> bool:
-        """
-        Sends the transfer; blocks if necessary until the specified deadline [second].
-        The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
-        Returns when transmission is completed, in which case the return value is True;
-        or when the deadline is reached, in which case the return value is False.
-        In the case of timeout, a multi-frame transfer may be emitted partially,
-        thereby rendering the receiving end unable to process it.
-        If the deadline is in the past, the method attempts to send the frames anyway as long as that
-        doesn't involve blocking (i.e., task context switching).
-
-        Some transports or media sub-layers may be unable to guarantee transmission strictly before the deadline;
-        for example, that may be the case if there is an additional buffering layer under the transport/media
-        implementation (e.g., that could be the case with SLCAN-interfaced CAN bus adapters, IEEE 802.15.4 radios,
-        and so on, where the data is pushed through an intermediary interface and briefly buffered again before
-        being pushed onto the media).
-        This is a design limitation imposed by the underlying non-real-time platform that Python runs on;
-        it is considered acceptable since PyUAVCAN is designed for soft-real-time applications at most.
         """
         raise NotImplementedError
 

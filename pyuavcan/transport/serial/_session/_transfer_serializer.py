@@ -18,7 +18,13 @@ def serialize_transfer(priority:                pyuavcan.transport.Priority,
                        fragmented_payload:      typing.Sequence[memoryview],
                        max_frame_payload_bytes: int) -> typing.Iterable[Frame]:
     assert max_frame_payload_bytes > 0
+
+    if local_node_id is None and isinstance(session_specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
+        raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+            f'Anonymous nodes cannot emit service transfers. Session specifier: {session_specifier}')
+
     payload_length = sum(map(len, fragmented_payload))
+
     if payload_length <= max_frame_payload_bytes:               # SINGLE-FRAME TRANSFER
         payload = fragmented_payload[0] if len(fragmented_payload) == 0 else memoryview(b''.join(fragmented_payload))
         assert len(payload) == payload_length
@@ -33,6 +39,10 @@ def serialize_transfer(priority:                pyuavcan.transport.Priority,
                     end_of_transfer=True,
                     payload=payload)
     else:                                                       # MULTI-FRAME TRANSFER
+        if local_node_id is None:
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                f'Anonymous nodes cannot emit multi-frame transfers. Session specifier: {session_specifier}')
+
         # Serial transport uses the same CRC algorithm both for frames and transfers.
         crc = pyuavcan.transport.commons.crc.CRC32C()
         for frag in fragmented_payload:
@@ -55,7 +65,9 @@ def serialize_transfer(priority:                pyuavcan.transport.Priority,
 
 
 def _unittest_serialize_transfer() -> None:
+    from pytest import raises
     from pyuavcan.transport import Priority, SessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier
+
     assert [
         Frame(
             priority=Priority.OPTIONAL,
@@ -77,6 +89,28 @@ def _unittest_serialize_transfer() -> None:
         fragmented_payload=[memoryview(b'hello'), memoryview(b' '), memoryview(b'world')],
         max_frame_payload_bytes=100,
     ))
+
+    with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+        _ = list(serialize_transfer(
+            priority=Priority.SLOW,
+            local_node_id=None,
+            session_specifier=SessionSpecifier(MessageDataSpecifier(4321), None),
+            data_type_hash=0xdead_beef_0dd_c0ffe,
+            transfer_id=12345678901234567890,
+            fragmented_payload=[memoryview(b'hello'), memoryview(b' '), memoryview(b'world')],
+            max_frame_payload_bytes=5,
+        ))
+
+    with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+        _ = list(serialize_transfer(
+            priority=Priority.SLOW,
+            local_node_id=None,
+            session_specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
+            data_type_hash=0xdead_beef_0dd_c0ffe,
+            transfer_id=12345678901234567890,
+            fragmented_payload=[memoryview(b'hello'), memoryview(b' '), memoryview(b'world')],
+            max_frame_payload_bytes=1000,
+        ))
 
     hello_world_crc = pyuavcan.transport.commons.crc.CRC32C()
     hello_world_crc.add(b'hello world')
