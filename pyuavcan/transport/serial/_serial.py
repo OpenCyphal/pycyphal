@@ -224,6 +224,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     def _handle_received_unparsed_data(data: memoryview) -> None:
         printable: typing.Union[str, bytes] = bytes(data)
         try:
+            assert isinstance(printable, bytes)
             printable = printable.decode('utf8')
         except ValueError:
             pass
@@ -261,12 +262,11 @@ class SerialTransport(pyuavcan.transport.Transport):
     def _reader_thread_func(self) -> None:
         def callback(item: typing.Union[TimestampedFrame, memoryview]) -> None:
             if isinstance(item, TimestampedFrame):
-                handler = self._handle_received_frame
+                self._loop.call_soon_threadsafe(self._handle_received_frame, item)
             elif isinstance(item, memoryview):
-                handler = self._handle_received_unparsed_data
+                self._loop.call_soon_threadsafe(self._handle_received_unparsed_data, item)
             else:
                 assert False
-            self._loop.call_soon_threadsafe(handler, item)
 
         try:
             parser = StreamParser(callback, _MAX_RECEIVE_PAYLOAD_SIZE_BYTES)

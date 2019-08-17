@@ -154,13 +154,14 @@ class TimestampedFrame(Frame):
 
         # noinspection PyTypeChecker
         version, int_priority, src_nid, dst_nid, int_data_spec, dt_hash, transfer_id, frame_index_eot = \
-            Frame.HEADER_STRUCT.unpack(header)  # type: ignore
+            Frame.HEADER_STRUCT.unpack(header)
         if version != _VERSION:
             return None
 
         src_nid = None if src_nid == _ANONYMOUS_NODE_ID else src_nid
         dst_nid = None if dst_nid == _ANONYMOUS_NODE_ID else dst_nid
 
+        data_specifier: pyuavcan.transport.DataSpecifier
         if int_data_spec & (1 << 15) == 0:
             data_specifier = pyuavcan.transport.MessageDataSpecifier(int_data_spec)
         else:

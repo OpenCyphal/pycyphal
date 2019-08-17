@@ -116,12 +116,12 @@ def _unittest_stream_parser() -> None:
         return out
 
     assert not outputs
-    assert [b'abcdef'] == proc(b'abcdef')
+    assert [memoryview(b'abcdef')] == proc(b'abcdef')
     assert [] == proc(b'')
 
     # The frame is well-delimited, but the content is invalid. Notice the unescaping in action.
     assert [] == proc(b'\x9E\x8E\x61')
-    assert [b'\x9E\x8E'] == proc(b'\x8E\x71\x9E')
+    assert [memoryview(b'\x9E\x8E')] == proc(b'\x8E\x71\x9E')
 
     # Valid frame.
     f1 = Frame(priority=Priority.HIGH,
