@@ -24,3 +24,5 @@ Inheritance diagram:
 """
 
 from ._serial import SerialTransport as SerialTransport
+
+from ._session import SerialOutputSession as SerialOutputSession

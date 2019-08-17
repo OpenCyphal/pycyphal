@@ -6,4 +6,5 @@
 
 from ._base import SerialSession as SerialSession
 
-from ._output import SerialOutputSession, SerialFeedback
+from ._output import SerialOutputSession as SerialOutputSession
+from ._output import SerialFeedback as SerialFeedback

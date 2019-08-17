@@ -15,7 +15,7 @@ import serial
 import pyuavcan.transport
 from ._frame import Frame, TimestampedFrame
 from ._stream_parser import StreamParser
-from ._session import SerialOutputSession, SerialFeedback
+from ._session import SerialOutputSession
 
 
 _SERIAL_PORT_READ_TIMEOUT = 1.0
@@ -170,10 +170,6 @@ class SerialTransport(pyuavcan.transport.Transport):
             node_id_set_cardinality=Frame.NODE_ID_MASK,  # The last one is reserved for anonymous, so 4095
             single_frame_transfer_payload_capacity_bytes=self._sft_payload_capacity_bytes
         )
-
-    @property
-    def single_frame_transfer_payload_capacity_bytes(self) -> int:
-        return self._sft_payload_capacity_bytes
 
     @property
     def local_node_id(self) -> typing.Optional[int]:

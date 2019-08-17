@@ -46,19 +46,21 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         Decide whether we want to keep that later. Those can't be implemented on CAN bus, for example.
     """
     def __init__(self,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
-                 payload_metadata: pyuavcan.transport.PayloadMetadata,
-                 transport:        pyuavcan.transport.serial.SerialTransport,
-                 send_handler:     SendHandler,
-                 finalizer:        typing.Callable[[], None]):
+                 specifier:                  pyuavcan.transport.SessionSpecifier,
+                 payload_metadata:           pyuavcan.transport.PayloadMetadata,
+                 sft_payload_capacity_bytes: int,
+                 local_node_id_accessor:     typing.Callable[[], int],
+                 send_handler:               SendHandler,
+                 finalizer:                  typing.Callable[[], None]):
         """
         Do not call this directly.
         Instead, use the factory method :meth:`pyuavcan.transport.serial.SerialTransport.get_output_session`.
         """
-        self._transport = transport
-        self._send_handler = send_handler
         self._specifier = specifier
         self._payload_metadata = payload_metadata
+        self._sft_payload_capacity_bytes = int(sft_payload_capacity_bytes)
+        self._local_node_id_accessor = local_node_id_accessor
+        self._send_handler = send_handler
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._statistics = pyuavcan.transport.Statistics()
 
@@ -75,12 +77,12 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
 
         frames = list(serialize_transfer(
             priority=transfer.priority,
-            local_node_id=self._transport.local_node_id,
+            local_node_id=self._local_node_id_accessor(),
             session_specifier=self._specifier,
             data_type_hash=self._payload_metadata.data_type_hash,
             transfer_id=transfer.transfer_id,
             fragmented_payload=transfer.fragmented_payload,
-            max_frame_payload_bytes=self._transport.single_frame_transfer_payload_capacity_bytes
+            max_frame_payload_bytes=self._sft_payload_capacity_bytes
         ))
 
         try:
