@@ -121,10 +121,6 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     # Allow the tasks to finish
     await asyncio.sleep(0.1)
 
-    # All disposed of?
-    assert list(pres_a.sessions) == []
-    assert list(pres_b.sessions) == []
-
     # Make sure the transport sessions have been closed properly, this is supremely important.
     assert list(pres_a.transport.input_sessions) == []
     assert list(pres_b.transport.input_sessions) == []

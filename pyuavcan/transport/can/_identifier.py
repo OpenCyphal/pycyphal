@@ -29,10 +29,8 @@ class CANID:
         # standard library, but that would make the code hard to test.
         raise NotImplementedError
 
-    def to_input_session_specifier(self) -> pyuavcan.transport.SessionSpecifier:
-        raise NotImplementedError
-
-    def to_output_session_specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    @property
+    def data_specifier(self) -> pyuavcan.transport.DataSpecifier:
         raise NotImplementedError
 
     def get_destination_node_id(self) -> typing.Optional[int]:
@@ -97,13 +95,9 @@ class MessageCANID(CANID):
         assert 0 <= identifier < 2 ** 29
         return identifier
 
-    def to_input_session_specifier(self) -> pyuavcan.transport.SessionSpecifier:
-        ds = pyuavcan.transport.MessageDataSpecifier(self.subject_id)
-        return pyuavcan.transport.SessionSpecifier(ds, self.source_node_id)
-
-    def to_output_session_specifier(self) -> pyuavcan.transport.SessionSpecifier:
-        ds = pyuavcan.transport.MessageDataSpecifier(self.subject_id)
-        return pyuavcan.transport.SessionSpecifier(ds, None)
+    @property
+    def data_specifier(self) -> pyuavcan.transport.MessageDataSpecifier:
+        return pyuavcan.transport.MessageDataSpecifier(self.subject_id)
 
     def get_destination_node_id(self) -> typing.Optional[int]:
         return None
@@ -137,17 +131,11 @@ class ServiceCANID(CANID):
         assert 0 <= identifier < 2 ** 29
         return identifier
 
-    def to_input_session_specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    @property
+    def data_specifier(self) -> pyuavcan.transport.ServiceDataSpecifier:
         role_enum = pyuavcan.transport.ServiceDataSpecifier.Role
-        role = role_enum.SERVER if self.request_not_response else role_enum.CLIENT
-        ds = pyuavcan.transport.ServiceDataSpecifier(self.service_id, role)
-        return pyuavcan.transport.SessionSpecifier(ds, self.source_node_id)
-
-    def to_output_session_specifier(self) -> pyuavcan.transport.SessionSpecifier:
-        role_enum = pyuavcan.transport.ServiceDataSpecifier.Role
-        role = role_enum.CLIENT if self.request_not_response else role_enum.SERVER
-        ds = pyuavcan.transport.ServiceDataSpecifier(self.service_id, role)
-        return pyuavcan.transport.SessionSpecifier(ds, self.destination_node_id)
+        role = role_enum.REQUEST if self.request_not_response else role_enum.RESPONSE
+        return pyuavcan.transport.ServiceDataSpecifier(self.service_id, role)
 
     def get_destination_node_id(self) -> typing.Optional[int]:
         return self.destination_node_id
@@ -306,7 +294,7 @@ def _unittest_can_filter_configuration() -> None:
 
 def _unittest_can_identifier_parse() -> None:
     from pytest import raises
-    from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier, SessionSpecifier
+    from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier
 
     with raises(ValueError):
         CANID.parse(2 ** 29)
@@ -353,32 +341,24 @@ def _unittest_can_identifier_parse() -> None:
     assert CANID.parse(0b_010_0_0_0011000000111001_1111011_0) is None
     assert CANID.parse(reference_message_id) == reference_message
     assert reference_message_id == reference_message.compile([])
-    assert reference_message.to_input_session_specifier() == SessionSpecifier(MessageDataSpecifier(12345), 123)
-    assert reference_message.to_output_session_specifier() == SessionSpecifier(MessageDataSpecifier(12345), None)
+    assert reference_message.data_specifier == MessageDataSpecifier(12345)
 
     reference_message = MessageCANID(Priority.FAST, None, 4321)
     reference_message_id = 0b_010_0_1_0001000011100001_1111111_1
     assert CANID.parse(0b_010_0_1_0001000011100001_1111111_0) is None
     assert CANID.parse(reference_message_id) == reference_message
     assert reference_message_id == reference_message.compile([memoryview(bytes([100, 27]))])
-    assert reference_message.to_input_session_specifier() == SessionSpecifier(MessageDataSpecifier(4321), None)
-    assert reference_message.to_output_session_specifier() == SessionSpecifier(MessageDataSpecifier(4321), None)
+    assert reference_message.data_specifier == MessageDataSpecifier(4321)
 
     reference_service = ServiceCANID(Priority.OPTIONAL, 123, 42, 300, True)
     reference_service_id = 0b_111_1_1_100101100_0101010_1111011_1
     assert CANID.parse(0b_111_1_1_100101100_0101010_1111011_0) is None
     assert CANID.parse(reference_service_id) == reference_service
     assert reference_service_id == reference_service.compile([])
-    assert reference_service.to_input_session_specifier() == \
-        SessionSpecifier(ServiceDataSpecifier(300, ServiceDataSpecifier.Role.SERVER), 123)
-    assert reference_service.to_output_session_specifier() == \
-        SessionSpecifier(ServiceDataSpecifier(300, ServiceDataSpecifier.Role.CLIENT), 42)
+    assert reference_service.data_specifier == ServiceDataSpecifier(300, ServiceDataSpecifier.Role.REQUEST)
 
     reference_service = ServiceCANID(Priority.OPTIONAL, 42, 123, 255, False)
     reference_service_id = 0b_111_1_0_011111111_1111011_0101010_1
     assert CANID.parse(reference_service_id) == reference_service
     assert reference_service_id == reference_service.compile([])
-    assert reference_service.to_input_session_specifier() == \
-        SessionSpecifier(ServiceDataSpecifier(255, ServiceDataSpecifier.Role.CLIENT), 42)
-    assert reference_service.to_output_session_specifier() ==\
-        SessionSpecifier(ServiceDataSpecifier(255, ServiceDataSpecifier.Role.SERVER), 123)
+    assert reference_service.data_specifier == ServiceDataSpecifier(255, ServiceDataSpecifier.Role.RESPONSE)

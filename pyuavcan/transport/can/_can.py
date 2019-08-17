@@ -294,7 +294,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     def _handle_received_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> bool:
         assert not frame.loopback
-        ss = can_id.to_input_session_specifier()
+        ss = pyuavcan.transport.SessionSpecifier(can_id.data_specifier, can_id.source_node_id)
         accepted = False
         dest_nid = can_id.get_destination_node_id()
         if dest_nid is None or dest_nid == self._local_node_id:
@@ -316,7 +316,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     def _handle_loopback_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> None:
         assert frame.loopback
-        ss = can_id.to_output_session_specifier()
+        ss = pyuavcan.transport.SessionSpecifier(can_id.data_specifier, can_id.get_destination_node_id())
         try:
             session = self._output_registry[ss]
         except KeyError:

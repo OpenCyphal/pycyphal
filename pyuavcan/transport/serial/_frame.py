@@ -90,8 +90,7 @@ class Frame:
         if isinstance(self.data_specifier, pyuavcan.transport.MessageDataSpecifier):
             data_spec = self.data_specifier.subject_id
         elif isinstance(self.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
-            # Servers send responses; clients send requests.
-            is_response = self.data_specifier.role == self.data_specifier.Role.SERVER
+            is_response = self.data_specifier.role == self.data_specifier.Role.RESPONSE
             data_spec = (1 << 15) | ((1 << 14) if is_response else 0) | self.data_specifier.service_id
         else:
             assert False
@@ -165,10 +164,10 @@ class TimestampedFrame(Frame):
         if int_data_spec & (1 << 15) == 0:
             data_specifier = pyuavcan.transport.MessageDataSpecifier(int_data_spec)
         else:
-            is_response = int_data_spec & (1 << 14) != 0  # Servers receive requests; clients receive responses.
+            is_response = int_data_spec & (1 << 14) != 0
             role = \
-                pyuavcan.transport.ServiceDataSpecifier.Role.CLIENT if is_response else \
-                pyuavcan.transport.ServiceDataSpecifier.Role.SERVER
+                pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE if is_response else \
+                pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
             service_id = int_data_spec & pyuavcan.transport.ServiceDataSpecifier.SERVICE_ID_MASK
             data_specifier = pyuavcan.transport.ServiceDataSpecifier(service_id, role)
 
@@ -255,7 +254,7 @@ def _unittest_frame_compile_service() -> None:
     f = Frame(priority=Priority.HIGH,
               source_node_id=Frame.FRAME_DELIMITER_BYTE,
               destination_node_id=None,
-              data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.SERVER),
+              data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=1234567890123456789,
               frame_index=1234567,
@@ -353,7 +352,7 @@ def _unittest_parse() -> None:
         priority=Priority.LOW,
         source_node_id=1,
         destination_node_id=0,
-        data_specifier=ServiceDataSpecifier(16, ServiceDataSpecifier.Role.CLIENT),
+        data_specifier=ServiceDataSpecifier(16, ServiceDataSpecifier.Role.RESPONSE),
         data_type_hash=0xbad_c0ffee_0dd_f00d,
         transfer_id=12345678901234567890,
         frame_index=54321,
@@ -450,7 +449,7 @@ def _unittest_frame_check() -> None:
         Frame(priority=Priority.HIGH,
               source_node_id=None,
               destination_node_id=456,
-              data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.CLIENT),
+              data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=1234567890123456789,
               frame_index=1234567,

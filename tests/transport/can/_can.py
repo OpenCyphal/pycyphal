@@ -60,7 +60,7 @@ async def _unittest_can_transport() -> None:
     meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't broadcast service calls
-        tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.SERVER), None),
+        tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE), None),
                               meta)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't unicast messages
@@ -76,24 +76,24 @@ async def _unittest_can_transport() -> None:
     assert subscriber_selective is tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
 
     server_listener = tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
     assert server_listener is tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
 
     server_responder = tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
     assert server_responder is tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
 
     client_requester = tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta)
     assert client_requester is tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta)
 
     client_listener = tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
     assert client_listener is tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
 
     assert broadcaster.destination_node_id is None
     assert subscriber_promiscuous.source_node_id is None
@@ -306,18 +306,18 @@ async def _unittest_can_transport() -> None:
     # Unicast exchange test
     #
     selective_server_s333_5 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 5), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 5), meta)
     selective_server_s333_9 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 9), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 9), meta)
     promiscuous_server_s333 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
 
     selective_client_s333_5 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 5), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 5), meta)
     selective_client_s333_9 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 9), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 9), meta)
     promiscuous_client_s333 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), None), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), None), meta)
 
     # No one is listening, this one will be lost.
     assert await client_requester.send_until(Transfer(

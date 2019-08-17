@@ -186,17 +186,11 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     sub_record2.close()
     pub_record.close()
     await asyncio.sleep(1.1)
-    assert pres_a.sessions == []
-    assert pres_b.sessions == []
 
     pres_a.close()
     pres_a.close()  # Double-close has no effect
     pres_b.close()
     pres_b.close()  # Double-close has no effect
-
-    # All disposed of?
-    assert list(pres_a.sessions) == []
-    assert list(pres_b.sessions) == []
 
     # Make sure the transport sessions have been closed properly, this is supremely important.
     assert list(pres_a.transport.input_sessions) == []

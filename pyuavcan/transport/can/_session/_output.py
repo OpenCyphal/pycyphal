@@ -208,7 +208,7 @@ class UnicastCANOutputSession(CANOutputSession):
                 f'This transport does not support unicast outputs for {specifier.data_specifier}')
         self._service_id = specifier.data_specifier.service_id
         self._request_not_response = \
-            specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.CLIENT
+            specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
 
         super(UnicastCANOutputSession, self).__init__(transport=transport,
                                                       send_handler=send_handler,

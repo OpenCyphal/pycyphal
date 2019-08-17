@@ -160,7 +160,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
             elif isinstance(canid, _identifier.ServiceCANID):
                 assert isinstance(self._specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
                 assert self._specifier.data_specifier.service_id == canid.service_id
-                assert (self._specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.SERVER) \
+                assert (self._specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST) \
                     == canid.request_not_response
                 source_node_id = canid.source_node_id
 

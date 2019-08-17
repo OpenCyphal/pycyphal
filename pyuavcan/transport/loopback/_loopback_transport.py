@@ -16,8 +16,6 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     """
     The loopback transport is intended for basic testing and API usage demonstrations.
     It works by short-circuiting input and output sessions together as if there was an underlying network.
-    Service transfers are a special case: in order to allow usage of service calls,
-    the transport flips the role from SERVER to CLIENT and back when routing the short-circuit data.
 
     It is not possible to exchange data between different nodes using this transport.
     The only valid usage is sending and receiving same data on the same node.
@@ -112,23 +110,11 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                 source_node_id=self.local_node_id,
             )
 
-            # Flip CLIENT/SERVER if this is a service session; do nothing otherwise.
-            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
-                role = pyuavcan.transport.ServiceDataSpecifier.Role
-                flip_lookup = {
-                    role.CLIENT: role.SERVER,
-                    role.SERVER: role.CLIENT,
-                }
-                data_specifier: pyuavcan.transport.DataSpecifier = \
-                    pyuavcan.transport.ServiceDataSpecifier(specifier.data_specifier.service_id,
-                                                            flip_lookup[specifier.data_specifier.role])
-            else:
-                data_specifier = specifier.data_specifier
-
             for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                 try:
-                    destination_session = self._input_sessions[pyuavcan.transport.SessionSpecifier(data_specifier,
-                                                                                                   remote_node_id)]
+                    destination_session = self._input_sessions[
+                        pyuavcan.transport.SessionSpecifier(specifier.data_specifier, remote_node_id)
+                    ]
                 except LookupError:
                     pass
                 else:

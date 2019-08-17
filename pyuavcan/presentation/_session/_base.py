@@ -30,7 +30,8 @@ class OutgoingTransferIDCounter:
     """
     A member of the *emitted transfer-ID map*; see the specification for technical details.
     Essentially this is just a boxed integer.
-    The value is monotonically increasing; transport-specific modulus is computed by the underlying transport(s).
+    The value is monotonically increasing starting from zero;
+    transport-specific modulus is computed by the underlying transport(s).
     """
 
     def __init__(self) -> None:

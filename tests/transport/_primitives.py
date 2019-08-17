@@ -16,7 +16,7 @@ def _unittest_transport_primitives() -> None:
         MessageDataSpecifier(32768)
 
     with raises(ValueError):
-        ServiceDataSpecifier(-1, ServiceDataSpecifier.Role.CLIENT)
+        ServiceDataSpecifier(-1, ServiceDataSpecifier.Role.REQUEST)
 
     with raises(ValueError):
         SessionSpecifier(MessageDataSpecifier(123), -1)

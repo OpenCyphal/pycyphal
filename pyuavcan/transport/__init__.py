@@ -40,7 +40,7 @@ one can map it onto aforementioned auxiliary definitions:
 |          | Data      +-------------------+-------------------+ transfer (message or service);        |
 |          | specifier |                   |    Service-ID     | subject-ID for messages;              |
 |          |           |    Subject-ID     +---------+---------+ service-ID with request/response      |
-|          |           |                   | Request |Response | indicator for services.               |
+|          |           |                   | Request |Response | role selector for services.           |
 +----------+-----------+-------------------+---------+---------+---------------------------------------+
 |                      |             Transfer-ID               | Transfer sequence number.             |
 +----------------------+---------------------------------------+---------------------------------------+
