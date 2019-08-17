@@ -5,6 +5,7 @@
 #
 
 import typing
+import pyuavcan
 
 
 class SerialSession:
@@ -16,3 +17,7 @@ class SerialSession:
         if fin is not None:
             self._close_finalizer = None
             fin()
+
+    def _raise_if_closed(self) -> None:
+        if self._close_finalizer is None:
+            raise pyuavcan.transport.ResourceClosedError(f'Session is closed: {self}')

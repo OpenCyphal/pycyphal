@@ -164,10 +164,10 @@ class TimestampedFrame(Frame):
         if int_data_spec & (1 << 15) == 0:
             data_specifier = pyuavcan.transport.MessageDataSpecifier(int_data_spec)
         else:
-            is_response = int_data_spec & (1 << 14) != 0
-            role = \
-                pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE if is_response else \
-                pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
+            if int_data_spec & (1 << 14):
+                role = pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE
+            else:
+                role = pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
             service_id = int_data_spec & pyuavcan.transport.ServiceDataSpecifier.SERVICE_ID_MASK
             data_specifier = pyuavcan.transport.ServiceDataSpecifier(service_id, role)
 
