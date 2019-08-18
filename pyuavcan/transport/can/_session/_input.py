@@ -111,7 +111,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         if value > 0:
             self._transfer_id_timeout_ns = round(value / _NANO)
         else:
-            raise ValueError(f'Invalid value for transfer ID timeout [second]: {value}')
+            raise ValueError(f'Invalid value for transfer-ID timeout [second]: {value}')
 
     async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         out = await self._do_receive_until(monotonic_deadline)
@@ -124,7 +124,6 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
 
     async def _do_receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:
-            self._raise_if_closed()
             try:
                 # Continue reading past the deadline until the queue is empty or a transfer is received.
                 timeout = monotonic_deadline - self._loop.time()
@@ -134,9 +133,9 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                     canid, frame = self._queue.get_nowait()
                 assert isinstance(canid, _identifier.CANID)
                 assert isinstance(frame, _frame.TimestampedUAVCANFrame)
-            except asyncio.TimeoutError:
-                return None
-            except asyncio.QueueEmpty:
+            except (asyncio.TimeoutError, asyncio.QueueEmpty):
+                # If there are unprocessed messages, allow the caller to read them even if the instance is closed.
+                self._raise_if_closed()
                 return None
 
             self._statistics.frames += 1

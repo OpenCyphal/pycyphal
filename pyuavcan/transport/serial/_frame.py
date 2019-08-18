@@ -23,6 +23,8 @@ class Frame:
     TRANSFER_ID_MASK = 2 ** 64 - 1
     FRAME_INDEX_MASK = 2 ** 31 - 1
 
+    NODE_ID_RANGE = range(NODE_ID_MASK + 1)
+
     FRAME_DELIMITER_BYTE = 0x9E
     ESCAPE_PREFIX_BYTE   = 0x8E
 

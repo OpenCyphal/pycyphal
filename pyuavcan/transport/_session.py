@@ -167,6 +167,11 @@ class InputSession(Session):
         The deadline is compared against :meth:`asyncio.AbstractEventLoop.time`.
         If the deadline is in the past, checks once if there is a transfer and then returns immediately
         without context switching.
+
+        Implementations that use internal queues are recommended to permit the consumer to continue reading
+        queued transfers after the instance is closed until the queue is empty.
+        In other words, it is recommended to not raise the ResourceClosed exception until
+        the instance is closed AND the queue is empty.
         """
         raise NotImplementedError
 

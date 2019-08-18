@@ -167,7 +167,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=Frame.TRANSFER_ID_MASK + 1,
-            node_id_set_cardinality=Frame.NODE_ID_MASK,  # The last one is reserved for anonymous, so 4095
+            node_id_set_cardinality=len(Frame.NODE_ID_RANGE),
             single_frame_transfer_payload_capacity_bytes=self._sft_payload_capacity_bytes
         )
 
