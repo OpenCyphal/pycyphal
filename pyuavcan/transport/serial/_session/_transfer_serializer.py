@@ -26,7 +26,7 @@ def serialize_transfer(priority:                pyuavcan.transport.Priority,
     payload_length = sum(map(len, fragmented_payload))
 
     if payload_length <= max_frame_payload_bytes:               # SINGLE-FRAME TRANSFER
-        payload = fragmented_payload[0] if len(fragmented_payload) == 0 else memoryview(b''.join(fragmented_payload))
+        payload = fragmented_payload[0] if len(fragmented_payload) == 1 else memoryview(b''.join(fragmented_payload))
         assert len(payload) == payload_length
         assert max_frame_payload_bytes >= len(payload)
         yield Frame(priority=priority,
@@ -87,6 +87,28 @@ def _unittest_serialize_transfer() -> None:
         data_type_hash=0xdead_beef_0dd_c0ffe,
         transfer_id=12345678901234567890,
         fragmented_payload=[memoryview(b'hello'), memoryview(b' '), memoryview(b'world')],
+        max_frame_payload_bytes=100,
+    ))
+
+    assert [
+        Frame(
+            priority=Priority.OPTIONAL,
+            source_node_id=1234,
+            destination_node_id=None,
+            data_specifier=MessageDataSpecifier(4321),
+            data_type_hash=0xdead_beef_0dd_c0ffe,
+            transfer_id=12345678901234567890,
+            frame_index=0,
+            end_of_transfer=True,
+            payload=memoryview(b''),
+        ),
+    ] == list(serialize_transfer(
+        priority=Priority.OPTIONAL,
+        local_node_id=1234,
+        session_specifier=SessionSpecifier(MessageDataSpecifier(4321), None),
+        data_type_hash=0xdead_beef_0dd_c0ffe,
+        transfer_id=12345678901234567890,
+        fragmented_payload=[],
         max_frame_payload_bytes=100,
     ))
 

@@ -49,7 +49,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
                  specifier:                  pyuavcan.transport.SessionSpecifier,
                  payload_metadata:           pyuavcan.transport.PayloadMetadata,
                  sft_payload_capacity_bytes: int,
-                 local_node_id_accessor:     typing.Callable[[], int],
+                 local_node_id_accessor:     typing.Callable[[], typing.Optional[int]],
                  send_handler:               SendHandler,
                  finalizer:                  typing.Callable[[], None]):
         """
@@ -125,3 +125,156 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
 
     def close(self) -> None:
         super(SerialOutputSession, self).close()
+
+
+def _unittest_output_session() -> None:
+    import asyncio
+    from pytest import raises, approx
+    from pyuavcan.transport import SessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority, Transfer
+    from pyuavcan.transport import PayloadMetadata, Statistics, Timestamp, Feedback
+
+    run_until_complete = asyncio.get_event_loop().run_until_complete
+
+    tx_timestamp: typing.Optional[Timestamp] = Timestamp.now()
+    tx_exception: typing.Optional[Exception] = None
+    last_sent_frames: typing.List[Frame] = []
+    last_monotonic_deadline = 0.0
+    finalized = False
+
+    async def do_send(frames: typing.Iterable[Frame], monotonic_deadline: float) -> typing.Optional[Timestamp]:
+        nonlocal last_sent_frames
+        nonlocal last_monotonic_deadline
+        last_sent_frames = list(frames)
+        last_monotonic_deadline = monotonic_deadline
+        if tx_exception:
+            raise tx_exception
+        return tx_timestamp
+
+    def do_finalize() -> None:
+        nonlocal finalized
+        finalized = True
+
+    with raises(pyuavcan.transport.UnsupportedSessionConfigurationError):
+        _ = SerialOutputSession(
+            specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.RESPONSE), None),
+            payload_metadata=PayloadMetadata(0xdeadbeefbadc0ffe, 1024),
+            sft_payload_capacity_bytes=10,
+            local_node_id_accessor=lambda: 1234,  # pragma: no cover
+            send_handler=do_send,
+            finalizer=do_finalize,
+        )
+
+    sos = SerialOutputSession(
+        specifier=SessionSpecifier(MessageDataSpecifier(3210), None),
+        payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
+        sft_payload_capacity_bytes=11,
+        local_node_id_accessor=lambda: None,
+        send_handler=do_send,
+        finalizer=do_finalize,
+    )
+
+    assert sos.specifier == SessionSpecifier(MessageDataSpecifier(3210), None)
+    assert sos.destination_node_id is None
+    assert sos.payload_metadata == PayloadMetadata(0xdead_beef_badc0ffe, 1024)
+    assert sos.sample_statistics() == Statistics()
+
+    ts = Timestamp.now()
+
+    assert run_until_complete(sos.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.NOMINAL,
+                 transfer_id=12340,
+                 fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
+        123456.789
+    ))
+    assert last_monotonic_deadline == approx(123456.789)
+    assert len(last_sent_frames) == 1
+
+    last_feedback: typing.Optional[Feedback] = None
+
+    def feedback_handler(feedback: Feedback) -> None:
+        nonlocal last_feedback
+        last_feedback = feedback
+
+    sos.enable_feedback(feedback_handler)
+
+    assert last_feedback is None
+    assert run_until_complete(sos.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.NOMINAL,
+                 transfer_id=12340,
+                 fragmented_payload=[]),
+        123456.789
+    ))
+    assert last_monotonic_deadline == approx(123456.789)
+    assert len(last_sent_frames) == 1
+    assert last_feedback is not None
+    assert last_feedback.original_transfer_timestamp == ts
+    assert last_feedback.first_frame_transmission_timestamp == tx_timestamp
+
+    sos.disable_feedback()
+    sos.disable_feedback()  # Idempotency check
+
+    assert sos.sample_statistics() == Statistics(
+        transfers=2,
+        frames=2,
+        payload_bytes=11,
+        errors=0,
+        drops=0
+    )
+
+    assert not finalized
+    sos.close()
+    assert finalized
+    finalized = False
+
+    sos = SerialOutputSession(
+        specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
+        payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
+        sft_payload_capacity_bytes=10,
+        local_node_id_accessor=lambda: 1234,
+        send_handler=do_send,
+        finalizer=do_finalize,
+    )
+
+    # Induced failure
+    tx_timestamp = None
+    assert not run_until_complete(sos.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.NOMINAL,
+                 transfer_id=12340,
+                 fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
+        123456.789
+    ))
+    assert last_monotonic_deadline == approx(123456.789)
+    assert len(last_sent_frames) == 2
+
+    assert sos.sample_statistics() == Statistics(
+        transfers=0,
+        frames=0,
+        payload_bytes=0,
+        errors=0,
+        drops=2
+    )
+
+    tx_exception = RuntimeError()
+    with raises(RuntimeError):
+        _ = run_until_complete(sos.send_until(
+            Transfer(timestamp=ts,
+                     priority=Priority.NOMINAL,
+                     transfer_id=12340,
+                     fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
+            123456.789
+        ))
+
+    assert sos.sample_statistics() == Statistics(
+        transfers=0,
+        frames=0,
+        payload_bytes=0,
+        errors=1,
+        drops=2
+    )
+
+    assert not finalized
+    sos.close()
+    assert finalized
