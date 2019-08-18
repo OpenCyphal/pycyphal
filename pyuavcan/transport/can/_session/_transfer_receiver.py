@@ -24,7 +24,10 @@ class TransferReceptionErrorID(enum.Enum):
 
 
 class TransferReceiver:
-    def __init__(self, max_payload_size_bytes: int):
+    def __init__(self,
+                 source_node_id:         int,
+                 max_payload_size_bytes: int):
+        self._source_node_id = int(source_node_id)
         self._fragmented_payload: typing.List[memoryview] = []
         self._timestamp = pyuavcan.transport.Timestamp(0, 0)
         self._transfer_id = 0
@@ -33,7 +36,6 @@ class TransferReceiver:
 
     def process_frame(self,
                       priority:               pyuavcan.transport.Priority,
-                      source_node_id:         int,
                       frame:                  _frame.TimestampedUAVCANFrame,
                       transfer_id_timeout_ns: int) \
             -> typing.Union[None, TransferReceptionErrorID, pyuavcan.transport.TransferFrom]:
@@ -111,7 +113,7 @@ class TransferReceiver:
                                                    priority=priority,
                                                    transfer_id=frame.transfer_id,
                                                    fragmented_payload=fragmented_payload,
-                                                   source_node_id=source_node_id)
+                                                   source_node_id=self._source_node_id)
         else:
             if sum(map(len, self._fragmented_payload)) > self._max_payload_size_bytes_with_crc:
                 # Observe that padding bytes at the end of the last frame are not counted towards the maximum
@@ -139,7 +141,6 @@ def _unittest_can_transfer_receiver_manual() -> None:
     def proc(frame: _frame.TimestampedUAVCANFrame) \
             -> typing.Union[None, TransferReceptionErrorID, pyuavcan.transport.TransferFrom]:
         away = rx.process_frame(priority=priority,
-                                source_node_id=source_node_id,
                                 frame=frame,
                                 transfer_id_timeout_ns=transfer_id_timeout_ns)
         assert away is None or isinstance(away, (TransferReceptionErrorID, pyuavcan.transport.TransferFrom))
@@ -174,7 +175,7 @@ def _unittest_can_transfer_receiver_manual() -> None:
             ],
             source_node_id=source_node_id)
 
-    rx = TransferReceiver(50)
+    rx = TransferReceiver(source_node_id, 50)
 
     # Correct single-frame transfers.
     assert proc(frm(1000, 'Hello', 0, True, True, True)) == trn(1000, 0, ['Hello'])
