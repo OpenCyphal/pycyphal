@@ -44,12 +44,9 @@ def serialize_transfer(priority:                pyuavcan.transport.Priority,
                 f'Anonymous nodes cannot emit multi-frame transfers. Session specifier: {session_specifier}')
 
         # Serial transport uses the same CRC algorithm both for frames and transfers.
-        crc = pyuavcan.transport.commons.crc.CRC32C()
-        for frag in fragmented_payload:
-            crc.add(frag)
-
+        crc_bytes = pyuavcan.transport.commons.crc.CRC32C.new(*fragmented_payload).value_as_bytes
         refragmented = pyuavcan.transport.commons.refragment(
-            itertools.chain(fragmented_payload, (memoryview(crc.value_as_bytes),)),
+            itertools.chain(fragmented_payload, (memoryview(crc_bytes),)),
             max_frame_payload_bytes
         )
         for frame_index, (end_of_transfer, frag) in enumerate(pyuavcan.util.mark_last(refragmented)):

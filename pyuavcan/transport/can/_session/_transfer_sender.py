@@ -55,16 +55,10 @@ def serialize_transfer(compiled_identifier:     int,
             last_frame_data_length = last_frame_payload_length + _frame.TRANSFER_CRC_LENGTH_BYTES
             padding = _PADDING_PATTERN * _frame.UAVCANFrame.get_required_padding(last_frame_data_length)
 
-        # Compute CRC; padding is also CRC-protected
-        crc = pyuavcan.transport.commons.crc.CRC16CCITT()
-        for frag in fragmented_payload:
-            crc.add(frag)
-        crc.add(padding)
-
         # Fragment generator that goes over the padding and CRC also
-        trailing_bytes = padding + bytes([crc.value >> 8, crc.value & 0xFF])
+        crc_bytes = pyuavcan.transport.commons.crc.CRC16CCITT.new(*fragmented_payload, padding).value_as_bytes
         refragmented = pyuavcan.transport.commons.refragment(
-            itertools.chain(fragmented_payload, (memoryview(trailing_bytes),)),
+            itertools.chain(fragmented_payload, (memoryview(padding + crc_bytes),)),
             max_frame_payload_bytes)
 
         # Serialized frame emission

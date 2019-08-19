@@ -91,10 +91,7 @@ class TransferReceiver:
                 assert len(fragmented_payload) == 1     # Single-frame transfer, additional checks not needed
             else:
                 assert len(fragmented_payload) > 1      # Multi-frame transfer, check and remove the trailing CRC
-                crc = pyuavcan.transport.commons.crc.CRC16CCITT()
-                for frag in fragmented_payload:
-                    crc.add(frag)
-                if not crc.check_residue():
+                if not pyuavcan.transport.commons.crc.CRC16CCITT.new(*fragmented_payload).check_residue():
                     return TransferReceptionErrorID.TRANSFER_CRC_MISMATCH
 
                 # Cut off the CRC

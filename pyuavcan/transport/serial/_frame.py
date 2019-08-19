@@ -29,10 +29,10 @@ class Frame:
     ESCAPE_PREFIX_BYTE   = 0x8E
 
     HEADER_STRUCT = struct.Struct('<'
-                                  'BB'  # Version, priority
-                                  'HHH'  # source NID, destination NID, data specifier
-                                  'QQ'  # Data type hash, transfer-ID
-                                  'L'  # Frame index with end-of-transfer flag in the MSB
+                                  'BB'      # Version, priority
+                                  'HHH'     # source NID, destination NID, data specifier
+                                  'QQ'      # Data type hash, transfer-ID
+                                  'L'       # Frame index with end-of-transfer flag in the MSB
                                   '4x')
     CRC_SIZE_BYTES = 4
 
@@ -109,10 +109,7 @@ class Frame:
                                          frame_index_eot)
         assert len(header) == 32
 
-        crc = pyuavcan.transport.commons.crc.CRC32C()
-        crc.add(header)
-        crc.add(self.payload)
-        crc_bytes = crc.value_as_bytes
+        crc_bytes = pyuavcan.transport.commons.crc.CRC32C.new(header, self.payload).value_as_bytes
 
         escapees = self.FRAME_DELIMITER_BYTE, self.ESCAPE_PREFIX_BYTE
         out_buffer[0] = self.FRAME_DELIMITER_BYTE
@@ -145,9 +142,7 @@ class TimestampedFrame(Frame):
         if len(header_payload_crc_image) < Frame.NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING:
             return None
 
-        crc = pyuavcan.transport.commons.crc.CRC32C()
-        crc.add(header_payload_crc_image)
-        if not crc.check_residue():
+        if not pyuavcan.transport.commons.crc.CRC32C.new(header_payload_crc_image).check_residue():
             return None
 
         header = header_payload_crc_image[:Frame.HEADER_STRUCT.size]
@@ -244,10 +239,7 @@ def _unittest_frame_compile_message() -> None:
                                       f.data_type_hash,
                                       f.transfer_id,
                                       f.frame_index + 0x8000_0000)
-    crc = pyuavcan.transport.commons.crc.CRC32C()
-    crc.add(header)
-    crc.add(f.payload)
-    assert segment[44:] == crc.value_as_bytes
+    assert segment[44:] == pyuavcan.transport.commons.crc.CRC32C.new(header, f.payload).value_as_bytes
 
 
 def _unittest_frame_compile_service() -> None:
@@ -292,10 +284,7 @@ def _unittest_frame_compile_service() -> None:
                                       f.data_type_hash,
                                       f.transfer_id,
                                       f.frame_index)
-    crc = pyuavcan.transport.commons.crc.CRC32C()
-    crc.add(header)
-    crc.add(f.payload)
-    assert segment[33:] == crc.value_as_bytes
+    assert segment[33:] == pyuavcan.transport.commons.crc.CRC32C.new(header, f.payload).value_as_bytes
 
 
 def _unittest_parse() -> None:
@@ -304,10 +293,7 @@ def _unittest_parse() -> None:
     ts = pyuavcan.transport.Timestamp.now()
 
     def get_crc(*blocks: typing.Union[bytes, memoryview]) -> bytes:
-        crc = pyuavcan.transport.commons.crc.CRC32C()
-        for b in blocks:
-            crc.add(b)
-        return crc.value_as_bytes
+        return pyuavcan.transport.commons.crc.CRC32C.new(*blocks).value_as_bytes
 
     # Valid message with payload
     header = bytes([
