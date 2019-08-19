@@ -156,9 +156,53 @@ class HighOverheadTransferReassembler:
     @staticmethod
     def _cutoff_crc(fragmented_payload: typing.List[memoryview]) -> None:
         remaining = HighOverheadTransferReassembler.TRANSFER_CRC_LENGTH_BYTES
-        while remaining > 0:
+        expected_length = sum(map(len, fragmented_payload)) - remaining
+        assert expected_length >= 0
+        while fragmented_payload and remaining > 0:
             if len(fragmented_payload[-1]) <= remaining:
                 remaining -= len(fragmented_payload[-1])
-                fragmented_payload = fragmented_payload[:-1]
+                fragmented_payload.pop()
             else:
                 fragmented_payload[-1] = fragmented_payload[-1][:-remaining]
+                remaining = 0
+        assert remaining == 0
+        assert sum(map(len, fragmented_payload)) == expected_length
+
+
+# noinspection PyProtectedMember
+def _unittest_cutoff_crc() -> None:
+    fp = [memoryview(b'0123456789')]
+    HighOverheadTransferReassembler._cutoff_crc(fp)
+    assert fp == [memoryview(b'012345')]
+
+    fp = [memoryview(b'0123456789'), memoryview(b'abcde')]
+    HighOverheadTransferReassembler._cutoff_crc(fp)
+    assert fp == [memoryview(b'0123456789'), memoryview(b'a')]
+
+    fp = [memoryview(b'0123456789'), memoryview(b'abcd')]
+    HighOverheadTransferReassembler._cutoff_crc(fp)
+    assert fp == [memoryview(b'0123456789')]
+
+    fp = [memoryview(b'0123456789'), memoryview(b'abc')]
+    HighOverheadTransferReassembler._cutoff_crc(fp)
+    assert fp == [memoryview(b'012345678')]
+
+    fp = [memoryview(b'0123456789'), memoryview(b'ab')]
+    HighOverheadTransferReassembler._cutoff_crc(fp)
+    assert fp == [memoryview(b'01234567')]
+
+    fp = [memoryview(b'0123456789'), memoryview(b'a')]
+    HighOverheadTransferReassembler._cutoff_crc(fp)
+    assert fp == [memoryview(b'0123456')]
+
+    fp = [memoryview(b'0123456789'), memoryview(b'')]
+    HighOverheadTransferReassembler._cutoff_crc(fp)
+    assert fp == [memoryview(b'012345')]
+
+    fp = [memoryview(b'0123456789'), memoryview(b''), memoryview(b'a'), memoryview(b'b')]
+    HighOverheadTransferReassembler._cutoff_crc(fp)
+    assert fp == [memoryview(b'01234567')]
+
+    fp = [memoryview(b'01'), memoryview(b''), memoryview(b'a'), memoryview(b'b')]
+    HighOverheadTransferReassembler._cutoff_crc(fp)
+    assert fp == []
