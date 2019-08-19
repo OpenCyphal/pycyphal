@@ -5,9 +5,10 @@
 #
 
 import typing
+from ._base import CRCAlgorithm
 
 
-class CRC16CCITT:
+class CRC16CCITT(CRCAlgorithm):
     """
     - Name:           CRC-16/CCITT-FALSE
     - Initial value:  0xFFFF

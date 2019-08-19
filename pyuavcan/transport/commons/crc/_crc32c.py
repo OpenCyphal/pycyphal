@@ -5,9 +5,10 @@
 #
 
 import typing
+from ._base import CRCAlgorithm
 
 
-class CRC32C:
+class CRC32C(CRCAlgorithm):
     """
     - Name:           CRC-32/ISCSI, CRC-32C, CRC-32/CASTAGNOLI
     - Initial value:  0xFFFFFFFF
@@ -30,6 +31,8 @@ class CRC32C:
     1214729159
     >>> c.check_residue()
     True
+    >>> CRC32C.new(b'123', b'', b'456789').value
+    3808858755
     """
     def __init__(self) -> None:
         assert len(self._TABLE) == 256
