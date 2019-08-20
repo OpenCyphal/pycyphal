@@ -13,7 +13,7 @@ import concurrent.futures
 import serial
 
 import pyuavcan.transport
-from ._frame import Frame, TimestampedFrame
+from ._frame import Frame
 from ._stream_parser import StreamParser
 from ._session import SerialOutputSession
 
@@ -218,7 +218,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
 
-    def _handle_received_frame(self, frame: TimestampedFrame) -> None:
+    def _handle_received_frame(self, frame: Frame) -> None:
         pass
 
     @staticmethod
@@ -261,8 +261,8 @@ class SerialTransport(pyuavcan.transport.Transport):
         return tx_ts
 
     def _reader_thread_func(self) -> None:
-        def callback(item: typing.Union[TimestampedFrame, memoryview]) -> None:
-            if isinstance(item, TimestampedFrame):
+        def callback(item: typing.Union[Frame, memoryview]) -> None:
+            if isinstance(item, Frame):
                 self._loop.call_soon_threadsafe(self._handle_received_frame, item)
             elif isinstance(item, memoryview):
                 self._loop.call_soon_threadsafe(self._handle_received_unparsed_data, item)

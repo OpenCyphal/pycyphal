@@ -10,7 +10,7 @@ import typing
 import asyncio
 import logging
 import pyuavcan
-from .._frame import TimestampedFrame
+from .._frame import Frame
 from ._base import SerialSession
 
 
@@ -19,7 +19,7 @@ _logger = logging.getLogger(__name__)
 
 class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
     #: Units are seconds. Can be overridden after instantiation if needed.
-    DEFAULT_TRANSFER_ID_TIMEOUT = 2
+    DEFAULT_TRANSFER_ID_TIMEOUT = 2.0
 
     def __init__(self,
                  specifier:        pyuavcan.transport.SessionSpecifier,
@@ -36,17 +36,17 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         assert self._loop is not None
 
         self._statistics = pyuavcan.transport.Statistics()
-        self._transfer_id_timeout_ns = int(self.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
+        self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
 
         self._reassemblers = [
             pyuavcan.transport.commons.high_overhead_transport.TransferReassembler(nid, payload_metadata.max_size_bytes)
-            for nid in TimestampedFrame.NODE_ID_RANGE
+            for nid in Frame.NODE_ID_RANGE
         ]
 
         super(SerialInputSession, self).__init__(finalizer)
 
-    def _process_frame(self, frame: TimestampedFrame) -> None:
+    def _process_frame(self, frame: Frame) -> None:
         """
         This is a part of the transport-internal API. It's a public method despite the name because Python's
         visibility handling capabilities are limited. I guess we could define a private abstract base to
@@ -72,12 +72,12 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
     @property
     def transfer_id_timeout(self) -> float:
-        return self._transfer_id_timeout_ns * _NANO
+        return self._transfer_id_timeout
 
     @transfer_id_timeout.setter
     def transfer_id_timeout(self, value: float) -> None:
         if value > 0:
-            self._transfer_id_timeout_ns = round(value / _NANO)
+            self._transfer_id_timeout = float(value)
         else:
             raise ValueError(f'Invalid value for transfer-ID timeout [second]: {value}')
 
@@ -91,6 +91,3 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
     def sample_statistics(self) -> pyuavcan.transport.Statistics:
         return copy.copy(self._statistics)
-
-
-_NANO = 1e-9

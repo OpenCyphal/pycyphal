@@ -18,10 +18,10 @@ _ANONYMOUS_NODE_ID = 0xFFFF
 
 
 @dataclasses.dataclass(frozen=True)
-class Frame:
+class Frame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
     NODE_ID_MASK     = 4095
     TRANSFER_ID_MASK = 2 ** 64 - 1
-    FRAME_INDEX_MASK = 2 ** 31 - 1
+    INDEX_MASK       = 2 ** 31 - 1
 
     NODE_ID_RANGE = range(NODE_ID_MASK + 1)
 
@@ -34,19 +34,14 @@ class Frame:
                                   'QQ'      # Data type hash, transfer-ID
                                   'L'       # Frame index with end-of-transfer flag in the MSB
                                   '4x')
-    CRC_SIZE_BYTES = 4
+    CRC_SIZE_BYTES = len(pyuavcan.transport.commons.high_overhead_transport.TransferCRC().value_as_bytes)
 
     NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = HEADER_STRUCT.size + CRC_SIZE_BYTES
 
-    priority:            pyuavcan.transport.Priority
     source_node_id:      typing.Optional[int]
     destination_node_id: typing.Optional[int]
     data_specifier:      pyuavcan.transport.DataSpecifier
     data_type_hash:      int
-    transfer_id:         int
-    frame_index:         int
-    end_of_transfer:     bool
-    payload:             memoryview
 
     def __post_init__(self) -> None:
         if not isinstance(self.priority, pyuavcan.transport.Priority):
@@ -73,8 +68,8 @@ class Frame:
         if not (0 <= self.transfer_id <= self.TRANSFER_ID_MASK):
             raise ValueError(f'Invalid transfer-ID: {self.transfer_id}')
 
-        if not (0 <= self.frame_index <= self.FRAME_INDEX_MASK):
-            raise ValueError(f'Invalid frame index: {self.frame_index}')
+        if not (0 <= self.index <= self.INDEX_MASK):
+            raise ValueError(f'Invalid frame index: {self.index}')
 
         if not isinstance(self.payload, memoryview):
             raise ValueError(f'Bad payload type: {type(self.payload).__name__}')  # pragma: no cover
@@ -97,7 +92,7 @@ class Frame:
         else:
             assert False
 
-        frame_index_eot = self.frame_index | ((1 << 31) if self.end_of_transfer else 0)
+        index_eot = self.index | ((1 << 31) if self.end_of_transfer else 0)
 
         header = self.HEADER_STRUCT.pack(_VERSION,
                                          int(self.priority),
@@ -106,7 +101,7 @@ class Frame:
                                          data_spec,
                                          self.data_type_hash,
                                          self.transfer_id,
-                                         frame_index_eot)
+                                         index_eot)
         assert len(header) == 32
 
         crc_bytes = pyuavcan.transport.commons.crc.CRC32C.new(header, self.payload).value_as_bytes
@@ -128,14 +123,9 @@ class Frame:
         assert (next_byte_index - 2) >= (len(header) + len(self.payload) + len(crc_bytes))
         return memoryview(out_buffer)[:next_byte_index]
 
-
-@dataclasses.dataclass(frozen=True)
-class TimestampedFrame(Frame):
-    timestamp: pyuavcan.transport.Timestamp
-
     @staticmethod
     def parse_from_unescaped_image(header_payload_crc_image: memoryview,
-                                   timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[TimestampedFrame]:
+                                   timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[Frame]:
         """
         :returns: Frame or None if the image is invalid.
         """
@@ -149,7 +139,7 @@ class TimestampedFrame(Frame):
         payload = header_payload_crc_image[Frame.HEADER_STRUCT.size:-Frame.CRC_SIZE_BYTES]
 
         # noinspection PyTypeChecker
-        version, int_priority, src_nid, dst_nid, int_data_spec, dt_hash, transfer_id, frame_index_eot = \
+        version, int_priority, src_nid, dst_nid, int_data_spec, dt_hash, transfer_id, index_eot = \
             Frame.HEADER_STRUCT.unpack(header)
         if version != _VERSION:
             return None
@@ -169,16 +159,16 @@ class TimestampedFrame(Frame):
             data_specifier = pyuavcan.transport.ServiceDataSpecifier(service_id, role)
 
         try:
-            return TimestampedFrame(priority=pyuavcan.transport.Priority(int_priority),
-                                    source_node_id=src_nid,
-                                    destination_node_id=dst_nid,
-                                    data_specifier=data_specifier,
-                                    data_type_hash=dt_hash,
-                                    transfer_id=transfer_id,
-                                    frame_index=frame_index_eot & Frame.FRAME_INDEX_MASK,
-                                    end_of_transfer=frame_index_eot & (1 << 31) != 0,
-                                    payload=payload,
-                                    timestamp=timestamp)
+            return Frame(timestamp=timestamp,
+                         priority=pyuavcan.transport.Priority(int_priority),
+                         source_node_id=src_nid,
+                         destination_node_id=dst_nid,
+                         data_specifier=data_specifier,
+                         data_type_hash=dt_hash,
+                         transfer_id=transfer_id,
+                         index=index_eot & Frame.INDEX_MASK,
+                         end_of_transfer=index_eot & (1 << 31) != 0,
+                         payload=payload)
         except ValueError:
             return None
 
@@ -189,15 +179,16 @@ assert Frame.HEADER_STRUCT.size == 32
 
 
 def _unittest_frame_compile_message() -> None:
-    from pyuavcan.transport import Priority, MessageDataSpecifier
+    from pyuavcan.transport import Priority, MessageDataSpecifier, Timestamp
 
-    f = Frame(priority=Priority.HIGH,
+    f = Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=Frame.FRAME_DELIMITER_BYTE,
               destination_node_id=Frame.ESCAPE_PREFIX_BYTE,
               data_specifier=MessageDataSpecifier(12345),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=1234567890123456789,
-              frame_index=1234567,
+              index=1234567,
               end_of_transfer=True,
               payload=memoryview(b'abcd\x9Eef\x8E'))
 
@@ -238,20 +229,21 @@ def _unittest_frame_compile_message() -> None:
                                       12345,
                                       f.data_type_hash,
                                       f.transfer_id,
-                                      f.frame_index + 0x8000_0000)
+                                      f.index + 0x8000_0000)
     assert segment[44:] == pyuavcan.transport.commons.crc.CRC32C.new(header, f.payload).value_as_bytes
 
 
 def _unittest_frame_compile_service() -> None:
-    from pyuavcan.transport import Priority, ServiceDataSpecifier
+    from pyuavcan.transport import Priority, ServiceDataSpecifier, Timestamp
 
-    f = Frame(priority=Priority.HIGH,
+    f = Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=Frame.FRAME_DELIMITER_BYTE,
               destination_node_id=None,
               data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=1234567890123456789,
-              frame_index=1234567,
+              index=1234567,
               end_of_transfer=False,
               payload=memoryview(b''))
 
@@ -283,11 +275,11 @@ def _unittest_frame_compile_service() -> None:
                                       (1 << 15) | (1 << 14) | 123,
                                       f.data_type_hash,
                                       f.transfer_id,
-                                      f.frame_index)
+                                      f.index)
     assert segment[33:] == pyuavcan.transport.commons.crc.CRC32C.new(header, f.payload).value_as_bytes
 
 
-def _unittest_parse() -> None:
+def _unittest_frame_parse() -> None:
     from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier
 
     ts = pyuavcan.transport.Timestamp.now()
@@ -309,15 +301,15 @@ def _unittest_parse() -> None:
     ])
     assert len(header) == 32
     payload = b'Squeeze mayonnaise onto a hamster'
-    f = TimestampedFrame.parse_from_unescaped_image(memoryview(header + payload + get_crc(header, payload)), ts)
-    assert f == TimestampedFrame(
+    f = Frame.parse_from_unescaped_image(memoryview(header + payload + get_crc(header, payload)), ts)
+    assert f == Frame(
         priority=Priority.LOW,
         source_node_id=123,
         destination_node_id=456,
         data_specifier=MessageDataSpecifier(4321),
         data_type_hash=0xbad_c0ffee_0dd_f00d,
         transfer_id=12345678901234567890,
-        frame_index=54321,
+        index=54321,
         end_of_transfer=True,
         payload=memoryview(payload),
         timestamp=ts,
@@ -335,26 +327,51 @@ def _unittest_parse() -> None:
         0x31, 0xD4, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00,
     ])
-    f = TimestampedFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts)
-    assert f == TimestampedFrame(
+    f = Frame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts)
+    assert f == Frame(
         priority=Priority.LOW,
         source_node_id=1,
         destination_node_id=0,
         data_specifier=ServiceDataSpecifier(16, ServiceDataSpecifier.Role.RESPONSE),
         data_type_hash=0xbad_c0ffee_0dd_f00d,
         transfer_id=12345678901234567890,
-        frame_index=54321,
+        index=54321,
+        end_of_transfer=False,
+        payload=memoryview(b''),
+        timestamp=ts,
+    )
+
+    # Valid service with no payload
+    header = bytes([
+        _VERSION,
+        int(Priority.LOW),
+        0x01, 0x00,
+        0x00, 0x00,
+        0x10, 0x80,                                         # Request, service ID 16
+        0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,
+        0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,
+        0x31, 0xD4, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+    ])
+    f = Frame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts)
+    assert f == Frame(
+        priority=Priority.LOW,
+        source_node_id=1,
+        destination_node_id=0,
+        data_specifier=ServiceDataSpecifier(16, ServiceDataSpecifier.Role.REQUEST),
+        data_type_hash=0xbad_c0ffee_0dd_f00d,
+        transfer_id=12345678901234567890,
+        index=54321,
         end_of_transfer=False,
         payload=memoryview(b''),
         timestamp=ts,
     )
 
     # Too short
-    assert TimestampedFrame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(header, payload)),
-                                                       ts) is None
+    assert Frame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(header, payload)), ts) is None
 
     # Bad CRC
-    assert TimestampedFrame.parse_from_unescaped_image(memoryview(header + payload + b'1234'), ts) is None
+    assert Frame.parse_from_unescaped_image(memoryview(header + payload + b'1234'), ts) is None
 
     # Bad version
     header = bytes([
@@ -368,7 +385,7 @@ def _unittest_parse() -> None:
         0x31, 0xD4, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00,
     ])
-    assert TimestampedFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
+    assert Frame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
 
     # Bad fields
     header = bytes([
@@ -382,97 +399,105 @@ def _unittest_parse() -> None:
         0x31, 0xD4, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00,
     ])
-    assert TimestampedFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
+    assert Frame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
 
 
 def _unittest_frame_check() -> None:
     from pytest import raises
-    from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier
+    from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier, Timestamp
 
-    f = Frame(priority=Priority.HIGH,
+    f = Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=123,
               destination_node_id=456,
               data_specifier=MessageDataSpecifier(12345),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=1234567890123456789,
-              frame_index=1234567,
+              index=1234567,
               end_of_transfer=False,
               payload=memoryview(b'abcdef'))
     del f
 
     with raises(ValueError):
-        Frame(priority=Priority.HIGH,
+        Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=123456,
               destination_node_id=456,
               data_specifier=MessageDataSpecifier(12345),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=1234567890123456789,
-              frame_index=1234567,
+              index=1234567,
               end_of_transfer=False,
               payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(priority=Priority.HIGH,
+        Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=123,
               destination_node_id=123456,
               data_specifier=MessageDataSpecifier(12345),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=1234567890123456789,
-              frame_index=1234567,
+              index=1234567,
               end_of_transfer=False,
               payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(priority=Priority.HIGH,
+        Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=123,
               destination_node_id=123,
               data_specifier=MessageDataSpecifier(12345),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=1234567890123456789,
-              frame_index=1234567,
+              index=1234567,
               end_of_transfer=False,
               payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(priority=Priority.HIGH,
+        Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=None,
               destination_node_id=456,
               data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=1234567890123456789,
-              frame_index=1234567,
+              index=1234567,
               end_of_transfer=False,
               payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(priority=Priority.HIGH,
+        Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=None,
               destination_node_id=None,
               data_specifier=MessageDataSpecifier(12345),
               data_type_hash=2 ** 64,
               transfer_id=1234567890123456789,
-              frame_index=1234567,
+              index=1234567,
               end_of_transfer=False,
               payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(priority=Priority.HIGH,
+        Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=None,
               destination_node_id=None,
               data_specifier=MessageDataSpecifier(12345),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=-1,
-              frame_index=1234567,
+              index=1234567,
               end_of_transfer=False,
               payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(priority=Priority.HIGH,
+        Frame(timestamp=Timestamp.now(),
+              priority=Priority.HIGH,
               source_node_id=None,
               destination_node_id=None,
               data_specifier=MessageDataSpecifier(12345),
               data_type_hash=0xdead_beef_bad_c0ffe,
               transfer_id=0,
-              frame_index=-1,
+              index=-1,
               end_of_transfer=False,
               payload=memoryview(b'abcdef'))

@@ -11,7 +11,6 @@ import logging
 import pyuavcan
 from .._frame import Frame
 from ._base import SerialSession
-from ._transfer_serializer import serialize_transfer
 
 
 #: Returns the transmission timestamp.
@@ -74,15 +73,33 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
 
     async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         self._raise_if_closed()
+        local_node_id = self._local_node_id_accessor()
 
-        frames = list(serialize_transfer(
-            priority=transfer.priority,
-            local_node_id=self._local_node_id_accessor(),
-            session_specifier=self._specifier,
-            data_type_hash=self._payload_metadata.data_type_hash,
-            transfer_id=transfer.transfer_id,
-            fragmented_payload=transfer.fragmented_payload,
-            max_frame_payload_bytes=self._sft_payload_capacity_bytes
+        if local_node_id is None and isinstance(self._specifier.data_specifier,
+                                                pyuavcan.transport.ServiceDataSpecifier):
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                f'Anonymous nodes cannot emit service transfers. Session specifier: {self._specifier}')
+
+        def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> Frame:
+            if not end_of_transfer and local_node_id is None:
+                raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                    f'Anonymous nodes cannot emit multi-frame transfers. Session specifier: {self._specifier}')
+
+            return Frame(timestamp=transfer.timestamp,
+                         priority=transfer.priority,
+                         transfer_id=transfer.transfer_id,
+                         index=index,
+                         end_of_transfer=end_of_transfer,
+                         payload=payload,
+                         source_node_id=local_node_id,
+                         destination_node_id=self._specifier.remote_node_id,
+                         data_specifier=self._specifier.data_specifier,
+                         data_type_hash=self._payload_metadata.data_type_hash)
+
+        frames = list(pyuavcan.transport.commons.high_overhead_transport.serialize_transfer(
+            transfer.fragmented_payload,
+            self._sft_payload_capacity_bytes,
+            construct_frame
         ))
 
         try:
@@ -133,6 +150,8 @@ def _unittest_output_session() -> None:
     from pyuavcan.transport import SessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority, Transfer
     from pyuavcan.transport import PayloadMetadata, Statistics, Timestamp, Feedback
 
+    ts = Timestamp.now()
+
     run_until_complete = asyncio.get_event_loop().run_until_complete
 
     tx_timestamp: typing.Optional[Timestamp] = Timestamp.now()
@@ -165,6 +184,24 @@ def _unittest_output_session() -> None:
         )
 
     sos = SerialOutputSession(
+        specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
+        payload_metadata=PayloadMetadata(0xdeadbeefbadc0ffe, 1024),
+        sft_payload_capacity_bytes=10,
+        local_node_id_accessor=lambda: None,  # pragma: no cover
+        send_handler=do_send,
+        finalizer=do_finalize,
+    )
+
+    with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+        run_until_complete(sos.send_until(
+            Transfer(timestamp=ts,
+                     priority=Priority.NOMINAL,
+                     transfer_id=12340,
+                     fragmented_payload=[]),
+            123456.789
+        ))
+
+    sos = SerialOutputSession(
         specifier=SessionSpecifier(MessageDataSpecifier(3210), None),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
         sft_payload_capacity_bytes=11,
@@ -178,8 +215,6 @@ def _unittest_output_session() -> None:
     assert sos.payload_metadata == PayloadMetadata(0xdead_beef_badc0ffe, 1024)
     assert sos.sample_statistics() == Statistics()
 
-    ts = Timestamp.now()
-
     assert run_until_complete(sos.send_until(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
@@ -189,6 +224,15 @@ def _unittest_output_session() -> None:
     ))
     assert last_monotonic_deadline == approx(123456.789)
     assert len(last_sent_frames) == 1
+
+    with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+        run_until_complete(sos.send_until(
+            Transfer(timestamp=ts,
+                     priority=Priority.NOMINAL,
+                     transfer_id=12340,
+                     fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three four five')]),
+            123456.789
+        ))
 
     last_feedback: typing.Optional[Feedback] = None
 
@@ -278,3 +322,13 @@ def _unittest_output_session() -> None:
     assert not finalized
     sos.close()
     assert finalized
+    sos.close()  # Idempotency
+
+    with raises(pyuavcan.transport.ResourceClosedError):
+        run_until_complete(sos.send_until(
+            Transfer(timestamp=ts,
+                     priority=Priority.NOMINAL,
+                     transfer_id=12340,
+                     fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
+            123456.789
+        ))
