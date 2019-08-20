@@ -40,7 +40,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
 
         self._reassemblers = [
-            pyuavcan.transport.commons.HighOverheadTransferReassembler(nid, payload_metadata.max_size_bytes)
+            pyuavcan.transport.commons.high_overhead_transport.TransferReassembler(nid, payload_metadata.max_size_bytes)
             for nid in TimestampedFrame.NODE_ID_RANGE
         ]
 

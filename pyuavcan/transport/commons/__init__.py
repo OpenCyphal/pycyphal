@@ -11,8 +11,7 @@ with different transport implementations.
 Some transport implementations may be too specialized to rely on these, which is expected and natural.
 """
 
-from . import crc
+from . import crc as crc
+from . import high_overhead_transport as high_overhead_transport
 
 from ._refragment import refragment as refragment
-
-from ._high_overhead_transfer_reassembler import HighOverheadTransferReassembler as HighOverheadTransferReassembler
