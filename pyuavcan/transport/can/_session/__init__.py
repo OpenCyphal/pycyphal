@@ -13,4 +13,4 @@ from ._output import CANOutputSession as CANOutputSession
 from ._output import BroadcastCANOutputSession as BroadcastCANOutputSession
 from ._output import UnicastCANOutputSession as UnicastCANOutputSession
 
-from ._transfer_receiver import TransferReceptionErrorID as TransferReceptionErrorID
+from ._transfer_reassembler import TransferReassemblyErrorID as TransferReassemblyErrorID

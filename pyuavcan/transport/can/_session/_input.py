@@ -13,7 +13,7 @@ import dataclasses
 import pyuavcan.util
 import pyuavcan.transport
 from .. import _frame, _identifier
-from . import _base, _transfer_receiver
+from . import _base, _transfer_reassembler
 
 
 _logger = logging.getLogger(__name__)
@@ -21,8 +21,8 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class CANInputStatistics(pyuavcan.transport.Statistics):
-    reception_error_counters: typing.Dict[_transfer_receiver.TransferReceptionErrorID, int] = \
-        dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_receiver.TransferReceptionErrorID})
+    reception_error_counters: typing.Dict[_transfer_reassembler.TransferReassemblyErrorID, int] = \
+        dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_reassembler.TransferReassemblyErrorID})
 
 
 class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
@@ -45,7 +45,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         self._loop = loop
         self._transfer_id_timeout_ns = int(CANInputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
-        self._receivers = [_transfer_receiver.TransferReceiver(nid, payload_metadata.max_size_bytes)
+        self._receivers = [_transfer_reassembler.TransferReassembler(nid, payload_metadata.max_size_bytes)
                            for nid in _node_id_range()]
 
         self._statistics = CANInputStatistics()         # We could easily support per-source-node statistics if needed
@@ -168,7 +168,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
 
             receiver = self._receivers[source_node_id]
             result = receiver.process_frame(canid.priority, frame, self._transfer_id_timeout_ns)
-            if isinstance(result, _transfer_receiver.TransferReceptionErrorID):
+            if isinstance(result, _transfer_reassembler.TransferReassemblyErrorID):
                 self._statistics.errors += 1
                 self._statistics.reception_error_counters[result] += 1
                 _logger.debug('%s: Rejecting CAN frame %s because %s; current stats: %s',
