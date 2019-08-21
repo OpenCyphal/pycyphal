@@ -27,6 +27,10 @@ class SerialInputStatistics(pyuavcan.transport.Statistics):
     mismatched_data_type_hashes: typing.DefaultDict[int, int] = \
         dataclasses.field(default_factory=lambda: collections.defaultdict(int))
 
+    #: Keys are source node-IDs; values are dicts where keys are error enum members and values are counts.
+    reassembly_errors_per_source_node_id: typing.Dict[int, typing.DefaultDict[TransferReassembler.Error, int]] = \
+        dataclasses.field(default_factory=dict)
+
 
 class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
     #: Units are seconds. Can be overridden after instantiation if needed.
@@ -75,14 +79,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
                                                        fragmented_payload=[frame.payload],
                                                        source_node_id=None)
         else:
-            try:
-                reasm = self._reassemblers[frame.source_node_id]
-            except LookupError:
-                reasm = TransferReassembler(frame.source_node_id, self._payload_metadata.max_size_bytes)
-                self._reassemblers[frame.source_node_id] = reasm
-                _logger.info('%s: New %s (%d total)', self, reasm, len(self._reassemblers))
-
-            transfer = reasm.process_frame(frame, self._transfer_id_timeout)
+            transfer = self._get_reassembler(frame.source_node_id).process_frame(frame, self._transfer_id_timeout)
 
         if transfer is not None:
             self._statistics.transfers += 1
@@ -91,7 +88,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
             try:
                 self._queue.put_nowait(transfer)
             except asyncio.QueueFull:
-                self._statistics.drops += len(transfer.fragmented_payload)  # TODO This is a hack?
+                self._statistics.drops += len(transfer.fragmented_payload)
 
     async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         try:
@@ -129,6 +126,21 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         return self._payload_metadata
 
     def sample_statistics(self) -> SerialInputStatistics:
-        out = copy.copy(self._statistics)
-        out.errors += sum(sum(tr.error_counters.values()) for tr in self._reassemblers.values())
-        return out
+        return copy.copy(self._statistics)
+
+    def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
+        try:
+            return self._reassemblers[source_node_id]
+        except LookupError:
+            def on_reassembly_error(error: TransferReassembler.Error) -> None:
+                self._statistics.errors += 1
+                self._statistics.reassembly_errors_per_source_node_id[source_node_id][error] += 1
+
+            self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id,
+                                                                             collections.defaultdict(int))
+            reasm = TransferReassembler(source_node_id=source_node_id,
+                                        max_payload_size_bytes=self._payload_metadata.max_size_bytes,
+                                        on_error_callback=on_reassembly_error)
+            self._reassemblers[source_node_id] = reasm
+            _logger.info('%s: New %s (%d total)', self, reasm, len(self._reassemblers))
+            return reasm

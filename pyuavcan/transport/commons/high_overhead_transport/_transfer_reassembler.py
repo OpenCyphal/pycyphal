@@ -63,7 +63,8 @@ class TransferReassembler:
 
     def __init__(self,
                  source_node_id:         int,
-                 max_payload_size_bytes: int):
+                 max_payload_size_bytes: int,
+                 on_error_callback:      typing.Callable[[TransferReassembler.Error], None]):
         """
         :param source_node_id: The remote node-ID whose transfers this instance will be listening for.
             Anonymous transfers cannot be multi-frame transfers, so they are to be accepted as-is without any
@@ -71,11 +72,16 @@ class TransferReassembler:
 
         :param max_payload_size_bytes: The maximum number of payload bytes per transfer.
             This value can be derived from the corresponding DSDL definition.
+
+        :param on_error_callback: The callback is invoked whenever an error is detected.
+            This is intended for diagnostic purposes only; the error information is not actionable.
+            The error is logged by the caller at the DEBUG verbosity level together with reassembly context info.
         """
         # Constant configuration.
         self._source_node_id = int(source_node_id)
         self._max_payload_size_bytes = int(max_payload_size_bytes)
-        if self._source_node_id < 0 or self._max_payload_size_bytes < 0:
+        self._on_error_callback = on_error_callback
+        if self._source_node_id < 0 or self._max_payload_size_bytes < 0 or not callable(self._on_error_callback):
             raise ValueError('Invalid parameters')
 
         # Internal state.
@@ -83,7 +89,6 @@ class TransferReassembler:
         self._max_index: typing.Optional[int] = None            # Max frame index in transfer, None if unknown.
         self._timestamp = pyuavcan.transport.Timestamp(0, 0)    # First frame timestamp.
         self._transfer_id = 0                                   # Transfer-ID of the current transfer.
-        self._error_counters = {e: 0 for e in self.Error}
 
     def process_frame(self,
                       frame:               FrameBase,
@@ -98,7 +103,7 @@ class TransferReassembler:
         """
         # DROP MALFORMED FRAMES. A multi-frame transfer cannot contain frames with no payload.
         if not (frame.index == 0 and frame.end_of_transfer) and not frame.payload:
-            self._error_counters[self.Error.MULTIFRAME_EMPTY_FRAME] += 1
+            self._on_error_callback(self.Error.MULTIFRAME_EMPTY_FRAME)
             return None
 
         # DETECT NEW TRANSFERS. Either a newer TID or TID-timeout is reached.
@@ -161,12 +166,16 @@ class TransferReassembler:
                       self.Error.MULTIFRAME_INTEGRITY_ERROR if result is None else None)
         return result
 
+    @property
+    def source_node_id(self) -> int:
+        return self._source_node_id
+
     def _restart(self,
                  timestamp:   pyuavcan.transport.Timestamp,
                  transfer_id: int,
                  error:       typing.Optional[TransferReassembler.Error] = None) -> None:
         if error is not None:
-            self._error_counters[error] += 1
+            self._on_error_callback(error)
             if _logger.isEnabledFor(logging.DEBUG):  # pragma: no branch
                 context = {
                     'ts':      self._timestamp,
@@ -175,20 +184,12 @@ class TransferReassembler:
                     'payload': f'{len(list(x for x in self._payloads if x))}/{len(self._payloads)}',
                 }
                 _logger.debug(f'{self}: {error.name}: ' + ' '.join(f'{k}={v}' for k, v in context.items()))
-                _logger.debug(f'{self}: ' + ' '.join(f'{k.name}={v}' for k, v in self._error_counters.items()))
         # The error must be processed before the state is reset because when the state is destroyed
         # the useful diagnostic information becomes unavailable.
         self._timestamp = timestamp
         self._transfer_id = transfer_id
         self._max_index = None
         self._payloads = []
-
-    @property
-    def error_counters(self) -> typing.Dict[TransferReassembler.Error, int]:
-        """
-        Error statistics. The returned value is a clone, so it can be modified without affecting the origin.
-        """
-        return self._error_counters.copy()
 
     @property
     def _pure_payload_size_bytes(self) -> int:
@@ -250,6 +251,11 @@ def _unittest_transfer_reassembler() -> None:
     prio = Priority.SLOW
     transfer_id_timeout = 1.0
 
+    error_counters = {e: 0 for e in TransferReassembler.Error}
+
+    def on_error_callback(error: TransferReassembler.Error) -> None:
+        error_counters[error] += 1
+
     def mk_frame(timestamp:       Timestamp,
                  transfer_id:     int,
                  index:           int,
@@ -276,12 +282,13 @@ def _unittest_transfer_reassembler() -> None:
         return Timestamp(system_ns=monotonic_ns + 10 ** 12, monotonic_ns=monotonic_ns)
 
     with raises(ValueError):
-        _ = TransferReassembler(source_node_id=-1, max_payload_size_bytes=100)
+        _ = TransferReassembler(source_node_id=-1, max_payload_size_bytes=100, on_error_callback=on_error_callback)
 
     with raises(ValueError):
-        _ = TransferReassembler(source_node_id=0, max_payload_size_bytes=-1)
+        _ = TransferReassembler(source_node_id=0, max_payload_size_bytes=-1, on_error_callback=on_error_callback)
 
-    ta = TransferReassembler(source_node_id=src_nid, max_payload_size_bytes=100)
+    ta = TransferReassembler(source_node_id=src_nid, max_payload_size_bytes=100, on_error_callback=on_error_callback)
+    assert ta.source_node_id == src_nid
 
     def push(frame: FrameBase) -> typing.Optional[TransferFrom]:
         return ta.process_frame(frame, transfer_id_timeout=transfer_id_timeout)
@@ -326,7 +333,7 @@ def _unittest_transfer_reassembler() -> None:
                  end_of_transfer=True,
                  payload=hedgehog * 2)
     ) is None
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     0,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        0,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
@@ -441,7 +448,7 @@ def _unittest_transfer_reassembler() -> None:
     ) == mk_transfer(timestamp=mk_ts(2000.0),
                      transfer_id=0,
                      fragmented_payload=[hedgehog])
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     0,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        1,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
@@ -465,7 +472,7 @@ def _unittest_transfer_reassembler() -> None:
                  end_of_transfer=False,
                  payload=horse[50:])
     ) is None
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     1,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        1,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
@@ -489,7 +496,7 @@ def _unittest_transfer_reassembler() -> None:
     ) == mk_transfer(timestamp=mk_ts(3000.0),
                      transfer_id=3,
                      fragmented_payload=[horse[:50], horse[50:]])
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     1,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        1,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
@@ -513,7 +520,7 @@ def _unittest_transfer_reassembler() -> None:
                  end_of_transfer=False,
                  payload=horse[50:])
     ) is None
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        1,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
@@ -537,7 +544,7 @@ def _unittest_transfer_reassembler() -> None:
     ) == mk_transfer(timestamp=mk_ts(4000.0),
                      transfer_id=3,
                      fragmented_payload=[horse[:50], horse[50:]])
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        1,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
@@ -568,7 +575,7 @@ def _unittest_transfer_reassembler() -> None:
                  end_of_transfer=False,
                  payload=hedgehog[:50])
     ) is None
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        1,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
@@ -599,7 +606,7 @@ def _unittest_transfer_reassembler() -> None:
                  end_of_transfer=True,
                  payload=TransferCRC.new(hedgehog + horse).value_as_bytes)
     ) is None
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        1,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
@@ -630,7 +637,7 @@ def _unittest_transfer_reassembler() -> None:
                  end_of_transfer=True,
                  payload=horse)
     ) is None
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        1,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
@@ -649,7 +656,7 @@ def _unittest_transfer_reassembler() -> None:
     ) == mk_transfer(timestamp=mk_ts(6000.0),
                      transfer_id=0,
                      fragmented_payload=[b''])
-    assert ta.error_counters == {
+    assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
         ta.Error.MULTIFRAME_EMPTY_FRAME:        1,
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
