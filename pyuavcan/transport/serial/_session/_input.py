@@ -52,7 +52,31 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         visibility handling capabilities are limited. I guess we could define a private abstract base to
         handle this but it feels like too much work. Why can't we have protected visibility in Python?
         """
-        pass
+        assert frame.data_specifier == self._specifier.data_specifier, 'Internal protocol violation'
+        if frame.data_type_hash != self._payload_metadata.data_type_hash:
+            self._statistics.errors += 1
+            return
+
+        self._statistics.frames += 1
+
+        transfer: typing.Optional[pyuavcan.transport.TransferFrom]
+        if frame.source_node_id is None:
+            transfer = pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
+                                                       priority=frame.priority,
+                                                       transfer_id=frame.transfer_id,
+                                                       fragmented_payload=[frame.payload],
+                                                       source_node_id=None)
+        else:
+            transfer = self._reassemblers[frame.source_node_id].process_frame(frame, self._transfer_id_timeout)
+
+        if transfer is not None:
+            self._statistics.transfers += 1
+            self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
+            _logger.debug('%s: Received transfer: %s; current stats: %s', self, transfer, self._statistics)
+            try:
+                self._queue.put_nowait(transfer)
+            except asyncio.QueueFull:
+                self._statistics.drops += len(transfer.fragmented_payload)  # TODO This is a hack?
 
     async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         try:
@@ -90,4 +114,6 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         return self._payload_metadata
 
     def sample_statistics(self) -> pyuavcan.transport.Statistics:
-        return copy.copy(self._statistics)
+        out = copy.copy(self._statistics)
+        out.errors += sum(sum(tr.error_counters.values()) for tr in self._reassemblers)
+        return out
