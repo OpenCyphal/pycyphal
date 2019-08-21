@@ -49,12 +49,23 @@ class TransferReassembler:
         Error states that the transfer reassembly state machine may encounter.
         Whenever an error is encountered, the corresponding error counter is incremented by one,
         and a verbose report is dumped into the log at the DEBUG level.
+        The errored transfer is always discarded.
         """
-        MISSING_FRAMES                  = enum.auto()
-        MULTIFRAME_INTEGRITY_ERROR      = enum.auto()
-        FRAME_PAST_END_OF_TRANSFER      = enum.auto()
-        INCONSISTENT_END_OF_TRANSFER    = enum.auto()
-        LARGE_PAYLOAD                   = enum.auto()
+        #: New transfer started before the old one could be completed.
+        MISSING_FRAMES = enum.auto()
+
+        #: The reassembled multi-frame transfer payload did not pass integrity checks.
+        MULTIFRAME_INTEGRITY_ERROR = enum.auto()
+
+        #: The end-of-transfer flag is set in the frame index N,
+        #: but the transfer contains at least one frame with index > N.
+        FRAME_PAST_END_OF_TRANSFER = enum.auto()
+
+        #: The end-of-transfer flag is set in the frames with indexes N and M, where N != M.
+        INCONSISTENT_END_OF_TRANSFER = enum.auto()
+
+        #: The payload exceeds the configured limit.
+        LARGE_PAYLOAD = enum.auto()
 
     def __init__(self,
                  source_node_id:         int,
@@ -124,7 +135,7 @@ class TransferReassembler:
             self._payloads.append(memoryview(b''))
         self._payloads[frame.index] = frame.payload
 
-        # ENFORCE PAYLOAD SIZE. Don't let a babbling sender exhaust our memory quota.
+        # ENFORCE PAYLOAD SIZE LIMIT. Don't let a babbling sender exhaust our memory quota.
         if self._pure_payload_size_bytes > self._max_payload_size_bytes:
             self._begin_transfer(frame.timestamp,
                                  frame.transfer_id + 1,
@@ -224,40 +235,384 @@ def _drop_crc(fragments: typing.List[memoryview]) -> typing.Sequence[memoryview]
     return fragments
 
 
+def _unittest_transfer_reassembler() -> None:
+    from pytest import raises
+    from pyuavcan.transport import Priority, Timestamp, TransferFrom
+
+    src_nid = 1234
+    prio = Priority.SLOW
+    transfer_id_timeout = 1.0
+
+    def mk_frame(timestamp:       Timestamp,
+                 transfer_id:     int,
+                 index:           int,
+                 end_of_transfer: bool,
+                 payload:         typing.Union[bytes, memoryview]) -> FrameBase:
+        return FrameBase(timestamp=timestamp,
+                         priority=prio,
+                         transfer_id=transfer_id,
+                         index=index,
+                         end_of_transfer=end_of_transfer,
+                         payload=memoryview(payload))
+
+    def mk_transfer(timestamp:          Timestamp,
+                    transfer_id:        int,
+                    fragmented_payload: typing.Sequence[typing.Union[bytes, memoryview]]) -> TransferFrom:
+        return TransferFrom(timestamp=timestamp,
+                            priority=prio,
+                            transfer_id=transfer_id,
+                            fragmented_payload=list(map(memoryview, fragmented_payload)),
+                            source_node_id=src_nid)
+
+    def mk_ts(monotonic: float) -> Timestamp:
+        monotonic_ns = round(monotonic * 1e9)
+        return Timestamp(system_ns=monotonic_ns + 10 ** 12, monotonic_ns=monotonic_ns)
+
+    with raises(ValueError):
+        _ = TransferReassembler(source_node_id=-1, max_payload_size_bytes=100)
+
+    with raises(ValueError):
+        _ = TransferReassembler(source_node_id=0, max_payload_size_bytes=-1)
+
+    ta = TransferReassembler(source_node_id=src_nid, max_payload_size_bytes=100)
+
+    def push(frame: FrameBase) -> typing.Optional[TransferFrom]:
+        return ta.process_frame(frame, transfer_id_timeout=transfer_id_timeout)
+
+    hedgehog = b'In the evenings, the little Hedgehog went to the Bear Cub to count stars.'
+    horse = b'He thought about the Horse: how was she doing there, in the fog?'
+
+    # Valid single-frame transfer.
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=0,
+                 index=0,
+                 end_of_transfer=True,
+                 payload=hedgehog)
+    ) == mk_transfer(timestamp=mk_ts(1000.0),
+                     transfer_id=0,
+                     fragmented_payload=[hedgehog])
+
+    # Same transfer-ID; transfer ignored, no error registered.
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=0,
+                 index=0,
+                 end_of_transfer=True,
+                 payload=hedgehog)
+    ) is None
+
+    # Same transfer-ID, different EOT; transfer ignored, no error registered.
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=0,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=hedgehog)
+    ) is None
+
+    # Valid transfer but the payload is above the limit.
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=1,
+                 index=0,
+                 end_of_transfer=True,
+                 payload=hedgehog * 2)
+    ) is None
+    assert ta.error_counters == {
+        ta.Error.MISSING_FRAMES:                0,
+        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
+        ta.Error.FRAME_PAST_END_OF_TRANSFER:    0,
+        ta.Error.INCONSISTENT_END_OF_TRANSFER:  0,
+        ta.Error.LARGE_PAYLOAD:                 1,
+    }
+
+    # Valid multi-frame transfer.
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=2,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=hedgehog[:50])
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=2,
+                 index=1,
+                 end_of_transfer=True,
+                 payload=hedgehog[50:] + TransferCRC.new(hedgehog).value_as_bytes)
+    ) == mk_transfer(timestamp=mk_ts(1000.0),
+                     transfer_id=2,
+                     fragmented_payload=[hedgehog[:50], hedgehog[50:]])
+
+    # Same as above, but the frame ordering is reversed.
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),           # LAST FRAME
+                 transfer_id=10,
+                 index=2,
+                 end_of_transfer=True,
+                 payload=TransferCRC.new(hedgehog).value_as_bytes)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=10,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=hedgehog[50:])
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),           # FIRST FRAME
+                 transfer_id=10,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=hedgehog[:50])
+    ) == mk_transfer(timestamp=mk_ts(1000.0),
+                     transfer_id=10,
+                     fragmented_payload=[hedgehog[:50], hedgehog[50:]])
+
+    # Transfer-ID timeout. No error registered.
+    assert push(
+        mk_frame(timestamp=mk_ts(2000.0),
+                 transfer_id=0,
+                 index=0,
+                 end_of_transfer=True,
+                 payload=hedgehog)
+    ) == mk_transfer(timestamp=mk_ts(2000.0),
+                     transfer_id=0,
+                     fragmented_payload=[hedgehog])
+    assert ta.error_counters == {
+        ta.Error.MISSING_FRAMES:                0,
+        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
+        ta.Error.FRAME_PAST_END_OF_TRANSFER:    0,
+        ta.Error.INCONSISTENT_END_OF_TRANSFER:  0,
+        ta.Error.LARGE_PAYLOAD:                 1,
+    }
+
+    # Start a transfer, then start a new one with higher TID.
+    assert push(
+        mk_frame(timestamp=mk_ts(3000.0),   # Middle of a new transfer.
+                 transfer_id=2,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=hedgehog)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(3000.0),   # Another transfer! The old one is discarded.
+                 transfer_id=3,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=horse[50:])
+    ) is None
+    assert ta.error_counters == {
+        ta.Error.MISSING_FRAMES:                1,
+        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
+        ta.Error.FRAME_PAST_END_OF_TRANSFER:    0,
+        ta.Error.INCONSISTENT_END_OF_TRANSFER:  0,
+        ta.Error.LARGE_PAYLOAD:                 1,
+    }
+    assert push(
+        mk_frame(timestamp=mk_ts(3000.0),
+                 transfer_id=3,
+                 index=2,
+                 end_of_transfer=True,
+                 payload=TransferCRC.new(horse).value_as_bytes)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(3000.0),
+                 transfer_id=3,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=horse[:50])
+    ) == mk_transfer(timestamp=mk_ts(3000.0),
+                     transfer_id=3,
+                     fragmented_payload=[horse[:50], horse[50:]])
+    assert ta.error_counters == {
+        ta.Error.MISSING_FRAMES:                1,
+        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
+        ta.Error.FRAME_PAST_END_OF_TRANSFER:    0,
+        ta.Error.INCONSISTENT_END_OF_TRANSFER:  0,
+        ta.Error.LARGE_PAYLOAD:                 1,
+    }
+
+    # Start a transfer, then start a new one with lower TID when a TID timeout is reached.
+    assert push(
+        mk_frame(timestamp=mk_ts(3000.0),   # Middle of a new transfer.
+                 transfer_id=10,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=hedgehog)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(4000.0),   # Another transfer! The old one is discarded.
+                 transfer_id=3,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=horse[50:])
+    ) is None
+    assert ta.error_counters == {
+        ta.Error.MISSING_FRAMES:                2,
+        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
+        ta.Error.FRAME_PAST_END_OF_TRANSFER:    0,
+        ta.Error.INCONSISTENT_END_OF_TRANSFER:  0,
+        ta.Error.LARGE_PAYLOAD:                 1,
+    }
+    assert push(
+        mk_frame(timestamp=mk_ts(4000.0),
+                 transfer_id=3,
+                 index=2,
+                 end_of_transfer=True,
+                 payload=TransferCRC.new(horse).value_as_bytes)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(4000.0),
+                 transfer_id=3,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=horse[:50])
+    ) == mk_transfer(timestamp=mk_ts(4000.0),
+                     transfer_id=3,
+                     fragmented_payload=[horse[:50], horse[50:]])
+    assert ta.error_counters == {
+        ta.Error.MISSING_FRAMES:                2,
+        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
+        ta.Error.FRAME_PAST_END_OF_TRANSFER:    0,
+        ta.Error.INCONSISTENT_END_OF_TRANSFER:  0,
+        ta.Error.LARGE_PAYLOAD:                 1,
+    }
+
+    # Multi-frame transfer with bad CRC.
+    assert push(
+        mk_frame(timestamp=mk_ts(5000.0),
+                 transfer_id=10,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=hedgehog[50:])
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(5000.0),           # LAST FRAME
+                 transfer_id=10,
+                 index=2,
+                 end_of_transfer=True,
+                 payload=TransferCRC.new(hedgehog).value_as_bytes[::-1])  # Bad CRC here.
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(5000.0),           # FIRST FRAME
+                 transfer_id=10,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=hedgehog[:50])
+    ) is None
+    assert ta.error_counters == {
+        ta.Error.MISSING_FRAMES:                2,
+        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
+        ta.Error.FRAME_PAST_END_OF_TRANSFER:    0,
+        ta.Error.INCONSISTENT_END_OF_TRANSFER:  0,
+        ta.Error.LARGE_PAYLOAD:                 1,
+    }
+
+    # Frame past end of transfer.
+    assert push(
+        mk_frame(timestamp=mk_ts(5000.0),
+                 transfer_id=11,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=hedgehog[50:])
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(5000.0),           # PAST THE END OF TRANSFER
+                 transfer_id=11,
+                 index=3,
+                 end_of_transfer=False,
+                 payload=horse)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(5000.0),           # LAST FRAME
+                 transfer_id=11,
+                 index=2,
+                 end_of_transfer=True,
+                 payload=TransferCRC.new(hedgehog + horse).value_as_bytes)
+    ) is None
+    assert ta.error_counters == {
+        ta.Error.MISSING_FRAMES:                2,
+        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
+        ta.Error.FRAME_PAST_END_OF_TRANSFER:    1,
+        ta.Error.INCONSISTENT_END_OF_TRANSFER:  0,
+        ta.Error.LARGE_PAYLOAD:                 1,
+    }
+
+    # Inconsistent end-of-transfer flag.
+    assert push(
+        mk_frame(timestamp=mk_ts(5000.0),
+                 transfer_id=12,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=hedgehog[:50])
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(5000.0),           # LAST FRAME A
+                 transfer_id=12,
+                 index=2,
+                 end_of_transfer=True,
+                 payload=TransferCRC.new(hedgehog + horse).value_as_bytes)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(5000.0),           # LAST FRAME B
+                 transfer_id=12,
+                 index=3,
+                 end_of_transfer=True,
+                 payload=horse)
+    ) is None
+    assert ta.error_counters == {
+        ta.Error.MISSING_FRAMES:                2,
+        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
+        ta.Error.FRAME_PAST_END_OF_TRANSFER:    1,
+        ta.Error.INCONSISTENT_END_OF_TRANSFER:  1,
+        ta.Error.LARGE_PAYLOAD:                 1,
+    }
+
+
+def _unittest_validate_and_finalize_transfer() -> None:
+    from pyuavcan.transport import Timestamp, Priority, TransferFrom
+
+    ts = Timestamp.now()
+    prio = Priority.FAST
+    tid = 888888888
+    src_nid = 1234
+
+    def mk_transfer(fp: typing.Sequence[bytes]) -> TransferFrom:
+        return TransferFrom(timestamp=ts,
+                            priority=prio,
+                            transfer_id=tid,
+                            fragmented_payload=list(map(memoryview, fp)),
+                            source_node_id=src_nid)
+
+    def call(fp: typing.Sequence[bytes]) -> TransferFrom:
+        return _validate_and_finalize_transfer(timestamp=ts,
+                                               priority=prio,
+                                               transfer_id=tid,
+                                               frame_payloads=list(map(memoryview, fp)),
+                                               source_node_id=src_nid)
+
+    assert call([b'']) == mk_transfer([b''])
+    assert call([b'hello world']) == mk_transfer([b'hello world'])
+    assert call([
+        b'hello world', b'0123456789', TransferCRC.new(b'hello world', b'0123456789').value_as_bytes
+    ]) == mk_transfer([b'hello world', b'0123456789'])
+    assert call([b'hello world', b'0123456789']) is None  # no CRC
+
+
 # noinspection PyProtectedMember
 def _unittest_drop_crc() -> None:
-    fp = [memoryview(b'0123456789')]
-    assert _drop_crc(fp) == [memoryview(b'012345')]
-
-    fp = [memoryview(b'0123456789'), memoryview(b'abcde')]
-    assert _drop_crc(fp) == [memoryview(b'0123456789'), memoryview(b'a')]
-
-    fp = [memoryview(b'0123456789'), memoryview(b'abcd')]
-    assert _drop_crc(fp) == [memoryview(b'0123456789')]
-
-    fp = [memoryview(b'0123456789'), memoryview(b'abc')]
-    assert _drop_crc(fp) == [memoryview(b'012345678')]
-
-    fp = [memoryview(b'0123456789'), memoryview(b'ab')]
-    assert _drop_crc(fp) == [memoryview(b'01234567')]
-
-    fp = [memoryview(b'0123456789'), memoryview(b'a')]
-    assert _drop_crc(fp) == [memoryview(b'0123456')]
-
-    fp = [memoryview(b'0123456789'), memoryview(b'')]
-    assert _drop_crc(fp) == [memoryview(b'012345')]
-
-    fp = [memoryview(b'0123456789'), memoryview(b''), memoryview(b'a'), memoryview(b'b')]
-    assert _drop_crc(fp) == [memoryview(b'01234567')]
-
-    fp = [memoryview(b'01'), memoryview(b''), memoryview(b'a'), memoryview(b'b')]
-    assert _drop_crc(fp) == []
-
-    fp = [memoryview(b'0'), memoryview(b''), memoryview(b'a'), memoryview(b'b')]  # Too short
-    assert _drop_crc(fp) == []
-
-    fp = [memoryview(b'')]  # Too short
-    assert _drop_crc(fp) == []
-
-    fp = []  # Too short
-    assert _drop_crc(fp) == []
+    mv = memoryview
+    assert _drop_crc([mv(b'0123456789')]) == [mv(b'012345')]
+    assert _drop_crc([mv(b'0123456789'), mv(b'abcde')]) == [mv(b'0123456789'), mv(b'a')]
+    assert _drop_crc([mv(b'0123456789'), mv(b'abcd')]) == [mv(b'0123456789')]
+    assert _drop_crc([mv(b'0123456789'), mv(b'abc')]) == [mv(b'012345678')]
+    assert _drop_crc([mv(b'0123456789'), mv(b'ab')]) == [mv(b'01234567')]
+    assert _drop_crc([mv(b'0123456789'), mv(b'a')]) == [mv(b'0123456')]
+    assert _drop_crc([mv(b'0123456789'), mv(b'')]) == [mv(b'012345')]
+    assert _drop_crc([mv(b'0123456789'), mv(b''), mv(b'a'), mv(b'b')]) == [mv(b'01234567')]
+    assert _drop_crc([mv(b'01'), mv(b''), mv(b'a'), mv(b'b')]) == []
+    assert _drop_crc([mv(b'0'), mv(b''), mv(b'a'), mv(b'b')]) == []
+    assert _drop_crc([mv(b'')]) == []
+    assert _drop_crc([]) == []
