@@ -9,10 +9,9 @@ import copy
 import typing
 import asyncio
 import logging
-import collections
 import dataclasses
 import pyuavcan
-from .._frame import Frame
+from .._frame import SerialFrame
 from ._base import SerialSession
 from pyuavcan.transport.commons.high_overhead_transport import TransferReassembler
 
@@ -56,7 +55,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
         super(SerialInputSession, self).__init__(finalizer)
 
-    def _process_frame(self, frame: Frame) -> None:
+    def _process_frame(self, frame: SerialFrame) -> None:
         """
         This is a part of the transport-internal API. It's a public method despite the name because Python's
         visibility handling capabilities are limited. I guess we could define a private abstract base to
@@ -198,17 +197,17 @@ def _unittest_input_session() -> None:
                  index:             int,
                  end_of_transfer:   bool,
                  payload:           typing.Union[bytes, memoryview],
-                 source_node_id:    typing.Optional[int]) -> Frame:
-        return Frame(timestamp=ts,
-                     priority=prio,
-                     transfer_id=transfer_id,
-                     index=index,
-                     end_of_transfer=end_of_transfer,
-                     payload=memoryview(payload),
-                     source_node_id=source_node_id,
-                     destination_node_id=dst_nid,
-                     data_specifier=session_spec.data_specifier,
-                     data_type_hash=payload_meta.data_type_hash)
+                 source_node_id:    typing.Optional[int]) -> SerialFrame:
+        return SerialFrame(timestamp=ts,
+                           priority=prio,
+                           transfer_id=transfer_id,
+                           index=index,
+                           end_of_transfer=end_of_transfer,
+                           payload=memoryview(payload),
+                           source_node_id=source_node_id,
+                           destination_node_id=dst_nid,
+                           data_specifier=session_spec.data_specifier,
+                           data_type_hash=payload_meta.data_type_hash)
 
     # ANONYMOUS TRANSFERS.
     sis._process_frame(mk_frame(transfer_id=0,
@@ -253,16 +252,16 @@ def _unittest_input_session() -> None:
 
     # BAD DATA TYPE HASH.
     sis._process_frame(
-        Frame(timestamp=ts,
-              priority=prio,
-              transfer_id=0,
-              index=0,
-              end_of_transfer=True,
-              payload=memoryview(nihil_supernum),
-              source_node_id=None,
-              destination_node_id=None,
-              data_specifier=session_spec.data_specifier,
-              data_type_hash=0xbad_bad_bad_bad_bad)
+        SerialFrame(timestamp=ts,
+                    priority=prio,
+                    transfer_id=0,
+                    index=0,
+                    end_of_transfer=True,
+                    payload=memoryview(nihil_supernum),
+                    source_node_id=None,
+                    destination_node_id=None,
+                    data_specifier=session_spec.data_specifier,
+                    data_type_hash=0xbad_bad_bad_bad_bad)
     )
     assert sis.sample_statistics() == SerialInputStatistics(
         transfers=1,

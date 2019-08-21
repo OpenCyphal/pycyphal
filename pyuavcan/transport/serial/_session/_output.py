@@ -9,12 +9,12 @@ import copy
 import typing
 import logging
 import pyuavcan
-from .._frame import Frame
+from .._frame import SerialFrame
 from ._base import SerialSession
 
 
 #: Returns the transmission timestamp.
-SendHandler = typing.Callable[[typing.Iterable[Frame], float],
+SendHandler = typing.Callable[[typing.Iterable[SerialFrame], float],
                               typing.Awaitable[typing.Optional[pyuavcan.transport.Timestamp]]]
 
 _logger = logging.getLogger(__name__)
@@ -80,21 +80,21 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
             raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                 f'Anonymous nodes cannot emit service transfers. Session specifier: {self._specifier}')
 
-        def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> Frame:
+        def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> SerialFrame:
             if not end_of_transfer and local_node_id is None:
                 raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                     f'Anonymous nodes cannot emit multi-frame transfers. Session specifier: {self._specifier}')
 
-            return Frame(timestamp=transfer.timestamp,
-                         priority=transfer.priority,
-                         transfer_id=transfer.transfer_id,
-                         index=index,
-                         end_of_transfer=end_of_transfer,
-                         payload=payload,
-                         source_node_id=local_node_id,
-                         destination_node_id=self._specifier.remote_node_id,
-                         data_specifier=self._specifier.data_specifier,
-                         data_type_hash=self._payload_metadata.data_type_hash)
+            return SerialFrame(timestamp=transfer.timestamp,
+                               priority=transfer.priority,
+                               transfer_id=transfer.transfer_id,
+                               index=index,
+                               end_of_transfer=end_of_transfer,
+                               payload=payload,
+                               source_node_id=local_node_id,
+                               destination_node_id=self._specifier.remote_node_id,
+                               data_specifier=self._specifier.data_specifier,
+                               data_type_hash=self._payload_metadata.data_type_hash)
 
         frames = list(pyuavcan.transport.commons.high_overhead_transport.serialize_transfer(
             transfer.fragmented_payload,
@@ -156,11 +156,11 @@ def _unittest_output_session() -> None:
 
     tx_timestamp: typing.Optional[Timestamp] = Timestamp.now()
     tx_exception: typing.Optional[Exception] = None
-    last_sent_frames: typing.List[Frame] = []
+    last_sent_frames: typing.List[SerialFrame] = []
     last_monotonic_deadline = 0.0
     finalized = False
 
-    async def do_send(frames: typing.Iterable[Frame], monotonic_deadline: float) -> typing.Optional[Timestamp]:
+    async def do_send(frames: typing.Iterable[SerialFrame], monotonic_deadline: float) -> typing.Optional[Timestamp]:
         nonlocal last_sent_frames
         nonlocal last_monotonic_deadline
         last_sent_frames = list(frames)

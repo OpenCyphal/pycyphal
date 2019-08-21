@@ -6,7 +6,7 @@
 
 import typing
 import pyuavcan
-from ._frame import Frame
+from ._frame import SerialFrame
 
 
 class StreamParser:
@@ -21,7 +21,7 @@ class StreamParser:
     The raw data reporting can be useful if the same serial port is used both for UAVCAN and as a text console.
     """
     def __init__(self,
-                 callback: typing.Callable[[typing.Union[Frame, memoryview]], None],
+                 callback: typing.Callable[[typing.Union[SerialFrame, memoryview]], None],
                  max_payload_size_bytes: int):
         """
         :param callback: Invoked when a new frame is parsed or when a block of data could not be recognized as a frame.
@@ -37,7 +37,7 @@ class StreamParser:
         # Constant configuration
         self._callback = callback
         self._max_frame_size_bytes = \
-            int(max_payload_size_bytes) + Frame.NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING
+            int(max_payload_size_bytes) + SerialFrame.NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING
 
         # Parser state
         self._frame_buffer = bytearray()  # Entire frame except delimiters.
@@ -55,14 +55,14 @@ class StreamParser:
 
     def _process_byte(self, b: int, timestamp: pyuavcan.transport.Timestamp) -> None:
         # Reception of a frame delimiter terminates the current frame unconditionally.
-        if b == Frame.FRAME_DELIMITER_BYTE:
+        if b == SerialFrame.FRAME_DELIMITER_BYTE:
             self._finalize(known_invalid=not self._is_inside_frame())
             self._current_frame_timestamp = timestamp
             return
 
         # Unescaping is done only if we're inside a frame currently.
         if self._is_inside_frame():
-            if b == Frame.ESCAPE_PREFIX_BYTE:
+            if b == SerialFrame.ESCAPE_PREFIX_BYTE:
                 self._unescape_next = True
                 return
             if self._unescape_next:
@@ -79,10 +79,10 @@ class StreamParser:
     def _finalize(self, known_invalid: bool) -> None:
         try:
             mv = memoryview(self._frame_buffer)
-            parsed: typing.Optional[Frame] = None
+            parsed: typing.Optional[SerialFrame] = None
             if (not known_invalid) and len(mv) <= self._max_frame_size_bytes:
                 assert self._current_frame_timestamp is not None
-                parsed = Frame.parse_from_unescaped_image(mv, self._current_frame_timestamp)
+                parsed = SerialFrame.parse_from_unescaped_image(mv, self._current_frame_timestamp)
             if parsed:
                 self._callback(parsed)
             elif mv:
@@ -98,18 +98,18 @@ class StreamParser:
 def _unittest_stream_parser() -> None:
     from pytest import raises
     from pyuavcan.transport import Priority, MessageDataSpecifier
-    from ._frame import Frame
+    from ._frame import SerialFrame
 
     ts = pyuavcan.transport.Timestamp.now()
 
-    outputs: typing.List[typing.Union[Frame, memoryview]] = []
+    outputs: typing.List[typing.Union[SerialFrame, memoryview]] = []
 
     with raises(ValueError):
         sp = StreamParser(outputs.append, 0)
 
     sp = StreamParser(outputs.append, 4)
 
-    def proc(b: typing.Union[bytes, memoryview]) -> typing.Sequence[typing.Union[Frame, memoryview]]:
+    def proc(b: typing.Union[bytes, memoryview]) -> typing.Sequence[typing.Union[SerialFrame, memoryview]]:
         sp.process_next_chunk(b, ts)
         out = outputs[:]
         outputs.clear()
@@ -124,32 +124,32 @@ def _unittest_stream_parser() -> None:
     assert [memoryview(b'\x9E\x8E')] == proc(b'\x8E\x71\x9E')
 
     # Valid frame.
-    f1 = Frame(timestamp=ts,
-               priority=Priority.HIGH,
-               source_node_id=Frame.FRAME_DELIMITER_BYTE,
-               destination_node_id=Frame.ESCAPE_PREFIX_BYTE,
-               data_specifier=MessageDataSpecifier(12345),
-               data_type_hash=0xdead_beef_bad_c0ffe,
-               transfer_id=1234567890123456789,
-               index=1234567,
-               end_of_transfer=True,
-               payload=memoryview(b'ab\x9E\x8E'))  # 4 bytes of payload.
+    f1 = SerialFrame(timestamp=ts,
+                     priority=Priority.HIGH,
+                     source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
+                     destination_node_id=SerialFrame.ESCAPE_PREFIX_BYTE,
+                     data_specifier=MessageDataSpecifier(12345),
+                     data_type_hash=0xdead_beef_bad_c0ffe,
+                     transfer_id=1234567890123456789,
+                     index=1234567,
+                     end_of_transfer=True,
+                     payload=memoryview(b'ab\x9E\x8E'))  # 4 bytes of payload.
     result = proc(f1.compile_into(bytearray(100)))
     assert len(result) == 1
-    assert isinstance(result[0], Frame)
-    assert Frame.__eq__(f1, result)
+    assert isinstance(result[0], SerialFrame)
+    assert SerialFrame.__eq__(f1, result)
 
     # Second valid frame is too long.
-    f2 = Frame(timestamp=ts,
-               priority=Priority.HIGH,
-               source_node_id=Frame.FRAME_DELIMITER_BYTE,
-               destination_node_id=Frame.ESCAPE_PREFIX_BYTE,
-               data_specifier=MessageDataSpecifier(12345),
-               data_type_hash=0xdead_beef_bad_c0ffe,
-               transfer_id=1234567890123456789,
-               index=1234567,
-               end_of_transfer=True,
-               payload=f1.compile_into(bytearray(1000)))
+    f2 = SerialFrame(timestamp=ts,
+                     priority=Priority.HIGH,
+                     source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
+                     destination_node_id=SerialFrame.ESCAPE_PREFIX_BYTE,
+                     data_specifier=MessageDataSpecifier(12345),
+                     data_type_hash=0xdead_beef_bad_c0ffe,
+                     transfer_id=1234567890123456789,
+                     index=1234567,
+                     end_of_transfer=True,
+                     payload=f1.compile_into(bytearray(1000)))
     assert len(f2.payload) == 46
     result = proc(f2.compile_into(bytearray(1000)))
     assert len(result) == 1
@@ -161,5 +161,5 @@ def _unittest_stream_parser() -> None:
     result = proc(f2.compile_into(bytearray(100)))              # Then the second frame begins.
     assert len(result) == 2                                     # Make sure the second one is retrieved correctly.
     assert isinstance(result[0], memoryview)
-    assert isinstance(result[1], Frame)
-    assert Frame.__eq__(f2, result)
+    assert isinstance(result[1], SerialFrame)
+    assert SerialFrame.__eq__(f2, result)

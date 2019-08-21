@@ -13,7 +13,7 @@ import concurrent.futures
 import serial
 
 import pyuavcan.transport
-from ._frame import Frame
+from ._frame import SerialFrame
 from ._stream_parser import StreamParser
 from ._session import SerialOutputSession
 
@@ -166,8 +166,8 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
-            transfer_id_modulo=Frame.TRANSFER_ID_MASK + 1,
-            node_id_set_cardinality=len(Frame.NODE_ID_RANGE),
+            transfer_id_modulo=SerialFrame.TRANSFER_ID_MASK + 1,
+            node_id_set_cardinality=len(SerialFrame.NODE_ID_RANGE),
             single_frame_transfer_payload_capacity_bytes=self._sft_payload_capacity_bytes
         )
 
@@ -218,7 +218,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
 
-    def _handle_received_frame(self, frame: Frame) -> None:
+    def _handle_received_frame(self, frame: SerialFrame) -> None:
         pass
 
     @staticmethod
@@ -231,7 +231,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             pass
         _logger.warning('Unparsed data: %s', printable)
 
-    async def _send_transfer(self, frames: typing.Iterable[Frame], monotonic_deadline: float) \
+    async def _send_transfer(self, frames: typing.Iterable[SerialFrame], monotonic_deadline: float) \
             -> typing.Optional[pyuavcan.transport.Timestamp]:
         """
         Emits the frames belonging to the same transfer, returns the first frame transmission timestamp.
@@ -261,8 +261,8 @@ class SerialTransport(pyuavcan.transport.Transport):
         return tx_ts
 
     def _reader_thread_func(self) -> None:
-        def callback(item: typing.Union[Frame, memoryview]) -> None:
-            if isinstance(item, Frame):
+        def callback(item: typing.Union[SerialFrame, memoryview]) -> None:
+            if isinstance(item, SerialFrame):
                 self._loop.call_soon_threadsafe(self._handle_received_frame, item)
             elif isinstance(item, memoryview):
                 self._loop.call_soon_threadsafe(self._handle_received_unparsed_data, item)

@@ -18,7 +18,7 @@ _ANONYMOUS_NODE_ID = 0xFFFF
 
 
 @dataclasses.dataclass(frozen=True)
-class Frame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
+class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
     NODE_ID_MASK     = 4095
     TRANSFER_ID_MASK = 2 ** 64 - 1
     INDEX_MASK       = 2 ** 31 - 1
@@ -125,22 +125,22 @@ class Frame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
 
     @staticmethod
     def parse_from_unescaped_image(header_payload_crc_image: memoryview,
-                                   timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[Frame]:
+                                   timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[SerialFrame]:
         """
         :returns: Frame or None if the image is invalid.
         """
-        if len(header_payload_crc_image) < Frame.NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING:
+        if len(header_payload_crc_image) < SerialFrame.NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING:
             return None
 
         if not pyuavcan.transport.commons.crc.CRC32C.new(header_payload_crc_image).check_residue():
             return None
 
-        header = header_payload_crc_image[:Frame.HEADER_STRUCT.size]
-        payload = header_payload_crc_image[Frame.HEADER_STRUCT.size:-Frame.CRC_SIZE_BYTES]
+        header = header_payload_crc_image[:SerialFrame.HEADER_STRUCT.size]
+        payload = header_payload_crc_image[SerialFrame.HEADER_STRUCT.size:-SerialFrame.CRC_SIZE_BYTES]
 
         # noinspection PyTypeChecker
         version, int_priority, src_nid, dst_nid, int_data_spec, dt_hash, transfer_id, index_eot = \
-            Frame.HEADER_STRUCT.unpack(header)
+            SerialFrame.HEADER_STRUCT.unpack(header)
         if version != _VERSION:
             return None
 
@@ -159,54 +159,54 @@ class Frame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
             data_specifier = pyuavcan.transport.ServiceDataSpecifier(service_id, role)
 
         try:
-            return Frame(timestamp=timestamp,
-                         priority=pyuavcan.transport.Priority(int_priority),
-                         source_node_id=src_nid,
-                         destination_node_id=dst_nid,
-                         data_specifier=data_specifier,
-                         data_type_hash=dt_hash,
-                         transfer_id=transfer_id,
-                         index=index_eot & Frame.INDEX_MASK,
-                         end_of_transfer=index_eot & (1 << 31) != 0,
-                         payload=payload)
+            return SerialFrame(timestamp=timestamp,
+                               priority=pyuavcan.transport.Priority(int_priority),
+                               source_node_id=src_nid,
+                               destination_node_id=dst_nid,
+                               data_specifier=data_specifier,
+                               data_type_hash=dt_hash,
+                               transfer_id=transfer_id,
+                               index=index_eot & SerialFrame.INDEX_MASK,
+                               end_of_transfer=index_eot & (1 << 31) != 0,
+                               payload=payload)
         except ValueError:
             return None
 
 
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
 
-assert Frame.HEADER_STRUCT.size == 32
+assert SerialFrame.HEADER_STRUCT.size == 32
 
 
 def _unittest_frame_compile_message() -> None:
     from pyuavcan.transport import Priority, MessageDataSpecifier, Timestamp
 
-    f = Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=Frame.FRAME_DELIMITER_BYTE,
-              destination_node_id=Frame.ESCAPE_PREFIX_BYTE,
-              data_specifier=MessageDataSpecifier(12345),
-              data_type_hash=0xdead_beef_bad_c0ffe,
-              transfer_id=1234567890123456789,
-              index=1234567,
-              end_of_transfer=True,
-              payload=memoryview(b'abcd\x9Eef\x8E'))
+    f = SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
+                    destination_node_id=SerialFrame.ESCAPE_PREFIX_BYTE,
+                    data_specifier=MessageDataSpecifier(12345),
+                    data_type_hash=0xdead_beef_bad_c0ffe,
+                    transfer_id=1234567890123456789,
+                    index=1234567,
+                    end_of_transfer=True,
+                    payload=memoryview(b'abcd\x9Eef\x8E'))
 
     buffer = bytearray(0 for _ in range(1000))
     mv = f.compile_into(buffer)
 
-    assert mv[0] == Frame.FRAME_DELIMITER_BYTE
-    assert mv[-1] == Frame.FRAME_DELIMITER_BYTE
+    assert mv[0] == SerialFrame.FRAME_DELIMITER_BYTE
+    assert mv[-1] == SerialFrame.FRAME_DELIMITER_BYTE
     segment = bytes(mv[1:-1])
-    assert Frame.FRAME_DELIMITER_BYTE not in segment
+    assert SerialFrame.FRAME_DELIMITER_BYTE not in segment
 
     # Header validation
     assert segment[0] == _VERSION
     assert segment[1] == int(Priority.HIGH)
-    assert segment[2] == Frame.ESCAPE_PREFIX_BYTE
-    assert (segment[3], segment[4]) == (Frame.FRAME_DELIMITER_BYTE ^ 0xFF, 0)
-    assert segment[5] == Frame.ESCAPE_PREFIX_BYTE
-    assert (segment[6], segment[7]) == (Frame.ESCAPE_PREFIX_BYTE ^ 0xFF, 0)
+    assert segment[2] == SerialFrame.ESCAPE_PREFIX_BYTE
+    assert (segment[3], segment[4]) == (SerialFrame.FRAME_DELIMITER_BYTE ^ 0xFF, 0)
+    assert segment[5] == SerialFrame.ESCAPE_PREFIX_BYTE
+    assert (segment[6], segment[7]) == (SerialFrame.ESCAPE_PREFIX_BYTE ^ 0xFF, 0)
     assert segment[8:10] == 12345 .to_bytes(2, 'little')
     assert segment[10:18] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
     assert segment[18:26] == 1234567890123456789 .to_bytes(8, 'little')
@@ -215,51 +215,51 @@ def _unittest_frame_compile_message() -> None:
 
     # Payload validation
     assert segment[34:38] == b'abcd'
-    assert segment[38] == Frame.ESCAPE_PREFIX_BYTE
+    assert segment[38] == SerialFrame.ESCAPE_PREFIX_BYTE
     assert segment[39] == 0x9E ^ 0xFF
     assert segment[40:42] == b'ef'
-    assert segment[42] == Frame.ESCAPE_PREFIX_BYTE
+    assert segment[42] == SerialFrame.ESCAPE_PREFIX_BYTE
     assert segment[43] == 0x8E ^ 0xFF
 
     # CRC validation
-    header = Frame.HEADER_STRUCT.pack(_VERSION,
-                                      int(f.priority),
-                                      f.source_node_id,
-                                      f.destination_node_id,
-                                      12345,
-                                      f.data_type_hash,
-                                      f.transfer_id,
-                                      f.index + 0x8000_0000)
+    header = SerialFrame.HEADER_STRUCT.pack(_VERSION,
+                                            int(f.priority),
+                                            f.source_node_id,
+                                            f.destination_node_id,
+                                            12345,
+                                            f.data_type_hash,
+                                            f.transfer_id,
+                                            f.index + 0x8000_0000)
     assert segment[44:] == pyuavcan.transport.commons.crc.CRC32C.new(header, f.payload).value_as_bytes
 
 
 def _unittest_frame_compile_service() -> None:
     from pyuavcan.transport import Priority, ServiceDataSpecifier, Timestamp
 
-    f = Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=Frame.FRAME_DELIMITER_BYTE,
-              destination_node_id=None,
-              data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
-              data_type_hash=0xdead_beef_bad_c0ffe,
-              transfer_id=1234567890123456789,
-              index=1234567,
-              end_of_transfer=False,
-              payload=memoryview(b''))
+    f = SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
+                    destination_node_id=None,
+                    data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
+                    data_type_hash=0xdead_beef_bad_c0ffe,
+                    transfer_id=1234567890123456789,
+                    index=1234567,
+                    end_of_transfer=False,
+                    payload=memoryview(b''))
 
     buffer = bytearray(0 for _ in range(1000))
     mv = f.compile_into(buffer)
 
-    assert mv[0] == Frame.FRAME_DELIMITER_BYTE
-    assert mv[-1] == Frame.FRAME_DELIMITER_BYTE
+    assert mv[0] == SerialFrame.FRAME_DELIMITER_BYTE
+    assert mv[-1] == SerialFrame.FRAME_DELIMITER_BYTE
     segment = bytes(mv[1:-1])
-    assert Frame.FRAME_DELIMITER_BYTE not in segment
+    assert SerialFrame.FRAME_DELIMITER_BYTE not in segment
 
     # Header validation
     assert segment[0] == _VERSION
     assert segment[1] == int(Priority.HIGH)
-    assert segment[2] == Frame.ESCAPE_PREFIX_BYTE
-    assert (segment[3], segment[4]) == (Frame.FRAME_DELIMITER_BYTE ^ 0xFF, 0)
+    assert segment[2] == SerialFrame.ESCAPE_PREFIX_BYTE
+    assert (segment[3], segment[4]) == (SerialFrame.FRAME_DELIMITER_BYTE ^ 0xFF, 0)
     assert (segment[5], segment[6]) == (0xFF, 0xFF)
     assert segment[7:9] == ((1 << 15) | (1 << 14) | 123) .to_bytes(2, 'little')
     assert segment[9:17] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
@@ -268,14 +268,14 @@ def _unittest_frame_compile_service() -> None:
     assert segment[29:33] == b'\x00' * 4
 
     # CRC validation
-    header = Frame.HEADER_STRUCT.pack(_VERSION,
-                                      int(f.priority),
-                                      f.source_node_id,
-                                      _ANONYMOUS_NODE_ID,
-                                      (1 << 15) | (1 << 14) | 123,
-                                      f.data_type_hash,
-                                      f.transfer_id,
-                                      f.index)
+    header = SerialFrame.HEADER_STRUCT.pack(_VERSION,
+                                            int(f.priority),
+                                            f.source_node_id,
+                                            _ANONYMOUS_NODE_ID,
+                                            (1 << 15) | (1 << 14) | 123,
+                                            f.data_type_hash,
+                                            f.transfer_id,
+                                            f.index)
     assert segment[33:] == pyuavcan.transport.commons.crc.CRC32C.new(header, f.payload).value_as_bytes
 
 
@@ -301,8 +301,8 @@ def _unittest_frame_parse() -> None:
     ])
     assert len(header) == 32
     payload = b'Squeeze mayonnaise onto a hamster'
-    f = Frame.parse_from_unescaped_image(memoryview(header + payload + get_crc(header, payload)), ts)
-    assert f == Frame(
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + payload + get_crc(header, payload)), ts)
+    assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=123,
         destination_node_id=456,
@@ -327,8 +327,8 @@ def _unittest_frame_parse() -> None:
         0x31, 0xD4, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00,
     ])
-    f = Frame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts)
-    assert f == Frame(
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts)
+    assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
         destination_node_id=0,
@@ -353,8 +353,8 @@ def _unittest_frame_parse() -> None:
         0x31, 0xD4, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00,
     ])
-    f = Frame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts)
-    assert f == Frame(
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts)
+    assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
         destination_node_id=0,
@@ -368,10 +368,10 @@ def _unittest_frame_parse() -> None:
     )
 
     # Too short
-    assert Frame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(header, payload)), ts) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(header, payload)), ts) is None
 
     # Bad CRC
-    assert Frame.parse_from_unescaped_image(memoryview(header + payload + b'1234'), ts) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header + payload + b'1234'), ts) is None
 
     # Bad version
     header = bytes([
@@ -385,7 +385,7 @@ def _unittest_frame_parse() -> None:
         0x31, 0xD4, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00,
     ])
-    assert Frame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
 
     # Bad fields
     header = bytes([
@@ -399,105 +399,105 @@ def _unittest_frame_parse() -> None:
         0x31, 0xD4, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00,
     ])
-    assert Frame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
 
 
 def _unittest_frame_check() -> None:
     from pytest import raises
     from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier, Timestamp
 
-    f = Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=123,
-              destination_node_id=456,
-              data_specifier=MessageDataSpecifier(12345),
-              data_type_hash=0xdead_beef_bad_c0ffe,
-              transfer_id=1234567890123456789,
-              index=1234567,
-              end_of_transfer=False,
-              payload=memoryview(b'abcdef'))
+    f = SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=123,
+                    destination_node_id=456,
+                    data_specifier=MessageDataSpecifier(12345),
+                    data_type_hash=0xdead_beef_bad_c0ffe,
+                    transfer_id=1234567890123456789,
+                    index=1234567,
+                    end_of_transfer=False,
+                    payload=memoryview(b'abcdef'))
     del f
 
     with raises(ValueError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=123456,
-              destination_node_id=456,
-              data_specifier=MessageDataSpecifier(12345),
-              data_type_hash=0xdead_beef_bad_c0ffe,
-              transfer_id=1234567890123456789,
-              index=1234567,
-              end_of_transfer=False,
-              payload=memoryview(b'abcdef'))
+        SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=123456,
+                    destination_node_id=456,
+                    data_specifier=MessageDataSpecifier(12345),
+                    data_type_hash=0xdead_beef_bad_c0ffe,
+                    transfer_id=1234567890123456789,
+                    index=1234567,
+                    end_of_transfer=False,
+                    payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=123,
-              destination_node_id=123456,
-              data_specifier=MessageDataSpecifier(12345),
-              data_type_hash=0xdead_beef_bad_c0ffe,
-              transfer_id=1234567890123456789,
-              index=1234567,
-              end_of_transfer=False,
-              payload=memoryview(b'abcdef'))
+        SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=123,
+                    destination_node_id=123456,
+                    data_specifier=MessageDataSpecifier(12345),
+                    data_type_hash=0xdead_beef_bad_c0ffe,
+                    transfer_id=1234567890123456789,
+                    index=1234567,
+                    end_of_transfer=False,
+                    payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=123,
-              destination_node_id=123,
-              data_specifier=MessageDataSpecifier(12345),
-              data_type_hash=0xdead_beef_bad_c0ffe,
-              transfer_id=1234567890123456789,
-              index=1234567,
-              end_of_transfer=False,
-              payload=memoryview(b'abcdef'))
+        SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=123,
+                    destination_node_id=123,
+                    data_specifier=MessageDataSpecifier(12345),
+                    data_type_hash=0xdead_beef_bad_c0ffe,
+                    transfer_id=1234567890123456789,
+                    index=1234567,
+                    end_of_transfer=False,
+                    payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=None,
-              destination_node_id=456,
-              data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
-              data_type_hash=0xdead_beef_bad_c0ffe,
-              transfer_id=1234567890123456789,
-              index=1234567,
-              end_of_transfer=False,
-              payload=memoryview(b'abcdef'))
+        SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=None,
+                    destination_node_id=456,
+                    data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
+                    data_type_hash=0xdead_beef_bad_c0ffe,
+                    transfer_id=1234567890123456789,
+                    index=1234567,
+                    end_of_transfer=False,
+                    payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=None,
-              destination_node_id=None,
-              data_specifier=MessageDataSpecifier(12345),
-              data_type_hash=2 ** 64,
-              transfer_id=1234567890123456789,
-              index=1234567,
-              end_of_transfer=False,
-              payload=memoryview(b'abcdef'))
+        SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=None,
+                    destination_node_id=None,
+                    data_specifier=MessageDataSpecifier(12345),
+                    data_type_hash=2 ** 64,
+                    transfer_id=1234567890123456789,
+                    index=1234567,
+                    end_of_transfer=False,
+                    payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=None,
-              destination_node_id=None,
-              data_specifier=MessageDataSpecifier(12345),
-              data_type_hash=0xdead_beef_bad_c0ffe,
-              transfer_id=-1,
-              index=1234567,
-              end_of_transfer=False,
-              payload=memoryview(b'abcdef'))
+        SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=None,
+                    destination_node_id=None,
+                    data_specifier=MessageDataSpecifier(12345),
+                    data_type_hash=0xdead_beef_bad_c0ffe,
+                    transfer_id=-1,
+                    index=1234567,
+                    end_of_transfer=False,
+                    payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.HIGH,
-              source_node_id=None,
-              destination_node_id=None,
-              data_specifier=MessageDataSpecifier(12345),
-              data_type_hash=0xdead_beef_bad_c0ffe,
-              transfer_id=0,
-              index=-1,
-              end_of_transfer=False,
-              payload=memoryview(b'abcdef'))
+        SerialFrame(timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    source_node_id=None,
+                    destination_node_id=None,
+                    data_specifier=MessageDataSpecifier(12345),
+                    data_type_hash=0xdead_beef_bad_c0ffe,
+                    transfer_id=0,
+                    index=-1,
+                    end_of_transfer=False,
+                    payload=memoryview(b'abcdef'))
