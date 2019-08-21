@@ -205,7 +205,7 @@ class TransferReassembler:
                                                       max_payload_size_bytes=self._max_payload_size_bytes)
 
     @staticmethod
-    def reassemble_anonymous_transfer(frame: FrameBase) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    def construct_anonymous_transfer(frame: FrameBase) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         """
         A minor helper that validates whether the frame is a valid anonymous transfer (it is if the index
         is zero and the end-of-transfer flag is set) and constructs a transfer instance if it is.
@@ -688,7 +688,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
 
     ts = Timestamp.now()
     prio = Priority.LOW
-    assert TransferReassembler.reassemble_anonymous_transfer(
+    assert TransferReassembler.construct_anonymous_transfer(
         FrameBase(timestamp=ts,
                   priority=prio,
                   transfer_id=123456,
@@ -701,7 +701,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
                       fragmented_payload=[memoryview(b'abcdef')],
                       source_node_id=None)
 
-    assert TransferReassembler.reassemble_anonymous_transfer(
+    assert TransferReassembler.construct_anonymous_transfer(
         FrameBase(timestamp=ts,
                   priority=prio,
                   transfer_id=123456,
@@ -710,7 +710,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
                   payload=memoryview(b'abcdef'))
     ) is None
 
-    assert TransferReassembler.reassemble_anonymous_transfer(
+    assert TransferReassembler.construct_anonymous_transfer(
         FrameBase(timestamp=ts,
                   priority=prio,
                   transfer_id=123456,

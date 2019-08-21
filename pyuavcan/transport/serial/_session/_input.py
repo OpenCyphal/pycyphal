@@ -24,11 +24,10 @@ _logger = logging.getLogger(__name__)
 class SerialInputStatistics(pyuavcan.transport.Statistics):
     #: Keys are data type hash values collected from received frames that did not match the local type configuration.
     #: Values are the number of times each hash value has been encountered.
-    mismatched_data_type_hashes: typing.DefaultDict[int, int] = \
-        dataclasses.field(default_factory=lambda: collections.defaultdict(int))
+    mismatched_data_type_hashes: typing.Dict[int, int] = dataclasses.field(default_factory=dict)
 
     #: Keys are source node-IDs; values are dicts where keys are error enum members and values are counts.
-    reassembly_errors_per_source_node_id: typing.Dict[int, typing.DefaultDict[TransferReassembler.Error, int]] = \
+    reassembly_errors_per_source_node_id: typing.Dict[int, typing.Dict[TransferReassembler.Error, int]] = \
         dataclasses.field(default_factory=dict)
 
 
@@ -64,20 +63,22 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         handle this but it feels like too much work. Why can't we have protected visibility in Python?
         """
         assert frame.data_specifier == self._specifier.data_specifier, 'Internal protocol violation'
+        self._statistics.frames += 1
+
         if frame.data_type_hash != self._payload_metadata.data_type_hash:
             self._statistics.errors += 1
-            self._statistics.mismatched_data_type_hashes[frame.data_type_hash] += 1
+            try:
+                self._statistics.mismatched_data_type_hashes[frame.data_type_hash] += 1
+            except LookupError:
+                self._statistics.mismatched_data_type_hashes[frame.data_type_hash] = 1
             return
-
-        self._statistics.frames += 1
 
         transfer: typing.Optional[pyuavcan.transport.TransferFrom]
         if frame.source_node_id is None:
-            transfer = pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
-                                                       priority=frame.priority,
-                                                       transfer_id=frame.transfer_id,
-                                                       fragmented_payload=[frame.payload],
-                                                       source_node_id=None)
+            transfer = TransferReassembler.construct_anonymous_transfer(frame)
+            if transfer is None:
+                self._statistics.errors += 1
+                _logger.debug('%s: Invalid anonymous frame: %s', self, frame)
         else:
             transfer = self._get_reassembler(frame.source_node_id).process_frame(frame, self._transfer_id_timeout)
 
@@ -87,7 +88,8 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
             _logger.debug('%s: Received transfer: %s; current stats: %s', self, transfer, self._statistics)
             try:
                 self._queue.put_nowait(transfer)
-            except asyncio.QueueFull:
+            except asyncio.QueueFull:  # pragma: no cover
+                # TODO: make the queue capacity configurable
                 self._statistics.drops += len(transfer.fragmented_payload)
 
     async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
@@ -103,7 +105,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
             return None
         else:
             assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
-            assert transfer.source_node_id in (None, self._specifier.remote_node_id), 'Internal protocol violation'
+            assert transfer.source_node_id == self._specifier.remote_node_id or self._specifier.remote_node_id is None
             return transfer
 
     @property
@@ -134,13 +136,240 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         except LookupError:
             def on_reassembly_error(error: TransferReassembler.Error) -> None:
                 self._statistics.errors += 1
-                self._statistics.reassembly_errors_per_source_node_id[source_node_id][error] += 1
+                d = self._statistics.reassembly_errors_per_source_node_id[source_node_id]
+                try:
+                    d[error] += 1
+                except LookupError:
+                    d[error] = 1
 
-            self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id,
-                                                                             collections.defaultdict(int))
+            self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id, {})
             reasm = TransferReassembler(source_node_id=source_node_id,
                                         max_payload_size_bytes=self._payload_metadata.max_size_bytes,
                                         on_error_callback=on_reassembly_error)
             self._reassemblers[source_node_id] = reasm
             _logger.info('%s: New %s (%d total)', self, reasm, len(self._reassemblers))
             return reasm
+
+
+# noinspection PyProtectedMember
+def _unittest_input_session() -> None:
+    import asyncio
+    from pytest import raises, approx
+    from pyuavcan.transport import SessionSpecifier, MessageDataSpecifier, Priority, TransferFrom
+    from pyuavcan.transport import PayloadMetadata, Timestamp
+    from pyuavcan.transport.commons.high_overhead_transport import TransferCRC
+
+    ts = Timestamp.now()
+    prio = Priority.SLOW
+    dst_nid = 1234
+
+    run_until_complete = asyncio.get_event_loop().run_until_complete
+    get_monotonic = asyncio.get_event_loop().time
+
+    nihil_supernum = b'nihil supernum'
+
+    finalized = False
+
+    def do_finalize() -> None:
+        nonlocal finalized
+        finalized = True
+
+    session_spec = SessionSpecifier(MessageDataSpecifier(12345), None)
+    payload_meta = PayloadMetadata(0xdead_beef_bad_c0ffe, 100)
+
+    sis = SerialInputSession(specifier=session_spec,
+                             payload_metadata=payload_meta,
+                             loop=asyncio.get_event_loop(),
+                             finalizer=do_finalize)
+    assert sis.specifier == session_spec
+    assert sis.payload_metadata == payload_meta
+    assert sis.sample_statistics() == SerialInputStatistics()
+
+    assert sis.transfer_id_timeout == approx(SerialInputSession.DEFAULT_TRANSFER_ID_TIMEOUT)
+    sis.transfer_id_timeout = 1.0
+    with raises(ValueError):
+        sis.transfer_id_timeout = 0.0
+    assert sis.transfer_id_timeout == approx(1.0)
+
+    assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
+    assert run_until_complete(sis.receive_until(0.0)) is None
+
+    def mk_frame(transfer_id:       int,
+                 index:             int,
+                 end_of_transfer:   bool,
+                 payload:           typing.Union[bytes, memoryview],
+                 source_node_id:    typing.Optional[int]) -> Frame:
+        return Frame(timestamp=ts,
+                     priority=prio,
+                     transfer_id=transfer_id,
+                     index=index,
+                     end_of_transfer=end_of_transfer,
+                     payload=memoryview(payload),
+                     source_node_id=source_node_id,
+                     destination_node_id=dst_nid,
+                     data_specifier=session_spec.data_specifier,
+                     data_type_hash=payload_meta.data_type_hash)
+
+    # ANONYMOUS TRANSFERS.
+    sis._process_frame(mk_frame(transfer_id=0,
+                                index=0,
+                                end_of_transfer=False,
+                                payload=nihil_supernum,
+                                source_node_id=None))
+    assert sis.sample_statistics() == SerialInputStatistics(
+        frames=1,
+        errors=1,
+    )
+
+    sis._process_frame(mk_frame(transfer_id=0,
+                                index=1,
+                                end_of_transfer=True,
+                                payload=nihil_supernum,
+                                source_node_id=None))
+    assert sis.sample_statistics() == SerialInputStatistics(
+        frames=2,
+        errors=2,
+    )
+
+    sis._process_frame(mk_frame(transfer_id=0,
+                                index=0,
+                                end_of_transfer=True,
+                                payload=nihil_supernum,
+                                source_node_id=None))
+    assert sis.sample_statistics() == SerialInputStatistics(
+        transfers=1,
+        frames=3,
+        payload_bytes=len(nihil_supernum),
+        errors=2,
+    )
+    assert run_until_complete(sis.receive_until(0)) == \
+        TransferFrom(timestamp=ts,
+                     priority=prio,
+                     transfer_id=0,
+                     fragmented_payload=[memoryview(nihil_supernum)],
+                     source_node_id=None)
+    assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
+    assert run_until_complete(sis.receive_until(0.0)) is None
+
+    # BAD DATA TYPE HASH.
+    sis._process_frame(
+        Frame(timestamp=ts,
+              priority=prio,
+              transfer_id=0,
+              index=0,
+              end_of_transfer=True,
+              payload=memoryview(nihil_supernum),
+              source_node_id=None,
+              destination_node_id=None,
+              data_specifier=session_spec.data_specifier,
+              data_type_hash=0xbad_bad_bad_bad_bad)
+    )
+    assert sis.sample_statistics() == SerialInputStatistics(
+        transfers=1,
+        frames=4,
+        payload_bytes=len(nihil_supernum),
+        errors=3,
+        mismatched_data_type_hashes={0xbad_bad_bad_bad_bad: 1},
+    )
+
+    # VALID TRANSFERS. Notice that they are unordered on purpose. The reassembler can deal with that.
+    sis._process_frame(mk_frame(transfer_id=0,
+                                index=1,
+                                end_of_transfer=False,
+                                payload=nihil_supernum,
+                                source_node_id=1111))
+
+    sis._process_frame(mk_frame(transfer_id=0,
+                                index=0,
+                                end_of_transfer=True,
+                                payload=nihil_supernum,
+                                source_node_id=2222))       # COMPLETED FIRST
+
+    assert sis.sample_statistics() == SerialInputStatistics(
+        transfers=2,
+        frames=6,
+        payload_bytes=len(nihil_supernum) * 2,
+        errors=3,
+        mismatched_data_type_hashes={0xbad_bad_bad_bad_bad: 1},
+        reassembly_errors_per_source_node_id={
+            1111: {},
+            2222: {},
+        },
+    )
+
+    sis._process_frame(mk_frame(transfer_id=0,
+                                index=3,
+                                end_of_transfer=True,
+                                payload=TransferCRC.new(nihil_supernum * 3).value_as_bytes,
+                                source_node_id=1111))
+
+    sis._process_frame(mk_frame(transfer_id=0,
+                                index=0,
+                                end_of_transfer=False,
+                                payload=nihil_supernum,
+                                source_node_id=1111))
+
+    sis._process_frame(mk_frame(transfer_id=0,
+                                index=2,
+                                end_of_transfer=False,
+                                payload=nihil_supernum,
+                                source_node_id=1111))       # COMPLETED SECOND
+
+    assert sis.sample_statistics() == SerialInputStatistics(
+        transfers=3,
+        frames=9,
+        payload_bytes=len(nihil_supernum) * 5,
+        errors=3,
+        mismatched_data_type_hashes={0xbad_bad_bad_bad_bad: 1},
+        reassembly_errors_per_source_node_id={
+            1111: {},
+            2222: {},
+        },
+    )
+
+    assert run_until_complete(sis.receive_until(0)) == \
+        TransferFrom(timestamp=ts,
+                     priority=prio,
+                     transfer_id=0,
+                     fragmented_payload=[memoryview(nihil_supernum)],
+                     source_node_id=2222)
+    assert run_until_complete(sis.receive_until(0)) == \
+        TransferFrom(timestamp=ts,
+                     priority=prio,
+                     transfer_id=0,
+                     fragmented_payload=[memoryview(nihil_supernum)] * 3,
+                     source_node_id=1111)
+    assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
+    assert run_until_complete(sis.receive_until(0.0)) is None
+
+    # TRANSFERS WITH REASSEMBLY ERRORS.
+    sis._process_frame(mk_frame(transfer_id=1,          # EMPTY IN MULTIFRAME
+                                index=0,
+                                end_of_transfer=False,
+                                payload=b'',
+                                source_node_id=1111))
+
+    sis._process_frame(mk_frame(transfer_id=2,          # EMPTY IN MULTIFRAME
+                                index=0,
+                                end_of_transfer=False,
+                                payload=b'',
+                                source_node_id=1111))
+
+    assert sis.sample_statistics() == SerialInputStatistics(
+        transfers=3,
+        frames=11,
+        payload_bytes=len(nihil_supernum) * 5,
+        errors=5,
+        mismatched_data_type_hashes={0xbad_bad_bad_bad_bad: 1},
+        reassembly_errors_per_source_node_id={
+            1111: {
+                TransferReassembler.Error.MULTIFRAME_EMPTY_FRAME: 2,
+            },
+            2222: {},
+        },
+    )
+
+    assert not finalized
+    sis.close()
+    assert finalized
+    sis.close()     # Idempotency check
