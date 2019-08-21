@@ -18,7 +18,7 @@ def serialize_transfer(fragmented_payload:      typing.Sequence[memoryview],
                        max_frame_payload_bytes: int,
                        frame_factory:           typing.Callable[[int, bool, memoryview], FrameType]) \
         -> typing.Iterable[FrameType]:
-    """
+    r"""
     Constructs an ordered sequence of frames ready for transmission from the provided data fragments.
     Compatible with any high-overhead transport.
 
@@ -27,8 +27,38 @@ def serialize_transfer(fragmented_payload:      typing.Sequence[memoryview],
     :param max_frame_payload_bytes: Max payload per transport-layer frame.
 
     :param frame_factory: A callable that accepts (frame index, end of transfer, payload) and returns a frame.
+        Normally this would be a closure.
 
     :return: An iterable that yields frames.
+
+    >>> import dataclasses
+    >>> @dataclasses.dataclass(frozen=True)
+    ... class MyFrameType(FrameBase):
+    ...     pass    # Transport-specific definition goes here.
+    >>> timestamp = pyuavcan.transport.Timestamp.now()
+    >>> priority = pyuavcan.transport.Priority.NOMINAL
+    >>> transfer_id = 12345
+    >>> def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> MyFrameType:
+    ...     return MyFrameType(timestamp=timestamp,
+    ...                        priority=priority,
+    ...                        transfer_id=transfer_id,
+    ...                        index=index,
+    ...                        end_of_transfer=end_of_transfer,
+    ...                        payload=payload)
+    >>> frames = list(serialize_transfer(
+    ...     fragmented_payload=[
+    ...         memoryview(b'He thought about the Horse: '),         # The CRC of this quote is 0xDDD1FF3A
+    ...         memoryview(b'how was she doing there, in the fog?'),
+    ...     ],
+    ...     max_frame_payload_bytes=53,
+    ...     frame_factory=construct_frame,
+    ... ))
+    >>> frames
+    [MyFrameType(..., index=0, end_of_transfer=False, ...), MyFrameType(..., index=1, end_of_transfer=True, ...)]
+    >>> bytes(frames[0].payload)    # 53 bytes long, as configured.
+    b'He thought about the Horse: how was she doing there, '
+    >>> bytes(frames[1].payload)    # The stuff at the end is the four bytes of multi-frame transfer CRC.
+    b'in the fog?:\xff\xd1\xdd'
     """
     assert max_frame_payload_bytes > 0
     payload_length = sum(map(len, fragmented_payload))

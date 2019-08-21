@@ -26,23 +26,14 @@ class TransferReassembler:
     with high-overhead transports, such as UDP, Serial, IEEE 802.15.4, etc.
     Any transport whose frame dataclass implementation derives from :class:`FrameBase` can use this class.
 
-    Out-of-order (OOO) frame reception is supported, and therefore the reassembler can be used with
+    Out-of-order frame reception is supported, and therefore the reassembler can be used with
     redundant interfaces directly, without preliminary frame deduplication procedures or explicit
     interface index assignment.
-    Distantly relevant: https://github.com/UAVCAN/specification/issues/8.
+    Distantly relevant discussion: https://github.com/UAVCAN/specification/issues/8.
+    OOO support includes edge cases where the first frame of a transfer is not received first and/or the last
+    frame is not received last.
 
     A multi-frame transfer shall not contain frames with empty payload.
-
-    We don't know the number of frames in the transfer until the last frame is received.
-    This complicates the reception logic somewhat, but the upside is that it enables zero-copy
-    serialization and transmission where the number of frames is not known until the last frame is emitted.
-    This approach differs from other message fragmentation formats such as UDPROS, for example, where the
-    number of frames is determined BEFORE the first frame is transmitted.
-
-    The receiver can reassemble transfers where the frames are received out-of-order.
-    This also includes the edge cases where the first frame of a transfer is not received first
-    and the last frame of a transfer is not received last.
-    This is another reason why having the number of frames in the transfer reported in the first frame is suboptimal.
     """
     class Error(enum.Enum):
         """
@@ -54,7 +45,7 @@ class TransferReassembler:
         #: New transfer started before the old one could be completed.
         MISSING_FRAMES = enum.auto()
 
-        #: The reassembled multi-frame transfer payload did not pass integrity checks.
+        #: A reassembled multi-frame transfer payload did not pass integrity checks.
         MULTIFRAME_INTEGRITY_ERROR = enum.auto()
 
         #: The end-of-transfer flag is set in a frame with index N,
@@ -96,6 +87,7 @@ class TransferReassembler:
                       transfer_id_timeout: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         """
         Updates the transfer reassembly state machine with the new frame.
+
         :param frame: The new frame. Standard deviation of the reception timestamp error should be under 10 ms.
         :param transfer_id_timeout: The current value of the transfer-ID timeout.
         :return: A new transfer if the new frame completed one. None if the new frame did not complete a transfer.
@@ -371,6 +363,52 @@ def _unittest_transfer_reassembler() -> None:
                  payload=hedgehog[:50])
     ) == mk_transfer(timestamp=mk_ts(1000.0),
                      transfer_id=10,
+                     fragmented_payload=[hedgehog[:50], hedgehog[50:]])
+
+    # Same as above, but one frame is duplicated and one is ignored with old TID.
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=11,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=hedgehog[50:])
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),           # OLD TID
+                 transfer_id=0,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=hedgehog[50:])
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),           # LAST FRAME
+                 transfer_id=11,
+                 index=2,
+                 end_of_transfer=True,
+                 payload=TransferCRC.new(hedgehog).value_as_bytes)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),           # DUPLICATE OF INDEX 1
+                 transfer_id=11,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=hedgehog[50:])
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),           # OLD TID
+                 transfer_id=10,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=hedgehog[50:])
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),           # FIRST FRAME
+                 transfer_id=11,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=hedgehog[:50])
+    ) == mk_transfer(timestamp=mk_ts(1000.0),
+                     transfer_id=11,
                      fragmented_payload=[hedgehog[:50], hedgehog[50:]])
 
     # Transfer-ID timeout. No error registered.

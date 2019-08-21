@@ -5,10 +5,12 @@
 #
 
 """
-This is not a transport, and it is not a part of the abstract model.
-This submodule contains a collection of software components implementing common logic reusable
+This module does not implement a transport, and it is not a part of the abstract transport model.
+It contains a collection of software components implementing common logic reusable
 with different transport implementations.
-Some transport implementations may be too specialized to rely on these, which is expected and natural.
+It is expected that some transport implementations may be unable to rely on these.
+
+This module is unlikely to be useful for a regular library user (not a developer).
 """
 
 from . import crc as crc

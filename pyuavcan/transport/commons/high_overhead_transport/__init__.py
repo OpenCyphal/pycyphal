@@ -7,9 +7,9 @@
 """
 This module contains common classes and algorithms used in a certain category of transports
 which we call **High Overhead Transports**.
-They are designed for highly capable mediums where packets are large and the data transfer speeds are high.
+They are designed for highly capable mediums where packets are large and data transfer speeds are high.
 
-For example, UDP, Serial, and IEEE 802.15.4 transports are high-overhead transports.
+For example, UDP, Serial, and IEEE 802.15.4 are high-overhead transports.
 CAN, on the other hand, is not a high-overhead transport;
 none of the entities defined in this module can be used with CAN.
 """

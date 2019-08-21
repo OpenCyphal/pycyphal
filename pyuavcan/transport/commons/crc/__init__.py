@@ -5,7 +5,7 @@
 #
 
 """
-This module contains implementations of various CRC algorithms used by the transport implementations.
+This module contains implementations of various CRC algorithms used by the transports.
 """
 
 from ._base import CRCAlgorithm as CRCAlgorithm
