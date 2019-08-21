@@ -57,11 +57,11 @@ class TransferReassembler:
         #: The reassembled multi-frame transfer payload did not pass integrity checks.
         MULTIFRAME_INTEGRITY_ERROR = enum.auto()
 
-        #: The end-of-transfer flag is set in the frame index N,
+        #: The end-of-transfer flag is set in a frame with index N,
         #: but the transfer contains at least one frame with index > N.
         FRAME_PAST_END_OF_TRANSFER = enum.auto()
 
-        #: The end-of-transfer flag is set in the frames with indexes N and M, where N != M.
+        #: The end-of-transfer flag is set in frames with indexes N and M, where N != M.
         INCONSISTENT_END_OF_TRANSFER = enum.auto()
 
         #: The payload exceeds the configured limit.
@@ -233,6 +233,9 @@ def _drop_crc(fragments: typing.List[memoryview]) -> typing.Sequence[memoryview]
             fragments[-1] = fragments[-1][:-remaining]
             remaining = 0
     return fragments
+
+
+# ----------------------------------------  TESTS BELOW THIS LINE  ----------------------------------------
 
 
 def _unittest_transfer_reassembler() -> None:
@@ -586,7 +589,7 @@ def _unittest_validate_and_finalize_transfer() -> None:
                             fragmented_payload=list(map(memoryview, fp)),
                             source_node_id=src_nid)
 
-    def call(fp: typing.Sequence[bytes]) -> TransferFrom:
+    def call(fp: typing.Sequence[bytes]) -> typing.Optional[TransferFrom]:
         return _validate_and_finalize_transfer(timestamp=ts,
                                                priority=prio,
                                                transfer_id=tid,
