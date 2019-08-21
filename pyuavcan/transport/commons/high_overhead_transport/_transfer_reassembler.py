@@ -204,6 +204,23 @@ class TransferReassembler:
                                                       source_node_id=self._source_node_id,
                                                       max_payload_size_bytes=self._max_payload_size_bytes)
 
+    @staticmethod
+    def reassemble_anonymous_transfer(frame: FrameBase) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+        """
+        A minor helper that validates whether the frame is a valid anonymous transfer (it is if the index
+        is zero and the end-of-transfer flag is set) and constructs a transfer instance if it is.
+        Otherwise, returns None.
+        Observe that this is a static method because anonymous transfers are fundamentally stateless.
+        """
+        if frame.index == 0 and frame.end_of_transfer:
+            return pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
+                                                   priority=frame.priority,
+                                                   transfer_id=frame.transfer_id,
+                                                   fragmented_payload=[frame.payload],
+                                                   source_node_id=None)
+        else:
+            return None
+
 
 def _validate_and_finalize_transfer(timestamp:      pyuavcan.transport.Timestamp,
                                     priority:       pyuavcan.transport.Priority,
@@ -664,6 +681,43 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   1,
         ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
+
+
+def _unittest_transfer_reassembler_anonymous() -> None:
+    from pyuavcan.transport import Timestamp, Priority, TransferFrom
+
+    ts = Timestamp.now()
+    prio = Priority.LOW
+    assert TransferReassembler.reassemble_anonymous_transfer(
+        FrameBase(timestamp=ts,
+                  priority=prio,
+                  transfer_id=123456,
+                  index=0,
+                  end_of_transfer=True,
+                  payload=memoryview(b'abcdef'))
+    ) == TransferFrom(timestamp=ts,
+                      priority=prio,
+                      transfer_id=123456,
+                      fragmented_payload=[memoryview(b'abcdef')],
+                      source_node_id=None)
+
+    assert TransferReassembler.reassemble_anonymous_transfer(
+        FrameBase(timestamp=ts,
+                  priority=prio,
+                  transfer_id=123456,
+                  index=1,
+                  end_of_transfer=True,
+                  payload=memoryview(b'abcdef'))
+    ) is None
+
+    assert TransferReassembler.reassemble_anonymous_transfer(
+        FrameBase(timestamp=ts,
+                  priority=prio,
+                  transfer_id=123456,
+                  index=0,
+                  end_of_transfer=False,
+                  payload=memoryview(b'abcdef'))
+    ) is None
 
 
 def _unittest_validate_and_finalize_transfer() -> None:
