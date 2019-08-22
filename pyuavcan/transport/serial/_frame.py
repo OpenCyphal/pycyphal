@@ -53,9 +53,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
         if self.destination_node_id is not None and not (0 <= self.destination_node_id <= self.NODE_ID_MASK):
             raise ValueError(f'Invalid destination node ID: {self.destination_node_id}')
 
-        if self.source_node_id is not None and self.source_node_id == self.destination_node_id:
-            raise ValueError(f'Source and destination node IDs are equal: {self.source_node_id}')
-
         if isinstance(self.data_specifier, pyuavcan.transport.ServiceDataSpecifier) and self.source_node_id is None:
             raise ValueError(f'Anonymous nodes cannot use service transfers: {self.data_specifier}')
 
@@ -435,18 +432,6 @@ def _unittest_frame_check() -> None:
                     priority=Priority.HIGH,
                     source_node_id=123,
                     destination_node_id=123456,
-                    data_specifier=MessageDataSpecifier(12345),
-                    data_type_hash=0xdead_beef_bad_c0ffe,
-                    transfer_id=1234567890123456789,
-                    index=1234567,
-                    end_of_transfer=False,
-                    payload=memoryview(b'abcdef'))
-
-    with raises(ValueError):
-        SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
-                    source_node_id=123,
-                    destination_node_id=123,
                     data_specifier=MessageDataSpecifier(12345),
                     data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=1234567890123456789,

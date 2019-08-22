@@ -8,6 +8,8 @@ import time
 import typing
 import pytest
 import pyuavcan.transport
+# Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
+from pyuavcan.transport import can
 
 
 _RX_TIMEOUT = 10e-3
@@ -16,7 +18,7 @@ _RX_TIMEOUT = 10e-3
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_can_transport() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
-    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, can, Statistics, Timestamp
+    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, Statistics, Timestamp
     from pyuavcan.transport import InvalidTransportConfigurationError, OperationNotDefinedForAnonymousNodeError
     from pyuavcan.transport import ResourceClosedError, SessionSpecifier
     # noinspection PyProtectedMember

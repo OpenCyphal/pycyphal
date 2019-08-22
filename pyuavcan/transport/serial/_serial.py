@@ -36,9 +36,10 @@ class SerialStatistics:
     in_frames:         int = 0
     in_unparsed_bytes: int = 0
 
-    out_bytes:     int = 0
-    out_frames:    int = 0
-    out_transfers: int = 0
+    out_bytes:      int = 0
+    out_frames:     int = 0
+    out_transfers:  int = 0
+    out_incomplete: int = 0
 
 
 class SerialTransport(pyuavcan.transport.Transport):
@@ -213,7 +214,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         for s in (*self.input_sessions, *self.output_sessions):
             try:
                 s.close()
-            except Exception as ex:
+            except Exception as ex:  # pragma: no cover
                 _logger.exception('%s: Failed to close session %r: %s', self, s, ex)
 
         if self._serial_port.is_open:  # Double-close is not an error.
@@ -321,7 +322,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             printable = printable.decode('utf8')
         except ValueError:
             pass
-        _logger.warning('%s: Unparsed: %s', self, printable)
+        _logger.warning('%s: Unparsed: %s', self._serial_port.name, printable)
 
     def _handle_received_item_and_update_stats(self,
                                                item:           typing.Union[SerialFrame, memoryview],
@@ -347,25 +348,31 @@ class SerialTransport(pyuavcan.transport.Transport):
         tx_ts: typing.Optional[pyuavcan.transport.Timestamp] = None
         for fr in frames:
             compiled = fr.compile_into(self._serialization_buffer)
-            with self._port_lock:       # TODO: the lock acquisition should be prioritized by frame priority!
+            async with self._port_lock:       # TODO: the lock acquisition should be prioritized by frame priority!
                 timeout = monotonic_deadline - self._loop.time()
-                if timeout <= 0:
-                    return None    # Timed out
-                self._serial_port.write_timeout = timeout
-                num_written = await self._loop.run_in_executor(self._background_executor,
-                                                               self._serial_port.write,
-                                                               compiled)
-                tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
-                self._statistics.out_bytes += num_written or 0
+                if timeout > 0:
+                    self._serial_port.write_timeout = timeout
+                    num_written = await self._loop.run_in_executor(self._background_executor,
+                                                                   self._serial_port.write,
+                                                                   compiled)
+                    tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
+                    self._statistics.out_bytes += num_written or 0
+                else:
+                    tx_ts = None  # Timed out
+                    break
 
             num_written = len(compiled) if num_written is None else num_written
             if num_written < len(compiled):
-                return None    # Write failed
+                tx_ts = None  # Write failed
+                break
 
             self._statistics.out_frames += 1
 
-        self._statistics.out_transfers += 1
-        assert tx_ts is not None
+        if tx_ts is not None:
+            self._statistics.out_transfers += 1
+        else:
+            self._statistics.out_incomplete += 1
+
         return tx_ts
 
     def _reader_thread_func(self) -> None:
@@ -382,7 +389,7 @@ class SerialTransport(pyuavcan.transport.Transport):
                 timestamp = pyuavcan.transport.Timestamp.now()
                 in_bytes_count += len(chunk)
                 parser.process_next_chunk(chunk, timestamp)
-        except Exception as ex:
+        except Exception as ex:  # pragma: no cover
             if isinstance(ex, serial.SerialException) and not self._serial_port.is_open:
                 _logger.debug('%s: The serial port is closed, exception ignored: %r', self, ex)
             else:
