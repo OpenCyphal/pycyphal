@@ -117,13 +117,15 @@ class SerialTransport(pyuavcan.transport.Transport):
     payload in little-endian byte order.
     """
 
-    DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES = 512
+    DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES = 1024
+
+    DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
 
     def __init__(
         self,
         serial_port:                                  typing.Union[str, serial.SerialBase],
         single_frame_transfer_payload_capacity_bytes: int = DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
-        service_transfer_multiplier:                  int = 2,
+        service_transfer_multiplier:                  int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
         loop:                                         typing.Optional[asyncio.AbstractEventLoop] = None
     ):
         """
