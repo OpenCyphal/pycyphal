@@ -87,7 +87,6 @@ class CANTransport(pyuavcan.transport.Transport):
 
         # Lookup performance for the output registry is not important because it's only used for loopback frames.
         # Hence we don't trade-off memory for speed here.
-        # https://stackoverflow.com/questions/510406/is-there-a-way-to-get-the-current-ref-count-of-an-object-in-python
         self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, CANOutputSession] = {}
 
         # Input lookup must be fast, so we use constant-complexity static lookup table.
@@ -158,11 +157,11 @@ class CANTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     @property
-    def input_sessions(self) -> typing.List[pyuavcan.transport.InputSession]:
+    def input_sessions(self) -> typing.Sequence[CANInputSession]:
         return list(self._input_dispatch_table.items)
 
     @property
-    def output_sessions(self) -> typing.List[pyuavcan.transport.OutputSession]:
+    def output_sessions(self) -> typing.Sequence[CANOutputSession]:
         return list(self._output_registry.values())
 
     @property
