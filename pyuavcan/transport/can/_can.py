@@ -179,7 +179,7 @@ class CANTransport(pyuavcan.transport.Transport):
         if media is not None:  # Double-close is NOT an error!
             media.close()
 
-    def sample_frame_statistics(self) -> CANFrameStatistics:
+    def sample_statistics(self) -> CANFrameStatistics:
         """
         Samples the statistics atomically and returns an unbound copy.
         """
