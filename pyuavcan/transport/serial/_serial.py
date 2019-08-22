@@ -4,10 +4,12 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import copy
 import typing
 import asyncio
 import logging
 import threading
+import dataclasses
 import concurrent.futures
 
 import serial
@@ -23,6 +25,20 @@ _MAX_RECEIVE_PAYLOAD_SIZE_BYTES = 1024 * 100
 
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass
+class SerialStatistics:
+    """
+    Byte-level serial port statistics.
+    """
+    in_bytes:          int = 0
+    in_frames:         int = 0
+    in_unparsed_bytes: int = 0
+
+    out_bytes:     int = 0
+    out_frames:    int = 0
+    out_transfers: int = 0
 
 
 class SerialTransport(pyuavcan.transport.Transport):
@@ -150,6 +166,8 @@ class SerialTransport(pyuavcan.transport.Transport):
         # it is needed to store frame contents before they are emitted into the serial port.
         self._serialization_buffer = bytearray(0 for _ in range(self._sft_payload_capacity_bytes * 3))
 
+        self._statistics = SerialStatistics()
+
         if not isinstance(serial_port, serial.SerialBase):
             serial_port = serial.serial_for_url(serial_port)
         assert isinstance(serial_port, serial.SerialBase)
@@ -265,7 +283,14 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
 
+    def sample_statistics(self) -> SerialStatistics:
+        """
+        Samples the statistics atomically and returns an unbound copy.
+        """
+        return copy.copy(self._statistics)
+
     def _handle_received_frame(self, frame: SerialFrame) -> None:
+        self._statistics.in_frames += 1
         if frame.destination_node_id in (self._local_node_id, None):
             for source_node_id in {None, frame.source_node_id}:
                 ss = pyuavcan.transport.SessionSpecifier(frame.data_specifier, source_node_id)
@@ -278,6 +303,7 @@ class SerialTransport(pyuavcan.transport.Transport):
                     session._process_frame(frame)
 
     def _handle_received_unparsed_data(self, data: memoryview) -> None:
+        self._statistics.in_unparsed_bytes += len(data)
         printable: typing.Union[str, bytes] = bytes(data)
         try:
             assert isinstance(printable, bytes)
@@ -285,6 +311,18 @@ class SerialTransport(pyuavcan.transport.Transport):
         except ValueError:
             pass
         _logger.warning('%s: Unparsed: %s', self, printable)
+
+    def _handle_received_item_and_update_stats(self,
+                                               item:           typing.Union[SerialFrame, memoryview],
+                                               in_bytes_count: int) -> None:
+        if isinstance(item, SerialFrame):
+            self._handle_received_frame(item)
+        elif isinstance(item, memoryview):
+            self._handle_received_unparsed_data(item)
+        else:
+            assert False
+
+        self._statistics.in_bytes = int(in_bytes_count)
 
     async def _send_transfer(self, frames: typing.Iterable[SerialFrame], monotonic_deadline: float) \
             -> typing.Optional[pyuavcan.transport.Timestamp]:
@@ -307,22 +345,23 @@ class SerialTransport(pyuavcan.transport.Transport):
                                                                self._serial_port.write,
                                                                compiled)
                 tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
+                self._statistics.out_bytes += num_written or 0
 
             num_written = len(compiled) if num_written is None else num_written
             if num_written < len(compiled):
                 return None    # Write failed
 
+            self._statistics.out_frames += 1
+
+        self._statistics.out_transfers += 1
         assert tx_ts is not None
         return tx_ts
 
     def _reader_thread_func(self) -> None:
+        in_bytes_count = 0
+
         def callback(item: typing.Union[SerialFrame, memoryview]) -> None:
-            if isinstance(item, SerialFrame):
-                self._loop.call_soon_threadsafe(self._handle_received_frame, item)
-            elif isinstance(item, memoryview):
-                self._loop.call_soon_threadsafe(self._handle_received_unparsed_data, item)
-            else:
-                assert False
+            self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, item, in_bytes_count)
 
         try:
             parser = StreamParser(callback, _MAX_RECEIVE_PAYLOAD_SIZE_BYTES)
@@ -330,6 +369,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             while self._serial_port.is_open:
                 chunk = self._serial_port.read(max(1, self._serial_port.inWaiting()))
                 timestamp = pyuavcan.transport.Timestamp.now()
+                in_bytes_count += len(chunk)
                 parser.process_next_chunk(chunk, timestamp)
         except Exception as ex:
             if isinstance(ex, serial.SerialException) and not self._serial_port.is_open:
