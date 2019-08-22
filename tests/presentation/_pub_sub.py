@@ -144,7 +144,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert pub_record.priority == pyuavcan.presentation.DEFAULT_PRIORITY
     pub_record.priority = Priority.NOMINAL
     assert pub_record.priority == Priority.NOMINAL
-    with pytest.raises(ValueError, match='.*Heartbeat.*'):
+    with pytest.raises(TypeError, match='.*Heartbeat.*'):
         # noinspection PyTypeChecker
         await pub_heart.publish(record)  # type: ignore
 
