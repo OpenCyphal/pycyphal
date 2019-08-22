@@ -74,12 +74,12 @@ def _make_arg_sequence_parser(*type_default_pairs: typing.Tuple[typing.Type[obje
 
 
 def _add_args_for_can(parser: argparse.ArgumentParser) -> None:
-    from pyuavcan.transport.can import CANTransport
-    from pyuavcan.transport.can.media.socketcan import SocketCANMedia
-
     socketcan_parser = _make_arg_sequence_parser((str, ''), (int, 64))
 
-    def construct_socketcan_transport(arg_seq: str) -> CANTransport:
+    def construct_socketcan_transport(arg_seq: str) -> pyuavcan.transport.Transport:
+        # Do not import the transport outside of the factory! It slows down the application startup.
+        from pyuavcan.transport.can import CANTransport
+        from pyuavcan.transport.can.media.socketcan import SocketCANMedia
         iface_name, mtu = socketcan_parser(arg_seq)
         return CANTransport(SocketCANMedia(iface_name, mtu=mtu))
 
@@ -111,6 +111,38 @@ Examples:
 """.strip())
 
 
+def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
+    def construct_transport(arg_seq: str) -> pyuavcan.transport.Transport:
+        # Do not import the transport outside of the factory! It slows down the application startup.
+        from pyuavcan.transport.serial import SerialTransport
+        default_sft_payload_size = SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES
+        default_srv_mult = SerialTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER
+        seq_parser = _make_arg_sequence_parser((str, ''),
+                                               (int, default_sft_payload_size),
+                                               (int, default_srv_mult))
+        serial_port_name, sft_payload_size, srv_mult = seq_parser(arg_seq)
+        return SerialTransport(serial_port=serial_port_name,
+                               single_frame_transfer_payload_capacity_bytes=sft_payload_size,
+                               service_transfer_multiplier=srv_mult)
+
+    parser.add_argument(
+        '--iface-serial', '--serial',
+        action='append',
+        dest='transport',
+        metavar='SERIAL_PORT_NAME[,MTU[,SERVICE_MULTIPLIER]]',
+        type=construct_transport,
+        help=f"""
+Use the serial transport. Arguments:
+    - Serial port name, string, mandatory; e.g.: "/dev/ttyACM0", "COM9".
+    - Maximum transmission unit, int; optional, defaults to 1024 bytes.
+    - Service multiplier, int; optional, defaults to 2.
+      The service multiplier specifies how many times every outgoing service
+      transfer will be repeated. This is a proactive data loss prevention
+      measure for unreliable links. Please read the serial transport
+      documentation for background.
+""".strip())
+
+
 def _add_args_for_loopback(parser: argparse.ArgumentParser) -> None:
     from pyuavcan.transport.loopback import LoopbackTransport
     parser.add_argument(
@@ -132,21 +164,14 @@ processes using this transport.
 #
 # TODO: This approach is fragile and does not scale well because it requires much manual coding per transport/media.
 #
-# Consider defining an URI scheme per transport, add a static factory method per transport implementation? Roughly:
-#   <transport>://<transport-specific initialization arguments>
-# For example:
-#   can:///dev/ttyACM0:slcan
-#   can://vcan0:socketcan?mtu=32
-#   serial:///dev/ttyACM0
-#
-# While generic and extensible, URI are hard to type manually, which harms usability. Not good. Should we search for a
-# middle ground solution that would combine the genericity of URI and conciseness of hand-coded arguments? We could,
-# perhaps, invent a custom spec string format? It could be as simple as a sequence of comma-separated parameters:
+# We could, perhaps, invent a custom spec string format?
+# It could be as simple as a sequence of comma-separated parameters:
 #   can,socketcan,/dev/ttyACM0,64
 # The spec string could be made a valid YAML string by adding square brackets on either side, so that quoted strings
 # could be used:
 #   can,socketcan,"~/serial-port-name,with-comma",64
 _INITIALIZERS: typing.Sequence[typing.Callable[[argparse.ArgumentParser], None]] = [
     _add_args_for_can,
+    _add_args_for_serial,
     _add_args_for_loopback,
 ]
