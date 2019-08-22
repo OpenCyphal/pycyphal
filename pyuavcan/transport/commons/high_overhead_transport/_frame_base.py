@@ -38,10 +38,10 @@ class FrameBase:
 
     def __post_init__(self) -> None:
         if not isinstance(self.timestamp, pyuavcan.transport.Timestamp):
-            raise ValueError(f'Invalid timestamp: {self.timestamp}')
+            raise TypeError(f'Invalid timestamp: {self.timestamp}')
 
         if not isinstance(self.priority, pyuavcan.transport.Priority):
-            raise ValueError(f'Invalid priority: {self.priority}')
+            raise TypeError(f'Invalid priority: {self.priority}')
 
         if self.transfer_id < 0:
             raise ValueError(f'Invalid transfer-ID: {self.transfer_id}')
@@ -50,10 +50,10 @@ class FrameBase:
             raise ValueError(f'Invalid frame index: {self.index}')
 
         if not isinstance(self.end_of_transfer, bool):
-            raise ValueError(f'Bad end of transfer flag: {type(self.end_of_transfer).__name__}')
+            raise TypeError(f'Bad end of transfer flag: {type(self.end_of_transfer).__name__}')
 
         if not isinstance(self.payload, memoryview):
-            raise ValueError(f'Bad payload type: {type(self.payload).__name__}')
+            raise TypeError(f'Bad payload type: {type(self.payload).__name__}')
 
 
 # noinspection PyTypeChecker
@@ -68,7 +68,7 @@ def _unittest_frame_base_ctor() -> None:
               end_of_transfer=True,
               payload=memoryview(b''))
 
-    with raises(ValueError):
+    with raises(TypeError):
         FrameBase(timestamp=123456,  # type: ignore
                   priority=Priority.LOW,
                   transfer_id=1234,
@@ -76,7 +76,7 @@ def _unittest_frame_base_ctor() -> None:
                   end_of_transfer=True,
                   payload=memoryview(b''))
 
-    with raises(ValueError):
+    with raises(TypeError):
         FrameBase(timestamp=Timestamp.now(),  # type: ignore
                   priority=2,
                   transfer_id=1234,
@@ -84,7 +84,7 @@ def _unittest_frame_base_ctor() -> None:
                   end_of_transfer=True,
                   payload=memoryview(b''))
 
-    with raises(ValueError):
+    with raises(TypeError):
         FrameBase(timestamp=Timestamp.now(),  # type: ignore
                   priority=Priority.LOW,
                   transfer_id=1234,
@@ -92,7 +92,7 @@ def _unittest_frame_base_ctor() -> None:
                   end_of_transfer=1,
                   payload=memoryview(b''))
 
-    with raises(ValueError):
+    with raises(TypeError):
         FrameBase(timestamp=Timestamp.now(),  # type: ignore
                   priority=Priority.LOW,
                   transfer_id=1234,

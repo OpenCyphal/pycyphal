@@ -296,8 +296,8 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                              priority:           pyuavcan.transport.Priority,
                              monotonic_deadline: float) -> bool:
         if not isinstance(request, self.dtype.Request):
-            raise ValueError(f'Invalid request object: expected an instance of {self.dtype.Request}, '
-                             f'got {type(request)} instead.')
+            raise TypeError(f'Invalid request object: expected an instance of {self.dtype.Request}, '
+                            f'got {type(request)} instead.')
 
         timestamp = pyuavcan.transport.Timestamp.now()
         fragmented_payload = list(pyuavcan.dsdl.serialize(request))

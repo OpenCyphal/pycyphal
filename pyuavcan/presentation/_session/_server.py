@@ -166,7 +166,7 @@ class Server(ServicePresentationSession[ServiceClass]):
             try:
                 response = await handler(request, meta)  # type: ignore
                 if response is not None and not isinstance(response, self._dtype.Response):
-                    raise ValueError(
+                    raise TypeError(
                         f'The application request handler has returned an invalid response: '
                         f'expected an instance of {self._dtype.Response} or None, '
                         f'found {type(response)} instead. '
