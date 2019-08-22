@@ -148,9 +148,12 @@ class CANTransport(pyuavcan.transport.Transport):
     def set_local_node_id(self, node_id: int) -> None:
         if self._local_node_id is None:
             if 0 <= node_id <= CANID.NODE_ID_MASK:
-                self._local_node_id = int(node_id)
-                self._media.enable_automatic_retransmission()
-                self._reconfigure_acceptance_filters()
+                if self._maybe_media is not None:
+                    self._local_node_id = int(node_id)
+                    self._maybe_media.enable_automatic_retransmission()
+                    self._reconfigure_acceptance_filters()
+                else:
+                    raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
             else:
                 raise ValueError(f'Invalid node ID for CAN: {node_id}')
         else:
@@ -193,7 +196,8 @@ class CANTransport(pyuavcan.transport.Transport):
         Whenever an input session is created or destroyed, the hardware acceptance filters are reconfigured
         automatically; computation of a new configuration and its deployment on the CAN controller may be slow.
         """
-        self._raise_if_closed()
+        if self._maybe_media is None:
+            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
 
         def finalizer() -> None:
             self._input_dispatch_table.remove(specifier)
@@ -212,7 +216,8 @@ class CANTransport(pyuavcan.transport.Transport):
     def get_output_session(self,
                            specifier:        pyuavcan.transport.SessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANOutputSession:
-        self._raise_if_closed()
+        if self._maybe_media is None:
+            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
 
         try:
             out = self._output_registry[specifier]
@@ -249,7 +254,10 @@ class CANTransport(pyuavcan.transport.Transport):
         frames_list = list(frames)
         del frames
         async with self._media_lock:
-            num_sent = await self._media.send_until((x.compile() for x in frames_list), monotonic_deadline)
+            if self._maybe_media is None:
+                raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+            else:
+                num_sent = await self._maybe_media.send_until((x.compile() for x in frames_list), monotonic_deadline)
             assert 0 <= num_sent <= len(frames_list), 'Media sub-layer API contract violation'
             sent_frames, unsent_frames = frames_list[:num_sent], frames_list[num_sent:]
 
@@ -331,31 +339,18 @@ class CANTransport(pyuavcan.transport.Transport):
             ds.subject_id for ds in (x.specifier.data_specifier for x in self._input_dispatch_table.items)
             if isinstance(ds, pyuavcan.transport.MessageDataSpecifier)
         )
-
         fcs = generate_filter_configurations(subject_ids, self._local_node_id)
         assert len(fcs) > len(subject_ids)
         del subject_ids
-
-        num_filters = self._media.number_of_acceptance_filters
-        fcs = optimize_filter_configurations(fcs, num_filters)
-        assert len(fcs) <= num_filters
-        if self._last_filter_configuration_set != fcs:
-            try:
-                self._media.configure_acceptance_filters(fcs)
-            except Exception:  # pragma: no cover
-                self._last_filter_configuration_set = None
-                raise
-            else:
-                self._last_filter_configuration_set = fcs
-
-    @property
-    def _media(self) -> Media:
-        out = self._maybe_media
-        if out is not None:
-            return out
-        else:
-            raise pyuavcan.transport.ResourceClosedError(repr(self))
-
-    def _raise_if_closed(self) -> None:
-        if self._maybe_media is None:
-            raise pyuavcan.transport.ResourceClosedError(repr(self))
+        if self._maybe_media is not None:
+            num_filters = self._maybe_media.number_of_acceptance_filters
+            fcs = optimize_filter_configurations(fcs, num_filters)
+            assert len(fcs) <= num_filters
+            if self._last_filter_configuration_set != fcs:
+                try:
+                    self._maybe_media.configure_acceptance_filters(fcs)
+                except Exception:  # pragma: no cover
+                    self._last_filter_configuration_set = None
+                    raise
+                else:
+                    self._last_filter_configuration_set = fcs
