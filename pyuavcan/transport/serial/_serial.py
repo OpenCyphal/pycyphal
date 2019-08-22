@@ -153,6 +153,9 @@ class SerialTransport(pyuavcan.transport.Transport):
         self._service_transfer_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
+        if not (SerialFrame.CRC_SIZE_BYTES <= self._sft_payload_capacity_bytes <= _MAX_RECEIVE_PAYLOAD_SIZE_BYTES):
+            raise ValueError(f'Invalid SFT payload limit: {self._sft_payload_capacity_bytes} bytes')
+
         if not (0 < self._service_transfer_multiplier < 10):
             raise ValueError(f'Invalid service transfer multiplier: {self._service_transfer_multiplier}')
 
