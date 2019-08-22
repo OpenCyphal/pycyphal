@@ -122,7 +122,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         self,
         serial_port:                                  typing.Union[str, serial.SerialBase],
         single_frame_transfer_payload_capacity_bytes: int = DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
-        service_transfer_multiplier:                  int = 1,
+        service_transfer_multiplier:                  int = 2,
         loop:                                         typing.Optional[asyncio.AbstractEventLoop] = None
     ):
         """
@@ -153,7 +153,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         self._service_transfer_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
-        if self._service_transfer_multiplier < 1:
+        if not (0 < self._service_transfer_multiplier < 10):
             raise ValueError(f'Invalid service transfer multiplier: {self._service_transfer_multiplier}')
 
         self._port_lock = asyncio.Lock(loop=loop)
@@ -245,22 +245,30 @@ class SerialTransport(pyuavcan.transport.Transport):
         if not self._serial_port.is_open:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
 
-        def finalizer() -> None:
-            del self._output_registry[specifier]
+        if specifier not in self._output_registry:
+            def finalizer() -> None:
+                del self._output_registry[specifier]
 
-        try:
-            out = self._output_registry[specifier]
-        except LookupError:
-            out = SerialOutputSession(specifier=specifier,
-                                      payload_metadata=payload_metadata,
-                                      sft_payload_capacity_bytes=self._sft_payload_capacity_bytes,
-                                      local_node_id_accessor=lambda: self._local_node_id,
-                                      send_handler=self._send_transfer,
-                                      finalizer=finalizer)
-            self._output_registry[specifier] = out
+            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) \
+                    and self._service_transfer_multiplier > 1:
+                async def send_transfer(frames: typing.Iterable[SerialFrame],
+                                        monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.Timestamp]:
+                    frames = list(frames) * self._service_transfer_multiplier
+                    return await self._send_transfer(frames, monotonic_deadline)
+            else:
+                send_transfer = self._send_transfer
 
+            self._output_registry[specifier] = SerialOutputSession(
+                specifier=specifier,
+                payload_metadata=payload_metadata,
+                sft_payload_capacity_bytes=self._sft_payload_capacity_bytes,
+                local_node_id_accessor=lambda: self._local_node_id,
+                send_handler=send_transfer,
+                finalizer=finalizer
+            )
+
+        out = self._output_registry[specifier]
         assert isinstance(out, SerialOutputSession)
-        assert specifier in self._output_registry
         assert out.specifier == specifier
         return out
 
