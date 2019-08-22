@@ -15,7 +15,7 @@ from pyuavcan.transport.serial import SerialTransport, SerialStatistics, SerialF
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_can_transport() -> None:
+async def _unittest_serial_transport() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import Priority, Timestamp, SessionSpecifier, ProtocolParameters
 
