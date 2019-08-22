@@ -45,7 +45,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
 
     def __post_init__(self) -> None:
         if not isinstance(self.priority, pyuavcan.transport.Priority):
-            raise ValueError(f'Invalid priority: {self.priority}')  # pragma: no cover
+            raise TypeError(f'Invalid priority: {self.priority}')  # pragma: no cover
 
         if self.source_node_id is not None and not (0 <= self.source_node_id <= self.NODE_ID_MASK):
             raise ValueError(f'Invalid source node ID: {self.source_node_id}')
@@ -60,7 +60,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
             raise ValueError(f'Anonymous nodes cannot use service transfers: {self.data_specifier}')
 
         if not isinstance(self.data_specifier, pyuavcan.transport.DataSpecifier):
-            raise ValueError(f'Invalid data specifier: {self.data_specifier}')  # pragma: no cover
+            raise TypeError(f'Invalid data specifier: {self.data_specifier}')  # pragma: no cover
 
         if not (0 <= self.data_type_hash <= pyuavcan.transport.PayloadMetadata.DATA_TYPE_HASH_MASK):
             raise ValueError(f'Invalid data type hash: {self.data_type_hash}')
@@ -72,7 +72,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
             raise ValueError(f'Invalid frame index: {self.index}')
 
         if not isinstance(self.payload, memoryview):
-            raise ValueError(f'Bad payload type: {type(self.payload).__name__}')  # pragma: no cover
+            raise TypeError(f'Bad payload type: {type(self.payload).__name__}')  # pragma: no cover
 
     def compile_into(self, out_buffer: bytearray) -> memoryview:
         """

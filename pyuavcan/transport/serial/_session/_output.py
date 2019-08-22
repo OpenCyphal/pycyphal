@@ -62,6 +62,12 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         self._send_handler = send_handler
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._statistics = pyuavcan.transport.Statistics()
+        assert callable(self._local_node_id_accessor)
+        assert callable(send_handler)
+
+        if not isinstance(self._specifier, pyuavcan.transport.SessionSpecifier) or \
+                not isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata):  # pragma: no cover
+            raise TypeError('Invalid parameters')
 
         if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
             is_response = specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE

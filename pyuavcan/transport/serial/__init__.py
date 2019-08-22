@@ -25,4 +25,10 @@ Inheritance diagram:
 
 from ._serial import SerialTransport as SerialTransport
 
+from ._session import SerialSession as SerialSession
+from ._session import SerialInputSession as SerialInputSession
 from ._session import SerialOutputSession as SerialOutputSession
+from ._session import SerialFeedback as SerialFeedback
+from ._session import SerialInputStatistics as SerialInputStatistics
+
+from ._frame import SerialFrame as SerialFrame

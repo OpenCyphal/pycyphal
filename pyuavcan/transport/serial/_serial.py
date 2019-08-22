@@ -15,7 +15,7 @@ import serial
 import pyuavcan.transport
 from ._frame import SerialFrame
 from ._stream_parser import StreamParser
-from ._session import SerialOutputSession
+from ._session import SerialOutputSession, SerialInputSession
 
 
 _SERIAL_PORT_READ_TIMEOUT = 1.0
@@ -111,7 +111,8 @@ class SerialTransport(pyuavcan.transport.Transport):
     ):
         """
         :param serial_port: The serial port instance to communicate over, or its name.
-            In the latter case, the port will be constructed via :func:`serial.serial_for_url`.
+            In the latter case, the port will be constructed via :func:`serial.serial_for_url`
+            (refer to the PySerial docs for the background).
             The new instance takes ownership of the port; when the instance is closed, its port will also be closed.
 
         :param single_frame_transfer_payload_capacity_bytes: Use single-frame transfers for all outgoing transfers
@@ -141,6 +142,9 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         self._port_lock = asyncio.Lock(loop=loop)
         self._local_node_id: typing.Optional[int] = None
+
+        self._input_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialInputSession] = {}
+        self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialOutputSession] = {}
 
         # The serialization buffer is pre-allocated for performance reasons;
         # it is needed to store frame contents before they are emitted into the serial port.
@@ -185,27 +189,70 @@ class SerialTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     def close(self) -> None:
-        # TODO: close sessions
-        if self._serial_port.is_open:
+        for s in (*self.input_sessions, *self.output_sessions):
+            try:
+                s.close()
+            except Exception as ex:
+                _logger.exception('%s: Failed to close session %r: %s', self, s, ex)
+
+        if self._serial_port.is_open:  # Double-close is not an error.
             self._serial_port.close()
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.SessionSpecifier,
-                          payload_metadata: pyuavcan.transport.PayloadMetadata) -> pyuavcan.transport.InputSession:
-        raise NotImplementedError
+                          payload_metadata: pyuavcan.transport.PayloadMetadata) -> SerialInputSession:
+        if not self._serial_port.is_open:
+            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+
+        def finalizer() -> None:
+            del self._input_registry[specifier]
+
+        try:
+            out = self._input_registry[specifier]
+        except LookupError:
+            out = SerialInputSession(specifier=specifier,
+                                     payload_metadata=payload_metadata,
+                                     loop=self._loop,
+                                     finalizer=finalizer)
+            self._input_registry[specifier] = out
+
+        assert isinstance(out, SerialInputSession)
+        assert specifier in self._input_registry
+        assert out.specifier == specifier
+        return out
 
     def get_output_session(self,
                            specifier:        pyuavcan.transport.SessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> SerialOutputSession:
-        raise NotImplementedError
+        if not self._serial_port.is_open:
+            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+
+        def finalizer() -> None:
+            del self._output_registry[specifier]
+
+        try:
+            out = self._output_registry[specifier]
+        except LookupError:
+            out = SerialOutputSession(specifier=specifier,
+                                      payload_metadata=payload_metadata,
+                                      sft_payload_capacity_bytes=self._sft_payload_capacity_bytes,
+                                      local_node_id_accessor=lambda: self._local_node_id,
+                                      send_handler=self._send_transfer,
+                                      finalizer=finalizer)
+            self._output_registry[specifier] = out
+
+        assert isinstance(out, SerialOutputSession)
+        assert specifier in self._output_registry
+        assert out.specifier == specifier
+        return out
 
     @property
-    def input_sessions(self) -> typing.Sequence[pyuavcan.transport.InputSession]:
-        raise NotImplementedError
+    def input_sessions(self) -> typing.Sequence[SerialInputSession]:
+        return list(self._input_registry.values())
 
     @property
-    def output_sessions(self) -> typing.Sequence[pyuavcan.transport.OutputSession]:
-        raise NotImplementedError
+    def output_sessions(self) -> typing.Sequence[SerialOutputSession]:
+        return list(self._output_registry.values())
 
     @property
     def descriptor(self) -> str:
@@ -219,17 +266,25 @@ class SerialTransport(pyuavcan.transport.Transport):
         return self._serial_port
 
     def _handle_received_frame(self, frame: SerialFrame) -> None:
-        pass
+        if frame.destination_node_id in (self._local_node_id, None):
+            for source_node_id in {None, frame.source_node_id}:
+                ss = pyuavcan.transport.SessionSpecifier(frame.data_specifier, source_node_id)
+                try:
+                    session = self._input_registry[ss]
+                except LookupError:
+                    pass
+                else:
+                    # noinspection PyProtectedMember
+                    session._process_frame(frame)
 
-    @staticmethod
-    def _handle_received_unparsed_data(data: memoryview) -> None:
+    def _handle_received_unparsed_data(self, data: memoryview) -> None:
         printable: typing.Union[str, bytes] = bytes(data)
         try:
             assert isinstance(printable, bytes)
             printable = printable.decode('utf8')
         except ValueError:
             pass
-        _logger.warning('Unparsed data: %s', printable)
+        _logger.warning('%s: Unparsed: %s', self, printable)
 
     async def _send_transfer(self, frames: typing.Iterable[SerialFrame], monotonic_deadline: float) \
             -> typing.Optional[pyuavcan.transport.Timestamp]:
@@ -277,5 +332,10 @@ class SerialTransport(pyuavcan.transport.Transport):
                 timestamp = pyuavcan.transport.Timestamp.now()
                 parser.process_next_chunk(chunk, timestamp)
         except Exception as ex:
-            _logger.exception('Reader thread has failed, the instance will be terminated: %s', ex)
+            if isinstance(ex, serial.SerialException) and not self._serial_port.is_open:
+                _logger.debug('%s: The serial port is closed, exception ignored: %r', self, ex)
+            else:
+                _logger.exception('%s: Reader thread has failed, the instance will be terminated: %s', self, ex)
             self._serial_port.close()
+        finally:
+            _logger.info('%s: Reader thread is exiting. Head aega.', self)
