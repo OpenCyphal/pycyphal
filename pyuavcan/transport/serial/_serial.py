@@ -117,15 +117,14 @@ class SerialTransport(pyuavcan.transport.Transport):
     payload in little-endian byte order.
     """
 
-    DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES = 1024
-
     DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
+    DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES = 1024
 
     def __init__(
         self,
         serial_port:                                  typing.Union[str, serial.SerialBase],
-        single_frame_transfer_payload_capacity_bytes: int = DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
         service_transfer_multiplier:                  int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
+        single_frame_transfer_payload_capacity_bytes: int = DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
         loop:                                         typing.Optional[asyncio.AbstractEventLoop] = None
     ):
         """
@@ -133,11 +132,6 @@ class SerialTransport(pyuavcan.transport.Transport):
             In the latter case, the port will be constructed via :func:`serial.serial_for_url`
             (refer to the PySerial docs for the background).
             The new instance takes ownership of the port; when the instance is closed, its port will also be closed.
-
-        :param single_frame_transfer_payload_capacity_bytes: Use single-frame transfers for all outgoing transfers
-            containing not more than than this many bytes of payload. Otherwise, use multi-frame transfers.
-            This setting does not affect transfer reception (any payload size is always accepted). Defaults to
-            :attr:`DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES`.
 
         :param service_transfer_multiplier: Specifies the number of times each outgoing service transfer will be
             repeated. The duplicates are emitted subsequently immediately following the original. This feature
@@ -149,6 +143,11 @@ class SerialTransport(pyuavcan.transport.Transport):
             duplicate transfers at the opposite end of the link is natively guaranteed by the UAVCAN protocol;
             no special activities are needed there (read the UAVCAN Specification for background). This setting
             does not affect message transfers.
+
+        :param single_frame_transfer_payload_capacity_bytes: Use single-frame transfers for all outgoing transfers
+            containing not more than than this many bytes of payload. Otherwise, use multi-frame transfers.
+            This setting does not affect transfer reception (any payload size is always accepted). Defaults to
+            :attr:`DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES`.
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
@@ -358,9 +357,9 @@ class SerialTransport(pyuavcan.transport.Transport):
                         num_written = await self._loop.run_in_executor(self._background_executor,
                                                                        self._serial_port.write,
                                                                        compiled)
+                        tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
                     except serial.SerialTimeoutException:
                         num_written = 0
-                    tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
                     self._statistics.out_bytes += num_written or 0
                 else:
                     tx_ts = None  # Timed out

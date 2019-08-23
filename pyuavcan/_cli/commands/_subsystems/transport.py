@@ -115,15 +115,15 @@ def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
     def construct_transport(arg_seq: str) -> pyuavcan.transport.Transport:
         # Do not import the transport outside of the factory! It slows down the application startup.
         from pyuavcan.transport.serial import SerialTransport
-        default_sft_payload_size = SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES
         default_srv_mult = SerialTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER
+        default_sft_payload_size = SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES
         seq_parser = _make_arg_sequence_parser((str, ''),
-                                               (int, default_sft_payload_size),
-                                               (int, default_srv_mult))
+                                               (int, default_srv_mult),
+                                               (int, default_sft_payload_size))
         serial_port_name, sft_payload_size, srv_mult = seq_parser(arg_seq)
         return SerialTransport(serial_port=serial_port_name,
-                               single_frame_transfer_payload_capacity_bytes=sft_payload_size,
-                               service_transfer_multiplier=srv_mult)
+                               service_transfer_multiplier=srv_mult,
+                               single_frame_transfer_payload_capacity_bytes=sft_payload_size)
 
     parser.add_argument(
         '--iface-serial', '--serial',
@@ -134,12 +134,14 @@ def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
         help=f"""
 Use the serial transport. Arguments:
     - Serial port name, string, mandatory; e.g.: "/dev/ttyACM0", "COM9".
-    - Maximum transmission unit, int; optional, defaults to 1024 bytes.
+      PySerial URL are also supported; e.g., "socket://localhost:50905".
+      Read the PySerial documentation for more information.
     - Service multiplier, int; optional, defaults to 2.
       The service multiplier specifies how many times every outgoing service
       transfer will be repeated. This is a proactive data loss prevention
       measure for unreliable links. Please read the serial transport
       documentation for background.
+    - Maximum transmission unit, int; optional, defaults to one kibibyte.
 """.strip())
 
 
