@@ -162,15 +162,15 @@ class SerialTransport(pyuavcan.transport.Transport):
         if not (low <= self._sft_payload_capacity_bytes <= high):
             raise ValueError(f'Invalid SFT payload limit: {self._sft_payload_capacity_bytes} bytes')
 
-        self._port_lock = asyncio.Lock(loop=loop)
         self._local_node_id: typing.Optional[int] = None
+        self._port_lock = asyncio.Lock(loop=loop)
+        # The serialization buffer is pre-allocated for performance reasons;
+        # it is needed to store frame contents before they are emitted into the serial port.
+        # Access must be protected with the port lock!
+        self._serialization_buffer = bytearray(0 for _ in range(self._sft_payload_capacity_bytes * 3))
 
         self._input_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialOutputSession] = {}
-
-        # The serialization buffer is pre-allocated for performance reasons;
-        # it is needed to store frame contents before they are emitted into the serial port.
-        self._serialization_buffer = bytearray(0 for _ in range(self._sft_payload_capacity_bytes * 3))
 
         self._statistics = SerialTransportStatistics()
 
@@ -346,8 +346,8 @@ class SerialTransport(pyuavcan.transport.Transport):
         """
         tx_ts: typing.Optional[pyuavcan.transport.Timestamp] = None
         for fr in frames:
-            compiled = fr.compile_into(self._serialization_buffer)
             async with self._port_lock:       # TODO: the lock acquisition should be prioritized by frame priority!
+                compiled = fr.compile_into(self._serialization_buffer)
                 timeout = monotonic_deadline - self._loop.time()
                 if timeout > 0:
                     self._serial_port.write_timeout = timeout
@@ -358,6 +358,7 @@ class SerialTransport(pyuavcan.transport.Transport):
                         tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
                     except serial.SerialTimeoutException:
                         num_written = 0
+                        _logger.info('%s: Port write timed out in %.3fs on frame %r', self, timeout, fr)
                     self._statistics.out_bytes += num_written or 0
                 else:
                     tx_ts = None  # Timed out
