@@ -23,7 +23,7 @@ from ._session import CANOutputSession as CANOutputSession
 # Statistics.
 from ._can import CANFrameStatistics as CANFrameStatistics
 
-from ._session import CANInputStatistics as CANInputStatistics
+from ._session import CANInputSessionStatistics as CANInputSessionStatistics
 from ._session import TransferReassemblyErrorID as TransferReassemblyErrorID
 
 # Media sub-layer.

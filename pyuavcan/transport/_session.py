@@ -82,7 +82,7 @@ class SessionSpecifier:
 
 
 @dataclasses.dataclass
-class Statistics:
+class SessionStatistics:
     """
     Abstract transport-agnostic session statistics.
     Transport implementations are encouraged to extend this class to add more transport-specific information.
@@ -100,7 +100,7 @@ class Statistics:
         It compares only those fields that are available in both operands, ignoring unique fields.
         This is useful for testing.
         """
-        if isinstance(other, Statistics):
+        if isinstance(other, SessionStatistics):
             fds = set(f.name for f in dataclasses.fields(self)) & set(f.name for f in dataclasses.fields(other))
             return all(getattr(self, n) == getattr(other, n) for n in fds)
         else:  # pragma: no cover
@@ -124,7 +124,7 @@ class Session(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_statistics(self) -> Statistics:
+    def sample_statistics(self) -> SessionStatistics:
         """
         Samples and returns the approximated statistics.
         We say "approximated" because implementations are not required to sample the counters atomically,

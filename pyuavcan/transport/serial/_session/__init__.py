@@ -10,4 +10,4 @@ from ._output import SerialOutputSession as SerialOutputSession
 from ._output import SerialFeedback as SerialFeedback
 
 from ._input import SerialInputSession as SerialInputSession
-from ._input import SerialInputStatistics as SerialInputStatistics
+from ._input import SerialInputSessionStatistics as SerialInputSessionStatistics

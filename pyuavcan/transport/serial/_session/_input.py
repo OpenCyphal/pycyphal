@@ -20,7 +20,7 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
-class SerialInputStatistics(pyuavcan.transport.Statistics):
+class SerialInputSessionStatistics(pyuavcan.transport.SessionStatistics):
     #: Keys are data type hash values collected from received frames that did not match the local type configuration.
     #: Values are the number of times each hash value has been encountered.
     mismatched_data_type_hashes: typing.Dict[int, int] = dataclasses.field(default_factory=dict)
@@ -52,7 +52,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
                 not isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata):  # pragma: no cover
             raise TypeError('Invalid parameters')
 
-        self._statistics = SerialInputStatistics()
+        self._statistics = SerialInputSessionStatistics()
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
         self._reassemblers: typing.Dict[int, TransferReassembler] = {}
@@ -130,7 +130,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         return self._payload_metadata
 
-    def sample_statistics(self) -> SerialInputStatistics:
+    def sample_statistics(self) -> SerialInputSessionStatistics:
         return copy.copy(self._statistics)
 
     def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
@@ -186,7 +186,7 @@ def _unittest_input_session() -> None:
                              finalizer=do_finalize)
     assert sis.specifier == session_spec
     assert sis.payload_metadata == payload_meta
-    assert sis.sample_statistics() == SerialInputStatistics()
+    assert sis.sample_statistics() == SerialInputSessionStatistics()
 
     assert sis.transfer_id_timeout == approx(SerialInputSession.DEFAULT_TRANSFER_ID_TIMEOUT)
     sis.transfer_id_timeout = 1.0
@@ -219,7 +219,7 @@ def _unittest_input_session() -> None:
                                 end_of_transfer=False,
                                 payload=nihil_supernum,
                                 source_node_id=None))
-    assert sis.sample_statistics() == SerialInputStatistics(
+    assert sis.sample_statistics() == SerialInputSessionStatistics(
         frames=1,
         errors=1,
     )
@@ -229,7 +229,7 @@ def _unittest_input_session() -> None:
                                 end_of_transfer=True,
                                 payload=nihil_supernum,
                                 source_node_id=None))
-    assert sis.sample_statistics() == SerialInputStatistics(
+    assert sis.sample_statistics() == SerialInputSessionStatistics(
         frames=2,
         errors=2,
     )
@@ -239,7 +239,7 @@ def _unittest_input_session() -> None:
                                 end_of_transfer=True,
                                 payload=nihil_supernum,
                                 source_node_id=None))
-    assert sis.sample_statistics() == SerialInputStatistics(
+    assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=1,
         frames=3,
         payload_bytes=len(nihil_supernum),
@@ -267,7 +267,7 @@ def _unittest_input_session() -> None:
                     data_specifier=session_spec.data_specifier,
                     data_type_hash=0xbad_bad_bad_bad_bad)
     )
-    assert sis.sample_statistics() == SerialInputStatistics(
+    assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=1,
         frames=4,
         payload_bytes=len(nihil_supernum),
@@ -288,7 +288,7 @@ def _unittest_input_session() -> None:
                                 payload=nihil_supernum,
                                 source_node_id=2222))       # COMPLETED FIRST
 
-    assert sis.sample_statistics() == SerialInputStatistics(
+    assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=2,
         frames=6,
         payload_bytes=len(nihil_supernum) * 2,
@@ -318,7 +318,7 @@ def _unittest_input_session() -> None:
                                 payload=nihil_supernum,
                                 source_node_id=1111))       # COMPLETED SECOND
 
-    assert sis.sample_statistics() == SerialInputStatistics(
+    assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=3,
         frames=9,
         payload_bytes=len(nihil_supernum) * 5,
@@ -358,7 +358,7 @@ def _unittest_input_session() -> None:
                                 payload=b'',
                                 source_node_id=1111))
 
-    assert sis.sample_statistics() == SerialInputStatistics(
+    assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=3,
         frames=11,
         payload_bytes=len(nihil_supernum) * 5,

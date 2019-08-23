@@ -31,10 +31,10 @@ _logger = logging.getLogger(__name__)
 @dataclasses.dataclass
 class ServerStatistics:
     #: There is only one input transport session per server.
-    request_transport_session:   pyuavcan.transport.Statistics
+    request_transport_session:   pyuavcan.transport.SessionStatistics
 
     #: This is a mapping keyed by the remote client node-ID value. One transport session per client.
-    response_transport_sessions: typing.Dict[int, pyuavcan.transport.Statistics]
+    response_transport_sessions: typing.Dict[int, pyuavcan.transport.SessionStatistics]
 
     served_requests:             int
     deserialization_failures:    int    #: Requests that could not be received because of bad input transfers.

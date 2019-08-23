@@ -67,7 +67,7 @@ async def _unittest_loopback_transport() -> None:
     assert last_feedback.first_frame_transmission_timestamp == ts
     del ts
 
-    assert out_123.sample_statistics() == pyuavcan.transport.Statistics(
+    assert out_123.sample_statistics() == pyuavcan.transport.SessionStatistics(
         transfers=1,
         frames=1,
         payload_bytes=len('Hello world!'),
@@ -127,7 +127,7 @@ async def _unittest_loopback_transport() -> None:
     assert rx.fragmented_payload == [memoryview(b'Hello world!')]
     assert rx.source_node_id == tr.local_node_id
 
-    assert inp_42.sample_statistics() == pyuavcan.transport.Statistics(
+    assert inp_42.sample_statistics() == pyuavcan.transport.SessionStatistics(
         transfers=1,
         frames=1,
         payload_bytes=len('Hello world!'),

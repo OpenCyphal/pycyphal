@@ -61,7 +61,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         self._local_node_id_accessor = local_node_id_accessor
         self._send_handler = send_handler
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
-        self._statistics = pyuavcan.transport.Statistics()
+        self._statistics = pyuavcan.transport.SessionStatistics()
         assert callable(self._local_node_id_accessor)
         assert callable(send_handler)
 
@@ -143,7 +143,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         return self._payload_metadata
 
-    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+    def sample_statistics(self) -> pyuavcan.transport.SessionStatistics:
         return copy.copy(self._statistics)
 
     def close(self) -> None:
@@ -154,7 +154,7 @@ def _unittest_output_session() -> None:
     import asyncio
     from pytest import raises, approx
     from pyuavcan.transport import SessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority, Transfer
-    from pyuavcan.transport import PayloadMetadata, Statistics, Timestamp, Feedback
+    from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback
 
     ts = Timestamp.now()
 
@@ -219,7 +219,7 @@ def _unittest_output_session() -> None:
     assert sos.specifier == SessionSpecifier(MessageDataSpecifier(3210), None)
     assert sos.destination_node_id is None
     assert sos.payload_metadata == PayloadMetadata(0xdead_beef_badc0ffe, 1024)
-    assert sos.sample_statistics() == Statistics()
+    assert sos.sample_statistics() == SessionStatistics()
 
     assert run_until_complete(sos.send_until(
         Transfer(timestamp=ts,
@@ -265,7 +265,7 @@ def _unittest_output_session() -> None:
     sos.disable_feedback()
     sos.disable_feedback()  # Idempotency check
 
-    assert sos.sample_statistics() == Statistics(
+    assert sos.sample_statistics() == SessionStatistics(
         transfers=2,
         frames=2,
         payload_bytes=11,
@@ -299,7 +299,7 @@ def _unittest_output_session() -> None:
     assert last_monotonic_deadline == approx(123456.789)
     assert len(last_sent_frames) == 2
 
-    assert sos.sample_statistics() == Statistics(
+    assert sos.sample_statistics() == SessionStatistics(
         transfers=0,
         frames=0,
         payload_bytes=0,
@@ -317,7 +317,7 @@ def _unittest_output_session() -> None:
             123456.789
         ))
 
-    assert sos.sample_statistics() == Statistics(
+    assert sos.sample_statistics() == SessionStatistics(
         transfers=0,
         frames=0,
         payload_bytes=0,

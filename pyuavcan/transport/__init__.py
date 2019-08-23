@@ -155,7 +155,7 @@ from ._session import OutputSession as OutputSession
 from ._payload_metadata import PayloadMetadata as PayloadMetadata
 
 # Low-level entities.
-from ._session import Statistics as Statistics
+from ._session import SessionStatistics as SessionStatistics
 from ._session import Feedback as Feedback
 
 from ._timestamp import Timestamp as Timestamp

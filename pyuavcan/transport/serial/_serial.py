@@ -146,8 +146,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         :param single_frame_transfer_payload_capacity_bytes: Use single-frame transfers for all outgoing transfers
             containing not more than than this many bytes of payload. Otherwise, use multi-frame transfers.
-            This setting does not affect transfer reception (any payload size is always accepted). Defaults to
-            :attr:`DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES`.
+            This setting does not affect transfer reception (any payload size is always accepted).
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """

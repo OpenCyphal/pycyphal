@@ -7,7 +7,7 @@
 from ._base import SessionFinalizer as SessionFinalizer
 
 from ._input import CANInputSession as CANInputSession
-from ._input import CANInputStatistics as CANInputStatistics
+from ._input import CANInputSessionStatistics as CANInputSessionStatistics
 
 from ._output import CANOutputSession as CANOutputSession
 from ._output import BroadcastCANOutputSession as BroadcastCANOutputSession
