@@ -121,8 +121,8 @@ async def _unittest_can_transport() -> None:
     collector = FrameCollector()
     peeper.set_received_frames_handler(collector.give)
 
-    assert tr.sample_statistics() == can.CANFrameStatistics()
-    assert tr2.sample_statistics() == can.CANFrameStatistics()
+    assert tr.sample_statistics() == can.CANTransportStatistics()
+    assert tr2.sample_statistics() == can.CANTransportStatistics()
 
     ts = Timestamp.now()
 
@@ -139,8 +139,8 @@ async def _unittest_can_transport() -> None:
     ), tr.loop.time() + 1.0)
     assert broadcaster.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
 
-    assert tr.sample_statistics() == can.CANFrameStatistics(sent=1)
-    assert tr2.sample_statistics() == can.CANFrameStatistics(received=1, received_uavcan=1)
+    assert tr.sample_statistics() == can.CANTransportStatistics(sent=1)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(received=1, received_uavcan=1)
     assert tr.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(1)
     assert tr2.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(0)
     assert tr.sample_statistics().lost_loopback == 0
@@ -189,8 +189,8 @@ async def _unittest_can_transport() -> None:
     ), tr.loop.time() + 1.0)
     assert broadcaster.sample_statistics() == SessionStatistics(transfers=2, frames=2, payload_bytes=12)
 
-    assert tr.sample_statistics() == can.CANFrameStatistics(sent=2)
-    assert tr2.sample_statistics() == can.CANFrameStatistics(
+    assert tr.sample_statistics() == can.CANTransportStatistics(sent=2)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(
         received=2, received_uavcan=2, received_uavcan_accepted=1)
 
     received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
@@ -232,8 +232,8 @@ async def _unittest_can_transport() -> None:
     assert broadcaster.sample_statistics() == SessionStatistics(transfers=3, frames=7, payload_bytes=312)
     broadcaster.disable_feedback()
 
-    assert tr.sample_statistics() == can.CANFrameStatistics(sent=7, loopback_requested=1, loopback_returned=1)
-    assert tr2.sample_statistics() == can.CANFrameStatistics(
+    assert tr.sample_statistics() == can.CANTransportStatistics(sent=7, loopback_requested=1, loopback_returned=1)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(
         received=7, received_uavcan=7, received_uavcan_accepted=6)
 
     fb = feedback_collector.take()
@@ -268,8 +268,8 @@ async def _unittest_can_transport() -> None:
 
     assert promiscuous_m12345.sample_statistics() == SessionStatistics(transfers=3, frames=7, payload_bytes=325)
 
-    assert tr.sample_statistics() == can.CANFrameStatistics(sent=8, loopback_requested=1, loopback_returned=1)
-    assert tr2.sample_statistics() == can.CANFrameStatistics(
+    assert tr.sample_statistics() == can.CANTransportStatistics(sent=8, loopback_requested=1, loopback_returned=1)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(
         received=8, received_uavcan=8, received_uavcan_accepted=7)
 
     broadcaster.close()
@@ -474,8 +474,8 @@ async def _unittest_can_transport() -> None:
     assert promiscuous_client_s333.sample_statistics() == SessionStatistics()
 
     # Final transport stats check; additional loopback frames are due to our manual tests above
-    assert tr.sample_statistics() == can.CANFrameStatistics(sent=16, loopback_requested=2, loopback_returned=5)
-    assert tr2.sample_statistics() == can.CANFrameStatistics(
+    assert tr.sample_statistics() == can.CANTransportStatistics(sent=16, loopback_requested=2, loopback_returned=5)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(
         received=15, received_uavcan=15, received_uavcan_accepted=14)
 
     #
@@ -513,14 +513,14 @@ async def _unittest_can_transport() -> None:
         loopback=True).compile()
     ])
 
-    assert tr.sample_statistics() == can.CANFrameStatistics(sent=16,
-                                                            received=2,
-                                                            loopback_requested=2,
-                                                            loopback_returned=6)
+    assert tr.sample_statistics() == can.CANTransportStatistics(sent=16,
+                                                                received=2,
+                                                                loopback_requested=2,
+                                                                loopback_returned=6)
 
-    assert tr2.sample_statistics() == can.CANFrameStatistics(received=15,
-                                                             received_uavcan=15,
-                                                             received_uavcan_accepted=14)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(received=15,
+                                                                 received_uavcan=15,
+                                                                 received_uavcan_accepted=14)
 
     #
     # Reception logic test.
@@ -559,17 +559,17 @@ async def _unittest_can_transport() -> None:
         ]
     ), tr.loop.time() + 1.0)
 
-    assert tr.sample_statistics() == can.CANFrameStatistics(sent=16,
-                                                            received=4,
-                                                            received_uavcan=2,
-                                                            received_uavcan_accepted=2,
-                                                            loopback_requested=2,
-                                                            loopback_returned=6)
+    assert tr.sample_statistics() == can.CANTransportStatistics(sent=16,
+                                                                received=4,
+                                                                received_uavcan=2,
+                                                                received_uavcan_accepted=2,
+                                                                loopback_requested=2,
+                                                                loopback_returned=6)
 
-    assert tr2.sample_statistics() == can.CANFrameStatistics(sent=2,
-                                                             received=15,
-                                                             received_uavcan=15,
-                                                             received_uavcan_accepted=14)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(sent=2,
+                                                                 received=15,
+                                                                 received_uavcan=15,
+                                                                 received_uavcan_accepted=14)
 
     received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -601,17 +601,17 @@ async def _unittest_can_transport() -> None:
         fragmented_payload=[]
     ), tr.loop.time() + 1.0)
 
-    assert tr.sample_statistics() == can.CANFrameStatistics(sent=16,
-                                                            received=5,
-                                                            received_uavcan=3,
-                                                            received_uavcan_accepted=3,
-                                                            loopback_requested=2,
-                                                            loopback_returned=6)
+    assert tr.sample_statistics() == can.CANTransportStatistics(sent=16,
+                                                                received=5,
+                                                                received_uavcan=3,
+                                                                received_uavcan_accepted=3,
+                                                                loopback_requested=2,
+                                                                loopback_returned=6)
 
-    assert tr2.sample_statistics() == can.CANFrameStatistics(sent=3,
-                                                             received=15,
-                                                             received_uavcan=15,
-                                                             received_uavcan_accepted=14)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(sent=3,
+                                                                 received=15,
+                                                                 received_uavcan=15,
+                                                                 received_uavcan_accepted=14)
 
     received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
     assert received is not None

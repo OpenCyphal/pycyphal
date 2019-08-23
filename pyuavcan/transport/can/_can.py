@@ -23,9 +23,8 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
-class CANFrameStatistics:
+class CANTransportStatistics(pyuavcan.transport.TransportStatistics):
     """
-    These stats are unrelated to the abstract transport layer interface; they are purely CAN-specific.
     The following invariants apply::
 
         sent >= loopback_requested
@@ -94,7 +93,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
         self._last_filter_configuration_set: typing.Optional[typing.Sequence[FilterConfiguration]] = None
 
-        self._frame_stats = CANFrameStatistics()
+        self._frame_stats = CANTransportStatistics()
 
         if media.mtu not in Media.VALID_MTU_SET:
             raise pyuavcan.transport.InvalidMediaConfigurationError(
@@ -182,10 +181,7 @@ class CANTransport(pyuavcan.transport.Transport):
         if media is not None:  # Double-close is NOT an error!
             media.close()
 
-    def sample_statistics(self) -> CANFrameStatistics:
-        """
-        Samples the statistics atomically and returns an unbound copy.
-        """
+    def sample_statistics(self) -> CANTransportStatistics:
         return copy.copy(self._frame_stats)
 
     def get_input_session(self,

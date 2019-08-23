@@ -28,10 +28,7 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
-class SerialStatistics:
-    """
-    Byte-level serial port statistics.
-    """
+class SerialTransportStatistics(pyuavcan.transport.TransportStatistics):
     in_bytes:          int = 0
     in_frames:         int = 0
     in_unparsed_bytes: int = 0
@@ -170,7 +167,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         # it is needed to store frame contents before they are emitted into the serial port.
         self._serialization_buffer = bytearray(0 for _ in range(self._sft_payload_capacity_bytes * 3))
 
-        self._statistics = SerialStatistics()
+        self._statistics = SerialTransportStatistics()
 
         if not isinstance(serial_port, serial.SerialBase):
             serial_port = serial.serial_for_url(serial_port)
@@ -295,10 +292,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
 
-    def sample_statistics(self) -> SerialStatistics:
-        """
-        Samples the statistics atomically and returns an unbound copy.
-        """
+    def sample_statistics(self) -> SerialTransportStatistics:
         return copy.copy(self._statistics)
 
     def _handle_received_frame(self, frame: SerialFrame) -> None:

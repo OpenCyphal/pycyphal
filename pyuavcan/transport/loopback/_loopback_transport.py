@@ -6,10 +6,16 @@
 
 import typing
 import asyncio
+import dataclasses
 
 import pyuavcan.transport
 from ._input_session import LoopbackInputSession
 from ._output_session import LoopbackOutputSession
+
+
+@dataclasses.dataclass
+class LoopbackTransportStatistics(pyuavcan.transport.TransportStatistics):
+    pass
 
 
 class LoopbackTransport(pyuavcan.transport.Transport):
@@ -132,6 +138,9 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                                          router=do_route)
             self._output_sessions[specifier] = sess
         return sess
+
+    def sample_statistics(self) -> LoopbackTransportStatistics:
+        return LoopbackTransportStatistics()
 
     @property
     def input_sessions(self) -> typing.Sequence[pyuavcan.transport.InputSession]:

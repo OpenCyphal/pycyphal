@@ -136,6 +136,7 @@ Below is the class inheritance diagram for this module (trivial classes may be o
 # Core transport.
 from ._transport import Transport as Transport
 from ._transport import ProtocolParameters as ProtocolParameters
+from ._transport import TransportStatistics as TransportStatistics
 
 # Transport model auxiliaries.
 from ._transfer import Transfer as Transfer

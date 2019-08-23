@@ -21,7 +21,7 @@ from ._session import CANInputSession as CANInputSession
 from ._session import CANOutputSession as CANOutputSession
 
 # Statistics.
-from ._can import CANFrameStatistics as CANFrameStatistics
+from ._can import CANTransportStatistics as CANTransportStatistics
 
 from ._session import CANInputSessionStatistics as CANInputSessionStatistics
 from ._session import TransferReassemblyErrorID as TransferReassemblyErrorID

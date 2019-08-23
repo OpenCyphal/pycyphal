@@ -11,7 +11,7 @@ import pytest
 import serial
 import pyuavcan.transport
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
-from pyuavcan.transport.serial import SerialTransport, SerialStatistics, SerialFrame
+from pyuavcan.transport.serial import SerialTransport, SerialTransportStatistics, SerialFrame
 
 
 @pytest.mark.asyncio    # type: ignore
@@ -53,7 +53,7 @@ async def _unittest_serial_transport() -> None:
         .DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
     )
 
-    assert tr.sample_statistics() == SerialStatistics()
+    assert tr.sample_statistics() == SerialTransportStatistics()
 
     sft_capacity = SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES
 
@@ -102,7 +102,7 @@ async def _unittest_serial_transport() -> None:
     print('OUTPUTS:', tr.output_sessions)
     assert set(tr.input_sessions) == {subscriber_promiscuous, subscriber_selective, server_listener, client_listener}
     assert set(tr.output_sessions) == {broadcaster, server_responder, client_requester}
-    assert tr.sample_statistics() == SerialStatistics()
+    assert tr.sample_statistics() == SerialTransportStatistics()
 
     #
     # Message exchange test.
