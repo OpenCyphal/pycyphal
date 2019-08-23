@@ -354,9 +354,12 @@ class SerialTransport(pyuavcan.transport.Transport):
                 timeout = monotonic_deadline - self._loop.time()
                 if timeout > 0:
                     self._serial_port.write_timeout = timeout
-                    num_written = await self._loop.run_in_executor(self._background_executor,
-                                                                   self._serial_port.write,
-                                                                   compiled)
+                    try:
+                        num_written = await self._loop.run_in_executor(self._background_executor,
+                                                                       self._serial_port.write,
+                                                                       compiled)
+                    except serial.SerialTimeoutException:
+                        num_written = 0
                     tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
                     self._statistics.out_bytes += num_written or 0
                 else:

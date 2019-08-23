@@ -112,10 +112,10 @@ async def _unittest_serial_transport() -> None:
                  priority=Priority.LOW,
                  transfer_id=77777,
                  fragmented_payload=payload_single),
-        monotonic_deadline=get_monotonic() + 1.0
+        monotonic_deadline=get_monotonic() + 5.0
     )
 
-    rx_transfer = await subscriber_promiscuous.receive_until(get_monotonic() + 1.0)
+    rx_transfer = await subscriber_promiscuous.receive_until(get_monotonic() + 5.0)
     print('PROMISCUOUS SUBSCRIBER TRANSFER:', rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.LOW
@@ -137,7 +137,7 @@ async def _unittest_serial_transport() -> None:
                      priority=Priority.LOW,
                      transfer_id=77777,
                      fragmented_payload=payload_x3),
-            monotonic_deadline=get_monotonic() + 1.0
+            monotonic_deadline=get_monotonic() + 5.0
         )
 
     assert None is await subscriber_selective.receive_until(get_monotonic() + 0.1)
@@ -155,7 +155,7 @@ async def _unittest_serial_transport() -> None:
                      priority=Priority.HIGH,
                      transfer_id=88888,
                      fragmented_payload=payload_single),
-            monotonic_deadline=get_monotonic() + 1.0
+            monotonic_deadline=get_monotonic() + 5.0
         )
 
     with pytest.raises(ValueError):
@@ -172,10 +172,10 @@ async def _unittest_serial_transport() -> None:
                  priority=Priority.HIGH,
                  transfer_id=88888,
                  fragmented_payload=payload_x3),
-        monotonic_deadline=get_monotonic() + 1.0
+        monotonic_deadline=get_monotonic() + 5.0
     )
 
-    rx_transfer = await server_listener.receive_until(get_monotonic() + 1.0)
+    rx_transfer = await server_listener.receive_until(get_monotonic() + 5.0)
     print('SERVER LISTENER TRANSFER:', rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.HIGH
@@ -205,7 +205,7 @@ async def _unittest_serial_transport() -> None:
                  priority=Priority.IMMEDIATE,
                  transfer_id=99999,
                  fragmented_payload=payload_x3),
-        monotonic_deadline=get_monotonic() - 1.0    # The deadline is in the past.
+        monotonic_deadline=get_monotonic() - 5.0    # The deadline is in the past.
     )
 
     assert None is await subscriber_selective.receive_until(get_monotonic() + 0.1)
@@ -230,10 +230,10 @@ async def _unittest_serial_transport() -> None:
                  priority=Priority.IMMEDIATE,
                  transfer_id=99999,
                  fragmented_payload=payload_x3),
-        monotonic_deadline=get_monotonic() + 1.0
+        monotonic_deadline=get_monotonic() + 5.0
     )
 
-    rx_transfer = await subscriber_promiscuous.receive_until(get_monotonic() + 1.0)
+    rx_transfer = await subscriber_promiscuous.receive_until(get_monotonic() + 5.0)
     print('PROMISCUOUS SUBSCRIBER TRANSFER:', rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.IMMEDIATE
