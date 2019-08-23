@@ -27,22 +27,19 @@ class CANTransportStatistics(pyuavcan.transport.TransportStatistics):
     """
     The following invariants apply::
 
-        sent >= loopback_requested
-        received >= received_uavcan >= received_uavcan_accepted
-        loopback_requested >= loopback_returned
+        out_frames >= out_frames_loopback
+        in_frames >= in_frames_uavcan >= in_frames_uavcan_accepted
+        out_frames_loopback >= in_frames_loopback
     """
+    in_frames:                 int = 0  #: Number of genuine frames received from the bus (loopback not included).
+    in_frames_uavcan:          int = 0  #: Subset of the above that happen to be valid UAVCAN frames.
+    in_frames_uavcan_accepted: int = 0  #: Subset of the above that are useful for the local application.
+    in_frames_loopback:        int = 0  #: Number of loopback frames received from the media instance (not bus).
+    in_frames_errored:         int = 0  #: How many frames of any kind could not be successfully processed.
 
-    sent: int = 0    #: Number of frames sent to the media instance successfully.
-    unsent: int = 0  #: Number of frames that were supposed to be sent but timed out.
-
-    received:                 int = 0  #: Number of genuine frames received from the bus (loopback not included).
-    received_uavcan:          int = 0  #: Subset of the above that happen to be valid UAVCAN frames.
-    received_uavcan_accepted: int = 0  #: Subset of the above that are useful for the local application.
-
-    loopback_requested: int = 0  #: Number of sent frames that we requested loopback for.
-    loopback_returned:  int = 0  #: Number of loopback frames received from the media instance (not from the bus).
-
-    errored: int = 0  #: How many frames of any kind could not be successfully processed.
+    out_frames:          int = 0        #: Number of frames sent to the media instance successfully.
+    out_frames_timeout:  int = 0        #: Number of frames that were supposed to be sent but timed out.
+    out_frames_loopback: int = 0        #: Number of sent frames that we requested loopback for.
 
     @property
     def media_acceptance_filtering_efficiency(self) -> float:
@@ -52,10 +49,10 @@ class CANTransportStatistics(pyuavcan.transport.TransportStatistics):
         irrelevant ones completely autonomously. The value of 0 indicates that none of the frames passed over
         from the media instance are useful for the application (all ignored).
         """
-        return (self.received_uavcan_accepted / self.received) if self.received > 0 else 1.0
+        return (self.in_frames_uavcan_accepted / self.in_frames) if self.in_frames > 0 else 1.0
 
     @property
-    def lost_loopback(self) -> int:
+    def lost_loopback_frames(self) -> int:
         """
         The number of loopback frames that have been requested but never returned. Normally the value should be zero.
         The value may transiently increase to small values if the counters happened to be sampled while the loopback
@@ -63,7 +60,7 @@ class CANTransportStatistics(pyuavcan.transport.TransportStatistics):
         positive for long periods of time, the media driver is probably misbehaving.
         A negative value means that the media instance is sending more loopback frames than requested (bad).
         """
-        return self.loopback_requested - self.loopback_returned
+        return self.out_frames_loopback - self.in_frames_loopback
 
 
 class CANTransport(pyuavcan.transport.Transport):
@@ -257,9 +254,9 @@ class CANTransport(pyuavcan.transport.Transport):
             assert 0 <= num_sent <= len(frames_list), 'Media sub-layer API contract violation'
             sent_frames, unsent_frames = frames_list[:num_sent], frames_list[num_sent:]
 
-            self._frame_stats.sent += len(sent_frames)
-            self._frame_stats.unsent += len(unsent_frames)
-            self._frame_stats.loopback_requested += sum(1 for f in sent_frames if f.loopback)
+            self._frame_stats.out_frames += len(sent_frames)
+            self._frame_stats.out_frames_timeout += len(unsent_frames)
+            self._frame_stats.out_frames_loopback += sum(1 for f in sent_frames if f.loopback)
 
         if unsent_frames:
             can_id_int_set = set(f.identifier for f in unsent_frames)
@@ -274,9 +271,9 @@ class CANTransport(pyuavcan.transport.Transport):
         for raw_frame in frames:
             try:
                 if raw_frame.loopback:
-                    self._frame_stats.loopback_returned += 1
+                    self._frame_stats.in_frames_loopback += 1
                 else:
-                    self._frame_stats.received += 1
+                    self._frame_stats.in_frames += 1
 
                 cid = CANID.parse(raw_frame.identifier)
                 if cid is not None:                                             # Ignore non-UAVCAN CAN frames
@@ -284,14 +281,14 @@ class CANTransport(pyuavcan.transport.Transport):
                     if ufr is not None:                                         # Ignore non-UAVCAN CAN frames
                         self._handle_any_frame(cid, ufr)
             except Exception as ex:  # pragma: no cover
-                self._frame_stats.errored += 1
+                self._frame_stats.in_frames_errored += 1
                 _logger.exception(f'Unhandled exception while processing input CAN frame {raw_frame}: {ex}')
 
     def _handle_any_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> None:
         if not frame.loopback:
-            self._frame_stats.received_uavcan += 1
+            self._frame_stats.in_frames_uavcan += 1
             if self._handle_received_frame(can_id, frame):
-                self._frame_stats.received_uavcan_accepted += 1
+                self._frame_stats.in_frames_uavcan_accepted += 1
         else:
             self._handle_loopback_frame(can_id, frame)
 
