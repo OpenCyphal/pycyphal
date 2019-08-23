@@ -117,6 +117,9 @@ class SerialTransport(pyuavcan.transport.Transport):
     DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
     DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES = 1024
 
+    VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
+    VALID_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES = (512, _MAX_RECEIVE_PAYLOAD_SIZE_BYTES)
+
     def __init__(
         self,
         serial_port:                                  typing.Union[str, serial.SerialBase],
@@ -147,15 +150,17 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
-        self._sft_payload_capacity_bytes = int(single_frame_transfer_payload_capacity_bytes)
         self._service_transfer_multiplier = int(service_transfer_multiplier)
+        self._sft_payload_capacity_bytes = int(single_frame_transfer_payload_capacity_bytes)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
-        if not (SerialFrame.CRC_SIZE_BYTES <= self._sft_payload_capacity_bytes <= _MAX_RECEIVE_PAYLOAD_SIZE_BYTES):
-            raise ValueError(f'Invalid SFT payload limit: {self._sft_payload_capacity_bytes} bytes')
-
-        if not (0 < self._service_transfer_multiplier < 10):
+        low, high = self.VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE
+        if not (low <= self._service_transfer_multiplier <= high):
             raise ValueError(f'Invalid service transfer multiplier: {self._service_transfer_multiplier}')
+
+        low, high = self.VALID_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES
+        if not (low <= self._sft_payload_capacity_bytes <= high):
+            raise ValueError(f'Invalid SFT payload limit: {self._sft_payload_capacity_bytes} bytes')
 
         self._port_lock = asyncio.Lock(loop=loop)
         self._local_node_id: typing.Optional[int] = None

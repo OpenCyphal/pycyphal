@@ -77,11 +77,15 @@ def _add_args_for_can(parser: argparse.ArgumentParser) -> None:
     socketcan_parser = _make_arg_sequence_parser((str, ''), (int, 64))
 
     def construct_socketcan_transport(arg_seq: str) -> pyuavcan.transport.Transport:
-        # Do not import the transport outside of the factory! It slows down the application startup.
-        from pyuavcan.transport.can import CANTransport
-        from pyuavcan.transport.can.media.socketcan import SocketCANMedia
-        iface_name, mtu = socketcan_parser(arg_seq)
-        return CANTransport(SocketCANMedia(iface_name, mtu=mtu))
+        try:
+            # Do not import the transport outside of the factory! It slows down the application startup.
+            from pyuavcan.transport.can import CANTransport
+            from pyuavcan.transport.can.media.socketcan import SocketCANMedia
+            iface_name, mtu = socketcan_parser(arg_seq)
+            return CANTransport(SocketCANMedia(iface_name, mtu=mtu))
+        except Exception as ex:
+            _logger.exception('Could not construct transport: %s', ex)
+            raise
 
     parser.add_argument(
         '--iface-can-socketcan', '--socketcan',
@@ -112,36 +116,50 @@ Examples:
 
 
 def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
+    default_baud_rate = 115200
+
     def construct_transport(arg_seq: str) -> pyuavcan.transport.Transport:
-        # Do not import the transport outside of the factory! It slows down the application startup.
-        from pyuavcan.transport.serial import SerialTransport
-        default_srv_mult = SerialTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER
-        default_sft_payload_size = SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES
-        seq_parser = _make_arg_sequence_parser((str, ''),
-                                               (int, default_srv_mult),
-                                               (int, default_sft_payload_size))
-        serial_port_name, sft_payload_size, srv_mult = seq_parser(arg_seq)
-        return SerialTransport(serial_port=serial_port_name,
-                               service_transfer_multiplier=srv_mult,
-                               single_frame_transfer_payload_capacity_bytes=sft_payload_size)
+        try:
+            # Do not import the transport outside of the factory! It slows down the application startup.
+            from pyuavcan.transport.serial import SerialTransport
+            seq_parser = _make_arg_sequence_parser(
+                (str, ''),
+                (int, default_baud_rate),
+                (int, SerialTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER),
+                (int, SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES),
+            )
+            serial_port_name, baud_rate, srv_mult, sft_payload_size = seq_parser(arg_seq)
+
+            import serial
+            serial_port = serial.serial_for_url(serial_port_name,
+                                                baudrate=baud_rate)
+
+            return SerialTransport(serial_port=serial_port,
+                                   service_transfer_multiplier=srv_mult,
+                                   single_frame_transfer_payload_capacity_bytes=sft_payload_size)
+        except Exception as ex:
+            _logger.exception('Could not construct transport: %s', ex)
+            raise
 
     parser.add_argument(
         '--iface-serial', '--serial',
         action='append',
         dest='transport',
-        metavar='SERIAL_PORT_NAME[,MTU[,SERVICE_MULTIPLIER]]',
+        metavar='SERIAL_PORT_NAME[,BAUDRATE[,SERVICE_MULTIPLIER[,MTU]]]',
         type=construct_transport,
         help=f"""
 Use the serial transport. Arguments:
     - Serial port name, string, mandatory; e.g.: "/dev/ttyACM0", "COM9".
       PySerial URL are also supported; e.g., "socket://localhost:50905".
       Read the PySerial documentation for more information.
-    - Service multiplier, int; optional, defaults to 2.
-      The service multiplier specifies how many times every outgoing service
-      transfer will be repeated. This is a proactive data loss prevention
-      measure for unreliable links. Please read the serial transport
-      documentation for background.
+    - Baud rate, int; optional, defaults to {default_baud_rate}.
+    - Service multiplier, int; optional, defaults to 2. The service
+      multiplier specifies how many times every outgoing service transfer
+      will be repeated. This is a proactive data loss prevention measure
+      for unreliable links. Please read the serial transport documentation.
     - Maximum transmission unit, int; optional, defaults to one kibibyte.
+The following parameters of the serial port are fixed and cannot be changed:
+8-bit characters, no parity check, one stop bit, flow control disabled.
 """.strip())
 
 
