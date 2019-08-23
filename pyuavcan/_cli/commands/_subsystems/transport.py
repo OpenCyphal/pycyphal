@@ -84,7 +84,7 @@ def _add_args_for_can(parser: argparse.ArgumentParser) -> None:
             iface_name, mtu = socketcan_parser(arg_seq)
             return CANTransport(SocketCANMedia(iface_name, mtu=mtu))
         except Exception as ex:
-            _logger.exception('Could not construct transport: %s', ex)
+            _logger.error('Could not construct transport: %s', ex)
             raise
 
     parser.add_argument(
@@ -138,7 +138,7 @@ def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
                                    service_transfer_multiplier=srv_mult,
                                    single_frame_transfer_payload_capacity_bytes=sft_payload_size)
         except Exception as ex:
-            _logger.exception('Could not construct transport: %s', ex)
+            _logger.error('Could not construct transport: %s', ex)
             raise
 
     parser.add_argument(
