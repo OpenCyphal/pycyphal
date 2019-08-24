@@ -4,7 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import os
 import re
 import sys
 import time
@@ -23,8 +22,7 @@ def _unittest_slow_cli_demo_basic_usage(
         generated_packages: typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedPackageInfo]]) -> None:
     """
     This test is KINDA FRAGILE. It makes assumptions about particular data types and their port IDs and other
-    aspects of the demo application. If you change anything in the demo, this test may break, so please keep
-    an eye out.
+    aspects of the demo application. If you change things in the demo, this test will likely break.
     """
     import uavcan.node
     del generated_packages
