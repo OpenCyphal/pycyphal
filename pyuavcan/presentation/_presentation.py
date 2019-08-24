@@ -384,11 +384,11 @@ class Presentation:
         return port_id
 
     def __repr__(self) -> str:
-        # This is kinda cumbersome, we may need to improve the repr output later.
-        counts: typing.Dict[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]], int] = {}
-        for ty, _ in self._registry.keys():
-            try:
-                counts[ty] += 1
-            except LookupError:
-                counts[ty] = 1
-        return pyuavcan.util.repr_attributes(self, self.transport, num_sessions=counts)
+        return pyuavcan.util.repr_attributes(
+            self,
+            self.transport,
+            num_publishers=sum(1 for t, _ in self._registry if isinstance(t, Publisher)),
+            num_subscribers=sum(1 for t, _ in self._registry if isinstance(t, Subscriber)),
+            num_clients=sum(1 for t, _ in self._registry if isinstance(t, Client)),
+            num_servers=sum(1 for t, _ in self._registry if isinstance(t, Server)),
+        )
