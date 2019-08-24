@@ -161,7 +161,15 @@ class SerialTransport(pyuavcan.transport.Transport):
             raise ValueError(f'Invalid SFT payload limit: {self._sft_payload_capacity_bytes} bytes')
 
         self._local_node_id: typing.Optional[int] = None
+
+        # At first I tried using serial.is_open, but unfortunately that doesn't work reliably because the close()
+        # method on most serial port classes is non-atomic, which causes all sorts of weird race conditions
+        # and spurious errors in the reader thread (at least). A simple explicit flag is reliable.
+        self._closed = False
+
+        # For serial port write serialization. Read operations are performed concurrently (no sync) in separate thread.
         self._port_lock = asyncio.Lock(loop=loop)
+
         # The serialization buffer is pre-allocated for performance reasons;
         # it is needed to store frame contents before they are emitted into the serial port.
         # Access must be protected with the port lock!
@@ -204,6 +212,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     def set_local_node_id(self, node_id: int) -> None:
         if self._local_node_id is None:
             if 0 <= node_id < self.protocol_parameters.node_id_set_cardinality:
+                self._ensure_not_closed()
                 self._local_node_id = int(node_id)
             else:
                 raise ValueError(f'Invalid node ID for serial: {node_id}')
@@ -211,6 +220,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     def close(self) -> None:
+        self._closed = True
         for s in (*self.input_sessions, *self.output_sessions):
             try:
                 s.close()
@@ -223,12 +233,10 @@ class SerialTransport(pyuavcan.transport.Transport):
     def get_input_session(self,
                           specifier:        pyuavcan.transport.SessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> SerialInputSession:
-        if not self._serial_port.is_open:
-            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
-
         def finalizer() -> None:
             del self._input_registry[specifier]
 
+        self._ensure_not_closed()
         try:
             out = self._input_registry[specifier]
         except LookupError:
@@ -246,9 +254,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     def get_output_session(self,
                            specifier:        pyuavcan.transport.SessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> SerialOutputSession:
-        if not self._serial_port.is_open:
-            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
-
+        self._ensure_not_closed()
         if specifier not in self._output_registry:
             def finalizer() -> None:
                 del self._output_registry[specifier]
@@ -335,6 +341,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         else:
             assert False
 
+        assert self._statistics.in_bytes <= in_bytes_count
         self._statistics.in_bytes = int(in_bytes_count)
 
     async def _send_transfer(self, frames: typing.Iterable[SerialFrame], monotonic_deadline: float) \
@@ -347,38 +354,44 @@ class SerialTransport(pyuavcan.transport.Transport):
             None on timeout or on write failure.
         """
         tx_ts: typing.Optional[pyuavcan.transport.Timestamp] = None
-        for fr in frames:
-            async with self._port_lock:       # TODO: the lock acquisition should be prioritized by frame priority!
-                compiled = fr.compile_into(self._serialization_buffer)
-                timeout = monotonic_deadline - self._loop.time()
-                if timeout > 0:
-                    self._serial_port.write_timeout = timeout
-                    try:
-                        num_written = await self._loop.run_in_executor(self._background_executor,
-                                                                       self._serial_port.write,
-                                                                       compiled)
-                        tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
-                    except serial.SerialTimeoutException:
-                        num_written = 0
-                        _logger.info('%s: Port write timed out in %.3fs on frame %r', self, timeout, fr)
-                    self._statistics.out_bytes += num_written or 0
-                else:
-                    tx_ts = None  # Timed out
+        self._ensure_not_closed()
+        try:  # Jeez this is getting complex
+            for fr in frames:
+                async with self._port_lock:       # TODO: the lock acquisition should be prioritized by frame priority!
+                    compiled = fr.compile_into(self._serialization_buffer)
+                    timeout = monotonic_deadline - self._loop.time()
+                    if timeout > 0:
+                        self._serial_port.write_timeout = timeout
+                        try:
+                            num_written = await self._loop.run_in_executor(self._background_executor,
+                                                                           self._serial_port.write,
+                                                                           compiled)
+                            tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
+                        except serial.SerialTimeoutException:
+                            num_written = 0
+                            _logger.info('%s: Port write timed out in %.3fs on frame %r', self, timeout, fr)
+                        self._statistics.out_bytes += num_written or 0
+                    else:
+                        tx_ts = None  # Timed out
+                        break
+
+                num_written = len(compiled) if num_written is None else num_written
+                if num_written < len(compiled):
+                    tx_ts = None  # Write failed
                     break
 
-            num_written = len(compiled) if num_written is None else num_written
-            if num_written < len(compiled):
-                tx_ts = None  # Write failed
-                break
-
-            self._statistics.out_frames += 1
-
-        if tx_ts is not None:
-            self._statistics.out_transfers += 1
+                self._statistics.out_frames += 1
+        except Exception as ex:
+            if self._closed:
+                raise pyuavcan.transport.ResourceClosedError(f'{self} is closed, transmission aborted.') from ex
+            else:
+                raise
         else:
-            self._statistics.out_incomplete += 1
-
-        return tx_ts
+            if tx_ts is not None:
+                self._statistics.out_transfers += 1
+            else:
+                self._statistics.out_incomplete += 1
+            return tx_ts
 
     def _reader_thread_func(self) -> None:
         in_bytes_count = 0
@@ -389,16 +402,25 @@ class SerialTransport(pyuavcan.transport.Transport):
         try:
             parser = StreamParser(callback, _MAX_RECEIVE_PAYLOAD_SIZE_BYTES)
             assert abs(self._serial_port.timeout - _SERIAL_PORT_READ_TIMEOUT) < 0.1
-            while self._serial_port.is_open:
+
+            while not self._closed and self._serial_port.is_open:
                 chunk = self._serial_port.read(max(1, self._serial_port.inWaiting()))
                 timestamp = pyuavcan.transport.Timestamp.now()
                 in_bytes_count += len(chunk)
                 parser.process_next_chunk(chunk, timestamp)
+
         except Exception as ex:  # pragma: no cover
-            if isinstance(ex, serial.SerialException) and not self._serial_port.is_open:
+            if self._closed or not self._serial_port.is_open:
                 _logger.debug('%s: The serial port is closed, exception ignored: %r', self, ex)
             else:
-                _logger.exception('%s: Reader thread has failed, the instance will be terminated: %s', self, ex)
+                _logger.exception('%s: Reader thread has failed, the instance with port %s will be terminated: %s',
+                                  self, self._serial_port, ex)
+            self._closed = True
             self._serial_port.close()
+
         finally:
             _logger.info('%s: Reader thread is exiting. Head aega.', self)
+
+    def _ensure_not_closed(self) -> None:
+        if self._closed:
+            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
