@@ -128,6 +128,7 @@ async def _unittest_serial_transport() -> None:
     assert tr.sample_statistics().in_unparsed_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
     assert tr.sample_statistics().out_frames == 1
+    assert tr.sample_statistics().out_transfers == 1
     assert tr.sample_statistics().out_incomplete == 0
 
     with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
@@ -195,6 +196,7 @@ async def _unittest_serial_transport() -> None:
     assert tr.sample_statistics().in_unparsed_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
     assert tr.sample_statistics().out_frames == 1 + 3 * service_multiplication_factor
+    assert tr.sample_statistics().out_transfers == 1 + 1 * service_multiplication_factor
     assert tr.sample_statistics().out_incomplete == 0
 
     #
@@ -220,6 +222,7 @@ async def _unittest_serial_transport() -> None:
     assert tr.sample_statistics().in_unparsed_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
     assert tr.sample_statistics().out_frames == 1 + 3 * service_multiplication_factor
+    assert tr.sample_statistics().out_transfers == 1 + 1 * service_multiplication_factor
     assert tr.sample_statistics().out_incomplete == 1   # INCREMENTED HERE
 
     #
