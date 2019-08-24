@@ -18,7 +18,7 @@ _ANONYMOUS_NODE_ID = 0xFFFF
 
 
 @dataclasses.dataclass(frozen=True)
-class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.FrameBase):
+class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     NODE_ID_MASK     = 4095
     TRANSFER_ID_MASK = 2 ** 64 - 1
     INDEX_MASK       = 2 ** 31 - 1

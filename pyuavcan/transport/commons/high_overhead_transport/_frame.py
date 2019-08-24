@@ -10,7 +10,7 @@ import pyuavcan
 
 
 @dataclasses.dataclass(frozen=True)
-class FrameBase:
+class Frame:
     """
     The base class of a high-overhead-transport frame.
     It is used with the common transport algorithms defined in this module.
@@ -61,7 +61,15 @@ def _unittest_frame_base_ctor() -> None:
     from pytest import raises
     from pyuavcan.transport import Priority, Timestamp
 
-    FrameBase(timestamp=Timestamp.now(),
+    Frame(timestamp=Timestamp.now(),
+          priority=Priority.LOW,
+          transfer_id=1234,
+          index=321,
+          end_of_transfer=True,
+          payload=memoryview(b''))
+
+    with raises(TypeError):
+        Frame(timestamp=123456,  # type: ignore
               priority=Priority.LOW,
               transfer_id=1234,
               index=321,
@@ -69,49 +77,41 @@ def _unittest_frame_base_ctor() -> None:
               payload=memoryview(b''))
 
     with raises(TypeError):
-        FrameBase(timestamp=123456,  # type: ignore
-                  priority=Priority.LOW,
-                  transfer_id=1234,
-                  index=321,
-                  end_of_transfer=True,
-                  payload=memoryview(b''))
+        Frame(timestamp=Timestamp.now(),  # type: ignore
+              priority=2,
+              transfer_id=1234,
+              index=321,
+              end_of_transfer=True,
+              payload=memoryview(b''))
 
     with raises(TypeError):
-        FrameBase(timestamp=Timestamp.now(),  # type: ignore
-                  priority=2,
-                  transfer_id=1234,
-                  index=321,
-                  end_of_transfer=True,
-                  payload=memoryview(b''))
+        Frame(timestamp=Timestamp.now(),  # type: ignore
+              priority=Priority.LOW,
+              transfer_id=1234,
+              index=321,
+              end_of_transfer=1,
+              payload=memoryview(b''))
 
     with raises(TypeError):
-        FrameBase(timestamp=Timestamp.now(),  # type: ignore
-                  priority=Priority.LOW,
-                  transfer_id=1234,
-                  index=321,
-                  end_of_transfer=1,
-                  payload=memoryview(b''))
-
-    with raises(TypeError):
-        FrameBase(timestamp=Timestamp.now(),  # type: ignore
-                  priority=Priority.LOW,
-                  transfer_id=1234,
-                  index=321,
-                  end_of_transfer=False,
-                  payload=b'')
+        Frame(timestamp=Timestamp.now(),  # type: ignore
+              priority=Priority.LOW,
+              transfer_id=1234,
+              index=321,
+              end_of_transfer=False,
+              payload=b'')
 
     with raises(ValueError):
-        FrameBase(timestamp=Timestamp.now(),
-                  priority=Priority.LOW,
-                  transfer_id=-1,
-                  index=321,
-                  end_of_transfer=True,
-                  payload=memoryview(b''))
+        Frame(timestamp=Timestamp.now(),
+              priority=Priority.LOW,
+              transfer_id=-1,
+              index=321,
+              end_of_transfer=True,
+              payload=memoryview(b''))
 
     with raises(ValueError):
-        FrameBase(timestamp=Timestamp.now(),
-                  priority=Priority.LOW,
-                  transfer_id=0,
-                  index=-1,
-                  end_of_transfer=True,
-                  payload=memoryview(b''))
+        Frame(timestamp=Timestamp.now(),
+              priority=Priority.LOW,
+              transfer_id=0,
+              index=-1,
+              end_of_transfer=True,
+              payload=memoryview(b''))

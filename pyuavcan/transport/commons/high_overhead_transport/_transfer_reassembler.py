@@ -9,7 +9,7 @@ import enum
 import typing
 import logging
 import pyuavcan
-from ._frame_base import FrameBase
+from ._frame import Frame
 from ._common import TransferCRC
 
 
@@ -24,7 +24,7 @@ class TransferReassembler:
     Multi-frame transfer reassembly logic is arguably the most complex part of any UAVCAN transport implementation.
     This class implements a highly transport-agnostic transfer reassembly state machine designed for use
     with high-overhead transports, such as UDP, Serial, IEEE 802.15.4, etc.
-    Any transport whose frame dataclass implementation derives from :class:`FrameBase` can use this class.
+    Any transport whose frame dataclass implementation derives from :class:`Frame` can use this class.
 
     Out-of-order frame reception is supported, and therefore the reassembler can be used with
     redundant interfaces directly, without preliminary frame deduplication procedures or explicit
@@ -91,7 +91,7 @@ class TransferReassembler:
         self._transfer_id = 0                                   # Transfer-ID of the current transfer.
 
     def process_frame(self,
-                      frame:               FrameBase,
+                      frame:               Frame,
                       transfer_id_timeout: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         """
         Updates the transfer reassembly state machine with the new frame.
@@ -205,7 +205,7 @@ class TransferReassembler:
                                                       max_payload_size_bytes=self._max_payload_size_bytes)
 
     @staticmethod
-    def construct_anonymous_transfer(frame: FrameBase) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    def construct_anonymous_transfer(frame: Frame) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         """
         A minor helper that validates whether the frame is a valid anonymous transfer (it is if the index
         is zero and the end-of-transfer flag is set) and constructs a transfer instance if it is.
@@ -277,13 +277,13 @@ def _unittest_transfer_reassembler() -> None:
                  transfer_id:     int,
                  index:           int,
                  end_of_transfer: bool,
-                 payload:         typing.Union[bytes, memoryview]) -> FrameBase:
-        return FrameBase(timestamp=timestamp,
-                         priority=prio,
-                         transfer_id=transfer_id,
-                         index=index,
-                         end_of_transfer=end_of_transfer,
-                         payload=memoryview(payload))
+                 payload:         typing.Union[bytes, memoryview]) -> Frame:
+        return Frame(timestamp=timestamp,
+                     priority=prio,
+                     transfer_id=transfer_id,
+                     index=index,
+                     end_of_transfer=end_of_transfer,
+                     payload=memoryview(payload))
 
     def mk_transfer(timestamp:          Timestamp,
                     transfer_id:        int,
@@ -307,7 +307,7 @@ def _unittest_transfer_reassembler() -> None:
     ta = TransferReassembler(source_node_id=src_nid, max_payload_size_bytes=100, on_error_callback=on_error_callback)
     assert ta.source_node_id == src_nid
 
-    def push(frame: FrameBase) -> typing.Optional[TransferFrom]:
+    def push(frame: Frame) -> typing.Optional[TransferFrom]:
         return ta.process_frame(frame, transfer_id_timeout=transfer_id_timeout)
 
     hedgehog = b'In the evenings, the little Hedgehog went to the Bear Cub to count stars.'
@@ -689,12 +689,12 @@ def _unittest_transfer_reassembler_anonymous() -> None:
     ts = Timestamp.now()
     prio = Priority.LOW
     assert TransferReassembler.construct_anonymous_transfer(
-        FrameBase(timestamp=ts,
-                  priority=prio,
-                  transfer_id=123456,
-                  index=0,
-                  end_of_transfer=True,
-                  payload=memoryview(b'abcdef'))
+        Frame(timestamp=ts,
+              priority=prio,
+              transfer_id=123456,
+              index=0,
+              end_of_transfer=True,
+              payload=memoryview(b'abcdef'))
     ) == TransferFrom(timestamp=ts,
                       priority=prio,
                       transfer_id=123456,
@@ -702,21 +702,21 @@ def _unittest_transfer_reassembler_anonymous() -> None:
                       source_node_id=None)
 
     assert TransferReassembler.construct_anonymous_transfer(
-        FrameBase(timestamp=ts,
-                  priority=prio,
-                  transfer_id=123456,
-                  index=1,
-                  end_of_transfer=True,
-                  payload=memoryview(b'abcdef'))
+        Frame(timestamp=ts,
+              priority=prio,
+              transfer_id=123456,
+              index=1,
+              end_of_transfer=True,
+              payload=memoryview(b'abcdef'))
     ) is None
 
     assert TransferReassembler.construct_anonymous_transfer(
-        FrameBase(timestamp=ts,
-                  priority=prio,
-                  transfer_id=123456,
-                  index=0,
-                  end_of_transfer=False,
-                  payload=memoryview(b'abcdef'))
+        Frame(timestamp=ts,
+              priority=prio,
+              transfer_id=123456,
+              index=0,
+              end_of_transfer=False,
+              payload=memoryview(b'abcdef'))
     ) is None
 
 

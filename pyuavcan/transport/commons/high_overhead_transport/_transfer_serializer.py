@@ -7,11 +7,11 @@
 import typing
 import itertools
 import pyuavcan
-from ._frame_base import FrameBase
+from ._frame import Frame
 from ._common import TransferCRC
 
 
-FrameType = typing.TypeVar('FrameType', bound=FrameBase)
+FrameType = typing.TypeVar('FrameType', bound=Frame)
 
 
 def serialize_transfer(fragmented_payload:      typing.Sequence[memoryview],
@@ -33,7 +33,7 @@ def serialize_transfer(fragmented_payload:      typing.Sequence[memoryview],
 
     >>> import dataclasses
     >>> @dataclasses.dataclass(frozen=True)
-    ... class MyFrameType(FrameBase):
+    ... class MyFrameType(Frame):
     ...     pass    # Transport-specific definition goes here.
     >>> timestamp = pyuavcan.transport.Timestamp.now()
     >>> priority = pyuavcan.transport.Priority.NOMINAL
@@ -84,13 +84,13 @@ def _unittest_serialize_transfer() -> None:
     priority = Priority.NOMINAL
     transfer_id = 12345678901234567890
 
-    def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> FrameBase:
-        return FrameBase(timestamp=timestamp,
-                         priority=priority,
-                         transfer_id=transfer_id,
-                         index=index,
-                         end_of_transfer=end_of_transfer,
-                         payload=payload)
+    def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> Frame:
+        return Frame(timestamp=timestamp,
+                     priority=priority,
+                     transfer_id=transfer_id,
+                     index=index,
+                     end_of_transfer=end_of_transfer,
+                     payload=payload)
 
     assert [
         construct_frame(0, True, memoryview(b'hello world')),
