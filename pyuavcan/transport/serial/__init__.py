@@ -43,6 +43,10 @@ where same concerns regarding medium access coordination apply.
 The location of the URI doesn't have to be ``localhost``, of course --
 one can use this approach to link UAVCAN nodes via conventional IP networks.
 
+The exchange over the virtual bus can be dumped trivially for analysis::
+
+    nc localhost 50905 > dump.bin
+
 
 Inheritance diagram
 +++++++++++++++++++

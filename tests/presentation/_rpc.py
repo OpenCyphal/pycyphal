@@ -6,30 +6,23 @@
 
 import typing
 import asyncio
-
 import pytest
-
 import pyuavcan
-import pyuavcan.transport.can
-import tests.transport.can
+from . import TRANSPORT_FACTORIES, TransportFactory
 
 
 # noinspection PyProtectedMember
-@pytest.mark.asyncio    # type: ignore
-async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+@pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
+@pytest.mark.asyncio  # type: ignore
+async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
+                                          transport_factory:  TransportFactory) -> None:
     assert generated_packages
     import uavcan.register
     import uavcan.primitive
     import uavcan.time
     from pyuavcan.transport import Priority, Timestamp
 
-    bus: typing.Set[tests.transport.can.media.mock.MockMedia] = set()
-    media_a = tests.transport.can.media.mock.MockMedia(bus, 8, 1)
-    media_b = tests.transport.can.media.mock.MockMedia(bus, 64, 2)      # Look, a heterogeneous setup!
-    assert bus == {media_a, media_b}
-
-    tran_a = pyuavcan.transport.can.CANTransport(media_a)
-    tran_b = pyuavcan.transport.can.CANTransport(media_b)
+    tran_a, tran_b = transport_factory()
 
     tran_a.set_local_node_id(123)
     tran_b.set_local_node_id(42)

@@ -61,6 +61,7 @@ command -v ncat || die "Please install nmap. On Debian-based: apt install nmap"
 pip install -r requirements.txt || die "Could not install dependencies"
 
 # Initializing the system-wide test environment.
+# SocketCAN virtual bus.
 sudo modprobe can
 sudo modprobe can_raw
 sudo modprobe vcan
@@ -69,6 +70,11 @@ sudo ip link set up vcan0
 sudo ifconfig vcan0 down
 sudo ip link set vcan0 mtu 72        || die "Could not configure MTU on vcan0"
 sudo ifconfig vcan0 up               || die "Could not bring up vcan0"
+
+# TCP broker for serial port testing.
+ncat --broker --listen -p 50905 &>/dev/null &
+# shellcheck disable=SC2064
+trap "kill $! || echo 'Could not kill child $!'" SIGINT SIGTERM EXIT
 
 # ---------------------------------------------------------------------------------------------------------------------
 
