@@ -6,6 +6,28 @@
 
 """
 The module is always importable but is functional only on GNU/Linux.
+
+For testing or experimentation on a local machine it is often convenient to use a virtual CAN bus instead of a real one.
+Using SocketCAN, one can set up a virtual CAN bus interface as follows::
+
+    # Load the kernel modules
+    sudo modprobe can
+    sudo modprobe can_raw
+    sudo modprobe vcan
+
+    # Create the interface
+    sudo ip link add dev vcan0 type vcan
+    sudo ip link set up vcan0
+
+    # Configure the MTU if needed
+    sudo ifconfig vcan0 down
+    sudo ip link set vcan0 mtu 72       # Enable CAN FD by configuring the MTU of 64+8
+
+    # Bring the interface up
+    sudo ifconfig vcan0 up
+
+Where ``vcan0`` can be replaced with any other valid interface name.
+Please read the SocketCAN documentation for more information.
 """
 
 from sys import platform as _platform
