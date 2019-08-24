@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+from __future__ import annotations
 import typing
 import asyncio
 import logging
@@ -106,11 +107,6 @@ Default: %(default)s
 '''.strip())
 
     def execute(self, args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:
-        asyncio.get_event_loop().run_until_complete(self._do_execute(args, subsystems))
-        return 0
-
-    @staticmethod
-    async def _do_execute(args: argparse.Namespace, subsystems: typing.Sequence[object]) -> None:
         import pyuavcan.application
         node, = subsystems
         assert isinstance(node, pyuavcan.application.Node)
@@ -133,22 +129,45 @@ Default: %(default)s
                                                 send_timeout=args.period))
             _logger.info('Publication set: %r', publications)
 
-            # All set! Run the publication loop until the specified number of publications is done.
-            node.start()
+            try:
+                asyncio.get_event_loop().run_until_complete(self._run(node=node,
+                                                                      count=int(args.count),
+                                                                      period=float(args.period),
+                                                                      publications=publications))
+            except KeyboardInterrupt:
+                pass
 
-            sleep_until = asyncio.get_event_loop().time()
-            for c in range(int(args.count)):
-                out = await asyncio.gather(*[p.publish() for p in publications])
-                assert len(out) == len(publications)
-                assert all(isinstance(x, bool) for x in out)
-                if not all(out):
-                    _logger.error('The following publications have timed out:\n\t',
-                                  '\n\t'.join(f'#{idx}: {publications[idx]}' for idx, res in enumerate(out) if not res))
+            if _logger.isEnabledFor(logging.INFO):
+                _logger.info('%s', node.presentation.transport.sample_statistics())
+                for s in node.presentation.transport.output_sessions:
+                    ds = s.specifier.data_specifier
+                    if isinstance(ds, pyuavcan.transport.MessageDataSpecifier):
+                        _logger.info('Subject %d: %s', ds.subject_id, s.sample_statistics())
 
-                sleep_until += float(args.period)
-                _logger.info('Publication cycle %d of %d completed; sleeping for %.3f seconds',
-                             c + 1, args.count, sleep_until - asyncio.get_event_loop().time())
-                await asyncio.sleep(sleep_until - asyncio.get_event_loop().time())
+        return 0
+
+    @staticmethod
+    async def _run(node:         object,
+                   count:        int,
+                   period:       float,
+                   publications: typing.Sequence[Publication]) -> None:
+        import pyuavcan.application
+        assert isinstance(node, pyuavcan.application.Node)
+        node.start()
+
+        sleep_until = asyncio.get_event_loop().time()
+        for c in range(count):
+            out = await asyncio.gather(*[p.publish() for p in publications])
+            assert len(out) == len(publications)
+            assert all(isinstance(x, bool) for x in out)
+            if not all(out):
+                _logger.error('The following publications have timed out:\n\t',
+                              '\n\t'.join(f'#{idx}: {publications[idx]}' for idx, res in enumerate(out) if not res))
+
+            sleep_until += period
+            _logger.info('Publication cycle %d of %d completed; sleeping for %.3f seconds',
+                         c + 1, count, sleep_until - asyncio.get_event_loop().time())
+            await asyncio.sleep(sleep_until - asyncio.get_event_loop().time())
 
 
 class Publication:

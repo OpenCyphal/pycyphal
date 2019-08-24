@@ -18,6 +18,9 @@ from ._yaml import YAMLLoader
 from ._base import Command, SubsystemFactory
 
 
+_S = typing.TypeVar('_S', bound=pyuavcan.dsdl.ServiceObject)
+
+
 _logger = logging.getLogger(__name__)
 
 
@@ -106,72 +109,79 @@ The metadata fields will be contained under the key "_metadata_".
 '''.strip())
 
     def execute(self, args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:
-        return asyncio.get_event_loop().run_until_complete(_do_execute(args, subsystems))
+        import pyuavcan.application
+
+        node, formatter = subsystems
+        assert isinstance(node, pyuavcan.application.Node)
+        assert callable(formatter)
+
+        with contextlib.closing(node):
+            node.heartbeat_publisher.priority = args.priority
+
+            # Construct the request object.
+            service_id, dtype = _util.construct_port_id_and_type(args.service_spec)
+            if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
+                raise ValueError(f'Expected a service type; got this: {dtype.__name__}')
+
+            request = pyuavcan.dsdl.update_from_builtin(dtype.Request(), args.field_spec)
+            _logger.info('Request object: %r', request)
+
+            # Initialize the client instance.
+            client = node.presentation.make_client(dtype, service_id, args.server_node_id)
+            client.response_timeout = args.timeout
+            client.priority = args.priority
+
+            # Ready to do the job now.
+            node.start()
+            return asyncio.get_event_loop().run_until_complete(_run(client=client,
+                                                                    request=request,
+                                                                    formatter=formatter,
+                                                                    with_metadata=args.with_metadata))
 
 
-async def _do_execute(args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:
-    import pyuavcan.application
-    node, formatter = subsystems
-    assert isinstance(node, pyuavcan.application.Node)
-    assert callable(formatter)
+async def _run(client:        pyuavcan.presentation.Client[_S],
+               request:       pyuavcan.dsdl.CompositeObject,
+               formatter:     _subsystems.formatter.Formatter,
+               with_metadata: bool) -> int:
+    request_ts_transport: typing.Optional[pyuavcan.transport.Timestamp] = None
 
-    with contextlib.closing(node):
-        node.heartbeat_publisher.priority = args.priority
+    def on_transfer_feedback(fb: pyuavcan.transport.Feedback) -> None:
+        nonlocal request_ts_transport
+        request_ts_transport = fb.first_frame_transmission_timestamp
 
-        # Construct the request object.
-        service_id, dtype = _util.construct_port_id_and_type(args.service_spec)
-        if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
-            raise ValueError(f'Expected a service type; got this: {dtype.__name__}')
+    client.output_transport_session.enable_feedback(on_transfer_feedback)
 
-        request = pyuavcan.dsdl.update_from_builtin(dtype.Request(), args.field_spec)
-        _logger.info('Request object: %r', request)
+    request_ts_application = pyuavcan.transport.Timestamp.now()
+    result = await client.call(request)
+    response_ts_application = pyuavcan.transport.Timestamp.now()
 
-        # Initialize the client instance.
-        client = node.presentation.make_client(dtype, service_id, args.server_node_id)
-        client.response_timeout = args.timeout
-        client.priority = args.priority
+    # Print the results.
+    if result is None:
+        print(f'The request has timed out after {client.response_timeout:0.1f} seconds', file=sys.stderr)
+        return 1
+    else:
+        if not request_ts_transport:  # pragma: no cover
+            request_ts_transport = request_ts_application
+            _logger.error('The transport implementation is misbehaving: feedback was never emitted; '
+                          'falling back to software timestamping. '
+                          'Please submit a bug report. Involved instances: client=%r, result=%r',
+                          client, result)
 
-        request_ts_transport: typing.Optional[pyuavcan.transport.Timestamp] = None
+        response, transfer = result
 
-        def on_transfer_feedback(fb: pyuavcan.transport.Feedback) -> None:
-            nonlocal request_ts_transport
-            request_ts_transport = fb.first_frame_transmission_timestamp
+        transport_duration = transfer.timestamp.monotonic - request_ts_transport.monotonic
+        application_duration = response_ts_application.monotonic - request_ts_application.monotonic
+        _logger.info('Request duration [second]: '
+                     'transport layer: %.6f, application layer: %.6f, application layer overhead: %.6f',
+                     transport_duration, application_duration, application_duration - transport_duration)
 
-        client.output_transport_session.enable_feedback(on_transfer_feedback)
-
-        # Ready to do the job now.
-        node.start()
-        request_ts_application = pyuavcan.transport.Timestamp.now()
-        result = await client.call(request)
-        response_ts_application = pyuavcan.transport.Timestamp.now()
-
-        # Print the results.
-        if result is None:
-            print(f'The request has timed out after {client.response_timeout:0.1f} seconds', file=sys.stderr)
-            return 1
-        else:
-            if not request_ts_transport:  # pragma: no cover
-                request_ts_transport = request_ts_application
-                _logger.error('The transport implementation is misbehaving: feedback was never emitted; '
-                              'falling back to software timestamping. '
-                              'Please submit a bug report. Involved instances: node=%r, client=%r, result=%r',
-                              node, client, result)
-
-            response, transfer = result
-
-            transport_duration = transfer.timestamp.monotonic - request_ts_transport.monotonic
-            application_duration = response_ts_application.monotonic - request_ts_application.monotonic
-            _logger.info('Request duration [second]: '
-                         'transport layer: %.6f, application layer: %.6f, application layer overhead: %.6f',
-                         transport_duration, application_duration, application_duration - transport_duration)
-
-            _print_result(service_id=service_id,
-                          response=response,
-                          transfer=transfer,
-                          formatter=formatter,
-                          request_transfer_ts=request_ts_transport,
-                          app_layer_duration=application_duration,
-                          with_metadata=args.with_metadata)
+        _print_result(service_id=client.port_id,
+                      response=response,
+                      transfer=transfer,
+                      formatter=formatter,
+                      request_transfer_ts=request_ts_transport,
+                      app_layer_duration=application_duration,
+                      with_metadata=with_metadata)
     return 0
 
 

@@ -14,6 +14,9 @@ from . import _util, _subsystems
 from ._base import Command, SubsystemFactory
 
 
+_M = typing.TypeVar('_M', bound=pyuavcan.dsdl.CompositeObject)
+
+
 _logger = logging.getLogger(__name__)
 
 
@@ -85,47 +88,60 @@ have been received. No limit by default.
         assert callable(formatter)
 
         subject_specs = [_util.construct_port_id_and_type(ds) for ds in args.subject_spec]
-        asyncio.get_event_loop().run_until_complete(
-            _run(transport=transport,
-                 subject_specs=subject_specs,
-                 formatter=formatter,
-                 with_metadata=args.with_metadata,
-                 count=int(args.count) if args.count is not None else (2 ** 64))
-        )
+
+        _logger.info(f'Starting the subscriber with transport={transport}, subject_specs={subject_specs}, '
+                     f'formatter={formatter}, with_metadata={args.with_metadata}')
+
+        with contextlib.closing(pyuavcan.presentation.Presentation(transport)) as presentation:
+            subscriber = self._make_subscriber(args, presentation)  # type: ignore
+            try:
+                asyncio.get_event_loop().run_until_complete(
+                    _run(subscriber=subscriber,
+                         formatter=formatter,
+                         with_metadata=args.with_metadata,
+                         count=int(args.count) if args.count is not None else (2 ** 64))
+                )
+            except KeyboardInterrupt:
+                pass
+
+            if _logger.isEnabledFor(logging.INFO):
+                _logger.info('%s', presentation.transport.sample_statistics())
+                _logger.info('%s', subscriber.sample_statistics())
+
         return 0
 
+    @staticmethod
+    def _make_subscriber(args:         argparse.Namespace,
+                         presentation: pyuavcan.presentation.Presentation) -> pyuavcan.presentation.Subscriber[_M]:
+        # TODO: the return type will probably have to be changed when multi-subject subscription is supported.
+        subject_specs = [_util.construct_port_id_and_type(ds) for ds in args.subject_spec]
+        if len(subject_specs) < 1:
+            raise ValueError('Nothing to do: no subjects specified')
+        elif len(subject_specs) == 1:
+            subject_id, dtype = subject_specs[0]
+            return presentation.make_subscriber(dtype, subject_id)  # type: ignore
+        else:
+            raise NotImplementedError('Multi-subject subscription is not yet implemented, sorry! '
+                                      'See https://github.com/UAVCAN/pyuavcan/issues/65')
 
-async def _run(transport:     pyuavcan.transport.Transport,
-               subject_specs: typing.List[typing.Tuple[int, typing.Type[pyuavcan.dsdl.CompositeObject]]],
+
+async def _run(subscriber:    pyuavcan.presentation.Subscriber[_M],
                formatter:     _subsystems.formatter.Formatter,
                with_metadata: bool,
                count:         int) -> None:
-    if len(subject_specs) < 1:
-        raise ValueError('Nothing to do: no subjects specified')
-    elif len(subject_specs) == 1:
-        subject_id, dtype = subject_specs[0]
-    else:
-        # TODO: add support for multi-subject synchronous subscribers https://github.com/UAVCAN/pyuavcan/issues/65
-        raise NotImplementedError('Multi-subject subscription is not yet implemented, sorry!')
+    async for msg, transfer in subscriber:
+        assert isinstance(transfer, pyuavcan.transport.TransferFrom)
+        outer: typing.Dict[int, typing.Dict[str, typing.Any]] = {}
 
-    _logger.info(f'Starting the subscriber with transport={transport}, subject_specs={subject_specs}, '
-                 f'formatter={formatter}, with_metadata={with_metadata}')
+        bi: typing.Dict[str, typing.Any] = {}  # We use updates to ensure proper dict ordering: metadata before data
+        if with_metadata:
+            bi.update(_util.convert_transfer_metadata_to_builtin(transfer))
+        bi.update(pyuavcan.dsdl.to_builtin(msg))
+        outer[subscriber.port_id] = bi
 
-    pres = pyuavcan.presentation.Presentation(transport)
-    with contextlib.closing(pres):
-        async for msg, transfer in pres.make_subscriber(dtype, subject_id):
-            assert isinstance(transfer, pyuavcan.transport.TransferFrom)
-            outer: typing.Dict[int, typing.Dict[str, typing.Any]] = {}
+        print(formatter(outer))
 
-            bi: typing.Dict[str, typing.Any] = {}  # We use updates to ensure proper dict ordering: metadata before data
-            if with_metadata:
-                bi.update(_util.convert_transfer_metadata_to_builtin(transfer))
-            bi.update(pyuavcan.dsdl.to_builtin(msg))
-            outer[subject_id] = bi
-
-            print(formatter(outer))
-
-            count -= 1
-            if count <= 0:
-                _logger.info('Reached the specified message count, stopping')
-                break
+        count -= 1
+        if count <= 0:
+            _logger.info('Reached the specified message count, stopping')
+            break
