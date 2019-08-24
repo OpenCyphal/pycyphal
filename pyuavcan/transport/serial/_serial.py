@@ -46,8 +46,6 @@ class SerialTransport(pyuavcan.transport.Transport):
     Context: https://forum.uavcan.org/t/alternative-transport-protocols/324, also see the discussion at
     https://forum.uavcan.org/t/yukon-design-megathread/390/115?u=pavel.kirienko.
 
-    This transport is not yet implemented. Please come back later.
-
     The serial transport is designed for basic raw byte-level low-speed serial links:
 
     - UART, RS-232/485/422 (the recommended baud rates are: 115200, 921600, 3'000'000).
