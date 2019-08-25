@@ -72,7 +72,7 @@ Some of the rules cannot be easily enforced automatically, so please keep an eye
 
 It is particularly important to ensure that none of the entities, including sub-modules,
 that are not part of the library API are reachable from outside the package.
-This means that every module, class, function, etc. defined in the library must be named with a leading underscore,
+This means that every module, class, function, etc. defined in the library should be named with a leading underscore,
 unless it a part of the public library API
 (relevant: `<https://github.com/sphinx-doc/sphinx/issues/6574#issuecomment-511122156>`_).
 Violation of this rule may result in an obscure API structure and its unintended breakage between minor revisions.

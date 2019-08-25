@@ -66,7 +66,7 @@ For example::
 Transport layer
 ---------------
 
-The UAVCAN protocol itself is designed to support multiple transport protocols such as CAN bus, UDP, serial, and so on.
+The UAVCAN protocol itself is designed to support multiple transports such as CAN bus, UDP, serial, and so on.
 Generally, a real-time safety-critical implementation of UAVCAN would support a limited subset of
 transports defined by the protocol (often just one) in order to reduce the validation & verification efforts.
 PyUAVCAN is different -- it is created for user-facing software rather than reliable deeply embedded systems;
@@ -95,6 +95,7 @@ Per asyncio, it defaults to :func:`time.monotonic`,
 but it can be overridden by the user on a per-loop basis if necessary (read the asyncio docs for details).
 This principle is valid for all other components of the library; for example, the presentation layer.
 
+
 Media sub-layers
 ++++++++++++++++
 
@@ -103,9 +104,6 @@ communication mediums for the sake of application flexibility.
 Such lower-level implementation details fall outside of the scope of the UAVCAN transport model entirely,
 but they are relevant for this library as we want to encourage consistent design across the codebase.
 Such lower-level modules are called *media sub-layers*.
-
-The media sub-layer structure is not at all mandatory to follow; rather, it is a general recommendation
-that helps library users understand its structure and helps library developers keep it consistent.
 
 Media sub-layer implementations should be located under the submodule called ``media``,
 which in turn should be located under its parent transport's submodule, i.e., ``pyuavcan.transport.*.media.*``.
@@ -135,10 +133,8 @@ For example, see :class:`pyuavcan.transport.serial.SerialTransport`.
 Redundant pseudo-transport
 ++++++++++++++++++++++++++
 
-The transport :class:`pyuavcan.transport.redundant.RedundantTransport`
-is a special kind of transport that does not have a specific physical manifestation,
-hence it's called a *pseudo-transport*.
-As the name suggests, it is used to operate with UAVCAN networks built with redundant transports.
+The pseudo-transport :class:`pyuavcan.transport.redundant.RedundantTransport` is used to operate with
+UAVCAN networks built with redundant transports.
 In order to initialize it, the application should first initialize each of the physical transports and then
 supply them to the redundant pseudo-transport instance.
 Afterwards, the configured instance is used with the upper layers of the protocol stack, as shown on the diagram.
@@ -210,7 +206,7 @@ The internal dependency relations can be visualized as follows:
 The function of the presentation layer is to build high-level object-oriented interface on top of the transport
 layer by invoking the DSDL serialization routines
 (see :func:`pyuavcan.dsdl.serialize` and :func:`pyuavcan.dsdl.deserialize`).
-This is the level of abstraction presented to the user of the library.
+This is the highest level of abstraction presented to the user of the library.
 That is, when creating a new publisher or another network session, the calling code will interact
 directly with the presentation layer (the application layer, if used, serves as a thin proxy
 rather than adding any new abstraction on top).

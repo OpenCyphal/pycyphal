@@ -58,6 +58,9 @@ def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.Generate
     original_logging_level = pyuavcan_logger.level
     pyuavcan_logger.setLevel(logging.WARNING)
 
+    print('Number of random samples:', _NUM_RANDOM_SAMPLES)
+    print('Set environment variable PYUAVCAN_TEST_NUM_RANDOM_SAMPLES to override.')
+
     try:
         performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
 
