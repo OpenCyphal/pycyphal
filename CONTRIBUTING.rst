@@ -213,7 +213,13 @@ Some of the components of the library and of the test suite require DSDL package
 Those must be dealt with carefully as it needs to be ensured that the code that requires generated
 packages to be available is not executed until they are generated.
 
-When adding new transports, make sure to extend the test suite so that the presentation layer is tested against them.
+When adding new transports, make sure to extend the test suite so that the presentation layer
+and other higher-level components are tested against them.
+At least the following locations should be checked first:
+
+- ``tests/presentation`` -- generic presentation layer test cases.
+- ``tests/cli`` -- CLI and demo test cases.
+- The list may not be exhaustive, please grep the sources to locate all relevant modules.
 
 
 Releasing
