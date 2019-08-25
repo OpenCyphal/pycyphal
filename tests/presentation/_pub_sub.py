@@ -6,34 +6,26 @@
 
 import typing
 import asyncio
-
 import pytest
-
 import pyuavcan
-import pyuavcan.transport.can
-import tests.transport.can
+from . import TRANSPORT_FACTORIES, TransportFactory
 
 
 _RX_TIMEOUT = 10e-3
 
 
 # noinspection PyProtectedMember
-@pytest.mark.asyncio    # type: ignore
-async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) \
-        -> None:
+@pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
+@pytest.mark.asyncio  # type: ignore
+async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
+                                              transport_factory:  TransportFactory) -> None:
     assert generated_packages
     import uavcan.node
     import uavcan.time
     import uavcan.diagnostic
     from pyuavcan.transport import Priority
 
-    bus: typing.Set[tests.transport.can.media.mock.MockMedia] = set()
-    media_a = tests.transport.can.media.mock.MockMedia(bus, 8, 1)
-    media_b = tests.transport.can.media.mock.MockMedia(bus, 64, 2)      # Look, a heterogeneous setup!
-    assert bus == {media_a, media_b}
-
-    tran_a = pyuavcan.transport.can.CANTransport(media_a)
-    tran_b = pyuavcan.transport.can.CANTransport(media_b)
+    tran_a, tran_b = transport_factory()
 
     pres_a = pyuavcan.presentation.Presentation(tran_a)
     pres_b = pyuavcan.presentation.Presentation(tran_b)
@@ -144,7 +136,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert pub_record.priority == pyuavcan.presentation.DEFAULT_PRIORITY
     pub_record.priority = Priority.NOMINAL
     assert pub_record.priority == Priority.NOMINAL
-    with pytest.raises(ValueError, match='.*Heartbeat.*'):
+    with pytest.raises(TypeError, match='.*Heartbeat.*'):
         # noinspection PyTypeChecker
         await pub_heart.publish(record)  # type: ignore
 
@@ -186,17 +178,11 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     sub_record2.close()
     pub_record.close()
     await asyncio.sleep(1.1)
-    assert pres_a.sessions == []
-    assert pres_b.sessions == []
 
     pres_a.close()
     pres_a.close()  # Double-close has no effect
     pres_b.close()
     pres_b.close()  # Double-close has no effect
-
-    # All disposed of?
-    assert list(pres_a.sessions) == []
-    assert list(pres_b.sessions) == []
 
     # Make sure the transport sessions have been closed properly, this is supremely important.
     assert list(pres_a.transport.input_sessions) == []

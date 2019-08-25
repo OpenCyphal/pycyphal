@@ -148,6 +148,16 @@ Afterwards, the configured instance is used with the upper layers of the protoco
 For more information, please read the class API documentation.
 
 
+Virtualization
+++++++++++++++
+
+Some transports support virtual interfaces that can be used for testing and experimentation
+instead of real physical connections.
+For example, the CAN transport supports virtual CAN buses via SocketCAN,
+and the serial transport supports TCP/IP tunneling and local loopback mode.
+Read the API documentation for more information about these features.
+
+
 DSDL support
 ------------
 

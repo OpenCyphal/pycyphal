@@ -50,6 +50,7 @@ class Presentation:
         self._transport = transport
         self._closed = False
         self._emitted_transfer_id_map: typing.Dict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = {}
+        # For services, the session is the input session.
         self._registry: typing.Dict[typing.Tuple[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
                                                  pyuavcan.transport.SessionSpecifier],
                                     Closable] = {}
@@ -203,29 +204,32 @@ class Presentation:
         def transfer_id_modulo_factory() -> int:
             return self._transport.protocol_parameters.transfer_id_modulo
 
-        data_specifier = pyuavcan.transport.ServiceDataSpecifier(
-            service_id=service_id,
-            role=pyuavcan.transport.ServiceDataSpecifier.Role.CLIENT
+        input_session_specifier = pyuavcan.transport.SessionSpecifier(
+            pyuavcan.transport.ServiceDataSpecifier(service_id, pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE),
+            server_node_id
         )
-        session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, server_node_id)
+        output_session_specifier = pyuavcan.transport.SessionSpecifier(
+            pyuavcan.transport.ServiceDataSpecifier(service_id, pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST),
+            server_node_id
+        )
         try:
-            impl = self._registry[Client, session_specifier]
+            impl = self._registry[Client, input_session_specifier]
             assert isinstance(impl, ClientImpl)
         except LookupError:
-            output_transport_session = self._transport.get_output_session(session_specifier,
+            output_transport_session = self._transport.get_output_session(output_session_specifier,
                                                                           self._make_payload_metadata(dtype.Request))
-            input_transport_session = self._transport.get_input_session(session_specifier,
+            input_transport_session = self._transport.get_input_session(input_session_specifier,
                                                                         self._make_payload_metadata(dtype.Response))
-            transfer_id_counter = self._emitted_transfer_id_map.setdefault(session_specifier,
+            transfer_id_counter = self._emitted_transfer_id_map.setdefault(output_session_specifier,
                                                                            OutgoingTransferIDCounter())
             impl = ClientImpl(dtype=dtype,
                               input_transport_session=input_transport_session,
                               output_transport_session=output_transport_session,
                               transfer_id_counter=transfer_id_counter,
                               transfer_id_modulo_factory=transfer_id_modulo_factory,
-                              finalizer=self._make_finalizer(Client, session_specifier),
+                              finalizer=self._make_finalizer(Client, input_session_specifier),
                               loop=self.loop)
-            self._registry[Client, session_specifier] = impl
+            self._registry[Client, input_session_specifier] = impl
 
         assert isinstance(impl, ClientImpl)
         return Client(impl=impl, loop=self.loop)
@@ -252,27 +256,27 @@ class Presentation:
 
         def output_transport_session_factory(client_node_id: int) -> pyuavcan.transport.OutputSession:
             _logger.info('%r has requested a new output session to client node %s', impl, client_node_id)
-            return self._transport.get_output_session(specifier=pyuavcan.transport.SessionSpecifier(data_specifier,
-                                                                                                    client_node_id),
+            ds = pyuavcan.transport.ServiceDataSpecifier(service_id,
+                                                         pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE)
+            return self._transport.get_output_session(specifier=pyuavcan.transport.SessionSpecifier(ds, client_node_id),
                                                       payload_metadata=self._make_payload_metadata(dtype.Response))
 
-        data_specifier = pyuavcan.transport.ServiceDataSpecifier(
-            service_id=service_id,
-            role=pyuavcan.transport.ServiceDataSpecifier.Role.SERVER
+        input_session_specifier = pyuavcan.transport.SessionSpecifier(
+            pyuavcan.transport.ServiceDataSpecifier(service_id, pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST),
+            None
         )
-        session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
         try:
-            impl = self._registry[Server, session_specifier]
+            impl = self._registry[Server, input_session_specifier]
             assert isinstance(impl, Server)
         except LookupError:
-            input_transport_session = self._transport.get_input_session(session_specifier,
+            input_transport_session = self._transport.get_input_session(input_session_specifier,
                                                                         self._make_payload_metadata(dtype.Request))
             impl = Server(dtype=dtype,
                           input_transport_session=input_transport_session,
                           output_transport_session_factory=output_transport_session_factory,
-                          finalizer=self._make_finalizer(Server, session_specifier),
+                          finalizer=self._make_finalizer(Server, input_session_specifier),
                           loop=self.loop)
-            self._registry[Server, session_specifier] = impl
+            self._registry[Server, input_session_specifier] = impl
 
         assert isinstance(impl, Server)
         return impl
@@ -333,28 +337,6 @@ class Presentation:
         self._closed = True
         self._transport.close()
 
-    @property
-    def sessions(self) -> typing.Sequence[typing.Tuple[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
-                                                       pyuavcan.transport.SessionSpecifier]]:
-        """
-        An immutable view of session specifiers whose sessions are currently open.
-
-        Neither :class:`pyuavcan.transport.DataSpecifier` nor :class:`pyuavcan.transport.SessionSpecifier`
-        provide sufficient information to uniquely identify a presentation-level session, because the transport
-        layer makes no distinction between publication and subscription on the wire. It makes sense because
-        one node's publication is another node's subscription. Read the specification for background.
-
-        Locally, however, we should be able to distinguish publishers from subscribers because in the context
-        of local node the difference matters.
-        So we amend each session specifier with the presentation session type to enable such distinction.
-        One could think that returning the sessions themselves would be easier,
-        but that would interfere with the RAII paradigm, and weak references are too cumbersome to deal with.
-
-        At the time of writing Sphinx could not display the type information for properties, so here it is:
-        ``Sequence[Tuple[Type[PresentationSession], pyuavcan.transport.SessionSpecifier]]``.
-        """
-        return list(self._registry.keys()) if not self._closed else []
-
     def _make_finalizer(self,
                         session_type:      typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
                         session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
@@ -402,4 +384,11 @@ class Presentation:
         return port_id
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, self.transport, sessions=self.sessions)
+        return pyuavcan.util.repr_attributes(
+            self,
+            self.transport,
+            num_publishers=sum(1 for t, _ in self._registry if isinstance(t, Publisher)),
+            num_subscribers=sum(1 for t, _ in self._registry if isinstance(t, Subscriber)),
+            num_clients=sum(1 for t, _ in self._registry if isinstance(t, Client)),
+            num_servers=sum(1 for t, _ in self._registry if isinstance(t, Server)),
+        )

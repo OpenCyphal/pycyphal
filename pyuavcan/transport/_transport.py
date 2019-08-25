@@ -29,6 +29,16 @@ class ProtocolParameters:
     single_frame_transfer_payload_capacity_bytes: int   #: E.g., 7 for CAN 2.0, <=63 for CAN FD.
 
 
+@dataclasses.dataclass
+class TransportStatistics:
+    """
+    Base class for transport-specific low-level statistical counters.
+    Not to be confused with :class:`pyuavcan.transport.SessionStatistics`,
+    which is updated per-session.
+    """
+    pass
+
+
 class Transport(abc.ABC):
     """
     An abstract UAVCAN transport interface. Please read the module documentation for details.
@@ -114,6 +124,15 @@ class Transport(abc.ABC):
         specifier, in which case it will be created and stored internally until closed.
         The payload metadata parameter is used only when a new instance is created, ignored otherwise.
         Implementations are encouraged to use a covariant return type annotation.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def sample_statistics(self) -> TransportStatistics:
+        """
+        Samples the low-level transport stats.
+        The returned object shall be new or cloned (should not refer to an internal field).
+        Implementations should annotate the return type as a derived custom type.
         """
         raise NotImplementedError
 

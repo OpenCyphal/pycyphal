@@ -62,9 +62,9 @@ class InputDispatchTable:
         if isinstance(ds, MessageDataSpecifier):
             dim1 = ds.subject_id
         elif isinstance(ds, ServiceDataSpecifier):
-            if ds.role == ds.Role.CLIENT:
+            if ds.role == ds.Role.REQUEST:
                 dim1 = ds.service_id + InputDispatchTable._NUM_SUBJECTS
-            elif ds.role == ds.Role.SERVER:
+            elif ds.role == ds.Role.RESPONSE:
                 dim1 = ds.service_id + InputDispatchTable._NUM_SUBJECTS + InputDispatchTable._NUM_SERVICES
             else:
                 assert False

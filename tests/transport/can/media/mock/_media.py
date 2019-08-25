@@ -142,7 +142,7 @@ class MockMedia(_media.Media):
 
     @staticmethod
     def list_available_interface_names() -> typing.Iterable[str]:
-        return ['mock']
+        return ['mock']  # pragma: no cover
 
     @staticmethod
     def _make_dead_filter() -> _media.FilterConfiguration:

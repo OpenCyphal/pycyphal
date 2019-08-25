@@ -14,9 +14,10 @@ import asyncio
 import tempfile
 import importlib
 import pyuavcan
-# Explicitly import transports and media sub-layers that we're going to use.
+# Explicitly import transports and media sub-layers that we may need here.
 import pyuavcan.transport.can
 import pyuavcan.transport.can.media.socketcan
+import pyuavcan.transport.serial
 
 # We will need a directory to store the generated Python packages in.
 #
@@ -71,7 +72,20 @@ import uavcan.si.temperature    # noqa E402
 
 class DemoApplication:
     def __init__(self):
-        if sys.platform == 'linux':
+        # The interface to run the demo against is selected via the environment variable with a default option provided.
+        # Virtual CAN bus is supported only on GNU/Linux, but other interfaces used here should be compatible
+        # with at least Windows and macOS.
+        # Frankly, the main reason we need this here is to simplify automatic testing of this demo script.
+        # Feel free to remove the selection logic and just hard-code whatever interface you need.
+        interface_kind = os.environ.get('DEMO_INTERFACE_KIND', '').lower()
+        if interface_kind == 'serial' or not interface_kind:  # This is the default.
+            # For demo purposes we're using not an actual serial port (which could have been specified like "COM9"
+            # for example) but a virtualized TCP/IP tunnel. The background is explained in the API documentation
+            # for the serial transport, please read that. For a quick start, just install Ncat (part of Nmap) and run:
+            #   ncat --broker --listen -p 50905
+            transport = pyuavcan.transport.serial.SerialTransport('socket://localhost:50905')
+
+        elif interface_kind == 'can':
             # Make sure to initialize the virtual CAN interface. For example (run as root):
             #   modprobe vcan
             #   ip link add dev vcan0 type vcan
@@ -84,11 +98,8 @@ class DemoApplication:
             media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=8)
             transport = pyuavcan.transport.can.CANTransport(media)
 
-        elif 'win' in sys.platform:
-            raise RuntimeError('This demo does not yet support MS Windows; please submit patches!')
-
         else:
-            raise RuntimeError(f'Unknown platform: {sys.platform!r}')
+            raise RuntimeError(f'Unrecognized interface kind: {interface_kind}')
 
         # Populate the node info for use with the Node class. Please see the DSDL definition of uavcan.node.GetInfo.
         node_info = uavcan.node.GetInfo_1_0.Response(

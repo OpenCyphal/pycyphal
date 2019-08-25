@@ -88,7 +88,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         raise NotImplementedError
 
-    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+    def sample_statistics(self) -> pyuavcan.transport.SessionStatistics:
         raise NotImplementedError
 
     def close(self) -> None:
@@ -119,7 +119,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         raise NotImplementedError
 
-    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+    def sample_statistics(self) -> pyuavcan.transport.SessionStatistics:
         raise NotImplementedError
 
     def close(self) -> None:

@@ -170,7 +170,7 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
                             priority:           pyuavcan.transport.Priority,
                             monotonic_deadline: float) -> bool:
         if not isinstance(message, self.dtype):
-            raise ValueError(f'Expected a message object of type {self.dtype}, found this: {message}')
+            raise TypeError(f'Expected a message object of type {self.dtype}, found this: {message}')
 
         async with self._lock:
             self._raise_if_closed()

@@ -74,14 +74,18 @@ def _make_arg_sequence_parser(*type_default_pairs: typing.Tuple[typing.Type[obje
 
 
 def _add_args_for_can(parser: argparse.ArgumentParser) -> None:
-    from pyuavcan.transport.can import CANTransport
-    from pyuavcan.transport.can.media.socketcan import SocketCANMedia
-
     socketcan_parser = _make_arg_sequence_parser((str, ''), (int, 64))
 
-    def construct_socketcan_transport(arg_seq: str) -> CANTransport:
-        iface_name, mtu = socketcan_parser(arg_seq)
-        return CANTransport(SocketCANMedia(iface_name, mtu=mtu))
+    def construct_socketcan_transport(arg_seq: str) -> pyuavcan.transport.Transport:
+        try:
+            # Do not import the transport outside of the factory! It slows down the application startup.
+            from pyuavcan.transport.can import CANTransport
+            from pyuavcan.transport.can.media.socketcan import SocketCANMedia
+            iface_name, mtu = socketcan_parser(arg_seq)
+            return CANTransport(SocketCANMedia(iface_name, mtu=mtu))
+        except Exception as ex:
+            _logger.error('Could not construct transport: %s', ex)
+            raise
 
     parser.add_argument(
         '--iface-can-socketcan', '--socketcan',
@@ -111,6 +115,54 @@ Examples:
 """.strip())
 
 
+def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
+    default_baud_rate = 115200
+
+    def construct_transport(arg_seq: str) -> pyuavcan.transport.Transport:
+        try:
+            # Do not import the transport outside of the factory! It slows down the application startup.
+            from pyuavcan.transport.serial import SerialTransport
+            seq_parser = _make_arg_sequence_parser(
+                (str, ''),
+                (int, default_baud_rate),
+                (int, SerialTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER),
+                (int, SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES),
+            )
+            serial_port_name, baud_rate, srv_mult, sft_payload_size = seq_parser(arg_seq)
+
+            import serial
+            serial_port = serial.serial_for_url(serial_port_name,
+                                                baudrate=baud_rate)
+
+            return SerialTransport(serial_port=serial_port,
+                                   service_transfer_multiplier=srv_mult,
+                                   single_frame_transfer_payload_capacity_bytes=sft_payload_size)
+        except Exception as ex:
+            _logger.error('Could not construct transport: %s', ex)
+            raise
+
+    parser.add_argument(
+        '--iface-serial', '--serial',
+        action='append',
+        dest='transport',
+        metavar='SERIAL_PORT_NAME[,BAUDRATE[,SERVICE_MULTIPLIER[,MTU]]]',
+        type=construct_transport,
+        help=f"""
+Use the serial transport. Arguments:
+    - Serial port name, string, mandatory; e.g.: "/dev/ttyACM0", "COM9".
+      PySerial URL are also supported; e.g., "socket://localhost:50905".
+      Read the PySerial documentation for more information.
+    - Baud rate, int; optional, defaults to {default_baud_rate}.
+    - Service multiplier, int; optional, defaults to 2. The service
+      multiplier specifies how many times every outgoing service transfer
+      will be repeated. This is a proactive data loss prevention measure
+      for unreliable links. Please read the serial transport documentation.
+    - Maximum transmission unit, int; optional, defaults to one kibibyte.
+The following parameters of the serial port are fixed and cannot be changed:
+8-bit characters, no parity check, one stop bit, flow control disabled.
+""".strip())
+
+
 def _add_args_for_loopback(parser: argparse.ArgumentParser) -> None:
     from pyuavcan.transport.loopback import LoopbackTransport
     parser.add_argument(
@@ -132,21 +184,14 @@ processes using this transport.
 #
 # TODO: This approach is fragile and does not scale well because it requires much manual coding per transport/media.
 #
-# Consider defining an URI scheme per transport, add a static factory method per transport implementation? Roughly:
-#   <transport>://<transport-specific initialization arguments>
-# For example:
-#   can:///dev/ttyACM0:slcan
-#   can://vcan0:socketcan?mtu=32
-#   serial:///dev/ttyACM0
-#
-# While generic and extensible, URI are hard to type manually, which harms usability. Not good. Should we search for a
-# middle ground solution that would combine the genericity of URI and conciseness of hand-coded arguments? We could,
-# perhaps, invent a custom spec string format? It could be as simple as a sequence of comma-separated parameters:
+# We could, perhaps, invent a custom spec string format?
+# It could be as simple as a sequence of comma-separated parameters:
 #   can,socketcan,/dev/ttyACM0,64
 # The spec string could be made a valid YAML string by adding square brackets on either side, so that quoted strings
 # could be used:
 #   can,socketcan,"~/serial-port-name,with-comma",64
 _INITIALIZERS: typing.Sequence[typing.Callable[[argparse.ArgumentParser], None]] = [
     _add_args_for_can,
+    _add_args_for_serial,
     _add_args_for_loopback,
 ]

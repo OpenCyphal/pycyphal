@@ -129,7 +129,7 @@ def update_from_builtin(destination: CompositeObjectTypeVar,
     source = dict(source)   # Create copy to prevent mutation of the original
 
     if not isinstance(destination, CompositeObject):  # pragma: no cover
-        raise ValueError(f'Bad destination: expected a CompositeObject, got {type(destination).__name__}')
+        raise TypeError(f'Bad destination: expected a CompositeObject, got {type(destination).__name__}')
 
     model = get_model(destination)
     _raise_if_service_type(model)
@@ -172,5 +172,5 @@ def update_from_builtin(destination: CompositeObjectTypeVar,
 
 def _raise_if_service_type(model: pydsdl.SerializableType) -> None:
     if isinstance(model, pydsdl.ServiceType):  # pragma: no cover
-        raise ValueError(f'Built-in form is not defined for service types. '
-                         f'Did you mean to use Request or Response? Input type: {model}')
+        raise TypeError(f'Built-in form is not defined for service types. '
+                        f'Did you mean to use Request or Response? Input type: {model}')

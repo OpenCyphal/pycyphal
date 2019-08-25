@@ -8,6 +8,8 @@ import time
 import typing
 import pytest
 import pyuavcan.transport
+# Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
+from pyuavcan.transport import can
 
 
 _RX_TIMEOUT = 10e-3
@@ -16,7 +18,7 @@ _RX_TIMEOUT = 10e-3
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_can_transport() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
-    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, can, Statistics, Timestamp
+    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
     from pyuavcan.transport import InvalidTransportConfigurationError, OperationNotDefinedForAnonymousNodeError
     from pyuavcan.transport import ResourceClosedError, SessionSpecifier
     # noinspection PyProtectedMember
@@ -60,7 +62,7 @@ async def _unittest_can_transport() -> None:
     meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't broadcast service calls
-        tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.SERVER), None),
+        tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE), None),
                               meta)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't unicast messages
@@ -76,24 +78,24 @@ async def _unittest_can_transport() -> None:
     assert subscriber_selective is tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
 
     server_listener = tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
     assert server_listener is tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
 
     server_responder = tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
     assert server_responder is tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
 
     client_requester = tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta)
     assert client_requester is tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta)
 
     client_listener = tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
     assert client_listener is tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 123), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
 
     assert broadcaster.destination_node_id is None
     assert subscriber_promiscuous.source_node_id is None
@@ -119,8 +121,8 @@ async def _unittest_can_transport() -> None:
     collector = FrameCollector()
     peeper.set_received_frames_handler(collector.give)
 
-    assert tr.sample_frame_statistics() == can.CANFrameStatistics()
-    assert tr2.sample_frame_statistics() == can.CANFrameStatistics()
+    assert tr.sample_statistics() == can.CANTransportStatistics()
+    assert tr2.sample_statistics() == can.CANTransportStatistics()
 
     ts = Timestamp.now()
 
@@ -135,14 +137,14 @@ async def _unittest_can_transport() -> None:
         transfer_id=32 + 11,            # Modulus 11
         fragmented_payload=[_mem('abc'), _mem('def')]
     ), tr.loop.time() + 1.0)
-    assert broadcaster.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=6)
+    assert broadcaster.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
 
-    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=1)
-    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(received=1, received_uavcan=1)
-    assert tr.sample_frame_statistics().media_acceptance_filtering_efficiency == pytest.approx(1)
-    assert tr2.sample_frame_statistics().media_acceptance_filtering_efficiency == pytest.approx(0)
-    assert tr.sample_frame_statistics().lost_loopback == 0
-    assert tr2.sample_frame_statistics().lost_loopback == 0
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=1)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=1, in_frames_uavcan=1)
+    assert tr.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(1)
+    assert tr2.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(0)
+    assert tr.sample_statistics().lost_loopback_frames == 0
+    assert tr2.sample_statistics().lost_loopback_frames == 0
 
     assert collector.pop().is_same_manifestation(UAVCANFrame(
         identifier=MessageCANID(Priority.IMMEDIATE, None, 12345).compile([_mem('abcdef')]),  # payload fragments joined
@@ -161,7 +163,7 @@ async def _unittest_can_transport() -> None:
             Transfer(timestamp=ts, priority=Priority.IMMEDIATE, transfer_id=0, fragmented_payload=[]),
             tr.loop.time() + 1.0,
         )
-    assert client_requester.sample_statistics() == Statistics()   # Not incremented!
+    assert client_requester.sample_statistics() == SessionStatistics()   # Not incremented!
 
     # Can't send multiframe anonymous messages
     with pytest.raises(OperationNotDefinedForAnonymousNodeError):
@@ -185,11 +187,11 @@ async def _unittest_can_transport() -> None:
         transfer_id=32 + 11,            # Modulus 11
         fragmented_payload=[_mem('abc'), _mem('def')]
     ), tr.loop.time() + 1.0)
-    assert broadcaster.sample_statistics() == Statistics(transfers=2, frames=2, payload_bytes=12)
+    assert broadcaster.sample_statistics() == SessionStatistics(transfers=2, frames=2, payload_bytes=12)
 
-    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=2)
-    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
-        received=2, received_uavcan=2, received_uavcan_accepted=1)
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=2)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(
+        in_frames=2, in_frames_uavcan=2, in_frames_uavcan_accepted=1)
 
     received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -200,9 +202,9 @@ async def _unittest_can_transport() -> None:
     assert is_timestamp_valid(received.timestamp)
     assert received.fragmented_payload == [_mem('abcdef')]
 
-    assert selective_m12345_5.sample_statistics() == Statistics()       # Nothing
-    assert selective_m12345_9.sample_statistics() == Statistics()       # Nothing
-    assert promiscuous_m12345.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=6)
+    assert selective_m12345_5.sample_statistics() == SessionStatistics()       # Nothing
+    assert selective_m12345_9.sample_statistics() == SessionStatistics()       # Nothing
+    assert promiscuous_m12345.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
 
     assert not media.automatic_retransmission_enabled
     assert not media2.automatic_retransmission_enabled
@@ -227,12 +229,14 @@ async def _unittest_can_transport() -> None:
         transfer_id=2,
         fragmented_payload=[_mem('qwe'), _mem('rty')] * 50  # Lots of data here, very multiframe
     ), tr.loop.time() + 1.0)
-    assert broadcaster.sample_statistics() == Statistics(transfers=3, frames=7, payload_bytes=312)
+    assert broadcaster.sample_statistics() == SessionStatistics(transfers=3, frames=7, payload_bytes=312)
     broadcaster.disable_feedback()
 
-    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=7, loopback_requested=1, loopback_returned=1)
-    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
-        received=7, received_uavcan=7, received_uavcan_accepted=6)
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=7,
+                                                                out_frames_loopback=1,
+                                                                in_frames_loopback=1)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(
+        in_frames=7, in_frames_uavcan=7, in_frames_uavcan_accepted=6)
 
     fb = feedback_collector.take()
     assert fb.original_transfer_timestamp == ts
@@ -253,7 +257,7 @@ async def _unittest_can_transport() -> None:
         transfer_id=3,
         fragmented_payload=[_mem('qwe'), _mem('rty')]
     ), tr.loop.time() + 1.0)
-    assert broadcaster.sample_statistics() == Statistics(transfers=4, frames=8, payload_bytes=318)
+    assert broadcaster.sample_statistics() == SessionStatistics(transfers=4, frames=8, payload_bytes=318)
 
     received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -264,11 +268,13 @@ async def _unittest_can_transport() -> None:
     assert is_timestamp_valid(received.timestamp)
     assert list(received.fragmented_payload) == [_mem('qwerty')]
 
-    assert promiscuous_m12345.sample_statistics() == Statistics(transfers=3, frames=7, payload_bytes=325)
+    assert promiscuous_m12345.sample_statistics() == SessionStatistics(transfers=3, frames=7, payload_bytes=325)
 
-    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=8, loopback_requested=1, loopback_returned=1)
-    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
-        received=8, received_uavcan=8, received_uavcan_accepted=7)
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=8,
+                                                                out_frames_loopback=1,
+                                                                in_frames_loopback=1)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(
+        in_frames=8, in_frames_uavcan=8, in_frames_uavcan_accepted=7)
 
     broadcaster.close()
     with pytest.raises(ResourceClosedError):
@@ -300,24 +306,24 @@ async def _unittest_can_transport() -> None:
     assert is_timestamp_valid(received.timestamp)
     assert list(received.fragmented_payload) == [_mem('qwerty')]
 
-    assert selective_m12345_5.sample_statistics() == Statistics(transfers=2, frames=6, payload_bytes=319)
+    assert selective_m12345_5.sample_statistics() == SessionStatistics(transfers=2, frames=6, payload_bytes=319)
 
     #
     # Unicast exchange test
     #
     selective_server_s333_5 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 5), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 5), meta)
     selective_server_s333_9 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), 9), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 9), meta)
     promiscuous_server_s333 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.SERVER), None), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
 
     selective_client_s333_5 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 5), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 5), meta)
     selective_client_s333_9 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), 9), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 9), meta)
     promiscuous_client_s333 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.CLIENT), None), meta)
+        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), None), meta)
 
     # No one is listening, this one will be lost.
     assert await client_requester.send_until(Transfer(
@@ -326,21 +332,21 @@ async def _unittest_can_transport() -> None:
         transfer_id=11,
         fragmented_payload=[]
     ), tr.loop.time() + 1.0)
-    assert client_requester.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=0)
+    assert client_requester.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=0)
 
     assert (await selective_server_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert (await selective_server_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert (await promiscuous_server_s333.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert selective_server_s333_5.sample_statistics() == Statistics()
-    assert selective_server_s333_9.sample_statistics() == Statistics()
-    assert promiscuous_server_s333.sample_statistics() == Statistics()
+    assert selective_server_s333_5.sample_statistics() == SessionStatistics()
+    assert selective_server_s333_9.sample_statistics() == SessionStatistics()
+    assert promiscuous_server_s333.sample_statistics() == SessionStatistics()
 
     assert (await selective_client_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert (await selective_client_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert (await promiscuous_client_s333.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert selective_client_s333_5.sample_statistics() == Statistics()
-    assert selective_client_s333_9.sample_statistics() == Statistics()
-    assert promiscuous_client_s333.sample_statistics() == Statistics()
+    assert selective_client_s333_5.sample_statistics() == SessionStatistics()
+    assert selective_client_s333_9.sample_statistics() == SessionStatistics()
+    assert promiscuous_client_s333.sample_statistics() == SessionStatistics()
 
     assert media.automatic_retransmission_enabled
     assert not media2.automatic_retransmission_enabled
@@ -364,7 +370,7 @@ async def _unittest_can_transport() -> None:
             transfer_id=12,
             fragmented_payload=[]
         ), tr.loop.time() + 1.0)
-    assert client_requester.sample_statistics() == Statistics(transfers=1, frames=1, payload_bytes=0, errors=1)
+    assert client_requester.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=0, errors=1)
 
     # Some malformed feedback frames which will be ignored
     media.inject_received([UAVCANFrame(
@@ -411,7 +417,7 @@ async def _unittest_can_transport() -> None:
         ]
     ), tr.loop.time() + 1.0)
     client_requester.disable_feedback()
-    assert client_requester.sample_statistics() == Statistics(transfers=2, frames=8, payload_bytes=438, errors=2)
+    assert client_requester.sample_statistics() == SessionStatistics(transfers=2, frames=8, payload_bytes=438, errors=2)
 
     # The feedback is disabled, but we will send a valid loopback frame anyway to make sure it is silently ignored
     media.inject_received([UAVCANFrame(
@@ -467,14 +473,17 @@ async def _unittest_can_transport() -> None:
     assert (await selective_client_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert (await selective_client_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert (await promiscuous_client_s333.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert selective_client_s333_5.sample_statistics() == Statistics()
-    assert selective_client_s333_9.sample_statistics() == Statistics()
-    assert promiscuous_client_s333.sample_statistics() == Statistics()
+    assert selective_client_s333_5.sample_statistics() == SessionStatistics()
+    assert selective_client_s333_9.sample_statistics() == SessionStatistics()
+    assert promiscuous_client_s333.sample_statistics() == SessionStatistics()
 
     # Final transport stats check; additional loopback frames are due to our manual tests above
-    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16, loopback_requested=2, loopback_returned=5)
-    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(
-        received=15, received_uavcan=15, received_uavcan_accepted=14)
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=16,
+                                                                out_frames_loopback=2,
+                                                                in_frames_loopback=5)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=15,
+                                                                 in_frames_uavcan=15,
+                                                                 in_frames_uavcan_accepted=14)
 
     #
     # Drop non-UAVCAN frames silently
@@ -511,14 +520,14 @@ async def _unittest_can_transport() -> None:
         loopback=True).compile()
     ])
 
-    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16,
-                                                                  received=2,
-                                                                  loopback_requested=2,
-                                                                  loopback_returned=6)
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=16,
+                                                                in_frames=2,
+                                                                out_frames_loopback=2,
+                                                                in_frames_loopback=6)
 
-    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(received=15,
-                                                                   received_uavcan=15,
-                                                                   received_uavcan_accepted=14)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=15,
+                                                                 in_frames_uavcan=15,
+                                                                 in_frames_uavcan_accepted=14)
 
     #
     # Reception logic test.
@@ -557,17 +566,17 @@ async def _unittest_can_transport() -> None:
         ]
     ), tr.loop.time() + 1.0)
 
-    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16,
-                                                                  received=4,
-                                                                  received_uavcan=2,
-                                                                  received_uavcan_accepted=2,
-                                                                  loopback_requested=2,
-                                                                  loopback_returned=6)
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=16,
+                                                                in_frames=4,
+                                                                in_frames_uavcan=2,
+                                                                in_frames_uavcan_accepted=2,
+                                                                out_frames_loopback=2,
+                                                                in_frames_loopback=6)
 
-    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(sent=2,
-                                                                   received=15,
-                                                                   received_uavcan=15,
-                                                                   received_uavcan_accepted=14)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(out_frames=2,
+                                                                 in_frames=15,
+                                                                 in_frames_uavcan=15,
+                                                                 in_frames_uavcan_accepted=14)
 
     received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -588,9 +597,9 @@ async def _unittest_can_transport() -> None:
     assert bytes(received.fragmented_payload[-1]).rstrip(b'\x55').endswith(b'out of his mind.')
 
     assert subscriber_selective.sample_statistics() == subscriber_promiscuous.sample_statistics()
-    assert subscriber_promiscuous.sample_statistics() == Statistics(transfers=1,
-                                                                    frames=2,
-                                                                    payload_bytes=124)  # Includes padding!
+    assert subscriber_promiscuous.sample_statistics() == SessionStatistics(transfers=1,
+                                                                           frames=2,
+                                                                           payload_bytes=124)  # Includes padding!
 
     assert await pub_m2222.send_until(Transfer(
         timestamp=ts,
@@ -599,17 +608,17 @@ async def _unittest_can_transport() -> None:
         fragmented_payload=[]
     ), tr.loop.time() + 1.0)
 
-    assert tr.sample_frame_statistics() == can.CANFrameStatistics(sent=16,
-                                                                  received=5,
-                                                                  received_uavcan=3,
-                                                                  received_uavcan_accepted=3,
-                                                                  loopback_requested=2,
-                                                                  loopback_returned=6)
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=16,
+                                                                in_frames=5,
+                                                                in_frames_uavcan=3,
+                                                                in_frames_uavcan_accepted=3,
+                                                                out_frames_loopback=2,
+                                                                in_frames_loopback=6)
 
-    assert tr2.sample_frame_statistics() == can.CANFrameStatistics(sent=3,
-                                                                   received=15,
-                                                                   received_uavcan=15,
-                                                                   received_uavcan_accepted=14)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(out_frames=3,
+                                                                 in_frames=15,
+                                                                 in_frames_uavcan=15,
+                                                                 in_frames_uavcan_accepted=14)
 
     received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -620,16 +629,18 @@ async def _unittest_can_transport() -> None:
     assert is_timestamp_valid(received.timestamp)
     assert b''.join(received.fragmented_payload) == b''
 
-    assert subscriber_promiscuous.sample_statistics() == Statistics(transfers=2,
-                                                                    frames=3,
-                                                                    payload_bytes=124)
+    assert subscriber_promiscuous.sample_statistics() == SessionStatistics(transfers=2,
+                                                                           frames=3,
+                                                                           payload_bytes=124)
 
     # Discarded because of the same transfer ID
     assert (await subscriber_selective.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
-                                                                  frames=3,
-                                                                  payload_bytes=124,
-                                                                  errors=1)     # Error due to the repeated transfer ID
+    assert subscriber_selective.sample_statistics() == SessionStatistics(
+        transfers=1,
+        frames=3,
+        payload_bytes=124,
+        errors=1            # Error due to the repeated transfer ID
+    )
 
     assert await pub_m2222.send_until(Transfer(
         timestamp=ts,
@@ -655,17 +666,17 @@ async def _unittest_can_transport() -> None:
         b'c' * 63,
         b'd' * 62,
     ]
-    assert subscriber_promiscuous.sample_statistics() == Statistics(transfers=3,
-                                                                    frames=8,
-                                                                    payload_bytes=375)
+    assert subscriber_promiscuous.sample_statistics() == SessionStatistics(transfers=3,
+                                                                           frames=8,
+                                                                           payload_bytes=375)
 
     # The selective one is unable to do so since its RX queue is too small; it is reflected in the error counter
     assert (await subscriber_selective.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert subscriber_selective.sample_statistics() == Statistics(transfers=1,
-                                                                  frames=5,
-                                                                  payload_bytes=124,
-                                                                  errors=1,
-                                                                  drops=3)  # Overruns!
+    assert subscriber_selective.sample_statistics() == SessionStatistics(transfers=1,
+                                                                         frames=5,
+                                                                         payload_bytes=124,
+                                                                         errors=1,
+                                                                         drops=3)  # Overruns!
 
     #
     # Finalization.

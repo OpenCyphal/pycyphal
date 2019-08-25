@@ -31,10 +31,10 @@ _logger = logging.getLogger(__name__)
 @dataclasses.dataclass
 class ServerStatistics:
     #: There is only one input transport session per server.
-    request_transport_session:   pyuavcan.transport.Statistics
+    request_transport_session:   pyuavcan.transport.SessionStatistics
 
     #: This is a mapping keyed by the remote client node-ID value. One transport session per client.
-    response_transport_sessions: typing.Dict[int, pyuavcan.transport.Statistics]
+    response_transport_sessions: typing.Dict[int, pyuavcan.transport.SessionStatistics]
 
     served_requests:             int
     deserialization_failures:    int    #: Requests that could not be received because of bad input transfers.
@@ -166,7 +166,7 @@ class Server(ServicePresentationSession[ServiceClass]):
             try:
                 response = await handler(request, meta)  # type: ignore
                 if response is not None and not isinstance(response, self._dtype.Response):
-                    raise ValueError(
+                    raise TypeError(
                         f'The application request handler has returned an invalid response: '
                         f'expected an instance of {self._dtype.Response} or None, '
                         f'found {type(response)} instead. '

@@ -14,7 +14,7 @@ before_script:
   - echo $extras_pkg
 
   # Graphviz is needed for documentation build.
-  - sudo apt-get install $extras_pkg graphviz
+  - sudo apt-get install $extras_pkg graphviz nmap
 
   # Intentionally removed from requirements.txt because it's only useful in the CI environment.
   - pip install coveralls

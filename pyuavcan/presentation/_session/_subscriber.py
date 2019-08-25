@@ -29,7 +29,7 @@ ReceivedMessageHandler = typing.Callable[[MessageClass, pyuavcan.transport.Trans
 
 @dataclasses.dataclass
 class SubscriberStatistics:
-    transport_session:        pyuavcan.transport.Statistics  #: Shared for all subscribers with same session specifier.
+    transport_session:        pyuavcan.transport.SessionStatistics  #: Shared per session specifier.
     messages:                 int  #: Number of received messages, individual per subscriber.
     overruns:                 int  #: Number of messages lost to queue overruns; individual per subscriber.
     deserialization_failures: int  #: Number of messages lost to deserialization errors; shared per session specifier.

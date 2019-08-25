@@ -94,7 +94,7 @@ def _unittest_slow_random(generated_packages: typing.List[pyuavcan.dsdl.Generate
                     f'At least one random sample must be valid. ' \
                     f'Either the tested code is incorrect, or the number of random samples is too low. ' \
                     f'Failed type: {ty}'
-            else:
+            else:  # pragma: no cover
                 _logger.warning('Statistical checks skipped because the number of samples is low.')
     finally:
         pyuavcan_logger.setLevel(original_logging_level)

@@ -4,11 +4,14 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import typing
+import pytest
 from ._subprocess import run_process, BackgroundChildProcess
-from ._common_args import make_iface_args
+from . import TRANSPORT_ARGS_OPTIONS
 
 
-def _unittest_slow_cli_pick_nid() -> None:
+@pytest.mark.parametrize('transport_args', TRANSPORT_ARGS_OPTIONS)  # type: ignore
+def _unittest_slow_cli_pick_nid(transport_args: typing.Sequence[str]) -> None:
     # Stupid unconstrained test.
     result = run_process('pyuavcan', '-v', 'pick-nid', '--loopback', timeout=5.0)
     print('pick-nid result:', result)
@@ -20,10 +23,10 @@ def _unittest_slow_cli_pick_nid() -> None:
     used_node_ids = list(range(20))
     pubs = [
         BackgroundChildProcess('pyuavcan', 'pub', '--period=0.3', '--count=100', f'--local-node-id={idx}',
-                               *make_iface_args())
+                               *transport_args)
         for idx in used_node_ids
     ]
-    result = run_process('pyuavcan', '-v', 'pick-nid', *make_iface_args(), timeout=60.0)
+    result = run_process('pyuavcan', '-v', 'pick-nid', *transport_args, timeout=60.0)
     print('pick-nid result:', result)
     assert int(result) not in used_node_ids
     for p in pubs:

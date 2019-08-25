@@ -211,7 +211,7 @@ def _make_serialization_alignment_prefix(offset: pydsdl.BitLengthSet) -> str:
     if isinstance(offset, pydsdl.BitLengthSet):
         return 'aligned' if offset.is_aligned_at_byte() else 'unaligned'
     else:  # pragma: no cover
-        raise ValueError(f'Expected BitLengthSet, got {type(offset).__name__}')
+        raise TypeError(f'Expected BitLengthSet, got {type(offset).__name__}')
 
 
 def _pickle_object(x: typing.Any) -> str:
@@ -264,7 +264,7 @@ def _test_if_saturated(t: pydsdl.PrimitiveType) -> bool:
             pydsdl.PrimitiveType.CastMode.TRUNCATED: False,
         }[t.cast_mode]
     else:  # pragma: no cover
-        raise ValueError(f'Cast mode is not defined for {type(t).__name__}')
+        raise TypeError(f'Cast mode is not defined for {type(t).__name__}')
 
 
 def _construct_instance_tests_from_root(root: typing.Type[object]) \

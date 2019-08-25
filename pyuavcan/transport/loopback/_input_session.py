@@ -23,7 +23,7 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
         self._loop = loop
         self._closer = closer
         self._transfer_id_timeout = float(self.DEFAULT_TRANSFER_ID_TIMEOUT)
-        self._stats = pyuavcan.transport.Statistics()
+        self._stats = pyuavcan.transport.SessionStatistics()
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue(loop=loop)
         super(LoopbackInputSession, self).__init__()
 
@@ -72,7 +72,7 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         return self._payload_metadata
 
-    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+    def sample_statistics(self) -> pyuavcan.transport.SessionStatistics:
         return self._stats
 
     def close(self) -> None:

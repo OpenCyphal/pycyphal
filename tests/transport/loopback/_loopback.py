@@ -67,7 +67,7 @@ async def _unittest_loopback_transport() -> None:
     assert last_feedback.first_frame_transmission_timestamp == ts
     del ts
 
-    assert out_123.sample_statistics() == pyuavcan.transport.Statistics(
+    assert out_123.sample_statistics() == pyuavcan.transport.SessionStatistics(
         transfers=1,
         frames=1,
         payload_bytes=len('Hello world!'),
@@ -127,7 +127,7 @@ async def _unittest_loopback_transport() -> None:
     assert rx.fragmented_payload == [memoryview(b'Hello world!')]
     assert rx.source_node_id == tr.local_node_id
 
-    assert inp_42.sample_statistics() == pyuavcan.transport.Statistics(
+    assert inp_42.sample_statistics() == pyuavcan.transport.SessionStatistics(
         transfers=1,
         frames=1,
         payload_bytes=len('Hello world!'),
@@ -149,10 +149,10 @@ async def _unittest_loopback_transport_service() -> None:
     tr = pyuavcan.transport.loopback.LoopbackTransport()
     tr.set_local_node_id(1234)
 
-    inp = tr.get_input_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.SERVER), 1234),
+    inp = tr.get_input_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST), 1234),
                                payload_metadata)
 
-    out = tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.CLIENT), 1234),
+    out = tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST), 1234),
                                 payload_metadata)
 
     assert await out.send_until(pyuavcan.transport.Transfer(

@@ -34,6 +34,9 @@ and update the DSDL paths to match your environment.
 Evaluating the demo using the command-line tool
 -----------------------------------------------
 
+Generating data type packages from DSDL
++++++++++++++++++++++++++++++++++++++++
+
 First, we need to make sure that the required DSDL-generated packages are available for the command-line tool.
 Suppose that the application-specific data types listed above are located at ``../dsdl/namespaces/``,
 and that instead of using a local copy of the public regulated data types we prefer to download it from the
@@ -46,33 +49,41 @@ repository. This is the command:
 That's it. If you want to know what exactly has been done, rerun the command with ``-v`` (V for Verbose).
 
 The DSDL packages have been stored on your computer in a directory known to the CLI tool, so now we can use them.
+
+Configuring the transport
++++++++++++++++++++++++++
+
+The commands shown later have to be instructed to use the same transport interface as the demo.
+Please use one of the options depending on your demo configuration:
+
+- ``--serial=socket://loopback:50905`` -- TCP/IP-tunneled serial port connection (any major OS).
+- ``--socketcan=vcan0,8`` -- virtual CAN bus via SocketCAN (GNU/Linux systems only).
+
+Running the application
++++++++++++++++++++++++
+
 Start the demo application shown above and leave it running.
-In a new terminal, run the following commands to listen to the demo's heartbeat or its diagnostics:
+In a new terminal, run the following commands to listen to the demo's heartbeat or its diagnostics
+(don't forget to specify transport):
 
 .. code-block:: sh
 
-    uc sub uavcan.node.Heartbeat.1.0 --with-metadata --socketcan=vcan0 --count=3
-    uc sub uavcan.diagnostic.Record.1.0 --with-metadata --socketcan=vcan0
+    uc sub uavcan.node.Heartbeat.1.0 --with-metadata --count=3
+    uc sub uavcan.diagnostic.Record.1.0 --with-metadata
 
 The latter may not output anything because the demo application is not doing anything interesting,
-so it has nothing to report. Keep the command running, and open a yet another terminal, whereat run this:
+so it has nothing to report.
+Keep the command running, and open a yet another terminal, whereat run this:
 
 .. code-block:: sh
 
-    uc call 42 123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0 '{points: [{x: 10, y: 1}, {x: 20, y: 2}]}' --local-node-id=11 --socketcan=vcan0,8
-
-Observe that we have specified the interface as ``vcan0,8``. The number eight is important as it tells the CAN
-transport that it should use CAN 2.0 (where the maximum transmission unit is eight bytes per its specification).
-Use of CAN 2.0 is in turn important because our demo application is configured to use that protocol;
-per SocketCAN logic, an application that is configured to use CAN 2.0 can't receive CAN FD frames.
-This is just an implementation detail that is not really related to UAVCAN,
-but it is to the SocketCAN stack we're using in this example.
+    uc call 42 123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0 '{points: [{x: 10, y: 1}, {x: 20, y: 2}]}' --local-node-id=11
 
 Once you've executed the last command, you should see a diagnostic message being emitted in the other terminal.
 Now let's publish temperature:
 
 .. code-block:: sh
 
-    uc pub 12345.uavcan.si.temperature.Scalar.1.0 '{kelvin: 123.456}' --count=2 --socketcan=vcan0,8
+    uc pub 12345.uavcan.si.temperature.Scalar.1.0 '{kelvin: 123.456}' --count=2
 
 You will see the demo application emit two more diagnostic messages.

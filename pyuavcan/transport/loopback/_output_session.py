@@ -38,7 +38,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         self._loop = loop
         self._closer = closer
         self._router = router
-        self._stats = pyuavcan.transport.Statistics()
+        self._stats = pyuavcan.transport.SessionStatistics()
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
@@ -68,7 +68,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         return self._payload_metadata
 
-    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+    def sample_statistics(self) -> pyuavcan.transport.SessionStatistics:
         return self._stats
 
     def close(self) -> None:

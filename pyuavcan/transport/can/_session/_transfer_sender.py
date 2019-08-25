@@ -6,7 +6,7 @@
 
 import typing
 import itertools
-import pyuavcan.util
+import pyuavcan
 from .. import _frame
 
 
@@ -30,9 +30,9 @@ def serialize_transfer(compiled_identifier:     int,
     if payload_length <= max_frame_payload_bytes:               # SINGLE-FRAME TRANSFER
         if payload_length > 0:
             padding_length = _frame.UAVCANFrame.get_required_padding(payload_length)
-            refragmented = pyuavcan.util.refragment(itertools.chain(fragmented_payload,
-                                                                    (memoryview(_PADDING_PATTERN * padding_length),)),
-                                                    max_frame_payload_bytes)
+            refragmented = pyuavcan.transport.commons.refragment(
+                itertools.chain(fragmented_payload, (memoryview(_PADDING_PATTERN * padding_length),)),
+                max_frame_payload_bytes)
             payload, = tuple(refragmented)
         else:
             # The special case is necessary because refragment() yields nothing if the payload is empty
@@ -55,16 +55,11 @@ def serialize_transfer(compiled_identifier:     int,
             last_frame_data_length = last_frame_payload_length + _frame.TRANSFER_CRC_LENGTH_BYTES
             padding = _PADDING_PATTERN * _frame.UAVCANFrame.get_required_padding(last_frame_data_length)
 
-        # Compute CRC; padding is also CRC-protected
-        crc = pyuavcan.util.hash.CRC16CCITT()
-        for frag in fragmented_payload:
-            crc.add(frag)
-        crc.add(padding)
-
         # Fragment generator that goes over the padding and CRC also
-        trailing_bytes = padding + bytes([crc.value >> 8, crc.value & 0xFF])
-        refragmented = pyuavcan.util.refragment(itertools.chain(fragmented_payload, (memoryview(trailing_bytes),)),
-                                                max_frame_payload_bytes)
+        crc_bytes = pyuavcan.transport.commons.crc.CRC16CCITT.new(*fragmented_payload, padding).value_as_bytes
+        refragmented = pyuavcan.transport.commons.refragment(
+            itertools.chain(fragmented_payload, (memoryview(padding + crc_bytes),)),
+            max_frame_payload_bytes)
 
         # Serialized frame emission
         for index, (last, frag) in enumerate(pyuavcan.util.mark_last(refragmented)):
@@ -129,7 +124,7 @@ def _unittest_can_serialize_transfer() -> None:
     assert mkf(0xbadc0fe, bytes(range(60)) + b'\x55\x55\x55', 19, True, True, True, True) \
         == one(run(0xbadc0fe, 32 + 19, [mv(bytes(range(60)))], 63, True))
 
-    crc = pyuavcan.util.hash.CRC16CCITT()
+    crc = pyuavcan.transport.commons.crc.CRC16CCITT()
     crc.add(bytes(range(0x1E)))
     assert crc.value == 0x3554
     assert [
@@ -140,7 +135,7 @@ def _unittest_can_serialize_transfer() -> None:
         mkf(0xbadc0fe, b'\x1c\x1d\x35\x54', 19, False, True, True),
     ] == list(run(0xbadc0fe, 323219, [mv(bytes(range(0x1E)))], 7, False))
 
-    crc = pyuavcan.util.hash.CRC16CCITT()
+    crc = pyuavcan.transport.commons.crc.CRC16CCITT()
     crc.add(bytes(range(0x1D)))
     assert crc.value == 0xC46F
     assert [
@@ -149,7 +144,7 @@ def _unittest_can_serialize_transfer() -> None:
         mkf(123456, b'\x6f', 19, False, True, True),
     ] == list(run(123456, 32323219, [mv(bytes(range(0x1D)))], 15, True))
 
-    crc = pyuavcan.util.hash.CRC16CCITT()
+    crc = pyuavcan.transport.commons.crc.CRC16CCITT()
     crc.add(bytes(range(0x1E)) + b'\x55')
     assert crc.value == 0x38A6
     assert [

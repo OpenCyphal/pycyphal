@@ -9,7 +9,7 @@ import pytest
 import subprocess
 import pyuavcan
 from tests.dsdl.conftest import PUBLIC_REGULATED_DATA_TYPES_DIR
-from ._subprocess import run_process, BackgroundChildProcess
+from ._subprocess import run_process
 
 
 def _unittest_slow_cli_call_a() -> None:

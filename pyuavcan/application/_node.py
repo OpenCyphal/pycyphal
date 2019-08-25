@@ -6,9 +6,9 @@
 
 from __future__ import annotations
 import logging
+import uavcan.node
 import pyuavcan
 import pyuavcan.application
-import uavcan.node
 
 
 NodeInfo = uavcan.node.GetInfo_1_0.Response

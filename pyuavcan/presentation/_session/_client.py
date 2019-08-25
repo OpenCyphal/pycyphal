@@ -29,8 +29,8 @@ class ClientStatistics:
     The counters are maintained at the hidden client instance which is not accessible to the user.
     As such, clients with the same session specifier will share the same set of statistical counters.
     """
-    request_transport_session:  pyuavcan.transport.Statistics
-    response_transport_session: pyuavcan.transport.Statistics
+    request_transport_session:  pyuavcan.transport.SessionStatistics
+    response_transport_session: pyuavcan.transport.SessionStatistics
     sent_requests:              int
     deserialization_failures:   int  #: Response transfers that could not be deserialized into a response object.
     unexpected_responses:       int  #: Response transfers that could not be matched with a request state.
@@ -296,8 +296,8 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                              priority:           pyuavcan.transport.Priority,
                              monotonic_deadline: float) -> bool:
         if not isinstance(request, self.dtype.Request):
-            raise ValueError(f'Invalid request object: expected an instance of {self.dtype.Request}, '
-                             f'got {type(request)} instead.')
+            raise TypeError(f'Invalid request object: expected an instance of {self.dtype.Request}, '
+                            f'got {type(request)} instead.')
 
         timestamp = pyuavcan.transport.Timestamp.now()
         fragmented_payload = list(pyuavcan.dsdl.serialize(request))

@@ -64,7 +64,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._pending_feedback: typing.Dict[_PendingFeedbackKey, pyuavcan.transport.Timestamp] = {}
 
-        self._statistics = pyuavcan.transport.Statistics()
+        self._statistics = pyuavcan.transport.SessionStatistics()
 
         super(CANOutputSession, self).__init__(finalizer=finalizer)
 
@@ -105,7 +105,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
         self._feedback_handler = None
         self._pending_feedback.clear()
 
-    def sample_statistics(self) -> pyuavcan.transport.Statistics:
+    def sample_statistics(self) -> pyuavcan.transport.SessionStatistics:
         return copy.copy(self._statistics)
 
     def close(self) -> None:
@@ -208,7 +208,7 @@ class UnicastCANOutputSession(CANOutputSession):
                 f'This transport does not support unicast outputs for {specifier.data_specifier}')
         self._service_id = specifier.data_specifier.service_id
         self._request_not_response = \
-            specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.CLIENT
+            specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
 
         super(UnicastCANOutputSession, self).__init__(transport=transport,
                                                       send_handler=send_handler,

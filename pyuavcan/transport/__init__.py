@@ -40,7 +40,7 @@ one can map it onto aforementioned auxiliary definitions:
 |          | Data      +-------------------+-------------------+ transfer (message or service);        |
 |          | specifier |                   |    Service-ID     | subject-ID for messages;              |
 |          |           |    Subject-ID     +---------+---------+ service-ID with request/response      |
-|          |           |                   | Request |Response | indicator for services.               |
+|          |           |                   | Request |Response | role selector for services.           |
 +----------+-----------+-------------------+---------+---------+---------------------------------------+
 |                      |             Transfer-ID               | Transfer sequence number.             |
 +----------------------+---------------------------------------+---------------------------------------+
@@ -136,6 +136,7 @@ Below is the class inheritance diagram for this module (trivial classes may be o
 # Core transport.
 from ._transport import Transport as Transport
 from ._transport import ProtocolParameters as ProtocolParameters
+from ._transport import TransportStatistics as TransportStatistics
 
 # Transport model auxiliaries.
 from ._transfer import Transfer as Transfer
@@ -155,7 +156,7 @@ from ._session import OutputSession as OutputSession
 from ._payload_metadata import PayloadMetadata as PayloadMetadata
 
 # Low-level entities.
-from ._session import Statistics as Statistics
+from ._session import SessionStatistics as SessionStatistics
 from ._session import Feedback as Feedback
 
 from ._timestamp import Timestamp as Timestamp
@@ -169,3 +170,6 @@ from ._error import OperationNotDefinedForAnonymousNodeError as OperationNotDefi
 from ._error import InvalidTransportConfigurationError as InvalidTransportConfigurationError
 from ._error import InvalidMediaConfigurationError as InvalidMediaConfigurationError
 from ._error import ResourceClosedError as ResourceClosedError
+
+# Reusable components.
+from . import commons as commons

@@ -7,15 +7,15 @@
 from __future__ import annotations
 import enum
 import typing
-import pyuavcan.util
-import pyuavcan.transport
+import pyuavcan
 from .. import _frame
 
 
-class TransferReceptionErrorID(enum.Enum):
+class TransferReassemblyErrorID(enum.Enum):
     """
-    Transfer reception error codes. Used in the extended error statistics.
+    Transfer reassembly error codes. Used in the extended error statistics.
     See the UAVCAN specification for background info.
+    We have ``ID`` in the name to make clear that this is not an exception type.
     """
     MISSED_START_OF_TRANSFER = enum.auto()
     UNEXPECTED_TOGGLE_BIT    = enum.auto()
@@ -24,8 +24,11 @@ class TransferReceptionErrorID(enum.Enum):
     PAYLOAD_TOO_LARGE        = enum.auto()
 
 
-class TransferReceiver:
-    def __init__(self, max_payload_size_bytes: int):
+class TransferReassembler:
+    def __init__(self,
+                 source_node_id:         int,
+                 max_payload_size_bytes: int):
+        self._source_node_id = int(source_node_id)
         self._fragmented_payload: typing.List[memoryview] = []
         self._timestamp = pyuavcan.transport.Timestamp(0, 0)
         self._transfer_id = 0
@@ -34,10 +37,9 @@ class TransferReceiver:
 
     def process_frame(self,
                       priority:               pyuavcan.transport.Priority,
-                      source_node_id:         int,
                       frame:                  _frame.TimestampedUAVCANFrame,
                       transfer_id_timeout_ns: int) \
-            -> typing.Union[None, TransferReceptionErrorID, pyuavcan.transport.TransferFrom]:
+            -> typing.Union[None, TransferReassemblyErrorID, pyuavcan.transport.TransferFrom]:
         """
         Observe that occasionally newer frames may have lower timestamp values due to error variations in the time
         recovery algorithms, depending on the methods of timestamping. This class therefore does not check if the
@@ -56,16 +58,16 @@ class TransferReceiver:
             self._transfer_id = frame.transfer_id
             self._toggle_bit = frame.toggle_bit
             if not frame.start_of_transfer:
-                return TransferReceptionErrorID.MISSED_START_OF_TRANSFER
+                return TransferReassemblyErrorID.MISSED_START_OF_TRANSFER
 
         # SECOND STAGE - DROP UNEXPECTED FRAMES.
         # A properly functioning CAN bus may occasionally replicate frames (see the Specification for background).
         # We combat these issues by checking the transfer ID and the toggle bit.
         if frame.transfer_id != self._transfer_id:
-            return TransferReceptionErrorID.UNEXPECTED_TRANSFER_ID
+            return TransferReassemblyErrorID.UNEXPECTED_TRANSFER_ID
 
         if frame.toggle_bit != self._toggle_bit:
-            return TransferReceptionErrorID.UNEXPECTED_TOGGLE_BIT
+            return TransferReassemblyErrorID.UNEXPECTED_TOGGLE_BIT
 
         # THIRD STAGE - PAYLOAD REASSEMBLY AND VERIFICATION.
         # Collect the data and check its correctness.
@@ -90,11 +92,8 @@ class TransferReceiver:
                 assert len(fragmented_payload) == 1     # Single-frame transfer, additional checks not needed
             else:
                 assert len(fragmented_payload) > 1      # Multi-frame transfer, check and remove the trailing CRC
-                crc = pyuavcan.util.hash.CRC16CCITT()
-                for frag in fragmented_payload:
-                    crc.add(frag)
-                if crc.value != crc.RESIDUE:
-                    return TransferReceptionErrorID.TRANSFER_CRC_MISMATCH
+                if not pyuavcan.transport.commons.crc.CRC16CCITT.new(*fragmented_payload).check_residue():
+                    return TransferReassemblyErrorID.TRANSFER_CRC_MISMATCH
 
                 # Cut off the CRC
                 expected_length = sum(map(len, fragmented_payload)) - _frame.TRANSFER_CRC_LENGTH_BYTES
@@ -112,7 +111,7 @@ class TransferReceiver:
                                                    priority=priority,
                                                    transfer_id=frame.transfer_id,
                                                    fragmented_payload=fragmented_payload,
-                                                   source_node_id=source_node_id)
+                                                   source_node_id=self._source_node_id)
         else:
             if sum(map(len, self._fragmented_payload)) > self._max_payload_size_bytes_with_crc:
                 # Observe that padding bytes at the end of the last frame are not counted towards the maximum
@@ -120,7 +119,7 @@ class TransferReceiver:
                 # resulting transfer size.
                 self._prepare_for_next_transfer()
                 self._fragmented_payload.clear()
-                return TransferReceptionErrorID.PAYLOAD_TOO_LARGE
+                return TransferReassemblyErrorID.PAYLOAD_TOO_LARGE
 
             return None     # Expect more frames to come
 
@@ -129,21 +128,20 @@ class TransferReceiver:
         self._toggle_bit = True
 
 
-def _unittest_can_transfer_receiver_manual() -> None:
+def _unittest_can_transfer_reassembler_manual() -> None:
     priority = pyuavcan.transport.Priority.IMMEDIATE
     source_node_id = 123
     transfer_id_timeout_ns = 900
     can_identifier = 0xbadc0fe
 
-    err = TransferReceptionErrorID
+    err = TransferReassemblyErrorID
 
     def proc(frame: _frame.TimestampedUAVCANFrame) \
-            -> typing.Union[None, TransferReceptionErrorID, pyuavcan.transport.TransferFrom]:
+            -> typing.Union[None, TransferReassemblyErrorID, pyuavcan.transport.TransferFrom]:
         away = rx.process_frame(priority=priority,
-                                source_node_id=source_node_id,
                                 frame=frame,
                                 transfer_id_timeout_ns=transfer_id_timeout_ns)
-        assert away is None or isinstance(away, (TransferReceptionErrorID, pyuavcan.transport.TransferFrom))
+        assert away is None or isinstance(away, (TransferReassemblyErrorID, pyuavcan.transport.TransferFrom))
         return away
 
     def frm(monotonic_ns:      int,
@@ -175,7 +173,7 @@ def _unittest_can_transfer_receiver_manual() -> None:
             ],
             source_node_id=source_node_id)
 
-    rx = TransferReceiver(50)
+    rx = TransferReassembler(source_node_id, 50)
 
     # Correct single-frame transfers.
     assert proc(frm(1000, 'Hello', 0, True, True, True)) == trn(1000, 0, ['Hello'])
@@ -203,7 +201,7 @@ def _unittest_can_transfer_receiver_manual() -> None:
     assert proc(frm(2013, b'\x15\x16\x17\x18\x19\x1a\x1b', 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
     assert proc(frm(2014, b'\x1c\x1d' b'\x35\x54', 1, False, True, True)) == err.UNEXPECTED_TRANSFER_ID
 
-    # Correct reception where the CRC spills over into the next frame.
+    # Correct reassembly where the CRC spills over into the next frame.
     assert proc(frm(2100, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 9, True, False, True)) \
         is None
     assert proc(frm(2101, b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 9, False, False, False)) \
