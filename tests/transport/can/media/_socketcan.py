@@ -21,7 +21,7 @@ async def _unittest_can_socketcan() -> None:
 
     available = SocketCANMedia.list_available_interface_names()
     print('Available SocketCAN ifaces:', available)
-    if sys.platform != 'linux':
+    if sys.platform != 'linux':  # pragma: no cover
         assert list(available) == [], 'Must return an empty set when not on a Linux-based system'
         pytest.skip('SocketCAN test skipped because we do not seem to be on a Linux-based system')
 
