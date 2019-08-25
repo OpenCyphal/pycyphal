@@ -72,13 +72,20 @@ import uavcan.si.temperature    # noqa E402
 
 class DemoApplication:
     def __init__(self):
-        # The interface to run the demo against is selected via the env var with a default option provided.
+        # The interface to run the demo against is selected via the environment variable with a default option provided.
         # Virtual CAN bus is supported only on GNU/Linux, but other interfaces used here should be compatible
         # with at least Windows and macOS.
         # Frankly, the main reason we need this here is to simplify automatic testing of this demo script.
         # Feel free to remove the selection logic and just hard-code whatever interface you need.
-        interface_kind = os.environ.get('DEMO_INTERFACE_KIND', 'serial').lower()
-        if interface_kind == 'can':
+        interface_kind = os.environ.get('DEMO_INTERFACE_KIND', '').lower()
+        if interface_kind == 'serial' or not interface_kind:  # This is the default.
+            # For demo purposes we're using not an actual serial port (which could have been specified like "COM9"
+            # for example) but a virtualized TCP/IP tunnel. The background is explained in the API documentation
+            # for the serial transport, please read that. For a quick start, just install Ncat (part of Nmap) and run:
+            #   ncat --broker --listen -p 50905
+            transport = pyuavcan.transport.serial.SerialTransport('socket://localhost:50905')
+
+        elif interface_kind == 'can':
             # Make sure to initialize the virtual CAN interface. For example (run as root):
             #   modprobe vcan
             #   ip link add dev vcan0 type vcan
@@ -90,13 +97,6 @@ class DemoApplication:
             # Here we select CAN 2.0 by setting MTU=8 bytes. We can switch to CAN FD by simply increasing the MTU.
             media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=8)
             transport = pyuavcan.transport.can.CANTransport(media)
-
-        elif interface_kind == 'serial':
-            # For demo purposes we're using not an actual serial port (which could have been specified like "COM9"
-            # for example) but a virtualized TCP/IP tunnel. The background is explained in the API documentation
-            # for the serial transport, please read that. For a quick start, just install Ncat (part of Nmap) and run:
-            #   ncat --broker --listen -p 50905
-            transport = pyuavcan.transport.serial.SerialTransport('socket://localhost:50905')
 
         else:
             raise RuntimeError(f'Unrecognized interface kind: {interface_kind}')
