@@ -5,6 +5,9 @@
 #
 
 r"""
+Submodule import policy
++++++++++++++++++++++++
+
 The following submodules are auto-imported when the root module ``pyuavcan`` is imported:
 
 - :mod:`pyuavcan.dsdl`
@@ -20,6 +23,22 @@ The submodule :mod:`pyuavcan.application` is not auto-imported because in order 
 the DSDL-generated package ``uavcan`` containing the standard data types must be generated first.
 
 There are no internal (hidden) API between the submodules; they rely only on each other's public API.
+
+
+Log level override
+++++++++++++++++++
+
+The environment variable ``PYUAVCAN_LOGLEVEL`` can be set to one of the following values to override
+the library log level:
+
+- ``CRITICAL``
+- ``FATAL``
+- ``ERROR``
+- ``WARNING``
+- ``INFO``
+- ``DEBUG``
+
+If not set, the log level is determined following the regular policies of the Python's standard ``logging`` library.
 """
 
 import os as _os
