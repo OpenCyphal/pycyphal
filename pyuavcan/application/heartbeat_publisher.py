@@ -9,8 +9,8 @@ import time
 import typing
 import logging
 import asyncio
-import pyuavcan
 from uavcan.node import Heartbeat_1_0 as Heartbeat
+import pyuavcan
 
 
 DEFAULT_PRIORITY = pyuavcan.transport.Priority.SLOW

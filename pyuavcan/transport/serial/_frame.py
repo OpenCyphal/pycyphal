@@ -234,7 +234,7 @@ def _unittest_frame_compile_service() -> None:
     from pyuavcan.transport import Priority, ServiceDataSpecifier, Timestamp
 
     f = SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
+                    priority=Priority.FAST,
                     source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                     destination_node_id=None,
                     data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
@@ -244,17 +244,16 @@ def _unittest_frame_compile_service() -> None:
                     end_of_transfer=False,
                     payload=memoryview(b''))
 
-    buffer = bytearray(0 for _ in range(1000))
+    buffer = bytearray(0 for _ in range(50))
     mv = f.compile_into(buffer)
 
-    assert mv[0] == SerialFrame.FRAME_DELIMITER_BYTE
-    assert mv[-1] == SerialFrame.FRAME_DELIMITER_BYTE
+    assert mv[0] == mv[-1] == SerialFrame.FRAME_DELIMITER_BYTE
     segment = bytes(mv[1:-1])
     assert SerialFrame.FRAME_DELIMITER_BYTE not in segment
 
     # Header validation
     assert segment[0] == _VERSION
-    assert segment[1] == int(Priority.HIGH)
+    assert segment[1] == int(Priority.FAST)
     assert segment[2] == SerialFrame.ESCAPE_PREFIX_BYTE
     assert (segment[3], segment[4]) == (SerialFrame.FRAME_DELIMITER_BYTE ^ 0xFF, 0)
     assert (segment[5], segment[6]) == (0xFF, 0xFF)

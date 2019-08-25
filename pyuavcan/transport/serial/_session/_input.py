@@ -11,9 +11,9 @@ import asyncio
 import logging
 import dataclasses
 import pyuavcan
+from pyuavcan.transport.commons.high_overhead_transport import TransferReassembler
 from .._frame import SerialFrame
 from ._base import SerialSession
-from pyuavcan.transport.commons.high_overhead_transport import TransferReassembler
 
 
 _logger = logging.getLogger(__name__)
