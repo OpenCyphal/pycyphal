@@ -18,6 +18,99 @@ except ImportError:
     from StringIO import StringIO
 
 
+def _to_json_compatible_object_impl(obj):
+    # Decomposing PrimitiveValue to value and type. This is ugly but it's by design...
+    if isinstance(obj, PrimitiveValue):
+        obj = obj.value
+
+    # CompoundValue
+    if isinstance(obj, CompoundValue):
+        output = dict()
+        for field_name, field in uavcan.get_fields(obj).items():
+            if uavcan.is_union(obj) and uavcan.get_active_union_field(obj) != field_name:
+                continue
+            if isinstance(field, VoidValue):
+                continue
+
+            output[field_name] = to_json_compatible_object(field)
+        return output
+
+    # ArrayValue
+    elif isinstance(obj, ArrayValue):
+        t = uavcan.get_uavcan_data_type(obj)
+        if t.value_type.category == t.value_type.CATEGORY_PRIMITIVE:
+            def is_nice_character(ch):
+                if ch.is_printable() or ch.isspace():
+                    return True
+                if ch in b'\n\r\t':
+                    return True
+                return False
+
+            # Catch a string masquerading as an array
+            if t.is_string_like and all(map(is_nice_character, obj)):
+                return obj.decode()
+
+        # Return the array!
+        output = []
+        for x in obj:
+            output.append(to_json_compatible_object(x))
+
+        return output
+
+    # Primitive types
+    elif isinstance(obj, float):
+        return obj
+    elif isinstance(obj, bool):
+        return obj
+    elif isinstance(obj, int):
+        return obj
+
+    # Non-printable types
+    elif isinstance(obj, VoidValue):
+        pass
+
+    # Unknown types
+    else:
+        raise ValueError('Cannot generate JSON-compatible object representation for %r' % type(obj))
+
+
+def to_json_compatible_object(obj):
+    """
+    This function returns a representation of a UAVCAN structure (message, request, or response), or
+    a DSDL entity (array or primitive), or a UAVCAN transfer, as a structure easily able to be
+    transformed into json or json-like serialization
+    Args:
+        obj:            Object to convert.
+
+    Returns: structure which can easily be transformed into a json-like serialization
+    """
+    if not isinstance(obj, CompoundValue) and hasattr(obj, 'transfer'):
+        output = dict()
+        if hasattr(obj, 'message'):
+            payload = obj.message
+            output['transfer_type'] = 'Message'
+        elif hasattr(obj, 'request'):
+            payload = obj.request
+            output['transfer_type'] = 'Request'
+        elif hasattr(obj, 'response'):
+            payload = obj.response
+            output['transfer_type'] = 'Response'
+        else:
+            raise ValueError('Cannot generate JSON-compatible object representation for %r' % type(obj))
+
+        output['source_node_id'] = obj.transfer.source_node_id
+        output['dest_node_id'] = obj.transfer.dest_node_id
+        output['ts_monotonic'] = obj.transfer.ts_monotonic
+        output['ts_real'] = obj.transfer.ts_real
+        output['transfer_priority'] = obj.transfer.transfer_priority
+        output['datatype'] = '{}'.format(payload._type)
+        output['fields'] = _to_json_compatible_object_impl(payload)
+
+        return output
+    else:
+        return _to_json_compatible_object_impl(obj)
+
+
 def _to_yaml_impl(obj, indent_level=0, parent=None, name=None, uavcan_type=None):
     buf = StringIO()
 
