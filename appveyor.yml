@@ -28,5 +28,6 @@ test_script:
   - sh: "./test.sh"
   - sh: "echo 'TODO: run SonarQube'"
 
-after_test:
-  - coveralls
+# Don't push coverage metrics because it's done from Travis CI. No need to do it twice.
+#after_test:
+#  - coveralls
