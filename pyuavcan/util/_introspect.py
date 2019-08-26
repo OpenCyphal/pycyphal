@@ -52,8 +52,8 @@ def import_submodules(root_module: types.ModuleType) -> None:
 
     >>> import pyuavcan
     >>> pyuavcan.util.import_submodules(pyuavcan.transport)
-    >>> pyuavcan.transport.can.media.socketcan.SocketCANMedia
-    <class 'pyuavcan.transport.can.media.socketcan...SocketCANMedia'>
+    >>> pyuavcan.transport.loopback.LoopbackTransport
+    <class 'pyuavcan.transport.loopback...LoopbackTransport'>
     """
     for _, module_name, _ in pkgutil.walk_packages(root_module.__path__, root_module.__name__ + '.'):  # type: ignore
         importlib.import_module(module_name)

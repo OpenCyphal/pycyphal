@@ -10,15 +10,12 @@ I've drafted up this custom hack instead of using sphinx-argparse because it's b
 not syntactically correct) and does not support parallel build.
 """
 
-import pathlib
 import textwrap
 import subprocess
 
 # noinspection PyProtectedMember
 import pyuavcan._cli as cli
 
-
-EXECUTABLE = pathlib.Path(cli.__file__).absolute().parent / 'pyuavcan'
 
 HEADER_SUFFIX = '\n' + '.' * 80 + '\n\n'
 
@@ -29,10 +26,10 @@ def indent(text: str) -> str:
 
 def print_output(command_arguments: str) -> None:
     print('::', end='\n\n')
-    print(indent(f'$ {EXECUTABLE.name} {command_arguments}'))
-    print(indent(subprocess.check_output(f'{EXECUTABLE} {command_arguments}',
+    print(indent(f'$ pyuavcan {command_arguments}'))
+    print(indent(subprocess.check_output(f'python -m pyuavcan {command_arguments}',
                                          encoding='utf8',
-                                         shell=True)),
+                                         shell=True)).replace('__main__.py ', 'pyuavcan ', 1),
           end='\n\n')
 
 

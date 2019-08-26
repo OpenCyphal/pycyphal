@@ -161,8 +161,8 @@ Default: %(default)s
             assert len(out) == len(publications)
             assert all(isinstance(x, bool) for x in out)
             if not all(out):
-                _logger.error('The following publications have timed out:\n\t',
-                              '\n\t'.join(f'#{idx}: {publications[idx]}' for idx, res in enumerate(out) if not res))
+                log_elements = '\n\t'.join(f'#{idx}: {publications[idx]}' for idx, res in enumerate(out) if not res)
+                _logger.error('The following publications have timed out:\n\t' + log_elements)
 
             sleep_until += period
             _logger.info('Publication cycle %d of %d completed; sleeping for %.3f seconds',
