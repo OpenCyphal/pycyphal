@@ -3,15 +3,18 @@
 Command-line tool
 =================
 
-The information contained here can also be accessed via ``--help``.
+The command-line tool can be invoked in one of the following ways:
 
-The command-line tool has an alias named ``uc``.
-It's easier to type, but may conflict with other commands under the same name,
-so its availability depends on the configuration of the local system.
+- Using its full name, same as the library: ``pyuavcan``.
+- Using the alias ``uc``. It's easier to type, but may conflict with other commands under the same name,
+  so its availability depends on the configuration of the local system.
+- By explicitly invoking the Python package: ``python -m pyuavcan``.
 
 There is an unlisted optional dependency ``coloredlogs``.
 As the name suggests, if this library is installed, the log messages emitted into stderr by the CLI tool
 will be nicely colored.
+
+The information contained below can also be accessed via ``--help``.
 
 .. computron-injection::
     :filename: synth/cli_help.py
