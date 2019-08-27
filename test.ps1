@@ -15,6 +15,14 @@ $env:PYTHONASYNCIODEBUG = "1"
 
 Remove-Item .coverage*
 
+# Reconfigure the system timer to run at a higher resolution. This may be necessary for real-time tests to pass.
+python -c @"
+import ctypes
+t = ctypes.c_ulong()
+ctypes.WinDLL('NTDLL.DLL').NtSetTimerResolution(5000, 1, ctypes.byref(t))
+print('System timer resolution:', t.value / 10e3, 'ms')
+"@
+
 python -m pip install -r requirements.txt
 
 # Install Ncat. The unpacking procedure is inspired by:
