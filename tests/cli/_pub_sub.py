@@ -103,17 +103,17 @@ def _unittest_slow_cli_pub_sub_b(transport_args: typing.Sequence[str]) -> None:
     run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
     proc_sub_heartbeat = BackgroundChildProcess.cli(
-        'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
+        '-v', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
         *transport_args
     )
 
     proc_sub_diagnostic_with_meta = BackgroundChildProcess.cli(
-        'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON', '--with-metadata',
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON', '--with-metadata',
         *transport_args
     )
 
     proc_sub_diagnostic_no_meta = BackgroundChildProcess.cli(
-        'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON',
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON',
         *transport_args
     )
 
@@ -130,6 +130,7 @@ def _unittest_slow_cli_pub_sub_b(transport_args: typing.Sequence[str]) -> None:
     assert proc_sub_heartbeat.wait(1.0, interrupt=True)[1].strip() == '', 'Anonymous nodes must not broadcast heartbeat'
 
     diagnostics = list(json.loads(s) for s in proc_sub_diagnostic_with_meta.wait(1.0, interrupt=True)[1].splitlines())
+    print('diagnostics:', diagnostics)
     assert len(diagnostics) == 2
     for m in diagnostics:
         assert 'nominal' in m['32760']['_metadata_']['priority'].lower()
@@ -139,6 +140,7 @@ def _unittest_slow_cli_pub_sub_b(transport_args: typing.Sequence[str]) -> None:
         assert m['32760']['text'] == ''
 
     diagnostics = list(json.loads(s) for s in proc_sub_diagnostic_no_meta.wait(1.0, interrupt=True)[1].splitlines())
+    print('diagnostics:', diagnostics)
     assert len(diagnostics) == 2
     for index, m in enumerate(diagnostics):
         assert m['32760']['timestamp']['microsecond'] == 0
