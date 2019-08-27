@@ -46,6 +46,9 @@ $ncat_proc = Start-Process ncat -Args '-vv --broker --listen localhost 50905' -P
 # TESTING
 #
 
+# The DSDL gen directory shall exist before coverage is invoked, otherwise its coverage won't be tracked.
+New-Item -Path . -Name ".test_dsdl_generated" -ItemType Directory
+
 # Too much logging may break real-time tests because console output is extremely slow on Windows.
 python -m pytest --override-ini log_cli=0 --capture=fd
 $test_ok = $?
