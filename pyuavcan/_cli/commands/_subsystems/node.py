@@ -133,7 +133,7 @@ Default: %(default)s
         from pyuavcan import application
 
         node_info = pyuavcan.dsdl.update_from_builtin(application.NodeInfo(), args.node_info_fields)
-        _logger.info('Node info: %r', node_info)
+        _logger.debug('Node info: %r', node_info)
 
         transport = self._transport_factory.construct_subsystem(args)
         presentation = pyuavcan.presentation.Presentation(transport)
@@ -151,7 +151,7 @@ Default: %(default)s
                 os.getpid() & (2 ** min(pyuavcan.dsdl.get_model(application.heartbeat_publisher.Heartbeat)
                                         ['vendor_specific_status_code'].data_type.bit_length_set) - 1)
             )
-            _logger.info('Node heartbeat: %r', node.heartbeat_publisher.make_message())
+            _logger.debug('Node heartbeat: %r', node.heartbeat_publisher.make_message())
             if args.heartbeat_fields:
                 raise ValueError(f'Unrecognized heartbeat fields: {args.heartbeat_fields}')
 
@@ -175,12 +175,12 @@ Default: %(default)s
                                                                   node.presentation.transport.descriptor)
                 _logger.debug('Emitted TID map file: %s', tid_map_path)
                 tid_map = self._restore_emitted_transfer_id_map(tid_map_path)
-                _logger.info('Emitted TID map with %d records from %s', len(tid_map), tid_map_path)
+                _logger.debug('Emitted TID map with %d records from %s', len(tid_map), tid_map_path)
                 _logger.debug('Emitted TID map dump: %r', tid_map)
                 # noinspection PyTypeChecker
                 presentation.emitted_transfer_id_map.update(tid_map)  # type: ignore
             else:
-                _logger.info('Emitted TID map not restored because the local node is anonymous.')
+                _logger.debug('Emitted TID map not restored because the local node is anonymous.')
 
             return node
         except Exception:
@@ -199,8 +199,8 @@ Default: %(default)s
 
         mtime_abs_diff = abs(file_path.stat().st_mtime - time.time())
         if mtime_abs_diff > _EMITTED_TRANSFER_ID_MAP_MAX_AGE:
-            _logger.info('Emitted TID map: File %s is valid but too old: mtime age diff %.0f s',
-                         file_path, mtime_abs_diff)
+            _logger.debug('Emitted TID map: File %s is valid but too old: mtime age diff %.0f s',
+                          file_path, mtime_abs_diff)
             return {}
 
         if isinstance(tid_map, dict) and all(isinstance(v, pyuavcan.presentation.OutgoingTransferIDCounter)

@@ -140,7 +140,7 @@ class Publisher(MessagePresentationSession[MessageClass]):
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
-            _logger.info('%s has not been disposed of properly; fixing', self)
+            _logger.debug('%s has not been disposed of properly; fixing', self)
             self._maybe_impl.remove_proxy()
 
 
@@ -193,7 +193,7 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         _logger.debug('%s has lost a proxy, new count %s', self, self._proxy_count)
         assert self._proxy_count >= 0
         if self._proxy_count <= 0 and not self._closed:
-            _logger.info('%s is being closed', self)
+            _logger.debug('%s is being closed', self)
             self._closed = True
             self._finalizer([self.transport_session])
 

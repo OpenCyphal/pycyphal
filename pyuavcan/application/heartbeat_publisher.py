@@ -209,7 +209,7 @@ class HeartbeatPublisher:
                 _logger.debug('%s publisher task cancelled', self)
                 break
             except pyuavcan.transport.ResourceClosedError as ex:
-                _logger.info('%s transport closed, publisher task will exit: %s', self, ex)
+                _logger.debug('%s transport closed, publisher task will exit: %s', self, ex)
                 break
             except Exception as ex:
                 _logger.exception('%s publisher task exception: %s', self, ex)
