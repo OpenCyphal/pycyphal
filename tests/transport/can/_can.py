@@ -619,7 +619,7 @@ async def _unittest_can_transport() -> None:
                                                                  in_frames_uavcan=15,
                                                                  in_frames_uavcan_accepted=14)
 
-    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
+    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 3.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123

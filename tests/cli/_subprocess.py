@@ -117,7 +117,7 @@ class BackgroundChildProcess:
         import signal
         try:
             self._inferior.send_signal(signal.SIGINT)
-        except ValueError:
+        except ValueError:  # pragma: no cover
             # On Windows, SIGINT is not supported, and CTRL_C_EVENT does nothing.
             self._inferior.send_signal(signal.CTRL_BREAK_EVENT)
 
