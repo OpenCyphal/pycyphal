@@ -17,14 +17,13 @@ import pytest
 async def _unittest_can_socketcan() -> None:
     from pyuavcan.transport import Timestamp
     from pyuavcan.transport.can.media import TimestampedDataFrame, DataFrame, FrameFormat, FilterConfiguration
-    from pyuavcan.transport.can.media.socketcan import SocketCANMedia
 
+    if sys.platform != 'linux':  # pragma: no cover
+        pytest.skip('SocketCAN test skipped because we do not seem to be on a GNU/Linux-based system')
+
+    from pyuavcan.transport.can.media.socketcan import SocketCANMedia
     available = SocketCANMedia.list_available_interface_names()
     print('Available SocketCAN ifaces:', available)
-    if sys.platform != 'linux':  # pragma: no cover
-        assert list(available) == [], 'Must return an empty set when not on a Linux-based system'
-        pytest.skip('SocketCAN test skipped because we do not seem to be on a Linux-based system')
-
     assert 'vcan0' in available, \
         'Either the interface listing method is not working or the environment is not configured correctly. ' \
         'Please ensure that the virtual SocketCAN interface "vcan0" is available, and its MTU is set to 64+8.'

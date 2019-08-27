@@ -87,6 +87,8 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     assert last_metadata.transfer_id == 0
     assert last_metadata.priority == Priority.SLOW
 
+    client0.response_timeout = 2.0  # Increase the timeout back because otherwise the test fails on slow systems.
+
     last_request = uavcan.register.Access_1_0.Request(name=uavcan.register.Name_1_0('security.uber_secure_password'))
     response = uavcan.register.Access_1_0.Response(
         timestamp=uavcan.time.SynchronizedTimestamp_1_0(123456789),

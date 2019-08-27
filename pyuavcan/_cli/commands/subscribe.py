@@ -89,8 +89,8 @@ have been received. No limit by default.
 
         subject_specs = [_util.construct_port_id_and_type(ds) for ds in args.subject_spec]
 
-        _logger.info(f'Starting the subscriber with transport={transport}, subject_specs={subject_specs}, '
-                     f'formatter={formatter}, with_metadata={args.with_metadata}')
+        _logger.debug(f'Starting the subscriber with transport={transport}, subject_specs={subject_specs}, '
+                      f'formatter={formatter}, with_metadata={args.with_metadata}')
 
         with contextlib.closing(pyuavcan.presentation.Presentation(transport)) as presentation:
             subscriber = self._make_subscriber(args, presentation)  # type: ignore
@@ -143,5 +143,5 @@ async def _run(subscriber:    pyuavcan.presentation.Subscriber[_M],
 
         count -= 1
         if count <= 0:
-            _logger.info('Reached the specified message count, stopping')
+            _logger.debug('Reached the specified message count, stopping')
             break

@@ -9,39 +9,39 @@ import time
 import json
 import pytest
 from tests.dsdl.conftest import PUBLIC_REGULATED_DATA_TYPES_DIR
-from ._subprocess import run_process, BackgroundChildProcess
+from ._subprocess import run_cli_tool, BackgroundChildProcess
 from . import TRANSPORT_ARGS_OPTIONS
 
 
 @pytest.mark.parametrize('transport_args', TRANSPORT_ARGS_OPTIONS)  # type: ignore
 def _unittest_slow_cli_pub_sub_a(transport_args: typing.Sequence[str]) -> None:
     # Generate DSDL namespace "uavcan"
-    run_process('pyuavcan', 'dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
+    run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
-    proc_sub_heartbeat = BackgroundChildProcess(
-        'pyuavcan', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
+    proc_sub_heartbeat = BackgroundChildProcess.cli(
+        'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
         '--with-metadata', *transport_args
     )
 
-    proc_sub_diagnostic = BackgroundChildProcess(
-        'pyuavcan', 'sub', '4321.uavcan.diagnostic.Record.1.0', '--count=3', '--format=JSON',
+    proc_sub_diagnostic = BackgroundChildProcess.cli(
+        'sub', '4321.uavcan.diagnostic.Record.1.0', '--count=3', '--format=JSON',
         '--with-metadata', *transport_args
     )
 
-    proc_sub_diagnostic_wrong_pid = BackgroundChildProcess(
-        'pyuavcan', 'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=YAML',
+    proc_sub_diagnostic_wrong_pid = BackgroundChildProcess.cli(
+        'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=YAML',
         '--with-metadata', *transport_args
     )
 
-    proc_sub_temperature = BackgroundChildProcess(
-        'pyuavcan', 'sub', '555.uavcan.si.temperature.Scalar.1.0', '--count=3', '--format=JSON',
+    proc_sub_temperature = BackgroundChildProcess.cli(
+        'sub', '555.uavcan.si.temperature.Scalar.1.0', '--count=3', '--format=JSON',
         *transport_args
     )
 
     time.sleep(1.0)     # Time to let the background processes finish initialization
 
-    run_process(
-        'pyuavcan', '-v', 'pub',
+    run_cli_tool(
+        '-v', 'pub',
 
         '4321.uavcan.diagnostic.Record.1.0',
         '{severity: {value: 6}, timestamp: {microsecond: 123456}, text: "Hello world!"}',
@@ -100,27 +100,27 @@ def _unittest_slow_cli_pub_sub_a(transport_args: typing.Sequence[str]) -> None:
 @pytest.mark.parametrize('transport_args', TRANSPORT_ARGS_OPTIONS)  # type: ignore
 def _unittest_slow_cli_pub_sub_b(transport_args: typing.Sequence[str]) -> None:
     # Generate DSDL namespace "uavcan"
-    run_process('pyuavcan', 'dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
+    run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
-    proc_sub_heartbeat = BackgroundChildProcess(
-        'pyuavcan', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
+    proc_sub_heartbeat = BackgroundChildProcess.cli(
+        '-v', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
         *transport_args
     )
 
-    proc_sub_diagnostic_with_meta = BackgroundChildProcess(
-        'pyuavcan', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON', '--with-metadata',
+    proc_sub_diagnostic_with_meta = BackgroundChildProcess.cli(
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON', '--with-metadata',
         *transport_args
     )
 
-    proc_sub_diagnostic_no_meta = BackgroundChildProcess(
-        'pyuavcan', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON',
+    proc_sub_diagnostic_no_meta = BackgroundChildProcess.cli(
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON',
         *transport_args
     )
 
     time.sleep(1.0)     # Time to let the background processes finish initialization
 
-    proc = BackgroundChildProcess(
-        'pyuavcan', '-v', 'pub', 'uavcan.diagnostic.Record.1.0', '{}',
+    proc = BackgroundChildProcess.cli(
+        '-v', 'pub', 'uavcan.diagnostic.Record.1.0', '{}',
         '--count=2', '--period=2', *transport_args,
     )
     proc.wait(timeout=8)
@@ -130,6 +130,7 @@ def _unittest_slow_cli_pub_sub_b(transport_args: typing.Sequence[str]) -> None:
     assert proc_sub_heartbeat.wait(1.0, interrupt=True)[1].strip() == '', 'Anonymous nodes must not broadcast heartbeat'
 
     diagnostics = list(json.loads(s) for s in proc_sub_diagnostic_with_meta.wait(1.0, interrupt=True)[1].splitlines())
+    print('diagnostics:', diagnostics)
     assert len(diagnostics) == 2
     for m in diagnostics:
         assert 'nominal' in m['32760']['_metadata_']['priority'].lower()
@@ -139,6 +140,7 @@ def _unittest_slow_cli_pub_sub_b(transport_args: typing.Sequence[str]) -> None:
         assert m['32760']['text'] == ''
 
     diagnostics = list(json.loads(s) for s in proc_sub_diagnostic_no_meta.wait(1.0, interrupt=True)[1].splitlines())
+    print('diagnostics:', diagnostics)
     assert len(diagnostics) == 2
     for index, m in enumerate(diagnostics):
         assert m['32760']['timestamp']['microsecond'] == 0

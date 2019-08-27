@@ -1,7 +1,11 @@
 environment:
   matrix:
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      PYTHON: 'C:\\Python37-x64'
+      PYTHON_ARCH: 64
+
     - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
-      PYTHON: "3.7"
+      PYTHON: '3.7'
 
 # NumPy is not yet compatible with Python 3.8; see https://github.com/cython/cython/issues/2938
 #    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
@@ -13,21 +17,24 @@ build: off
 
 install:
   - git submodule update --init --recursive
-  - pip install pyyaml coveralls  # Removed from requirements.txt because it's only useful on the CI.
 
   # GNU/Linux build config
+  - sh: 'lsb_release -a'
   - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
   - sh: 'echo $extras_pkg'
   - sh: 'sudo apt-get install -y $extras_pkg graphviz nmap'
 
-  # Windows build config
-  - cmd: 'SET PATH=%PYTHON%;%PATH%'
-  - cmd: 'SET PATH=C:\\Python37-x64\\Scripts;%PATH%'
+  # MS Windows build config
+  - cmd: 'systeminfo'
+  - cmd: 'set PATH=%PYTHON%;%PATH%'
+  - cmd: 'set PATH=C:\\Python37-x64\\Scripts;%PATH%'
+
+  # Config check
+  - 'python -V'
 
 test_script:
-  - sh: "./test.sh"
-  - sh: "echo 'TODO: run SonarQube'"
+  # GNU/Linux test
+  - sh: './test.sh'
 
-# Don't push coverage metrics because it's done from Travis CI. No need to do it twice.
-#after_test:
-#  - coveralls
+  # MS Windows test
+  - cmd: 'powershell .\test.ps1'

@@ -6,14 +6,14 @@
 
 import typing
 import pytest
-from ._subprocess import run_process, BackgroundChildProcess
+from ._subprocess import run_cli_tool, BackgroundChildProcess
 from . import TRANSPORT_ARGS_OPTIONS
 
 
 @pytest.mark.parametrize('transport_args', TRANSPORT_ARGS_OPTIONS)  # type: ignore
 def _unittest_slow_cli_pick_nid(transport_args: typing.Sequence[str]) -> None:
     # Stupid unconstrained test.
-    result = run_process('pyuavcan', '-v', 'pick-nid', '--loopback', timeout=5.0)
+    result = run_cli_tool('-v', 'pick-nid', '--loopback', timeout=5.0)
     print('pick-nid result:', result)
     assert 0 <= int(result) < 2 ** 64
 
@@ -22,11 +22,10 @@ def _unittest_slow_cli_pick_nid(transport_args: typing.Sequence[str]) -> None:
     # unable to maintain sufficiently real-time operation for the test to pass. Hm.
     used_node_ids = list(range(20))
     pubs = [
-        BackgroundChildProcess('pyuavcan', 'pub', '--period=0.3', '--count=100', f'--local-node-id={idx}',
-                               *transport_args)
+        BackgroundChildProcess.cli('pub', '--period=0.3', '--count=100', f'--local-node-id={idx}', *transport_args)
         for idx in used_node_ids
     ]
-    result = run_process('pyuavcan', '-v', 'pick-nid', *transport_args, timeout=60.0)
+    result = run_cli_tool('-v', 'pick-nid', *transport_args, timeout=60.0)
     print('pick-nid result:', result)
     assert int(result) not in used_node_ids
     for p in pubs:

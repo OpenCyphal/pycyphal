@@ -11,7 +11,7 @@ import pyuavcan
 from . import TRANSPORT_FACTORIES, TransportFactory
 
 
-_RX_TIMEOUT = 10e-3
+_RX_TIMEOUT = 1.0
 
 
 # noinspection PyProtectedMember

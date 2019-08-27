@@ -6,18 +6,18 @@
 
 import pytest
 import subprocess
-from ._subprocess import run_process
+from ._subprocess import run_cli_tool
 
 
 def _unittest_trivial() -> None:
     with pytest.raises(subprocess.CalledProcessError):
-        run_process('pyuavcan', timeout=2.0)
+        run_cli_tool(timeout=2.0)
 
     with pytest.raises(subprocess.CalledProcessError):
-        run_process('pyuavcan', 'invalid-command', timeout=2.0)
+        run_cli_tool('invalid-command', timeout=2.0)
 
     with pytest.raises(subprocess.CalledProcessError):
-        run_process('pyuavcan', 'dsdl-gen-pkg', 'nonexistent/path', timeout=2.0)
+        run_cli_tool('dsdl-gen-pkg', 'nonexistent/path', timeout=2.0)
 
     with pytest.raises(subprocess.CalledProcessError):  # Look-up of a nonexistent package requires large timeout
-        run_process('pyuavcan', 'pub', 'nonexistent.data.Type.1.0', '{}', '--socketcan=vcan0', timeout=5.0)
+        run_cli_tool('pub', 'nonexistent.data.Type.1.0', '{}', '--loopback', timeout=5.0)

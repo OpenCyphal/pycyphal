@@ -172,7 +172,7 @@ class Client(ServicePresentationSession[ServiceClass]):
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
-            _logger.info('%s has not been disposed of properly; fixing', self)
+            _logger.debug('%s has not been disposed of properly; fixing', self)
             self._maybe_impl.remove_proxy()
 
 
@@ -273,7 +273,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         _logger.debug('%s has lost a proxy, new count %s', self, self._proxy_count)
         assert self._proxy_count >= 0
         if self._proxy_count <= 0 and not self._closed:
-            _logger.info('%s is being closed', self)
+            _logger.debug('%s is being closed', self)
             self._closed = True
             try:
                 self._task.cancel()
@@ -329,7 +329,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                 else:
                     fut.set_result((response, transfer))
         except asyncio.CancelledError:
-            _logger.info('Cancelling the task of %s', self)
+            _logger.debug('Cancelling the task of %s', self)
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger

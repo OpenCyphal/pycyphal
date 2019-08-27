@@ -162,6 +162,9 @@ Testing
 -------
 
 In order to setup the local environment, execute the setup commands listed in the CI configuration files.
+It is assumed that library development and code analysis is done on a GNU/Linux system.
+There is support for automatic testing on other operating systems (after all, the library is cross-platform),
+but it is intended for CI use only.
 
 The script ``test.sh`` can be used to run the unit tests, static code analysis, documentation generation,
 and so on, locally or on a CI server.

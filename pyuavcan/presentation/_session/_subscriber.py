@@ -229,7 +229,7 @@ class Subscriber(MessagePresentationSession[MessageClass]):
 
     def __del__(self) -> None:
         if not self._closed:
-            _logger.info('%s has not been disposed of properly; fixing', self)
+            _logger.debug('%s has not been disposed of properly; fixing', self)
             self._closed = True
             self._impl.remove_listener(self._rx)
 
@@ -289,7 +289,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
                     else:
                         self.deserialization_failure_count += 1
         except asyncio.CancelledError:
-            _logger.info('Cancelling the subscriber task of %s', self)
+            _logger.debug('Cancelling the subscriber task of %s', self)
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger

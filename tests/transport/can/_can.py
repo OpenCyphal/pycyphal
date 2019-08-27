@@ -126,10 +126,9 @@ async def _unittest_can_transport() -> None:
 
     ts = Timestamp.now()
 
-    def is_timestamp_valid(timestamp: Timestamp) -> bool:
-        mon = ts.monotonic < timestamp.monotonic < tr.loop.time()
-        sys = ts.system < timestamp.system < time.time()
-        return mon and sys
+    def validate_timestamp(timestamp: Timestamp) -> None:
+        assert ts.monotonic_ns <= timestamp.monotonic_ns <= time.monotonic_ns()
+        assert ts.system_ns <= timestamp.system_ns <= time.time_ns()
 
     assert await broadcaster.send_until(Transfer(
         timestamp=ts,
@@ -199,7 +198,7 @@ async def _unittest_can_transport() -> None:
     assert received.transfer_id == 11
     assert received.source_node_id is None      # The sender is anonymous
     assert received.priority == Priority.IMMEDIATE
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert received.fragmented_payload == [_mem('abcdef')]
 
     assert selective_m12345_5.sample_statistics() == SessionStatistics()       # Nothing
@@ -240,7 +239,7 @@ async def _unittest_can_transport() -> None:
 
     fb = feedback_collector.take()
     assert fb.original_transfer_timestamp == ts
-    assert is_timestamp_valid(fb.first_frame_transmission_timestamp)
+    validate_timestamp(fb.first_frame_transmission_timestamp)
 
     received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -248,7 +247,7 @@ async def _unittest_can_transport() -> None:
     assert received.transfer_id == 2
     assert received.source_node_id == 5
     assert received.priority == Priority.SLOW
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x55' * 13  # The 0x55 at the end is padding
 
     assert await broadcaster.send_until(Transfer(
@@ -265,7 +264,7 @@ async def _unittest_can_transport() -> None:
     assert received.transfer_id == 3
     assert received.source_node_id == 5
     assert received.priority == Priority.OPTIONAL
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert list(received.fragmented_payload) == [_mem('qwerty')]
 
     assert promiscuous_m12345.sample_statistics() == SessionStatistics(transfers=3, frames=7, payload_bytes=325)
@@ -296,14 +295,14 @@ async def _unittest_can_transport() -> None:
     assert received is not None
     assert received.transfer_id == 2
     assert received.priority == Priority.SLOW
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x55' * 13  # The 0x55 at the end is padding
 
     received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert received.transfer_id == 3
     assert received.priority == Priority.OPTIONAL
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert list(received.fragmented_payload) == [_mem('qwerty')]
 
     assert selective_m12345_5.sample_statistics() == SessionStatistics(transfers=2, frames=6, payload_bytes=319)
@@ -442,7 +441,7 @@ async def _unittest_can_transport() -> None:
 
     fb = feedback_collector.take()
     assert fb.original_transfer_timestamp == ts
-    assert is_timestamp_valid(fb.first_frame_transmission_timestamp)
+    validate_timestamp(fb.first_frame_transmission_timestamp)
 
     received = await promiscuous_server_s333.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -450,7 +449,7 @@ async def _unittest_can_transport() -> None:
     assert received.source_node_id == 5
     assert received.transfer_id == 12
     assert received.priority == Priority.FAST
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert len(received.fragmented_payload) == 7                    # Equals the number of frames
     assert sum(map(len, received.fragmented_payload)) == 438 + 1    # Padding also included
     assert b'Until philosophers are kings' in bytes(received.fragmented_payload[0])
@@ -460,7 +459,7 @@ async def _unittest_can_transport() -> None:
     assert received is not None
     assert received.transfer_id == 12
     assert received.priority == Priority.FAST
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert len(received.fragmented_payload) == 7                    # Equals the number of frames
     assert sum(map(len, received.fragmented_payload)) == 438 + 1    # Padding also included
     assert b'Until philosophers are kings' in bytes(received.fragmented_payload[0])
@@ -584,7 +583,7 @@ async def _unittest_can_transport() -> None:
     assert received.source_node_id == 123
     assert received.priority == Priority.EXCEPTIONAL
     assert received.transfer_id == 7
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert bytes(received.fragmented_payload[0]).startswith(b'Finally')
     assert bytes(received.fragmented_payload[-1]).rstrip(b'\x55').endswith(b'out of his mind.')
 
@@ -592,7 +591,7 @@ async def _unittest_can_transport() -> None:
     assert received is not None
     assert received.priority == Priority.EXCEPTIONAL
     assert received.transfer_id == 7
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert bytes(received.fragmented_payload[0]).startswith(b'Finally')
     assert bytes(received.fragmented_payload[-1]).rstrip(b'\x55').endswith(b'out of his mind.')
 
@@ -620,13 +619,13 @@ async def _unittest_can_transport() -> None:
                                                                  in_frames_uavcan=15,
                                                                  in_frames_uavcan_accepted=14)
 
-    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
+    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 3.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123
     assert received.priority == Priority.NOMINAL
     assert received.transfer_id == 7
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert b''.join(received.fragmented_payload) == b''
 
     assert subscriber_promiscuous.sample_statistics() == SessionStatistics(transfers=2,
@@ -659,7 +658,7 @@ async def _unittest_can_transport() -> None:
     assert received is not None
     assert received.priority == Priority.HIGH
     assert received.transfer_id == 8
-    assert is_timestamp_valid(received.timestamp)
+    validate_timestamp(received.timestamp)
     assert list(map(bytes, received.fragmented_payload)) == [
         b'a' * 63,
         b'b' * 63,

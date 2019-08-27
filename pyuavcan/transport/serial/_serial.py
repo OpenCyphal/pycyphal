@@ -419,7 +419,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             self._serial_port.close()
 
         finally:
-            _logger.info('%s: Reader thread is exiting. Head aega.', self)
+            _logger.debug('%s: Reader thread is exiting. Head aega.', self)
 
     def _ensure_not_closed(self) -> None:
         if self._closed:
