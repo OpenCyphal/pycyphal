@@ -39,8 +39,6 @@ import {{ n }}
 
 {#-
  # FIELD TYPE ANNOTATIONS.
- # Observe that for composite types we use forward references (wrapping into string literals).
- # This is required to break circular dependency when external composite types are referenced from top-level entities.
 -#}
 {%- macro strict_type_annotation(t) -%}
     {%-   if t is BooleanType   -%} bool
