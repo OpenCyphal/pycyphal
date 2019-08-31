@@ -29,9 +29,9 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class SerialTransportStatistics(pyuavcan.transport.TransportStatistics):
-    in_bytes:          int = 0
-    in_frames:         int = 0
-    in_unparsed_bytes: int = 0
+    in_bytes:             int = 0
+    in_frames:            int = 0
+    in_out_of_band_bytes: int = 0
 
     out_bytes:      int = 0
     out_frames:     int = 0
@@ -321,15 +321,15 @@ class SerialTransport(pyuavcan.transport.Transport):
                     # noinspection PyProtectedMember
                     session._process_frame(frame)
 
-    def _handle_received_unparsed_data(self, data: memoryview) -> None:
-        self._statistics.in_unparsed_bytes += len(data)
+    def _handle_received_out_of_band_data(self, data: memoryview) -> None:
+        self._statistics.in_out_of_band_bytes += len(data)
         printable: typing.Union[str, bytes] = bytes(data)
         try:
             assert isinstance(printable, bytes)
             printable = printable.decode('utf8')
         except ValueError:
             pass
-        _logger.warning('%s: Unparsed: %s', self._serial_port.name, printable)
+        _logger.warning('%s: Out-of-band: %s', self._serial_port.name, printable)
 
     def _handle_received_item_and_update_stats(self,
                                                item:           typing.Union[SerialFrame, memoryview],
@@ -337,7 +337,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         if isinstance(item, SerialFrame):
             self._handle_received_frame(item)
         elif isinstance(item, memoryview):
-            self._handle_received_unparsed_data(item)
+            self._handle_received_out_of_band_data(item)
         else:
             assert False
 

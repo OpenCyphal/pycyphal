@@ -14,10 +14,11 @@ class StreamParser:
     A stream parser is fed with bytes received from the channel.
     The parser maintains internal parsing state machine; whenever the machine detects that a valid frame is received,
     the callback is invoked. When the state machine identifies that a received block of data cannot possibly
-    contain or be part of a valid frame, the raw bytes are delivered into the callback as-is for optional processing.
-    The raw bytes are always unescaped and never contain the frame delimiter bytes; that is, the parser does not
-    guarantee that extraneous data (i.e., data not belonging to the protocol set) is retained in its original form.
-    An empty sequence of raw bytes is never reported.
+    contain or be part of a valid frame, the raw bytes are delivered into the callback as-is for optional later
+    processing; such data is called "out-of-band" (OOB) data.
+    The OOB bytes are always unescaped and never contain the frame delimiter bytes; that is, the parser does not
+    guarantee that OOB data (not belonging to the protocol set) is retained in its original form.
+    An empty sequence of OOB bytes is never reported.
     The raw data reporting can be useful if the same serial port is used both for UAVCAN and as a text console.
     """
     def __init__(self,

@@ -125,7 +125,7 @@ async def _unittest_serial_transport() -> None:
     print(tr.sample_statistics())
     assert tr.sample_statistics().in_bytes >= 32 + sft_capacity + 2
     assert tr.sample_statistics().in_frames == 1
-    assert tr.sample_statistics().in_unparsed_bytes == 0
+    assert tr.sample_statistics().in_out_of_band_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
     assert tr.sample_statistics().out_frames == 1
     assert tr.sample_statistics().out_transfers == 1
@@ -193,7 +193,7 @@ async def _unittest_serial_transport() -> None:
     assert tr.sample_statistics().in_bytes >= \
         (32 + sft_capacity + 2) + (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
     assert tr.sample_statistics().in_frames == 1 + 3 * service_multiplication_factor
-    assert tr.sample_statistics().in_unparsed_bytes == 0
+    assert tr.sample_statistics().in_out_of_band_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
     assert tr.sample_statistics().out_frames == 1 + 3 * service_multiplication_factor
     assert tr.sample_statistics().out_transfers == 1 + 1 * service_multiplication_factor
@@ -219,7 +219,7 @@ async def _unittest_serial_transport() -> None:
     assert tr.sample_statistics().in_bytes >= \
         (32 + sft_capacity + 2) + (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
     assert tr.sample_statistics().in_frames == 1 + 3 * service_multiplication_factor
-    assert tr.sample_statistics().in_unparsed_bytes == 0
+    assert tr.sample_statistics().in_out_of_band_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
     assert tr.sample_statistics().out_frames == 1 + 3 * service_multiplication_factor
     assert tr.sample_statistics().out_transfers == 1 + 1 * service_multiplication_factor
@@ -256,7 +256,7 @@ async def _unittest_serial_transport() -> None:
     assert None is await client_listener.receive_until(get_monotonic() + 0.1)
 
     #
-    # Unparsed data test.
+    # Out-of-band data test.
     #
     stats_reference = tr.sample_statistics()
 
@@ -265,7 +265,7 @@ async def _unittest_serial_transport() -> None:
     # The frame delimiter is needed to force new frame in the state machine.
     tr.serial_port.write(grownups + bytes([SerialFrame.FRAME_DELIMITER_BYTE]))
     stats_reference.in_bytes += len(grownups) + 1
-    stats_reference.in_unparsed_bytes += len(grownups)
+    stats_reference.in_out_of_band_bytes += len(grownups)
 
     # Wait for the reader thread to catch up.
     assert None is await subscriber_selective.receive_until(get_monotonic() + 0.2)
@@ -279,7 +279,7 @@ async def _unittest_serial_transport() -> None:
     # The frame delimiter is needed to force new frame in the state machine.
     tr.serial_port.write(bytes([0xFF, 0xFF, SerialFrame.FRAME_DELIMITER_BYTE]))
     stats_reference.in_bytes += 3
-    stats_reference.in_unparsed_bytes += 2
+    stats_reference.in_out_of_band_bytes += 2
 
     # Wait for the reader thread to catch up.
     assert None is await subscriber_selective.receive_until(get_monotonic() + 0.2)
