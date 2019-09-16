@@ -146,7 +146,7 @@ def generate_package(package_parent_directory:        _AnyPath,
     >>> sys.path.insert(0, str(dsdl_generated_dir))
     >>> try:
     ...     import sirius_cyber_corp
-    ...     import uavcan.si.volumetric_flow_rate
+    ...     import uavcan.si.sample.volumetric_flow_rate
     ... except (ImportError, AttributeError):
     ...     _ = pyuavcan.dsdl.generate_package(package_parent_directory=dsdl_generated_dir,
     ...                                        root_namespace_directory='tests/dsdl/namespaces/sirius_cyber_corp',
@@ -155,7 +155,7 @@ def generate_package(package_parent_directory:        _AnyPath,
     ...                                        root_namespace_directory='tests/public_regulated_data_types/uavcan')
     ...     importlib.invalidate_caches()
     ...     import sirius_cyber_corp
-    ...     import uavcan.si.volumetric_flow_rate
+    ...     import uavcan.si.sample.volumetric_flow_rate
     """
     # Read the DSDL definitions
     composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
