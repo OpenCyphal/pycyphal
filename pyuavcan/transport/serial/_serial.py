@@ -21,7 +21,6 @@ from ._session import SerialOutputSession, SerialInputSession
 
 
 _SERIAL_PORT_READ_TIMEOUT = 1.0
-_RX_MTU = 1024 * 1024
 
 
 _logger = logging.getLogger(__name__)
@@ -116,7 +115,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     DEFAULT_MTU = 1024
 
     VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
-    VALID_MTU_RANGE = (1024, _RX_MTU)
+    VALID_MTU_RANGE = (1024, 1024 * 10)
 
     def __init__(self,
                  serial_port:                 typing.Union[str, serial.SerialBase],
@@ -142,7 +141,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         :param mtu: Use single-frame transfers for all outgoing transfers containing not more than than
             this many bytes of payload. Otherwise, use multi-frame transfers.
-            This setting does not affect transfer reception (RX MTU is hard-coded at 1 MiB).
+            This setting does not affect transfer reception; the RX MTU is hard-coded as ``max(VALID_MTU_RANGE)``.
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
@@ -398,7 +397,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, item, in_bytes_count)
 
         try:
-            parser = StreamParser(callback, _RX_MTU)
+            parser = StreamParser(callback, max(self.VALID_MTU_RANGE))
             assert abs(self._serial_port.timeout - _SERIAL_PORT_READ_TIMEOUT) < 0.1
 
             while not self._closed and self._serial_port.is_open:
