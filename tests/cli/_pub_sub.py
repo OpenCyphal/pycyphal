@@ -117,7 +117,7 @@ def _unittest_slow_cli_pub_sub_b(transport_args: typing.Sequence[str]) -> None:
         *transport_args
     )
 
-    time.sleep(1.0)     # Time to let the background processes finish initialization
+    time.sleep(3.0)     # Time to let the background processes finish initialization
 
     proc = BackgroundChildProcess.cli(
         '-v', 'pub', 'uavcan.diagnostic.Record.1.0', '{}',
@@ -125,7 +125,7 @@ def _unittest_slow_cli_pub_sub_b(transport_args: typing.Sequence[str]) -> None:
     )
     proc.wait(timeout=8)
 
-    time.sleep(1.0)     # Time to sync up
+    time.sleep(2.0)     # Time to sync up
 
     assert proc_sub_heartbeat.wait(1.0, interrupt=True)[1].strip() == '', 'Anonymous nodes must not broadcast heartbeat'
 
