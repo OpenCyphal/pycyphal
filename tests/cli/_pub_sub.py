@@ -34,7 +34,7 @@ def _unittest_slow_cli_pub_sub_a(transport_args: typing.Sequence[str]) -> None:
     )
 
     proc_sub_temperature = BackgroundChildProcess.cli(
-        'sub', '555.uavcan.si.temperature.Scalar.1.0', '--count=3', '--format=JSON',
+        'sub', '555.uavcan.si.sample.temperature.Scalar.1.0', '--count=3', '--format=JSON',
         *transport_args
     )
 
@@ -48,7 +48,7 @@ def _unittest_slow_cli_pub_sub_a(transport_args: typing.Sequence[str]) -> None:
 
         '1234.uavcan.diagnostic.Record.1.0', '{text: "Goodbye world."}',
 
-        '555.uavcan.si.temperature.Scalar.1.0', '{kelvin: 123.456}',
+        '555.uavcan.si.sample.temperature.Scalar.1.0', '{kelvin: 123.456}',
 
         '--count=3', '--period=0.1', '--priority=SLOW', '--local-node-id=51',
         '--heartbeat-fields={vendor_specific_status_code: 54321}',

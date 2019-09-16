@@ -88,7 +88,7 @@ def _unittest_slow_cli_demo_basic_usage(
     )
 
     proc_sub_temperature = BackgroundChildProcess.cli(
-        'sub', '12345.uavcan.si.temperature.Scalar.1.0', '--count=3', '--format=JSON',
+        'sub', '12345.uavcan.si.sample.temperature.Scalar.1.0', '--count=3', '--format=JSON',
         '--with-metadata', *iface_option.cli_arguments
     )
 
@@ -106,7 +106,7 @@ def _unittest_slow_cli_demo_basic_usage(
 
         run_cli_tool(
             '-v',
-            'pub', '12345.uavcan.si.temperature.Scalar.1.0', '{kelvin: 321.5}',
+            'pub', '12345.uavcan.si.sample.temperature.Scalar.1.0', '{kelvin: 321.5}',
             '--count=3', '--period=0.1', '--priority=SLOW', '--local-node-id=0',
             '--heartbeat-fields={vendor_specific_status_code: 123456}',
             *iface_option.cli_arguments,

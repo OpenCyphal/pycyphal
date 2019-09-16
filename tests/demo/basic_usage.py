@@ -65,9 +65,9 @@ except (ImportError, AttributeError):
 
 # Import other namespaces we're planning to use. Nested namespaces are not auto-imported, so in order to reach,
 # say, "uavcan.node.Heartbeat", you have to do "import uavcan.node".
-import uavcan.node              # noqa E402
-import uavcan.diagnostic        # noqa E402
-import uavcan.si.temperature    # noqa E402
+import uavcan.node                      # noqa E402
+import uavcan.diagnostic                # noqa E402
+import uavcan.si.sample.temperature     # noqa E402
 
 
 class DemoApplication:
@@ -157,7 +157,7 @@ class DemoApplication:
         self._pub_diagnostic_record.send_timeout = 2.0
 
         # A message subscription.
-        self._sub_temperature = self._node.presentation.make_subscriber(uavcan.si.temperature.Scalar_1_0, 12345)
+        self._sub_temperature = self._node.presentation.make_subscriber(uavcan.si.sample.temperature.Scalar_1_0, 12345)
         self._sub_temperature.receive_in_background(self._handle_temperature)
 
         # When all is initialized, don't forget to start the node!
@@ -238,7 +238,7 @@ class DemoApplication:
             return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND)
 
     async def _handle_temperature(self,
-                                  msg:      uavcan.si.temperature.Scalar_1_0,
+                                  msg:      uavcan.si.sample.temperature.Scalar_1_0,
                                   metadata: pyuavcan.transport.TransferFrom) -> None:
         """
         A subscription message handler. This is also an async function, so we can block inside if necessary.
