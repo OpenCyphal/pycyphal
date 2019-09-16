@@ -19,8 +19,8 @@ async def _unittest_loopback_transport() -> None:
 
     protocol_params = pyuavcan.transport.ProtocolParameters(
         transfer_id_modulo=32,
-        node_id_set_cardinality=2 ** 64,
-        single_frame_transfer_payload_capacity_bytes=2 ** 64 - 1,
+        max_nodes=2 ** 64,
+        mtu=2 ** 64 - 1,
     )
     tr.protocol_parameters = protocol_params
     assert tr.protocol_parameters == protocol_params

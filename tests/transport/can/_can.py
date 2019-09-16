@@ -44,10 +44,10 @@ async def _unittest_can_transport() -> None:
 
     assert tr.protocol_parameters == pyuavcan.transport.ProtocolParameters(
         transfer_id_modulo=32,
-        node_id_set_cardinality=128,
-        single_frame_transfer_payload_capacity_bytes=63
+        max_nodes=128,
+        mtu=63
     )
-    assert tr.frame_payload_capacity_bytes == 63
+    assert tr.mtu == 63
     assert tr.local_node_id is None
     assert tr.protocol_parameters == tr2.protocol_parameters
 

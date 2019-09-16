@@ -95,8 +95,8 @@ class CANTransport(pyuavcan.transport.Transport):
         if media.mtu not in Media.VALID_MTU_SET:
             raise pyuavcan.transport.InvalidMediaConfigurationError(
                 f'The MTU value {media.mtu} is not a member of {Media.VALID_MTU_SET}')
-        self._frame_payload_capacity = media.mtu - 1
-        assert self._frame_payload_capacity > 0
+        self._mtu = media.mtu - 1
+        assert self._mtu > 0
 
         if media.number_of_acceptance_filters < 1:
             raise pyuavcan.transport.InvalidMediaConfigurationError(
@@ -120,16 +120,17 @@ class CANTransport(pyuavcan.transport.Transport):
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=TRANSFER_ID_MODULO,
-            node_id_set_cardinality=CANID.NODE_ID_MASK + 1,
-            single_frame_transfer_payload_capacity_bytes=self.frame_payload_capacity_bytes
+            max_nodes=CANID.NODE_ID_MASK + 1,
+            mtu=self._mtu,
         )
 
     @property
-    def frame_payload_capacity_bytes(self) -> int:
+    def mtu(self) -> int:
         """
-        This is the MTU minus one; i.e., 7 for CAN 2.0.
+        This is the media layer MTU minus one; i.e., 7 for CAN 2.0.
+        Because the transport layer adds one byte of overhead per frame.
         """
-        return self._frame_payload_capacity
+        return self._mtu
 
     @property
     def local_node_id(self) -> typing.Optional[int]:

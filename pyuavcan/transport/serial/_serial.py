@@ -21,7 +21,7 @@ from ._session import SerialOutputSession, SerialInputSession
 
 
 _SERIAL_PORT_READ_TIMEOUT = 1.0
-_MAX_RECEIVE_PAYLOAD_SIZE_BYTES = 1024 * 100
+_RX_MTU = 1024 * 1024
 
 
 _logger = logging.getLogger(__name__)
@@ -113,18 +113,16 @@ class SerialTransport(pyuavcan.transport.Transport):
     """
 
     DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
-    DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES = 1024
+    DEFAULT_MTU = 1024
 
     VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
-    VALID_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES = (512, _MAX_RECEIVE_PAYLOAD_SIZE_BYTES)
+    VALID_MTU_RANGE = (1024, _RX_MTU)
 
-    def __init__(
-        self,
-        serial_port:                                  typing.Union[str, serial.SerialBase],
-        service_transfer_multiplier:                  int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
-        single_frame_transfer_payload_capacity_bytes: int = DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
-        loop:                                         typing.Optional[asyncio.AbstractEventLoop] = None
-    ):
+    def __init__(self,
+                 serial_port:                 typing.Union[str, serial.SerialBase],
+                 service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
+                 mtu:                         int = DEFAULT_MTU,
+                 loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
         """
         :param serial_port: The serial port instance to communicate over, or its name.
             In the latter case, the port will be constructed via :func:`serial.serial_for_url`
@@ -142,21 +140,21 @@ class SerialTransport(pyuavcan.transport.Transport):
             no special activities are needed there (read the UAVCAN Specification for background). This setting
             does not affect message transfers.
 
-        :param single_frame_transfer_payload_capacity_bytes: Use single-frame transfers for all outgoing transfers
-            containing not more than than this many bytes of payload. Otherwise, use multi-frame transfers.
-            This setting does not affect transfer reception (any payload size is always accepted).
+        :param mtu: Use single-frame transfers for all outgoing transfers containing not more than than
+            this many bytes of payload. Otherwise, use multi-frame transfers.
+            This setting does not affect transfer reception (RX MTU is hard-coded at 1 MiB).
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._service_transfer_multiplier = int(service_transfer_multiplier)
-        self._sft_payload_capacity_bytes = int(single_frame_transfer_payload_capacity_bytes)
+        self._sft_payload_capacity_bytes = int(mtu)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         low, high = self.VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE
         if not (low <= self._service_transfer_multiplier <= high):
             raise ValueError(f'Invalid service transfer multiplier: {self._service_transfer_multiplier}')
 
-        low, high = self.VALID_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES
+        low, high = self.VALID_MTU_RANGE
         if not (low <= self._sft_payload_capacity_bytes <= high):
             raise ValueError(f'Invalid SFT payload limit: {self._sft_payload_capacity_bytes} bytes')
 
@@ -201,8 +199,8 @@ class SerialTransport(pyuavcan.transport.Transport):
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=SerialFrame.TRANSFER_ID_MASK + 1,
-            node_id_set_cardinality=len(SerialFrame.NODE_ID_RANGE),
-            single_frame_transfer_payload_capacity_bytes=self._sft_payload_capacity_bytes
+            max_nodes=len(SerialFrame.NODE_ID_RANGE),
+            mtu=self._sft_payload_capacity_bytes,
         )
 
     @property
@@ -211,7 +209,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     def set_local_node_id(self, node_id: int) -> None:
         if self._local_node_id is None:
-            if 0 <= node_id < self.protocol_parameters.node_id_set_cardinality:
+            if 0 <= node_id < self.protocol_parameters.max_nodes:
                 self._ensure_not_closed()
                 self._local_node_id = int(node_id)
             else:
@@ -400,7 +398,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, item, in_bytes_count)
 
         try:
-            parser = StreamParser(callback, _MAX_RECEIVE_PAYLOAD_SIZE_BYTES)
+            parser = StreamParser(callback, _RX_MTU)
             assert abs(self._serial_port.timeout - _SERIAL_PORT_READ_TIMEOUT) < 0.1
 
             while not self._closed and self._serial_port.is_open:

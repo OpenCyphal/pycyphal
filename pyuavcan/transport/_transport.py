@@ -17,16 +17,30 @@ from ._payload_metadata import PayloadMetadata
 @dataclasses.dataclass(frozen=True)
 class ProtocolParameters:
     """
-    Basic transport capabilities. These parameters are defined by a transport specification.
+    Basic transport capabilities. These parameters are defined by the underlying transport specifications.
 
     Normally, the values should never change for a particular transport instance.
     This is not a hard guarantee, however.
     For example, a redundant transport aggregator may return a different set of parameters after
-    the set of aggregated transports is changed (e.g., a transport is added or removed).
+    the set of aggregated transports is changed (i.e., a transport is added or removed).
     """
-    transfer_id_modulo:                           int   #: E.g., 32 for CAN, 2**56 for UDP.
-    node_id_set_cardinality:                      int   #: E.g., 128 for CAN.
-    single_frame_transfer_payload_capacity_bytes: int   #: E.g., 7 for CAN 2.0, <=63 for CAN FD.
+
+    #: The cardinality of the set of distinct transfer-ID values; i.e., the overflow period.
+    #: All high-overhead transports (UDP, Serial, etc.) use a sufficiently large value that will never overflow
+    #: in a realistic, practical scenario.
+    #: The background and motivation are explained at https://forum.uavcan.org/t/alternative-transport-protocols/324.
+    #: Example: 32 for CAN, 72057594037927936 (2**56) for UDP.
+    transfer_id_modulo: int
+
+    #: How many nodes can the transport accommodate in a given network.
+    #: Example: 128 for CAN, 4096 for Serial.
+    max_nodes: int
+
+    #: The maximum number of payload bytes in a single-frame transfer.
+    #: If the number of payload bytes in a transfer exceeds this limit, the transport will spill
+    #: the data into a multi-frame transfer.
+    #: Example: 7 for CAN 2.0, <=63 for CAN FD.
+    mtu: int
 
 
 @dataclasses.dataclass
@@ -34,7 +48,7 @@ class TransportStatistics:
     """
     Base class for transport-specific low-level statistical counters.
     Not to be confused with :class:`pyuavcan.transport.SessionStatistics`,
-    which is updated per-session.
+    which is tracked per-session.
     """
     pass
 

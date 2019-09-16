@@ -54,7 +54,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
     def set_local_node_id(self, node_id: int) -> None:
         if self.local_node_id is None:
-            nid_card = self.protocol_parameters.node_id_set_cardinality
+            nid_card = self.protocol_parameters.max_nodes
             if 0 <= node_id < nid_card:
                 for t in self._transports:
                     t.set_local_node_id(node_id)
