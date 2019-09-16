@@ -38,8 +38,8 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         # Unlimited protocol capabilities by default.
         self._protocol_parameters = pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=2 ** 64,
-            node_id_set_cardinality=2 ** 64,
-            single_frame_transfer_payload_capacity_bytes=2 ** 64 - 1,
+            max_nodes=2 ** 64,
+            mtu=2 ** 64 - 1,
         )
 
     @property
@@ -64,7 +64,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     def set_local_node_id(self, node_id: int) -> None:
         if self._local_node_id is None:
             node_id = int(node_id)
-            if 0 <= node_id < self._protocol_parameters.node_id_set_cardinality:
+            if 0 <= node_id < self._protocol_parameters.max_nodes:
                 self._local_node_id = node_id
             else:
                 raise ValueError(f'Invalid node-ID value: {node_id}')

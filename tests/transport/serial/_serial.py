@@ -25,7 +25,7 @@ async def _unittest_serial_transport() -> None:
 
     with pytest.raises(ValueError):
         _ = SerialTransport(serial_port='loop://',
-                            single_frame_transfer_payload_capacity_bytes=1)
+                            mtu=1)
 
     with pytest.raises(ValueError):
         _ = SerialTransport(serial_port='loop://',
@@ -44,18 +44,17 @@ async def _unittest_serial_transport() -> None:
     assert tr.output_sessions == []
 
     assert list(xml.etree.ElementTree.fromstring(tr.descriptor).itertext()) == ['loop://']
-    assert str(SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES) in tr.descriptor
+    assert str(SerialTransport.DEFAULT_MTU) in tr.descriptor
 
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
-        node_id_set_cardinality=4096,
-        single_frame_transfer_payload_capacity_bytes=SerialTransport
-        .DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES,
+        max_nodes=4096,
+        mtu=SerialTransport.DEFAULT_MTU,
     )
 
     assert tr.sample_statistics() == SerialTransportStatistics()
 
-    sft_capacity = SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES
+    sft_capacity = SerialTransport.DEFAULT_MTU
 
     payload_single = [_mem('qwertyui'), _mem('01234567')] * (sft_capacity // 16)
     assert sum(map(len, payload_single)) == sft_capacity

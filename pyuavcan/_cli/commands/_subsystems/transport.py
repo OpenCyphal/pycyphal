@@ -126,7 +126,7 @@ def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
                 (str, ''),
                 (int, default_baud_rate),
                 (int, SerialTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER),
-                (int, SerialTransport.DEFAULT_SINGLE_FRAME_TRANSFER_PAYLOAD_CAPACITY_BYTES),
+                (int, SerialTransport.DEFAULT_MTU),
             )
             serial_port_name, baud_rate, srv_mult, sft_payload_size = seq_parser(arg_seq)
 
@@ -136,7 +136,7 @@ def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
 
             return SerialTransport(serial_port=serial_port,
                                    service_transfer_multiplier=srv_mult,
-                                   single_frame_transfer_payload_capacity_bytes=sft_payload_size)
+                                   mtu=sft_payload_size)
         except Exception as ex:
             _logger.error('Could not construct transport: %s', ex)
             raise
