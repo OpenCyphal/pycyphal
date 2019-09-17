@@ -212,7 +212,7 @@ class TransferReassembler:
         Otherwise, returns None.
         Observe that this is a static method because anonymous transfers are fundamentally stateless.
         """
-        if frame.index == 0 and frame.end_of_transfer:
+        if frame.single_frame_transfer:
             return pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
                                                    priority=frame.priority,
                                                    transfer_id=frame.transfer_id,

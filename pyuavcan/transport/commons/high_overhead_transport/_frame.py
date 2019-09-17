@@ -55,6 +55,10 @@ class Frame:
         if not isinstance(self.payload, memoryview):
             raise TypeError(f'Bad payload type: {type(self.payload).__name__}')
 
+    @property
+    def single_frame_transfer(self) -> bool:
+        return self.index == 0 and self.end_of_transfer
+
 
 # noinspection PyTypeChecker
 def _unittest_frame_base_ctor() -> None:
