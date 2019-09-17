@@ -57,15 +57,15 @@ class SerialTransport(pyuavcan.transport.Transport):
     least significant byte first, most significant bit first)::
 
         uint8   version                 # Always zero. Discard the frame if not.
-        uint8   priority                # Like IEEE 802.15.4, three most significant bits: 0 = highest, 7 = lowest.
+        uint8   priority                # 0 = highest, 7 = lowest; the rest are unused.
         uint16  source node ID          # 0xFFFF = anonymous.
         uint16  destination node ID     # 0xFFFF = broadcast.
-        uint16  data specifier          # Like IEEE 802.15.4.
+        uint16  data specifier
 
         uint64  data type hash
         uint64  transfer ID
 
-        uint32  frame index EOT         # Like IEEE 802.15.4; MSB set if last frame of the transfer.
+        uint32  frame index EOT         # MSB set if last frame of the transfer.
         void32                          # Set to zero when sending, ignore when receiving.
 
     For message frames, the data specifier field contains the subject-ID value,
