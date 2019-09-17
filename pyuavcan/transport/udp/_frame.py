@@ -78,6 +78,8 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     TRANSFER_ID_MASK = 2 ** 56 - 1
     INDEX_MASK       = 2 ** 31 - 1
 
+    SINGLE_FRAME_TRANSFER_HEADER_SIZE_BYTES = 16
+
     data_type_hash: int
 
     def __post_init__(self) -> None:

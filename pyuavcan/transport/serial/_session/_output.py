@@ -45,19 +45,19 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         Decide whether we want to keep that later. Those can't be implemented on CAN bus, for example.
     """
     def __init__(self,
-                 specifier:                  pyuavcan.transport.SessionSpecifier,
-                 payload_metadata:           pyuavcan.transport.PayloadMetadata,
-                 sft_payload_capacity_bytes: int,
-                 local_node_id_accessor:     typing.Callable[[], typing.Optional[int]],
-                 send_handler:               SendHandler,
-                 finalizer:                  typing.Callable[[], None]):
+                 specifier:              pyuavcan.transport.SessionSpecifier,
+                 payload_metadata:       pyuavcan.transport.PayloadMetadata,
+                 mtu:                    int,
+                 local_node_id_accessor: typing.Callable[[], typing.Optional[int]],
+                 send_handler:           SendHandler,
+                 finalizer:              typing.Callable[[], None]):
         """
         Do not call this directly.
         Instead, use the factory method :meth:`pyuavcan.transport.serial.SerialTransport.get_output_session`.
         """
         self._specifier = specifier
         self._payload_metadata = payload_metadata
-        self._sft_payload_capacity_bytes = int(sft_payload_capacity_bytes)
+        self._mtu = int(mtu)
         self._local_node_id_accessor = local_node_id_accessor
         self._send_handler = send_handler
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
@@ -104,7 +104,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
 
         frames = list(pyuavcan.transport.commons.high_overhead_transport.serialize_transfer(
             transfer.fragmented_payload,
-            self._sft_payload_capacity_bytes,
+            self._mtu,
             construct_frame
         ))
 
@@ -183,7 +183,7 @@ def _unittest_output_session() -> None:
         _ = SerialOutputSession(
             specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.RESPONSE), None),
             payload_metadata=PayloadMetadata(0xdeadbeefbadc0ffe, 1024),
-            sft_payload_capacity_bytes=10,
+            mtu=10,
             local_node_id_accessor=lambda: 1234,  # pragma: no cover
             send_handler=do_send,
             finalizer=do_finalize,
@@ -192,7 +192,7 @@ def _unittest_output_session() -> None:
     sos = SerialOutputSession(
         specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
         payload_metadata=PayloadMetadata(0xdeadbeefbadc0ffe, 1024),
-        sft_payload_capacity_bytes=10,
+        mtu=10,
         local_node_id_accessor=lambda: None,  # pragma: no cover
         send_handler=do_send,
         finalizer=do_finalize,
@@ -210,7 +210,7 @@ def _unittest_output_session() -> None:
     sos = SerialOutputSession(
         specifier=SessionSpecifier(MessageDataSpecifier(3210), None),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
-        sft_payload_capacity_bytes=11,
+        mtu=11,
         local_node_id_accessor=lambda: None,
         send_handler=do_send,
         finalizer=do_finalize,
@@ -281,7 +281,7 @@ def _unittest_output_session() -> None:
     sos = SerialOutputSession(
         specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
-        sft_payload_capacity_bytes=10,
+        mtu=10,
         local_node_id_accessor=lambda: 1234,
         send_handler=do_send,
         finalizer=do_finalize,

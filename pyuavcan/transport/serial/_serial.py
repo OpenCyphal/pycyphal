@@ -146,7 +146,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._service_transfer_multiplier = int(service_transfer_multiplier)
-        self._sft_payload_capacity_bytes = int(mtu)
+        self._mtu = int(mtu)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         low, high = self.VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE
@@ -154,8 +154,8 @@ class SerialTransport(pyuavcan.transport.Transport):
             raise ValueError(f'Invalid service transfer multiplier: {self._service_transfer_multiplier}')
 
         low, high = self.VALID_MTU_RANGE
-        if not (low <= self._sft_payload_capacity_bytes <= high):
-            raise ValueError(f'Invalid SFT payload limit: {self._sft_payload_capacity_bytes} bytes')
+        if not (low <= self._mtu <= high):
+            raise ValueError(f'Invalid MTU: {self._mtu} bytes')
 
         self._local_node_id: typing.Optional[int] = None
 
@@ -170,7 +170,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         # The serialization buffer is pre-allocated for performance reasons;
         # it is needed to store frame contents before they are emitted into the serial port.
         # Access must be protected with the port lock!
-        self._serialization_buffer = bytearray(0 for _ in range(self._sft_payload_capacity_bytes * 3))
+        self._serialization_buffer = bytearray(0 for _ in range(self._mtu * 3))
 
         self._input_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialOutputSession] = {}
@@ -199,7 +199,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=SerialFrame.TRANSFER_ID_MASK + 1,
             max_nodes=len(SerialFrame.NODE_ID_RANGE),
-            mtu=self._sft_payload_capacity_bytes,
+            mtu=self._mtu,
         )
 
     @property
@@ -272,7 +272,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             self._output_registry[specifier] = SerialOutputSession(
                 specifier=specifier,
                 payload_metadata=payload_metadata,
-                sft_payload_capacity_bytes=self._sft_payload_capacity_bytes,
+                mtu=self._mtu,
                 local_node_id_accessor=lambda: self._local_node_id,
                 send_handler=send_transfer,
                 finalizer=finalizer
@@ -294,7 +294,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def descriptor(self) -> str:
         return \
-            f'<serial baudrate="{self._serial_port.baudrate}" sft_capacity="{self._sft_payload_capacity_bytes}" ' \
+            f'<serial baudrate="{self._serial_port.baudrate}" mtu="{self._mtu}" ' \
             f'srv_mult="{self._service_transfer_multiplier}">{self._serial_port.name}</serial>'
 
     @property
