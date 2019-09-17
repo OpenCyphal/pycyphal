@@ -8,3 +8,5 @@ from ._udp import UDPTransport as UDPTransport
 
 from ._session import UDPInputSession as UDPInputSession
 from ._session import UDPOutputSession as UDPOutputSession
+
+from ._frame import UDPFrame
