@@ -8,24 +8,14 @@ import copy
 import typing
 import asyncio
 import logging
-import ipaddress
 import dataclasses
 import pyuavcan
 from ._session import UDPInputSession, UDPOutputSession
 from ._frame import UDPFrame
+from ._network_map import NetworkMap
 
 
 _logger = logging.getLogger(__name__)
-
-
-IPNetwork = typing.Union[ipaddress.IPv4Network,
-                         ipaddress.IPv6Network]
-
-IPAddress = typing.Union[ipaddress.IPv4Address,
-                         ipaddress.IPv6Address]
-
-IPAddressSequence = typing.Union[typing.Sequence[ipaddress.IPv4Address],
-                                 typing.Sequence[ipaddress.IPv6Address]]
 
 
 @dataclasses.dataclass
@@ -35,6 +25,12 @@ class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class UDPTransport(pyuavcan.transport.Transport):
     """
+    Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value is rejected.
+
+    If IPv6 is used, the flow-ID of UAVCAN packets shall be zero.
+
+    The concept of anonymous node is not defined for UDP/IP; in this transport, every node always has a node-ID.
+    If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
     """
 
     #: By default, service transfer multiplication is disabled for UDP.
@@ -54,11 +50,11 @@ class UDPTransport(pyuavcan.transport.Transport):
     VALID_MTU_RANGE = (1024, 9000)
 
     def __init__(self,
-                 network:                     typing.Union[str, IPNetwork],
+                 ip_address_with_mask:        str,
                  mtu:                         int = DEFAULT_MTU,
                  service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
-        self._network = ipaddress.ip_network(network)
+        self._network_map = NetworkMap.new(ip_address_with_mask)
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
@@ -71,10 +67,12 @@ class UDPTransport(pyuavcan.transport.Transport):
         if not (low <= self._mtu <= high):
             raise ValueError(f'Invalid MTU: {self._mtu} bytes')
 
+        _logger.debug(f'IP: {self._network_map}; max nodes: {self._network_map.max_nodes}; '
+                      f'local node-ID: {self.local_node_id}')
+
         self._input_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, UDPOutputSession] = {}
 
-        self._hosts: IPAddressSequence = tuple(sorted(self._network.hosts))
         self._closed = False
         self._statistics = UDPTransportStatistics()
 
@@ -86,24 +84,20 @@ class UDPTransport(pyuavcan.transport.Transport):
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=UDPFrame.TRANSFER_ID_MASK + 1,
-            max_nodes=len(self._hosts),
+            max_nodes=self._network_map.max_nodes,
             mtu=self._mtu,
         )
 
     @property
-    def hosts(self) -> IPAddressSequence:
-        """
-        The ordered list of hosts on the network.
-        The index of a host on this list equals its node-ID.
-        """
-        return self._hosts
-
-    @property
     def local_node_id(self) -> typing.Optional[int]:
-        pass
+        return self._network_map.local_node_id
 
     def set_local_node_id(self, node_id: int) -> None:
-        pass
+        _ = node_id
+        raise pyuavcan.transport.InvalidTransportConfigurationError(
+            f'Cannot assign the node-ID of a UDP transport. '
+            f'Configure the local IP address via the operating system or use DHCP.'
+        )
 
     def close(self) -> None:
         self._closed = True
@@ -132,4 +126,4 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     @property
     def descriptor(self) -> str:
-        return f'<udp mtu="{self._mtu}" srv_mult="{self._srv_multiplier}">{self._network}</udp>'
+        return f'<udp mtu="{self._mtu}" srv_mult="{self._srv_multiplier}">{self._network_map}</udp>'
