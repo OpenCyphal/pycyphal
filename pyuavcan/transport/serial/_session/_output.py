@@ -157,8 +157,8 @@ def _unittest_output_session() -> None:
     from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback
 
     ts = Timestamp.now()
-
-    run_until_complete = asyncio.get_event_loop().run_until_complete
+    loop = asyncio.get_event_loop()
+    run_until_complete = loop.run_until_complete
 
     tx_timestamp: typing.Optional[Timestamp] = Timestamp.now()
     tx_exception: typing.Optional[Exception] = None
@@ -204,7 +204,7 @@ def _unittest_output_session() -> None:
                      priority=Priority.NOMINAL,
                      transfer_id=12340,
                      fragmented_payload=[]),
-            123456.789
+            loop.time() + 10.0
         ))
 
     sos = SerialOutputSession(
@@ -226,9 +226,9 @@ def _unittest_output_session() -> None:
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
                  fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
-        123456.789
+        999999999.999
     ))
-    assert last_monotonic_deadline == approx(123456.789)
+    assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 1
 
     with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
@@ -237,7 +237,7 @@ def _unittest_output_session() -> None:
                      priority=Priority.NOMINAL,
                      transfer_id=12340,
                      fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three four five')]),
-            123456.789
+            loop.time() + 10.0
         ))
 
     last_feedback: typing.Optional[Feedback] = None
@@ -254,9 +254,9 @@ def _unittest_output_session() -> None:
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
                  fragmented_payload=[]),
-        123456.789
+        999999999.999
     ))
-    assert last_monotonic_deadline == approx(123456.789)
+    assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 1
     assert last_feedback is not None
     assert last_feedback.original_transfer_timestamp == ts
@@ -294,9 +294,9 @@ def _unittest_output_session() -> None:
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
                  fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
-        123456.789
+        999999999.999
     ))
-    assert last_monotonic_deadline == approx(123456.789)
+    assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 2
 
     assert sos.sample_statistics() == SessionStatistics(
@@ -314,7 +314,7 @@ def _unittest_output_session() -> None:
                      priority=Priority.NOMINAL,
                      transfer_id=12340,
                      fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
-            123456.789
+            loop.time() + 10.0
         ))
 
     assert sos.sample_statistics() == SessionStatistics(
@@ -336,5 +336,5 @@ def _unittest_output_session() -> None:
                      priority=Priority.NOMINAL,
                      transfer_id=12340,
                      fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
-            123456.789
+            loop.time() + 10.0
         ))
