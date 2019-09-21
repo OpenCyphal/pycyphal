@@ -71,17 +71,20 @@ class NetworkMap(abc.ABC):
     @abc.abstractmethod
     def make_output_socket(self, remote_node_id: typing.Optional[int], remote_port: int) -> socket.socket:
         """
-        Make a new output socket connected to the specified port at the specified node or broadcast.
+        Make a new non-blocking output socket connected to the specified port at the specified node or broadcast.
+        The socket will be bound to an ephemeral port at the configured local network address.
         The required options (such as ``SO_BROADCAST`` etc) will be set up as needed automatically.
+        Timestamping will need to be enabled separately.
         """
         raise NotImplementedError
 
     @abc.abstractmethod
     def make_input_socket(self, local_port: int) -> socket.socket:
         """
-        Makes a new input socket bound to the specified port and the configured network address.
+        Makes a new non-blocking input socket bound to the specified port and the configured network address.
         By virtue of being bound, the socket will only receive data from the target subnet.
         The required socket options will be set up as needed automatically.
+        Timestamping will need to be enabled separately.
         """
         raise NotImplementedError
 

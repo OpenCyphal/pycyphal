@@ -89,6 +89,7 @@ class NetworkMapIPv4(NetworkMap):
     def _make_socket(self, local_port: int) -> socket.socket:
         bind_to = self._local.host_address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setblocking(False)
         try:
             # Output sockets shall be bound, too, in order to ensure that outgoing packets have the correct
             # source IP address specified. This is particularly important for localhost; an unbound socket
@@ -141,6 +142,9 @@ def _unittest_network_map_ipv4() -> None:
     data, sockaddr = inp.recvfrom(1024)
     assert data == b'Well, I got here the same way the coin did.'
     assert sockaddr[0] == '127.123.0.123'
+
+    out.close()
+    inp.close()
 
 
 class IPv4Address:

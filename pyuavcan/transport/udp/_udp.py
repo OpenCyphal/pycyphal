@@ -101,16 +101,22 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     def close(self) -> None:
         self._closed = True
-        raise NotImplementedError
+        for s in (*self.input_sessions, *self.output_sessions):
+            try:
+                s.close()
+            except Exception as ex:  # pragma: no cover
+                _logger.exception('%s: Failed to close session %r: %s', self, s, ex)
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.SessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPInputSession:
+        self._ensure_not_closed()
         raise NotImplementedError
 
     def get_output_session(self,
                            specifier:        pyuavcan.transport.SessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPOutputSession:
+        self._ensure_not_closed()
         raise NotImplementedError
 
     def sample_statistics(self) -> UDPTransportStatistics:
@@ -127,3 +133,7 @@ class UDPTransport(pyuavcan.transport.Transport):
     @property
     def descriptor(self) -> str:
         return f'<udp mtu="{self._mtu}" srv_mult="{self._srv_multiplier}">{self._network_map}</udp>'
+
+    def _ensure_not_closed(self) -> None:
+        if self._closed:
+            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
