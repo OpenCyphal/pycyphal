@@ -13,6 +13,7 @@ import pyuavcan
 from ._session import UDPInputSession, UDPOutputSession
 from ._frame import UDPFrame
 from ._network_map import NetworkMap
+from ._udp_port_mapping import map_data_specifier_to_udp_port_number
 
 
 _logger = logging.getLogger(__name__)
@@ -28,6 +29,13 @@ class UDPTransport(pyuavcan.transport.Transport):
     Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value is rejected.
 
     If IPv6 is used, the flow-ID of UAVCAN packets shall be zero.
+
+    UAVCAN uses a wide range of UDP ports [15360, 49151].
+    Operating systems that comply with the IANA ephemeral port range recommendations are expected to be
+    compatible with this; otherwise there may be port assignment conflicts.
+    All new versions of MS Windows starting with Vista and Server 2008 are compatible with the IANA recommendations.
+    Many versions of GNU/Linux, however, are not, but it can be fixed by manual reconfiguration:
+    https://stackoverflow.com/questions/28573390/how-to-view-and-edit-the-ephemeral-port-range-on-linux.
 
     The concept of anonymous node is not defined for UDP/IP; in this transport, every node always has a node-ID.
     If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
@@ -117,7 +125,31 @@ class UDPTransport(pyuavcan.transport.Transport):
                            specifier:        pyuavcan.transport.SessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPOutputSession:
         self._ensure_not_closed()
-        raise NotImplementedError
+        if specifier not in self._output_registry:
+            def finalizer() -> None:
+                del self._output_registry[specifier]
+
+            multiplier = \
+                self._srv_multiplier if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) \
+                else 1
+            sock = self._network_map.make_output_socket(
+                specifier.remote_node_id,
+                map_data_specifier_to_udp_port_number(specifier.data_specifier)
+            )
+            self._output_registry[specifier] = UDPOutputSession(
+                specifier=specifier,
+                payload_metadata=payload_metadata,
+                mtu=self._mtu,
+                multiplier=multiplier,
+                sock=sock,
+                loop=self._loop,
+                finalizer=finalizer,
+            )
+
+        out = self._output_registry[specifier]
+        assert isinstance(out, UDPOutputSession)
+        assert out.specifier == specifier
+        return out
 
     def sample_statistics(self) -> UDPTransportStatistics:
         return copy.copy(self._statistics)

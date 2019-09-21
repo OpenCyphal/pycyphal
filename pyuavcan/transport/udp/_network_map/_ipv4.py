@@ -28,7 +28,7 @@ class NetworkMapIPv4(NetworkMap):
         if self._local.netmask == 0 or self._local.hostmask == 0:
             raise ValueError(f'Invalid subnet mask in {ip_address_with_mask}')
 
-        self._max_nodes = min(2 ** self.NODE_ID_BIT_LENGTH, self._local.hostmask)
+        self._max_nodes: int = min(2 ** self.NODE_ID_BIT_LENGTH, self._local.hostmask)
 
         self._local_node_id = int(self._local) - int(self._local.subnet_address)
         assert (int(self._local.subnet_address) + self._local_node_id) in self._local
@@ -180,11 +180,14 @@ class IPv4Address:
     def netmask(self) -> int:
         netmask = (2 ** self._netmask_width - 1) << (self.BIT_LENGTH - self._netmask_width)
         assert 0 <= netmask < 2 ** self.BIT_LENGTH
+        assert isinstance(netmask, int)
         return netmask
 
     @property
     def hostmask(self) -> int:
-        return self.netmask ^ (2 ** self.BIT_LENGTH - 1)
+        hostmask = self.netmask ^ (2 ** self.BIT_LENGTH - 1)
+        assert isinstance(hostmask, int)
+        return hostmask
 
     @property
     def host_address(self) -> IPv4Address:
@@ -204,7 +207,7 @@ class IPv4Address:
         else:
             return NotImplemented  # pragma: no cover
 
-    def __eq__(self, other: typing.Union[int, IPv4Address]) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, int):
             return other == self._address
         elif isinstance(other, IPv4Address):
@@ -224,6 +227,7 @@ class IPv4Address:
 
     @staticmethod
     def parse(text: str) -> IPv4Address:
+        # TODO: regexp is likely to become a bottleneck. Use direct string splitting instead.
         match = IPv4Address._REGEXP.match(text.strip())
         if not match:
             raise ValueError(f'Malformed IPv4 address: {text!r}; the expected format is "A.B.C.D/M"')
@@ -238,7 +242,7 @@ class IPv4Address:
             raise ValueError(f'The IPv4 address {text!r} contains invalid octet(s)') from None
 
         try:
-            netmask_width = parts[4]
+            netmask_width: typing.Optional[int] = parts[4]
         except IndexError:
             netmask_width = None
 

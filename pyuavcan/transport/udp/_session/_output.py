@@ -5,7 +5,7 @@
 #
 
 import copy
-import socket
+import socket as socket_
 import typing
 import asyncio
 import logging
@@ -38,9 +38,13 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  mtu:              int,
                  multiplier:       int,
-                 sock:             socket.socket,
+                 sock:             socket_.socket,
                  loop:             asyncio.AbstractEventLoop,
                  finalizer:        typing.Callable[[], None]):
+        """
+        Do not call this directly. Instead, use the factory method.
+        Instances take ownership of the socket.
+        """
         self._closed = False
         self._specifier = specifier
         self._payload_metadata = payload_metadata
@@ -136,7 +140,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
                 self._finalizer()
 
     @property
-    def socket(self) -> socket.socket:
+    def socket(self) -> socket_.socket:
         """
         Provides access to the underlying UDP socket.
         """
@@ -177,7 +181,6 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
 
 
 def _unittest_output_session() -> None:
-    import socket
     from pytest import raises
     from pyuavcan.transport import SessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority, Transfer
     from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback
@@ -199,14 +202,15 @@ def _unittest_output_session() -> None:
 
     destination_endpoint = '127.100.0.1', 25406
 
-    sock_rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock_rx = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
     sock_rx.bind(destination_endpoint)
     sock_rx.settimeout(1.0)
 
-    def make_sock() -> socket.socket:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    def make_sock() -> socket_.socket:
+        sock = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
         sock.bind(('127.100.0.2', 0))
         sock.connect(destination_endpoint)
+        sock.setblocking(False)
         return sock
 
     with raises(pyuavcan.transport.UnsupportedSessionConfigurationError):
@@ -250,7 +254,7 @@ def _unittest_output_session() -> None:
         0xdead_beef_badc0ffe .to_bytes(8, 'little') +
         b'one' b'two' b'three'
     )
-    with raises(socket.timeout):
+    with raises(socket_.timeout):
         sock_rx.recvfrom(1000)
 
     last_feedback: typing.Optional[Feedback] = None
@@ -278,7 +282,7 @@ def _unittest_output_session() -> None:
 
     _, endpoint = sock_rx.recvfrom(1000)
     assert endpoint[0] == '127.100.0.2'
-    with raises(socket.timeout):
+    with raises(socket_.timeout):
         sock_rx.recvfrom(1000)
 
     assert sos.sample_statistics() == SessionStatistics(
@@ -321,7 +325,7 @@ def _unittest_output_session() -> None:
     assert endpoint[0] == '127.100.0.2'
     data_redundant_b, endpoint = sock_rx.recvfrom(1000)
     assert endpoint[0] == '127.100.0.2'
-    with raises(socket.timeout):
+    with raises(socket_.timeout):
         sock_rx.recvfrom(1000)
 
     print('data_main_a', data_main_a)
