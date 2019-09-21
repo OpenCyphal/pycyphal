@@ -124,8 +124,22 @@ class UDPTransport(pyuavcan.transport.Transport):
     def get_output_session(self,
                            specifier:        pyuavcan.transport.SessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPOutputSession:
+        """
+        .. todo::
+            We currently permit the following unconventional usages:
+            1. Broadcast service request transfers (not responses though).
+            2. Unicast message transfers.
+            Decide whether we want to keep that later. Those can't be implemented on CAN bus, for example.
+        """
         self._ensure_not_closed()
         if specifier not in self._output_registry:
+            # Check whether the requested session configuration complies with the protocol requirements.
+            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
+                is_response = specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE
+                if is_response and specifier.remote_node_id is None:
+                    raise pyuavcan.transport.UnsupportedSessionConfigurationError(
+                        f'Cannot broadcast a service response. Session specifier: {specifier}')
+
             def finalizer() -> None:
                 del self._output_registry[specifier]
 

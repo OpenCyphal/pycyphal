@@ -63,11 +63,10 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         if self._multiplier < 1:  # pragma: no cover
             raise ValueError(f'Invalid transfer multiplier: {self._multiplier}')
 
-        if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
-            is_response = specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE
-            if is_response and specifier.remote_node_id is None:
-                raise pyuavcan.transport.UnsupportedSessionConfigurationError(
-                    f'Cannot broadcast a service response. Session specifier: {specifier}')
+        assert not specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE \
+            or specifier.remote_node_id is not None \
+            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) else True, \
+            'Internal protocol violation: cannot broadcast a service response (enforced one level higher)'
 
     async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         if self._closed:
@@ -212,17 +211,6 @@ def _unittest_output_session() -> None:
         sock.connect(destination_endpoint)
         sock.setblocking(False)
         return sock
-
-    with raises(pyuavcan.transport.UnsupportedSessionConfigurationError):
-        _ = UDPOutputSession(
-            specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.RESPONSE), None),
-            payload_metadata=PayloadMetadata(0xdeadbeefbadc0ffe, 1024),
-            mtu=10,
-            multiplier=1,
-            sock=make_sock(),
-            loop=asyncio.get_event_loop(),
-            finalizer=do_finalize,
-        )
 
     sos = UDPOutputSession(
         specifier=SessionSpecifier(MessageDataSpecifier(3210), None),
