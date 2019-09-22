@@ -23,14 +23,25 @@ class NetworkMapIPv4(NetworkMap):
     the maximum node-ID can only be used if it is not the same as the broadcast address for the subnet.
     """
 
-    def __init__(self, ip_address_with_mask: str):
-        self._local = IPv4Address.parse(ip_address_with_mask)
+    def __init__(self, ip_address: str):
+        self._local = IPv4Address.parse(ip_address)
         if self._local.netmask == 0 or self._local.hostmask == 0:
-            raise ValueError(f'Invalid subnet mask in {ip_address_with_mask}')
+            raise ValueError(f'The subnet mask in {ip_address} is invalid or missing. '
+                             f'It is needed to determine the subnet broadcast address.')
 
+        # Say, if the node-ID bit length is 12, the maximum node-ID would be 4095,
+        # but it won't be usable if the subnet mask is 20 bits wide because it would be the
+        # broadcast address for the subnet. In this example, we can use the full range of node-ID
+        # values if the subnet mask is 19 bits wide or less.
         self._max_nodes: int = min(2 ** self.NODE_ID_BIT_LENGTH, self._local.hostmask)
 
         self._local_node_id = int(self._local) - int(self._local.subnet_address)
+        if self._local_node_id >= self._max_nodes:
+            raise pyuavcan.transport.InvalidMediaConfigurationError(
+                f'The local IP address/mask {self._local} resolves to a node-ID value {self._local_node_id} '
+                f'which is invalid.'
+            )
+
         assert (int(self._local.subnet_address) + self._local_node_id) in self._local
         assert self._local_node_id < self._max_nodes
 
@@ -111,10 +122,19 @@ def _unittest_network_map_ipv4() -> None:
     from pytest import raises
 
     with raises(ValueError):
-        NetworkMap.new('127.0.0.1')  # No network mask specified.
+        NetworkMap.new('127.0.0.1/32')          # Bad network mask.
+
+    with raises(ValueError):
+        NetworkMap.new('127.0.0.1/0')           # Bad network mask.
+
+    with raises(ValueError):
+        NetworkMap.new('127.0.0.1')             # No network mask.
 
     with raises(pyuavcan.transport.InvalidMediaConfigurationError):
-        NetworkMap.new('10.0.254.254/24')  # Suppose that the test machine does not have such interface.
+        NetworkMap.new('10.0.254.254/24')       # Suppose that the test machine does not have such interface.
+
+    with raises(pyuavcan.transport.InvalidMediaConfigurationError):
+        NetworkMap.new('127.254.254.254/8')     # Maps to an invalid local node-ID.
 
     nm = NetworkMap.new(' 127.123.1.0/16\t')
     assert str(nm) == '127.123.1.0/16'
@@ -123,6 +143,16 @@ def _unittest_network_map_ipv4() -> None:
     assert nm.map_ip_address_to_node_id('127.123.0.1') == 1
     assert nm.map_ip_address_to_node_id('127.123.254.254') is None
     assert nm.map_ip_address_to_node_id('127.254.254.254') is None
+
+    nm = NetworkMap.new(' 127.123.2.0/16')
+    assert str(nm) == '127.123.2.0/16'
+    assert nm.max_nodes == 2 ** NetworkMap.NODE_ID_BIT_LENGTH  # Full capacity available.
+    assert nm.local_node_id == 512
+    assert nm.map_ip_address_to_node_id('127.123.2.1') == 513
+    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1
+    assert nm.map_ip_address_to_node_id('127.122.0.1') is None
+    assert nm.map_ip_address_to_node_id('127.123.254.254') is None
+    assert nm.map_ip_address_to_node_id('127.124.0.1') is None
 
     nm = NetworkMap.new('127.123.0.123/24')
     assert str(nm) == '127.123.0.123/24'
@@ -162,13 +192,14 @@ class IPv4Address:
     _REGEXP = re.compile(r'^(\d+)\.(\d+)\.(\d+)\.(\d+)(?:/(\d+))?$')
 
     BIT_LENGTH = 32
+    DEFAULT_NETMASK_WIDTH = BIT_LENGTH
 
-    def __init__(self, address: int, netmask_width: typing.Optional[int] = None):
+    def __init__(self, address: int, netmask_width: int = DEFAULT_NETMASK_WIDTH):
         """
         The default netmask width is 32 bits.
         """
         self._address = int(address)
-        self._netmask_width = int(netmask_width) if netmask_width is not None else self.BIT_LENGTH
+        self._netmask_width = int(netmask_width)
 
         if not (0 <= self._address < 2 ** self.BIT_LENGTH):
             raise ValueError(f'Invalid IPv4 address: 0x{self._address:08x}')
@@ -226,8 +257,7 @@ class IPv4Address:
         return pyuavcan.util.repr_attributes(self, str(self))
 
     @staticmethod
-    def parse(text: str) -> IPv4Address:
-        # TODO: regexp is likely to become a bottleneck. Use direct string splitting instead.
+    def parse(text: str, default_netmask_width: int = DEFAULT_NETMASK_WIDTH) -> IPv4Address:
         match = IPv4Address._REGEXP.match(text.strip())
         if not match:
             raise ValueError(f'Malformed IPv4 address: {text!r}; the expected format is "A.B.C.D/M"')
@@ -242,9 +272,9 @@ class IPv4Address:
             raise ValueError(f'The IPv4 address {text!r} contains invalid octet(s)') from None
 
         try:
-            netmask_width: typing.Optional[int] = parts[4]
+            netmask_width = parts[4]
         except IndexError:
-            netmask_width = None
+            netmask_width = default_netmask_width
 
         return IPv4Address(address, netmask_width)
 
@@ -262,6 +292,9 @@ def _unittest_ipv4() -> None:
         IPv4Address.parse('192.168.1.200/-1')
 
     with raises(ValueError):
+        IPv4Address.parse('192.168.1.200', -1)
+
+    with raises(ValueError):
         IPv4Address.parse('192.168.1.200/33')
 
     with raises(ValueError):
@@ -276,14 +309,14 @@ def _unittest_ipv4() -> None:
     with raises(ValueError):
         IPv4Address(123456789, 33)
 
-    ip = IPv4Address.parse(' 192.168.1.200/24\n')
+    ip = IPv4Address.parse(' 192.168.1.200\n', 24)
     assert isinstance(ip, IPv4Address)
 
-    assert str(ip) == '192.168.1.200/24'
+    assert str(ip) == f'192.168.1.200/24'
     assert int(ip) == 0xC0A801C8
 
     assert ip == 0xC0A801C8
-    assert ip == IPv4Address.parse('192.168.1.200/24')
+    assert ip == IPv4Address.parse(f'192.168.1.200/24')
     assert ip != IPv4Address.parse('192.168.1.200/16')
 
     assert ip.netmask == 0xFFFFFF00

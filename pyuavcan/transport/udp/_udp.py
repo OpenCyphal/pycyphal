@@ -13,7 +13,7 @@ import pyuavcan
 from ._session import UDPInputSession, UDPOutputSession
 from ._frame import UDPFrame
 from ._network_map import NetworkMap
-from ._udp_port_mapping import map_data_specifier_to_udp_port_number
+from ._port_mapping import map_data_specifier_to_udp_port
 
 
 _logger = logging.getLogger(__name__)
@@ -69,12 +69,65 @@ class UDPTransport(pyuavcan.transport.Transport):
     #: An attempt to transmit a larger frame than supported by L2 will lead to IP fragmentation.
     VALID_MTU_RANGE = (1024, 9000)
 
+    #: The maximum theoretical number of nodes on the network is determined by raising 2 into this power.
+    #: A node-ID is the set of this many least significant bits of the IP address of the node.
+    NODE_ID_BIT_LENGTH = NetworkMap.NODE_ID_BIT_LENGTH
+
     def __init__(self,
-                 ip_address_with_mask:        str,
+                 ip_address:                  str,
                  mtu:                         int = DEFAULT_MTU,
                  service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
-        self._network_map = NetworkMap.new(ip_address_with_mask)
+        """
+        :param ip_address: Specifies which local IP address to use for this transport.
+            This setting also implicitly specifies the network interface to use.
+            All sockets will be bound (see ``bind()``) to the specified local address.
+            If the specified address is not available locally, or if the specified address cannot be mapped to
+            a valid local node-ID, the initialization will fail with
+            :class:`pyuavcan.transport.InvalidMediaConfigurationError`.
+
+            IPv4 addresses shall have the network mask specified, this is necessary for the transport to
+            determine the subnet's broadcast address (for broadcast UAVCAN transfers).
+            The mask will also be used to derive the range of node-ID values for the subnet,
+            capped by two raised to the power of the node-ID bit length.
+            For example:
+
+            - ``192.168.1.200/24`` -- a subnet with up to 255 UAVCAN nodes; for example:
+                - ``192.168.1.0`` -- node-ID of zero (may be unusable depending on the network configuration).
+                - ``192.168.1.254`` -- the maximum available node-ID in this subnet is 254.
+                - ``192.168.1.255`` -- the broadcast address, not a valid node.
+            - ``127.100.0.42/16`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
+                - ``127.100.0.1`` -- node-ID 1.
+                - ``127.100.0.255`` -- node-ID 255.
+                - ``127.100.15.255`` -- node-ID 4095.
+                - ``127.100.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
+                    All traffic from this address will be rejected as non-UAVCAN.
+                - ``127.100.255.255`` -- the broadcast address; notice that this address lies outside of the
+                    node-ID-mapped space, no conflicts.
+
+            IPv6 addresses may be specified without the mask, in which case it will be assumed to be
+            equal ``128 - NODE_ID_BIT_LENGTH``.
+            Don't forget to specify the scope-ID for link-local IPv6 addresses.
+
+        :param mtu: The application-level MTU for outgoing packets. In other words, this is the maximum
+            number of payload bytes per UDP frame. Transfers with a fewer number of payload bytes will be
+            single-frame transfers, otherwise multi-frame transfers will be used.
+            This setting affects only outgoing frames; the MTU of incoming frames may be arbitrary.
+
+        :param service_transfer_multiplier: Specifies the number of times each outgoing service transfer will be
+            repeated. The duplicates are emitted subsequently immediately following the original. This feature
+            can be used to reduce the likelihood of service transfer loss over unreliable networks. Assuming that
+            the probability of transfer loss ``P`` is time-invariant, the influence of the multiplier ``M`` can
+            be approximately modeled as ``P' = P^M``. For example, given a network that successfully delivers 90%
+            of transfers, and the probabilities of adjacent transfer loss are uncorrelated, the multiplication
+            factor of 2 can increase the link reliability up to ``100% - (100% - 90%)^2 = 99%``. Removal of
+            duplicate transfers at the opposite end of the link is natively guaranteed by the UAVCAN protocol;
+            no special activities are needed there (read the UAVCAN Specification for background). This setting
+            does not affect message transfers.
+
+        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+        """
+        self._network_map = NetworkMap.new(ip_address)
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
@@ -145,7 +198,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                 else 1
             sock = self._network_map.make_output_socket(
                 specifier.remote_node_id,
-                map_data_specifier_to_udp_port_number(specifier.data_specifier)
+                map_data_specifier_to_udp_port(specifier.data_specifier)
             )
             self._output_registry[specifier] = UDPOutputSession(
                 specifier=specifier,

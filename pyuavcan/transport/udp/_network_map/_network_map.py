@@ -22,7 +22,7 @@ class NetworkMap(abc.ABC):
     the node's IP address.
 
     If none of the available network interfaces have the supplied IP address, the constructor will raise
-    a media layer configuration exception.
+    :class:`pyuavcan.transport.InvalidMediaConfigurationError`.
     """
 
     #: The maximum theoretical number of nodes on the network is determined by raising 2 into this power.
@@ -30,16 +30,16 @@ class NetworkMap(abc.ABC):
     NODE_ID_BIT_LENGTH = 12
 
     @staticmethod
-    def new(ip_address_with_mask: str) -> NetworkMap:
+    def new(ip_address: str) -> NetworkMap:
         """
         Use this factory to create new instances.
         """
-        if ':' in ip_address_with_mask:
+        if ':' in ip_address:
             from ._ipv6 import NetworkMapIPv6
-            return NetworkMapIPv6(ip_address_with_mask)  # type: ignore
+            return NetworkMapIPv6(ip_address)  # type: ignore
         else:
             from ._ipv4 import NetworkMapIPv4
-            return NetworkMapIPv4(ip_address_with_mask)
+            return NetworkMapIPv4(ip_address)
 
     @property
     @abc.abstractmethod

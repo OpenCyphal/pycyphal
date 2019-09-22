@@ -11,4 +11,4 @@ from ._session import UDPOutputSession as UDPOutputSession
 
 from ._frame import UDPFrame as UDPFrame
 
-from ._udp_port_mapping import map_data_specifier_to_udp_port_number as map_data_specifier_to_udp_port_number
+from ._port_mapping import map_data_specifier_to_udp_port as map_data_specifier_to_udp_port
