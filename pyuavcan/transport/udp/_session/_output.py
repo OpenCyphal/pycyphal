@@ -34,7 +34,7 @@ class UDPFeedback(pyuavcan.transport.Feedback):
 
 class UDPOutputSession(pyuavcan.transport.OutputSession):
     def __init__(self,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  mtu:              int,
                  multiplier:       int,
@@ -56,7 +56,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._statistics = pyuavcan.transport.SessionStatistics()
 
-        if not isinstance(self._specifier, pyuavcan.transport.SessionSpecifier) or \
+        if not isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier) or \
                 not isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata):  # pragma: no cover
             raise TypeError('Invalid parameters')
 
@@ -66,7 +66,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         assert not specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE \
             or specifier.remote_node_id is not None \
             if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) else True, \
-            'Internal protocol violation: cannot broadcast a service response (enforced one level higher)'
+            'Internal protocol violation: cannot broadcast a service response'
 
     async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         if self._closed:
@@ -120,7 +120,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         self._feedback_handler = None
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
         return self._specifier
 
     @property
@@ -181,8 +181,8 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
 
 def _unittest_output_session() -> None:
     from pytest import raises
-    from pyuavcan.transport import SessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority, Transfer
-    from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback
+    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority
+    from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback, Transfer
 
     ts = Timestamp.now()
     loop = asyncio.get_event_loop()
@@ -213,7 +213,7 @@ def _unittest_output_session() -> None:
         return sock
 
     sos = UDPOutputSession(
-        specifier=SessionSpecifier(MessageDataSpecifier(3210), None),
+        specifier=OutputSessionSpecifier(MessageDataSpecifier(3210), None),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
         mtu=11,
         multiplier=1,
@@ -222,7 +222,7 @@ def _unittest_output_session() -> None:
         finalizer=do_finalize,
     )
 
-    assert sos.specifier == SessionSpecifier(MessageDataSpecifier(3210), None)
+    assert sos.specifier == OutputSessionSpecifier(MessageDataSpecifier(3210), None)
     assert sos.destination_node_id is None
     assert sos.payload_metadata == PayloadMetadata(0xdead_beef_badc0ffe, 1024)
     assert sos.sample_statistics() == SessionStatistics()
@@ -238,9 +238,9 @@ def _unittest_output_session() -> None:
     rx_data, endpoint = sock_rx.recvfrom(1000)
     assert endpoint[0] == '127.100.0.2'
     assert rx_data == (
-        12340 .to_bytes(7, 'little') + bytes([int(Priority.NOMINAL) << 5]) +
-        0xdead_beef_badc0ffe .to_bytes(8, 'little') +
-        b'one' b'two' b'three'
+        12340 .to_bytes(7, 'little') + bytes([int(Priority.NOMINAL) << 5])
+        + 0xdead_beef_badc0ffe .to_bytes(8, 'little')
+        + b'one' b'two' b'three'
     )
     with raises(socket_.timeout):
         sock_rx.recvfrom(1000)
@@ -290,7 +290,7 @@ def _unittest_output_session() -> None:
 
     # Multi-frame with multiplication
     sos = UDPOutputSession(
-        specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
+        specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
         mtu=10,
         multiplier=2,
@@ -324,20 +324,20 @@ def _unittest_output_session() -> None:
     assert data_main_a == data_redundant_a
     assert data_main_b == data_redundant_b
     assert data_main_a == (
-        54321 .to_bytes(7, 'little') + bytes([0xF0]) +
-        0xdead_beef_badc0ffe .to_bytes(8, 'little') +
-        0x_00_00_00_00 .to_bytes(4, 'little') +
-        b'one' b'two' b'three'[:-1]
+        54321 .to_bytes(7, 'little') + bytes([0xF0])
+        + 0xdead_beef_badc0ffe .to_bytes(8, 'little')
+        + 0x_00_00_00_00 .to_bytes(4, 'little')
+        + b'one' b'two' b'three'[:-1]
     )
     assert data_main_b == (
-        54321 .to_bytes(7, 'little') + bytes([0xF0]) +
-        0xdead_beef_badc0ffe .to_bytes(8, 'little') +
-        0x_80_00_00_01 .to_bytes(4, 'little') +
-        b'e' + pyuavcan.transport.commons.crc.CRC32C.new(b'one', b'two', b'three').value_as_bytes
+        54321 .to_bytes(7, 'little') + bytes([0xF0])
+        + 0xdead_beef_badc0ffe .to_bytes(8, 'little')
+        + 0x_80_00_00_01 .to_bytes(4, 'little')
+        + b'e' + pyuavcan.transport.commons.crc.CRC32C.new(b'one', b'two', b'three').value_as_bytes
     )
 
     sos = UDPOutputSession(
-        specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
+        specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
         mtu=10,
         multiplier=1,

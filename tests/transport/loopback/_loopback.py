@@ -38,12 +38,13 @@ async def _unittest_loopback_transport() -> None:
 
     payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
 
-    message_spec_123 = pyuavcan.transport.SessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
-    message_spec_42 = pyuavcan.transport.SessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 42)
-    message_spec_any = pyuavcan.transport.SessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), None)
+    message_spec_123_in = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
+    message_spec_123_out = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
+    message_spec_42_in = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 42)
+    message_spec_any_out = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), None)
 
-    out_123 = tr.get_output_session(specifier=message_spec_123, payload_metadata=payload_metadata)
-    assert out_123 is tr.get_output_session(specifier=message_spec_123, payload_metadata=payload_metadata)
+    out_123 = tr.get_output_session(specifier=message_spec_123_out, payload_metadata=payload_metadata)
+    assert out_123 is tr.get_output_session(specifier=message_spec_123_out, payload_metadata=payload_metadata)
 
     last_feedback: typing.Optional[pyuavcan.transport.Feedback] = None
 
@@ -76,17 +77,17 @@ async def _unittest_loopback_transport() -> None:
     old_out = out_123
     out_123.close()
     out_123.close()  # Double close handled properly
-    out_123 = tr.get_output_session(specifier=message_spec_123, payload_metadata=payload_metadata)
+    out_123 = tr.get_output_session(specifier=message_spec_123_out, payload_metadata=payload_metadata)
     assert out_123 is not old_out
     del old_out
 
-    inp_123 = tr.get_input_session(specifier=message_spec_123, payload_metadata=payload_metadata)
-    assert inp_123 is tr.get_input_session(specifier=message_spec_123, payload_metadata=payload_metadata)
+    inp_123 = tr.get_input_session(specifier=message_spec_123_in, payload_metadata=payload_metadata)
+    assert inp_123 is tr.get_input_session(specifier=message_spec_123_in, payload_metadata=payload_metadata)
 
     old_inp = inp_123
     inp_123.close()
     inp_123.close()  # Double close handled properly
-    inp_123 = tr.get_input_session(specifier=message_spec_123, payload_metadata=payload_metadata)
+    inp_123 = tr.get_input_session(specifier=message_spec_123_in, payload_metadata=payload_metadata)
     assert old_inp is not inp_123
     del old_inp
 
@@ -103,10 +104,10 @@ async def _unittest_loopback_transport() -> None:
     assert None is await inp_123.receive_until(0)
     assert None is await inp_123.receive_until(tr.loop.time() + 1.0)
 
-    out_bc = tr.get_output_session(specifier=message_spec_any, payload_metadata=payload_metadata)
+    out_bc = tr.get_output_session(specifier=message_spec_any_out, payload_metadata=payload_metadata)
     assert out_123 is not out_bc
 
-    inp_42 = tr.get_input_session(specifier=message_spec_42, payload_metadata=payload_metadata)
+    inp_42 = tr.get_input_session(specifier=message_spec_42_in, payload_metadata=payload_metadata)
     assert inp_123 is not inp_42
 
     assert await out_bc.send_until(pyuavcan.transport.Transfer(
@@ -142,17 +143,19 @@ async def _unittest_loopback_transport() -> None:
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_loopback_transport_service() -> None:
-    from pyuavcan.transport import ServiceDataSpecifier, SessionSpecifier
+    from pyuavcan.transport import ServiceDataSpecifier, InputSessionSpecifier, OutputSessionSpecifier
 
     payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
 
     tr = pyuavcan.transport.loopback.LoopbackTransport()
     tr.set_local_node_id(1234)
 
-    inp = tr.get_input_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST), 1234),
+    inp = tr.get_input_session(InputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
+                                                     1234),
                                payload_metadata)
 
-    out = tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST), 1234),
+    out = tr.get_output_session(OutputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
+                                                       1234),
                                 payload_metadata)
 
     assert await out.send_until(pyuavcan.transport.Transfer(

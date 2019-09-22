@@ -10,7 +10,7 @@ import typing
 import asyncio
 import dataclasses
 import pyuavcan.util
-from ._session import InputSession, OutputSession, SessionSpecifier
+from ._session import InputSession, OutputSession, InputSessionSpecifier, OutputSessionSpecifier
 from ._payload_metadata import PayloadMetadata
 
 
@@ -116,7 +116,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_input_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
+    def get_input_session(self, specifier: InputSessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
         """
         This factory method is the only valid way of constructing input session instances.
         Beware that construction and retirement of sessions may be costly.
@@ -129,7 +129,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_output_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
+    def get_output_session(self, specifier: OutputSessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
         """
         This factory method is the only valid way of constructing output session instances.
         Beware that construction and retirement of sessions may be costly.

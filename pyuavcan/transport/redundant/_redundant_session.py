@@ -81,7 +81,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         raise NotImplementedError
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.InputSessionSpecifier:
         raise NotImplementedError
 
     @property
@@ -112,7 +112,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         raise NotImplementedError
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
         raise NotImplementedError
 
     @property

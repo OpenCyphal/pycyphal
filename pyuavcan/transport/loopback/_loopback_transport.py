@@ -32,8 +32,8 @@ class LoopbackTransport(pyuavcan.transport.Transport):
 
         self._local_node_id: typing.Optional[int] = None
 
-        self._input_sessions: typing.Dict[pyuavcan.transport.SessionSpecifier, LoopbackInputSession] = {}
-        self._output_sessions: typing.Dict[pyuavcan.transport.SessionSpecifier, LoopbackOutputSession] = {}
+        self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
+        self._output_sessions: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, LoopbackOutputSession] = {}
 
         # Unlimited protocol capabilities by default.
         self._protocol_parameters = pyuavcan.transport.ProtocolParameters(
@@ -76,7 +76,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         self._output_sessions.clear()
 
     def get_input_session(self,
-                          specifier:        pyuavcan.transport.SessionSpecifier,
+                          specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> LoopbackInputSession:
         def do_close() -> None:
             try:
@@ -95,7 +95,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         return sess
 
     def get_output_session(self,
-                           specifier:        pyuavcan.transport.SessionSpecifier,
+                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> LoopbackOutputSession:
         def do_close() -> None:
             try:
@@ -119,7 +119,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
             for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                 try:
                     destination_session = self._input_sessions[
-                        pyuavcan.transport.SessionSpecifier(specifier.data_specifier, remote_node_id)
+                        pyuavcan.transport.InputSessionSpecifier(specifier.data_specifier, remote_node_id)
                     ]
                 except LookupError:
                     pass

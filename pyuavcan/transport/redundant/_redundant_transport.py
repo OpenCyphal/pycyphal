@@ -64,12 +64,12 @@ class RedundantTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     def get_input_session(self,
-                          specifier:        pyuavcan.transport.SessionSpecifier,
+                          specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> RedundantInputSession:
         raise NotImplementedError
 
     def get_output_session(self,
-                           specifier:        pyuavcan.transport.SessionSpecifier,
+                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> pyuavcan.transport.OutputSession:
         raise NotImplementedError
 

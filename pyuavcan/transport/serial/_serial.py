@@ -109,6 +109,18 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     The last four bytes of a multi-frame transfer payload contain the CRC32C (Castagnoli) hash of the transfer
     payload in little-endian byte order.
+
+    The serial transport supports all transfer categories:
+
+    +--------------------+--------------------------+---------------------------+
+    | Supported transfers| Unicast                  | Broadcast                 |
+    +====================+==========================+===========================+
+    |**Message**         | Yes                      | Yes                       |
+    +-----------+--------+--------------------------+---------------------------+
+    |           |Request | Yes                      | Yes                       |
+    |**Service**+--------+--------------------------+---------------------------+
+    |           |Response| Yes                      | Banned by Specification   |
+    +-----------+--------+--------------------------+---------------------------+
     """
 
     DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
@@ -172,8 +184,8 @@ class SerialTransport(pyuavcan.transport.Transport):
         # Access must be protected with the port lock!
         self._serialization_buffer = bytearray(0 for _ in range(self._mtu * 3))
 
-        self._input_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialInputSession] = {}
-        self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialOutputSession] = {}
+        self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, SerialInputSession] = {}
+        self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, SerialOutputSession] = {}
 
         self._statistics = SerialTransportStatistics()
 
@@ -228,7 +240,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             self._serial_port.close()
 
     def get_input_session(self,
-                          specifier:        pyuavcan.transport.SessionSpecifier,
+                          specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> SerialInputSession:
         def finalizer() -> None:
             del self._input_registry[specifier]
@@ -249,7 +261,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         return out
 
     def get_output_session(self,
-                           specifier:        pyuavcan.transport.SessionSpecifier,
+                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> SerialOutputSession:
         self._ensure_not_closed()
         if specifier not in self._output_registry:
@@ -309,7 +321,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         self._statistics.in_frames += 1
         if frame.destination_node_id in (self._local_node_id, None):
             for source_node_id in {None, frame.source_node_id}:
-                ss = pyuavcan.transport.SessionSpecifier(frame.data_specifier, source_node_id)
+                ss = pyuavcan.transport.InputSessionSpecifier(frame.data_specifier, source_node_id)
                 try:
                     session = self._input_registry[ss]
                 except LookupError:

@@ -9,26 +9,30 @@ import pyuavcan
 
 
 class UDPInputSession(pyuavcan.transport.InputSession):
-    def __init__(self):
-        pass
+    def __init__(self) -> None:
+        raise NotImplementedError
 
     async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
-        pass
+        raise NotImplementedError
 
     @property
     def transfer_id_timeout(self) -> float:
-        pass
+        raise NotImplementedError
+
+    @transfer_id_timeout.setter
+    def transfer_id_timeout(self, value: float) -> None:
+        raise NotImplementedError
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
-        pass
+    def specifier(self) -> pyuavcan.transport.InputSessionSpecifier:
+        raise NotImplementedError
 
     @property
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
-        pass
+        raise NotImplementedError
 
     def sample_statistics(self) -> pyuavcan.transport.SessionStatistics:
-        pass
+        raise NotImplementedError
 
     def close(self) -> None:
-        pass
+        raise NotImplementedError

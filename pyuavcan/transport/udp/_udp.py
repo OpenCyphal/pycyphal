@@ -39,6 +39,18 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     The concept of anonymous node is not defined for UDP/IP; in this transport, every node always has a node-ID.
     If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
+
+    The UDP transport supports all transfer categories:
+
+    +--------------------+--------------------------+---------------------------+
+    | Supported transfers| Unicast                  | Broadcast                 |
+    +====================+==========================+===========================+
+    |**Message**         | Yes                      | Yes                       |
+    +-----------+--------+--------------------------+---------------------------+
+    |           |Request | Yes                      | Yes                       |
+    |**Service**+--------+--------------------------+---------------------------+
+    |           |Response| Yes                      | Banned by Specification   |
+    +-----------+--------+--------------------------+---------------------------+
     """
 
     #: By default, service transfer multiplication is disabled for UDP.
@@ -78,8 +90,8 @@ class UDPTransport(pyuavcan.transport.Transport):
         _logger.debug(f'IP: {self._network_map}; max nodes: {self._network_map.max_nodes}; '
                       f'local node-ID: {self.local_node_id}')
 
-        self._input_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, UDPInputSession] = {}
-        self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, UDPOutputSession] = {}
+        self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
+        self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
         self._closed = False
         self._statistics = UDPTransportStatistics()
@@ -116,30 +128,15 @@ class UDPTransport(pyuavcan.transport.Transport):
                 _logger.exception('%s: Failed to close session %r: %s', self, s, ex)
 
     def get_input_session(self,
-                          specifier:        pyuavcan.transport.SessionSpecifier,
+                          specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPInputSession:
-        self._ensure_not_closed()
         raise NotImplementedError
 
     def get_output_session(self,
-                           specifier:        pyuavcan.transport.SessionSpecifier,
+                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPOutputSession:
-        """
-        .. todo::
-            We currently permit the following unconventional usages:
-            1. Broadcast service request transfers (not responses though).
-            2. Unicast message transfers.
-            Decide whether we want to keep that later. Those can't be implemented on CAN bus, for example.
-        """
         self._ensure_not_closed()
         if specifier not in self._output_registry:
-            # Check whether the requested session configuration complies with the protocol requirements.
-            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
-                is_response = specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE
-                if is_response and specifier.remote_node_id is None:
-                    raise pyuavcan.transport.UnsupportedSessionConfigurationError(
-                        f'Cannot broadcast a service response. Session specifier: {specifier}')
-
             def finalizer() -> None:
                 del self._output_registry[specifier]
 

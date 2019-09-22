@@ -69,6 +69,18 @@ class CANTransport(pyuavcan.transport.Transport):
     Whether CAN 2.0 or CAN FD is used is determined by the underlying media instance.
     This class makes no distinction between the two; as such, a CAN 2.0 bus and a CAN FD bus with MTU 8 bytes
     are identical to this class.
+
+    Per Specification, the CAN transport supports broadcast messages and unicast services:
+
+    +--------------------+--------------------------+---------------------------+
+    | Supported transfers| Unicast                  | Broadcast                 |
+    +====================+==========================+===========================+
+    |**Message**         | No                       | Yes                       |
+    +-----------+--------+--------------------------+---------------------------+
+    |           |Request | Yes                      | No                        |
+    |**Service**+--------+--------------------------+---------------------------+
+    |           |Response| Yes                      | Banned by Specification   |
+    +-----------+--------+--------------------------+---------------------------+
     """
 
     def __init__(self, media: Media, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
@@ -83,7 +95,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
         # Lookup performance for the output registry is not important because it's only used for loopback frames.
         # Hence we don't trade-off memory for speed here.
-        self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, CANOutputSession] = {}
+        self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, CANOutputSession] = {}
 
         # Input lookup must be fast, so we use constant-complexity static lookup table.
         self._input_dispatch_table = InputDispatchTable()
@@ -183,7 +195,7 @@ class CANTransport(pyuavcan.transport.Transport):
         return copy.copy(self._frame_stats)
 
     def get_input_session(self,
-                          specifier:        pyuavcan.transport.SessionSpecifier,
+                          specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANInputSession:
         """
         See the base class docs for background.
@@ -208,7 +220,7 @@ class CANTransport(pyuavcan.transport.Transport):
         return session
 
     def get_output_session(self,
-                           specifier:        pyuavcan.transport.SessionSpecifier,
+                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANOutputSession:
         if self._maybe_media is None:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
@@ -224,7 +236,7 @@ class CANTransport(pyuavcan.transport.Transport):
         def finalizer() -> None:
             self._output_registry.pop(specifier)
 
-        if specifier.remote_node_id is None:
+        if specifier.is_broadcast:
             session: CANOutputSession = \
                 BroadcastCANOutputSession(specifier=specifier,
                                           payload_metadata=payload_metadata,
@@ -295,7 +307,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     def _handle_received_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> bool:
         assert not frame.loopback
-        ss = pyuavcan.transport.SessionSpecifier(can_id.data_specifier, can_id.source_node_id)
+        ss = pyuavcan.transport.InputSessionSpecifier(can_id.data_specifier, can_id.source_node_id)
         accepted = False
         dest_nid = can_id.get_destination_node_id()
         if dest_nid is None or dest_nid == self._local_node_id:
@@ -306,7 +318,7 @@ class CANTransport(pyuavcan.transport.Transport):
                 accepted = True
 
             if ss.remote_node_id is not None:
-                ss = pyuavcan.transport.SessionSpecifier(ss.data_specifier, None)
+                ss = pyuavcan.transport.InputSessionSpecifier(ss.data_specifier, None)
                 session = self._input_dispatch_table.get(ss)
                 if session is not None:
                     # noinspection PyProtectedMember
@@ -317,7 +329,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     def _handle_loopback_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> None:
         assert frame.loopback
-        ss = pyuavcan.transport.SessionSpecifier(can_id.data_specifier, can_id.get_destination_node_id())
+        ss = pyuavcan.transport.OutputSessionSpecifier(can_id.data_specifier, can_id.get_destination_node_id())
         try:
             session = self._output_registry[ss]
         except KeyError:

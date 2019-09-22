@@ -28,7 +28,7 @@ class LoopbackFeedback(pyuavcan.transport.Feedback):
 
 class LoopbackOutputSession(pyuavcan.transport.OutputSession):
     def __init__(self,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  loop:             asyncio.AbstractEventLoop,
                  closer:           typing.Callable[[], None],
@@ -61,7 +61,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         return out
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
         return self._specifier
 
     @property
@@ -78,7 +78,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
 def _unittest_session() -> None:
     closed = False
 
-    specifier = pyuavcan.transport.SessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
+    specifier = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
     payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
 
     def do_close() -> None:

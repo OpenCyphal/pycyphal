@@ -17,7 +17,8 @@ from pyuavcan.transport.serial import SerialTransport, SerialTransportStatistics
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_serial_transport() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
-    from pyuavcan.transport import Priority, Timestamp, SessionSpecifier, ProtocolParameters
+    from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
+    from pyuavcan.transport import ProtocolParameters
 
     get_monotonic = asyncio.get_event_loop().time
 
@@ -68,34 +69,35 @@ async def _unittest_serial_transport() -> None:
     #
     meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
 
-    broadcaster = tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert broadcaster is tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
-    subscriber_promiscuous = tr.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert subscriber_promiscuous is tr.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None),
+                                                          meta)
 
-    subscriber_selective = tr.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
-    assert subscriber_selective is tr.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
+    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
+    assert subscriber_selective is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
 
     server_listener = tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
     assert server_listener is tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
 
     server_responder = tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
     assert server_responder is tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
 
     client_requester = tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
     assert client_requester is tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
 
     client_listener = tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
     assert client_listener is tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
 
     print('INPUTS:', tr.input_sessions)
     print('OUTPUTS:', tr.output_sessions)
@@ -314,10 +316,10 @@ async def _unittest_serial_transport() -> None:
     assert not set(tr.output_sessions)
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        _ = tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+        _ = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        _ = tr.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+        _ = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

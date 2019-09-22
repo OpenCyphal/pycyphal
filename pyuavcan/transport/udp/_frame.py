@@ -210,10 +210,10 @@ def _unittest_udp_frame_compile() -> None:
 
     # Multi-frame, not the end of the transfer.
     assert (
-        memoryview(0x_dead_beef_c0ffee.to_bytes(7, 'little') +
-                   b'\xD0' +
-                   0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little') +
-                   0x_0dd_f00d.to_bytes(4, 'little')),
+        memoryview(b''.join([0x_dead_beef_c0ffee.to_bytes(7, 'little'),
+                             b'\xD0',
+                             0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little'),
+                             0x_0dd_f00d.to_bytes(4, 'little')])),
         memoryview(b'Well, I got here the same way the coin did.'),
     ) == UDPFrame(
         timestamp=ts,
@@ -227,10 +227,10 @@ def _unittest_udp_frame_compile() -> None:
 
     # Multi-frame, end of the transfer.
     assert (
-        memoryview(0x_dead_beef_c0ffee.to_bytes(7, 'little') +
-                   b'\xF0' +
-                   0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little') +
-                   (0x_0dd_f00d | 2 ** 31).to_bytes(4, 'little')),
+        memoryview(b''.join([0x_dead_beef_c0ffee.to_bytes(7, 'little'),
+                             b'\xF0',
+                             0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little'),
+                             (0x_0dd_f00d | 2 ** 31).to_bytes(4, 'little')])),
         memoryview(b'Well, I got here the same way the coin did.'),
     ) == UDPFrame(
         timestamp=ts,
@@ -244,9 +244,9 @@ def _unittest_udp_frame_compile() -> None:
 
     # Single-frame.
     assert (
-        memoryview(0x_dead_beef_c0ffee.to_bytes(7, 'little') +
-                   b'\x00' +
-                   0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little')),
+        memoryview(b''.join([0x_dead_beef_c0ffee.to_bytes(7, 'little'),
+                             b'\x00',
+                             0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little')])),
         memoryview(b'Well, I got here the same way the coin did.'),
     ) == UDPFrame(
         timestamp=ts,
@@ -277,11 +277,11 @@ def _unittest_udp_frame_parse() -> None:
         payload=memoryview(b'Well, I got here the same way the coin did.'),
         data_type_hash=0x_0dd_c0ffee_bad_f00d,
     ) == UDPFrame.parse(
-        memoryview(0x_dead_beef_c0ffee.to_bytes(7, 'little') +
-                   b'\xD0' +
-                   0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little') +
-                   0x_0dd_f00d.to_bytes(4, 'little') +
-                   b'Well, I got here the same way the coin did.'),
+        memoryview(b''.join([0x_dead_beef_c0ffee.to_bytes(7, 'little'),
+                             b'\xD0',
+                             0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little'),
+                             0x_0dd_f00d.to_bytes(4, 'little'),
+                             b'Well, I got here the same way the coin did.'])),
         ts,
     )
 
@@ -295,11 +295,11 @@ def _unittest_udp_frame_parse() -> None:
         payload=memoryview(b'Well, I got here the same way the coin did.'),
         data_type_hash=0x_0dd_c0ffee_bad_f00d,
     ) == UDPFrame.parse(
-        memoryview(0x_dead_beef_c0ffee.to_bytes(7, 'little') +
-                   b'\xF0' +
-                   0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little') +
-                   (0x_0dd_f00d | 2 ** 31).to_bytes(4, 'little') +
-                   b'Well, I got here the same way the coin did.'),
+        memoryview(b''.join([0x_dead_beef_c0ffee.to_bytes(7, 'little'),
+                             b'\xF0',
+                             0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little'),
+                             (0x_0dd_f00d | 2 ** 31).to_bytes(4, 'little'),
+                             b'Well, I got here the same way the coin did.'])),
         ts,
     )
 
@@ -313,25 +313,25 @@ def _unittest_udp_frame_parse() -> None:
         payload=memoryview(b'Well, I got here the same way the coin did.'),
         data_type_hash=0x_0dd_c0ffee_bad_f00d,
     ) == UDPFrame.parse(
-        memoryview(0x_dead_beef_c0ffee.to_bytes(7, 'little') +
-                   b'\x00' +
-                   0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little') +
-                   b'Well, I got here the same way the coin did.'),
+        memoryview(b''.join([0x_dead_beef_c0ffee.to_bytes(7, 'little'),
+                             b'\x00',
+                             0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little'),
+                             b'Well, I got here the same way the coin did.'])),
         ts,
     )
 
     # Bad formats.
     assert None is UDPFrame.parse(
-        memoryview(0x_dead_beef_c0ffee.to_bytes(7, 'little') +
-                   b'\xD0' +
-                   0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little') +
-                   0x_0dd_f00d.to_bytes(4, 'little'))[:-1],
+        memoryview(b''.join([0x_dead_beef_c0ffee.to_bytes(7, 'little'),
+                             b'\xD0',
+                             0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little'),
+                             0x_0dd_f00d.to_bytes(4, 'little')]))[:-1],
         ts,
     )
     assert None is UDPFrame.parse(
-        memoryview(0x_dead_beef_c0ffee.to_bytes(7, 'little') +
-                   b'\xDF' +
-                   0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little') +
-                   0x_0dd_f00d.to_bytes(4, 'little')),
+        memoryview(b''.join([0x_dead_beef_c0ffee.to_bytes(7, 'little'),
+                             b'\xDF',
+                             0x_0dd_c0ffee_bad_f00d.to_bytes(8, 'little'),
+                             0x_0dd_f00d.to_bytes(4, 'little')])),
         ts,
     )

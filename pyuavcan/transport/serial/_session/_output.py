@@ -37,15 +37,8 @@ class SerialFeedback(pyuavcan.transport.Feedback):
 
 
 class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
-    """
-    .. todo::
-        We currently permit the following unconventional usages:
-        1. Broadcast service request transfers (not responses though).
-        2. Unicast message transfers.
-        Decide whether we want to keep that later. Those can't be implemented on CAN bus, for example.
-    """
     def __init__(self,
-                 specifier:              pyuavcan.transport.SessionSpecifier,
+                 specifier:              pyuavcan.transport.OutputSessionSpecifier,
                  payload_metadata:       pyuavcan.transport.PayloadMetadata,
                  mtu:                    int,
                  local_node_id_accessor: typing.Callable[[], typing.Optional[int]],
@@ -65,15 +58,14 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         assert callable(self._local_node_id_accessor)
         assert callable(send_handler)
 
-        if not isinstance(self._specifier, pyuavcan.transport.SessionSpecifier) or \
+        if not isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier) or \
                 not isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata):  # pragma: no cover
             raise TypeError('Invalid parameters')
 
-        if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
-            is_response = specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE
-            if is_response and specifier.remote_node_id is None:
-                raise pyuavcan.transport.UnsupportedSessionConfigurationError(
-                    f'Cannot broadcast a service response. Session specifier: {specifier}')
+        assert not specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE \
+            or specifier.remote_node_id is not None \
+            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) else True, \
+            'Internal protocol violation: cannot broadcast a service response'
 
         super(SerialOutputSession, self).__init__(finalizer)
 
@@ -136,7 +128,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         self._feedback_handler = None
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
         return self._specifier
 
     @property
@@ -153,8 +145,8 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
 def _unittest_output_session() -> None:
     import asyncio
     from pytest import raises, approx
-    from pyuavcan.transport import SessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority, Transfer
-    from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback
+    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority
+    from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback, Transfer
 
     ts = Timestamp.now()
     loop = asyncio.get_event_loop()
@@ -179,18 +171,8 @@ def _unittest_output_session() -> None:
         nonlocal finalized
         finalized = True
 
-    with raises(pyuavcan.transport.UnsupportedSessionConfigurationError):
-        _ = SerialOutputSession(
-            specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.RESPONSE), None),
-            payload_metadata=PayloadMetadata(0xdeadbeefbadc0ffe, 1024),
-            mtu=10,
-            local_node_id_accessor=lambda: 1234,  # pragma: no cover
-            send_handler=do_send,
-            finalizer=do_finalize,
-        )
-
     sos = SerialOutputSession(
-        specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
+        specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
         payload_metadata=PayloadMetadata(0xdeadbeefbadc0ffe, 1024),
         mtu=10,
         local_node_id_accessor=lambda: None,  # pragma: no cover
@@ -208,7 +190,7 @@ def _unittest_output_session() -> None:
         ))
 
     sos = SerialOutputSession(
-        specifier=SessionSpecifier(MessageDataSpecifier(3210), None),
+        specifier=OutputSessionSpecifier(MessageDataSpecifier(3210), None),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
         mtu=11,
         local_node_id_accessor=lambda: None,
@@ -216,7 +198,7 @@ def _unittest_output_session() -> None:
         finalizer=do_finalize,
     )
 
-    assert sos.specifier == SessionSpecifier(MessageDataSpecifier(3210), None)
+    assert sos.specifier == OutputSessionSpecifier(MessageDataSpecifier(3210), None)
     assert sos.destination_node_id is None
     assert sos.payload_metadata == PayloadMetadata(0xdead_beef_badc0ffe, 1024)
     assert sos.sample_statistics() == SessionStatistics()
@@ -279,7 +261,7 @@ def _unittest_output_session() -> None:
     finalized = False
 
     sos = SerialOutputSession(
-        specifier=SessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
+        specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
         mtu=10,
         local_node_id_accessor=lambda: 1234,

@@ -35,7 +35,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2.0
 
     def __init__(self,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 specifier:        pyuavcan.transport.InputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  loop:             asyncio.AbstractEventLoop,
                  finalizer:        typing.Callable[[], None]):
@@ -48,7 +48,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         self._loop = loop
         assert self._loop is not None
 
-        if not isinstance(self._specifier, pyuavcan.transport.SessionSpecifier) or \
+        if not isinstance(self._specifier, pyuavcan.transport.InputSessionSpecifier) or \
                 not isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata):  # pragma: no cover
             raise TypeError('Invalid parameters')
 
@@ -123,7 +123,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
             raise ValueError(f'Invalid value for transfer-ID timeout [second]: {value}')
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.InputSessionSpecifier:
         return self._specifier
 
     @property
@@ -158,7 +158,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 def _unittest_input_session() -> None:
     import asyncio
     from pytest import raises, approx
-    from pyuavcan.transport import SessionSpecifier, MessageDataSpecifier, Priority, TransferFrom
+    from pyuavcan.transport import InputSessionSpecifier, MessageDataSpecifier, Priority, TransferFrom
     from pyuavcan.transport import PayloadMetadata, Timestamp
     from pyuavcan.transport.commons.high_overhead_transport import TransferCRC
 
@@ -177,7 +177,7 @@ def _unittest_input_session() -> None:
         nonlocal finalized
         finalized = True
 
-    session_spec = SessionSpecifier(MessageDataSpecifier(12345), None)
+    session_spec = InputSessionSpecifier(MessageDataSpecifier(12345), None)
     payload_meta = PayloadMetadata(0xdead_beef_bad_c0ffe, 100)
 
     sis = SerialInputSession(specifier=session_spec,
