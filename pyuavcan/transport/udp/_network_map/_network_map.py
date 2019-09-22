@@ -96,6 +96,4 @@ class NetworkMap(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             network=str(self),
-                                             max_nodes=self.max_nodes)
+        return pyuavcan.util.repr_attributes(self, str(self), max_nodes=self.max_nodes)

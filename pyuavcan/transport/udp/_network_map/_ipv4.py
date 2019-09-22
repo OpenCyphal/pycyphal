@@ -56,6 +56,8 @@ class NetworkMapIPv4(NetworkMap):
             assert IPv4Address.parse(s.getsockname()[0]) == self._local.host_address
             s.close()
 
+        self._ip_to_nid_cache: typing.Dict[str, typing.Optional[int]] = {}
+
     @property
     def max_nodes(self) -> int:
         return self._max_nodes
@@ -65,13 +67,21 @@ class NetworkMapIPv4(NetworkMap):
         return self._local_node_id
 
     def map_ip_address_to_node_id(self, ip: str) -> typing.Optional[int]:
-        a = IPv4Address.parse(ip)  # This is likely to be a bottleneck!
-        if a in self._local:
-            out = int(a) - int(self._local.subnet_address)
-            assert out >= 0
-            if out < self._max_nodes:
-                return out
-        return None
+        # Unclean strings will decrease the cache performance. Do we want to strip() them beforehand?
+        try:
+            return self._ip_to_nid_cache[ip]
+        except LookupError:
+            a = IPv4Address.parse(ip)
+            node_id: typing.Optional[int] = None
+            if a in self._local:
+                candidate = int(a) - int(self._local.subnet_address)
+                assert candidate >= 0
+                if candidate < self._max_nodes:
+                    node_id = candidate
+
+            _logger.debug('%r: New IP to node-ID mapping: %r --> %s', self, ip, node_id)
+            self._ip_to_nid_cache[ip] = node_id
+            return node_id
 
     def make_output_socket(self, remote_node_id: typing.Optional[int], remote_port: int) -> socket.socket:
         s = self._make_socket(0)    # Bind to an ephemeral port.
@@ -86,15 +96,15 @@ class NetworkMapIPv4(NetworkMap):
         else:
             raise ValueError(f'Cannot map the node-ID value {remote_node_id} to an IP address. '
                              f'The range of valid node-ID values is [0, {self._max_nodes})')
-        _logger.debug('New output socket %r connected to remote node %r, remote port %r',
-                      s, remote_node_id, remote_port)
+        _logger.debug('%r: New output socket %r connected to remote node %r, remote port %r',
+                      self, s, remote_node_id, remote_port)
         return s
 
     def make_input_socket(self, local_port: int) -> socket.socket:
         s = self._make_socket(local_port)
         # Allow other applications and other instances to listen to multicast/broadcast traffic.
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        _logger.debug('New input socket %r, local port %r', s, local_port)
+        _logger.debug('%r: New input socket %r, local port %r', self, s, local_port)
         return s
 
     def _make_socket(self, local_port: int) -> socket.socket:
@@ -141,6 +151,7 @@ def _unittest_network_map_ipv4() -> None:
     assert nm.max_nodes == 2 ** NetworkMap.NODE_ID_BIT_LENGTH  # Full capacity available.
     assert nm.local_node_id == 256
     assert nm.map_ip_address_to_node_id('127.123.0.1') == 1
+    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1  # From cache
     assert nm.map_ip_address_to_node_id('127.123.254.254') is None
     assert nm.map_ip_address_to_node_id('127.254.254.254') is None
 
