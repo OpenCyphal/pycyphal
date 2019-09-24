@@ -102,8 +102,6 @@ class NetworkMapIPv4(NetworkMap):
 
     def make_input_socket(self, local_port: int) -> socket.socket:
         s = self._make_socket(local_port)
-        # Allow other applications and other instances to listen to multicast/broadcast traffic.
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         _logger.debug('%r: New input socket %r, local port %r', self, s, local_port)
         return s
 
@@ -111,6 +109,10 @@ class NetworkMapIPv4(NetworkMap):
         bind_to = self._local.host_address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.setblocking(False)
+        if local_port > 0:
+            # Allow other applications and other instances to listen to multicast/broadcast traffic.
+            # This option shall be set before the socket is bound.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             # Output sockets shall be bound, too, in order to ensure that outgoing packets have the correct
             # source IP address specified. This is particularly important for localhost; an unbound socket
