@@ -103,7 +103,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
             else:
                 transfer = self._queue.get_nowait()
         except (asyncio.TimeoutError, asyncio.QueueEmpty):
-            # If there are unprocessed messages, allow the caller to read them even if the instance is closed.
+            # If there are unprocessed transfers, allow the caller to read them even if the instance is closed.
             self._raise_if_closed()
             return None
         else:
@@ -150,7 +150,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
                                         max_payload_size_bytes=self._payload_metadata.max_size_bytes,
                                         on_error_callback=on_reassembly_error)
             self._reassemblers[source_node_id] = reasm
-            _logger.info('%s: New %s (%d total)', self, reasm, len(self._reassemblers))
+            _logger.debug('%s: New %s (%d total)', self, reasm, len(self._reassemblers))
             return reasm
 
 
