@@ -46,10 +46,11 @@ class Demultiplexer:
     Even on GNU/Linux, there is a risk of race conditions, but I'll spare you the details.
     Those who care may read this: https://stackoverflow.com/a/54156768/1007777.
     """
-    #: The callback is invoked with a frame instance upon successful reception.
+    #: The callback is invoked with the source node-ID and the frame instance upon successful reception.
+    #: Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that.
     #: If a UDP frame is received that does not contain a valid UAVCAN frame,
     #: the callback is invoked with None for error statistic collection purposes.
-    Listener = typing.Callable[[typing.Optional[UDPFrame]], None]
+    Listener = typing.Callable[[int, typing.Optional[UDPFrame]], None]
 
     def __init__(self,
                  sock:           socket.socket,
@@ -153,7 +154,7 @@ class Demultiplexer:
                 else:
                     handled = True
                     try:
-                        callback(frame)
+                        callback(source_node_id, frame)
                     except Exception as ex:  # pragma: no cover
                         _logger.exception('%r: Unhandled exception in the listener for node-ID %r: %s', self, key, ex)
 
@@ -191,7 +192,7 @@ class Demultiplexer:
                 if len(data) >= self._udp_mtu:  # pragma: no cover
                     _logger.warning('%r: A datagram from %r is %d bytes long which is not less than '
                                     'the size of the buffer, therefore it might have been truncated. '
-                                    'To squelch this warning, increase the size of the read buffer.',
+                                    'Enlarge the read buffer to squelch this warning.',
                                     self, endpoint, len(data))
 
             except socket.timeout:
@@ -216,9 +217,7 @@ class Demultiplexer:
         assert self._closed
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes_noexcept(self,
-                                                      self._sock,
-                                                      remote_node_ids=list(self._listeners.keys()))
+        return pyuavcan.util.repr_attributes_noexcept(self, self._sock, remote_node_ids=list(self._listeners.keys()))
 
 
 def _unittest_demultiplexer() -> None:
@@ -263,14 +262,14 @@ def _unittest_demultiplexer() -> None:
     with raises(LookupError):
         demux.remove_listener(123)
 
-    received_frames_promiscuous: typing.List[typing.Optional[UDPFrame]] = []
-    received_frames_3: typing.List[typing.Optional[UDPFrame]] = []
+    received_frames_promiscuous: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
+    received_frames_3: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
 
-    demux.add_listener(None, received_frames_promiscuous.append)
+    demux.add_listener(None, lambda i, f: received_frames_promiscuous.append((i, f)))
     assert demux.has_listeners
-    demux.add_listener(3, received_frames_3.append)
+    demux.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
     with raises(Exception):
-        demux.add_listener(3, received_frames_3.append)
+        demux.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
     assert demux.has_listeners
 
     sock_tx_1 = make_sock_tx('127.100.0.1')
@@ -292,8 +291,9 @@ def _unittest_demultiplexer() -> None:
         accepted_datagrams={1: 1},
         dropped_datagrams={},
     )
-    rxf = received_frames_promiscuous.pop()
+    nid, rxf = received_frames_promiscuous.pop()
     assert rxf is not None
+    assert nid == 1
     assert check_timestamp(rxf.timestamp)
     assert bytes(rxf.payload) == b'HARDBASS'
     assert rxf.priority == Priority.HIGH
@@ -320,8 +320,9 @@ def _unittest_demultiplexer() -> None:
         accepted_datagrams={1: 1, 3: 1},
         dropped_datagrams={},
     )
-    rxf = received_frames_promiscuous.pop()
+    nid, rxf = received_frames_promiscuous.pop()
     assert rxf is not None
+    assert nid == 3
     assert check_timestamp(rxf.timestamp)
     assert bytes(rxf.payload) == b'Oy blin!'
     assert rxf.priority == Priority.LOW
@@ -329,7 +330,7 @@ def _unittest_demultiplexer() -> None:
     assert rxf.data_type_hash == 0x_dead_beef_c0ffee
     assert not rxf.single_frame_transfer
 
-    assert rxf == received_frames_3.pop()   # Same exact frame in the other listener.
+    assert (3, rxf) == received_frames_3.pop()   # Same exact frame in the other listener.
 
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -354,8 +355,9 @@ def _unittest_demultiplexer() -> None:
         accepted_datagrams={1: 1, 3: 2},
         dropped_datagrams={},
     )
-    rxf = received_frames_3.pop()
+    nid, rxf = received_frames_3.pop()
     assert rxf is not None
+    assert nid == 3
     assert check_timestamp(rxf.timestamp)
     assert bytes(rxf.payload) == b'HARDBASS'
     assert rxf.priority == Priority.HIGH
@@ -409,7 +411,7 @@ def _unittest_demultiplexer() -> None:
         accepted_datagrams={1: 1, 3: 3},
         dropped_datagrams={1: 1, '127.100.0.9': 1},
     )
-    assert received_frames_3.pop() is None
+    assert received_frames_3.pop() == (3, None)
     assert not received_frames_promiscuous
     assert not received_frames_3
 
@@ -432,7 +434,7 @@ def _unittest_demultiplexer() -> None:
     demux.close()
     demux.close()   # Idempotency
     with raises(pyuavcan.transport.ResourceClosedError):
-        demux.add_listener(3, received_frames_3.append)
+        demux.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
     assert sock_rx.fileno() < 0, 'The socket has not been closed'
 
     # SOCKET FAILURE
