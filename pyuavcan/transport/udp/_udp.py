@@ -10,10 +10,18 @@ import asyncio
 import logging
 import dataclasses
 import pyuavcan
-from ._session import UDPInputSession, UDPOutputSession
+from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
+from ._session import UDPOutputSession
 from ._frame import UDPFrame
 from ._network_map import NetworkMap
 from ._port_mapping import map_data_specifier_to_udp_port
+from ._demultiplexer import Demultiplexer, DemultiplexerStatistics
+
+
+# This is for internal use only: the maximum possible payload per UDP frame.
+# We assume that it equals the maximum size of an Ethernet jumbo frame.
+# We subtract the size of the L2/L3/L4 overhead here, and add one byte to enable packet truncation detection.
+_MAX_UDP_MTU = 9 * 1024 - 20 - 8 + 1
 
 
 _logger = logging.getLogger(__name__)
@@ -21,7 +29,8 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
-    pass
+    demultiplexer_statistics: typing.Dict[pyuavcan.transport.DataSpecifier, DemultiplexerStatistics] = \
+        dataclasses.field(default_factory=dict)
 
 
 class UDPTransport(pyuavcan.transport.Transport):
@@ -150,6 +159,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         _logger.debug(f'IP: {self._network_map}; max nodes: {self._network_map.max_nodes}; '
                       f'local node-ID: {self.local_node_id}')
 
+        self._demultiplexer_registry: typing.Dict[pyuavcan.transport.DataSpecifier, Demultiplexer] = {}
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
@@ -185,12 +195,19 @@ class UDPTransport(pyuavcan.transport.Transport):
             try:
                 s.close()
             except Exception as ex:  # pragma: no cover
-                _logger.exception('%s: Failed to close session %r: %s', self, s, ex)
+                _logger.exception('%s: Failed to close %r: %s', self, s, ex)
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPInputSession:
-        raise NotImplementedError
+        self._ensure_not_closed()
+        if specifier not in self._input_registry:
+            self._setup_input_session(specifier, payload_metadata)
+        assert specifier.data_specifier in self._demultiplexer_registry
+        out = self._input_registry[specifier]
+        assert isinstance(out, UDPInputSession)
+        assert out.specifier == specifier
+        return out
 
     def get_output_session(self,
                            specifier:        pyuavcan.transport.OutputSessionSpecifier,
@@ -236,6 +253,55 @@ class UDPTransport(pyuavcan.transport.Transport):
     @property
     def descriptor(self) -> str:
         return f'<udp mtu="{self._mtu}" srv_mult="{self._srv_multiplier}">{self._network_map}</udp>'
+
+    def _setup_input_session(self,
+                             specifier:        pyuavcan.transport.InputSessionSpecifier,
+                             payload_metadata: pyuavcan.transport.PayloadMetadata) -> None:
+        """
+        In order to set up a new input session, we have to link together a lot of objects. Tricky.
+        So we extract this into a separate method, where the precondition is that the session does not
+        exist and the post-condition is that it does exist.
+        """
+        assert specifier not in self._input_registry
+
+        if specifier.data_specifier not in self._demultiplexer_registry:
+            self._demultiplexer_registry[specifier.data_specifier] = Demultiplexer(
+                sock=self._network_map.make_input_socket(map_data_specifier_to_udp_port(specifier.data_specifier)),
+                udp_mtu=_MAX_UDP_MTU,
+                node_id_mapper=self._network_map.map_ip_address_to_node_id,
+                statistics=self._statistics.demultiplexer_statistics.setdefault(specifier.data_specifier,
+                                                                                DemultiplexerStatistics()),
+                loop=self.loop,
+            )
+            _logger.debug('%r: New %r for %s',
+                          self, self._demultiplexer_registry[specifier.data_specifier], specifier.data_specifier)
+
+        demux = self._demultiplexer_registry[specifier.data_specifier]
+
+        def finalizer() -> None:
+            del self._input_registry[specifier]
+            try:
+                demux.remove_listener(specifier.remote_node_id)
+            finally:
+                if not demux.has_listeners:
+                    try:
+                        _logger.debug('%r: Destroying %r for %s', self, demux, specifier.data_specifier)
+                        demux.close()
+                    finally:
+                        assert self._demultiplexer_registry[specifier.data_specifier] is demux
+                        del self._demultiplexer_registry[specifier.data_specifier]
+
+        cls: typing.Union[typing.Type[PromiscuousUDPInputSession], typing.Type[SelectiveUDPInputSession]] = \
+            PromiscuousUDPInputSession if specifier.is_promiscuous else SelectiveUDPInputSession
+        session = cls(
+            specifier=specifier,
+            payload_metadata=payload_metadata,
+            loop=self.loop,
+            finalizer=finalizer,
+        )
+        # noinspection PyProtectedMember
+        demux.add_listener(specifier.remote_node_id, session._process_frame)
+        self._input_registry[specifier] = session
 
     def _ensure_not_closed(self) -> None:
         if self._closed:

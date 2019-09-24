@@ -36,7 +36,7 @@ class NetworkMap(abc.ABC):
         """
         if ':' in ip_address:
             from ._ipv6 import NetworkMapIPv6
-            return NetworkMapIPv6(ip_address)  # type: ignore
+            return NetworkMapIPv6(ip_address)
         else:
             from ._ipv4 import NetworkMapIPv4
             return NetworkMapIPv4(ip_address)
