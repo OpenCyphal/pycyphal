@@ -135,7 +135,8 @@ class SocketCANMedia(_media.Media):
     def _thread_function(self, handler: _media.Media.ReceivedFramesHandler) -> None:
         def handler_wrapper(frs: typing.Sequence[_media.TimestampedDataFrame]) -> None:
             try:
-                handler(frs)
+                if not self._closed:  # Don't call after closure to prevent race conditions and use-after-close.
+                    handler(frs)
             except Exception as exc:
                 _logger.exception('%s unhandled exception in the receive handler: %s; lost frames: %s', self, exc, frs)
 

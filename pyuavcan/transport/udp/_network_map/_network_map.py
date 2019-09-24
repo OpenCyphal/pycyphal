@@ -65,6 +65,7 @@ class NetworkMap(abc.ABC):
         Attempts to convert the IP address into a valid node-ID.
         Returns None if the supplied IP address is outside of the node-ID-mapped range within the network
         or belongs to a different subnet.
+        This method is intended to be invoked frequently, approx. once per received frame.
         """
         raise NotImplementedError
 
