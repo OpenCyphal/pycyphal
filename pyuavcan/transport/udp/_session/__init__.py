@@ -5,5 +5,7 @@
 #
 
 from ._input import UDPInputSession as UDPInputSession
+from ._input import UDPInputSessionStatistics as UDPInputSessionStatistics
 
 from ._output import UDPOutputSession as UDPOutputSession
+from ._output import UDPFeedback as UDPFeedback
