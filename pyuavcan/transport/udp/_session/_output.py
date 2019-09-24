@@ -33,6 +33,13 @@ class UDPFeedback(pyuavcan.transport.Feedback):
 
 
 class UDPOutputSession(pyuavcan.transport.OutputSession):
+    """
+    The output session logic is extremely simple because most of the work is handled by the UDP/IP
+    stack of the operating system.
+    Here we just split the transfer into frames, encode the frames, and write them into the socket one by one.
+    If the transfer multiplier is greater than one (for unreliable networks),
+    we repeat that the required number of times.
+    """
     def __init__(self,
                  specifier:        pyuavcan.transport.OutputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,

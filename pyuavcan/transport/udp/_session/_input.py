@@ -5,6 +5,7 @@
 #
 
 from __future__ import annotations
+import abc
 import copy
 import typing
 import asyncio
@@ -24,12 +25,72 @@ class UDPInputSessionStatistics(pyuavcan.transport.SessionStatistics):
     #: Values are the number of times each hash value has been encountered.
     mismatched_data_type_hashes: typing.Dict[int, int] = dataclasses.field(default_factory=dict)
 
-    #: Keys are source node-IDs; values are dicts where keys are error enum members and values are counts.
-    reassembly_errors_per_source_node_id: typing.Dict[int, typing.Dict[TransferReassembler.Error, int]] = \
-        dataclasses.field(default_factory=dict)
-
 
 class UDPInputSession(pyuavcan.transport.InputSession):
+    """
+    As you already know, the UDP port number is a function of the data specifier.
+    Hence, the input flow demultiplexing is mostly done by the UDP/IP stack implemented in the operating system
+    itself, we just need to put a few basic abstractions on top.
+    One of those abstractions is the internal Demultiplexer class, which is not a part of the API
+    but its function is important if one needs to understand how the data flow is organized inside the library::
+
+        [Socket] 1   --->   1 [Demultiplexer] 1   --->   * [Input session] 1   --->   1 [API]
+
+    *(The plurality notation is supposed to resemble UML: 1 - one, * - many.)*
+
+    A UDP datagram is an atomic unit of workload for the stack.
+    Unlike, say, the serial transport, the operating system does the low-level work of framing and
+    CRC checking for us (thank you), so we get our stuff sorted up to the OSI layer 4 inclusive.
+    The processing pipeline per datagram is as follows:
+
+    - The demultiplexer reads the datagram from the socket using ``recvfrom()``.
+      The source IP address is mapped to a node-ID and the contents are parsed into a UAVCAN UDP frame instance.
+      If anything goes wrong here (like if the source IP address belongs to a wrong subnet or the datagram
+      does not contain a valid UAVCAN frame or whatever), the datagram is dropped and the appropriate statistical
+      counters are updated.
+
+    - The demultiplexer looks up the input session instances that have subscribed for the datagram from the
+      current source node-ID (derived from the IP address) and passes the frame to them.
+      By the way, remember that this is a zero-copy stack, so every subscribed input session gets a reference
+      to the same instance of the frame, although it is beside the point right now.
+
+    - Upon reception of the frame, the input session (one of many) updates its reassembler state machine
+      and runs all that meticulous bookkeeping you can't get away from if you need to receive multi-frame transfers.
+
+    - If the received frame happened to complete a transfer, the input session passes it up to the higher layer.
+
+    Now, an attentive reader might exclaim:
+
+        But look! If there is more than one input session instance per source node-ID,
+        we'd be running multiple transfer reassemblers with the same input data,
+        which is inefficient!
+        Why can't we extract the task of transfer reassembly into the demultiplexer,
+        before the pipeline is forked, to avoid the extra workload?
+
+    That is a good question, and here's why:
+
+    - The most important reason is that the proposal would only work if the state of
+      a transfer reassembler was a function of the input frame flow only.
+      This is not the case.
+      The state of a transfer reassembler is also defined by its configuration parameters
+      which are defined per-instance, which in turn are defined per input session instance.
+      In particular, the transfer-ID timeout is configured separately per input session.
+
+    - The case where there is more than one input session per remote node-ID is uncommon.
+      In fact, it may only occur if the higher layers requested a promiscuous and a selective session
+      at the same time, which normally does not happen with UAVCAN.
+      We support this use case nevertheless because this library is supposed to offer a generic and
+      flexible API due to its intended usages (read the library design goals).
+
+    - The computing load of updating the state machine of a transfer reassembler is minuscule.
+      The most intensive computation happening there is the CRC update, which is not intense at all.
+
+    The architecture of the data processing pipeline in PyUAVCAN is complex, but that is due to the
+    high-level requirements for the library: it has to support *all transport protocols*, a lot of
+    media layers, and be portable, so trade-offs had to be made.
+    It should be understood that actual safety-critical implementations used in production systems
+    can be far simpler because generally they do not have to be multi-transport and multi-platform.
+    """
     #: Units are seconds. Can be overridden after instantiation if needed.
     DEFAULT_TRANSFER_ID_TIMEOUT = 2.0
 
@@ -38,9 +99,6 @@ class UDPInputSession(pyuavcan.transport.InputSession):
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  loop:             asyncio.AbstractEventLoop,
                  finalizer:        typing.Callable[[], None]):
-        """
-        Do not call this directly, use the factory method instead.
-        """
         self._specifier = specifier
         self._payload_metadata = payload_metadata
         self._loop = loop
@@ -50,10 +108,8 @@ class UDPInputSession(pyuavcan.transport.InputSession):
         assert isinstance(self._loop, asyncio.AbstractEventLoop)
         assert callable(self._maybe_finalizer)
 
-        self._statistics = UDPInputSessionStatistics()
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
-        self._reassemblers: typing.Dict[int, TransferReassembler] = {}
 
     def _process_frame(self, source_node_id: int, frame: typing.Optional[UDPFrame]) -> None:
         """
@@ -126,13 +182,50 @@ class UDPInputSession(pyuavcan.transport.InputSession):
     def payload_metadata(self) -> pyuavcan.transport.PayloadMetadata:
         return self._payload_metadata
 
-    def sample_statistics(self) -> UDPInputSessionStatistics:
-        return copy.copy(self._statistics)
-
     def close(self) -> None:
         if self._maybe_finalizer is not None:
             self._maybe_finalizer()
             self._maybe_finalizer = None
+
+    @property
+    @abc.abstractmethod
+    def _statistics(self) -> UDPInputSessionStatistics:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
+        raise NotImplementedError
+
+
+@dataclasses.dataclass
+class PromiscuousUDPInputSessionStatistics(UDPInputSessionStatistics):
+    #: Keys are source node-IDs; values are dicts where keys are error enum members and values are counts.
+    reassembly_errors_per_source_node_id: typing.Dict[int, typing.Dict[TransferReassembler.Error, int]] = \
+        dataclasses.field(default_factory=dict)
+
+
+class PromiscuousUDPInputSession(UDPInputSession):
+    def __init__(self,
+                 specifier:        pyuavcan.transport.InputSessionSpecifier,
+                 payload_metadata: pyuavcan.transport.PayloadMetadata,
+                 loop:             asyncio.AbstractEventLoop,
+                 finalizer:        typing.Callable[[], None]):
+        """
+        Do not call this directly, use the factory method instead.
+        """
+        self._statistics_impl = PromiscuousUDPInputSessionStatistics()
+        self._reassemblers: typing.Dict[int, TransferReassembler] = {}
+        super(PromiscuousUDPInputSession, self).__init__(specifier=specifier,
+                                                         payload_metadata=payload_metadata,
+                                                         loop=loop,
+                                                         finalizer=finalizer)
+
+    def sample_statistics(self) -> PromiscuousUDPInputSessionStatistics:
+        return copy.copy(self._statistics)
+
+    @property
+    def _statistics(self) -> PromiscuousUDPInputSessionStatistics:
+        return self._statistics_impl
 
     def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
         assert isinstance(source_node_id, int) and source_node_id >= 0, 'Internal protocol violation'
@@ -154,3 +247,51 @@ class UDPInputSession(pyuavcan.transport.InputSession):
             self._reassemblers[source_node_id] = reasm
             _logger.debug('%s: New %s (%d total)', self, reasm, len(self._reassemblers))
             return reasm
+
+
+@dataclasses.dataclass
+class SelectiveUDPInputSessionStatistics(UDPInputSessionStatistics):
+    #: Keys are error enum members and values are counts.
+    reassembly_errors: typing.Dict[TransferReassembler.Error, int] = dataclasses.field(default_factory=dict)
+
+
+class SelectiveUDPInputSession(UDPInputSession):
+    def __init__(self,
+                 specifier:        pyuavcan.transport.InputSessionSpecifier,
+                 payload_metadata: pyuavcan.transport.PayloadMetadata,
+                 loop:             asyncio.AbstractEventLoop,
+                 finalizer:        typing.Callable[[], None]):
+        """
+        Do not call this directly, use the factory method instead.
+        """
+        self._statistics_impl = SelectiveUDPInputSessionStatistics()
+
+        source_node_id = specifier.remote_node_id
+        assert source_node_id is not None, 'Internal protocol violation'
+
+        def on_reassembly_error(error: TransferReassembler.Error) -> None:
+            self._statistics.errors += 1
+            try:
+                self._statistics.reassembly_errors[error] += 1
+            except LookupError:
+                self._statistics.reassembly_errors[error] = 1
+
+        self._reassembler = TransferReassembler(source_node_id=source_node_id,
+                                                max_payload_size_bytes=payload_metadata.max_size_bytes,
+                                                on_error_callback=on_reassembly_error)
+
+        super(SelectiveUDPInputSession, self).__init__(specifier=specifier,
+                                                       payload_metadata=payload_metadata,
+                                                       loop=loop,
+                                                       finalizer=finalizer)
+
+    def sample_statistics(self) -> SelectiveUDPInputSessionStatistics:
+        return copy.copy(self._statistics)
+
+    @property
+    def _statistics(self) -> SelectiveUDPInputSessionStatistics:
+        return self._statistics_impl
+
+    def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
+        assert source_node_id == self._reassembler.source_node_id, 'Internal protocol violation'
+        return self._reassembler

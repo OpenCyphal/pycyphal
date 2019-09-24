@@ -26,6 +26,10 @@ class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class UDPTransport(pyuavcan.transport.Transport):
     """
+    The UDP transport is experimental and is not yet part of the UAVCAN specification.
+    Future revisions may break wire compatibility until the transport is formally specified.
+    Context: https://forum.uavcan.org/t/alternative-transport-protocols/324.
+
     Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value is rejected.
 
     If IPv6 is used, the flow-ID of UAVCAN packets shall be zero.
@@ -93,17 +97,20 @@ class UDPTransport(pyuavcan.transport.Transport):
             For example:
 
             - ``192.168.1.200/24`` -- a subnet with up to 255 UAVCAN nodes; for example:
+
                 - ``192.168.1.0`` -- node-ID of zero (may be unusable depending on the network configuration).
                 - ``192.168.1.254`` -- the maximum available node-ID in this subnet is 254.
                 - ``192.168.1.255`` -- the broadcast address, not a valid node.
+
             - ``127.100.0.42/16`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
+
                 - ``127.100.0.1`` -- node-ID 1.
                 - ``127.100.0.255`` -- node-ID 255.
                 - ``127.100.15.255`` -- node-ID 4095.
                 - ``127.100.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
-                    All traffic from this address will be rejected as non-UAVCAN.
+                  All traffic from this address will be rejected as non-UAVCAN.
                 - ``127.100.255.255`` -- the broadcast address; notice that this address lies outside of the
-                    node-ID-mapped space, no conflicts.
+                  node-ID-mapped space, no conflicts.
 
             IPv6 addresses may be specified without the mask, in which case it will be assumed to be
             equal ``128 - NODE_ID_BIT_LENGTH``.
