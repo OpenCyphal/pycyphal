@@ -92,7 +92,8 @@ class NetworkMap(abc.ABC):
     @abc.abstractmethod
     def __str__(self) -> str:
         """
-        Canonical subnet notation.
+        Canonical notation: address plus the netmask width.
+        For example: ``192.168.1.200/24``.
         """
         raise NotImplementedError
 

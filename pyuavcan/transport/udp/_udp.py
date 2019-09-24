@@ -29,29 +29,101 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
+    #: Basic input session statistics: instances of :class:`DemultiplexerStatistics` keyed by data specifier.
     demultiplexer_statistics: typing.Dict[pyuavcan.transport.DataSpecifier, DemultiplexerStatistics] = \
         dataclasses.field(default_factory=dict)
 
 
 class UDPTransport(pyuavcan.transport.Transport):
-    """
+    r"""
     The UDP transport is experimental and is not yet part of the UAVCAN specification.
     Future revisions may break wire compatibility until the transport is formally specified.
     Context: https://forum.uavcan.org/t/alternative-transport-protocols/324.
 
-    Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value is rejected.
+    The UDP transport is essentially a trivial stateless UDP blaster.
+    In the spirit of UAVCAN, it is designed to be simple and robust.
+    Much of the data handling work is offloaded to the standard underlying UDP/IP stack.
 
-    If IPv6 is used, the flow-ID of UAVCAN packets shall be zero.
+    The data specifier is manifested on the wire as the destination UDP port number;
+    the mapping function is implemented in :func:`map_data_specifier_to_udp_port`.
+    The source port number can be arbitrary (ephemeral), its value is ignored.
 
-    UAVCAN uses a wide range of UDP ports [15360, 49151].
+    UAVCAN uses a wide range of UDP ports: [15360, 49151].
     Operating systems that comply with the IANA ephemeral port range recommendations are expected to be
-    compatible with this; otherwise there may be port assignment conflicts.
+    compatible with this; otherwise, there may be port assignment conflicts.
     All new versions of MS Windows starting with Vista and Server 2008 are compatible with the IANA recommendations.
     Many versions of GNU/Linux, however, are not, but it can be fixed by manual reconfiguration:
     https://stackoverflow.com/questions/28573390/how-to-view-and-edit-the-ephemeral-port-range-on-linux.
 
+    The node-ID of a node is the value of :attr:`NODE_ID_BIT_LENGTH` least significant bits of its IP address.
+    Both IPv4 and IPv6 are supported with minimal differences, although IPv6 is not expected to be useful in
+    a vehicular network because virtually none of its advantages are relevant there,
+    and the increased overhead is likely to be detrimental to the network's latency and throughput.
+    Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value (i.e., outside of
+    the local subnet) is rejected.
     The concept of anonymous node is not defined for UDP/IP; in this transport, every node always has a node-ID.
     If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
+    If IPv6 is used, the flow-ID of UAVCAN packets is set to zero.
+
+    The datagram payload format is documented in :class:`UDPFrame`.
+    Again, it is designed to be simple and low-overhead, which is not difficult considering that
+    the entirety of the session specifier is reified through the UDP/IP stack:
+
+    +---------------------------------------+---------------------------------------+
+    | Parameter                             | Manifested in                         |
+    +=======================================+=======================================+
+    | Transfer priority                     |                                       |
+    +---------------------------------------+                                       |
+    | Transfer-ID                           | UDP datagram payload (frame header)   |
+    +---------------------------------------+                                       |
+    | Data type hash                        |                                       |
+    +-------------------+-------------------+---------------------------------------+
+    |                   | Route specifier   | IP address (least significant bits)   |
+    | Session specifier +-------------------+---------------------------------------+
+    |                   | Data specifier    | UDP destination port number           |
+    +-------------------+-------------------+---------------------------------------+
+
+    For unreliable networks, deterministic data loss mitigation is supported.
+    This measure is only available for service transfers, not for message transfers due to their different semantics.
+    If the probability of a frame loss exceeds the desired reliability threshold,
+    the transport can be configured to repeat every outgoing service transfer a specified number of times,
+    on the assumption that the probability of losing any given frame is uncorrelated (or weakly correlated)
+    with that of its neighbors.
+    For instance, suppose a service transfer contains three frames, F0 to F2,
+    and the service transfer multiplication factor is two;
+    the resulting frame sequence would be as follows::
+
+        F0      F1      F2      F0      F1      F2
+        \_______________/       \_______________/
+           main copy             redundant copy
+         (TX timestamp)      (never TX-timestamped)
+
+        ------------------ time ------------------>
+
+    As shown on the diagram, if transmission timestamping is requested, only the first copy is timestamped.
+    Further, any errors occurring during the transmission of redundant copies
+    may be silently ignored by the stack, provided that the main copy has been transmitted successfully.
+
+    The resulting behavior in the provided example is that the transport network may
+    lose up to three unique frames without affecting the application.
+    In the following example, the frames F0 and F2 of the main copy are lost, but the transfer survives::
+
+        F0 F1 F2 F0 F1 F2
+        |  |  |  |  |  |
+        x  |  x  |  |  \_____ F2 __________________________
+           |     |  \________ F1 (redundant, discarded) x  \
+           |     \___________ F0 ________________________  |
+           \_________________ F1 ______________________  \ |
+                                                       \ | |
+        ----- time ----->                              v v v
+                                                    reassembled
+                                                    multi-frame
+                                                     transfer
+
+    For time-deterministic (real-time) networks this strategy is preferred over the conventional
+    confirmation-retry approach (e.g., the TCP model) because it results in more predictable
+    network load, lower worst-case latency, and is stateless (participants do not make assumptions
+    about the state of other agents involved in data exchange).
 
     The UDP transport supports all transfer categories:
 
@@ -79,7 +151,8 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     #: A conventional Ethernet jumbo frame can carry up to 9 KiB (9216 bytes).
     #: These are the application-level MTU values, so we take overheads into account.
-    #: An attempt to transmit a larger frame than supported by L2 will lead to IP fragmentation.
+    #: An attempt to transmit a larger frame than supported by L2 may lead to IP fragmentation,
+    #: which is undesirable for time-deterministic networks.
     VALID_MTU_RANGE = (1024, 9000)
 
     #: The maximum theoretical number of nodes on the network is determined by raising 2 into this power.
@@ -99,6 +172,15 @@ class UDPTransport(pyuavcan.transport.Transport):
             a valid local node-ID, the initialization will fail with
             :class:`pyuavcan.transport.InvalidMediaConfigurationError`.
 
+            For use on localhost, any IP address from the localhost range can be used;
+            for example, ``127.0.0.123``.
+            This generally does not work with physical interfaces;
+            for example, if a host has one physical interface at ``192.168.1.200``,
+            an attempt to run a node at ``192.168.1.201`` will trigger the media configuration error
+            because ``bind()`` will fail with ``EADDRNOTAVAIL``.
+            One can change the node-ID of a physical transport by altering the network
+            interface configuration in the underlying operating system itself.
+
             IPv4 addresses shall have the network mask specified, this is necessary for the transport to
             determine the subnet's broadcast address (for broadcast UAVCAN transfers).
             The mask will also be used to derive the range of node-ID values for the subnet,
@@ -111,14 +193,14 @@ class UDPTransport(pyuavcan.transport.Transport):
                 - ``192.168.1.254`` -- the maximum available node-ID in this subnet is 254.
                 - ``192.168.1.255`` -- the broadcast address, not a valid node.
 
-            - ``127.100.0.42/16`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
+            - ``192.168.1.200/16`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
 
-                - ``127.100.0.1`` -- node-ID 1.
-                - ``127.100.0.255`` -- node-ID 255.
-                - ``127.100.15.255`` -- node-ID 4095.
-                - ``127.100.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
+                - ``192.168.0.1`` -- node-ID 1.
+                - ``192.168.0.255`` -- node-ID 255.
+                - ``192.168.15.255`` -- node-ID 4095.
+                - ``192.168.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
                   All traffic from this address will be rejected as non-UAVCAN.
-                - ``127.100.255.255`` -- the broadcast address; notice that this address lies outside of the
+                - ``192.168.255.255`` -- the broadcast address; notice that this address lies outside of the
                   node-ID-mapped space, no conflicts.
 
             IPv6 addresses may be specified without the mask, in which case it will be assumed to be
@@ -128,9 +210,11 @@ class UDPTransport(pyuavcan.transport.Transport):
         :param mtu: The application-level MTU for outgoing packets. In other words, this is the maximum
             number of payload bytes per UDP frame. Transfers with a fewer number of payload bytes will be
             single-frame transfers, otherwise multi-frame transfers will be used.
-            This setting affects only outgoing frames; the MTU of incoming frames may be arbitrary.
+            This setting affects only outgoing frames; the MTU of incoming frames is fixed at a sufficiently
+            large value to accept any meaningful UDP frame.
 
-        :param service_transfer_multiplier: Specifies the number of times each outgoing service transfer will be
+        :param service_transfer_multiplier: Deterministic data loss mitigation is disabled by default.
+            This parameter specifies the number of times each outgoing service transfer will be
             repeated. The duplicates are emitted subsequently immediately following the original. This feature
             can be used to reduce the likelihood of service transfer loss over unreliable networks. Assuming that
             the probability of transfer loss ``P`` is time-invariant, the influence of the multiplier ``M`` can
@@ -183,6 +267,10 @@ class UDPTransport(pyuavcan.transport.Transport):
         return self._network_map.local_node_id
 
     def set_local_node_id(self, node_id: int) -> None:
+        """
+        This method always raises :class:`pyuavcan.transport.InvalidTransportConfigurationError`
+        because UDP does not support anonymous nodes.
+        """
         _ = node_id
         raise pyuavcan.transport.InvalidTransportConfigurationError(
             f'Cannot assign the node-ID of a UDP transport. '
@@ -254,54 +342,82 @@ class UDPTransport(pyuavcan.transport.Transport):
     def descriptor(self) -> str:
         return f'<udp mtu="{self._mtu}" srv_mult="{self._srv_multiplier}">{self._network_map}</udp>'
 
+    @property
+    def local_ip_address_with_netmask(self) -> str:
+        """
+        The configured IP address of the local node with network mask.
+        For example: ``192.168.1.200/24``.
+        """
+        return str(self._network_map)
+
     def _setup_input_session(self,
                              specifier:        pyuavcan.transport.InputSessionSpecifier,
                              payload_metadata: pyuavcan.transport.PayloadMetadata) -> None:
         """
         In order to set up a new input session, we have to link together a lot of objects. Tricky.
-        So we extract this into a separate method, where the precondition is that the session does not
-        exist and the post-condition is that it does exist.
+        Also, the setup and teardown actions shall be atomic. Hence the separate method.
         """
         assert specifier not in self._input_registry
 
-        if specifier.data_specifier not in self._demultiplexer_registry:
-            self._demultiplexer_registry[specifier.data_specifier] = Demultiplexer(
-                sock=self._network_map.make_input_socket(map_data_specifier_to_udp_port(specifier.data_specifier)),
-                udp_mtu=_MAX_UDP_MTU,
-                node_id_mapper=self._network_map.map_ip_address_to_node_id,
-                statistics=self._statistics.demultiplexer_statistics.setdefault(specifier.data_specifier,
-                                                                                DemultiplexerStatistics()),
-                loop=self.loop,
-            )
-            _logger.debug('%r: New %r for %s',
-                          self, self._demultiplexer_registry[specifier.data_specifier], specifier.data_specifier)
+        try:
+            if specifier.data_specifier not in self._demultiplexer_registry:
+                _logger.debug('%r: Setting up new demultiplexer for %s', self, specifier.data_specifier)
+                self._demultiplexer_registry[specifier.data_specifier] = Demultiplexer(
+                    sock=self._network_map.make_input_socket(map_data_specifier_to_udp_port(specifier.data_specifier)),
+                    udp_mtu=_MAX_UDP_MTU,
+                    node_id_mapper=self._network_map.map_ip_address_to_node_id,
+                    statistics=self._statistics.demultiplexer_statistics.setdefault(specifier.data_specifier,
+                                                                                    DemultiplexerStatistics()),
+                    loop=self.loop,
+                )
 
-        demux = self._demultiplexer_registry[specifier.data_specifier]
+            cls: typing.Union[typing.Type[PromiscuousUDPInputSession], typing.Type[SelectiveUDPInputSession]] = \
+                PromiscuousUDPInputSession if specifier.is_promiscuous else SelectiveUDPInputSession
 
-        def finalizer() -> None:
+            session = cls(specifier=specifier,
+                          payload_metadata=payload_metadata,
+                          loop=self.loop,
+                          finalizer=lambda: self._teardown_input_session(specifier))
+
+            # noinspection PyProtectedMember
+            self._demultiplexer_registry[specifier.data_specifier].add_listener(specifier.remote_node_id,
+                                                                                session._process_frame)
+        except Exception:
+            self._teardown_input_session(specifier)  # Rollback to ensure atomicity.
+            raise
+
+        self._input_registry[specifier] = session
+
+    def _teardown_input_session(self, specifier: pyuavcan.transport.InputSessionSpecifier) -> None:
+        """
+        The finalizer may be invoked at any point during the setup process,
+        so it must be able to deconstruct the pipeline even if it is not fully set up.
+        This is why we have these try-except everywhere. Who knew that atomic transactions can be so messy?
+        """
+        # Unregister the session first.
+        try:
             del self._input_registry[specifier]
+        except LookupError:
+            pass
+
+        # Remove the session from the list of demultiplexer listeners.
+        try:
+            demux = self._demultiplexer_registry[specifier.data_specifier]
+        except LookupError:
+            pass    # The demultiplexer has not been set up yet, nothing to do.
+        else:
             try:
                 demux.remove_listener(specifier.remote_node_id)
-            finally:
-                if not demux.has_listeners:
-                    try:
-                        _logger.debug('%r: Destroying %r for %s', self, demux, specifier.data_specifier)
-                        demux.close()
-                    finally:
-                        assert self._demultiplexer_registry[specifier.data_specifier] is demux
-                        del self._demultiplexer_registry[specifier.data_specifier]
+            except LookupError:
+                pass
 
-        cls: typing.Union[typing.Type[PromiscuousUDPInputSession], typing.Type[SelectiveUDPInputSession]] = \
-            PromiscuousUDPInputSession if specifier.is_promiscuous else SelectiveUDPInputSession
-        session = cls(
-            specifier=specifier,
-            payload_metadata=payload_metadata,
-            loop=self.loop,
-            finalizer=finalizer,
-        )
-        # noinspection PyProtectedMember
-        demux.add_listener(specifier.remote_node_id, session._process_frame)
-        self._input_registry[specifier] = session
+            # Destroy the demultiplexer if there are no listeners left.
+            if not demux.has_listeners:
+                try:
+                    _logger.debug('%r: Destroying %r for %s', self, demux, specifier.data_specifier)
+                    demux.close()
+                finally:
+                    del self._demultiplexer_registry[specifier.data_specifier]
 
     def _ensure_not_closed(self) -> None:
         if self._closed:
