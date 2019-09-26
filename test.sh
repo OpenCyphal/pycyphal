@@ -76,6 +76,18 @@ ncat --broker --listen -p 50905 &>/dev/null &
 # shellcheck disable=SC2064
 trap "kill $! || echo 'Could not kill child $!'" SIGINT SIGTERM EXIT
 
+# Allow low-level network access for regular users. This is required for testing the UDP transport.
+# You can learn the specifics in tests/transport/udp/udp_broadcaster.py (yes, it's a terrible hack).
+# If you're using a venv, you might be tempted to run "setcap ... $(which python)". This won't work!
+# The reason is that executable capabilities must be set on the target binary; you can't reach it
+# using the above approach because venv actually runs a shell shim which then calls another shim
+# which runs the actual interpreter. This wrapping only gets in the way, super annoying; we don't
+# want to deal with that, so we, so to speak, bite straight to the chocolatey center of the tootsie pop.
+python_exe=$(python -c 'import sys; print(sys.executable)')
+sudo setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' "$python_exe" || die "Could not set capabilities"
+# Now, someone might say: "Come on Pavel, this is fucking insecure!"
+# Don't be a crybaby. You can always drop the escalated capabilities afterward if you fell strongly about it.
+
 # ---------------------------------------------------------------------------------------------------------------------
 
 banner TEST EXECUTION
