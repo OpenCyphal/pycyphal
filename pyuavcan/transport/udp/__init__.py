@@ -12,11 +12,7 @@ is handled directly by the standard UDP/IP stack of the underlying operating sys
 Tooling
 +++++++
 
-Run UAVCAN networks on the local loopback interface (``127.x.x.x``, ``::1``).
-The loopback interface does not support broadcasting, however, so it can't be used on its own.
-There is a helper script in the UDP transport test directory which can be used for broadcast emulation.
-However, this approach is not recommended; instead, consider testing on a physical network with real broadcast
-capability.
+Run UAVCAN networks on the local loopback interface (``127.x.x.x/8``, ``::1``).
 
 Use Wireshark for monitoring and inspection.
 

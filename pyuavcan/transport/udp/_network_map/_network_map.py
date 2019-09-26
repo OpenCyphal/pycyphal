@@ -82,8 +82,10 @@ class NetworkMap(abc.ABC):
     @abc.abstractmethod
     def make_input_socket(self, local_port: int) -> socket.socket:
         """
-        Makes a new non-blocking input socket bound to the specified port and the configured network address.
-        By virtue of being bound, the socket will only receive data from the target subnet.
+        Makes a new non-blocking input socket bound to the specified port.
+        The bind address may be INADDR_ANY in order to allow reception of broadcast datagrams,
+        so the user of the socket will have to filter out packets manually in user space;
+        the background is explained here: https://stackoverflow.com/a/58118503/1007777.
         The required socket options will be set up as needed automatically.
         Timestamping will need to be enabled separately.
         """

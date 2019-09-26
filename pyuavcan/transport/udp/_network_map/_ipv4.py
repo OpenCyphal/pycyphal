@@ -84,7 +84,21 @@ class NetworkMapIPv4(NetworkMap):
             return node_id
 
     def make_output_socket(self, remote_node_id: typing.Optional[int], remote_port: int) -> socket.socket:
-        s = self._make_socket(0)    # Bind to an ephemeral port.
+        bind_to = self._local.host_address
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setblocking(False)
+        try:
+            # Output sockets shall be bound, too, in order to ensure that outgoing packets have the correct
+            # source IP address specified. This is particularly important for localhost; an unbound socket
+            # there emits all packets from 127.0.0.1 which is certainly not what we need.
+            s.bind((str(bind_to), 0))  # Bind to an ephemeral port.
+        except OSError as ex:
+            if ex.errno == errno.EADDRNOTAVAIL:
+                raise pyuavcan.transport.InvalidMediaConfigurationError(
+                    f'Bad IP configuration: cannot bind socket to {bind_to} [{errno.errorcode[ex.errno]}]'
+                ) from None
+            raise  # pragma: no cover
+
         # Specify the fixed remote end. The port is always fixed; the host is unicast or broadcast.
         if remote_node_id is None:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -96,34 +110,33 @@ class NetworkMapIPv4(NetworkMap):
         else:
             raise ValueError(f'Cannot map the node-ID value {remote_node_id} to an IP address. '
                              f'The range of valid node-ID values is [0, {self._max_nodes})')
+
         _logger.debug('%r: New output socket %r connected to remote node %r, remote port %r',
                       self, s, remote_node_id, remote_port)
         return s
 
     def make_input_socket(self, local_port: int) -> socket.socket:
-        s = self._make_socket(local_port)
-        _logger.debug('%r: New input socket %r, local port %r', self, s, local_port)
-        return s
-
-    def _make_socket(self, local_port: int) -> socket.socket:
-        bind_to = self._local.host_address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.setblocking(False)
-        if local_port > 0:
-            # Allow other applications and other instances to listen to multicast/broadcast traffic.
-            # This option shall be set before the socket is bound.
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        # Allow other applications and other instances to listen to broadcast traffic.
+        # This option shall be set before the socket is bound.
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        # The socket MUST BE BOUND TO INADDR_ANY IN ORDER TO RECEIVE BROADCAST DATAGRAMS.
+        # The user will have to filter out irrelevant datagrams in user space.
+        # Please read https://stackoverflow.com/a/58118503/1007777
+        s.bind(('', local_port))
+
+        # Man 7 IP says that SO_BROADCAST should be set in order to receive broadcast datagrams.
+        # The behavior I am observing does not match that, but we do it anyway because man says so.
+        # If the call fails, ignore because it may not be necessary depending on the OS in use.
         try:
-            # Output sockets shall be bound, too, in order to ensure that outgoing packets have the correct
-            # source IP address specified. This is particularly important for localhost; an unbound socket
-            # there emits all packets from 127.0.0.1 which is certainly not what we need.
-            s.bind((str(bind_to), local_port))
-        except OSError as ex:
-            if ex.errno == errno.EADDRNOTAVAIL:
-                raise pyuavcan.transport.InvalidMediaConfigurationError(
-                    f'Bad IP configuration: cannot bind socket to {bind_to} [{errno.errorcode[ex.errno]}]'
-                ) from None
-            raise  # pragma: no cover
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        except Exception as ex:  # pragma: no cover
+            _logger.exception('%r: Could not set SO_BROADCAST on %r: %s', self, s, ex)
+
+        _logger.debug('%r: New input socket %r, local port %r', self, s, local_port)
         return s
 
     def __str__(self) -> str:

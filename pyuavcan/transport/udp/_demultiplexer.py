@@ -141,6 +141,7 @@ class Demultiplexer:
             return  # pragma: no cover
 
         # Process the datagram. This is where the actual demultiplexing takes place.
+        # The node-ID mapper will return None for datagrams coming from outside of our UAVCAN subnet.
         handled = False
         source_node_id = self._node_id_mapper(source_ip)
         if source_node_id is not None:

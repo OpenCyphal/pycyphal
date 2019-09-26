@@ -193,14 +193,15 @@ class UDPTransport(pyuavcan.transport.Transport):
                 - ``192.168.1.254`` -- the maximum available node-ID in this subnet is 254.
                 - ``192.168.1.255`` -- the broadcast address, not a valid node.
 
-            - ``192.168.1.200/16`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
+            - ``127.100.0.42/8`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
+              The local loopback subnet is useful for testing.
 
-                - ``192.168.0.1`` -- node-ID 1.
-                - ``192.168.0.255`` -- node-ID 255.
-                - ``192.168.15.255`` -- node-ID 4095.
-                - ``192.168.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
+                - ``127.100.0.1`` -- node-ID 1.
+                - ``127.100.0.255`` -- node-ID 255.
+                - ``127.100.15.255`` -- node-ID 4095.
+                - ``127.100.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
                   All traffic from this address will be rejected as non-UAVCAN.
-                - ``192.168.255.255`` -- the broadcast address; notice that this address lies outside of the
+                - ``127.255.255.255`` -- the broadcast address; notice that this address lies outside of the
                   node-ID-mapped space, no conflicts.
 
             IPv6 addresses may be specified without the mask, in which case it will be assumed to be
