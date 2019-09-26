@@ -47,10 +47,10 @@ class NetworkMapIPv4(NetworkMap):
 
         # Test the address configuration to detect configuration errors early.
         # I suppose we could also set up a pair of sockets and send a test datagram just for extra paranoia?
+        self.make_input_socket(0).close()
         for s in [
             self.make_output_socket(None, 65535),
             self.make_output_socket(1, 65535),
-            self.make_input_socket(0),
         ]:
             # This invariant is supposed to be upheld by the OS, so we use an assertion check.
             assert IPv4Address.parse(s.getsockname()[0]) == self._local.host_address
