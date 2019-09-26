@@ -30,7 +30,7 @@ _logger = logging.getLogger(__name__)
 @dataclasses.dataclass
 class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
     #: Basic input session statistics: instances of :class:`UDPDemultiplexerStatistics` keyed by data specifier.
-    demultiplexer_statistics: typing.Dict[pyuavcan.transport.DataSpecifier, UDPDemultiplexerStatistics] = \
+    demultiplexer: typing.Dict[pyuavcan.transport.DataSpecifier, UDPDemultiplexerStatistics] = \
         dataclasses.field(default_factory=dict)
 
 
@@ -367,8 +367,8 @@ class UDPTransport(pyuavcan.transport.Transport):
                     sock=self._network_map.make_input_socket(udp_port_from_data_specifier(specifier.data_specifier)),
                     udp_mtu=_MAX_UDP_MTU,
                     node_id_mapper=self._network_map.map_ip_address_to_node_id,
-                    statistics=self._statistics.demultiplexer_statistics.setdefault(specifier.data_specifier,
-                                                                                    UDPDemultiplexerStatistics()),
+                    statistics=self._statistics.demultiplexer.setdefault(specifier.data_specifier,
+                                                                         UDPDemultiplexerStatistics()),
                     loop=self.loop,
                 )
 

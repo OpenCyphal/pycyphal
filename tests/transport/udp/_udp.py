@@ -114,14 +114,14 @@ async def _unittest_serial_transport() -> None:
     assert set(tr2.input_sessions) == {client_listener}
     assert set(tr2.output_sessions) == {broadcaster, client_requester}
 
-    assert tr.sample_statistics().demultiplexer_statistics[
+    assert tr.sample_statistics().demultiplexer[
         MessageDataSpecifier(12345)
     ].accepted_datagrams == {}
-    assert tr.sample_statistics().demultiplexer_statistics[
+    assert tr.sample_statistics().demultiplexer[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
     ].accepted_datagrams == {}
 
-    assert tr2.sample_statistics().demultiplexer_statistics[
+    assert tr2.sample_statistics().demultiplexer[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)
     ].accepted_datagrams == {}
 
@@ -144,14 +144,14 @@ async def _unittest_serial_transport() -> None:
     assert rx_transfer.fragmented_payload == [b''.join(payload_single)]  # type: ignore
 
     print('tr :', tr.sample_statistics())
-    assert tr.sample_statistics().demultiplexer_statistics[
+    assert tr.sample_statistics().demultiplexer[
         MessageDataSpecifier(12345)
     ].accepted_datagrams == {222: 1}
-    assert tr.sample_statistics().demultiplexer_statistics[
+    assert tr.sample_statistics().demultiplexer[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
     ].accepted_datagrams == {}
     print('tr2:', tr2.sample_statistics())
-    assert tr2.sample_statistics().demultiplexer_statistics[
+    assert tr2.sample_statistics().demultiplexer[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)
     ].accepted_datagrams == {}
 
@@ -185,14 +185,14 @@ async def _unittest_serial_transport() -> None:
     assert None is await client_listener.receive_until(get_monotonic() + 0.1)
 
     print('tr :', tr.sample_statistics())
-    assert tr.sample_statistics().demultiplexer_statistics[
+    assert tr.sample_statistics().demultiplexer[
         MessageDataSpecifier(12345)
     ].accepted_datagrams == {222: 1}
-    assert tr.sample_statistics().demultiplexer_statistics[
+    assert tr.sample_statistics().demultiplexer[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
     ].accepted_datagrams == {222: 3 * 2}  # Deterministic data loss mitigation is enabled, multiplication factor 2
     print('tr2:', tr2.sample_statistics())
-    assert tr2.sample_statistics().demultiplexer_statistics[
+    assert tr2.sample_statistics().demultiplexer[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)
     ].accepted_datagrams == {}
 
