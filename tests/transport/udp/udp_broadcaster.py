@@ -35,8 +35,12 @@ class UDPBroadcaster:
         - Send the packet.
 
     The class operates at OSI L3 so superuser privileges may be required.
+    On GNU/Linux, consider setting the process capabilities instead::
+
+        sudo setcap 'CAP_NET_RAW+eip CAP_NET_ADMIN+eip' "$(python -c 'import sys; print(sys.executable)')"
+
     Observe that due to IP spoofing the original sender of the packet may be receiving
-    ICMP messages intended for the source.
+    ICMP messages intended for the broadcaster.
 
     Normally, this thing shouldn't exist. If you have a solution for the above described problem,
     please post a reply there and I will happily delete this pizdets and forget that it ever existed.
@@ -56,7 +60,7 @@ class UDPBroadcaster:
         self._network = ipaddress.ip_network(network)
         self._hosts = list(self._network.hosts())
         if len(self._hosts) > 2 ** 15:  # pragma: no cover
-            raise ValueError(f'The subnet is too large')
+            raise ValueError(f'The subnet {self._network} is too large')
 
         self._datagrams_by_source: typing.Dict[str, int] = {}
         self._lock = threading.RLock()
@@ -71,9 +75,7 @@ class UDPBroadcaster:
         except AttributeError:
             pass  # Okay, this is not Windows. Who would have thought.
 
-        self._thread = threading.Thread(target=self._thread_function,
-                                        name=f'udp_broadcaster_worker',
-                                        daemon=True)
+        self._thread = threading.Thread(target=self._thread_function, name=f'udp_broadcaster_worker', daemon=True)
         self._thread.start()
 
     def close(self) -> None:
