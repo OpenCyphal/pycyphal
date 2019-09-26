@@ -14,8 +14,8 @@ from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPI
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
 from ._network_map import NetworkMap
-from ._port_mapping import map_data_specifier_to_udp_port
-from ._demultiplexer import Demultiplexer, DemultiplexerStatistics
+from ._port_mapping import udp_port_from_data_specifier
+from ._demultiplexer import UDPDemultiplexer, UDPDemultiplexerStatistics
 
 
 # This is for internal use only: the maximum possible payload per UDP frame.
@@ -29,8 +29,8 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
-    #: Basic input session statistics: instances of :class:`DemultiplexerStatistics` keyed by data specifier.
-    demultiplexer_statistics: typing.Dict[pyuavcan.transport.DataSpecifier, DemultiplexerStatistics] = \
+    #: Basic input session statistics: instances of :class:`UDPDemultiplexerStatistics` keyed by data specifier.
+    demultiplexer_statistics: typing.Dict[pyuavcan.transport.DataSpecifier, UDPDemultiplexerStatistics] = \
         dataclasses.field(default_factory=dict)
 
 
@@ -45,7 +45,7 @@ class UDPTransport(pyuavcan.transport.Transport):
     Much of the data handling work is offloaded to the standard underlying UDP/IP stack.
 
     The data specifier is manifested on the wire as the destination UDP port number;
-    the mapping function is implemented in :func:`map_data_specifier_to_udp_port`.
+    the mapping function is implemented in :func:`udp_port_from_data_specifier`.
     The source port number can be arbitrary (ephemeral), its value is ignored.
 
     UAVCAN uses a wide range of UDP ports: [15360, 49151].
@@ -193,13 +193,13 @@ class UDPTransport(pyuavcan.transport.Transport):
                 - ``192.168.1.254`` -- the maximum available node-ID in this subnet is 254.
                 - ``192.168.1.255`` -- the broadcast address, not a valid node.
 
-            - ``127.100.0.42/8`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
+            - ``127.0.0.42/8`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
               The local loopback subnet is useful for testing.
 
-                - ``127.100.0.1`` -- node-ID 1.
-                - ``127.100.0.255`` -- node-ID 255.
-                - ``127.100.15.255`` -- node-ID 4095.
-                - ``127.100.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
+                - ``127.0.0.1`` -- node-ID 1.
+                - ``127.0.0.255`` -- node-ID 255.
+                - ``127.0.15.255`` -- node-ID 4095.
+                - ``127.0.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
                   All traffic from this address will be rejected as non-UAVCAN.
                 - ``127.255.255.255`` -- the broadcast address; notice that this address lies outside of the
                   node-ID-mapped space, no conflicts.
@@ -244,7 +244,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         _logger.debug(f'IP: {self._network_map}; max nodes: {self._network_map.max_nodes}; '
                       f'local node-ID: {self.local_node_id}')
 
-        self._demultiplexer_registry: typing.Dict[pyuavcan.transport.DataSpecifier, Demultiplexer] = {}
+        self._demultiplexer_registry: typing.Dict[pyuavcan.transport.DataSpecifier, UDPDemultiplexer] = {}
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
@@ -311,7 +311,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                 else 1
             sock = self._network_map.make_output_socket(
                 specifier.remote_node_id,
-                map_data_specifier_to_udp_port(specifier.data_specifier)
+                udp_port_from_data_specifier(specifier.data_specifier)
             )
             self._output_registry[specifier] = UDPOutputSession(
                 specifier=specifier,
@@ -363,12 +363,12 @@ class UDPTransport(pyuavcan.transport.Transport):
         try:
             if specifier.data_specifier not in self._demultiplexer_registry:
                 _logger.debug('%r: Setting up new demultiplexer for %s', self, specifier.data_specifier)
-                self._demultiplexer_registry[specifier.data_specifier] = Demultiplexer(
-                    sock=self._network_map.make_input_socket(map_data_specifier_to_udp_port(specifier.data_specifier)),
+                self._demultiplexer_registry[specifier.data_specifier] = UDPDemultiplexer(
+                    sock=self._network_map.make_input_socket(udp_port_from_data_specifier(specifier.data_specifier)),
                     udp_mtu=_MAX_UDP_MTU,
                     node_id_mapper=self._network_map.map_ip_address_to_node_id,
                     statistics=self._statistics.demultiplexer_statistics.setdefault(specifier.data_specifier,
-                                                                                    DemultiplexerStatistics()),
+                                                                                    UDPDemultiplexerStatistics()),
                     loop=self.loop,
                 )
 

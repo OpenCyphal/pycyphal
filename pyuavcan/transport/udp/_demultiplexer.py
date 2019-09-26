@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
-class DemultiplexerStatistics:
+class UDPDemultiplexerStatistics:
     """
     Incoming UDP datagram statistics for an input socket.
     """
@@ -37,7 +37,7 @@ class DemultiplexerStatistics:
     dropped_datagrams: typing.Dict[typing.Union[str, int], int] = dataclasses.field(default_factory=dict)
 
 
-class Demultiplexer:
+class UDPDemultiplexer:
     """
     This class is the solution to the UDP demultiplexing problem, as you can probably figure out from reading its name.
     The objective is to read data from the supplied socket and then forward it to interested listeners.
@@ -56,7 +56,7 @@ class Demultiplexer:
                  sock:           socket.socket,
                  udp_mtu:        int,
                  node_id_mapper: typing.Callable[[str], typing.Optional[int]],
-                 statistics:     DemultiplexerStatistics,
+                 statistics:     UDPDemultiplexerStatistics,
                  loop:           asyncio.AbstractEventLoop):
         """
         :param sock: The instance takes ownership of the socket; it will be closed when the instance is closed.
@@ -74,11 +74,11 @@ class Demultiplexer:
         self._loop = loop
 
         assert callable(self._node_id_mapper)
-        assert isinstance(self._statistics, DemultiplexerStatistics)
+        assert isinstance(self._statistics, UDPDemultiplexerStatistics)
         assert isinstance(self._loop, asyncio.AbstractEventLoop)
 
         self._closed = False
-        self._listeners: typing.Dict[typing.Optional[int], Demultiplexer.Listener] = {}
+        self._listeners: typing.Dict[typing.Optional[int], UDPDemultiplexer.Listener] = {}
 
         self._thread = threading.Thread(target=self._thread_entry_point,
                                         name='demultiplexer_socket_reader',
@@ -253,12 +253,12 @@ def _unittest_demultiplexer() -> None:
         sock.connect(destination_endpoint)
         return sock
 
-    stats = DemultiplexerStatistics()
-    demux = Demultiplexer(sock=sock_rx,
-                          udp_mtu=10240,
-                          node_id_mapper=node_id_map.get,
-                          statistics=stats,
-                          loop=loop)
+    stats = UDPDemultiplexerStatistics()
+    demux = UDPDemultiplexer(sock=sock_rx,
+                             udp_mtu=10240,
+                             node_id_mapper=node_id_map.get,
+                             statistics=stats,
+                             loop=loop)
     assert not demux.has_listeners
     with raises(LookupError):
         demux.remove_listener(123)
@@ -288,7 +288,7 @@ def _unittest_demultiplexer() -> None:
                  data_type_hash=0x_deadbeef_deadbeef).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == DemultiplexerStatistics(
+    assert stats == UDPDemultiplexerStatistics(
         accepted_datagrams={1: 1},
         dropped_datagrams={},
     )
@@ -317,7 +317,7 @@ def _unittest_demultiplexer() -> None:
     ))
 
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == DemultiplexerStatistics(
+    assert stats == UDPDemultiplexerStatistics(
         accepted_datagrams={1: 1, 3: 1},
         dropped_datagrams={},
     )
@@ -352,7 +352,7 @@ def _unittest_demultiplexer() -> None:
                  data_type_hash=0x_deadbeef_deadbeef).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == DemultiplexerStatistics(
+    assert stats == UDPDemultiplexerStatistics(
         accepted_datagrams={1: 1, 3: 2},
         dropped_datagrams={},
     )
@@ -380,7 +380,7 @@ def _unittest_demultiplexer() -> None:
                  data_type_hash=0x_dead_beef_c0ffee).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == DemultiplexerStatistics(
+    assert stats == UDPDemultiplexerStatistics(
         accepted_datagrams={1: 1, 3: 2},
         dropped_datagrams={1: 1},
     )
@@ -398,7 +398,7 @@ def _unittest_demultiplexer() -> None:
                  data_type_hash=0x_dead_beef_c0ffee).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == DemultiplexerStatistics(
+    assert stats == UDPDemultiplexerStatistics(
         accepted_datagrams={1: 1, 3: 2},
         dropped_datagrams={1: 1, '127.100.0.9': 1},
     )
@@ -408,7 +408,7 @@ def _unittest_demultiplexer() -> None:
     # INVALID FRAME FROM NODE
     sock_tx_3.send(b'abc')
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == DemultiplexerStatistics(
+    assert stats == UDPDemultiplexerStatistics(
         accepted_datagrams={1: 1, 3: 3},
         dropped_datagrams={1: 1, '127.100.0.9': 1},
     )
@@ -419,7 +419,7 @@ def _unittest_demultiplexer() -> None:
     # INVALID FRAME FROM UNMAPPED IP ADDRESS
     sock_tx_9.send(b'abc')
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == DemultiplexerStatistics(
+    assert stats == UDPDemultiplexerStatistics(
         accepted_datagrams={1: 1, 3: 3},
         dropped_datagrams={1: 1, '127.100.0.9': 2},
     )
@@ -441,12 +441,12 @@ def _unittest_demultiplexer() -> None:
     # SOCKET FAILURE
     sock_rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_rx.bind(('127.100.0.100', 0))
-    stats = DemultiplexerStatistics()
-    demux = Demultiplexer(sock=sock_rx,
-                          udp_mtu=10240,
-                          node_id_mapper=node_id_map.get,
-                          statistics=stats,
-                          loop=loop)
+    stats = UDPDemultiplexerStatistics()
+    demux = UDPDemultiplexer(sock=sock_rx,
+                             udp_mtu=10240,
+                             node_id_mapper=node_id_map.get,
+                             statistics=stats,
+                             loop=loop)
     _logger.error("DON'T PANIC: THE ERROR MESSAGE YOU ARE GOING TO SEE JUST BELOW THIS ONE IS EXPECTED")
     # noinspection PyProtectedMember
     demux._sock.close()

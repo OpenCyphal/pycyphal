@@ -10,7 +10,7 @@ from pyuavcan.transport import DataSpecifier, MessageDataSpecifier, ServiceDataS
 SUBJECT_ID_OFFSET = 16384
 
 
-def map_data_specifier_to_udp_port(ds: DataSpecifier) -> int:
+def udp_port_from_data_specifier(ds: DataSpecifier) -> int:
     """
     Maps the data specifier to the UDP port number.
 
@@ -23,17 +23,17 @@ def map_data_specifier_to_udp_port(ds: DataSpecifier) -> int:
     Services grow downward to allow for a possible future extension of the service-ID
     range without breaking the existing mapping.
 
-    >>> map_data_specifier_to_udp_port(MessageDataSpecifier(0))
+    >>> udp_port_from_data_specifier(MessageDataSpecifier(0))
     16384
-    >>> map_data_specifier_to_udp_port(MessageDataSpecifier(MessageDataSpecifier.SUBJECT_ID_MASK))
+    >>> udp_port_from_data_specifier(MessageDataSpecifier(MessageDataSpecifier.SUBJECT_ID_MASK))
     49151
-    >>> map_data_specifier_to_udp_port(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.REQUEST))
+    >>> udp_port_from_data_specifier(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.REQUEST))
     16382
-    >>> map_data_specifier_to_udp_port(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE))
+    >>> udp_port_from_data_specifier(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE))
     16383
-    >>> map_data_specifier_to_udp_port(ServiceDataSpecifier(511, ServiceDataSpecifier.Role.REQUEST))
+    >>> udp_port_from_data_specifier(ServiceDataSpecifier(511, ServiceDataSpecifier.Role.REQUEST))
     15360
-    >>> map_data_specifier_to_udp_port(ServiceDataSpecifier(511, ServiceDataSpecifier.Role.RESPONSE))
+    >>> udp_port_from_data_specifier(ServiceDataSpecifier(511, ServiceDataSpecifier.Role.RESPONSE))
     15361
     """
     if isinstance(ds, MessageDataSpecifier):
