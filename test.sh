@@ -104,6 +104,10 @@ coverage report
 banner STATIC ANALYSIS
 
 # We typecheck after the tests have run in order to be able to typecheck the generated Python packages as well.
+# Also, dear mypy, please stuff your caching, it's fucking broken.
+rm -rf .mypy_cache/ &> /dev/null
+echo 'YOU SHALL NOT PASS' > .mypy_cache
+chmod 444 .mypy_cache
 mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg pyuavcan tests .test_dsdl_generated \
     || die "MyPy returned $?"
 

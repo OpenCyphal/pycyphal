@@ -14,7 +14,7 @@ from pyuavcan.transport.udp import UDPTransport, UDPTransportStatistics
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_serial_transport() -> None:
+async def _unittest_udp_transport() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
     from pyuavcan.transport import ProtocolParameters
