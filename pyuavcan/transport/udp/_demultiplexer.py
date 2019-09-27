@@ -263,6 +263,7 @@ def _unittest_demultiplexer() -> None:
     demux = UDPDemultiplexer(sock=sock_rx,
                              udp_mtu=10240,
                              node_id_mapper=node_id_map.get,
+                             local_node_id=1234,
                              statistics=stats,
                              loop=loop)
     assert not demux.has_listeners
@@ -451,6 +452,7 @@ def _unittest_demultiplexer() -> None:
     demux = UDPDemultiplexer(sock=sock_rx,
                              udp_mtu=10240,
                              node_id_mapper=node_id_map.get,
+                             local_node_id=1234,
                              statistics=stats,
                              loop=loop)
     _logger.error("DON'T PANIC: THE ERROR MESSAGE YOU ARE GOING TO SEE JUST BELOW THIS ONE IS EXPECTED")
