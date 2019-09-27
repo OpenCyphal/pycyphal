@@ -45,6 +45,9 @@ class UDPDemultiplexer:
     Why can't we ask the operating system to do this for us? Because there is no portable way of doing this.
     Even on GNU/Linux, there is a risk of race conditions, but I'll spare you the details.
     Those who care may read this: https://stackoverflow.com/a/54156768/1007777.
+
+    The UDP transport is unable to detect a node-ID conflict because it has to discard broadcast traffic generated
+    by itself in user space. To this transport, its own traffic and a node-ID conflict would look identical.
     """
     #: The callback is invoked with the source node-ID and the frame instance upon successful reception.
     #: Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that.
@@ -56,12 +59,14 @@ class UDPDemultiplexer:
                  sock:           socket.socket,
                  udp_mtu:        int,
                  node_id_mapper: typing.Callable[[str], typing.Optional[int]],
+                 local_node_id:  int,
                  statistics:     UDPDemultiplexerStatistics,
                  loop:           asyncio.AbstractEventLoop):
         """
         :param sock: The instance takes ownership of the socket; it will be closed when the instance is closed.
         :param udp_mtu: The size of the socket read buffer. Make it large. If not sure, make it larger.
         :param node_id_mapper: A mapping: ``(ip_address) -> Optional[node_id]``.
+        :param local_node_id: The node-ID of the local node. Needed to discard own-generated broadcast traffic.
         :param statistics: A reference to the external statistics object that will be updated by the instance.
         :param loop: The event loop. You know the drill.
         """
@@ -70,6 +75,7 @@ class UDPDemultiplexer:
 
         self._udp_mtu = int(udp_mtu)
         self._node_id_mapper = node_id_mapper
+        self._local_node_id = int(local_node_id)
         self._statistics = statistics
         self._loop = loop
 
@@ -144,7 +150,7 @@ class UDPDemultiplexer:
         # The node-ID mapper will return None for datagrams coming from outside of our UAVCAN subnet.
         handled = False
         source_node_id = self._node_id_mapper(source_ip)
-        if source_node_id is not None:
+        if source_node_id is not None and source_node_id != self._local_node_id:
             # Each frame is sent to the promiscuous listener and to the selective listener.
             # We parse the frame before invoking the listener in order to avoid the double parsing workload.
             for key in (None, source_node_id):

@@ -58,12 +58,17 @@ class UDPTransport(pyuavcan.transport.Transport):
     The node-ID of a node is the value of :attr:`NODE_ID_BIT_LENGTH` least significant bits of its IP address.
     Both IPv4 and IPv6 are supported with minimal differences, although IPv6 is not expected to be useful in
     a vehicular network because virtually none of its advantages are relevant there,
-    and the increased overhead is likely to be detrimental to the network's latency and throughput.
+    and the increased overhead is detrimental to the network's latency and throughput.
     Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value (i.e., outside of
     the local subnet) is rejected.
     The concept of anonymous node is not defined for UDP/IP; in this transport, every node always has a node-ID.
     If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
     If IPv6 is used, the flow-ID of UAVCAN packets is set to zero.
+
+    Applications relying on this transport implementation will be unable to detect a node-ID conflict on
+    the bus because this implementation discards all broadcast traffic originating from its own IP address.
+    This is a mere implementation detail resulting from the peculiarities of the Berkeley socket API.
+    Other implementations of this transport (particularly those for embedded systems) may not have this limitation.
 
     The datagram payload format is documented in :class:`UDPFrame`.
     Again, it is designed to be simple and low-overhead, which is not difficult considering that
@@ -367,6 +372,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                     sock=self._network_map.make_input_socket(udp_port_from_data_specifier(specifier.data_specifier)),
                     udp_mtu=_MAX_UDP_MTU,
                     node_id_mapper=self._network_map.map_ip_address_to_node_id,
+                    local_node_id=self.local_node_id,
                     statistics=self._statistics.demultiplexer.setdefault(specifier.data_specifier,
                                                                          UDPDemultiplexerStatistics()),
                     loop=self.loop,

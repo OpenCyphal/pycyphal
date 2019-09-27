@@ -19,7 +19,7 @@ class StreamParser:
     The OOB bytes are always unescaped and never contain the frame delimiter bytes; that is, the parser does not
     guarantee that OOB data (not belonging to the protocol set) is retained in its original form.
     An empty sequence of OOB bytes is never reported.
-    The raw data reporting can be useful if the same serial port is used both for UAVCAN and as a text console.
+    The OOB data reporting can be useful if the same serial port is used both for UAVCAN and as a text console.
     """
     def __init__(self,
                  callback: typing.Callable[[typing.Union[SerialFrame, memoryview]], None],
@@ -27,7 +27,7 @@ class StreamParser:
         """
         :param callback: Invoked when a new frame is parsed or when a block of data could not be recognized as a frame.
             In the case of success, an instance of the frame class is passed; otherwise, raw memoryview is passed.
-            In either case, the passed memoryview instance is guaranteed to point to an immutable memory.
+            In either case, the referenced memory is guaranteed to be immutable.
         :param max_payload_size_bytes: Frames containing more that this many bytes of payload (after escaping and
             not including the header and CRC) will be considered invalid.
         """
