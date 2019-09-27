@@ -18,6 +18,7 @@ import pyuavcan
 import pyuavcan.transport.can
 import pyuavcan.transport.can.media.socketcan
 import pyuavcan.transport.serial
+import pyuavcan.transport.udp
 
 # We will need a directory to store the generated Python packages in.
 #
@@ -74,11 +75,18 @@ class DemoApplication:
     def __init__(self):
         # The interface to run the demo against is selected via the environment variable with a default option provided.
         # Virtual CAN bus is supported only on GNU/Linux, but other interfaces used here should be compatible
-        # with at least Windows and macOS.
+        # with at least Windows as well.
         # Frankly, the main reason we need this here is to simplify automatic testing of this demo script.
         # Feel free to remove the selection logic and just hard-code whatever interface you need.
         interface_kind = os.environ.get('DEMO_INTERFACE_KIND', '').lower()
-        if interface_kind == 'serial' or not interface_kind:  # This is the default.
+        if interface_kind == 'udp' or not interface_kind:  # This is the default.
+            # The UDP/IP transport in this example runs on the local loopback interface, so no setup is needed.
+            # The UDP transport requires us to assign the IP address (there are no anonymous nodes if UDP is used);
+            # the node-ID equals the value of several least significant bits of its IP address.
+            # For more info, please read the API documentation.
+            transport = pyuavcan.transport.udp.UDPTransport('127.0.0.42/8')
+
+        elif interface_kind == 'serial':
             # For demo purposes we're using not an actual serial port (which could have been specified like "COM9"
             # for example) but a virtualized TCP/IP tunnel. The background is explained in the API documentation
             # for the serial transport, please read that. For a quick start, just install Ncat (part of Nmap) and run:
@@ -136,18 +144,25 @@ class DemoApplication:
         # Create another server using shorthand for fixed port ID. We could also use it with an application-specific
         # service-ID as well, of course:
         #   get_server(uavcan.node.ExecuteCommand_1_0, 42).serve_in_background(self._serve_execute_command)
+        # If the transport does not yet have a node-ID, the server will stay idle until a node-ID is assigned
+        # because the node won't be able to receive unicast transfers carrying service requests.
         self._node.presentation.get_server_with_fixed_service_id(
             uavcan.node.ExecuteCommand_1_0
         ).serve_in_background(self._serve_execute_command)
 
-        # By default, the node operates in anonymous mode, without a node-ID.
-        # In this mode, some of the protocol features are unavailable (read Specification for more info).
+        # The node-ID is configured per transport instance. Some transports (e.g., UDP/IP) have a valid node-ID
+        # immediately upon initialization, so they do not require further configuration at the application layer.
+        # Other transports (e.g., CAN or serial) are initialized in the anonymous node (without a node-ID),
+        # so the node-ID has to be assigned later by the application (either from a config or by using PnP allocation).
+        # Some of the protocol features are unavailable until the node-ID is set (read Specification for more info).
         # For example, anonymous node cannot be a server, since without an ID it cannot be addressed.
-        assert self._node.presentation.transport.local_node_id is None
+        if self._node.presentation.transport.local_node_id is None:
+            # Here, we assign a node-ID statically, because this is a simplified demo.
+            # Most applications would need this to be configurable, some may support the plug-and-play
+            # node-ID allocation protocol.
+            self._node.presentation.transport.set_local_node_id(42)
 
-        # Here, we assign a node-ID statically, because this is a simplified demo. Most applications would need this
-        # to be configurable, some may support the plug-and-play node-ID allocation protocol.
-        self._node.presentation.transport.set_local_node_id(42)
+        assert self._node.presentation.transport.local_node_id == 42
 
         # We'll be publishing diagnostic messages using this publisher instance. The method we use is a shortcut for:
         #   make_publisher(uavcan.diagnostic.Record_1_0, pyuavcan.dsdl.get_fixed_port_id(uavcan.diagnostic.Record_1_0))

@@ -372,7 +372,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                     sock=self._network_map.make_input_socket(udp_port_from_data_specifier(specifier.data_specifier)),
                     udp_mtu=_MAX_UDP_MTU,
                     node_id_mapper=self._network_map.map_ip_address_to_node_id,
-                    local_node_id=self.local_node_id,
+                    local_node_id=self._network_map.local_node_id,
                     statistics=self._statistics.demultiplexer.setdefault(specifier.data_specifier,
                                                                          UDPDemultiplexerStatistics()),
                     loop=self.loop,

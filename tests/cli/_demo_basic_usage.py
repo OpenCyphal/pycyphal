@@ -41,11 +41,13 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
         )
 
     yield _IfaceOption(
-        demo_env_vars={},   # Defaults to this, no variable has to be specified. If the default is changed, update this.
+        demo_env_vars={'DEMO_INTERFACE_KIND': 'serial'},
         cli_arguments=[
             '--serial=socket://localhost:50905',
         ],
     )
+
+    # TODO: UDP
 
 
 @pytest.mark.parametrize('iface_option', _get_iface_options())  # type: ignore
