@@ -123,22 +123,26 @@ class SerialTransport(pyuavcan.transport.Transport):
     +-----------+--------+--------------------------+---------------------------+
     """
 
-    DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
     DEFAULT_MTU = 1024
-
-    VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
     VALID_MTU_RANGE = (1024, 1024 * 10)
+
+    DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
+    VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
 
     def __init__(self,
                  serial_port:                 typing.Union[str, serial.SerialBase],
-                 service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
                  mtu:                         int = DEFAULT_MTU,
+                 service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
         """
         :param serial_port: The serial port instance to communicate over, or its name.
             In the latter case, the port will be constructed via :func:`serial.serial_for_url`
             (refer to the PySerial docs for the background).
             The new instance takes ownership of the port; when the instance is closed, its port will also be closed.
+
+        :param mtu: Use single-frame transfers for all outgoing transfers containing not more than than
+            this many bytes of payload. Otherwise, use multi-frame transfers.
+            This setting does not affect transfer reception; the RX MTU is hard-coded as ``max(VALID_MTU_RANGE)``.
 
         :param service_transfer_multiplier: Specifies the number of times each outgoing service transfer will be
             repeated. The duplicates are emitted subsequently immediately following the original. This feature
@@ -150,10 +154,6 @@ class SerialTransport(pyuavcan.transport.Transport):
             duplicate transfers at the opposite end of the link is natively guaranteed by the UAVCAN protocol;
             no special activities are needed there (read the UAVCAN Specification for background). This setting
             does not affect message transfers.
-
-        :param mtu: Use single-frame transfers for all outgoing transfers containing not more than than
-            this many bytes of payload. Otherwise, use multi-frame transfers.
-            This setting does not affect transfer reception; the RX MTU is hard-coded as ``max(VALID_MTU_RANGE)``.
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """

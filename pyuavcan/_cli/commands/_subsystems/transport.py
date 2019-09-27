@@ -102,7 +102,7 @@ Use CAN transport over SocketCAN. Arguments:
 Caveat emptor: The application may fail to communicate if the MTU is
 configured incorrectly. The UAVCAN protocol itself is invariant to the MTU
 configuration; in fact, it doesn't even differentiate between CAN 2.0 and
-CAN FD, the only difference is the amount of data transferred per frame
+CAN FD, the only distinction is the amount of data transferred per frame
 (i.e., MTU). The SocketCAN stack, however, is very sensitive to the
 correctness of this setting. For example, given a set of nodes connected to
 a local vcan (virtual CAN) bus, those that are configured to use CAN 2.0
@@ -125,18 +125,18 @@ def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
             seq_parser = _make_arg_sequence_parser(
                 (str, ''),
                 (int, default_baud_rate),
-                (int, SerialTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER),
                 (int, SerialTransport.DEFAULT_MTU),
+                (int, SerialTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER),
             )
-            serial_port_name, baud_rate, srv_mult, sft_payload_size = seq_parser(arg_seq)
+            serial_port_name, baud_rate, mtu, srv_mult = seq_parser(arg_seq)
 
             import serial
             serial_port = serial.serial_for_url(serial_port_name,
                                                 baudrate=baud_rate)
 
             return SerialTransport(serial_port=serial_port,
-                                   service_transfer_multiplier=srv_mult,
-                                   mtu=sft_payload_size)
+                                   mtu=mtu,
+                                   service_transfer_multiplier=srv_mult)
         except Exception as ex:
             _logger.error('Could not construct transport: %s', ex)
             raise
@@ -145,7 +145,7 @@ def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
         '--iface-serial', '--serial',
         action='append',
         dest='transport',
-        metavar='SERIAL_PORT_NAME[,BAUDRATE[,SERVICE_MULTIPLIER[,MTU]]]',
+        metavar='SERIAL_PORT_NAME[,BAUDRATE[,MTU[,SERVICE_MULTIPLIER]]]',
         type=construct_transport,
         help=f"""
 Use the serial transport. Arguments:
@@ -153,13 +153,50 @@ Use the serial transport. Arguments:
       PySerial URL are also supported; e.g., "socket://localhost:50905".
       Read the PySerial documentation for more information.
     - Baud rate, int; optional, defaults to {default_baud_rate}.
+    - Maximum transmission unit, int; optional, defaults to one kibibyte.
     - Service multiplier, int; optional, defaults to 2. The service
       multiplier specifies how many times every outgoing service transfer
-      will be repeated. This is a proactive data loss prevention measure
+      will be repeated. This is a deterministic data loss prevention measure
       for unreliable links. Please read the serial transport documentation.
-    - Maximum transmission unit, int; optional, defaults to one kibibyte.
 The following parameters of the serial port are fixed and cannot be changed:
 8-bit characters, no parity check, one stop bit, flow control disabled.
+""".strip())
+
+
+def _add_args_for_udp(parser: argparse.ArgumentParser) -> None:
+    def construct_transport(arg_seq: str) -> pyuavcan.transport.Transport:
+        try:
+            # Do not import the transport outside of the factory! It slows down the application startup.
+            from pyuavcan.transport.udp import UDPTransport
+            seq_parser = _make_arg_sequence_parser(
+                (str, ''),
+                (int, UDPTransport.DEFAULT_MTU),
+                (int, UDPTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER),
+            )
+            ip_address, mtu, srv_mult = seq_parser(arg_seq)
+            return UDPTransport(ip_address=ip_address,
+                                mtu=mtu,
+                                service_transfer_multiplier=srv_mult)
+        except Exception as ex:
+            _logger.error('Could not construct transport: %s', ex)
+            raise
+
+    parser.add_argument(
+        '--iface-udp', '--udp',
+        action='append',
+        dest='transport',
+        metavar='IP_ADDRESS[,MTU[,SERVICE_MULTIPLIER]]',
+        type=construct_transport,
+        help=f"""
+Use the UDP/IP transport (either IPv4 or IPv6). Arguments:
+    - The IPv4/IPv6 address of the local UAVCAN node with subnet mask.
+      For example: "127.0.0.123/8". Read the UDP transport docs for info.
+    - Maximum transmission unit at L5+ (payload bytes per UAVCAN frame), int;
+      optional, defaults to one kibibyte.
+    - Service multiplier, int; optional, defaults to 1. The service
+      multiplier specifies how many times every outgoing service transfer
+      will be repeated. This is a deterministic data loss prevention measure
+      for unreliable links. Please read the UDP transport documentation.
 """.strip())
 
 
@@ -193,5 +230,6 @@ processes using this transport.
 _INITIALIZERS: typing.Sequence[typing.Callable[[argparse.ArgumentParser], None]] = [
     _add_args_for_can,
     _add_args_for_serial,
+    _add_args_for_udp,
     _add_args_for_loopback,
 ]
