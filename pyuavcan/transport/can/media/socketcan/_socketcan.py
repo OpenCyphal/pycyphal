@@ -89,13 +89,15 @@ class SocketCANMedia(_media.Media):
         """
         return 512
 
-    def set_received_frames_handler(self, handler: _media.Media.ReceivedFramesHandler) -> None:
+    def start(self, handler: _media.Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._maybe_thread is None:
             self._maybe_thread = threading.Thread(target=self._thread_function,
                                                   name=str(self),
                                                   args=(handler,),
                                                   daemon=True)
             self._maybe_thread.start()
+            if no_automatic_retransmission:
+                _logger.info('%s non-automatic retransmission is not supported', self)
         else:
             raise RuntimeError('The RX frame handler is already set up')
 
@@ -105,12 +107,6 @@ class SocketCANMedia(_media.Media):
         _logger.info('%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! '
                      'Requested configuration: %s',
                      self, ', '.join(map(str, configuration)))
-
-    def enable_automatic_retransmission(self) -> None:
-        """
-        This is currently a no-op for SocketCAN. This may change later.
-        """
-        pass
 
     async def send_until(self, frames: typing.Iterable[_media.DataFrame], monotonic_deadline: float) -> int:
         num_sent = 0

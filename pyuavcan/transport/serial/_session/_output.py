@@ -38,12 +38,12 @@ class SerialFeedback(pyuavcan.transport.Feedback):
 
 class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
     def __init__(self,
-                 specifier:              pyuavcan.transport.OutputSessionSpecifier,
-                 payload_metadata:       pyuavcan.transport.PayloadMetadata,
-                 mtu:                    int,
-                 local_node_id_accessor: typing.Callable[[], typing.Optional[int]],
-                 send_handler:           SendHandler,
-                 finalizer:              typing.Callable[[], None]):
+                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
+                 payload_metadata: pyuavcan.transport.PayloadMetadata,
+                 mtu:              int,
+                 local_node_id:    typing.Optional[int],
+                 send_handler:     SendHandler,
+                 finalizer:        typing.Callable[[], None]):
         """
         Do not call this directly.
         Instead, use the factory method :meth:`pyuavcan.transport.serial.SerialTransport.get_output_session`.
@@ -51,11 +51,11 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         self._specifier = specifier
         self._payload_metadata = payload_metadata
         self._mtu = int(mtu)
-        self._local_node_id_accessor = local_node_id_accessor
+        self._local_node_id = local_node_id
         self._send_handler = send_handler
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._statistics = pyuavcan.transport.SessionStatistics()
-        assert callable(self._local_node_id_accessor)
+        assert isinstance(self._local_node_id, int) or self._local_node_id is None
         assert callable(send_handler)
 
         if not isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier) or \
@@ -71,15 +71,14 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
 
     async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         self._raise_if_closed()
-        local_node_id = self._local_node_id_accessor()
 
-        if local_node_id is None and isinstance(self._specifier.data_specifier,
-                                                pyuavcan.transport.ServiceDataSpecifier):
+        if self._local_node_id is None and isinstance(self._specifier.data_specifier,
+                                                      pyuavcan.transport.ServiceDataSpecifier):
             raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                 f'Anonymous nodes cannot emit service transfers. Session specifier: {self._specifier}')
 
         def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> SerialFrame:
-            if not end_of_transfer and local_node_id is None:
+            if not end_of_transfer and self._local_node_id is None:
                 raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                     f'Anonymous nodes cannot emit multi-frame transfers. Session specifier: {self._specifier}')
 
@@ -89,7 +88,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
                                index=index,
                                end_of_transfer=end_of_transfer,
                                payload=payload,
-                               source_node_id=local_node_id,
+                               source_node_id=self._local_node_id,
                                destination_node_id=self._specifier.remote_node_id,
                                data_specifier=self._specifier.data_specifier,
                                data_type_hash=self._payload_metadata.data_type_hash)
@@ -175,7 +174,7 @@ def _unittest_output_session() -> None:
         specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
         payload_metadata=PayloadMetadata(0xdeadbeefbadc0ffe, 1024),
         mtu=10,
-        local_node_id_accessor=lambda: None,  # pragma: no cover
+        local_node_id=None,  # pragma: no cover
         send_handler=do_send,
         finalizer=do_finalize,
     )
@@ -193,7 +192,7 @@ def _unittest_output_session() -> None:
         specifier=OutputSessionSpecifier(MessageDataSpecifier(3210), None),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
         mtu=11,
-        local_node_id_accessor=lambda: None,
+        local_node_id=None,
         send_handler=do_send,
         finalizer=do_finalize,
     )
@@ -264,7 +263,7 @@ def _unittest_output_session() -> None:
         specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
         payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
         mtu=10,
-        local_node_id_accessor=lambda: 1234,
+        local_node_id=1234,
         send_handler=do_send,
         finalizer=do_finalize,
     )

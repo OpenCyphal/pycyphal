@@ -83,13 +83,17 @@ class CANTransport(pyuavcan.transport.Transport):
     +-----------+--------+--------------------------+---------------------------+
     """
 
-    def __init__(self, media: Media, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self,
+                 media:         Media,
+                 local_node_id: typing.Optional[int],
+                 loop:          typing.Optional[asyncio.AbstractEventLoop] = None):
         """
-        :param media: The media implementation.
-        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+        :param media:         The media implementation.
+        :param local_node_id: The node-ID to use. Can't be changed. None means anonymous (useful for PnP allocation).
+        :param loop:          The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._maybe_media: typing.Optional[Media] = media
-        self._local_node_id: typing.Optional[int] = None
+        self._local_node_id = int(local_node_id) if local_node_id is not None else None
         self._media_lock = asyncio.Lock(loop=loop)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
@@ -103,6 +107,9 @@ class CANTransport(pyuavcan.transport.Transport):
         self._last_filter_configuration_set: typing.Optional[typing.Sequence[FilterConfiguration]] = None
 
         self._frame_stats = CANTransportStatistics()
+
+        if self._local_node_id is not None and not (0 <= self._local_node_id <= CANID.NODE_ID_MASK):
+            raise ValueError(f'Invalid node ID for CAN: {self._local_node_id}')
 
         if media.mtu not in Media.VALID_MTU_SET:
             raise pyuavcan.transport.InvalidMediaConfigurationError(
@@ -122,7 +129,7 @@ class CANTransport(pyuavcan.transport.Transport):
         self._descriptor = \
             f'<can><{media_name} mtu="{media.mtu}">{media.interface_name}</{media_name}></can>'
 
-        media.set_received_frames_handler(self._on_frames_received)   # Starts the transport.
+        media.start(self._on_frames_received, no_automatic_retransmission=self._local_node_id is None)
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -137,14 +144,6 @@ class CANTransport(pyuavcan.transport.Transport):
         )
 
     @property
-    def mtu(self) -> int:
-        """
-        This is the media layer MTU minus one; i.e., 7 for CAN 2.0.
-        Because the transport layer adds one byte of overhead per frame.
-        """
-        return self._mtu
-
-    @property
     def local_node_id(self) -> typing.Optional[int]:
         """
         The local node-ID is always unset (None) by default.
@@ -153,20 +152,6 @@ class CANTransport(pyuavcan.transport.Transport):
         Anonymous transfers are always single-frame transfers, so their payload carrying capacity is very limited.
         """
         return self._local_node_id
-
-    def set_local_node_id(self, node_id: int) -> None:
-        if self._local_node_id is None:
-            if 0 <= node_id <= CANID.NODE_ID_MASK:
-                if self._maybe_media is not None:
-                    self._local_node_id = int(node_id)
-                    self._maybe_media.enable_automatic_retransmission()
-                    self._reconfigure_acceptance_filters()
-                else:
-                    raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
-            else:
-                raise ValueError(f'Invalid node ID for CAN: {node_id}')
-        else:
-            raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     @property
     def input_sessions(self) -> typing.Sequence[CANInputSession]:

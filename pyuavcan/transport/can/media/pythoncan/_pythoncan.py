@@ -38,16 +38,13 @@ class PythonCANMedia(_media.Media):
     def number_of_acceptance_filters(self) -> int:
         raise NotImplementedError
 
-    def set_received_frames_handler(self, handler: _media.Media.ReceivedFramesHandler) -> None:
+    def start(self, handler: _media.Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         raise NotImplementedError
 
     def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
         _logger.warning('%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! '
                         'Requested configuration: %s',
                         self, ', '.join(map(str, configuration)))
-
-    def enable_automatic_retransmission(self) -> None:
-        raise NotImplementedError
 
     async def send_until(self, frames: typing.Iterable[_media.DataFrame], monotonic_deadline: float) -> int:
         raise NotImplementedError

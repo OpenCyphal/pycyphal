@@ -54,7 +54,7 @@ This example is based on a simple loopback transport that does not interact with
 [...]
 >>> import uavcan.node, uavcan.diagnostic         # Import what we need from DSDL-generated packages.
 >>> import pyuavcan.transport.loopback            # Import the demo transport implementation.
->>> transport = pyuavcan.transport.loopback.LoopbackTransport()  # Use your real transport instead.
+>>> transport = pyuavcan.transport.loopback.LoopbackTransport(None)  # Use your real transport instead.
 >>> presentation = pyuavcan.presentation.Presentation(transport)
 
 Having prepared a presentation layer controller, we can create presentation-layer sessions.
@@ -90,13 +90,29 @@ You can see above that the node-ID of the received transfer metadata is None,
 that's because it is actually an anonymous transfer, and it is so because our node is an anonymous node;
 i.e., it doesn't have a node-ID.
 
-Next we're going to create a service. Services can't be used with anonymous nodes, so let's assign a node-ID first:
-
->>> presentation.transport.local_node_id is None    # Yup, our node is anonymous.
+>>> presentation.transport.local_node_id is None    # Yup, it's anonymous.
 True
->>> presentation.transport.set_local_node_id(1234)  # The set of valid node-ID values is transport-dependent.
 
-Having assigned a node-ID, let's set up a service and invoke it:
+Next we're going to create a service.
+Services can't be used with anonymous nodes (which is natural -- how do you send a unicast transfer
+to an anonymous node?), so we'll have to create a new transport with a node-ID of its own.
+
+>>> transport = pyuavcan.transport.loopback.LoopbackTransport(1234)  # The range of valid values is transport-dependent.
+>>> presentation = pyuavcan.presentation.Presentation(transport)  # Start anew, this time not anonymous.
+>>> presentation.transport.local_node_id
+1234
+
+Generally, anonymous nodes are useful in two cases:
+
+1. You only need to listen and you know that you are not going to emit any transfers
+  (no point tinkering with node-ID if you're not going to use it anyway).
+
+2.You need to allocate a node-ID using the plug-and-play autoconfiguration protocol.
+  In this case, you would normally create a transport, run the PnP allocation procedure to obtain a node-ID value
+  from the PnP allocator, and then replace your transport instance with a new one (similar to what we just did here)
+  initialized with the node-ID value provided by the PnP allocator.
+
+Having configured the node-ID, let's set up a service and invoke it:
 
 >>> async def on_request(request: uavcan.node.ExecuteCommand_1_0.Request,
 ...                      metadata: pyuavcan.presentation.ServiceRequestMetadata) \

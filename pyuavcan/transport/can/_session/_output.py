@@ -122,7 +122,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
             compiled_identifier=can_id.compile(transfer.fragmented_payload),
             transfer_id=transfer.transfer_id,
             fragmented_payload=transfer.fragmented_payload,
-            max_frame_payload_bytes=self._transport.mtu,
+            max_frame_payload_bytes=self._transport.protocol_parameters.mtu,
             loopback_first_frame=self._feedback_handler is not None
         ))
         first_frame = next(auxiliary_iter)

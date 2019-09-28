@@ -45,12 +45,14 @@ class MockMedia(_media.Media):
     def number_of_acceptance_filters(self) -> int:
         return len(self._acceptance_filters)
 
-    def set_received_frames_handler(self, handler: _media.Media.ReceivedFramesHandler) -> None:
+    def start(self, handler: _media.Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
 
         assert callable(handler)
         self._rx_handler = handler
+        assert isinstance(no_automatic_retransmission, bool)
+        self._automatic_retransmission_enabled = not no_automatic_retransmission
 
     def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
         if self._closed:
@@ -62,9 +64,6 @@ class MockMedia(_media.Media):
 
         assert len(configuration) == len(self._acceptance_filters)
         self._acceptance_filters = configuration
-
-    def enable_automatic_retransmission(self) -> None:
-        self._automatic_retransmission_enabled = True
 
     @property
     def automatic_retransmission_enabled(self) -> bool:
@@ -163,11 +162,10 @@ async def _unittest_can_mock_media() -> None:
     assert me.number_of_acceptance_filters == 3
     assert not me.automatic_retransmission_enabled
     assert str(me) == "MockMedia(interface_name='mock', mtu=64)"
-    me.enable_automatic_retransmission()
-    assert me.automatic_retransmission_enabled
 
     me_collector = FrameCollector()
-    me.set_received_frames_handler(me_collector.give)
+    me.start(me_collector.give, False)
+    assert me.automatic_retransmission_enabled
 
     # Will drop the loopback because of the acceptance filters
     await me.send_until([
@@ -190,7 +188,7 @@ async def _unittest_can_mock_media() -> None:
     assert peers == {me, pe}
 
     pe_collector = FrameCollector()
-    pe.set_received_frames_handler(pe_collector.give)
+    pe.start(pe_collector.give, False)
 
     me.raise_on_send_once(RuntimeError('Hello world!'))
     with pytest.raises(RuntimeError, match='Hello world!'):
@@ -222,8 +220,6 @@ async def _unittest_can_mock_media() -> None:
         await me.send_until([], asyncio.get_event_loop().time() + 1.0)
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         me.configure_acceptance_filters([])
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        me.set_received_frames_handler(me_collector.give)
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         me.close()
 

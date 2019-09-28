@@ -26,16 +26,18 @@ async def _unittest_serial_transport() -> None:
 
     with pytest.raises(ValueError):
         _ = SerialTransport(serial_port='loop://',
+                            local_node_id=None,
                             mtu=1)
 
     with pytest.raises(ValueError):
         _ = SerialTransport(serial_port='loop://',
+                            local_node_id=None,
                             service_transfer_multiplier=10000)
 
     with pytest.raises(pyuavcan.transport.InvalidMediaConfigurationError):
-        _ = SerialTransport(serial_port=serial.serial_for_url('loop://', do_not_open=True))
+        _ = SerialTransport(serial_port=serial.serial_for_url('loop://', do_not_open=True), local_node_id=None)
 
-    tr = SerialTransport(serial_port='loop://')
+    tr = SerialTransport(serial_port='loop://', local_node_id=None)
 
     assert tr.loop is asyncio.get_event_loop()
     assert tr.local_node_id is None
@@ -45,7 +47,6 @@ async def _unittest_serial_transport() -> None:
     assert tr.output_sessions == []
 
     assert list(xml.etree.ElementTree.fromstring(tr.descriptor).itertext()) == ['loop://']
-    assert str(SerialTransport.DEFAULT_MTU) in tr.descriptor
 
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
@@ -84,11 +85,6 @@ async def _unittest_serial_transport() -> None:
     assert server_listener is tr.get_input_session(
         InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
 
-    server_responder = tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
-    assert server_responder is tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
-
     client_requester = tr.get_output_session(
         OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
     assert client_requester is tr.get_output_session(
@@ -102,7 +98,7 @@ async def _unittest_serial_transport() -> None:
     print('INPUTS:', tr.input_sessions)
     print('OUTPUTS:', tr.output_sessions)
     assert set(tr.input_sessions) == {subscriber_promiscuous, subscriber_selective, server_listener, client_listener}
-    assert set(tr.output_sessions) == {broadcaster, server_responder, client_requester}
+    assert set(tr.output_sessions) == {broadcaster, client_requester}
     assert tr.sample_statistics() == SerialTransportStatistics()
 
     #
@@ -160,14 +156,43 @@ async def _unittest_serial_transport() -> None:
             monotonic_deadline=get_monotonic() + 5.0
         )
 
-    with pytest.raises(ValueError):
-        tr.set_local_node_id(2 ** 64)
-    assert tr.local_node_id is None
-    tr.set_local_node_id(3210)
+    #
+    # Replace the transport with a different one where the local node-ID is not None.
+    #
+    tr = SerialTransport(serial_port='loop://', local_node_id=3210)
     assert tr.local_node_id == 3210
-    with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
-        tr.set_local_node_id(42)
-    assert tr.local_node_id == 3210
+
+    #
+    # Re-instantiate session objects because the transport instances have been replaced.
+    #
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+
+    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+
+    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
+
+    server_listener = tr.get_input_session(
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+
+    server_responder = tr.get_output_session(
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+    assert server_responder is tr.get_output_session(
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+
+    client_requester = tr.get_output_session(
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
+    assert client_requester is tr.get_output_session(
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
+
+    client_listener = tr.get_input_session(
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+    assert client_listener is tr.get_input_session(
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+
+    assert set(tr.input_sessions) == {subscriber_promiscuous, subscriber_selective, server_listener, client_listener}
+    assert set(tr.output_sessions) == {broadcaster, server_responder, client_requester}
+    assert tr.sample_statistics() == SerialTransportStatistics()
 
     assert await client_requester.send_until(
         Transfer(timestamp=Timestamp.now(),
@@ -191,13 +216,12 @@ async def _unittest_serial_transport() -> None:
     assert None is await client_listener.receive_until(get_monotonic() + 0.1)
 
     print(tr.sample_statistics())
-    assert tr.sample_statistics().in_bytes >= \
-        (32 + sft_capacity + 2) + (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
-    assert tr.sample_statistics().in_frames == 1 + 3 * service_multiplication_factor
+    assert tr.sample_statistics().in_bytes >= (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
+    assert tr.sample_statistics().in_frames == 3 * service_multiplication_factor
     assert tr.sample_statistics().in_out_of_band_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
-    assert tr.sample_statistics().out_frames == 1 + 3 * service_multiplication_factor
-    assert tr.sample_statistics().out_transfers == 1 + 1 * service_multiplication_factor
+    assert tr.sample_statistics().out_frames == 3 * service_multiplication_factor
+    assert tr.sample_statistics().out_transfers == 1 * service_multiplication_factor
     assert tr.sample_statistics().out_incomplete == 0
 
     #
@@ -217,13 +241,12 @@ async def _unittest_serial_transport() -> None:
     assert None is await client_listener.receive_until(get_monotonic() + 0.1)
 
     print(tr.sample_statistics())
-    assert tr.sample_statistics().in_bytes >= \
-        (32 + sft_capacity + 2) + (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
-    assert tr.sample_statistics().in_frames == 1 + 3 * service_multiplication_factor
+    assert tr.sample_statistics().in_bytes >= (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
+    assert tr.sample_statistics().in_frames == 3 * service_multiplication_factor
     assert tr.sample_statistics().in_out_of_band_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
-    assert tr.sample_statistics().out_frames == 1 + 3 * service_multiplication_factor
-    assert tr.sample_statistics().out_transfers == 1 + 1 * service_multiplication_factor
+    assert tr.sample_statistics().out_frames == 3 * service_multiplication_factor
+    assert tr.sample_statistics().out_transfers == 1 * service_multiplication_factor
     assert tr.sample_statistics().out_incomplete == 1   # INCREMENTED HERE
 
     #

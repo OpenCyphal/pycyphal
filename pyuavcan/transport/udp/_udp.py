@@ -269,19 +269,8 @@ class UDPTransport(pyuavcan.transport.Transport):
         )
 
     @property
-    def local_node_id(self) -> typing.Optional[int]:
+    def local_node_id(self) -> int:
         return self._network_map.local_node_id
-
-    def set_local_node_id(self, node_id: int) -> None:
-        """
-        This method always raises :class:`pyuavcan.transport.InvalidTransportConfigurationError`
-        because UDP does not support anonymous nodes.
-        """
-        _ = node_id
-        raise pyuavcan.transport.InvalidTransportConfigurationError(
-            f'Cannot assign the node-ID of a UDP transport. '
-            f'Configure the local IP address via the operating system or use DHCP.'
-        )
 
     def close(self) -> None:
         self._closed = True
@@ -346,7 +335,7 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     @property
     def descriptor(self) -> str:
-        return f'<udp mtu="{self._mtu}" srv_mult="{self._srv_multiplier}">{self._network_map}</udp>'
+        return f'<udp srv_mult="{self._srv_multiplier}">{self._network_map}</udp>'
 
     @property
     def local_ip_address_with_netmask(self) -> str:

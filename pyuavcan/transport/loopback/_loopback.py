@@ -27,14 +27,13 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     The only valid usage is sending and receiving same data on the same node.
     """
 
-    def __init__(self, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self,
+                 local_node_id: typing.Optional[int],
+                 loop:          typing.Optional[asyncio.AbstractEventLoop] = None):
         self._loop = loop if loop is not None else asyncio.get_event_loop()
-
-        self._local_node_id: typing.Optional[int] = None
-
+        self._local_node_id = int(local_node_id) if local_node_id is not None else None
         self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
         self._output_sessions: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, LoopbackOutputSession] = {}
-
         # Unlimited protocol capabilities by default.
         self._protocol_parameters = pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=2 ** 64,
@@ -60,16 +59,6 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     @property
     def local_node_id(self) -> typing.Optional[int]:
         return self._local_node_id
-
-    def set_local_node_id(self, node_id: int) -> None:
-        if self._local_node_id is None:
-            node_id = int(node_id)
-            if 0 <= node_id < self._protocol_parameters.max_nodes:
-                self._local_node_id = node_id
-            else:
-                raise ValueError(f'Invalid node-ID value: {node_id}')
-        else:
-            raise pyuavcan.transport.InvalidTransportConfigurationError('Node-ID is already assigned')
 
     def close(self) -> None:
         self._input_sessions.clear()

@@ -52,17 +52,6 @@ class RedundantTransport(pyuavcan.transport.Transport):
             raise InconsistentRedundantTransportConfigurationError(
                 f'Inconsistent local node ID: {[x.local_node_id for x in self._transports]}')
 
-    def set_local_node_id(self, node_id: int) -> None:
-        if self.local_node_id is None:
-            nid_card = self.protocol_parameters.max_nodes
-            if 0 <= node_id < nid_card:
-                for t in self._transports:
-                    t.set_local_node_id(node_id)
-            else:
-                raise ValueError(f'Node ID not in range, changes not applied: 0 <= {node_id} < {nid_card}')
-        else:
-            raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
-
     def get_input_session(self,
                           specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> RedundantInputSession:

@@ -4,7 +4,6 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import os
 import sys
 import typing
 import asyncio
@@ -55,8 +54,8 @@ async def _unittest_can_socketcan() -> None:
         print('RX B:', frames)
         asyncio.ensure_future(media_b.send_until(frames, asyncio.get_event_loop().time() + 1.0))
 
-    media_a.set_received_frames_handler(on_rx_a)
-    media_b.set_received_frames_handler(on_rx_b)
+    media_a.start(on_rx_a, False)
+    media_b.start(on_rx_b, True)
 
     assert media_a._maybe_thread is not None
     assert media_b._maybe_thread is not None

@@ -15,8 +15,7 @@ import pyuavcan.transport.loopback
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_loopback_transport() -> None:
-    tr = pyuavcan.transport.loopback.LoopbackTransport()
-
+    tr = pyuavcan.transport.loopback.LoopbackTransport(None)
     protocol_params = pyuavcan.transport.ProtocolParameters(
         transfer_id_modulo=32,
         max_nodes=2 ** 64,
@@ -24,17 +23,12 @@ async def _unittest_loopback_transport() -> None:
     )
     tr.protocol_parameters = protocol_params
     assert tr.protocol_parameters == protocol_params
-
     assert tr.loop is asyncio.get_event_loop()
+    assert tr.local_node_id is None
 
-    assert tr.local_node_id is None
-    with pytest.raises(ValueError):
-        tr.set_local_node_id(-1)
-    assert tr.local_node_id is None
-    tr.set_local_node_id(42)
-    assert tr.local_node_id == 42
-    with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
-        tr.set_local_node_id(123)
+    tr = pyuavcan.transport.loopback.LoopbackTransport(42)
+    tr.protocol_parameters = protocol_params
+    assert 42 == tr.local_node_id
 
     payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
 
@@ -147,8 +141,7 @@ async def _unittest_loopback_transport_service() -> None:
 
     payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
 
-    tr = pyuavcan.transport.loopback.LoopbackTransport()
-    tr.set_local_node_id(1234)
+    tr = pyuavcan.transport.loopback.LoopbackTransport(1234)
 
     inp = tr.get_input_session(InputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
                                                      1234),

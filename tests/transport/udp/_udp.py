@@ -38,16 +38,11 @@ async def _unittest_udp_transport() -> None:
     assert tr.loop is asyncio.get_event_loop()
     assert tr.local_node_id == 111
     assert tr2.local_node_id == 222
-    with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
-        tr.set_local_node_id(42)
-    assert tr.local_node_id == 111
-    assert tr2.local_node_id == 222
 
     assert tr.input_sessions == []
     assert tr.output_sessions == []
 
     assert list(xml.etree.ElementTree.fromstring(tr.descriptor).itertext()) == ['127.0.0.111/8']
-    assert 'mtu="9000"' in tr.descriptor
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 56,
         max_nodes=2 ** UDPTransport.NODE_ID_BIT_LENGTH,
@@ -55,7 +50,6 @@ async def _unittest_udp_transport() -> None:
     )
 
     assert list(xml.etree.ElementTree.fromstring(tr2.descriptor).itertext()) == ['127.0.0.222/8']
-    assert f'mtu="{UDPTransport.DEFAULT_MTU}"' in tr2.descriptor
     assert tr2.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 56,
         max_nodes=2 ** UDPTransport.NODE_ID_BIT_LENGTH,

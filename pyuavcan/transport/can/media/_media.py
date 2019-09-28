@@ -71,7 +71,7 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def set_received_frames_handler(self, handler: ReceivedFramesHandler) -> None:
+    def start(self, handler: ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         """
         Every received frame shall be timestamped. Both monotonic and system timestamps are required.
         There are no timestamping accuracy requirements. An empty set of frames should never be reported.
@@ -92,6 +92,14 @@ class Media(abc.ABC):
         The transport is guaranteed to invoke this method exactly once during (or shortly after) initialization;
         it can be used to perform a lazy start of the receive loop task/thread/whatever.
         It is undefined behavior to invoke this method more than once on the same instance.
+
+        :param handler: Behold my transformation. You are empowered to do as you please.
+
+        :param no_automatic_retransmission: If True, the CAN controller should be configured to abort transmission
+            of CAN frames after first error or arbitration loss (time-triggered transmission mode).
+            This mode is used by UAVCAN to facilitate the PnP node-ID allocation process on the client side.
+            Its support is not mandatory but highly recommended to avoid excessive disturbance of the bus
+            while PnP allocations are in progress.
         """
         raise NotImplementedError
 
@@ -104,15 +112,6 @@ class Media(abc.ABC):
         An empty set of configurations means that the transport is not interested in any frames, i.e., all frames
         should be rejected by the controller. That is also the recommended default configuration (ignore all frames
         until explicitly requested otherwise).
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def enable_automatic_retransmission(self) -> None:
-        """
-        By default, automatic retransmission should be disabled to facilitate PnP node-ID allocation.
-        This method is invoked by the transport at most once to enable it,
-        which is usually done when the local node obtains a node-ID.
         """
         raise NotImplementedError
 

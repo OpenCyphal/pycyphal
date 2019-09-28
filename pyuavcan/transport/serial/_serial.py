@@ -131,6 +131,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     def __init__(self,
                  serial_port:                 typing.Union[str, serial.SerialBase],
+                 local_node_id:               typing.Optional[int],
                  mtu:                         int = DEFAULT_MTU,
                  service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
@@ -139,6 +140,9 @@ class SerialTransport(pyuavcan.transport.Transport):
             In the latter case, the port will be constructed via :func:`serial.serial_for_url`
             (refer to the PySerial docs for the background).
             The new instance takes ownership of the port; when the instance is closed, its port will also be closed.
+
+        :param local_node_id: The node-ID to use. Can't be changed after initialization.
+            None means that the transport will operate in the anonymous mode.
 
         :param mtu: Use single-frame transfers for all outgoing transfers containing not more than than
             this many bytes of payload. Otherwise, use multi-frame transfers.
@@ -169,7 +173,9 @@ class SerialTransport(pyuavcan.transport.Transport):
         if not (low <= self._mtu <= high):
             raise ValueError(f'Invalid MTU: {self._mtu} bytes')
 
-        self._local_node_id: typing.Optional[int] = None
+        self._local_node_id = int(local_node_id) if local_node_id is not None else None
+        if self._local_node_id is not None and not (0 <= self._local_node_id < self.protocol_parameters.max_nodes):
+            raise ValueError(f'Invalid node ID for serial: {self._local_node_id}')
 
         # At first I tried using serial.is_open, but unfortunately that doesn't work reliably because the close()
         # method on most serial port classes is non-atomic, which causes all sorts of weird race conditions
@@ -217,16 +223,6 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def local_node_id(self) -> typing.Optional[int]:
         return self._local_node_id
-
-    def set_local_node_id(self, node_id: int) -> None:
-        if self._local_node_id is None:
-            if 0 <= node_id < self.protocol_parameters.max_nodes:
-                self._ensure_not_closed()
-                self._local_node_id = int(node_id)
-            else:
-                raise ValueError(f'Invalid node ID for serial: {node_id}')
-        else:
-            raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     def close(self) -> None:
         self._closed = True
@@ -285,7 +281,7 @@ class SerialTransport(pyuavcan.transport.Transport):
                 specifier=specifier,
                 payload_metadata=payload_metadata,
                 mtu=self._mtu,
-                local_node_id_accessor=lambda: self._local_node_id,
+                local_node_id=self._local_node_id,
                 send_handler=send_transfer,
                 finalizer=finalizer
             )
@@ -306,8 +302,8 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def descriptor(self) -> str:
         return \
-            f'<serial baudrate="{self._serial_port.baudrate}" mtu="{self._mtu}" ' \
-            f'srv_mult="{self._service_transfer_multiplier}">{self._serial_port.name}</serial>'
+            f'<serial baudrate="{self._serial_port.baudrate}" srv_mult="{self._service_transfer_multiplier}">' \
+            f'{self._serial_port.name}</serial>'
 
     @property
     def serial_port(self) -> serial.SerialBase:
