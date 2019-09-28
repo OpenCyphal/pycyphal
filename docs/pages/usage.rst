@@ -54,10 +54,17 @@ Configuring the transport
 +++++++++++++++++++++++++
 
 The commands shown later have to be instructed to use the same transport interface as the demo.
-Please use one of the options depending on your demo configuration:
+Please use one of the following options depending on your demo configuration:
 
-- ``--serial=socket://loopback:50905`` -- TCP/IP-tunneled serial port connection (any major OS).
-- ``--socketcan=vcan0,8`` -- virtual CAN bus via SocketCAN (GNU/Linux systems only).
+- ``--tr="UDP('127.0.0.111/8')"`` --
+  UDP/IP transport on localhost.
+
+- ``--tr="Serial('socket://loopback:50905',111)"`` --
+  serial transport emulated over a TCP/IP tunnel (use Ncat for TCP/IP tunneling).
+
+- ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"`` --
+  virtual CAN bus via SocketCAN (GNU/Linux systems only).
+
 
 Running the application
 +++++++++++++++++++++++
