@@ -6,12 +6,12 @@
 
 from __future__ import annotations
 import typing
+import inspect
 import logging
 import argparse
-import itertools
-import pyuavcan.transport
-from .._yaml import YAMLLoader
+import pyuavcan
 from ._base import SubsystemFactory
+from .._paths import EMITTED_TRANSFER_ID_MAP_DIR, EMITTED_TRANSFER_ID_MAP_MAX_AGE
 
 
 _logger = logging.getLogger(__name__)
@@ -19,17 +19,69 @@ _logger = logging.getLogger(__name__)
 
 class TransportFactory(SubsystemFactory):
     def register_arguments(self, parser: argparse.ArgumentParser) -> None:
-        for ini in _INITIALIZERS:
-            ini(parser)
+        parser.add_argument(
+            '--transport', '--tr',
+            metavar='EXPRESSION',
+            action='append',
+            help=f'''
+A Python expression that yields a transport instance upon evaluation.
+If the expression fails to evaluate or yields anything that is not a
+transport instance, the command fails. If the argument is provided
+more than once, a redundant transport instance will be constructed
+automatically.
+
+Please read the PyUAVCAN's API documentation to learn about the available
+transports and how their instances can be constructed.
+
+All nested submodules under "pyuavcan.transport" are imported before the
+expression is evaluated, so the expression itself does not need to explicitly
+import anything.
+
+Examples:
+    pyuavcan.transport.can.CANTransport(pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', 64), 42)
+    pyuavcan.transport.loopback.LoopbackTransport(None)
+    pyuavcan.transport.serial.SerialTransport("/dev/ttyUSB0", None, baudrate=115200)
+
+Such long expressions are hard to type, so the following entities are also
+pre-imported into the global namespace for convenience:
+    - All direct submodules of "pyuavcan.transport" are wildcard-imported.
+      For example, "pyuavcan.transport.can" is also available as "can".
+    - All classes that implement "pyuavcan.transport.Transport" are
+      wildcard-imported under their original name but without the
+      shared "Transport" suffix. For example, the transport class
+      "pyuavcan.transport.loopback.LoopbackTransport" is also available as
+      "Loopback".
+More shortcuts may be added in the future.
+
+The following examples yield configurations that are equivalent to the above:
+    CAN(can.media.socketcan.SocketCANMedia('vcan0',64),42)
+    Loopback(None)
+    Serial("/dev/ttyUSB0",None,baudrate=115200)
+
+This is still a lot to type, so it might make sense to store frequently used
+configurations into environment variables and expand them as necessary.
+
+Observe that the node-ID for the local node is to be configured here as well,
+because per the UAVCAN architecture, this is a transport-layer property.
+If desired, a usable node-ID value can be automatically found using the
+command "pick-node-id"; read its help for usage information (it's useful for
+various automation scripts and similar tasks).
+
+The command-line tool stores the emitted transfer-ID map on disk, keyed by
+the node-ID and the OS resource associated with the transport; the path is:
+{EMITTED_TRANSFER_ID_MAP_DIR}
+The map files are managed automatically. They can be removed to reset all
+transfer-ID counters to zero. Files that are more than {EMITTED_TRANSFER_ID_MAP_MAX_AGE} seconds
+old are no longer used.
+'''.strip())
 
     def construct_subsystem(self, args: argparse.Namespace) -> pyuavcan.transport.Transport:
-        trans: typing.List[pyuavcan.transport.Transport] = args.transport
-        if not trans:
-            raise ValueError('At least one transport must be specified.')
-        assert isinstance(trans, list)
-        assert all(map(lambda t: isinstance(t, pyuavcan.transport.Transport), trans))
+        trans: typing.List[pyuavcan.transport.Transport] = []
+        for expression in args.transport:
+            t = _evaluate(expression)
+            _logger.info('Expression %r yields %r', expression, t)
+            trans.append(t)
 
-        _logger.debug(f'Using the following transports: {trans!r}')
         if len(trans) < 1:
             raise ValueError('No transports specified')
         elif len(trans) == 1:
@@ -39,197 +91,33 @@ class TransportFactory(SubsystemFactory):
             raise NotImplementedError('Sorry, redundant transport construction is not yet implemented')
 
 
-def _make_arg_sequence_parser(*type_default_pairs: typing.Tuple[typing.Type[object], typing.Any]) \
-        -> typing.Callable[[str], typing.Sequence[typing.Any]]:
-    r"""
-    Constructs a callable that transforms a comma-separated list of arguments into the form specified by the
-    sequence of (type, default) tuples, or raises a ValueError if the input arguments are non-conforming.
-    The type constructor must be able to accept the default value unless it's None.
+def _evaluate(expression: str) -> pyuavcan.transport.Transport:
+    # This import is super slow, so we only do it when really necessary.
+    # Doing this when generating command-line arguments would be disastrous for performance.
+    # noinspection PyTypeChecker
+    pyuavcan.util.import_submodules(pyuavcan.transport)
+    context: typing.Dict[str, typing.Any] = {}
 
-    >>> _make_arg_sequence_parser()('')
-    []
-    >>> _make_arg_sequence_parser((int, 123), (float, -15))('12')
-    [12, -15.0]
-    >>> _make_arg_sequence_parser((int, 123), (float, -15))('12, 16, "abc"')
-    Traceback (most recent call last):
-    ...
-    ValueError: Expected at most 2 values, found 3 in '12, 16, "abc"'
-    """
-    # Config validation - abort if default can't be accepted by the type constructor.
-    try:
-        _ = [ty(default) for ty, default in type_default_pairs if default is not None]  # type: ignore
-    except Exception:
-        raise ValueError(f'Invalid arg spec: {type_default_pairs!r}')
+    # Pre-import transport modules for convenience.
+    for name, module in inspect.getmembers(pyuavcan.transport, inspect.ismodule):
+        if not name.startswith('_'):
+            context[name] = module
 
-    def do_parse(arg: str) -> typing.Sequence[typing.Any]:
-        values = YAMLLoader().load(f'[ {arg} ]')
-        if len(values) <= len(type_default_pairs):
-            return [
-                ty(val if val is not None else default)
-                for val, (ty, default) in itertools.zip_longest(values, type_default_pairs)
-            ]
-        else:
-            raise ValueError(f'Expected at most {len(type_default_pairs)} values, found {len(values)} in {arg!r}')
-    return do_parse
+    # Pre-import transport classes for convenience.
+    transport_base = pyuavcan.transport.Transport
+    for cls in pyuavcan.util.iter_descendants(transport_base):
+        if not cls.__name__.startswith('_') and cls is not transport_base:
+            name = cls.__name__.rpartition(transport_base.__name__)[0] or cls.__name__
+            context[name] = cls
 
+    _logger.debug('Expression evaluation context (excl. globals): %r', list(context.keys()))
+    conflicting_names = set(context.keys()) & set(globals().keys())
+    assert not conflicting_names, f'Conflicting names: {conflicting_names}'
+    context.update(globals())
 
-def _add_args_for_can(parser: argparse.ArgumentParser) -> None:
-    socketcan_parser = _make_arg_sequence_parser((str, ''), (int, 64))
-
-    def construct_socketcan_transport(arg_seq: str) -> pyuavcan.transport.Transport:
-        try:
-            # Do not import the transport outside of the factory! It slows down the application startup.
-            from pyuavcan.transport.can import CANTransport
-            from pyuavcan.transport.can.media.socketcan import SocketCANMedia
-            iface_name, mtu = socketcan_parser(arg_seq)
-            return CANTransport(SocketCANMedia(iface_name, mtu=mtu))
-        except Exception as ex:
-            _logger.error('Could not construct transport: %s', ex)
-            raise
-
-    parser.add_argument(
-        '--iface-can-socketcan', '--socketcan',
-        action='append',
-        dest='transport',
-        metavar='IFACE_NAME[,MTU]',
-        type=construct_socketcan_transport,
-        help=f"""
-Use CAN transport over SocketCAN. Arguments:
-    - Interface name, string, mandatory; e.g.: "can0".
-    - Maximum transmission unit, int; optional, defaults to 64 bytes;
-      MTU value of 8 bytes selects CAN 2.0.
-
-Caveat emptor: The application may fail to communicate if the MTU is
-configured incorrectly. The UAVCAN protocol itself is invariant to the MTU
-configuration; in fact, it doesn't even differentiate between CAN 2.0 and
-CAN FD, the only distinction is the amount of data transferred per frame
-(i.e., MTU). The SocketCAN stack, however, is very sensitive to the
-correctness of this setting. For example, given a set of nodes connected to
-a local vcan (virtual CAN) bus, those that are configured to use CAN 2.0
-will be unable to receive messages from those that are set up to use CAN FD.
-The latter will be able to receive all messages.
-
-Examples:
-    --socketcan=vcan0,8     # Selects CAN 2.0
-    --socketcan=vcan0       # Selects CAN FD with MTU 64 bytes
-""".strip())
-
-
-def _add_args_for_serial(parser: argparse.ArgumentParser) -> None:
-    default_baud_rate = 115200
-
-    def construct_transport(arg_seq: str) -> pyuavcan.transport.Transport:
-        try:
-            # Do not import the transport outside of the factory! It slows down the application startup.
-            from pyuavcan.transport.serial import SerialTransport
-            seq_parser = _make_arg_sequence_parser(
-                (str, ''),
-                (int, default_baud_rate),
-                (int, SerialTransport.DEFAULT_MTU),
-                (int, SerialTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER),
-            )
-            serial_port_name, baud_rate, mtu, srv_mult = seq_parser(arg_seq)
-
-            import serial
-            serial_port = serial.serial_for_url(serial_port_name,
-                                                baudrate=baud_rate)
-
-            return SerialTransport(serial_port=serial_port,
-                                   mtu=mtu,
-                                   service_transfer_multiplier=srv_mult)
-        except Exception as ex:
-            _logger.error('Could not construct transport: %s', ex)
-            raise
-
-    parser.add_argument(
-        '--iface-serial', '--serial',
-        action='append',
-        dest='transport',
-        metavar='SERIAL_PORT_NAME[,BAUDRATE[,MTU[,SERVICE_MULTIPLIER]]]',
-        type=construct_transport,
-        help=f"""
-Use the serial transport. Arguments:
-    - Serial port name, string, mandatory; e.g.: "/dev/ttyACM0", "COM9".
-      PySerial URL are also supported; e.g., "socket://localhost:50905".
-      Read the PySerial documentation for more information.
-    - Baud rate, int; optional, defaults to {default_baud_rate}.
-    - Maximum transmission unit, int; optional, defaults to one kibibyte.
-    - Service multiplier, int; optional, defaults to 2. The service
-      multiplier specifies how many times every outgoing service transfer
-      will be repeated. This is a deterministic data loss prevention measure
-      for unreliable links. Please read the serial transport documentation.
-The following parameters of the serial port are fixed and cannot be changed:
-8-bit characters, no parity check, one stop bit, flow control disabled.
-""".strip())
-
-
-def _add_args_for_udp(parser: argparse.ArgumentParser) -> None:
-    def construct_transport(arg_seq: str) -> pyuavcan.transport.Transport:
-        try:
-            # Do not import the transport outside of the factory! It slows down the application startup.
-            from pyuavcan.transport.udp import UDPTransport
-            seq_parser = _make_arg_sequence_parser(
-                (str, ''),
-                (int, UDPTransport.DEFAULT_MTU),
-                (int, UDPTransport.DEFAULT_SERVICE_TRANSFER_MULTIPLIER),
-            )
-            ip_address, mtu, srv_mult = seq_parser(arg_seq)
-            return UDPTransport(ip_address=ip_address,
-                                mtu=mtu,
-                                service_transfer_multiplier=srv_mult)
-        except Exception as ex:
-            _logger.error('Could not construct transport: %s', ex)
-            raise
-
-    parser.add_argument(
-        '--iface-udp', '--udp',
-        action='append',
-        dest='transport',
-        metavar='IP_ADDRESS[,MTU[,SERVICE_MULTIPLIER]]',
-        type=construct_transport,
-        help=f"""
-Use the UDP/IP transport (either IPv4 or IPv6). Arguments:
-    - The IPv4/IPv6 address of the local UAVCAN node with subnet mask.
-      For example: "127.0.0.123/8". Read the UDP transport docs for info.
-    - Maximum transmission unit at L5+ (payload bytes per UAVCAN frame), int;
-      optional, defaults to one kibibyte.
-    - Service multiplier, int; optional, defaults to 1. The service
-      multiplier specifies how many times every outgoing service transfer
-      will be repeated. This is a deterministic data loss prevention measure
-      for unreliable links. Please read the UDP transport documentation.
-""".strip())
-
-
-def _add_args_for_loopback(parser: argparse.ArgumentParser) -> None:
-    from pyuavcan.transport.loopback import LoopbackTransport
-    parser.add_argument(
-        '--iface-loopback', '--loopback',
-        action='append_const',
-        dest='transport',
-        const=LoopbackTransport(),
-        help=f"""
-Use process-local loopback transport. This transport is only useful for
-testing. It is not possible to exchange data between different nodes and/or
-processes using this transport.
-""".strip())
-
-
-# When writing initializers, the full (non-abridged) argument name pattern should be as follows:
-#   --iface-<transport-name>[-media-name][-further-specifiers]
-# Abridged names may be arbitrary.
-# The result shall be stored into the field "transport" and the action shall be "append" or "append_const".
-#
-# TODO: This approach is fragile and does not scale well because it requires much manual coding per transport/media.
-#
-# We could, perhaps, invent a custom spec string format?
-# It could be as simple as a sequence of comma-separated parameters:
-#   can,socketcan,/dev/ttyACM0,64
-# The spec string could be made a valid YAML string by adding square brackets on either side, so that quoted strings
-# could be used:
-#   can,socketcan,"~/serial-port-name,with-comma",64
-_INITIALIZERS: typing.Sequence[typing.Callable[[argparse.ArgumentParser], None]] = [
-    _add_args_for_can,
-    _add_args_for_serial,
-    _add_args_for_udp,
-    _add_args_for_loopback,
-]
+    out = eval(expression, context)
+    if isinstance(out, pyuavcan.transport.Transport):
+        return out
+    else:
+        raise ValueError(f'The expression {expression!r} yields an instance of {type(out).__name__}. '
+                         f'Expected an instance of pyuavcan.transport.Transport.')

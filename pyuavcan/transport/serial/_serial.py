@@ -134,6 +134,7 @@ class SerialTransport(pyuavcan.transport.Transport):
                  local_node_id:               typing.Optional[int],
                  mtu:                         int = DEFAULT_MTU,
                  service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
+                 baudrate:                    typing.Optional[int] = None,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
         """
         :param serial_port: The serial port instance to communicate over, or its name.
@@ -158,6 +159,9 @@ class SerialTransport(pyuavcan.transport.Transport):
             duplicate transfers at the opposite end of the link is natively guaranteed by the UAVCAN protocol;
             no special activities are needed there (read the UAVCAN Specification for background). This setting
             does not affect message transfers.
+
+        :param baudrate: If not None, the specified baud rate will be configured on the serial port.
+            Otherwise, the baudrate will be left unchanged.
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
@@ -202,6 +206,8 @@ class SerialTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidMediaConfigurationError('The serial port instance is not open')
         serial_port.timeout = _SERIAL_PORT_READ_TIMEOUT
         self._serial_port = serial_port
+        if baudrate is not None:
+            self._serial_port.baudrate = int(baudrate)
 
         self._background_executor = concurrent.futures.ThreadPoolExecutor()
 
