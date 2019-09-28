@@ -38,7 +38,8 @@ Show transport usage documentation and exit.
         pyuavcan.util.import_submodules(pyuavcan.transport)
         fill_width = 120
         transport_base = pyuavcan.transport.Transport
-        for cls in pyuavcan.util.iter_descendants(transport_base):
+        # Suppressing MyPy false positive: https://github.com/python/mypy/issues/5374
+        for cls in pyuavcan.util.iter_descendants(transport_base):  # type: ignore
             if not cls.__name__.startswith('_') and cls is not transport_base:
                 public_module = cls.__module__.split('._')[0]
                 public_name = public_module + '.' + cls.__name__

@@ -136,7 +136,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     pub_heart.transfer_id_counter.override(23)
     await pub_heart.publish(heart)
-    rx, transfer = await sub_heart.receive()
+    rx, transfer = await sub_heart.receive()  # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id == 123
     assert transfer.priority == Priority.NOMINAL

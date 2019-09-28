@@ -105,7 +105,8 @@ def _evaluate(expression: str) -> pyuavcan.transport.Transport:
 
     # Pre-import transport classes for convenience.
     transport_base = pyuavcan.transport.Transport
-    for cls in pyuavcan.util.iter_descendants(transport_base):
+    # Suppressing MyPy false positive: https://github.com/python/mypy/issues/5374
+    for cls in pyuavcan.util.iter_descendants(transport_base):  # type: ignore
         if not cls.__name__.startswith('_') and cls is not transport_base:
             name = cls.__name__.rpartition(transport_base.__name__)[0] or cls.__name__
             context[name] = cls
