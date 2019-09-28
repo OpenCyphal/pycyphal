@@ -62,6 +62,10 @@ _logger = logging.getLogger(__name__)
 
 async def _run(transport: pyuavcan.transport.Transport) -> int:
     import uavcan.node
+    if transport.local_node_id is not None:
+        print('The transport has a valid node-ID already, use it:', transport.local_node_id, file=sys.stderr)
+        return 2
+
     node_id_set_cardinality = transport.protocol_parameters.max_nodes
     if node_id_set_cardinality >= 2 ** 32:
         # Special case: for very large sets just pick a random number. Very large sets are only possible with test
