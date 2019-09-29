@@ -50,6 +50,7 @@ That's it. If you want to know what exactly has been done, rerun the command wit
 
 The DSDL packages have been stored on your computer in a directory known to the CLI tool, so now we can use them.
 
+
 Configuring the transport
 +++++++++++++++++++++++++
 
@@ -57,13 +58,15 @@ The commands shown later have to be instructed to use the same transport interfa
 Please use one of the following options depending on your demo configuration:
 
 - ``--tr="UDP('127.0.0.111/8')"`` --
-  UDP/IP transport on localhost.
+  UDP/IP transport on localhost. Local node-ID 111.
 
 - ``--tr="Serial('socket://loopback:50905',111)"`` --
-  serial transport emulated over a TCP/IP tunnel (use Ncat for TCP/IP tunneling).
+  serial transport emulated over a TCP/IP tunnel instead of a real serial port (use Ncat for TCP connection brokering).
+  Local node-ID 111.
 
 - ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"`` --
   virtual CAN bus via SocketCAN (GNU/Linux systems only).
+  Local node-ID 111.
 
 
 Running the application
@@ -84,7 +87,7 @@ Keep the command running, and open a yet another terminal, whereat run this:
 
 .. code-block:: sh
 
-    uc call 42 123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0 '{points: [{x: 10, y: 1}, {x: 20, y: 2}]}' --local-node-id=11
+    uc call 42 123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0 '{points: [{x: 10, y: 1}, {x: 20, y: 2}]}'
 
 Once you've executed the last command, you should see a diagnostic message being emitted in the other terminal.
 Now let's publish temperature:
