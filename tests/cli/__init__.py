@@ -27,7 +27,7 @@ def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:
     yield lambda nid: (f'--tr=Serial("{VIRTUAL_BUS_URI}",local_node_id={nid})', )
 
     # UDP/IP on localhost (anonymous nodes not supported)
-    yield lambda nid: ((f'--tr=UDP("127.0.0.{nid}/8")', )
+    yield lambda nid: ((f'--tr=UDP("127.0.0.{nid}/8")', )  # type: ignore
                        if nid is not None and nid > 0 else
                        ())
 

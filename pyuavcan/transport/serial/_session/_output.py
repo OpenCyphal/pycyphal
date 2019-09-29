@@ -62,10 +62,9 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
                 not isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata):  # pragma: no cover
             raise TypeError('Invalid parameters')
 
-        assert not specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE \
-            or specifier.remote_node_id is not None \
+        assert specifier.remote_node_id is not None \
             if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) else True, \
-            'Internal protocol violation: cannot broadcast a service response'
+            'Internal protocol violation: cannot broadcast a service transfer'
 
         super(SerialOutputSession, self).__init__(finalizer)
 

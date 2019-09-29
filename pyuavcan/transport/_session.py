@@ -115,23 +115,14 @@ class OutputSessionSpecifier(SessionSpecifier):
     +====================+======================================+=======================================+
     |**Message**         | Experimental, may be allowed in v1.x | Allowed by Specification              |
     +-----------+--------+--------------------------------------+---------------------------------------+
-    |           |Request | Allowed by Specification             | Experimental, may be allowed in v1.x  |
-    |**Service**+--------+--------------------------------------+---------------------------------------+
-    |           |Response| Allowed by Specification             | Banned by Specification               |
+    |           |Request | Allowed by Specification             |                                       |
+    |**Service**+--------+--------------------------------------+ Banned by Specification               |
+    |           |Response| Allowed by Specification             |                                       |
     +-----------+--------+--------------------------------------+---------------------------------------+
     """
     def __post_init__(self) -> None:
         if isinstance(self.data_specifier, pyuavcan.transport.ServiceDataSpecifier) and self.remote_node_id is None:
-            if self.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST:
-                warnings.warn(
-                    f'Broadcast service request transfers are an experimental extension of the protocol '
-                    f'which should not be used in production yet. '
-                    f'If your application relies on this feature, leave feedback at https://forum.uavcan.org.',
-                    category=RuntimeWarning,
-                    stacklevel=-2,
-                )
-            else:
-                raise ValueError('Service response transfers shall be unicast')
+            raise ValueError('Service transfers shall be unicast')
 
         if isinstance(self.data_specifier, pyuavcan.transport.MessageDataSpecifier) and self.remote_node_id is not None:
             warnings.warn(

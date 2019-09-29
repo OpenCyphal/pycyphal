@@ -70,10 +70,9 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         if self._multiplier < 1:  # pragma: no cover
             raise ValueError(f'Invalid transfer multiplier: {self._multiplier}')
 
-        assert not specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE \
-            or specifier.remote_node_id is not None \
+        assert specifier.remote_node_id is not None \
             if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) else True, \
-            'Internal protocol violation: cannot broadcast a service response'
+            'Internal protocol violation: cannot broadcast a service transfer'
 
     async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         if self._closed:
