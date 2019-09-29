@@ -112,6 +112,7 @@ Generally, anonymous nodes are useful in two cases:
   from the PnP allocator, and then replace your transport instance with a new one (similar to what we just did here)
   initialized with the node-ID value provided by the PnP allocator.
 
+
 Having configured the node-ID, let's set up a service and invoke it:
 
 >>> async def on_request(request: uavcan.node.ExecuteCommand_1_0.Request,

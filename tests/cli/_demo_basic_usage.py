@@ -48,13 +48,12 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
         ),
     )
 
-    # TODO: enable
-    # yield _IfaceOption(
-    #     demo_env_vars={'DEMO_INTERFACE_KIND': 'udp'},
-    #     make_cli_args=lambda nid: (
-    #         f'--tr=UDP("127.0.0.{nid if nid is not None else 255}/8")',
-    #     ),
-    # )
+    yield _IfaceOption(
+        demo_env_vars={'DEMO_INTERFACE_KIND': 'udp'},
+        make_cli_args=lambda nid: (
+            f'--tr=UDP("127.0.0.{nid if nid is not None else 255}/8")',
+        ),
+    )
 
 
 @pytest.mark.parametrize('iface_option', _get_iface_options())  # type: ignore

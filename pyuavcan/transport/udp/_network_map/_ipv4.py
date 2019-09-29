@@ -47,13 +47,14 @@ class NetworkMapIPv4(NetworkMap):
 
         # Test the address configuration to detect configuration errors early.
         # I suppose we could also set up a pair of sockets and send a test datagram just for extra paranoia?
-        self.make_input_socket(0).close()
+        self.make_input_socket(0, True).close()
         for s in [
             self.make_output_socket(None, 65535),
             self.make_output_socket(1, 65535),
+            self.make_input_socket(0, False),
         ]:
             # This invariant is supposed to be upheld by the OS, so we use an assertion check.
-            assert IPv4Address.parse(s.getsockname()[0]) == self._local.host_address
+            assert IPv4Address.parse(s.getsockname()[0]) == self._local.host_address, 'Socket API invariant violation'
             s.close()
 
         self._ip_to_nid_cache: typing.Dict[str, typing.Optional[int]] = {}
@@ -95,7 +96,7 @@ class NetworkMapIPv4(NetworkMap):
         except OSError as ex:
             if ex.errno == errno.EADDRNOTAVAIL:
                 raise pyuavcan.transport.InvalidMediaConfigurationError(
-                    f'Bad IP configuration: cannot bind socket to {bind_to} [{errno.errorcode[ex.errno]}]'
+                    f'Bad IP configuration: cannot bind output socket to {bind_to} [{errno.errorcode[ex.errno]}]'
                 ) from None
             raise  # pragma: no cover
 
@@ -115,7 +116,7 @@ class NetworkMapIPv4(NetworkMap):
                       self, s, remote_node_id, remote_port)
         return s
 
-    def make_input_socket(self, local_port: int) -> socket.socket:
+    def make_input_socket(self, local_port: int, expect_broadcast: bool) -> socket.socket:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.setblocking(False)
 
@@ -123,10 +124,27 @@ class NetworkMapIPv4(NetworkMap):
         # This option shall be set before the socket is bound.
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        # The socket MUST BE BOUND TO INADDR_ANY IN ORDER TO RECEIVE BROADCAST DATAGRAMS.
-        # The user will have to filter out irrelevant datagrams in user space.
-        # Please read https://stackoverflow.com/a/58118503/1007777
-        s.bind(('', local_port))
+        if expect_broadcast:
+            # The socket MUST BE BOUND TO INADDR_ANY IN ORDER TO RECEIVE BROADCAST DATAGRAMS.
+            # The user will have to filter out irrelevant datagrams in user space.
+            # Please read https://stackoverflow.com/a/58118503/1007777
+            s.bind(('', local_port))
+        else:
+            # We are not interested in broadcast traffic, so it is safe to bind to a specific address.
+            # On some operating systems this may not reject broadcast traffic, but we don't care.
+            # The motivation for this is to allow multiple nodes running on localhost to bind to the same
+            # service port. If they all were binding to that port at INADDR_ANY, on some OS (like GNU/Linux)
+            # only the last-bound node would receive unicast data, making the service dysfunctional on all
+            # other (earlier bound) nodes. Jeez, the socket API is kind of a mess.
+            bind_to = self._local.host_address
+            try:
+                s.bind((str(bind_to), local_port))
+            except OSError as ex:
+                if ex.errno == errno.EADDRNOTAVAIL:
+                    raise pyuavcan.transport.InvalidMediaConfigurationError(
+                        f'Bad IP configuration: cannot bind input socket to {bind_to} [{errno.errorcode[ex.errno]}]'
+                    ) from None
+                raise  # pragma: no cover
 
         # Man 7 IP says that SO_BROADCAST should be set in order to receive broadcast datagrams.
         # The behavior I am observing does not match that, but we do it anyway because man says so.
@@ -136,7 +154,8 @@ class NetworkMapIPv4(NetworkMap):
         except Exception as ex:  # pragma: no cover
             _logger.exception('%r: Could not set SO_BROADCAST on %r: %s', self, s, ex)
 
-        _logger.debug('%r: New input socket %r, local port %r', self, s, local_port)
+        _logger.debug('%r: New input socket %r, local port %r, supports broadcast: %r',
+                      self, s, local_port, expect_broadcast)
         return s
 
     def __str__(self) -> str:
@@ -191,7 +210,7 @@ def _unittest_network_map_ipv4() -> None:
         assert nm.make_output_socket(4095, 65535)  # The node-ID cannot be mapped.
 
     out = nm.make_output_socket(nm.local_node_id, 12345)
-    inp = nm.make_input_socket(12345)
+    inp = nm.make_input_socket(12345, True)
 
     # Ensure the source IP address is specified correctly in outgoing UDP frames.
     out.send(b'Well, I got here the same way the coin did.')

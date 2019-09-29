@@ -32,7 +32,7 @@ class NetworkMapIPv6(NetworkMap):
     def make_output_socket(self, remote_node_id: typing.Optional[int], remote_port: int) -> socket.socket:
         raise NotImplementedError
 
-    def make_input_socket(self, local_port: int) -> socket.socket:
+    def make_input_socket(self, local_port: int, expect_broadcast: bool) -> socket.socket:
         raise NotImplementedError
 
     def __str__(self) -> str:

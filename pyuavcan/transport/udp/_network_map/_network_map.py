@@ -80,14 +80,50 @@ class NetworkMap(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def make_input_socket(self, local_port: int) -> socket.socket:
-        """
+    def make_input_socket(self, local_port: int, expect_broadcast: bool) -> socket.socket:
+        r"""
         Makes a new non-blocking input socket bound to the specified port.
-        The bind address may be INADDR_ANY in order to allow reception of broadcast datagrams,
-        so the user of the socket will have to filter out packets manually in user space;
-        the background is explained here: https://stackoverflow.com/a/58118503/1007777.
         The required socket options will be set up as needed automatically.
         Timestamping will need to be enabled separately.
+
+        If the "expect broadcast" parameter is True, the bind address may be INADDR_ANY
+        in order to allow reception of broadcast datagrams,
+        so the user of the socket will have to filter out packets manually in user space;
+        the background is explained here: https://stackoverflow.com/a/58118503/1007777.
+        If that parameter is False, the socket may be bound to the local IP address,
+        which on some OS will make it reject all broadcast traffic.
+        The positive side-effect of binding to a specific address instead of INADDR_ANY
+        is that on GNU/Linux it will allow multiple processes to bind to and receive unicast
+        datagrams from the same port.
+
+        The above distinction between broadcast-capable and not broadcast-capable sockets is
+        important for GNU/Linux because sockets bound to INADDR_ANY can receive both broadcast
+        and unicast datagrams, but if there is more than one socket on the same port and
+        the same interface, only the last bound one will receive unicast traffic::
+
+            dgram to 127.255.255.255:1234   --------------->    INADDR_ANY:1234 (socket A, OK)
+                                                    \
+                                                     ------>    INADDR_ANY:1234 (socket B, OK)
+
+            dgram to 127.255.255.255:1234   ------------X       127.0.0.11:1234 (socket A, data lost)
+                                                    \
+                                                     ---X       127.0.0.22:1234 (socket B, data lost)
+
+            dgram to 127.0.0.11:1234        ------------X       INADDR_ANY:1234 (socket A, data lost)
+                                                    \
+                                                     ------>    INADDR_ANY:1234 (socket B, OK)
+
+        The expect-broadcast option allows us to run more than one node on localhost side-by-side,
+        which is convenient for testing. Otherwise, each node interested in the same UAVCAN service
+        would bind to the same UDP port at INADDR_ANY, and on GNU/Linux the result would be that
+        only the latest bound node would be able to receive unicast traffic directed to that port.
+        To an outside observer it would appear as if the other nodes just ignore the packets.
+        On other operating systems this problem may not exist though.
+
+        :param local_port: The UDP port to bind to (function of the data specifier).
+        :param expect_broadcast: If True, the socket shall be able to accept broadcast datagrams.
+            If False, acceptance of broadcast datagrams is possible but not guaranteed.
+            This option enables certain optimizations depending on the underlying OS.
         """
         raise NotImplementedError
 

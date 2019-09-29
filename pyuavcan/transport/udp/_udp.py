@@ -357,8 +357,11 @@ class UDPTransport(pyuavcan.transport.Transport):
         try:
             if specifier.data_specifier not in self._demultiplexer_registry:
                 _logger.debug('%r: Setting up new demultiplexer for %s', self, specifier.data_specifier)
+                # Service transfers cannot be broadcast.
+                expect_broadcast = not isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
+                udp_port = udp_port_from_data_specifier(specifier.data_specifier)
                 self._demultiplexer_registry[specifier.data_specifier] = UDPDemultiplexer(
-                    sock=self._network_map.make_input_socket(udp_port_from_data_specifier(specifier.data_specifier)),
+                    sock=self._network_map.make_input_socket(udp_port, expect_broadcast),
                     udp_mtu=_MAX_UDP_MTU,
                     node_id_mapper=self._network_map.map_ip_address_to_node_id,
                     local_node_id=self._network_map.local_node_id,
