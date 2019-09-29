@@ -76,27 +76,43 @@ old are no longer used.
 '''.strip())
 
     def construct_subsystem(self, args: argparse.Namespace) -> pyuavcan.transport.Transport:
-        trans: typing.List[pyuavcan.transport.Transport] = []
-        for expression in args.transport:
-            t = _evaluate(expression)
-            _logger.info('Expression %r yields %r', expression, t)
-            trans.append(t)
+        context = _make_evaluation_context()
+        _logger.debug('Expression evaluation context: %r', list(context.keys()))
 
-        if len(trans) < 1:
+        trs: typing.List[pyuavcan.transport.Transport] = []
+        for expression in args.transport:
+            t = _evaluate_transport_expr(expression, context)
+            _logger.info('Expression %r yields %r', expression, t)
+            trs.append(t)
+
+        if len(trs) < 1:
             raise ValueError('No transports specified')
-        elif len(trans) == 1:
-            return trans[0]  # Non-redundant transport
+        elif len(trs) == 1:
+            return trs[0]  # Non-redundant transport
         else:
             # TODO: initialize a RedundantTransport!
             raise NotImplementedError('Sorry, redundant transport construction is not yet implemented')
 
 
-def _evaluate(expression: str) -> pyuavcan.transport.Transport:
-    # This import is super slow, so we only do it when really necessary.
+def _evaluate_transport_expr(expression: str, context: typing.Dict[str, typing.Any]) -> pyuavcan.transport.Transport:
+    out = eval(expression, context)
+    if isinstance(out, pyuavcan.transport.Transport):
+        return out
+    else:
+        raise ValueError(f'The expression {expression!r} yields an instance of {type(out).__name__}. '
+                         f'Expected an instance of pyuavcan.transport.Transport.')
+
+
+def _make_evaluation_context() -> typing.Dict[str, typing.Any]:
+    # This import is super slow, so we do it as late as possible.
     # Doing this when generating command-line arguments would be disastrous for performance.
     # noinspection PyTypeChecker
     pyuavcan.util.import_submodules(pyuavcan.transport)
-    context: typing.Dict[str, typing.Any] = {}
+
+    # Populate the context with all references that may be useful for the transport expression.
+    context: typing.Dict[str, typing.Any] = {
+        'pyuavcan': pyuavcan,
+    }
 
     # Pre-import transport modules for convenience.
     for name, module in inspect.getmembers(pyuavcan.transport, inspect.ismodule):
@@ -108,17 +124,8 @@ def _evaluate(expression: str) -> pyuavcan.transport.Transport:
     # Suppressing MyPy false positive: https://github.com/python/mypy/issues/5374
     for cls in pyuavcan.util.iter_descendants(transport_base):  # type: ignore
         if not cls.__name__.startswith('_') and cls is not transport_base:
-            name = cls.__name__.rpartition(transport_base.__name__)[0] or cls.__name__
+            name = cls.__name__.rpartition(transport_base.__name__)[0]
+            assert name
             context[name] = cls
 
-    _logger.debug('Expression evaluation context (excl. globals): %r', list(context.keys()))
-    conflicting_names = set(context.keys()) & set(globals().keys())
-    assert not conflicting_names, f'Conflicting names: {conflicting_names}'
-    context.update(globals())
-
-    out = eval(expression, context)
-    if isinstance(out, pyuavcan.transport.Transport):
-        return out
-    else:
-        raise ValueError(f'The expression {expression!r} yields an instance of {type(out).__name__}. '
-                         f'Expected an instance of pyuavcan.transport.Transport.')
+    return context
