@@ -16,8 +16,8 @@ def _unittest_slow_cli_call_a() -> None:
     # Generate DSDL namespace "uavcan"
     run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
-    result_text = run_cli_tool('-v', 'call', '1234', 'uavcan.node.GetInfo.1.0', '{}',
-                               '--local-node-id', '1234', '--format', 'JSON', '--loopback')
+    result_text = run_cli_tool('-v', 'call', '1234', 'uavcan.node.GetInfo.1.0', '{}', '--tr=Loopback(1234)',
+                               '--format', 'JSON')
     result = json.loads(result_text)
     assert result['430']['name'] == 'org.uavcan.pyuavcan.cli.call'
     assert result['430']['protocol_version']['major'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
@@ -27,4 +27,4 @@ def _unittest_slow_cli_call_a() -> None:
 
     with pytest.raises(subprocess.CalledProcessError):
         # Will time out because we're using a wrong service-ID
-        run_cli_tool('-v', 'call', '1234', '123.uavcan.node.GetInfo.1.0', '{}', '--local-node-id', '1234', '--loopback')
+        run_cli_tool('-v', 'call', '1234', '123.uavcan.node.GetInfo.1.0', '{}', '--tr=Loopback(1234)')

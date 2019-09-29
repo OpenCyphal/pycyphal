@@ -10,32 +10,32 @@ import json
 import pytest
 from tests.dsdl.conftest import PUBLIC_REGULATED_DATA_TYPES_DIR
 from ._subprocess import run_cli_tool, BackgroundChildProcess
-from . import TRANSPORT_ARGS_OPTIONS
+from . import TRANSPORT_FACTORIES, TransportFactory
 
 
-@pytest.mark.parametrize('transport_args', TRANSPORT_ARGS_OPTIONS)  # type: ignore
-def _unittest_slow_cli_pub_sub_a(transport_args: typing.Sequence[str]) -> None:
+@pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
+def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
     # Generate DSDL namespace "uavcan"
     run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
     proc_sub_heartbeat = BackgroundChildProcess.cli(
         'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
-        '--with-metadata', *transport_args
+        '--with-metadata', *transport_factory(10)
     )
 
     proc_sub_diagnostic = BackgroundChildProcess.cli(
         'sub', '4321.uavcan.diagnostic.Record.1.0', '--count=3', '--format=JSON',
-        '--with-metadata', *transport_args
+        '--with-metadata', *transport_factory(11)
     )
 
     proc_sub_diagnostic_wrong_pid = BackgroundChildProcess.cli(
         'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=YAML',
-        '--with-metadata', *transport_args
+        '--with-metadata', *transport_factory(12)
     )
 
     proc_sub_temperature = BackgroundChildProcess.cli(
         'sub', '555.uavcan.si.sample.temperature.Scalar.1.0', '--count=3', '--format=JSON',
-        *transport_args
+        *transport_factory(13)
     )
 
     time.sleep(1.0)     # Time to let the background processes finish initialization
@@ -50,9 +50,9 @@ def _unittest_slow_cli_pub_sub_a(transport_args: typing.Sequence[str]) -> None:
 
         '555.uavcan.si.sample.temperature.Scalar.1.0', '{kelvin: 123.456}',
 
-        '--count=3', '--period=0.1', '--priority=SLOW', '--local-node-id=51',
+        '--count=3', '--period=0.1', '--priority=SLOW',
         '--heartbeat-fields={vendor_specific_status_code: 54321}',
-        *transport_args,
+        *transport_factory(51),
         timeout=10.0
     )
 
@@ -97,31 +97,31 @@ def _unittest_slow_cli_pub_sub_a(transport_args: typing.Sequence[str]) -> None:
     assert proc_sub_diagnostic_wrong_pid.wait(1.0, interrupt=True)[1].strip() == ''
 
 
-@pytest.mark.parametrize('transport_args', TRANSPORT_ARGS_OPTIONS)  # type: ignore
-def _unittest_slow_cli_pub_sub_b(transport_args: typing.Sequence[str]) -> None:
+@pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
+def _unittest_slow_cli_pub_sub_anon(transport_factory: TransportFactory) -> None:
+    tr_anon = transport_factory(None)
+    if not tr_anon:
+        return
+
     # Generate DSDL namespace "uavcan"
     run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
     proc_sub_heartbeat = BackgroundChildProcess.cli(
-        '-v', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
-        *transport_args
+        '-v', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON', *tr_anon  # Count unlimited
     )
 
     proc_sub_diagnostic_with_meta = BackgroundChildProcess.cli(
-        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON', '--with-metadata',
-        *transport_args
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON', '--with-metadata', *tr_anon
     )
 
     proc_sub_diagnostic_no_meta = BackgroundChildProcess.cli(
-        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON',
-        *transport_args
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON', *tr_anon
     )
 
     time.sleep(3.0)     # Time to let the background processes finish initialization
 
     proc = BackgroundChildProcess.cli(
-        '-v', 'pub', 'uavcan.diagnostic.Record.1.0', '{}',
-        '--count=2', '--period=2', *transport_args,
+        '-v', 'pub', 'uavcan.diagnostic.Record.1.0', '{}', '--count=2', '--period=2', *tr_anon,
     )
     proc.wait(timeout=8)
 

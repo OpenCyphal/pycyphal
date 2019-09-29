@@ -117,7 +117,7 @@ class DemoApplication:
         else:
             raise RuntimeError(f'Unrecognized interface kind: {interface_kind}')
 
-        assert self._node.presentation.transport.local_node_id == 42  # Yup, the node-ID is configured.
+        assert transport.local_node_id == 42  # Yup, the node-ID is configured.
 
         # Populate the node info for use with the Node class. Please see the DSDL definition of uavcan.node.GetInfo.
         node_info = uavcan.node.GetInfo_1_0.Response(
