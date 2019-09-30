@@ -35,27 +35,28 @@ class NetworkMapIPv4(NetworkMap):
         # values if the subnet mask is 19 bits wide or less.
         self._max_nodes: int = min(2 ** self.NODE_ID_BIT_LENGTH, self._local.hostmask)
 
-        self._local_node_id = int(self._local) - int(self._local.subnet_address)
-        if self._local_node_id >= self._max_nodes:
-            raise pyuavcan.transport.InvalidMediaConfigurationError(
-                f'The local IP address/mask {self._local} resolves to a node-ID value {self._local_node_id} '
-                f'which is invalid.'
-            )
-
-        assert (int(self._local.subnet_address) + self._local_node_id) in self._local
-        assert self._local_node_id < self._max_nodes
+        maybe_local_node_id = int(self._local) - int(self._local.subnet_address)
+        if maybe_local_node_id < self._max_nodes:
+            self._local_node_id: typing.Optional[int] = maybe_local_node_id
+            assert (int(self._local.subnet_address) + self._local_node_id) in self._local
+            assert self._local_node_id < self._max_nodes
+            # Test the address configuration to detect configuration errors early.
+            # These checks are only valid if the local node is non-anonymous.
+            for s in [
+                self.make_output_socket(None, 65535),
+                self.make_output_socket(1, 65535),
+                self.make_input_socket(0, False),
+            ]:
+                # This invariant is supposed to be upheld by the OS, so we use an assertion check.
+                assert IPv4Address.parse(s.getsockname()[0]) == self._local.host_address, \
+                    'Socket API invariant violation'
+                s.close()
+        else:
+            self._local_node_id = None
 
         # Test the address configuration to detect configuration errors early.
-        # I suppose we could also set up a pair of sockets and send a test datagram just for extra paranoia?
+        # These checks are valid regardless of whether the local node is anonymous.
         self.make_input_socket(0, True).close()
-        for s in [
-            self.make_output_socket(None, 65535),
-            self.make_output_socket(1, 65535),
-            self.make_input_socket(0, False),
-        ]:
-            # This invariant is supposed to be upheld by the OS, so we use an assertion check.
-            assert IPv4Address.parse(s.getsockname()[0]) == self._local.host_address, 'Socket API invariant violation'
-            s.close()
 
         self._ip_to_nid_cache: typing.Dict[str, typing.Optional[int]] = {}
 
@@ -64,7 +65,7 @@ class NetworkMapIPv4(NetworkMap):
         return self._max_nodes
 
     @property
-    def local_node_id(self) -> int:
+    def local_node_id(self) -> typing.Optional[int]:
         return self._local_node_id
 
     def map_ip_address_to_node_id(self, ip: str) -> typing.Optional[int]:
@@ -85,6 +86,12 @@ class NetworkMapIPv4(NetworkMap):
             return node_id
 
     def make_output_socket(self, remote_node_id: typing.Optional[int], remote_port: int) -> socket.socket:
+        if self.local_node_id is None:
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                f'Anonymous UDP/IP nodes cannot emit transfers, they can only listen. '
+                f'The local IP address is {self._local}.'
+            )
+
         bind_to = self._local.host_address
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.setblocking(False)
@@ -124,10 +131,12 @@ class NetworkMapIPv4(NetworkMap):
         # This option shall be set before the socket is bound.
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        if expect_broadcast:
+        if expect_broadcast or self.local_node_id is None:
             # The socket MUST BE BOUND TO INADDR_ANY IN ORDER TO RECEIVE BROADCAST DATAGRAMS.
             # The user will have to filter out irrelevant datagrams in user space.
             # Please read https://stackoverflow.com/a/58118503/1007777
+            # We also bind to this address if the local node is anonymous because in that case the local
+            # IP address may be impossible to bind to.
             s.bind(('', local_port))
         else:
             # We are not interested in broadcast traffic, so it is safe to bind to a specific address.
@@ -177,8 +186,11 @@ def _unittest_network_map_ipv4() -> None:
     with raises(pyuavcan.transport.InvalidMediaConfigurationError):
         NetworkMap.new('10.0.254.254/24')       # Suppose that the test machine does not have such interface.
 
-    with raises(pyuavcan.transport.InvalidMediaConfigurationError):
-        NetworkMap.new('127.254.254.254/8')     # Maps to an invalid local node-ID.
+    nm = NetworkMap.new('127.254.254.254/8')    # Maps to an invalid local node-ID which means anonymous.
+    assert nm.local_node_id is None
+
+    nm = NetworkMap.new('192.168.0.255/24')    # Maps to an invalid local node-ID which means anonymous.
+    assert nm.local_node_id is None
 
     nm = NetworkMap.new(' 127.123.1.0/16\t')
     assert str(nm) == '127.123.1.0/16'

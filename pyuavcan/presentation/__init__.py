@@ -107,10 +107,10 @@ Generally, anonymous nodes are useful in two cases:
 1. You only need to listen and you know that you are not going to emit any transfers
   (no point tinkering with node-ID if you're not going to use it anyway).
 
-2.You need to allocate a node-ID using the plug-and-play autoconfiguration protocol.
-  In this case, you would normally create a transport, run the PnP allocation procedure to obtain a node-ID value
-  from the PnP allocator, and then replace your transport instance with a new one (similar to what we just did here)
-  initialized with the node-ID value provided by the PnP allocator.
+2. You need to allocate a node-ID using the plug-and-play autoconfiguration protocol.
+   In this case, you would normally create a transport, run the PnP allocation procedure to obtain a node-ID value
+   from the PnP allocator, and then replace your transport instance with a new one (similar to what we just did here)
+   initialized with the node-ID value provided by the PnP allocator.
 
 
 Having configured the node-ID, let's set up a service and invoke it:

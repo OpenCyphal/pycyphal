@@ -12,6 +12,7 @@ import typing
 import logging
 import pathlib
 import subprocess
+from subprocess import CalledProcessError as CalledProcessError
 
 
 DEMO_DIR = pathlib.Path(__file__).absolute().parent.parent / 'demo'

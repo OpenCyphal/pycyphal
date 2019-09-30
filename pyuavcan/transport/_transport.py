@@ -88,10 +88,6 @@ class Transport(abc.ABC):
         While in the anonymous mode, some transports may choose to operate in a particular regime to facilitate
         plug-and-play node-ID allocation (for example, a CAN transport may disable automatic retransmission).
 
-        The concept of anonymous node may not be defined on some transports (e.g., UDP/IP).
-        In such cases, implementations are encouraged to reflect this through the type system by annotating
-        the value as ``int`` instead of ``Optional[int]``.
-
         Protip: If you feel like assigning the node-ID after initialization,
         make a proxy that implements this interface and keeps a private transport instance.
         When the node-ID is assigned, the private transport instance is destroyed,

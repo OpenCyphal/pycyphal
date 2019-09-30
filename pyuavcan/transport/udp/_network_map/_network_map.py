@@ -21,6 +21,12 @@ class NetworkMap(abc.ABC):
     The principle is that the node-ID is represented as a contiguous set of least significant bits of
     the node's IP address.
 
+    If the IP address of the local node does not belong to the subnet
+    (e.g., if the local IP address is the same as the broadcast address of the subnet,
+    or if the value of the host bits does not belong to the set of valid node-ID values),
+    the local node is considered to be anonymous.
+    Anonymous UDP/IP nodes cannot initiate network exchanges of any kind, they can only listen.
+
     If none of the available network interfaces have the supplied IP address, the constructor will raise
     :class:`pyuavcan.transport.InvalidMediaConfigurationError`.
     """
@@ -52,9 +58,10 @@ class NetworkMap(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def local_node_id(self) -> int:
+    def local_node_id(self) -> typing.Optional[int]:
         """
-        The concept of anonymous node is not defined for UDP/IP; in this transport, every node always has a node-ID.
+        The node-ID of the local node derived from its IP address;
+        None if the local IP address configuration dictates that the node shall be anonymous.
         If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
         """
         raise NotImplementedError
@@ -76,6 +83,7 @@ class NetworkMap(abc.ABC):
         The socket will be bound to an ephemeral port at the configured local network address.
         The required options (such as ``SO_BROADCAST`` etc) will be set up as needed automatically.
         Timestamping will need to be enabled separately.
+        Raises :class:`pyuavcan.transport.OperationNotDefinedForAnonymousNodeError` if the local node is anonymous.
         """
         raise NotImplementedError
 

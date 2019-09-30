@@ -17,13 +17,12 @@ from ._subprocess import run_cli_tool, BackgroundChildProcess, DEMO_DIR
 # noinspection PyProtectedMember
 from pyuavcan._cli import DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
 from tests.dsdl.conftest import TEST_DATA_TYPES_DIR, PUBLIC_REGULATED_DATA_TYPES_DIR, generated_packages
-from . import TransportFactory
 
 
 @dataclasses.dataclass
 class _IfaceOption:
     demo_env_vars: typing.Dict[str, str]
-    make_cli_args: TransportFactory
+    make_cli_args: typing.Callable[[typing.Optional[int]], typing.Sequence[str]]
 
 
 def _get_iface_options() -> typing.Iterable[_IfaceOption]:
@@ -51,7 +50,9 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
     yield _IfaceOption(
         demo_env_vars={'DEMO_INTERFACE_KIND': 'udp'},
         make_cli_args=lambda nid: (
-            f'--tr=UDP("127.0.0.{nid if nid is not None else 255}/8")',
+            (f'--tr=UDP("127.0.0.{nid}/8")', )      # Regular node
+            if nid is not None else
+            (f'--tr=UDP("127.255.255.255/8")', )    # Anonymous node
         ),
     )
 

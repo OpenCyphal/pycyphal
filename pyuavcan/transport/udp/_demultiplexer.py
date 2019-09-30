@@ -59,14 +59,14 @@ class UDPDemultiplexer:
                  sock:           socket.socket,
                  udp_mtu:        int,
                  node_id_mapper: typing.Callable[[str], typing.Optional[int]],
-                 local_node_id:  int,
+                 local_node_id:  typing.Optional[int],
                  statistics:     UDPDemultiplexerStatistics,
                  loop:           asyncio.AbstractEventLoop):
         """
         :param sock: The instance takes ownership of the socket; it will be closed when the instance is closed.
         :param udp_mtu: The size of the socket read buffer. Make it large. If not sure, make it larger.
         :param node_id_mapper: A mapping: ``(ip_address) -> Optional[node_id]``.
-        :param local_node_id: The node-ID of the local node. Needed to discard own-generated broadcast traffic.
+        :param local_node_id: The node-ID of the local node or None. Needed to discard own-generated broadcast traffic.
         :param statistics: A reference to the external statistics object that will be updated by the instance.
         :param loop: The event loop. You know the drill.
         """
@@ -75,11 +75,12 @@ class UDPDemultiplexer:
 
         self._udp_mtu = int(udp_mtu)
         self._node_id_mapper = node_id_mapper
-        self._local_node_id = int(local_node_id)
+        self._local_node_id = local_node_id
         self._statistics = statistics
         self._loop = loop
 
         assert callable(self._node_id_mapper)
+        assert isinstance(self._local_node_id, int) or self._local_node_id is None
         assert isinstance(self._statistics, UDPDemultiplexerStatistics)
         assert isinstance(self._loop, asyncio.AbstractEventLoop)
 

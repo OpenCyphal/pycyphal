@@ -8,7 +8,7 @@ import typing
 import asyncio
 import pytest
 import pyuavcan
-from . import TRANSPORT_FACTORIES, TransportFactory, UntestableTransportConfigurationError
+from . import TRANSPORT_FACTORIES, TransportFactory
 
 
 _RX_TIMEOUT = 1.0
@@ -24,10 +24,7 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     import uavcan.diagnostic
     from pyuavcan.transport import Priority
 
-    try:
-        tran_a, tran_b = transport_factory(None, None)
-    except UntestableTransportConfigurationError:
-        return
+    tran_a, tran_b, transmits_anon = transport_factory(None, None)
     assert tran_a.local_node_id is None
     assert tran_b.local_node_id is None
 
@@ -36,7 +33,6 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
 
     assert pres_a.transport is tran_a
 
-    pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
     sub_heart = pres_b.make_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
 
     with pytest.raises(TypeError):
@@ -45,6 +41,13 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
         pres_a.get_server_with_fixed_service_id(uavcan.node.Heartbeat_1_0)  # type: ignore
+
+    if transmits_anon:
+        pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    else:
+        with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+            pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+        return  # The test ends here.
 
     assert pub_heart._maybe_impl is not None
     assert pub_heart._maybe_impl.proxy_count == 1
@@ -77,6 +80,7 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     pub_heart.priority = Priority.SLOW
     assert pub_heart.priority == Priority.SLOW
     await pub_heart.publish(heart)
+
     rx, transfer = await sub_heart.receive()  # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id is None
@@ -113,7 +117,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     import uavcan.diagnostic
     from pyuavcan.transport import Priority
 
-    tran_a, tran_b = transport_factory(123, 42)
+    tran_a, tran_b, _ = transport_factory(123, 42)
     assert tran_a.local_node_id == 123
     assert tran_b.local_node_id == 42
 

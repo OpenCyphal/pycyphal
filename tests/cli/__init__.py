@@ -6,11 +6,18 @@
 
 import sys
 import typing
+import dataclasses
+
+
+@dataclasses.dataclass(frozen=True)
+class TransportConfig:
+    cli_args:     typing.Sequence[str]
+    can_transmit: bool
 
 
 #: This factory constructs arguments for the CLI instructing it to use a particular transport configuration.
 #: The factory takes one argument - the node-ID - which can be None (anonymous).
-TransportFactory = typing.Callable[[typing.Optional[int]], typing.Sequence[str]]
+TransportFactory = typing.Callable[[typing.Optional[int]], TransportConfig]
 
 
 def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:
@@ -20,16 +27,26 @@ def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:
     """
     if sys.platform == 'linux':
         # CAN via SocketCAN
-        yield lambda nid: (f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan0",64),local_node_id={nid})', )
+        yield lambda nid: TransportConfig(
+            cli_args=(f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan0",64),local_node_id={nid})', ),
+            can_transmit=True,
+        )
 
     # Serial via TCP/IP tunnel (emulation)
     from tests.transport.serial import VIRTUAL_BUS_URI
-    yield lambda nid: (f'--tr=Serial("{VIRTUAL_BUS_URI}",local_node_id={nid})', )
+    yield lambda nid: TransportConfig(
+        cli_args=(f'--tr=Serial("{VIRTUAL_BUS_URI}",local_node_id={nid})', ),
+        can_transmit=True,
+    )
 
-    # UDP/IP on localhost (anonymous nodes not supported)
-    yield lambda nid: ((f'--tr=UDP("127.0.0.{nid}/8")', )  # type: ignore
-                       if nid is not None and nid > 0 else
-                       ())
+    # UDP/IP on localhost (cannot transmit if anonymous)
+    yield lambda nid: TransportConfig(
+        cli_args=(f'--tr=UDP("127.0.0.{nid}/8")', ),
+        can_transmit=True,
+    ) if nid is not None else TransportConfig(
+        cli_args=(f'--tr=UDP("127.255.255.255/8")', ),
+        can_transmit=False,
+    )
 
 
 TRANSPORT_FACTORIES = list(_make_transport_factories_for_cli())

@@ -113,7 +113,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
 
     def _process_frame(self, source_node_id: int, frame: typing.Optional[UDPFrame]) -> None:
         """
-        The source node-ID is always valid because anonymous nodes are not defined for the UDP transport.
+        The source node-ID is always valid because anonymous transfers are not defined for the UDP transport.
         The frame argument may be None to indicate that the underlying transport has received a datagram
         which is valid but does not contain a UAVCAN UDP frame inside. This is needed for error stats tracking.
 

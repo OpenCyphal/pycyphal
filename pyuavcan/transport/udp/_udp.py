@@ -49,7 +49,7 @@ class UDPTransport(pyuavcan.transport.Transport):
     The source port number can be arbitrary (ephemeral), its value is ignored.
 
     UAVCAN uses a wide range of UDP ports: [15360, 49151].
-    Operating systems that comply with the IANA ephemeral port range recommendations are expected to be
+    UDP/IP stacks that comply with the IANA ephemeral port range recommendations are expected to be
     compatible with this; otherwise, there may be port assignment conflicts.
     All new versions of MS Windows starting with Vista and Server 2008 are compatible with the IANA recommendations.
     Many versions of GNU/Linux, however, are not, but it can be fixed by manual reconfiguration:
@@ -61,9 +61,13 @@ class UDPTransport(pyuavcan.transport.Transport):
     and the increased overhead is detrimental to the network's latency and throughput.
     Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value (i.e., outside of
     the local subnet) is rejected.
-    The concept of anonymous node is not defined for UDP/IP; in this transport, every node always has a node-ID.
-    If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
     If IPv6 is used, the flow-ID of UAVCAN packets is set to zero.
+
+    The concept of anonymous transfer is not defined for UDP/IP; in this transport, in order to be able to
+    emit a transfer, the node shall have a valid node-ID value.
+    This means that an anonymous UAVCAN/UDP/IP node can only listen to broadcast
+    network traffic (i.e., can subscribe to subjects) but cannot transmit anything.
+    If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
 
     Applications relying on this transport implementation will be unable to detect a node-ID conflict on
     the bus because this implementation discards all broadcast traffic originating from its own IP address.
@@ -172,10 +176,17 @@ class UDPTransport(pyuavcan.transport.Transport):
         """
         :param ip_address: Specifies which local IP address to use for this transport.
             This setting also implicitly specifies the network interface to use.
-            All sockets will be bound (see ``bind()``) to the specified local address.
-            If the specified address is not available locally, or if the specified address cannot be mapped to
-            a valid local node-ID, the initialization will fail with
+            All output sockets will be bound (see ``bind()``) to the specified local address.
+            If the specified address is not available locally, initialization will fail with
             :class:`pyuavcan.transport.InvalidMediaConfigurationError`.
+
+            If the specified IP address cannot be mapped to a valid node-ID, the local node will be anonymous.
+            An IP address will be impossible to map to a valid node-ID (resulting in the local node being
+            anonymous) if the address happens to be a broadcast address for the subnet (e.g., ``192.168.0.255/24``),
+            or if the value of the host bits exceeds the valid node-ID range (e.g., ``127.123.123.123/8``).
+
+            If the local node is anonymous, any attempt to create an output session will fail with
+            :class:`pyuavcan.transport.OperationNotDefinedForAnonymousNodeError`.
 
             For use on localhost, any IP address from the localhost range can be used;
             for example, ``127.0.0.123``.
@@ -196,7 +207,8 @@ class UDPTransport(pyuavcan.transport.Transport):
 
                 - ``192.168.1.0`` -- node-ID of zero (may be unusable depending on the network configuration).
                 - ``192.168.1.254`` -- the maximum available node-ID in this subnet is 254.
-                - ``192.168.1.255`` -- the broadcast address, not a valid node.
+                - ``192.168.1.255`` -- the broadcast address, not a valid node. If you specify this address,
+                  the local node will be anonymous.
 
             - ``127.0.0.42/8`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
               The local loopback subnet is useful for testing.
@@ -206,8 +218,9 @@ class UDPTransport(pyuavcan.transport.Transport):
                 - ``127.0.15.255`` -- node-ID 4095.
                 - ``127.0.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
                   All traffic from this address will be rejected as non-UAVCAN.
+                  If used for local node, the local node will be anonymous.
                 - ``127.255.255.255`` -- the broadcast address; notice that this address lies outside of the
-                  node-ID-mapped space, no conflicts.
+                  node-ID-mapped space, no conflicts. If used for local node, the local node will be anonymous.
 
             IPv6 addresses may be specified without the mask, in which case it will be assumed to be
             equal ``128 - NODE_ID_BIT_LENGTH``.
@@ -269,7 +282,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         )
 
     @property
-    def local_node_id(self) -> int:
+    def local_node_id(self) -> typing.Optional[int]:
         return self._network_map.local_node_id
 
     def close(self) -> None:
@@ -364,7 +377,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                     sock=self._network_map.make_input_socket(udp_port, expect_broadcast),
                     udp_mtu=_MAX_UDP_MTU,
                     node_id_mapper=self._network_map.map_ip_address_to_node_id,
-                    local_node_id=self._network_map.local_node_id,
+                    local_node_id=self.local_node_id,
                     statistics=self._statistics.demultiplexer.setdefault(specifier.data_specifier,
                                                                          UDPDemultiplexerStatistics()),
                     loop=self.loop,
