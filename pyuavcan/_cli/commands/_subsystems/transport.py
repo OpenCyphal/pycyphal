@@ -41,6 +41,7 @@ Examples:
     pyuavcan.transport.can.CANTransport(pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', 64), 42)
     pyuavcan.transport.loopback.LoopbackTransport(None)
     pyuavcan.transport.serial.SerialTransport("/dev/ttyUSB0", None, baudrate=115200)
+    pyuavcan.transport.udp.UDPTransport('127.255.255.255/8')
 
 Such long expressions are hard to type, so the following entities are also
 pre-imported into the global namespace for convenience:
@@ -57,6 +58,7 @@ The following examples yield configurations that are equivalent to the above:
     CAN(can.media.socketcan.SocketCANMedia('vcan0',64),42)
     Loopback(None)
     Serial("/dev/ttyUSB0",None,baudrate=115200)
+    UDP('127.255.255.255/8')
 
 This is still a lot to type, so it might make sense to store frequently used
 configurations into environment variables and expand them as necessary.
@@ -71,8 +73,8 @@ The command-line tool stores the emitted transfer-ID map on disk, keyed by
 the node-ID and the OS resource associated with the transport; the path is:
 {EMITTED_TRANSFER_ID_MAP_DIR}
 The map files are managed automatically. They can be removed to reset all
-transfer-ID counters to zero. Files that are more than {EMITTED_TRANSFER_ID_MAP_MAX_AGE} seconds
-old are no longer used.
+transfer-ID counters to zero. Files that are more than {EMITTED_TRANSFER_ID_MAP_MAX_AGE}
+seconds old are no longer used.
 '''.strip())
 
     def construct_subsystem(self, args: argparse.Namespace) -> pyuavcan.transport.Transport:

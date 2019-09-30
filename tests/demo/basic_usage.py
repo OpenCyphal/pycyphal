@@ -89,8 +89,9 @@ class DemoApplication:
         # Most applications would need this to be configurable, some may support the PnP node-ID allocation protocol.
         if interface_kind == 'udp' or not interface_kind:  # This is the default.
             # The UDP/IP transport in this example runs on the local loopback interface, so no setup is needed.
-            # The UDP transport requires us to assign the IP address (there are no anonymous nodes if UDP is used);
-            # the node-ID equals the value of several least significant bits of its IP address.
+            # The UDP transport requires us to assign the IP address; the node-ID equals the value of several least
+            # significant bits of its IP address. If you want an anonymous UDP/IPv4 node, just use the subnet's
+            # broadcast address as its local IP address (e.g., 127.255.255.255/8, 192.168.0.255/24, and so on).
             # For more info, please read the API documentation.
             transport = pyuavcan.transport.udp.UDPTransport('127.0.0.42/8')
 
