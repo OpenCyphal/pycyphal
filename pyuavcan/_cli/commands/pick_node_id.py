@@ -74,6 +74,15 @@ async def _run(transport: pyuavcan.transport.Transport) -> int:
         return 0
 
     candidates = set(range(node_id_set_cardinality))
+    if node_id_set_cardinality > 1000:
+        # Special case: some transports with large NID cardinality may have difficulties supporting a node-ID of zero
+        # depending on the configuration of the underlying hardware and software. This is not a problem of UAVCAN but
+        # of the platform itself. For example, a UDP/IP transport over IPv4 with a node-ID of zero would map to
+        # an IP address with trailing zeros which happens to be the address of the subnet, which is likely
+        # to cause all sorts of complications.
+        _logger.debug('Removing the zero node-ID from the set of available values to avoid platform-specific issues')
+        candidates.remove(0)
+
     pres = pyuavcan.presentation.Presentation(transport)
     with contextlib.closing(pres):
         deadline = asyncio.get_event_loop().time() + uavcan.node.Heartbeat_1_0.MAX_PUBLICATION_PERIOD * 2.0
