@@ -14,20 +14,6 @@ def make_enum_action(enum_type: typing.Type[enum.Enum]) -> typing.Type[argparse.
     for e in enum_type:
         mapping[e.name.lower()] = e
 
-    class Choice:
-        def __init__(self, key: str, value: typing.Any):
-            self.key = key
-            self.value = value
-
-        def __eq__(self, other: object) -> bool:
-            return bool(self.value == other)
-
-        def __hash__(self) -> int:
-            return hash(self.value)
-
-        def __repr__(self) -> str:
-            return self.key
-
     class ArgparseEnumAction(argparse.Action):
         # noinspection PyShadowingBuiltins
         def __init__(self,
@@ -50,7 +36,7 @@ def make_enum_action(enum_type: typing.Type[enum.Enum]) -> typing.Type[argparse.
 
             if choices is None:
                 choices = [
-                    Choice(key, value) for key, value in mapping.items()
+                    _NamedChoice(key, value) for key, value in mapping.items()
                 ]
 
             super(ArgparseEnumAction, self).__init__(
@@ -74,3 +60,18 @@ def make_enum_action(enum_type: typing.Type[enum.Enum]) -> typing.Type[argparse.
             setattr(namespace, self.dest, values)
 
     return ArgparseEnumAction
+
+
+class _NamedChoice:
+    def __init__(self, key: str, value: typing.Any):
+        self.key = key
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        return bool(self.value == other)
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    def __repr__(self) -> str:
+        return self.key
