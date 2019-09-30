@@ -19,22 +19,22 @@ def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
     run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
     proc_sub_heartbeat = BackgroundChildProcess.cli(
-        'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
+        'sub', 'uavcan.node.Heartbeat.1.0', '--format=json',    # Count unlimited
         '--with-metadata', *transport_factory(None).cli_args
     )
 
     proc_sub_diagnostic = BackgroundChildProcess.cli(
-        'sub', '4321.uavcan.diagnostic.Record.1.0', '--count=3', '--format=JSON',
+        'sub', '4321.uavcan.diagnostic.Record.1.0', '--count=3', '--format=json',
         '--with-metadata', *transport_factory(None).cli_args
     )
 
     proc_sub_diagnostic_wrong_pid = BackgroundChildProcess.cli(
-        'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=YAML',
+        'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=yaml',
         '--with-metadata', *transport_factory(None).cli_args
     )
 
     proc_sub_temperature = BackgroundChildProcess.cli(
-        'sub', '555.uavcan.si.sample.temperature.Scalar.1.0', '--count=3', '--format=JSON',
+        'sub', '555.uavcan.si.sample.temperature.Scalar.1.0', '--count=3', '--format=json',
         *transport_factory(None).cli_args
     )
 
@@ -50,7 +50,7 @@ def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
 
         '555.uavcan.si.sample.temperature.Scalar.1.0', '{kelvin: 123.456}',
 
-        '--count=3', '--period=0.1', '--priority=SLOW',
+        '--count=3', '--period=0.1', '--priority=slow',
         '--heartbeat-fields={vendor_specific_status_code: 54321}',
         *transport_factory(51).cli_args,
         timeout=10.0
@@ -103,16 +103,16 @@ def _unittest_slow_cli_pub_sub_anon(transport_factory: TransportFactory) -> None
     run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
     proc_sub_heartbeat = BackgroundChildProcess.cli(
-        '-v', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON', *transport_factory(None).cli_args  # Count unlimited
+        '-v', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=json', *transport_factory(None).cli_args  # Count unlimited
     )
 
     proc_sub_diagnostic_with_meta = BackgroundChildProcess.cli(
-        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON', '--with-metadata',
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=json', '--with-metadata',
         *transport_factory(None).cli_args,
     )
 
     proc_sub_diagnostic_no_meta = BackgroundChildProcess.cli(
-        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=JSON', *transport_factory(None).cli_args,
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=json', *transport_factory(None).cli_args,
     )
 
     time.sleep(3.0)     # Time to let the background processes finish initialization
