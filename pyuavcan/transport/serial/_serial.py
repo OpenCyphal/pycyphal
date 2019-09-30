@@ -47,13 +47,13 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     The serial transport is designed for basic raw byte-level low-speed serial links:
 
-    - UART, RS-232/485/422 (the recommended baud rates are: 115200, 921600, 3'000'000).
+    - UART, RS-232/485/422 (the recommended rates are: 115200 bps, 921600 bps, 3 Mbps, 10 Mbps, 100 Mbps).
     - USB CDC ACM.
 
     It is also suitable for raw transport log storage, because one-dimensional flat binary files are structurally
     similar to serial byte-level links.
 
-    The packet header is defined as follows (byte and bit ordering follow the DSDL specification:
+    The packet header is defined as follows (byte and bit ordering in this definition follow the DSDL specification:
     least significant byte first, most significant bit first)::
 
         uint8   version                 # Always zero. Discard the frame if not.
@@ -116,11 +116,9 @@ class SerialTransport(pyuavcan.transport.Transport):
     | Supported transfers| Unicast                  | Broadcast                 |
     +====================+==========================+===========================+
     |**Message**         | Yes                      | Yes                       |
-    +-----------+--------+--------------------------+---------------------------+
-    |           |Request | Yes                      |                           |
-    |**Service**+--------+--------------------------+ Banned by Specification   |
-    |           |Response| Yes                      |                           |
-    +-----------+--------+--------------------------+---------------------------+
+    +--------------------+--------------------------+---------------------------+
+    |**Service**         | Yes                      | Banned by Specification   |
+    +--------------------+--------------------------+---------------------------+
     """
 
     DEFAULT_MTU = 1024
@@ -141,6 +139,17 @@ class SerialTransport(pyuavcan.transport.Transport):
             In the latter case, the port will be constructed via :func:`serial.serial_for_url`
             (refer to the PySerial docs for the background).
             The new instance takes ownership of the port; when the instance is closed, its port will also be closed.
+            Examples:
+
+            - ``/dev/ttyACM0`` -- a regular serial port on GNU/Linux (USB CDC ACM in this example).
+            - ``COM9`` -- likewise, on Windows.
+            - ``/dev/serial/by-id/usb-Black_Sphere_Technologies_Black_Magic_Probe_B5DCABF5-if02`` -- a regular
+              USB CDC ACM port referenced by the device name and ID (GNU/Linux).
+            - ``hwgrep:///dev/serial/by-id/*Black_Magic_Probe*-if02`` -- glob instead of exact name.
+            - ``socket://localhost:50905`` -- a TCP/IP tunnel instead of a physical port.
+            - ``spy://COM3?file=dump.txt`` -- open a regular port and dump all data exchange into a text file.
+
+            Read the PySerial docs for more info.
 
         :param local_node_id: The node-ID to use. Can't be changed after initialization.
             None means that the transport will operate in the anonymous mode.

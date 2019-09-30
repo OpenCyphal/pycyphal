@@ -14,7 +14,7 @@ def udp_port_from_data_specifier(ds: DataSpecifier) -> int:
     """
     Maps the data specifier to the UDP port number.
 
-    For subjects, the UDP port number equals the subject-ID plus 2**14=16384.
+    For subjects, the UDP port number equals the subject-ID plus ``2**14 = 16384``.
     The offset is chosen so that UAVCAN ports do not conflict with the IANA-reserved range for ephemeral ports
     and commonly-used lower port numbers.
 
@@ -25,7 +25,7 @@ def udp_port_from_data_specifier(ds: DataSpecifier) -> int:
 
     >>> udp_port_from_data_specifier(MessageDataSpecifier(0))
     16384
-    >>> udp_port_from_data_specifier(MessageDataSpecifier(MessageDataSpecifier.SUBJECT_ID_MASK))
+    >>> udp_port_from_data_specifier(MessageDataSpecifier(32767))
     49151
     >>> udp_port_from_data_specifier(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.REQUEST))
     16382

@@ -55,24 +55,46 @@ class UDPTransport(pyuavcan.transport.Transport):
     Many versions of GNU/Linux, however, are not, but it can be fixed by manual reconfiguration:
     https://stackoverflow.com/questions/28573390/how-to-view-and-edit-the-ephemeral-port-range-on-linux.
 
-    The node-ID of a node is the value of :attr:`NODE_ID_BIT_LENGTH` least significant bits of its IP address.
-    Both IPv4 and IPv6 are supported with minimal differences, although IPv6 is not expected to be useful in
-    a vehicular network because virtually none of its advantages are relevant there,
-    and the increased overhead is detrimental to the network's latency and throughput.
-    Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value (i.e., outside of
-    the local subnet) is rejected.
-    If IPv6 is used, the flow-ID of UAVCAN packets is set to zero.
+    The node-ID of a node is the value of its host address (i.e., IP address with the subnet bits zeroed out);
+    the bits above the :attr:`NODE_ID_BIT_LENGTH`-th bit shall be zero::
 
-    The concept of anonymous transfer is not defined for UDP/IP; in this transport, in order to be able to
-    emit a transfer, the node shall have a valid node-ID value.
-    This means that an anonymous UAVCAN/UDP/IP node can only listen to broadcast
+        IPv4 address:   127.000.012.123/8
+        Subnet mask:    255.000.000.000
+        Host mask:      000.255.255.255
+                        \_/ \_________/
+                      subnet    host
+                     address   address
+                                 \____/
+                               node-ID=3195
+
+        IPv6 address:   fe80:0000:0000:0000:0000:0000:0000:0c7b%enp6s0/64
+        Subnet mask:    ffff:ffff:ffff:ffff:0000:0000:0000:0000
+        Host mask:      0000:0000:0000:0000:ffff:ffff:ffff:ffff
+                        \_________________/ \_________________/
+                          subnet address        host address
+                                                           \__/
+                                                        node-ID=3195
+
+    An IP address that does not match the above requirement cannot be mapped to a node-ID value.
+    Nodes that are configured with such IP addresses are considered anonymous.
+    Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value is rejected;
+    this behavior enables co-existence of UAVCAN/UDP with other UDP protocols on the same network.
+
+    The concept of anonymous transfer is not defined for UDP/IP;
+    in this transport, in order to be able to emit a transfer, the node shall have a valid node-ID value.
+    This means that an anonymous UAVCAN/UDP node can only listen to broadcast
     network traffic (i.e., can subscribe to subjects) but cannot transmit anything.
     If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
 
-    Applications relying on this transport implementation will be unable to detect a node-ID conflict on
-    the bus because this implementation discards all broadcast traffic originating from its own IP address.
-    This is a mere implementation detail resulting from the peculiarities of the Berkeley socket API.
-    Other implementations of this transport (particularly those for embedded systems) may not have this limitation.
+    Both IPv4 and IPv6 are supported with minimal differences, although IPv6 is not expected to be useful in
+    a vehicular network because virtually none of its advantages are relevant there,
+    and the increased overhead is detrimental to the network's latency and throughput.
+    If IPv6 is used, the flow-ID of UAVCAN packets is set to zero.
+
+    Applications relying on this particular transport implementation will be unable to detect a node-ID conflict on
+    the bus because the implementation discards all broadcast traffic originating from its own IP address.
+    This is a very environment-specific edge case resulting from certain peculiarities of the Berkeley socket API.
+    Other implementations of UAVCAN/UDP (particularly those for embedded systems) may not have this limitation.
 
     The datagram payload format is documented in :class:`UDPFrame`.
     Again, it is designed to be simple and low-overhead, which is not difficult considering that
@@ -98,9 +120,9 @@ class UDPTransport(pyuavcan.transport.Transport):
     the transport can be configured to repeat every outgoing service transfer a specified number of times,
     on the assumption that the probability of losing any given frame is uncorrelated (or weakly correlated)
     with that of its neighbors.
-    For instance, suppose a service transfer contains three frames, F0 to F2,
-    and the service transfer multiplication factor is two;
-    the resulting frame sequence would be as follows::
+    For instance, suppose that a service transfer contains three frames, F0 to F2,
+    and the service transfer multiplication factor is two,
+    then the resulting frame sequence would be as follows::
 
         F0      F1      F2      F0      F1      F2
         \_______________/       \_______________/
@@ -109,9 +131,9 @@ class UDPTransport(pyuavcan.transport.Transport):
 
         ------------------ time ------------------>
 
-    As shown on the diagram, if transmission timestamping is requested, only the first copy is timestamped.
+    As shown on the diagram, if the transmission timestamping is requested, only the first copy is timestamped.
     Further, any errors occurring during the transmission of redundant copies
-    may be silently ignored by the stack, provided that the main copy has been transmitted successfully.
+    may be silently ignored by the stack, provided that the main copy is transmitted successfully.
 
     The resulting behavior in the provided example is that the transport network may
     lose up to three unique frames without affecting the application.
@@ -140,11 +162,9 @@ class UDPTransport(pyuavcan.transport.Transport):
     | Supported transfers| Unicast                  | Broadcast                 |
     +====================+==========================+===========================+
     |**Message**         | Yes                      | Yes                       |
-    +-----------+--------+--------------------------+---------------------------+
-    |           |Request | Yes                      |                           |
-    |**Service**+--------+--------------------------+ Banned by Specification   |
-    |           |Response| Yes                      |                           |
-    +-----------+--------+--------------------------+---------------------------+
+    +--------------------+--------------------------+---------------------------+
+    |**Service**         | Yes                      | Banned by Specification   |
+    +--------------------+--------------------------+---------------------------+
     """
 
     #: By default, service transfer multiplication is disabled for UDP.
@@ -181,9 +201,11 @@ class UDPTransport(pyuavcan.transport.Transport):
             :class:`pyuavcan.transport.InvalidMediaConfigurationError`.
 
             If the specified IP address cannot be mapped to a valid node-ID, the local node will be anonymous.
-            An IP address will be impossible to map to a valid node-ID (resulting in the local node being
-            anonymous) if the address happens to be a broadcast address for the subnet (e.g., ``192.168.0.255/24``),
-            or if the value of the host bits exceeds the valid node-ID range (e.g., ``127.123.123.123/8``).
+            An IP address will be impossible to map to a valid node-ID if the address happens to be
+            the broadcast address for the subnet (e.g., ``192.168.0.255/24``),
+            or if the value of the host address exceeds the valid node-ID range (e.g.,
+            given IP address ``127.123.123.123/8``, the host address is 8092539,
+            which exceeds the range of valid node-ID values).
 
             If the local node is anonymous, any attempt to create an output session will fail with
             :class:`pyuavcan.transport.OperationNotDefinedForAnonymousNodeError`.
@@ -216,7 +238,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                 - ``127.0.0.1`` -- node-ID 1.
                 - ``127.0.0.255`` -- node-ID 255.
                 - ``127.0.15.255`` -- node-ID 4095.
-                - ``127.0.255.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
+                - ``127.123.123.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
                   All traffic from this address will be rejected as non-UAVCAN.
                   If used for local node, the local node will be anonymous.
                 - ``127.255.255.255`` -- the broadcast address; notice that this address lies outside of the

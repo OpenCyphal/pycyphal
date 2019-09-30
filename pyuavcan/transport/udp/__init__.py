@@ -12,11 +12,13 @@ is handled directly by the standard UDP/IP stack of the underlying operating sys
 Tooling
 +++++++
 
-Run UAVCAN networks on the local loopback interface (``127.x.x.x/8``, ``::1``).
+Run UAVCAN networks on the local loopback interface (``127.x.y.z/8``) or create virtual interfaces for testing.
 
 Use Wireshark for monitoring and inspection.
 
 Use netcat for trivial monitoring; e.g., listen to a UDP port like this: ``nc -ul 48469``.
+
+List all open UDP ports on the local machine: ``netstat -vpaun`` (GNU/Linux).
 
 
 Inheritance diagram
