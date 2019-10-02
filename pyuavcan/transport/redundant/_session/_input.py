@@ -52,10 +52,9 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         self._stat_errors = 0
 
     def _add_inferior(self, session: pyuavcan.transport.Session) -> None:
-        assert isinstance(session, pyuavcan.transport.InputSession), 'Internal error'
-        assert self._finalizer is not None, 'Internal logic error: the session was supposed to be unregistered'
-        assert session.specifier == self.specifier, 'Internal error'
-        assert session.payload_metadata == self.payload_metadata, 'Internal error'
+        assert isinstance(session, pyuavcan.transport.InputSession)
+        assert self._finalizer is not None, 'The session was supposed to be unregistered'
+        assert session.specifier == self.specifier and session.payload_metadata == self.payload_metadata
         if session not in self._inferiors:
             if self._tid_timeout is not None:
                 session.transfer_id_timeout = self._tid_timeout
@@ -63,10 +62,9 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
             self._inferiors.append(session)
 
     def _close_inferior(self, session: pyuavcan.transport.Session) -> None:
-        assert isinstance(session, pyuavcan.transport.InputSession), 'Internal error'
-        assert self._finalizer is not None, 'Internal logic error: the session was supposed to be unregistered'
-        assert session.specifier == self.specifier, 'Internal error'
-        assert session.payload_metadata == self.payload_metadata, 'Internal error'
+        assert isinstance(session, pyuavcan.transport.InputSession)
+        assert self._finalizer is not None, 'The session was supposed to be unregistered'
+        assert session.specifier == self.specifier and session.payload_metadata == self.payload_metadata
         try:
             self._inferiors.remove(session)
         except ValueError:
@@ -76,7 +74,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
 
     @property
     def inferiors(self) -> typing.Sequence[pyuavcan.transport.InputSession]:
-        return self._inferiors
+        return self._inferiors[:]
 
     async def receive_until(self, monotonic_deadline: float) -> typing.Optional[RedundantTransferFrom]:
         raise NotImplementedError
@@ -111,4 +109,13 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         raise NotImplementedError
 
     def close(self) -> None:
-        raise NotImplementedError
+        for s in self._inferiors:
+            try:
+                s.close()
+            except Exception as ex:
+                _logger.exception('%s could not close inferior %s: %s', self, s, ex)
+        self._inferiors.clear()
+
+        fin, self._finalizer = self._finalizer, None
+        if fin is not None:
+            fin()

@@ -90,10 +90,9 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         self._stat_drops = 0
 
     def _add_inferior(self, session: pyuavcan.transport.Session) -> None:
-        assert isinstance(session, pyuavcan.transport.OutputSession), 'Internal error'
-        assert self._finalizer is not None, 'Internal logic error: the session was supposed to be unregistered'
-        assert session.specifier == self.specifier, 'Internal error'
-        assert session.payload_metadata == self.payload_metadata, 'Internal error'
+        assert isinstance(session, pyuavcan.transport.OutputSession)
+        assert self._finalizer is not None, 'The session was supposed to be unregistered'
+        assert session.specifier == self.specifier and session.payload_metadata == self.payload_metadata
         if session not in self._inferiors:
             # Synchronize the feedback state.
             if self._feedback_handler is not None:
@@ -104,10 +103,9 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             self._inferiors.append(session)
 
     def _close_inferior(self, session: pyuavcan.transport.Session) -> None:
-        assert isinstance(session, pyuavcan.transport.OutputSession), 'Internal error'
-        assert self._finalizer is not None, 'Internal logic error: the session was supposed to be unregistered'
-        assert session.specifier == self.specifier, 'Internal error'
-        assert session.payload_metadata == self.payload_metadata, 'Internal error'
+        assert isinstance(session, pyuavcan.transport.OutputSession)
+        assert self._finalizer is not None, 'The session was supposed to be unregistered'
+        assert session.specifier == self.specifier and session.payload_metadata == self.payload_metadata
         try:
             self._inferiors.remove(session)
         except ValueError:
@@ -185,7 +183,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                 _logger.error('%s: Suppressed exceptions: %r', self, exceptions[1:])
             raise exceptions[0]
 
-        assert all(isinstance(x, bool) for x in out)
+        assert all(isinstance(x, bool) for x in out)  # If there were exceptions, they would have been thrown.
         return any(out)
 
     @property
@@ -215,11 +213,6 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         )
 
     def close(self) -> None:
-        """
-        Closes and detaches all inferior sessions.
-        If any of the sessions fail to close, an error message will be logged, but no exception will be raised.
-        The instance will no longer be usable afterward.
-        """
         for s in self._inferiors:
             try:
                 s.close()
@@ -240,7 +233,8 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             """
             if inferior_session not in self._inferiors:
                 _logger.warning('%s got unexpected feedback %s from %s which is not a registered inferior. '
-                                'The transport or its underlying software or hardware are probably misbehaving.',
+                                'The transport or its underlying software or hardware are probably misbehaving, '
+                                'or this inferior has just been removed.',
                                 self, fb, inferior_session)
                 return
 

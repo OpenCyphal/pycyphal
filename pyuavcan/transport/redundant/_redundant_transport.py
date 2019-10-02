@@ -31,6 +31,40 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
     This is a standard composite over a set of :class:`pyuavcan.transport.Transport`.
 
+    +-----------+---------------+---------------+---------------+---------------+
+    |           |  Transport 0  |  Transport 1  |      ...      |  Transport M  |
+    +===========+===============+===============+===============+===============+
+    | Session 0 |     S0T0      |     S0T1      |      ...      |     S0Tm      |
+    +-----------+---------------+---------------+---------------+---------------+
+    | Session 1 |     S1T0      |     S1T1      |      ...      |     S1Tm      |
+    +-----------+---------------+---------------+---------------+---------------+
+    |    ...    |      ...      |      ...      |      ...      |      ...      |
+    +-----------+---------------+---------------+---------------+---------------+
+    | Session N |     SnT0      |     SnT1      |      ...      |     SnTm      |
+    +-----------+---------------+---------------+---------------+---------------+
+
+    - Attachment/detachment of a transport is modeled as an addition/removal of a column.
+    - Construction/retirement of a session is modeled as an addition/removal of a row.
+
+    While the construction of a row or a column is in progress, the matrix resides in an inconsistent state.
+    If any error occurs in the process, the matrix is rolled back to the previous consistent state.
+
+    Existing redundant sessions retain validity across any changes in the matrix configuration.
+    Logic that relies on a redundant instance is completely shielded from any changes in the underlying transport
+    configuration, meaning that the entire underlying transport structure may be swapped out with a completely
+    different one without affecting the higher levels.
+    An extreme case of this feature is an inverted logic where a redundant transport is constructed
+    with zero inferior transports,
+    its session instances are configured, and the inferior transports are added later.
+
+    This is extremely useful for long-running applications that have to retain the presentation-level structure
+    across any changes in the transport configurations done on-the-fly without stopping the application.
+    An example of such application is a GUI tool where the user may want to switch an existing running setup
+    from one transport configuration to another without stopping it.
+
+    A redundant transport cannot be an inferior of itself,
+    although it can be an inferior of another redundant transport (which is unlikely to be practical).
+
     Stub::
 
         top   /|    /|    /|    /
@@ -56,11 +90,11 @@ class RedundantTransport(pyuavcan.transport.Transport):
     #: An inferior transport whose transfer-ID modulo is less than this value is expected to experience
     #: transfer-ID overflows routinely during its operation. Otherwise, the transfer-ID is not expected to
     #: overflow for centuries. Read https://forum.uavcan.org/t/alternative-transport-protocols/324.
-    MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD = 2 ** 48
+    MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD = int(2 ** 48)
 
     def __init__(self) -> None:
-        self._inferiors: typing.List[pyuavcan.transport.Transport] = []
-        self._sessions: typing.Dict[pyuavcan.transport.SessionSpecifier, RedundantSession] = {}
+        self._cols: typing.List[pyuavcan.transport.Transport] = []
+        self._rows: typing.Dict[pyuavcan.transport.SessionSpecifier, RedundantSession] = {}
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -69,7 +103,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         If there are no inferiors (i.e., if the instance is closed), the value is all-zeros.
         Beware that if the set of inferiors is changed, this value may also be changed.
         """
-        ipp = [t.protocol_parameters for t in self._inferiors] or [
+        ipp = [t.protocol_parameters for t in self._cols] or [
             pyuavcan.transport.ProtocolParameters(
                 transfer_id_modulo=0,
                 max_nodes=0,
@@ -88,12 +122,12 @@ class RedundantTransport(pyuavcan.transport.Transport):
         All inferiors run on the same event loop.
         If there are no inferiors, the value is sourced from :func:`asyncio.get_event_loop`.
         """
-        if self._inferiors:
-            out = self._inferiors[0].loop
-            for it in self._inferiors:
+        if self._cols:
+            out = self._cols[0].loop
+            for it in self._cols:
                 if it.loop is not out:
                     raise InconsistentInferiorConfigurationError(
-                        f'Redundant transports operate on different event loops: {[x.loop for x in self._inferiors]}'
+                        f'Redundant transports operate on different event loops: {[x.loop for x in self._cols]}'
                     )
             return out
         else:
@@ -105,14 +139,14 @@ class RedundantTransport(pyuavcan.transport.Transport):
         All inferiors share the same local node-ID.
         If there are no inferiors, the value is None (anonymous).
         """
-        if self._inferiors:
-            nid_set = set(x.local_node_id for x in self._inferiors)
+        if self._cols:
+            nid_set = set(x.local_node_id for x in self._cols)
             if len(nid_set) == 1:
                 out, = nid_set
                 return out
             else:
                 raise InconsistentInferiorConfigurationError(
-                    f'Redundant transports have different node-IDs: {[x.local_node_id for x in self._inferiors]}'
+                    f'Redundant transports have different node-IDs: {[x.local_node_id for x in self._cols]}'
                 )
         else:
             return None
@@ -120,78 +154,70 @@ class RedundantTransport(pyuavcan.transport.Transport):
     def get_input_session(self,
                           specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> RedundantInputSession:
-        raise NotImplementedError
+        out = self._get_session(
+            specifier,
+            lambda fin: RedundantInputSession(specifier,
+                                              payload_metadata,
+                                              self._is_tid_monotonic,
+                                              lambda: self.loop,
+                                              fin)
+        )
+        assert isinstance(out, RedundantInputSession)
+        return out
 
     def get_output_session(self,
                            specifier:        pyuavcan.transport.OutputSessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> RedundantOutputSession:
-        if specifier not in self._sessions:
-            def retire() -> None:
-                try:
-                    del self._sessions[specifier]
-                except LookupError:
-                    pass
-
-            ses = RedundantOutputSession(specifier, payload_metadata, lambda: self.loop, retire)
-            try:
-                for t in self._inferiors:
-                    # noinspection PyProtectedMember
-                    ses._add_inferior(self._construct_session(t, specifier, payload_metadata))
-            except Exception:
-                ses.close()
-                raise
-            assert specifier not in self._sessions[specifier]
-            self._sessions[specifier] = ses
-
-        out = self._sessions[specifier]
+        out = self._get_session(
+            specifier,
+            lambda fin: RedundantOutputSession(specifier,
+                                               payload_metadata,
+                                               lambda: self.loop,
+                                               fin)
+        )
         assert isinstance(out, RedundantOutputSession)
         return out
 
     def sample_statistics(self) -> pyuavcan.transport.TransportStatistics:
         return RedundantTransportStatistics(
-            inferiors=[t.sample_statistics() for t in self._inferiors]
+            inferiors=[t.sample_statistics() for t in self._cols]
         )
 
     @property
     def input_sessions(self) -> typing.Sequence[RedundantInputSession]:
-        return [s for s in self._sessions.values() if isinstance(s, RedundantInputSession)]
+        return [s for s in self._rows.values() if isinstance(s, RedundantInputSession)]
 
     @property
     def output_sessions(self) -> typing.Sequence[RedundantOutputSession]:
-        return [s for s in self._sessions.values() if isinstance(s, RedundantOutputSession)]
+        return [s for s in self._rows.values() if isinstance(s, RedundantOutputSession)]
 
     @property
     def descriptor(self) -> str:
-        return '<redundant>' + ''.join(t.descriptor for t in self._inferiors) + '</redundant>'
+        return '<redundant>' + ''.join(t.descriptor for t in self._cols) + '</redundant>'
 
     @property
     def inferiors(self) -> typing.Sequence[pyuavcan.transport.Transport]:
-        return self._inferiors[:]  # Return copy to prevent mutation
+        """
+        Read-only access to the list of inferior transports; ordering preserved.
+        """
+        return self._cols[:]  # Return copy to prevent mutation
 
     def attach_inferior(self, transport: pyuavcan.transport.Transport) -> None:
         """
         Adds a new transport to the redundant set.
         The new transport shall not be closed.
-        If the transport is already added, a :class:`ValueError` will be raised.
+        If the transport is already added or it is the redundant transport itself (recursive attachment),
+        a :class:`ValueError` will be raised.
+        If the new transport is not compatible with the other inferiors, a
+        :class:`InconsistentInferiorConfigurationError` will be raised.
         If an exception is raised while the setup of the new inferior is in progress,
         the operation will be rolled back to ensure state consistency.
         """
         self._validate_inferior(transport)
-        self._inferiors.append(transport)
+        self._cols.append(transport)
         try:
-            # Carefully create all session instances in the new inferior.
-            # If anything whatsoever goes wrong, just roll everything back and re-raise the exception.
-            for redundant_session in self._sessions.values():
-                inferior_session = self._construct_session(transport,
-                                                           redundant_session.specifier,
-                                                           redundant_session.payload_metadata)
-                try:  # noinspection PyProtectedMember
-                    redundant_session._add_inferior(inferior_session)
-                except Exception:
-                    # The inferior MUST be closed manually because in the case of failure it is not
-                    # registered in the redundant session.
-                    inferior_session.close()
-                    raise
+            for redundant_session in self._rows.values():
+                self._construct_inferior_session(transport, redundant_session)
         except Exception:
             self.detach_inferior(transport)  # Roll back to ensure consistent states.
             raise
@@ -203,13 +229,13 @@ class RedundantTransport(pyuavcan.transport.Transport):
         but the transport itself will not be (the caller will have to do that manually if desired).
         If there is no such transport, a :class:`ValueError` will be raised.
         """
-        if transport not in self._inferiors:
+        if transport not in self._cols:
             raise ValueError(f'{transport} is not an inferior of {self}')
-        self._inferiors.remove(transport)
+        self._cols.remove(transport)
 
         for inferior_session in (*transport.input_sessions, *transport.output_sessions):
             try:
-                redundant_session = self._sessions[inferior_session.specifier]
+                redundant_session = self._rows[inferior_session.specifier]
             except LookupError:
                 pass
             else:
@@ -222,31 +248,32 @@ class RedundantTransport(pyuavcan.transport.Transport):
     def close(self) -> None:
         """
         Detaches and closes all inferior transports and their sessions.
-        Upon completion, the current redundant transport instance will be returned into its original state (closed).
+        Upon completion, the session matrix will be returned into its original state (empty/closed).
         It can be un-closed back by adding new transports if needed (closing is reversible here).
+        Invoking this method on an empty matrix has no effect.
         """
-        for s in self._sessions.values():
+        for s in self._rows.values():
             try:
                 s.close()
             except Exception as ex:  # pragma: no cover
                 _logger.exception('%s could not close %s: %s', self, s, ex)
 
-        for t in self._inferiors:
+        for t in self._cols:
             try:
                 t.close()
             except Exception as ex:  # pragma: no cover
                 _logger.exception('%s could not close inferior %s: %s', self, t, ex)
 
-        self._inferiors.clear()
-        assert not self._sessions, 'Internal logic error'
+        self._cols.clear()
+        assert not self._rows, 'All sessions should have been unregistered'
 
     def _validate_inferior(self, transport: pyuavcan.transport.Transport) -> None:
         # If there are no other inferiors, we can accept anything.
-        if not self._inferiors:
+        if not self._cols:
             return
 
         # Prevent double-add.
-        if transport in self._inferiors:
+        if transport in self._cols:
             raise ValueError(f'{transport} is already an inferior of {self}')
 
         # Just out of abundance of paranoia.
@@ -266,29 +293,64 @@ class RedundantTransport(pyuavcan.transport.Transport):
             )
 
         # Ensure all inferiors use the same transfer-ID overflow policy.
-        tid_modulo = self.protocol_parameters.transfer_id_modulo
-        if tid_modulo >= self.MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD:
+        if self._is_tid_monotonic():
             if transport.protocol_parameters.transfer_id_modulo < self.MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD:
                 raise InconsistentInferiorConfigurationError(
                     f'The new inferior shall use monotonic transfer-ID counters in order to match the '
                     f'other inferiors in the redundant transport group'
                 )
         else:
+            tid_modulo = self.protocol_parameters.transfer_id_modulo
             if transport.protocol_parameters.transfer_id_modulo != tid_modulo:
                 raise InconsistentInferiorConfigurationError(
                     f'The transfer-ID modulo {transport.protocol_parameters.transfer_id_modulo} of the new '
                     f'inferior is not compatible with the other inferiors ({tid_modulo})'
                 )
 
+    def _get_session(self,
+                     specifier:       pyuavcan.transport.SessionSpecifier,
+                     session_factory: typing.Callable[[typing.Callable[[], None]],
+                                                      RedundantSession]) -> RedundantSession:
+        if specifier not in self._rows:
+            def retire() -> None:
+                try:
+                    del self._rows[specifier]
+                except LookupError:
+                    pass
+
+            ses = session_factory(retire)
+            try:
+                for t in self._cols:
+                    self._construct_inferior_session(t, ses)
+            except Exception:
+                ses.close()
+                raise
+            assert specifier not in self._rows
+            self._rows[specifier] = ses
+
+        return self._rows[specifier]
+
     @staticmethod
-    def _construct_session(transport:        pyuavcan.transport.Transport,
-                           specifier:        pyuavcan.transport.SessionSpecifier,
-                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> pyuavcan.transport.Session:
+    def _construct_inferior_session(transport: pyuavcan.transport.Transport, owner: RedundantSession) -> None:
         assert isinstance(transport, pyuavcan.transport.Transport)
-        assert isinstance(payload_metadata, pyuavcan.transport.PayloadMetadata)
-        if isinstance(specifier, pyuavcan.transport.InputSessionSpecifier):
-            return transport.get_input_session(specifier, payload_metadata)
-        elif isinstance(specifier, pyuavcan.transport.OutputSessionSpecifier):
-            return transport.get_output_session(specifier, payload_metadata)
+        if isinstance(owner, pyuavcan.transport.InputSession):
+            inferior = transport.get_input_session(owner.specifier, owner.payload_metadata)
+        elif isinstance(owner, pyuavcan.transport.OutputSession):
+            inferior = transport.get_output_session(owner.specifier, owner.payload_metadata)
         else:
-            assert False, 'Internal logic error'
+            assert False
+        assert isinstance(owner, RedundantSession)  # MyPy makes me miss static typing so much.
+        # If anything whatsoever goes wrong, just roll everything back and re-raise the exception.
+        try:
+            # noinspection PyProtectedMember
+            owner._add_inferior(inferior)
+        except Exception:
+            # The inferior MUST be closed manually because in the case of failure it is not registered
+            # in the redundant session.
+            inferior.close()
+            # noinspection PyProtectedMember
+            owner._close_inferior(inferior)
+            raise
+
+    def _is_tid_monotonic(self) -> bool:
+        return self.protocol_parameters.transfer_id_modulo >= self.MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD

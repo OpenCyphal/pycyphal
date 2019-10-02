@@ -26,7 +26,7 @@ class RedundantSessionStatistics(pyuavcan.transport.SessionStatistics):
 class RedundantSession(abc.ABC):
     @property
     @abc.abstractmethod
-    def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
         raise NotImplementedError
 
     @property
@@ -37,10 +37,18 @@ class RedundantSession(abc.ABC):
     @property
     @abc.abstractmethod
     def inferiors(self) -> typing.Sequence[pyuavcan.transport.Session]:
+        """
+        Read-only access to the list of inferiors; ordering preserved.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     def close(self) -> None:
+        """
+        Closes and detaches all inferior sessions.
+        If any of the sessions fail to close, an error message will be logged, but no exception will be raised.
+        The instance will no longer be usable afterward.
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
