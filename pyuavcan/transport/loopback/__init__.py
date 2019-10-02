@@ -7,3 +7,4 @@
 from ._loopback import LoopbackTransport as LoopbackTransport
 from ._input_session import LoopbackInputSession as LoopbackInputSession
 from ._output_session import LoopbackOutputSession as LoopbackOutputSession
+from ._output_session import LoopbackFeedback as LoopbackFeedback

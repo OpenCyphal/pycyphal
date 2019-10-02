@@ -113,12 +113,10 @@ class OutputSessionSpecifier(SessionSpecifier):
     +--------------------+--------------------------------------+---------------------------------------+
     |                    | Unicast                              | Broadcast                             |
     +====================+======================================+=======================================+
-    |**Message**         | Experimental, may be allowed in v1.x | Allowed by Specification              |
-    +-----------+--------+--------------------------------------+---------------------------------------+
-    |           |Request | Allowed by Specification             |                                       |
-    |**Service**+--------+--------------------------------------+ Banned by Specification               |
-    |           |Response| Allowed by Specification             |                                       |
-    +-----------+--------+--------------------------------------+---------------------------------------+
+    | **Message**        | Experimental, may be allowed in v1.x | Allowed by Specification              |
+    +--------------------+--------------------------------------+---------------------------------------+
+    | **Service**        | Allowed by Specification             | Banned by Specification               |
+    +--------------------+--------------------------------------+---------------------------------------+
     """
     def __post_init__(self) -> None:
         if isinstance(self.data_specifier, pyuavcan.transport.ServiceDataSpecifier) and self.remote_node_id is None:
@@ -204,7 +202,7 @@ class Session(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, specifier=self.specifier, payload_metadata=self.payload_metadata)
+        return pyuavcan.util.repr_attributes(self, self.specifier, self.payload_metadata)
 
 
 # noinspection PyAbstractClass

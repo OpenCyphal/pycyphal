@@ -31,17 +31,17 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
                  specifier:                 pyuavcan.transport.InputSessionSpecifier,
                  payload_metadata:          pyuavcan.transport.PayloadMetadata,
                  tid_monotonicity_provider: typing.Callable[[], bool],
-                 loop_provider:             typing.Callable[[], asyncio.AbstractEventLoop],
+                 loop:                      asyncio.AbstractEventLoop,
                  finalizer:                 typing.Callable[[], None]):
         self._specifier = specifier
         self._payload_metadata = payload_metadata
         self._is_tid_monotonic = tid_monotonicity_provider
-        self._loop_provider = loop_provider
+        self._loop = loop
         self._finalizer: typing.Optional[typing.Callable[[], None]] = finalizer
         assert isinstance(self._specifier, pyuavcan.transport.InputSessionSpecifier)
         assert isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata)
         assert isinstance(self._is_tid_monotonic(), bool)
-        assert isinstance(self._loop_provider(), asyncio.AbstractEventLoop)
+        assert isinstance(self._loop, asyncio.AbstractEventLoop)
         assert callable(self._finalizer)
 
         self._inferiors: typing.List[pyuavcan.transport.InputSession] = []

@@ -92,9 +92,14 @@ class RedundantTransport(pyuavcan.transport.Transport):
     #: overflow for centuries. Read https://forum.uavcan.org/t/alternative-transport-protocols/324.
     MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD = int(2 ** 48)
 
-    def __init__(self) -> None:
+    def __init__(self, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
+        """
+        :param loop: All inferiors will have to run on the same event loop.
+            If not provided, defaults to :func:`asyncio.get_event_loop`.
+        """
         self._cols: typing.List[pyuavcan.transport.Transport] = []
         self._rows: typing.Dict[pyuavcan.transport.SessionSpecifier, RedundantSession] = {}
+        self._loop = loop if loop is not None else asyncio.get_event_loop()
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -119,19 +124,10 @@ class RedundantTransport(pyuavcan.transport.Transport):
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
         """
-        All inferiors run on the same event loop.
-        If there are no inferiors, the value is sourced from :func:`asyncio.get_event_loop`.
+        All inferiors run on the same event loop, which is configured statically once when the redundant transport
+        is instantiated. The loop cannot be reassigned after instantiation.
         """
-        if self._cols:
-            out = self._cols[0].loop
-            for it in self._cols:
-                if it.loop is not out:
-                    raise InconsistentInferiorConfigurationError(
-                        f'Redundant transports operate on different event loops: {[x.loop for x in self._cols]}'
-                    )
-            return out
-        else:
-            return asyncio.get_event_loop()
+        return self._loop
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
@@ -159,7 +155,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
             lambda fin: RedundantInputSession(specifier,
                                               payload_metadata,
                                               self._is_tid_monotonic,
-                                              lambda: self.loop,
+                                              self._loop,
                                               fin)
         )
         assert isinstance(out, RedundantInputSession)
@@ -172,7 +168,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
             specifier,
             lambda fin: RedundantOutputSession(specifier,
                                                payload_metadata,
-                                               lambda: self.loop,
+                                               self._loop,
                                                fin)
         )
         assert isinstance(out, RedundantOutputSession)
@@ -268,9 +264,11 @@ class RedundantTransport(pyuavcan.transport.Transport):
         assert not self._rows, 'All sessions should have been unregistered'
 
     def _validate_inferior(self, transport: pyuavcan.transport.Transport) -> None:
-        # If there are no other inferiors, we can accept anything.
-        if not self._cols:
-            return
+        # Ensure all inferiors run on the same event loop.
+        if self.loop is not transport.loop:
+            raise InconsistentInferiorConfigurationError(
+                f'The inferior operates on a different event loop {transport.loop}, expected {self.loop}'
+            )
 
         # Prevent double-add.
         if transport in self._cols:
@@ -280,32 +278,28 @@ class RedundantTransport(pyuavcan.transport.Transport):
         if transport is self:
             raise ValueError(f'A redundant transport cannot be an inferior of itself')
 
-        # Ensure all inferiors run on the same event loop.
-        if self.loop is not transport.loop:
-            raise InconsistentInferiorConfigurationError(
-                f'The inferior operates on a different event loop {transport.loop}, expected {self.loop}'
-            )
-
-        # Ensure all inferiors have the same node-ID.
-        if self.local_node_id != transport.local_node_id:
-            raise InconsistentInferiorConfigurationError(
-                f'The inferior has a different node-ID {transport.local_node_id}, expected {self.local_node_id}'
-            )
-
-        # Ensure all inferiors use the same transfer-ID overflow policy.
-        if self._is_tid_monotonic():
-            if transport.protocol_parameters.transfer_id_modulo < self.MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD:
+        # If there are no other inferiors, no further checks are necessary.
+        if self._cols:
+            # Ensure all inferiors have the same node-ID.
+            if self.local_node_id != transport.local_node_id:
                 raise InconsistentInferiorConfigurationError(
-                    f'The new inferior shall use monotonic transfer-ID counters in order to match the '
-                    f'other inferiors in the redundant transport group'
+                    f'The inferior has a different node-ID {transport.local_node_id}, expected {self.local_node_id}'
                 )
-        else:
-            tid_modulo = self.protocol_parameters.transfer_id_modulo
-            if transport.protocol_parameters.transfer_id_modulo != tid_modulo:
-                raise InconsistentInferiorConfigurationError(
-                    f'The transfer-ID modulo {transport.protocol_parameters.transfer_id_modulo} of the new '
-                    f'inferior is not compatible with the other inferiors ({tid_modulo})'
-                )
+
+            # Ensure all inferiors use the same transfer-ID overflow policy.
+            if self._is_tid_monotonic():
+                if transport.protocol_parameters.transfer_id_modulo < self.MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD:
+                    raise InconsistentInferiorConfigurationError(
+                        f'The new inferior shall use monotonic transfer-ID counters in order to match the '
+                        f'other inferiors in the redundant transport group'
+                    )
+            else:
+                tid_modulo = self.protocol_parameters.transfer_id_modulo
+                if transport.protocol_parameters.transfer_id_modulo != tid_modulo:
+                    raise InconsistentInferiorConfigurationError(
+                        f'The transfer-ID modulo {transport.protocol_parameters.transfer_id_modulo} of the new '
+                        f'inferior is not compatible with the other inferiors ({tid_modulo})'
+                    )
 
     def _get_session(self,
                      specifier:       pyuavcan.transport.SessionSpecifier,

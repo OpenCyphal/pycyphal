@@ -105,6 +105,9 @@ class Timestamp:
         return decimal.Decimal(x) * _DECIMAL_NANO
 
     def __eq__(self, other: typing.Any) -> bool:
+        """
+        Performs an exact comparison of the timestamp components with nanosecond resolution.
+        """
         if isinstance(other, Timestamp):
             return self._system_ns == other._system_ns and self._monotonic_ns == other._monotonic_ns
         else:
