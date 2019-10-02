@@ -4,8 +4,23 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+"""
+Inheritance diagram
++++++++++++++++++++
+
+.. inheritance-diagram:: pyuavcan.transport.redundant._redundant_transport
+                         pyuavcan.transport.redundant._error
+                         pyuavcan.transport.redundant._session._base
+                         pyuavcan.transport.redundant._session._input
+                         pyuavcan.transport.redundant._session._output
+   :parts: 1
+"""
+
 from ._redundant_transport import RedundantTransport as RedundantTransport
 
-from ._redundant_session import RedundantSession as RedundantSession
-from ._redundant_session import RedundantOutputSession as RedundantOutputSession
-from ._redundant_session import RedundantInputSession as RedundantInputSession
+from ._session import RedundantSession as RedundantSession
+from ._session import RedundantInputSession as RedundantInputSession
+from ._session import RedundantOutputSession as RedundantOutputSession
+
+from ._session import RedundantSessionStatistics as RedundantSessionStatistics
+from ._session import RedundantFeedback as RedundantFeedback
