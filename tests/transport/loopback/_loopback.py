@@ -128,6 +128,23 @@ async def _unittest_loopback_transport() -> None:
         payload_bytes=len('Hello world!'),
     )
 
+    out_bc.exception = RuntimeError('EXCEPTION SUKA')
+    with pytest.raises(ValueError):
+        # noinspection PyTypeHints
+        out_bc.exception = 123  # type: ignore
+    with pytest.raises(RuntimeError, match='EXCEPTION SUKA'):
+        assert await out_bc.send_until(pyuavcan.transport.Transfer(
+            timestamp=pyuavcan.transport.Timestamp.now(),
+            priority=pyuavcan.transport.Priority.IMMEDIATE,
+            transfer_id=123,        # mod 32 = 27
+            fragmented_payload=[memoryview(b'Hello world!')],
+        ), tr.loop.time() + 1.0)
+    assert isinstance(out_bc.exception, RuntimeError)
+    out_bc.exception = None
+    assert out_bc.exception is None
+
+    assert None is await inp_42.receive_until(0)
+
     assert len(tr.input_sessions) == 2
     assert len(tr.output_sessions) == 2
     tr.close()
