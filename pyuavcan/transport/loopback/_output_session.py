@@ -41,6 +41,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         self._stats = pyuavcan.transport.SessionStatistics()
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._injected_exception: typing.Optional[Exception] = None
+        self._should_timeout = False
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
         self._feedback_handler = handler
@@ -52,7 +53,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         if self._injected_exception is not None:
             raise self._injected_exception
 
-        out = await self._router(transfer, monotonic_deadline)
+        out = False if self._should_timeout else await self._router(transfer, monotonic_deadline)
         if out:
             self._stats.transfers += 1
             self._stats.frames += 1
@@ -94,6 +95,14 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
             self._injected_exception = value
         else:
             raise ValueError(f'Bad exception: {value}')
+
+    @property
+    def should_timeout(self) -> bool:
+        return self._should_timeout
+
+    @should_timeout.setter
+    def should_timeout(self, value: bool) -> None:
+        self._should_timeout = bool(value)
 
 
 def _unittest_session() -> None:
