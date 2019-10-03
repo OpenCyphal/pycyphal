@@ -187,7 +187,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             if not self._inferiors and monotonic_deadline > self._loop.time():
                 try:
                     _logger.debug('%s has no inferiors; suspending the send method...', self)
-                    self._idle_send_future = asyncio.Future(loop=self._loop)
+                    self._idle_send_future = self._loop.create_future()
                     try:
                         await asyncio.wait_for(self._idle_send_future,
                                                timeout=monotonic_deadline - self._loop.time(),
