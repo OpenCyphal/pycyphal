@@ -60,6 +60,12 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
     """
     This is a standard composite over a set of :class:`pyuavcan.transport.OutputSession`.
     Every sent transfer is simply forked into each of the inferior sessions.
+    The results are consolidated into one as follows:
+
+    - If at least ONE inferior has succeeded, success is returned. Exceptions are logged as errors, if any.
+    - If ALL inferiors have raised exceptions, the exception from the first inferior is re-raised
+      and the rest are logged as errors.
+    - If ALL inferiors have timed out, the time-out indicator is returned (i.e., False).
     """
     def __init__(self,
                  specifier:        pyuavcan.transport.OutputSessionSpecifier,
@@ -105,7 +111,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             self._inferiors.append(session)
             # Unlock the pending transmission because now we have an inferior to work with.
             if self._idle_send_future is not None:
-                self._idle_send_future.done()
+                self._idle_send_future.set_result(None)
 
     def _close_inferior(self, session: pyuavcan.transport.Session) -> None:
         assert isinstance(session, pyuavcan.transport.OutputSession)
@@ -159,65 +165,77 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
           In the latter case, the transfer is transmitted via the new inferior(s) using the remaining time
           until the deadline.
 
-        - If at least one inferior succeeds, True is returned.
-          False is returned only if all redundant sessions fail to send the transfer.
+        - If at least one inferior succeeds, True is returned (logical OR).
+          If the other inferiors raise exceptions, they are logged as errors and suppressed.
 
-        - If any of the inferiors raises an exception, it is postponed until all other inferiors succeed or fail.
+        - If all inferiors raise exceptions, the exception from the first one is raised,
+          the rest are logged as errors and suppressed.
 
-        - If more than one inferior raises an exception, only one of them will be raised;
-          which one is raised is undefined. The other exceptions will be logged instead.
+        - If all inferiors time out, False is returned (logical OR).
+
+        In other words, the error handling strategy is optimistic: if one inferior reported success,
+        the call is assumed to have succeeded; best result is always returned.
         """
         if self._finalizer is None:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
 
         async with self._lock:  # Serialize access to the inferiors and the idle future.
-            self._stat_transfers += 1
-            self._stat_payload_bytes += sum(map(len, transfer.fragmented_payload))
-
             # This part is a bit tricky. If there are no inferiors, we have nowhere to send the transfer.
             # Instead of returning immediately, we hang out here until the deadline is expired hoping that
             # an inferior is added while we're waiting here.
             assert not self._idle_send_future
             if not self._inferiors and monotonic_deadline > self._loop.time():
-                _logger.debug('%s has no inferiors; suspending the send method...', self)
-                self._idle_send_future = asyncio.Future(loop=self._loop)
                 try:
-                    await asyncio.wait_for(self._idle_send_future,
-                                           timeout=monotonic_deadline - self._loop.time(),
-                                           loop=self._loop)
-                except asyncio.TimeoutError:
-                    pass
-                else:
-                    self._idle_send_future.result()  # Collect the empty result to prevent asyncio from complaining.
-                _logger.debug('%s send method unsuspended; available inferiors: %r; remaining time: %f',
-                              self, self._inferiors, monotonic_deadline - self._loop.time())
-            self._idle_send_future = None
+                    _logger.debug('%s has no inferiors; suspending the send method...', self)
+                    self._idle_send_future = asyncio.Future(loop=self._loop)
+                    try:
+                        await asyncio.wait_for(self._idle_send_future,
+                                               timeout=monotonic_deadline - self._loop.time(),
+                                               loop=self._loop)
+                    except asyncio.TimeoutError:
+                        pass
+                    else:
+                        self._idle_send_future.result()  # Collect the empty result to prevent asyncio from complaining.
+                    _logger.debug('%s send method unsuspended; available inferiors: %r; remaining time: %f',
+                                  self, self._inferiors, monotonic_deadline - self._loop.time())
+                finally:
+                    self._idle_send_future = None
+            assert not self._idle_send_future
 
             if not self._inferiors:
                 self._stat_drops += 1
                 return False    # Still nothing.
 
-            out = await asyncio.gather(
+            results = await asyncio.gather(
                 *[
                     ses.send_until(transfer, monotonic_deadline) for ses in self._inferiors
                 ],
                 loop=self._loop,
                 return_exceptions=True
             )
-            assert len(out) == len(self._inferiors)
-            exceptions = [ex for ex in out if isinstance(ex, Exception)]
+            assert results and len(results) == len(self._inferiors)
+            _logger.debug('%s send results: %s', self, results)
 
-            self._stat_drops += sum(1 for x in out if not x)
-            self._stat_errors += len(exceptions)
+            exceptions = [ex for ex in results if isinstance(ex, Exception)]
 
-        if exceptions:
-            if len(exceptions) > 1:
-                # This is because we can only raise one. All of them are counted in the stats, however.
-                _logger.error('%s: Suppressed exceptions: %r', self, exceptions[1:])
-            raise exceptions[0]
+            # Result consolidation logic as described in the doc.
+            if exceptions:
+                # Taking great efforts to make the error message very understandable to the user.
+                _logger.error(
+                    f'{self}: {len(exceptions)} of {len(results)} inferiors have failed: ' +
+                    ', '.join(f'{i}:{self._describe_send_result(r)}' for i, r in enumerate(results))
+                )
+                if len(exceptions) >= len(results):
+                    self._stat_errors += 1
+                    raise exceptions[0]
 
-        assert all(isinstance(x, bool) for x in out)  # If there were exceptions, they would have been thrown.
-        return any(out)
+            if any(x is True for x in results):
+                self._stat_transfers += 1
+                self._stat_payload_bytes += sum(map(len, transfer.fragmented_payload))
+                return True
+            else:
+                self._stat_drops += 1
+                return False
 
     @property
     def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
@@ -229,11 +247,11 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
 
     def sample_statistics(self) -> RedundantSessionStatistics:
         """
-        - ``transfers``     - the number of *redundant* (i.e., unique) transfers.
-        - ``frames``        - the total number of frames summed from all inferiors.
-        - ``payload_bytes`` - the number of payload bytes before redundant transfer replication.
-        - ``errors``        - the total number of exceptions thrown from the inferiors.
-        - ``drops``         - how many times an inferior was unable to complete transmission before the deadline.
+        - ``transfers``     - the number of redundant transfers where at least ONE inferior succeeded (success count).
+        - ``errors``        - the number of redundant transfers where ALL inferiors raised exceptions (failure count).
+        - ``drops``         - the number of redundant transfers where ALL inferiors timed out (timeout count).
+        - ``payload_bytes`` - the number of payload bytes in successful redundant transfers counted in ``transfers``.
+        - ``frames``        - the total number of frames summed from all inferiors (i.e., replicated frame count).
         """
         inferiors = [s.sample_statistics() for s in self._inferiors]
         return RedundantSessionStatistics(
@@ -283,17 +301,28 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
 
         inferior_session.enable_feedback(proxy)
 
+    @staticmethod
+    def _describe_send_result(result: typing.Union[bool, Exception]) -> str:
+        if isinstance(result, Exception):
+            return repr(result)
+        elif isinstance(result, bool):
+            return 'success' if result else 'timeout'
+        else:
+            assert False
+
 
 def _unittest_redundant_output() -> None:
     import time
     import pytest
     from pyuavcan.transport import Transfer, Timestamp, Priority, SessionStatistics, ResourceClosedError
+    from pyuavcan.transport import TransferFrom
     from pyuavcan.transport.loopback import LoopbackTransport, LoopbackFeedback
 
     loop = asyncio.get_event_loop()
     await_ = loop.run_until_complete
 
     spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
+    spec_rx = pyuavcan.transport.InputSessionSpecifier(spec.data_specifier, None)
     meta = pyuavcan.transport.PayloadMetadata(0x_deadbeef_deadbeef, 30 * 1024 * 1024)
 
     ts = Timestamp.now()
@@ -322,32 +351,44 @@ def _unittest_redundant_output() -> None:
     ))
     assert 1.0 < loop.time() - time_before < 5.0, 'The method should have returned in about two seconds.'
     assert ses.sample_statistics() == RedundantSessionStatistics(
-        transfers=1,
-        payload_bytes=3,
         drops=1,
     )
 
     # Create inferiors.
     tr_a = LoopbackTransport(111)
-    inf_a = tr_a.get_output_session(spec, meta)
     tr_b = LoopbackTransport(111)
+    inf_a = tr_a.get_output_session(spec, meta)
     inf_b = tr_b.get_output_session(spec, meta)
+    rx_a = tr_a.get_input_session(spec_rx, meta)
+    rx_b = tr_b.get_input_session(spec_rx, meta)
 
     # Begin transmission, then add an inferior while it is in progress.
-    send_future = ses.send_until(
-        Transfer(timestamp=ts,
-                 priority=Priority.IMMEDIATE,
-                 transfer_id=9876543210,
-                 fragmented_payload=[memoryview(b'def')]),
-        loop.time() + 1.0
-    )
-    # noinspection PyProtectedMember
-    ses._add_inferior(inf_a)
-    assert await_(send_future), 'Transmission should have succeeded'
+    async def add_inferior(inferior: pyuavcan.transport.OutputSession) -> None:
+        _logger.debug('Test: sleeping before adding the inferior...')
+        await asyncio.sleep(2.0)
+        _logger.debug('Test: adding the inferior...')
+        # noinspection PyProtectedMember
+        ses._add_inferior(inferior)
+        _logger.debug('Test: inferior has been added.')
+
+    assert await_(asyncio.gather(
+        # Start transmission here. It would stall for up to five seconds because no inferiors.
+        ses.send_until(
+            Transfer(timestamp=ts,
+                     priority=Priority.IMMEDIATE,
+                     transfer_id=9876543210,
+                     fragmented_payload=[memoryview(b'def')]),
+            loop.time() + 5.0
+        ),
+        # While the transmission is stalled, add one inferior with a two-second delay. It will unlock the stalled task.
+        add_inferior(inf_a),
+        # Then make sure that the transmission has actually taken place about after two seconds from the start.
+    )), 'Transmission should have succeeded'
+    assert 1.0 < loop.time() - time_before < 5.0, 'The method should have returned in about two seconds.'
     assert ses.sample_statistics() == RedundantSessionStatistics(
-        transfers=2,
+        transfers=1,
         frames=1,
-        payload_bytes=6,
+        payload_bytes=3,
         drops=1,
         inferiors=[
             SessionStatistics(
@@ -357,6 +398,11 @@ def _unittest_redundant_output() -> None:
             ),
         ],
     )
+    tf_rx = await_(rx_a.receive_until(loop.time() + 1))
+    assert isinstance(tf_rx, TransferFrom)
+    assert tf_rx.transfer_id == 9876543210
+    assert tf_rx.fragmented_payload == [memoryview(b'def')]
+    assert None is await_(rx_b.receive_until(loop.time() + .1))
 
     # Enable feedback.
     feedback: typing.List[RedundantFeedback] = []
@@ -369,9 +415,9 @@ def _unittest_redundant_output() -> None:
         loop.time() + 1.0
     ))
     assert ses.sample_statistics() == RedundantSessionStatistics(
-        transfers=3,
+        transfers=2,
         frames=2,
-        payload_bytes=12,
+        payload_bytes=9,
         drops=1,
         inferiors=[
             SessionStatistics(
@@ -389,6 +435,11 @@ def _unittest_redundant_output() -> None:
     assert isinstance(feedback[0].inferior_feedback, LoopbackFeedback)
     feedback.pop()
     assert not feedback
+    tf_rx = await_(rx_a.receive_until(loop.time() + 1))
+    assert isinstance(tf_rx, TransferFrom)
+    assert tf_rx.transfer_id == 555555555555
+    assert tf_rx.fragmented_payload == [memoryview(b'qwerty')]
+    assert None is await_(rx_b.receive_until(loop.time() + .1))
 
     # Add a new inferior and ensure that its feedback is auto-enabled!
     # noinspection PyProtectedMember
@@ -412,9 +463,9 @@ def _unittest_redundant_output() -> None:
         loop.time() + 1.0
     ))
     assert ses.sample_statistics() == RedundantSessionStatistics(
-        transfers=4,
+        transfers=3,
         frames=3 + 1,
-        payload_bytes=18,
+        payload_bytes=15,
         drops=1,
         inferiors=[
             SessionStatistics(
@@ -444,6 +495,14 @@ def _unittest_redundant_output() -> None:
     assert isinstance(feedback[0].inferior_feedback, LoopbackFeedback)
     feedback.pop()
     assert not feedback
+    tf_rx = await_(rx_a.receive_until(loop.time() + 1))
+    assert isinstance(tf_rx, TransferFrom)
+    assert tf_rx.transfer_id == 777777777777
+    assert tf_rx.fragmented_payload == [memoryview(b'fgsfds')]
+    tf_rx = await_(rx_b.receive_until(loop.time() + 1))
+    assert isinstance(tf_rx, TransferFrom)
+    assert tf_rx.transfer_id == 777777777777
+    assert tf_rx.fragmented_payload == [memoryview(b'fgsfds')]
 
     # Remove the first inferior.
     # noinspection PyProtectedMember
@@ -463,9 +522,9 @@ def _unittest_redundant_output() -> None:
                  fragmented_payload=[memoryview(b'hedgehog')]),
         loop.time() + 1.0
     ))
-    assert ses.sample_statistics().transfers == 5
+    assert ses.sample_statistics().transfers == 4
     # We don't check frames because this stat metric is computed quite clumsily atm, this may change later.
-    assert ses.sample_statistics().payload_bytes == 26
+    assert ses.sample_statistics().payload_bytes == 23
     assert ses.sample_statistics().drops == 1
     assert ses.sample_statistics().inferiors == [
         SessionStatistics(
@@ -482,6 +541,11 @@ def _unittest_redundant_output() -> None:
     assert isinstance(feedback[0].inferior_feedback, LoopbackFeedback)
     feedback.pop()
     assert not feedback
+    assert None is await_(rx_a.receive_until(loop.time() + 1))
+    tf_rx = await_(rx_b.receive_until(loop.time() + 1))
+    assert isinstance(tf_rx, TransferFrom)
+    assert tf_rx.transfer_id == 88888888888888
+    assert tf_rx.fragmented_payload == [memoryview(b'hedgehog')]
 
     # Disable the feedback.
     ses.disable_feedback()
@@ -495,9 +559,9 @@ def _unittest_redundant_output() -> None:
                  fragmented_payload=[memoryview(b'horse')]),
         loop.time() + 1.0
     ))
-    assert ses.sample_statistics().transfers == 6
+    assert ses.sample_statistics().transfers == 5
     # We don't check frames because this stat metric is computed quite clumsily atm, this may change later.
-    assert ses.sample_statistics().payload_bytes == 31
+    assert ses.sample_statistics().payload_bytes == 28
     assert ses.sample_statistics().drops == 1
     assert ses.sample_statistics().inferiors == [
         SessionStatistics(
@@ -507,8 +571,14 @@ def _unittest_redundant_output() -> None:
         ),
     ]
     assert not feedback
+    assert None is await_(rx_a.receive_until(loop.time() + 1))
+    tf_rx = await_(rx_b.receive_until(loop.time() + 1))
+    assert isinstance(tf_rx, TransferFrom)
+    assert tf_rx.transfer_id == 666666666666666
+    assert tf_rx.fragmented_payload == [memoryview(b'horse')]
 
     # Retirement.
+    assert not is_retired
     ses.close()
     assert is_retired
     # Make sure the inferiors have been closed.
@@ -528,3 +598,129 @@ def _unittest_redundant_output() -> None:
                      fragmented_payload=[memoryview(b'cat')]),
             loop.time() + 1.0
         ))
+
+    assert None is await_(rx_a.receive_until(loop.time() + 1))
+    assert None is await_(rx_b.receive_until(loop.time() + 1))
+
+
+def _unittest_redundant_output_exceptions() -> None:
+    import pytest
+    from pyuavcan.transport import Transfer, Timestamp, Priority, SessionStatistics
+    from pyuavcan.transport import TransferFrom
+    from pyuavcan.transport.loopback import LoopbackTransport
+
+    loop = asyncio.get_event_loop()
+    await_ = loop.run_until_complete
+
+    spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
+    spec_rx = pyuavcan.transport.InputSessionSpecifier(spec.data_specifier, None)
+    meta = pyuavcan.transport.PayloadMetadata(0x_deadbeef_deadbeef, 30 * 1024 * 1024)
+
+    ts = Timestamp.now()
+
+    is_retired = False
+
+    def retire() -> None:
+        nonlocal is_retired
+        is_retired = True
+
+    ses = RedundantOutputSession(spec, meta, loop=loop, finalizer=retire)
+    assert not is_retired
+    assert ses.specifier is spec
+    assert ses.payload_metadata is meta
+    assert not ses.inferiors
+    assert ses.sample_statistics() == RedundantSessionStatistics()
+
+    tr_a = LoopbackTransport(111)
+    tr_b = LoopbackTransport(111)
+    inf_a = tr_a.get_output_session(spec, meta)
+    inf_b = tr_b.get_output_session(spec, meta)
+    rx_a = tr_a.get_input_session(spec_rx, meta)
+    rx_b = tr_b.get_input_session(spec_rx, meta)
+
+    # noinspection PyProtectedMember
+    ses._add_inferior(inf_a)
+    # noinspection PyProtectedMember
+    ses._add_inferior(inf_b)
+
+    # Transmission with exceptions.
+    # If at least one transmission succeeds, the call succeeds.
+    inf_a.exception = RuntimeError('EXCEPTION SUKA')
+    assert await_(ses.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.FAST,
+                 transfer_id=444444444444,
+                 fragmented_payload=[memoryview(b'exception suka')]),
+        loop.time() + 1.0
+    ))
+    assert ses.sample_statistics() == RedundantSessionStatistics(
+        transfers=1,
+        frames=1,
+        payload_bytes=len('exception suka'),
+        errors=0,
+        drops=0,
+        inferiors=[
+            SessionStatistics(
+                transfers=0,
+                frames=0,
+                payload_bytes=0,
+            ),
+            SessionStatistics(
+                transfers=1,
+                frames=1,
+                payload_bytes=len('exception suka'),
+            ),
+        ],
+    )
+    assert None is await_(rx_a.receive_until(loop.time() + 1))
+    tf_rx = await_(rx_b.receive_until(loop.time() + 1))
+    assert isinstance(tf_rx, TransferFrom)
+    assert tf_rx.transfer_id == 444444444444
+    assert tf_rx.fragmented_payload == [memoryview(b'exception suka')]
+
+    # Transmission timeout.
+    # One times out, one raises an exception --> the result is timeout.
+    inf_b.should_timeout = True
+    assert not await_(ses.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.FAST,
+                 transfer_id=2222222222222,
+                 fragmented_payload=[memoryview(b'exception suka')]),
+        loop.time() + 1.0
+    ))
+    assert ses.sample_statistics().transfers == 1
+    assert ses.sample_statistics().payload_bytes == len('exception suka')
+    assert ses.sample_statistics().errors == 0
+    assert ses.sample_statistics().drops == 1
+    assert None is await_(rx_a.receive_until(loop.time() + 1))
+    assert None is await_(rx_b.receive_until(loop.time() + 1))
+
+    # Transmission with exceptions.
+    # If all transmissions fail, the call fails.
+    inf_b.exception = RuntimeError('EXCEPTION SUKA')
+    with pytest.raises(RuntimeError, match='EXCEPTION SUKA'):
+        assert await_(ses.send_until(
+            Transfer(timestamp=ts,
+                     priority=Priority.FAST,
+                     transfer_id=3333333333333,
+                     fragmented_payload=[memoryview(b'exception suka')]),
+            loop.time() + 1.0
+        ))
+    assert ses.sample_statistics().transfers == 1
+    assert ses.sample_statistics().payload_bytes == len('exception suka')
+    assert ses.sample_statistics().errors == 1
+    assert ses.sample_statistics().drops == 1
+    assert None is await_(rx_a.receive_until(loop.time() + 1))
+    assert None is await_(rx_b.receive_until(loop.time() + 1))
+
+    # Retirement.
+    assert not is_retired
+    ses.close()
+    assert is_retired
+    # Make sure the inferiors have been closed.
+    assert not tr_a.output_sessions
+    assert not tr_b.output_sessions
+    # Idempotency.
+    is_retired = False
+    ses.close()
+    assert not is_retired
