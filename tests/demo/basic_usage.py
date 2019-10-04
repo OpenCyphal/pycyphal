@@ -116,7 +116,7 @@ class DemoApplication:
             transport = pyuavcan.transport.can.CANTransport(media, local_node_id=42)
 
         else:
-            raise RuntimeError(f'Unrecognized interface kind: {interface_kind}')
+            raise RuntimeError(f'Unrecognized interface kind: {interface_kind}')  # pragma: no cover
 
         assert transport.local_node_id == 42  # Yup, the node-ID is configured.
 
