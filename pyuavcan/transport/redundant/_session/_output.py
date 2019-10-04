@@ -180,11 +180,15 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
 
         async with self._lock:  # Serialize access to the inferiors and the idle future.
+            # It is required to create a local copy to prevent disruption of the logic when
+            # the set of inferiors is changed in the background. Oh, Rust, where art thou.
+            inferiors = list(self._inferiors)
+
             # This part is a bit tricky. If there are no inferiors, we have nowhere to send the transfer.
             # Instead of returning immediately, we hang out here until the deadline is expired hoping that
             # an inferior is added while we're waiting here.
             assert not self._idle_send_future
-            if not self._inferiors and monotonic_deadline > self._loop.time():
+            if not inferiors and monotonic_deadline > self._loop.time():
                 try:
                     _logger.debug('%s has no inferiors; suspending the send method...', self)
                     self._idle_send_future = self._loop.create_future()
@@ -196,24 +200,26 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                         pass
                     else:
                         self._idle_send_future.result()  # Collect the empty result to prevent asyncio from complaining.
+                    # The set of inferiors may have been updated.
+                    inferiors = list(self._inferiors)
                     _logger.debug('%s send method unsuspended; available inferiors: %r; remaining time: %f',
-                                  self, self._inferiors, monotonic_deadline - self._loop.time())
+                                  self, inferiors, monotonic_deadline - self._loop.time())
                 finally:
                     self._idle_send_future = None
             assert not self._idle_send_future
 
-            if not self._inferiors:
+            if not inferiors:
                 self._stat_drops += 1
                 return False    # Still nothing.
 
             results = await asyncio.gather(
                 *[
-                    ses.send_until(transfer, monotonic_deadline) for ses in self._inferiors
+                    ses.send_until(transfer, monotonic_deadline) for ses in inferiors
                 ],
                 loop=self._loop,
                 return_exceptions=True
             )
-            assert results and len(results) == len(self._inferiors)
+            assert results and len(results) == len(inferiors)
             _logger.debug('%s send results: %s', self, results)
 
             exceptions = [ex for ex in results if isinstance(ex, Exception)]
@@ -222,8 +228,8 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             if exceptions:
                 # Taking great efforts to make the error message very understandable to the user.
                 _logger.error(
-                    f'{self}: {len(exceptions)} of {len(results)} inferiors have failed: ' +
-                    ', '.join(f'{i}:{self._describe_send_result(r)}' for i, r in enumerate(results))
+                    f'{self}: {len(exceptions)} of {len(results)} inferiors have failed: '
+                    + ', '.join(f'{i}:{self._describe_send_result(r)}' for i, r in enumerate(results))
                 )
                 if len(exceptions) >= len(results):
                     self._stat_errors += 1
@@ -252,6 +258,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         - ``drops``         - the number of redundant transfers where ALL inferiors timed out (timeout count).
         - ``payload_bytes`` - the number of payload bytes in successful redundant transfers counted in ``transfers``.
         - ``frames``        - the total number of frames summed from all inferiors (i.e., replicated frame count).
+          This value is invalidated when the set of inferiors is changed. The semantics may change later.
         """
         inferiors = [s.sample_statistics() for s in self._inferiors]
         return RedundantSessionStatistics(
