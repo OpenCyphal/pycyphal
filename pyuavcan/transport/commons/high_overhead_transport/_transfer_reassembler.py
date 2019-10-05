@@ -28,10 +28,11 @@ class TransferReassembler:
 
     Out-of-order frame reception is supported, and therefore the reassembler can be used with
     redundant interfaces directly, without preliminary frame deduplication procedures or explicit
-    interface index assignment.
-    Distantly relevant discussion: https://github.com/UAVCAN/specification/issues/8.
+    interface index assignment, provided that all involved redundant interfaces share the same MTU setting.
     OOO support includes edge cases where the first frame of a transfer is not received first and/or the last
     frame is not received last.
+
+    Distantly relevant discussion: https://github.com/UAVCAN/specification/issues/8.
 
     A multi-frame transfer shall not contain frames with empty payload.
     """
