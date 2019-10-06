@@ -154,7 +154,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
             specifier,
             lambda fin: RedundantInputSession(specifier,
                                               payload_metadata,
-                                              self._is_tid_monotonic,
+                                              self._get_tid_modulo,
                                               self._loop,
                                               fin)
         )
@@ -287,7 +287,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
                 )
 
             # Ensure all inferiors use the same transfer-ID overflow policy.
-            if self._is_tid_monotonic():
+            if self._get_tid_modulo() is None:
                 if transport.protocol_parameters.transfer_id_modulo < self.MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD:
                     raise InconsistentInferiorConfigurationError(
                         f'The new inferior shall use monotonic transfer-ID counters in order to match the '
@@ -346,5 +346,8 @@ class RedundantTransport(pyuavcan.transport.Transport):
             owner._close_inferior(inferior)
             raise
 
-    def _is_tid_monotonic(self) -> bool:
-        return self.protocol_parameters.transfer_id_modulo >= self.MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD
+    def _get_tid_modulo(self) -> typing.Optional[int]:
+        if self.protocol_parameters.transfer_id_modulo < self.MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD:
+            return self.protocol_parameters.transfer_id_modulo
+        else:
+            return None
