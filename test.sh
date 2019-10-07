@@ -14,6 +14,8 @@
 
 set -o nounset
 
+started_at=$(python3 -c 'import time; print(time.monotonic())')
+
 function die()
 {
     echo >&2 "FAILURE: $*"
@@ -129,5 +131,7 @@ pushd docs || die "Couldn't change directory"
 popd       || die "Couldn't change directory"
 
 # ---------------------------------------------------------------------------------------------------------------------
+
+python3 -c "import time; print(f'Done in {(time.monotonic() - $started_at) / 60:0.0f} minutes')"
 
 banner SUCCESS
