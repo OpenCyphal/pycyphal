@@ -92,8 +92,12 @@ seconds old are no longer used.
         elif len(trs) == 1:
             return trs[0]  # Non-redundant transport
         else:
-            # TODO: initialize a RedundantTransport!
-            raise NotImplementedError('Sorry, redundant transport construction is not yet implemented')
+            from pyuavcan.transport.redundant import RedundantTransport
+            rt = RedundantTransport()
+            for t in trs:
+                rt.attach_inferior(t)
+            assert rt.inferiors == trs
+            return rt
 
 
 def _evaluate_transport_expr(expression: str, context: typing.Dict[str, typing.Any]) -> pyuavcan.transport.Transport:

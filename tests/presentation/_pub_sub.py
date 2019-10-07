@@ -88,11 +88,13 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     assert transfer.transfer_id == 0
 
     stat = sub_heart.sample_statistics()
-    assert stat.transport_session.transfers == 1
-    assert stat.transport_session.frames == 1
+    # Remember that anonymous transfers over redundant transports are NOT deduplicated.
+    # Hence, to support the case of redundant transports, we use 'greater or equal' here.
+    assert stat.transport_session.transfers >= 1
+    assert stat.transport_session.frames >= 1
     assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 0
-    assert stat.messages == 1
+    assert stat.messages >= 1
 
     pres_a.close()
     pres_a.close()  # Double-close has no effect
@@ -148,7 +150,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     stat = sub_heart.sample_statistics()
     assert stat.transport_session.transfers == 1
-    assert stat.transport_session.frames == 1
+    assert stat.transport_session.frames >= 1  # 'greater' is needed to accommodate redundant transports.
     assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 0
     assert stat.messages == 1
@@ -196,7 +198,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     # Broken transfer
     stat = sub_record.sample_statistics()
     assert stat.transport_session.transfers == 1
-    assert stat.transport_session.frames == 1
+    assert stat.transport_session.frames >= 1  # 'greater' is needed to accommodate redundant transports.
     assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 0
     assert stat.messages == 1
@@ -211,7 +213,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     stat = sub_record.sample_statistics()
     assert stat.transport_session.transfers == 2
-    assert stat.transport_session.frames == 2
+    assert stat.transport_session.frames >= 2  # 'greater' is needed to accommodate redundant transports.
     assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 1
     assert stat.messages == 1

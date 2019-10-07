@@ -10,6 +10,8 @@ from ._subprocess import run_cli_tool
 
 
 def _unittest_trivial() -> None:
+    run_cli_tool('show-transport', timeout=2.0)
+
     with pytest.raises(subprocess.CalledProcessError):
         run_cli_tool(timeout=2.0)
 
