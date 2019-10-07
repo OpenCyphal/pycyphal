@@ -68,6 +68,16 @@ Please use one of the following options depending on your demo configuration:
   virtual CAN bus via SocketCAN (GNU/Linux systems only).
   Local node-ID 111.
 
+Redundant transports can be configured by specifying the ``--tr`` option more than once:
+
+- ``--tr="UDP('127.0.0.111/8')" --tr="Serial('socket://loopback:50905',111)"`` --
+  dissimilar double redundancy, UDP plus serial.
+
+- ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"``
+  ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan1',32),111)"``
+  ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan2',64),111)"`` --
+  triple redundant CAN bus, classic CAN with CAN FD.
+
 
 Running the application
 +++++++++++++++++++++++

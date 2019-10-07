@@ -31,8 +31,8 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
     When adding new transports, add them to the demo and update this factory accordingly.
     Don't forget about redundant configurations, too.
     """
-    # TODO: Add more transports when redundancy is supported.
     if sys.platform == 'linux':
+        # CAN
         yield _IfaceOption(
             demo_env_vars={'DEMO_INTERFACE_KIND': 'can'},
             make_cli_args=lambda nid: (  # The demo uses CAN 2.0! SocketCAN does not support nonuniform MTU well.
@@ -40,6 +40,17 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
             ),
         )
 
+        # TMR CAN
+        yield _IfaceOption(
+            demo_env_vars={'DEMO_INTERFACE_KIND': 'can_can_can'},
+            make_cli_args=lambda nid: (  # The MTU values are like in the demo otherwise SocketCAN may misbehave.
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan0",8),local_node_id={nid})',
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan1",32),local_node_id={nid})',
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan2",64),local_node_id={nid})',
+            ),
+        )
+
+    # Serial
     yield _IfaceOption(
         demo_env_vars={'DEMO_INTERFACE_KIND': 'serial'},
         make_cli_args=lambda nid: (
@@ -47,12 +58,26 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
         ),
     )
 
+    # UDP
     yield _IfaceOption(
         demo_env_vars={'DEMO_INTERFACE_KIND': 'udp'},
         make_cli_args=lambda nid: (
             (f'--tr=UDP("127.0.0.{nid}/8")', )      # Regular node
             if nid is not None else
             (f'--tr=UDP("127.255.255.255/8")', )    # Anonymous node
+        ),
+    )
+
+    # DMR UDP+Serial
+    yield _IfaceOption(
+        demo_env_vars={'DEMO_INTERFACE_KIND': 'udp_serial'},
+        make_cli_args=lambda nid: (
+            (
+                f'--tr=UDP("127.0.0.{nid}/8")'          # Regular node
+                if nid is not None else
+                f'--tr=UDP("127.255.255.255/8")'        # Anonymous node
+            ),
+            f'--tr=Serial("socket://localhost:50905",local_node_id={nid})',
         ),
     )
 

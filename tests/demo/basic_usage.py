@@ -19,6 +19,7 @@ import pyuavcan.transport.can
 import pyuavcan.transport.can.media.socketcan
 import pyuavcan.transport.serial
 import pyuavcan.transport.udp
+import pyuavcan.transport.redundant
 
 # We will need a directory to store the generated Python packages in.
 #
@@ -114,6 +115,31 @@ class DemoApplication:
             # Here we select CAN 2.0 by setting MTU=8 bytes. We can switch to CAN FD by simply increasing the MTU.
             media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=8)
             transport = pyuavcan.transport.can.CANTransport(media, local_node_id=42)
+
+        elif interface_kind == 'can_can_can':
+            # One of the selling points of UAVCAN is the built-in support for modular redundancy.
+            # In this section, we set up a triply modular redundant (TMR) CAN bus.
+            transport = pyuavcan.transport.redundant.RedundantTransport()
+            # Like vcan0, this case requires vcan1 and vcan2 to be available as well.
+            media_0 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f'vcan0', mtu=8)
+            media_1 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f'vcan1', mtu=32)
+            media_2 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f'vcan2', mtu=64)
+            # All transports in a redundant group MUST share the same node-ID.
+            transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_0, local_node_id=42))
+            transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_1, local_node_id=42))
+            transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_2, local_node_id=42))
+            assert len(transport.inferiors) == 3  # Yup, it's a triply redundant transport.
+
+        elif interface_kind == 'udp_serial':
+            # UAVCAN supports dissimilar transport redundancy for safety-critical/high-reliability systems.
+            # In this example, we set up a transport that operates over UDP and serial concurrently.
+            # This is just an example, however. Major advantages of dissimilar redundant architectures
+            # may be observed with wired+wireless links used concurrently; see https://forum.uavcan.org/t/557.
+            # All transports in a redundant group MUST share the same node-ID.
+            transport = pyuavcan.transport.redundant.RedundantTransport()
+            transport.attach_inferior(pyuavcan.transport.udp.UDPTransport('127.0.0.42/8'))
+            transport.attach_inferior(pyuavcan.transport.serial.SerialTransport('socket://localhost:50905',
+                                                                                local_node_id=42))
 
         else:
             raise RuntimeError(f'Unrecognized interface kind: {interface_kind}')  # pragma: no cover
