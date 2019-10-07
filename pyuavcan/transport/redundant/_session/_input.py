@@ -111,13 +111,13 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
     @property
     def transfer_id_timeout(self) -> float:
         """
-        This is the MAXIMUM transfer-ID timeout value from inferiors.
+        This is the maximum transfer-ID timeout value from all inferiors.
         The value is zero if there are no inferiors.
         """
         if self._inferiors:
             return max(x.transfer_id_timeout for x in self._inferiors)
         else:
-            return 0.0  # No inferiors.
+            return 0.0
 
     @transfer_id_timeout.setter
     def transfer_id_timeout(self, value: float) -> None:
@@ -169,10 +169,12 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
     @property
     def _deduplicator(self) -> Deduplicator:
         if self._maybe_deduplicator is None:
-            if self._get_tid_modulo() is None:
+            tid_modulo = self._get_tid_modulo()
+            if tid_modulo is None:
                 self._maybe_deduplicator = MonotonicDeduplicator()
             else:
-                self._maybe_deduplicator = CyclicDeduplicator()
+                assert 0 < tid_modulo < 2 ** 56, 'Sanity check'
+                self._maybe_deduplicator = CyclicDeduplicator(tid_modulo)
         return self._maybe_deduplicator
 
     async def _receive_into_backlog(self, monotonic_deadline: float) -> None:

@@ -248,7 +248,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         It can be un-closed back by adding new transports if needed (closing is reversible here).
         Invoking this method on an empty matrix has no effect.
         """
-        for s in self._rows.values():
+        for s in list(self._rows.values()):
             try:
                 s.close()
             except Exception as ex:  # pragma: no cover

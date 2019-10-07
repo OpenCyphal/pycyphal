@@ -132,11 +132,11 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         return LoopbackTransportStatistics()
 
     @property
-    def input_sessions(self) -> typing.Sequence[pyuavcan.transport.InputSession]:
+    def input_sessions(self) -> typing.Sequence[LoopbackInputSession]:
         return list(self._input_sessions.values())
 
     @property
-    def output_sessions(self) -> typing.Sequence[pyuavcan.transport.OutputSession]:
+    def output_sessions(self) -> typing.Sequence[LoopbackOutputSession]:
         return list(self._output_sessions.values())
 
     @property

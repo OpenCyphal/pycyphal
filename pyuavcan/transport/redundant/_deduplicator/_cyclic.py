@@ -11,7 +11,9 @@ from ._base import Deduplicator
 
 
 class CyclicDeduplicator(Deduplicator):
-    def __init__(self) -> None:
+    def __init__(self, transfer_id_modulo: int) -> None:
+        self._tid_modulo = int(transfer_id_modulo)
+        assert self._tid_modulo > 0
         self._remote_states: typing.List[typing.Optional[_RemoteState]] = []
 
     def should_accept_transfer(self,
@@ -44,6 +46,9 @@ class CyclicDeduplicator(Deduplicator):
         iface_switch_allowed = time_delta > transfer_id_timeout
         if not iface_switch_allowed and state.iface_index != iface_index:
             return False
+
+        # TODO: The TID modulo setting is not currently used yet.
+        # TODO: It may be utilized later to implement faster iface fallback.
 
         # Either we're on the same interface or (the interface is new and the current one seems to be down).
         state.iface_index = iface_index
