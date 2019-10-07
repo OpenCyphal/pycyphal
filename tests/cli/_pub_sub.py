@@ -132,7 +132,9 @@ def _unittest_slow_cli_pub_sub_anon(transport_factory: TransportFactory) -> None
         diagnostics = list(json.loads(s)
                            for s in proc_sub_diagnostic_with_meta.wait(1.0, interrupt=True)[1].splitlines())
         print('diagnostics:', diagnostics)
-        assert len(diagnostics) == 2
+        # Remember that anonymous transfers over redundant transports are NOT deduplicated.
+        # Hence, to support the case of redundant transports, we use 'greater or equal' here.
+        assert len(diagnostics) >= 2
         for m in diagnostics:
             assert 'nominal' in m['32760']['_metadata_']['priority'].lower()
             assert m['32760']['_metadata_']['transfer_id'] >= 0

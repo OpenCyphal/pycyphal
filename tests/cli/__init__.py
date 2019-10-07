@@ -32,6 +32,16 @@ def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:
             can_transmit=True,
         )
 
+        # Redundant CAN via SocketCAN
+        yield lambda nid: TransportConfig(
+            cli_args=(
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan0",8),local_node_id={nid})',
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan1",32),local_node_id={nid})',
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan2",64),local_node_id={nid})',
+            ),
+            can_transmit=True,
+        )
+
     # Serial via TCP/IP tunnel (emulation)
     from tests.transport.serial import VIRTUAL_BUS_URI
     yield lambda nid: TransportConfig(
@@ -44,8 +54,17 @@ def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:
         cli_args=(f'--tr=UDP("127.0.0.{nid}/8")', ),
         can_transmit=True,
     ) if nid is not None else TransportConfig(
-        cli_args=(f'--tr=UDP("127.255.255.255/8")', ),
+        cli_args=('--tr=UDP("127.255.255.255/8")', ),
         can_transmit=False,
+    )
+
+    # Redundant UDP+Serial. The UDP transport does not support anonymous transfers.
+    yield lambda nid: TransportConfig(
+        cli_args=(
+            f'--tr=Serial("{VIRTUAL_BUS_URI}",local_node_id={nid})',
+            (f'--tr=UDP("127.0.0.{nid}/8")' if nid is not None else '--tr=UDP("127.255.255.255/8")'),
+        ),
+        can_transmit=nid is not None,
     )
 
 

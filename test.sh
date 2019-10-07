@@ -27,10 +27,13 @@ function banner()
     local fill_seq=$(seq 1 $((${#text} + 2)))
     [[ -t 0 && -t 1 ]] && printf >&2 '\033[1;36m'
     printf >&2 '+'
+    # shellcheck disable=SC2086
     printf >&2 '%.0s-' $fill_seq
     printf >&2 '+\n| %s |\n+' "$text"
+    # shellcheck disable=SC2086
     printf >&2 '%.0s-' $fill_seq
     printf >&2 '+\n'
+    # shellcheck disable=SC2015
     [[ -t 0 && -t 1 ]] && printf >&2 '\033[0m' || :
 }
 
@@ -65,11 +68,15 @@ pip install -r requirements.txt || die "Could not install dependencies"
 sudo modprobe can
 sudo modprobe can_raw
 sudo modprobe vcan
-sudo ip link add dev vcan0 type vcan
-sudo ip link set up vcan0
-sudo ifconfig vcan0 down
-sudo ip link set vcan0 mtu 72        || die "Could not configure MTU on vcan0"
-sudo ifconfig vcan0 up               || die "Could not bring up vcan0"
+for index in 0 1 2  # Multiple interfaces are needed for testing redundant transports.
+do
+    iface="vcan$index"
+    sudo ip link add dev $iface type vcan
+    sudo ip link set up $iface
+    sudo ifconfig $iface down
+    sudo ip link set $iface mtu 72        || die "Could not configure MTU on $iface"
+    sudo ifconfig $iface up               || die "Could not bring up $iface"
+done
 
 # TCP broker for serial port testing.
 ncat --broker --listen -p 50905 &>/dev/null &
