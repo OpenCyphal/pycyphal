@@ -9,12 +9,6 @@ import pyuavcan.transport
 
 
 class Deduplicator(abc.ABC):
-    """
-    Stub::
-
-        [Frame] *   --->   1 [Redundant transfer] *   --->   1 [Unique transfer]
-    """
-
     @abc.abstractmethod
     def should_accept_transfer(self,
                                iface_index:         int,

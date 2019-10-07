@@ -19,11 +19,24 @@ class RedundantSessionStatistics(pyuavcan.transport.SessionStatistics):
     """
     Aggregate statistics for all inferior sessions in a redundant group.
     """
-    #: The ordering is guaranteed to match that of the inferiors.
+    #: The ordering is guaranteed to match that of :attr:`RedundantSession.inferiors`.
     inferiors: typing.List[pyuavcan.transport.SessionStatistics] = dataclasses.field(default_factory=list)
 
 
 class RedundantSession(abc.ABC):
+    """
+    The base for all redundant session instances.
+
+    A redundant session may be constructed even if the redundant transport itself has no inferiors.
+    When a new inferior transport is attached/detached to/from the redundant set,
+    dependent session instances are automatically reconfigured, transparently to the user.
+
+    The higher layers of the protocol stack are therefore shielded from any changes made to the stack
+    below the redundant transport instance; existing sessions and other instances are never invalidated.
+    This guarantee allows one to construct applications whose underlying transport configuration
+    can be changed at runtime.
+    """
+
     @property
     @abc.abstractmethod
     def specifier(self) -> pyuavcan.transport.SessionSpecifier:
@@ -38,7 +51,8 @@ class RedundantSession(abc.ABC):
     @abc.abstractmethod
     def inferiors(self) -> typing.Sequence[pyuavcan.transport.Session]:
         """
-        Read-only access to the list of inferiors; ordering preserved.
+        Read-only access to the list of inferiors.
+        The ordering is guaranteed to match that of :attr:`RedundantTransport.inferiors`.
         """
         raise NotImplementedError
 
