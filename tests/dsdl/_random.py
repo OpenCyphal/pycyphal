@@ -33,7 +33,7 @@ _MAX_RANDOM_SERIALIZED_REPRESENTATION_FRAGMENTS = 1000
 _MIN_RANDOM_SAMPLES_FOR_STATISTICAL_CORRECTNESS_CHECK = 50
 # Set this environment variable to a lower value to speed up the test (random tests take a very long time to run).
 _NUM_RANDOM_SAMPLES = int(os.environ.get('PYUAVCAN_TEST_NUM_RANDOM_SAMPLES',
-                                         _MIN_RANDOM_SAMPLES_FOR_STATISTICAL_CORRECTNESS_CHECK * 2))
+                                         _MIN_RANDOM_SAMPLES_FOR_STATISTICAL_CORRECTNESS_CHECK))
 
 
 _logger = logging.getLogger(__name__)
