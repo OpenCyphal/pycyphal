@@ -74,7 +74,7 @@ def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
     print('diagnostics:', *diagnostics, sep='\n\t')
     print('temperatures:', *temperatures, sep='\n\t')
 
-    assert len(heartbeats) in (2, 3, 4)    # Fuzzy because the last one might be dropped
+    assert 2 <= len(heartbeats) <= 6
     for m in heartbeats:
         assert 'slow' in m['32085']['_metadata_']['priority'].lower()
         assert m['32085']['_metadata_']['transfer_id'] >= 0
