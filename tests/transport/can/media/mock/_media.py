@@ -35,7 +35,7 @@ class MockMedia(_media.Media):
 
     @property
     def interface_name(self) -> str:
-        return 'mock'
+        return f'mock@{id(self._peers):08x}'
 
     @property
     def mtu(self) -> int:
@@ -141,7 +141,7 @@ class MockMedia(_media.Media):
 
     @staticmethod
     def list_available_interface_names() -> typing.Iterable[str]:
-        return ['mock']  # pragma: no cover
+        return []  # pragma: no cover
 
     @staticmethod
     def _make_dead_filter() -> _media.FilterConfiguration:
@@ -161,7 +161,7 @@ async def _unittest_can_mock_media() -> None:
     assert me.mtu == 64
     assert me.number_of_acceptance_filters == 3
     assert not me.automatic_retransmission_enabled
-    assert str(me) == "MockMedia(interface_name='mock', mtu=64)"
+    assert str(me) == f"MockMedia(interface_name='mock@{id(peers):08x}', mtu=64)"
 
     me_collector = FrameCollector()
     me.start(me_collector.give, False)
