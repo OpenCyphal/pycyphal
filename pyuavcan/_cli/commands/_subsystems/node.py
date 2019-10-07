@@ -176,10 +176,14 @@ Default: %(default)s
 
     @staticmethod
     def _register_emitted_transfer_id_map_save_at_exit(presentation: pyuavcan.presentation.Presentation) -> None:
+        # We MUST sample the configuration early because if this is a redundant transport it may reset its
+        # reported descriptor and local node-ID back to default after close().
+        local_node_id = presentation.transport.local_node_id
+        descriptor = presentation.transport.descriptor
+
         def do_save_at_exit() -> None:
-            if presentation.transport.local_node_id is not None:
-                file_path = _get_emitted_transfer_id_file_path(presentation.transport.local_node_id,
-                                                               presentation.transport.descriptor)
+            if local_node_id is not None:
+                file_path = _get_emitted_transfer_id_file_path(local_node_id, descriptor)
                 tmp_path = f'{file_path}.{os.getpid()}.{time.time_ns()}.tmp'
                 _logger.debug('Emitted TID map save: %s --> %s', tmp_path, file_path)
                 with open(tmp_path, 'wb') as f:
@@ -192,6 +196,8 @@ Default: %(default)s
                     os.unlink(tmp_path)
                 except OSError:
                     pass
+            else:
+                _logger.debug('Emitted TID map NOT saved because the transport instance is anonymous')
 
         atexit.register(do_save_at_exit)
 
