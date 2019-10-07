@@ -303,7 +303,7 @@ def _unittest_redundant_input_cyclic() -> None:
     ))
     assert 1.0 < loop.time() - time_before < 5.0, 'The method should have returned in about two seconds.'
     assert isinstance(tr, RedundantTransferFrom)
-    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() - 1e-3)
+    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 1
     assert tr.fragmented_payload == [memoryview(b'abc')]
@@ -335,7 +335,7 @@ def _unittest_redundant_input_cyclic() -> None:
 
     tr = await_(ses.receive_until(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
-    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() - 1e-3)
+    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 2
     assert tr.fragmented_payload == [memoryview(b'def')]
@@ -343,7 +343,7 @@ def _unittest_redundant_input_cyclic() -> None:
 
     tr = await_(ses.receive_until(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
-    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() - 1e-3)
+    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 3
     assert tr.fragmented_payload == [memoryview(b'ghi')]
@@ -381,7 +381,7 @@ def _unittest_redundant_input_cyclic() -> None:
                                   loop.time() + 1.0))
     tr = await_(ses.receive_until(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
-    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() - 1e-3)
+    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 1
     assert tr.fragmented_payload == [memoryview(b'acc')]
@@ -472,14 +472,14 @@ def _unittest_redundant_input_monotonic() -> None:
 
     tr = await_(ses.receive_until(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
-    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() - 1e-3)
+    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 2
     assert tr.fragmented_payload == [memoryview(b'def')]
 
     tr = await_(ses.receive_until(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
-    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() - 1e-3)
+    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 3
     assert tr.fragmented_payload == [memoryview(b'ghi')]
@@ -494,7 +494,7 @@ def _unittest_redundant_input_monotonic() -> None:
                                   loop.time() + 1.0))
     tr = await_(ses.receive_until(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
-    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() - 1e-3)
+    assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 1
     assert tr.fragmented_payload == [memoryview(b'acc')]
