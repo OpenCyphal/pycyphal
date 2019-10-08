@@ -19,11 +19,14 @@ PyUAVCAN aims to support all features and transport layers of UAVCAN,
 be portable across all major platforms supporting Python,
 and be extensible to permit low-effort experimentation and testing of new protocol capabilities.
 
-It is designed to support **GNU/Linux**, **MS Windows**, and **OS X** as first-class target platforms.
+It is designed to support **GNU/Linux**, **MS Windows**, and **macOS** as first-class target platforms.
+However, the library does not rely on any platform-specific capabilities,
+so it should be usable with other systems as well.
 
 [UAVCAN](https://uavcan.org) is an open lightweight data bus standard designed for reliable intravehicular
-communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
-The acronym stands for *Uncomplicated Application-level Vehicular Communication And Networking*.
+communication in aerospace and robotic applications via
+CAN bus, Ethernet, RS-485, IEEE 802.15.4, and other robust transports.
+The acronym *UAVCAN* stands for ***Uncomplicated Application-level Vehicular Communication And Networking***.
 
 <big>**READ THE DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**</big>
 
