@@ -8,28 +8,23 @@
 Redundant pseudo-transport overview
 +++++++++++++++++++++++++++++++++++
 
-Basic principles
-~~~~~~~~~~~~~~~~
-
 Native support for redundant transports is one of the core features of UAVCAN.
 The class :class:`RedundantTransport` implements this feature within PyUAVCAN.
 It works by aggregating zero or more instances of :class:`pyuavcan.transport.Transport`
-into a single *composite* instance that implements the redundant transport management logic
-as defined in the UAVCAN specification:
+into a *composite* that implements the redundant transport management logic as defined in the UAVCAN specification:
 
 - Every outgoing transfer is replicated into all of the available redundant interfaces.
 - Incoming transfers are deduplicated so that the local node receives at most one copy of each unique transfer
   received from the bus.
 
-It should be noted that there exist two fundamentally different approaches to implementing transport-layer redundancy.
-The differences are confined to the specifics of a particular implementation,
-they are not manifested on the bus
-(i.e., nodes exhibit identical behavior on the bus regardless of the chosen strategy):
+There exist two approaches to implementing transport-layer redundancy.
+The differences are confined to the specifics of a particular implementation, they are not manifested on the bus
+-- nodes exhibit identical behavior regardless of the chosen strategy:
 
 - **Frame-level redundancy.**
   In this case, multiple redundant interfaces are managed by the same transport state machine.
   This strategy is more efficient in the sense of computing power and memory resources required to
-  accommodate the same amount of networking workload compared to the alternative.
+  accommodate a given amount of networking workload compared to the alternative.
   Its limitation is that the redundant transports shall implement the same protocol (e.g., CAN),
   and all involved transports shall be configured to use the same MTU.
 
@@ -38,7 +33,8 @@ they are not manifested on the bus
   not at the level of separate *transport frames*, but at the level of complete *UAVCAN transfers*
   (if these terms sound unfamiliar, please read the UAVCAN specification).
   This approach complicates the data flow inside the library, but it supports *dissimilar transport redundancy*,
-  allowing one to aggregate transports with different parameters (e.g., UDP with serial, possibly with different MTU).
+  allowing one to aggregate transports implementing different protocols (e.g., UDP with serial,
+  possibly with different MTU).
   Dissimilar redundancy is often sought in high-reliability/safety-critical applications,
   as reviewed in https://forum.uavcan.org/t/557.
 
@@ -55,8 +51,8 @@ Whenever a redundant transport is requested to construct a new session,
 it does so by initializing an instance of :class:`RedundantInputSession` or :class:`RedundantOutputSession`.
 The constructed instance then holds a set of inferior sessions, one from each inferior transport,
 all sharing the same session specifier (:class:`pyuavcan.transport.SessionSpecifier`).
-The resulting relationship between inferior transports and inferior sessions can be conveniently conceptualized
-as a matrix where columns represent inferior transports and rows represent inferior sessions:
+The resulting relationship between inferior transports and inferior sessions can be conceptualized
+as a matrix where columns represent inferior transports and rows represent sessions:
 
 +-----------+---------------+---------------+---------------+---------------+
 |           |  Transport 0  |  Transport 1  |      ...      |  Transport M  |
@@ -80,14 +76,10 @@ Existing redundant sessions retain validity across any changes in the matrix con
 Logic that relies on a redundant instance is completely shielded from any changes in the underlying transport
 configuration, meaning that the entire underlying transport structure may be swapped out with a completely
 different one without affecting the higher levels.
-An extreme case of this feature is an inverted logic where a redundant transport is constructed
-with zero inferior transports,
+A practical extreme case is where a redundant transport is constructed with zero inferior transports,
 its session instances are configured, and the inferior transports are added later.
 This is expected to be useful for long-running applications that have to retain the presentation-level structure
-across any changes in the transport configurations done on-the-fly without stopping the application.
-An example of such application is a GUI tool where the user may want to switch an existing running setup
-from one transport configuration to another without stopping it, or a configuration may need to be stored
-to a file and re-stored back before a transport is configured.
+across changes in the transport configuration done on-the-fly without stopping the application.
 
 Since the redundant transport itself also implements the interface :class:`pyuavcan.transport.Transport`,
 it technically could be used as an inferior of another redundant transport instance,
@@ -96,67 +88,69 @@ Attaching a redundant transfer as an inferior of itself is expressly prohibited 
 
 
 Inferior aggregation restrictions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++++++++++++++++++++++++++++++++++
 
-Transports are categorized into one of the following two categories by the value of their transfer-ID modulo
+Transports are categorized into one of the following two categories by the value of their transfer-ID (TID) modulo
 (i.e., the transfer-ID overflow period).
 
 Transports where the set of transfer-ID values contains less than 2**48 (``0x_1_0000_0000_0000``)
 distinct elements are said to have *cyclic transfer-ID*.
-In such transports, the value of the transfer-ID grows steadily starting from zero,
+In such transports, the value of the transfer-ID increases steadily starting from zero,
 incremented once per emitted transfer, until the highest value is reached,
-upon which time the value is wrapped over to zero::
+then the value is wrapped over to zero::
 
     modulo
-         /|   /|   /|   /
-        / |  / |  / |  /
+         /|   /|   /|
+        / |  / |  / |
        /  | /  | /  | /
       /   |/   |/   |/
-    0 -------------------->
-              time
+    0 ----------------->
+            time
 
 
 Transports where the set of transfer-ID values is larger are said to have *monotonic transfer-ID*.
-In such transports, the set is considered large enough to be inexhaustible for any practical application,
+In such transports, the set is considered to be large enough to be inexhaustible for any practical application,
 hence a wrap-over to zero is expected to never occur.
-(For example, a UAVCAN/UDP transport operating over a 10 GbE link at the theoretical capacity limit of 14.9 million
-transfers per second will exhaust the set in approx. 153 years in the worst case.)
+(For example, a UAVCAN/UDP transport operating over a 10 GbE link at the theoretical throughput limit of
+14.9 million transfers per second will exhaust the set in approx. 153 years in the worst case.)
 
 Monotonic transports impose a higher data overhead per frame due to the requirement to accommodate a
 sufficiently wide integer field for the transfer-ID value.
 Their advantage is that transfer-ID values carried over inferior transports of a redundant group are guaranteed
 to remain in-phase for the entire lifetime of the network.
-This can be demonstrated with the following counter-example of two transports leveraging different transfer-ID
-modulo for the same session, where the unambiguous mapping between their transfer-ID values is lost
+The importance of this guarantee can be demonstrated with the following counter-example of two transports
+leveraging different transfer-ID modulo for the same session,
+where the unambiguous mapping between their transfer-ID values is lost
 with the beginning of the epoch B1 after the first overflow::
 
     A0    A1    A2    A3
-        /|    /|    /|    /
+        /|    /|    /|
        / |   / |   / |   /
       /  |  /  |  /  |  /
      /   | /   | /   | /
     /    |/    |/    |/
 
     B0   B1   B2   B3   B4
-       /|   /|   /|   /|   /
-      / |  / |  / |  / |  /
+       /|   /|   /|   /|
+      / |  / |  / |  / |
      /  | /  | /  | /  | /
     /   |/   |/   |/   |/
-    ------------------------>
-              time
+    ---------------------->
+             time
 
 The phase ambiguity of cyclic-TID transports results in the following hard requirements:
 
 1. Inferior transports under the same redundant transport instance shall belong to the same TID monotonicity category:
    either all cyclic or all monotonic.
-2. In the case where the inferiors utilize a cyclic TID counter, the TID modulo shall be identical for all inferiors.
+2. In the case where the inferiors utilize cyclic TID counters, the TID modulo shall be identical for all inferiors.
 
 The implementation raises an error if an attempt is made to violate any of the above requirements.
-The TID monotonicity of an inferior is determined by querying :attr:`pyuavcan.transport.Transport.protocol_parameters`.
+The TID monotonicity category of an inferior is determined by querying
+:attr:`pyuavcan.transport.Transport.protocol_parameters`.
 
 
 Transmission
-~~~~~~~~~~~~
+++++++++++++
 
 As stated in the Specification, every emitted transfer shall be replicated into all available redundant interfaces.
 The rest of the logic does not concern wire compatibility, and hence it is implementation-defined.
@@ -170,24 +164,24 @@ Every outgoing transfer will be serialized and transmitted by each inferior inde
 This may result in different number of transport frames emitted if the inferiors are configured to use
 different MTU, or if they implement different transport protocols.
 
-Inferiors may compute a modulo of the transfer-ID according to the protocol they implement
+Inferiors compute the modulus of the transfer-ID according to the protocol they implement
 independently from each other;
 however, despite the independent computation, it is guaranteed that they will always arrive at the same
 final transfer-ID value thanks to the aggregation restrictions introduced earlier.
 This guarantee is paramount for service calls, because UAVCAN requires the caller to match a service response
 with the appropriate request state by comparing its transfer-ID value,
-which in turn requires that the logic that performs such matching need to be aware about the transfer-ID
-modulo.
+which in turn requires that the logic that performs such matching is aware about the transfer-ID modulo in use.
 
 
 Reception
-~~~~~~~~~
++++++++++
 
 Received transfers need to be deduplicated (dereplicated) so that the higher layers of the protocol stack
 would not receive each unique transfer more than once (as demanded by the Specification).
 
 Transfer reception and deduplication are managed by the class :class:`RedundantInputSession`.
-There exist two deduplication strategies, chosen automatically depending on the TID monotonicity of the inferiors
+There exist two deduplication strategies, chosen automatically depending on the TID monotonicity category
+of the inferiors
 (as described earlier, it is enforced that all inferiors in a redundant group belong to the same
 TID monotonicity category).
 
@@ -196,8 +190,8 @@ the interface keeps delivering transfers.
 If the currently used interface ceases to deliver transfers, the strategy may switch to another one,
 thus manifesting the automatic fail-over.
 The cyclic-TID strategy cannot utilize more than one interface simultaneously due to the risk of
-transfer duplication induced by a possible transport latency disbalance.
-The phase divergence problem is discussed at https://github.com/UAVCAN/specification/issues/8 and in the Specification.
+transfer duplication induced by a possible transport latency disbalance
+(this is discussed at https://github.com/UAVCAN/specification/issues/8 and in the Specification).
 
 The monotonic-TID deduplication strategy always picks the first transfer to arrive.
 This approach provides instant fail-over in the case of an interface failure and
@@ -231,10 +225,10 @@ Monotonic-TID::
     T4
 
 Anonymous transfers are a special case:
-a deduplicator has to keep local state per session in order to perform its duties;
+a deduplicator has to keep local state per session in order to perform its functions;
 since anonymous transfers are fundamentally stateless, they are always accepted unconditionally.
 The implication is that redundant transfers may be replicated.
-This behavior is due to the design of the protocol and is not an implementation detail.
+This behavior is due to the design of the protocol and is not specific to this implementation.
 
 
 Inheritance diagram
@@ -254,7 +248,7 @@ Usage
 A freshly constructed redundant transport is empty.
 Redundant transport instances are intentionally designed to be very mutable,
 allowing one to reconfigure them freely on-the-fly to support the needs of highly dynamic applications.
-This flexibility allows one to do things that are illegal per the UAVCAN specification,
+Such flexibility allows one to do things that are illegal per the UAVCAN specification,
 such as changing the node-ID while the node is running, so beware.
 
 >>> tr = RedundantTransport()
@@ -262,7 +256,7 @@ such as changing the node-ID while the node is running, so beware.
 []
 
 It is possible to begin creating session instances immediately, before configuring the inferiors.
-Any future changes will update all dependent session instances automatically in the background.
+Any future changes will update all dependent session instances automatically.
 
 >>> from pyuavcan.transport import OutputSessionSpecifier, InputSessionSpecifier, MessageDataSpecifier
 >>> from pyuavcan.transport import PayloadMetadata, Transfer, Timestamp, Priority, ProtocolParameters
@@ -271,6 +265,8 @@ Any future changes will update all dependent session instances automatically in 
 >>> s0.inferiors    # No inferior transports; hence, no inferior sessions.
 []
 
+If we attempted to transmit or receive a transfer while there are no inferiors, the call would just time out.
+
 In this example, we will be experimenting with the loopback transport.
 Below we are attaching a new inferior transport instance; the session instances are updated automatically.
 
@@ -278,9 +274,9 @@ Below we are attaching a new inferior transport instance; the session instances 
 >>> lo_0 = LoopbackTransport(local_node_id=42)
 >>> tr.attach_inferior(lo_0)
 >>> tr.inferiors
-[...LoopbackTransport(...)]
+[LoopbackTransport(...)]
 >>> s0.inferiors
-[...LoopbackOutputSession(...)]
+[LoopbackOutputSession(...)]
 
 Add another inferior and another session:
 
@@ -309,7 +305,7 @@ True
 RedundantTransferFrom(..., transfer_id=1111, fragmented_payload=[], ...)
 
 Inject a failure into one inferior by closing it.
-The redundant transfer will continue to function with the other inferior:
+The redundant transfer will continue to function with the other inferior; an error message will be logged:
 
 >>> lo_0.close()        # Inject failure.
 >>> await_(s0.send_until(Transfer(Timestamp.now(), Priority.LOW, 1112, fragmented_payload=[]), tr.loop.time() + 1.0))
@@ -328,7 +324,8 @@ The redundant transport cleans up after itself by closing all inferior sessions 
 >>> len(s1.inferiors)   # Indeed they are.
 1
 
-One cannot mix inferiors with incompatible TID monotonicity or different node-ID:
+One cannot mix inferiors with incompatible TID monotonicity or different node-ID.
+For example, it is not possible to use CAN with UDP in the same redundant group.
 
 >>> lo_0 = LoopbackTransport(local_node_id=42)
 >>> lo_0.protocol_parameters = ProtocolParameters(transfer_id_modulo=32, max_nodes=128, mtu=8)
@@ -343,7 +340,8 @@ InconsistentInferiorConfigurationError: The inferior has a different node-ID...
 
 The parameters of a redundant transport are computed from the inferiors.
 If the inferior set is changed, the transport parameters may also be changed.
-This may create unexpected complications because parameters of real transports are generally immutable.
+This may create unexpected complications because parameters of real transports are generally immutable,
+so it is best to avoid unnecessary runtime transformations unless required by the business logic.
 
 >>> tr.local_node_id
 42
@@ -356,6 +354,10 @@ ProtocolParameters(...)
 True
 >>> tr.protocol_parameters
 ProtocolParameters(transfer_id_modulo=0, max_nodes=0, mtu=0)
+
+A redundant transport can be used with just one inferior to implement ad-hoc PnP allocation as follows:
+the transport is set up with an anonymous inferior which is disposed of upon completing the allocation procedure;
+the new inferior is then installed in the place of the old one configured to use the newly allocated node-ID value.
 """
 
 from ._redundant_transport import RedundantTransport as RedundantTransport

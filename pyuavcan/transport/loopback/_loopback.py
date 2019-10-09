@@ -61,8 +61,11 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         return self._local_node_id
 
     def close(self) -> None:
+        sessions = (*self._input_sessions.values(), *self._output_sessions.values())
         self._input_sessions.clear()
         self._output_sessions.clear()
+        for s in sessions:
+            s.close()
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.InputSessionSpecifier,

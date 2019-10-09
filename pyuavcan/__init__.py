@@ -74,7 +74,7 @@ if _log_level_from_env is not None:
     _logging.basicConfig(format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s',
                          level=_log_level_from_env)
     _logging.getLogger(__name__).setLevel(_log_level_from_env)
-    _logging.getLogger(__name__).warning('Log config from env var; level: %r', _log_level_from_env)
+    _logging.getLogger(__name__).info('Log config from env var; level: %r', _log_level_from_env)
 
 
 # The sub-packages are imported in the order of their interdependency.

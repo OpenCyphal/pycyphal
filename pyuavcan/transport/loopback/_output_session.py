@@ -77,6 +77,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         return self._stats
 
     def close(self) -> None:
+        self._injected_exception = pyuavcan.transport.ResourceClosedError(f'{self} is closed')
         self._closer()
 
     @property

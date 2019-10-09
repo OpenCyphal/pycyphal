@@ -190,7 +190,8 @@ class RedundantTransport(pyuavcan.transport.Transport):
         except Exception:
             self.detach_inferior(transport)  # Roll back to ensure consistent states.
             raise
-        self._check_matrix_consistency()
+        finally:
+            self._check_matrix_consistency()
 
     def detach_inferior(self, transport: pyuavcan.transport.Transport) -> None:
         """
