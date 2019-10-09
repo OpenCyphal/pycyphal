@@ -8,7 +8,6 @@
 Redundant pseudo-transport overview
 +++++++++++++++++++++++++++++++++++
 
-
 Basic principles
 ~~~~~~~~~~~~~~~~
 
@@ -341,6 +340,22 @@ InconsistentInferiorConfigurationError: The new inferior shall use monotonic tra
 Traceback (most recent call last):
     ...
 InconsistentInferiorConfigurationError: The inferior has a different node-ID...
+
+The parameters of a redundant transport are computed from the inferiors.
+If the inferior set is changed, the transport parameters may also be changed.
+This may create unexpected complications because parameters of real transports are generally immutable.
+
+>>> tr.local_node_id
+42
+>>> tr.protocol_parameters
+ProtocolParameters(...)
+>>> tr.close()                  # All inferiors and all sessions are closed.
+>>> tr.inferiors
+[]
+>>> tr.local_node_id is None
+True
+>>> tr.protocol_parameters
+ProtocolParameters(transfer_id_modulo=0, max_nodes=0, mtu=0)
 """
 
 from ._redundant_transport import RedundantTransport as RedundantTransport

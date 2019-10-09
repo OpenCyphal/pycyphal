@@ -193,7 +193,6 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         try:
             while True:
                 assert len(pending) == len(inferiors)
-                _logger.debug('%r wait input: %r', self, pending)
                 done, pending = await asyncio.wait(pending,  # type: ignore
                                                    loop=self._loop,
                                                    return_when=asyncio.FIRST_COMPLETED)
