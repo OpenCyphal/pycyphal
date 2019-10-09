@@ -14,7 +14,7 @@ import math
 import copy
 import struct
 import functools
-import collections
+import collections.abc
 
 import uavcan
 import uavcan.dsdl as dsdl
@@ -325,7 +325,7 @@ class PrimitiveValue(BaseValue):
 
 
 # noinspection PyProtectedMember
-class ArrayValue(BaseValue, collections.MutableSequence):
+class ArrayValue(BaseValue, collections.abc.MutableSequence):
     def __init__(self, _uavcan_type, *args, **kwargs):
         super(ArrayValue, self).__init__(_uavcan_type, *args, **kwargs)
 
