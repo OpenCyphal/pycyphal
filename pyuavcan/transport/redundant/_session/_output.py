@@ -113,13 +113,12 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             if self._idle_send_future is not None:
                 self._idle_send_future.set_result(None)
 
-    def _close_inferior(self, session: pyuavcan.transport.Session) -> None:
-        assert isinstance(session, pyuavcan.transport.OutputSession)
+    def _close_inferior(self, session_index: int) -> None:
+        assert session_index >= 0, 'Negative indexes may lead to unexpected side effects'
         assert self._finalizer is not None, 'The session was supposed to be unregistered'
-        assert session.specifier == self.specifier and session.payload_metadata == self.payload_metadata
         try:
-            self._inferiors.remove(session)
-        except ValueError:
+            session = self._inferiors.pop(session_index)
+        except LookupError:
             pass
         else:
             session.close()  # May raise.
@@ -513,10 +512,10 @@ def _unittest_redundant_output() -> None:
 
     # Remove the first inferior.
     # noinspection PyProtectedMember
-    ses._close_inferior(inf_a)
+    ses._close_inferior(0)
     assert ses.inferiors == [inf_b]
     # noinspection PyProtectedMember
-    ses._close_inferior(inf_a)      # No effect, already removed.
+    ses._close_inferior(1)      # Out of range, no effect.
     assert ses.inferiors == [inf_b]
     # Make sure the removed inferior has been closed.
     assert not tr_a.output_sessions

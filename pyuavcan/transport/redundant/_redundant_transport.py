@@ -27,64 +27,8 @@ class RedundantTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class RedundantTransport(pyuavcan.transport.Transport):
     """
-    This is a stub, not yet implemented. Come back later.
-
-    This is a standard composite over a set of :class:`pyuavcan.transport.Transport`.
-
-    +-----------+---------------+---------------+---------------+---------------+
-    |           |  Transport 0  |  Transport 1  |      ...      |  Transport M  |
-    +===========+===============+===============+===============+===============+
-    | Session 0 |     S0T0      |     S0T1      |      ...      |     S0Tm      |
-    +-----------+---------------+---------------+---------------+---------------+
-    | Session 1 |     S1T0      |     S1T1      |      ...      |     S1Tm      |
-    +-----------+---------------+---------------+---------------+---------------+
-    |    ...    |      ...      |      ...      |      ...      |      ...      |
-    +-----------+---------------+---------------+---------------+---------------+
-    | Session N |     SnT0      |     SnT1      |      ...      |     SnTm      |
-    +-----------+---------------+---------------+---------------+---------------+
-
-    - Attachment/detachment of a transport is modeled as an addition/removal of a column.
-    - Construction/retirement of a session is modeled as an addition/removal of a row.
-
-    While the construction of a row or a column is in progress, the matrix resides in an inconsistent state.
-    If any error occurs in the process, the matrix is rolled back to the previous consistent state.
-
-    Existing redundant sessions retain validity across any changes in the matrix configuration.
-    Logic that relies on a redundant instance is completely shielded from any changes in the underlying transport
-    configuration, meaning that the entire underlying transport structure may be swapped out with a completely
-    different one without affecting the higher levels.
-    An extreme case of this feature is an inverted logic where a redundant transport is constructed
-    with zero inferior transports,
-    its session instances are configured, and the inferior transports are added later.
-
-    This is extremely useful for long-running applications that have to retain the presentation-level structure
-    across any changes in the transport configurations done on-the-fly without stopping the application.
-    An example of such application is a GUI tool where the user may want to switch an existing running setup
-    from one transport configuration to another without stopping it.
-
-    A redundant transport cannot be an inferior of itself,
-    although it can be an inferior of another redundant transport (which is unlikely to be practical).
-
-    Stub::
-
-        top   /|    /|    /|    /
-             / |   / |   / |   /
-            /  |  /  |  /  |  /
-           /   | /   | /   | /
-        0 /    |/    |/    |/
-          ---------------------->
-                   time
-
-    Stub::
-
-        top >= 2**48         . `
-                         . `
-        ...          ...
-                  . `
-              . `
-        0 . `
-          ---------- ... ------->
-                   time
+    This is a composite over a set of :class:`pyuavcan.transport.Transport`.
+    Please read the module documentation for details.
     """
 
     #: An inferior transport whose transfer-ID modulo is less than this value is expected to experience
@@ -255,19 +199,14 @@ class RedundantTransport(pyuavcan.transport.Transport):
         """
         if transport not in self._cols:
             raise ValueError(f'{transport} is not an inferior of {self}')
+        index = self._cols.index(transport)
         self._cols.remove(transport)
-
-        for inferior_session in (*transport.input_sessions, *transport.output_sessions):
+        for owner in self._rows.values():
             try:
-                redundant_session = self._rows[inferior_session.specifier]
-            except LookupError:
-                pass
-            else:
-                try:
-                    # noinspection PyProtectedMember
-                    redundant_session._close_inferior(inferior_session)
-                except Exception as ex:
-                    _logger.exception('%s could not close inferior session %s: %s', self, inferior_session, ex)
+                # noinspection PyProtectedMember
+                owner._close_inferior(index)
+            except Exception as ex:
+                _logger.exception('%s could not close inferior session #%d in %s: %s', self, index, owner, ex)
 
     def close(self) -> None:
         """
@@ -367,6 +306,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
             assert False
         assert isinstance(owner, RedundantSession)  # MyPy makes me miss static typing so much.
         # If anything whatsoever goes wrong, just roll everything back and re-raise the exception.
+        new_index = len(owner.inferiors)
         try:
             # noinspection PyProtectedMember
             owner._add_inferior(inferior)
@@ -375,7 +315,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
             # in the redundant session.
             inferior.close()
             # noinspection PyProtectedMember
-            owner._close_inferior(inferior)
+            owner._close_inferior(new_index)  # If the inferior has not been added, this method will have no effect.
             raise
 
     def _get_tid_modulo(self) -> typing.Optional[int]:

@@ -60,13 +60,12 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
                 session.transfer_id_timeout = self.transfer_id_timeout
             self._inferiors.append(session)
 
-    def _close_inferior(self, session: pyuavcan.transport.Session) -> None:
-        assert isinstance(session, pyuavcan.transport.InputSession)
+    def _close_inferior(self, session_index: int) -> None:
+        assert session_index >= 0, 'Negative indexes may lead to unexpected side effects'
         assert self._finalizer is not None, 'The session was supposed to be unregistered'
-        assert session.specifier == self.specifier and session.payload_metadata == self.payload_metadata
         try:
-            self._inferiors.remove(session)
-        except ValueError:
+            session = self._inferiors.pop(session_index)
+        except LookupError:
             pass
         else:
             self._maybe_deduplicator = None   # Removal of any inferior invalidates the state of the deduplicator.
@@ -369,9 +368,9 @@ def _unittest_redundant_input_cyclic() -> None:
 
     # Inferior removal resets the state of the deduplicator.
     # noinspection PyProtectedMember
-    ses._close_inferior(inf_a)
+    ses._close_inferior(0)
     # noinspection PyProtectedMember
-    ses._close_inferior(inf_a)  # Idempotency.
+    ses._close_inferior(1)  # Out of range, no effect.
     assert ses.inferiors == [inf_b]
 
     assert await_(tx_b.send_until(Transfer(timestamp=Timestamp.now(),

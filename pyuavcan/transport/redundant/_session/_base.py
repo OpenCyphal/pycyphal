@@ -78,9 +78,9 @@ class RedundantSession(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _close_inferior(self, session: pyuavcan.transport.Session) -> None:
+    def _close_inferior(self, session_index: int) -> None:
         """
-        If the session is not a registered inferior, this method does nothing.
+        If the index is out of range, this method does nothing.
         Removal always succeeds regardless of any exceptions raised.
 
         Like its counterpart, this method is supposed to be invoked by the transport class.
