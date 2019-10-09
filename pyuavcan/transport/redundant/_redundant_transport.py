@@ -47,6 +47,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         self._cols: typing.List[pyuavcan.transport.Transport] = []
         self._rows: typing.Dict[pyuavcan.transport.SessionSpecifier, RedundantSession] = {}
         self._loop = loop if loop is not None else asyncio.get_event_loop()
+        self._check_matrix_consistency()
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -113,6 +114,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
                                               fin)
         )
         assert isinstance(out, RedundantInputSession)
+        self._check_matrix_consistency()
         return out
 
     def get_output_session(self,
@@ -126,6 +128,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
                                                fin)
         )
         assert isinstance(out, RedundantOutputSession)
+        self._check_matrix_consistency()
         return out
 
     def sample_statistics(self) -> RedundantTransportStatistics:
@@ -187,6 +190,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         except Exception:
             self.detach_inferior(transport)  # Roll back to ensure consistent states.
             raise
+        self._check_matrix_consistency()
 
     def detach_inferior(self, transport: pyuavcan.transport.Transport) -> None:
         """
@@ -207,6 +211,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
                 owner._close_inferior(index)
             except Exception as ex:
                 _logger.exception('%s could not close inferior session #%d in %s: %s', self, index, owner, ex)
+        self._check_matrix_consistency()
 
     def close(self) -> None:
         """
@@ -233,6 +238,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
         self._cols.clear()
         assert not self._rows, 'All sessions should have been unregistered'
+        self._check_matrix_consistency()
 
     def _validate_inferior(self, transport: pyuavcan.transport.Transport) -> None:
         # Ensure all inferiors run on the same event loop.
@@ -323,3 +329,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
             return self.protocol_parameters.transfer_id_modulo
         else:
             return None
+
+    def _check_matrix_consistency(self) -> None:
+        for row in self._rows.values():
+            assert len(row.inferiors) == len(self._cols)
