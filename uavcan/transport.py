@@ -17,8 +17,10 @@ import functools
 
 try:
     import collections.abc  # Python 3
+    MutableSequence = collections.abc.MutableSequence
 except ImportError:
     import collections  # Python 2
+    MutableSequence = collections.MutableSequence
 
 import uavcan
 import uavcan.dsdl as dsdl
@@ -329,7 +331,7 @@ class PrimitiveValue(BaseValue):
 
 
 # noinspection PyProtectedMember
-class ArrayValue(BaseValue, collections.abc.MutableSequence):
+class ArrayValue(BaseValue, MutableSequence):
     def __init__(self, _uavcan_type, *args, **kwargs):
         super(ArrayValue, self).__init__(_uavcan_type, *args, **kwargs)
 
