@@ -72,6 +72,7 @@ class Transport(abc.ABC):
     def protocol_parameters(self) -> ProtocolParameters:
         """
         Provides information about the properties of the transport protocol implemented by the instance.
+        See :class:`ProtocolParameters`.
         """
         raise NotImplementedError
 
