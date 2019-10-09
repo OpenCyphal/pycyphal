@@ -282,8 +282,6 @@ Add another inferior and another session:
 
 >>> lo_1 = LoopbackTransport(local_node_id=42)
 >>> tr.attach_inferior(lo_1)
->>> tr.descriptor
-'<redundant><loopback/><loopback/></redundant>'
 >>> s1 = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), pm)
 >>> len(tr.inferiors)
 2
@@ -304,10 +302,10 @@ True
 >>> await_(s1.receive_until(tr.loop.time() + 1.0))
 RedundantTransferFrom(..., transfer_id=1111, fragmented_payload=[], ...)
 
-Inject a failure into one inferior by closing it.
+Inject a failure into one inferior.
 The redundant transfer will continue to function with the other inferior; an error message will be logged:
 
->>> lo_0.close()        # Inject failure.
+>>> lo_0.output_sessions[0].exception = RuntimeError('Injected failure')
 >>> await_(s0.send_until(Transfer(Timestamp.now(), Priority.LOW, 1112, fragmented_payload=[]), tr.loop.time() + 1.0))
 True
 >>> await_(s1.receive_until(tr.loop.time() + 1.0))   # Still works.

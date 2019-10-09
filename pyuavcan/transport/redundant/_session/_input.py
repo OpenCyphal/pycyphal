@@ -23,7 +23,14 @@ class RedundantTransferFrom(pyuavcan.transport.TransferFrom):
 
 class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
     """
-    Notes on transfer-ID timeout settings.
+    This is a composite of a group of :class:`pyuavcan.transport.InputSession`.
+
+    When an inferior session is removed, the state of the input transfer deduplicator is automatically reset.
+    Therefore, removal of an inferior may temporarily disrupt the transfer flow by causing the session
+    to skip or repeat several transfers.
+    Applications where this is critical may prefer to avoid dynamic removal of inferiors.
+
+    The transfer deduplication strategy is chosen between cyclic and monotonic automatically.
     """
     def __init__(self,
                  specifier:           pyuavcan.transport.InputSessionSpecifier,
@@ -31,6 +38,9 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
                  tid_modulo_provider: typing.Callable[[], typing.Optional[int]],
                  loop:                asyncio.AbstractEventLoop,
                  finalizer:           typing.Callable[[], None]):
+        """
+        Do not call this directly! Use the factory method instead.
+        """
         self._specifier = specifier
         self._payload_metadata = payload_metadata
         self._get_tid_modulo = tid_modulo_provider
@@ -80,6 +90,8 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         Reads one deduplicated transfer using all inferiors concurrently. Returns None on timeout.
         If there are no inferiors, waits until the deadline, checks again, and returns if there are still none;
         otherwise, does a non-blocking read once.
+
+        If any of the inferiors raises an exception, all reads are aborted and the exception is propagated immediately.
         """
         if self._finalizer is None:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed suka')
@@ -110,8 +122,16 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
     @property
     def transfer_id_timeout(self) -> float:
         """
-        This is the maximum transfer-ID timeout value from all inferiors.
-        The value is zero if there are no inferiors.
+        Assignment of a new transfer-ID timeout is transferred to all inferior sessions,
+        so that their settings are always kept consistent.
+        When the transfer-ID timeout value is queried, the maximum value from the inferior sessions is returned;
+        if there are no inferiors, zero is returned.
+        The transfer-ID timeout is not kept by the redundant session itself.
+
+        When a new inferior session is added, its transfer-ID timeout is assigned to match other inferiors.
+        When all inferior sessions are removed, the transfer-ID timeout configuration becomes lost.
+        Therefore, when the first inferior is added, the redundant session assumes its transfer-ID timeout
+        configuration as its own; all inferiors added later will inherit the same setting.
         """
         if self._inferiors:
             return max(x.transfer_id_timeout for x in self._inferiors)
@@ -138,8 +158,9 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         """
         - ``transfers``     - the number of successfully received deduplicated transfers (unique transfer count).
         - ``errors``        - the number of receive calls that could not be completed due to an exception.
-        - ``drops``         - not used.
         - ``payload_bytes`` - the number of payload bytes in successful deduplicated transfers counted in ``transfers``.
+        - ``drops``         - the total number of drops summed from all inferiors (i.e., total drop count).
+          This value is invalidated when the set of inferiors is changed. The semantics may change later.
         - ``frames``        - the total number of frames summed from all inferiors (i.e., replicated frame count).
           This value is invalidated when the set of inferiors is changed. The semantics may change later.
         """
@@ -149,7 +170,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
             frames=sum(s.frames for s in inferiors),
             payload_bytes=self._stat_payload_bytes,
             errors=self._stat_errors,
-            drops=0,
+            drops=sum(s.drops for s in inferiors),
             inferiors=inferiors,
         )
 

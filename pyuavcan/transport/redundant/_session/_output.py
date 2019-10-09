@@ -18,7 +18,6 @@ class RedundantFeedback(pyuavcan.transport.Feedback):
     """
     This is the output feedback extended with the reference to the inferior transport session
     that this feedback originates from.
-    The user can then map the feedback to the inferior transport instance if necessary.
 
     A redundant output session provides one feedback entry per inferior session;
     for example, if there are three inferiors in a redundant transport group,
@@ -58,14 +57,9 @@ class RedundantFeedback(pyuavcan.transport.Feedback):
 
 class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession):
     """
-    This is a standard composite over a set of :class:`pyuavcan.transport.OutputSession`.
-    Every sent transfer is simply forked into each of the inferior sessions.
-    The results are consolidated into one as follows:
-
-    - If at least ONE inferior has succeeded, success is returned. Exceptions are logged as errors, if any.
-    - If ALL inferiors have raised exceptions, the exception from the first inferior is re-raised
-      and the rest are logged as errors.
-    - If ALL inferiors have timed out, the time-out indicator is returned (i.e., False).
+    This is a composite of a group of :class:`pyuavcan.transport.OutputSession`.
+    Every outgoing transfer is simply forked into each of the inferior sessions.
+    The result aggregation policy is documented in :func:`send_until`.
     """
     def __init__(self,
                  specifier:        pyuavcan.transport.OutputSessionSpecifier,
@@ -74,9 +68,6 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                  finalizer:        typing.Callable[[], None]):
         """
         Do not call this directly! Use the factory method instead.
-
-        Observe that we can't pass a loop directly because it may be changed when the set of
-        redundant transports is changed, so we have to request it each time it's needed separately.
         """
         self._specifier = specifier
         self._payload_metadata = payload_metadata
@@ -167,7 +158,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         - If at least one inferior succeeds, True is returned (logical OR).
           If the other inferiors raise exceptions, they are logged as errors and suppressed.
 
-        - If all inferiors raise exceptions, the exception from the first one is raised,
+        - If all inferiors raise exceptions, the exception from the first one is propagated,
           the rest are logged as errors and suppressed.
 
         - If all inferiors time out, False is returned (logical OR).
@@ -254,8 +245,8 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         """
         - ``transfers``     - the number of redundant transfers where at least ONE inferior succeeded (success count).
         - ``errors``        - the number of redundant transfers where ALL inferiors raised exceptions (failure count).
-        - ``drops``         - the number of redundant transfers where ALL inferiors timed out (timeout count).
         - ``payload_bytes`` - the number of payload bytes in successful redundant transfers counted in ``transfers``.
+        - ``drops``         - the number of redundant transfers where ALL inferiors timed out (timeout count).
         - ``frames``        - the total number of frames summed from all inferiors (i.e., replicated frame count).
           This value is invalidated when the set of inferiors is changed. The semantics may change later.
         """

@@ -18,6 +18,7 @@ _logger = logging.getLogger(__name__)
 class RedundantSessionStatistics(pyuavcan.transport.SessionStatistics):
     """
     Aggregate statistics for all inferior sessions in a redundant group.
+    This is an atomic immutable sample; it is not updated after construction.
     """
     #: The ordering is guaranteed to match that of :attr:`RedundantSession.inferiors`.
     inferiors: typing.List[pyuavcan.transport.SessionStatistics] = dataclasses.field(default_factory=list)
@@ -28,7 +29,7 @@ class RedundantSession(abc.ABC):
     The base for all redundant session instances.
 
     A redundant session may be constructed even if the redundant transport itself has no inferiors.
-    When a new inferior transport is attached/detached to/from the redundant set,
+    When a new inferior transport is attached/detached to/from the redundant group,
     dependent session instances are automatically reconfigured, transparently to the user.
 
     The higher layers of the protocol stack are therefore shielded from any changes made to the stack

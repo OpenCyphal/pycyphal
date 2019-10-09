@@ -171,8 +171,7 @@ class Transport(abc.ABC):
     def descriptor(self) -> str:
         """
         A transport-specific specification string containing sufficient information to recreate the current
-        configuration in a human-readable XML-like format. The format is currently very unstable;
-        it is probably going to change in the future, so applications should not depend on it yet.
+        configuration in a human-readable XML-like format.
 
         The returned string shall contain exactly one top-level XML element. The tag name of the element shall match
         the name of the transport class in lower case without the "transport" suffix; e.g:

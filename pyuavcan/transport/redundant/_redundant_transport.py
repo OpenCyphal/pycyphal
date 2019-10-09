@@ -20,6 +20,7 @@ _logger = logging.getLogger(__name__)
 class RedundantTransportStatistics(pyuavcan.transport.TransportStatistics):
     """
     Aggregate statistics for all inferior transports in a redundant group.
+    This is an atomic immutable sample; it is not updated after construction.
     """
     #: The ordering is guaranteed to match that of :attr:`RedundantTransport.inferiors`.
     inferiors: typing.List[pyuavcan.transport.TransportStatistics] = dataclasses.field(default_factory=list)
@@ -56,11 +57,11 @@ class RedundantTransport(pyuavcan.transport.Transport):
         If there are no inferiors (i.e., if the instance is closed), the value is all-zeros.
         Beware that if the set of inferiors is changed, this value may also be changed.
 
-        The values are derived from the inferiors as follows:
+        The values are obtained from the set of inferiors by applying the following reductions:
 
-        - min(transfer-ID)
-        - min(max-nodes)
-        - min(MTU)
+        - min transfer-ID
+        - min max-nodes
+        - min MTU
         """
         ipp = [t.protocol_parameters for t in self._cols] or [
             pyuavcan.transport.ProtocolParameters(
@@ -149,6 +150,15 @@ class RedundantTransport(pyuavcan.transport.Transport):
         """
         The outer tag is ``<redundant>``;
         the inner elements are descriptors of the inferiors (if any), ordered as in :attr:`inferiors`.
+
+        >>> tr = RedundantTransport()
+        >>> tr.descriptor
+        '<redundant></redundant>'
+        >>> from pyuavcan.transport.loopback import LoopbackTransport
+        >>> tr.attach_inferior(LoopbackTransport(None))
+        >>> tr.attach_inferior(LoopbackTransport(None))
+        >>> tr.descriptor
+        '<redundant><loopback/><loopback/></redundant>'
         """
         return '<redundant>' + ''.join(t.descriptor for t in self._cols) + '</redundant>'
 
@@ -162,7 +172,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
     def attach_inferior(self, transport: pyuavcan.transport.Transport) -> None:
         """
-        Adds a new transport to the redundant set. The new transport shall not be closed.
+        Adds a new transport to the redundant group. The new transport shall not be closed.
 
         If the transport is already added or it is the redundant transport itself (recursive attachment),
         a :class:`ValueError` will be raised.
@@ -195,11 +205,11 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
     def detach_inferior(self, transport: pyuavcan.transport.Transport) -> None:
         """
-        Removes the specified transport from the redundant set.
+        Removes the specified transport from the redundant group.
         If there is no such transport, a :class:`ValueError` will be raised.
 
         All sessions of the removed inferior that are managed by the redundant transport instance
-        will be automatically closed, but the transport itself will not be
+        will be automatically closed, but the inferior itself will not be
         (the caller will have to do that manually if desired).
         """
         if transport not in self._cols:
@@ -224,6 +234,8 @@ class RedundantTransport(pyuavcan.transport.Transport):
         if needed.
         In other words, closing is reversible here, which is uncommon for the library;
         consider this feature experimental.
+
+        If the session matrix is empty, this method has no effect.
         """
         for s in list(self._rows.values()):
             try:
