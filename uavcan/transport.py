@@ -14,7 +14,11 @@ import math
 import copy
 import struct
 import functools
-import collections.abc
+
+try:
+    import collections.abc  # Python 3
+except ImportError:
+    import collections  # Python 2
 
 import uavcan
 import uavcan.dsdl as dsdl
