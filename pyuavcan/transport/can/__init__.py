@@ -5,21 +5,40 @@
 #
 
 """
+CAN transport overview
+++++++++++++++++++++++
+
 This module implements the CAN transport for UAVCAN: both CAN 2.0 and CAN FD.
 UAVCAN does not distinguish between the two aside from the MTU difference; neither does this implementation.
 CAN 2.0 is essentially treated as CAN FD with MTU of 8 bytes.
 
-Virtual CAN bus interfaces
-++++++++++++++++++++++++++
+Different CAN hardware is supported through the media sublayer; please refer to :mod:`pyuavcan.transport.can.media`.
 
-Some of the media sub-layer implementations support virtual CAN bus interfaces.
-Those are useful for testing.
-Please read their documentation for background.
+Per the UAVCAN specification, the CAN transport supports broadcast messages and unicast services:
+
++--------------------+--------------------------+---------------------------+
+| Supported transfers| Unicast                  | Broadcast                 |
++====================+==========================+===========================+
+|**Message**         | No                       | Yes                       |
++--------------------+--------------------------+---------------------------+
+|**Service**         | Yes                      | Banned by Specification   |
++--------------------+--------------------------+---------------------------+
+
+
+Tooling
++++++++
+
+Some of the media sub-layer implementations support virtual CAN bus interfaces
+(e.g., SocketCAN on GNU/Linux); they are often useful for testing.
+Please read the media sub-layer documentation for details.
+
 
 Inheritance diagram
 +++++++++++++++++++
 
-.. inheritance-diagram:: pyuavcan.transport.can._session._input pyuavcan.transport.can._session._output
+.. inheritance-diagram:: pyuavcan.transport.can._can
+                         pyuavcan.transport.can._session._input
+                         pyuavcan.transport.can._session._output
    :parts: 1
 """
 

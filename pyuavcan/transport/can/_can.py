@@ -66,19 +66,7 @@ class CANTransportStatistics(pyuavcan.transport.TransportStatistics):
 class CANTransport(pyuavcan.transport.Transport):
     """
     CAN 2.0 and CAN FD transport implementation.
-    Whether CAN 2.0 or CAN FD is used is determined by the underlying media instance.
-    This class makes no distinction between the two; as such, a CAN 2.0 bus and a CAN FD bus with MTU 8 bytes
-    are identical to this class.
-
-    Per Specification, the CAN transport supports broadcast messages and unicast services:
-
-    +--------------------+--------------------------+---------------------------+
-    | Supported transfers| Unicast                  | Broadcast                 |
-    +====================+==========================+===========================+
-    |**Message**         | No                       | Yes                       |
-    +--------------------+--------------------------+---------------------------+
-    |**Service**         | Yes                      | Banned by Specification   |
-    +--------------------+--------------------------+---------------------------+
+    Please read the module documentation for details.
     """
 
     def __init__(self,
