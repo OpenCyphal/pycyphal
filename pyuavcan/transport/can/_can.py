@@ -65,7 +65,7 @@ class CANTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class CANTransport(pyuavcan.transport.Transport):
     """
-    CAN 2.0 and CAN FD transport implementation.
+    Standard CAN 2.0 and CAN FD transport implementation as defined in the UAVCAN specification.
     Please read the module documentation for details.
     """
 
