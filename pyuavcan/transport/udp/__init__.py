@@ -240,6 +240,8 @@ Send a transfer from one instance to another:
 True
 >>> await_(sub.receive_until(tr_1.loop.time() + 1.0))
 TransferFrom(..., transfer_id=1111, ...)
+>>> tr_0.close()
+>>> tr_1.close()
 
 
 Tooling

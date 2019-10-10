@@ -13,7 +13,9 @@ class StreamParser:
     """
     A stream parser is fed with bytes received from the channel.
     The parser maintains internal parsing state machine; whenever the machine detects that a valid frame is received,
-    the callback is invoked. When the state machine identifies that a received block of data cannot possibly
+    the callback is invoked.
+
+    When the state machine identifies that a received block of data cannot possibly
     contain or be part of a valid frame, the raw bytes are delivered into the callback as-is for optional later
     processing; such data is called "out-of-band" (OOB) data.
     The OOB bytes are always unescaped and never contain the frame delimiter bytes; that is, the parser does not

@@ -40,85 +40,8 @@ class SerialTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class SerialTransport(pyuavcan.transport.Transport):
     """
-    The serial transport is experimental and is not yet part of the UAVCAN specification.
-    Future revisions may break wire compatibility until the transport is formally specified.
-    Context: https://forum.uavcan.org/t/alternative-transport-protocols/324, also see the discussion at
-    https://forum.uavcan.org/t/yukon-design-megathread/390/115?u=pavel.kirienko.
-
-    The serial transport is designed for basic raw byte-level low-speed serial links:
-
-    - UART, RS-232/485/422 (the recommended rates are: 115200 bps, 921600 bps, 3 Mbps, 10 Mbps, 100 Mbps).
-    - USB CDC ACM.
-
-    It is also suitable for raw transport log storage, because one-dimensional flat binary files are structurally
-    similar to serial byte-level links.
-
-    The packet header is defined as follows (byte and bit ordering in this definition follow the DSDL specification:
-    least significant byte first, most significant bit first)::
-
-        uint8   version                 # Always zero. Discard the frame if not.
-        uint8   priority                # 0 = highest, 7 = lowest; the rest are unused.
-        uint16  source node ID          # 0xFFFF = anonymous.
-        uint16  destination node ID     # 0xFFFF = broadcast.
-        uint16  data specifier
-
-        uint64  data type hash
-        uint64  transfer ID
-
-        uint32  frame index EOT         # MSB set if last frame of the transfer.
-        void32                          # Set to zero when sending, ignore when receiving.
-
-    For message frames, the data specifier field contains the subject-ID value,
-    so that the most significant bit is always cleared.
-    For service frames, the most significant bit (15th) is always set,
-    and the second-to-most-significant bit (14th) is set for response transfers only;
-    the remaining 14 least significant bits contain the service-ID value.
-
-    Total header size: 32 bytes (256 bits).
-
-    The header is prepended before the frame payload; the resulting structure is
-    encoded into its serialized form using the following packet format (influenced by HDLC, SLIP, POPCOP):
-
-    +------------------------+-----------------------+-----------------------+------------------------+
-    |Frame delimiter **0x9E**|Escaped header+payload |CRC32C (Castagnoli)    |Frame delimiter **0x9E**|
-    +========================+=======================+=======================+========================+
-    |Single-byte frame       |The following bytes are|Four bytes long,       |Same frame delimiter as |
-    |delimiter **0x9E**.     |escaped: **0x9E**      |little-endian byte     |at the start.           |
-    |Begins a new frame and  |(frame delimiter);     |order; bytes 0x9E      |Terminates the current  |
-    |possibly terminates the |**0x8E** (escape       |(frame delimiter) and  |frame and possibly      |
-    |previous frame.         |character). An escaped |0x8E (escape character)|begins the next frame.  |
-    |                        |byte is bitwise        |are escaped like in    |                        |
-    |                        |inverted and prepended |the payload.           |                        |
-    |                        |with the escape        |The CRC is computed    |                        |
-    |                        |character 0x8E. For    |over the unescaped     |                        |
-    |                        |example: byte 0x9E is  |(i.e., original form)  |                        |
-    |                        |transformed into 0x8E  |payload, not including |                        |
-    |                        |followed by 0x71.      |the start delimiter.   |                        |
-    +------------------------+-----------------------+-----------------------+------------------------+
-
-    There are no magic bytes in this format because the strong CRC and the data type hash field render the
-    format sufficiently recognizable. The worst case overhead exceeds 100% if every byte of the payload and the CRC
-    is either 0x9E or 0x8E. Despite the overhead, this format is still considered superior to the alternatives
-    since it is robust and guarantees a constant recovery time. Consistent-overhead byte stuffing (COBS) is sometimes
-    employed for similar tasks, but it should be understood that while it offers a substantially lower overhead,
-    it undermines the synchronization recovery properties of the protocol. There is a somewhat relevant discussion
-    at https://github.com/vedderb/bldc/issues/79.
-
-    The format can share the same serial medium with ASCII text exchanges such as command-line interfaces or
-    real-time logging. The special byte values employed by the format do not belong to the ASCII character set.
-
-    The last four bytes of a multi-frame transfer payload contain the CRC32C (Castagnoli) hash of the transfer
-    payload in little-endian byte order.
-
-    The serial transport supports all transfer categories:
-
-    +--------------------+--------------------------+---------------------------+
-    | Supported transfers| Unicast                  | Broadcast                 |
-    +====================+==========================+===========================+
-    |**Message**         | Yes                      | Yes                       |
-    +--------------------+--------------------------+---------------------------+
-    |**Service**         | Yes                      | Banned by Specification   |
-    +--------------------+--------------------------+---------------------------+
+    The serial transport is designed for OSI L1 byte-level serial links, such as RS-485, UART, USB CDC ACM, etc.
+    Please read the module documentation for details.
     """
 
     DEFAULT_MTU = 1024
@@ -158,16 +81,9 @@ class SerialTransport(pyuavcan.transport.Transport):
             this many bytes of payload. Otherwise, use multi-frame transfers.
             This setting does not affect transfer reception; the RX MTU is hard-coded as ``max(VALID_MTU_RANGE)``.
 
-        :param service_transfer_multiplier: Specifies the number of times each outgoing service transfer will be
-            repeated. The duplicates are emitted subsequently immediately following the original. This feature
-            can be used to reduce the likelihood of service transfer loss over unreliable links. Assuming that
-            the probability of transfer loss ``P`` is time-invariant, the influence of the multiplier ``M`` can
-            be approximately modeled as ``P' = P^M``. For example, given a link that successfully delivers 90%
-            of transfers, and the probabilities of adjacent transfer loss are uncorrelated, the multiplication
-            factor of 2 can increase the link reliability up to ``100% - (100% - 90%)^2 = 99%``. Removal of
-            duplicate transfers at the opposite end of the link is natively guaranteed by the UAVCAN protocol;
-            no special activities are needed there (read the UAVCAN Specification for background). This setting
-            does not affect message transfers.
+        :param service_transfer_multiplier: Deterministic data loss mitigation is disabled by default.
+            This parameter specifies the number of times each outgoing service transfer will be repeated.
+            This setting does not affect message transfers.
 
         :param baudrate: If not None, the specified baud rate will be configured on the serial port.
             Otherwise, the baudrate will be left unchanged.
