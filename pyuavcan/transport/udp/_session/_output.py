@@ -105,7 +105,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
 
         # Once we have transmitted at least one copy of a multiplied transfer, it's a success.
         # We don't care if redundant copies fail.
-        for mult_index in range(self._multiplier - 1):
+        for _ in range(self._multiplier - 1):
             if not await self._emit(frames, monotonic_deadline):
                 break
 
