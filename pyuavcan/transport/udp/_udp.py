@@ -125,7 +125,7 @@ class UDPTransport(pyuavcan.transport.Transport):
 
         :param mtu: The application-level MTU for outgoing packets.
             In other words, this is the maximum number of payload bytes per UDP frame.
-            Transfers with a fewer number of payload bytes will be single-frame transfers,
+            Transfers where the number of payload bytes does not exceed this value will be single-frame transfers,
             otherwise, multi-frame transfers will be used.
             This setting affects only outgoing frames;
             the MTU of incoming frames is fixed at a sufficiently large value to accept any meaningful UDP frame.

@@ -14,8 +14,8 @@ Context: https://forum.uavcan.org/t/alternative-transport-protocols/324.
 
 The UDP/IP transport is essentially a trivial stateless UDP blaster.
 This transport is intended for low-latency, high-throughput switched Ethernet networks with complex topologies.
-In the spirit of UAVCAN, it is designed to be simple and robust.
-Much of the data handling work is offloaded to the standard underlying UDP/IP stack.
+In the spirit of UAVCAN, it is designed to be simple and robust;
+much of the data handling work is offloaded to the standard underlying UDP/IP stack.
 Both IPv4 and IPv6 are supported.
 
 This transport module contains no media sublayers because the media abstraction
@@ -135,9 +135,13 @@ the most significant bit (31st) is set if the current frame is the last frame of
 
 An in-depth description of the header format is provided in the documentation for :class:`UDPFrame`.
 
+Multi-frame transfers contain four bytes of CRC32-C (Castagnoli) at the end computed over the entire transfer payload.
+For more info on multi-frame transfers, please see
+:class:`pyuavcan.transport.commons.high_overhead_transport.TransferReassembler`.
 
-Unreliable networks
-+++++++++++++++++++
+
+Unreliable networks and temporal redundancy
++++++++++++++++++++++++++++++++++++++++++++
 
 For unreliable networks, deterministic data loss mitigation is supported.
 This measure is only available for service transfers, not for message transfers due to their different semantics.
@@ -147,12 +151,12 @@ on the assumption that the probability of losing any given frame is uncorrelated
 with that of its neighbors.
 
 Assuming that the probability of transfer loss ``P`` is time-invariant,
-the influence of the multiplier ``M`` can be approximately modeled as ``P' = P^M``.
-For example, given a network that successfully delivers 90% of transfers,
+the influence of the multiplier ``M`` can be approximated as ``P' = P^M``.
+For example, given a network that successfully delivers 99% of transfers,
 and the probabilities of adjacent transfer loss are uncorrelated,
-the multiplication factor of 2 can increase the link reliability up to ``100% - (100% - 90%)^2 = 99%``.
+the multiplication factor of 2 can increase the link reliability up to ``100% - (100% - 99%)^2 = 99.99%``.
 
-The duplicates are emitted subsequently immediately following the original.
+The duplicates are emitted immediately following the original transfer.
 For example, suppose that a service transfer contains three frames, F0 to F2,
 and the service transfer multiplication factor is two,
 then the resulting frame sequence would be as follows::

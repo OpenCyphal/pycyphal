@@ -32,6 +32,14 @@ class TransferReassembler:
     OOO support includes edge cases where the first frame of a transfer is not received first and/or the last
     frame is not received last.
 
+    OOO is required for frame-level modular transport redundancy (more than one transport operating concurrently)
+    and temporal transfer redundancy (every transfer repeated several times to mitigate frame loss).
+    The necessity of OOO is due to the fact that frames sourced concurrently from multiple transport interfaces
+    and/or frames of a temporally redundant transfer where some of the frames are lost
+    result in an out-of-order arrival of the frames.
+    Additionally, various non-vehicular and/or non-mission-critical networks
+    (such as conventional IP networks) may deliver frames out-of-order even without redundancy.
+
     Distantly relevant discussion: https://github.com/UAVCAN/specification/issues/8.
 
     A multi-frame transfer shall not contain frames with empty payload.
