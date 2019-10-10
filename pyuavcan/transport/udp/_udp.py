@@ -35,136 +35,11 @@ class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 
 class UDPTransport(pyuavcan.transport.Transport):
-    r"""
-    The UDP transport is experimental and is not yet part of the UAVCAN specification.
-    Future revisions may break wire compatibility until the transport is formally specified.
-    Context: https://forum.uavcan.org/t/alternative-transport-protocols/324.
+    """
+    The UDP/IP (v4/v6) transport is intended for
+    low-latency, high-throughput switched Ethernet vehicular networks with complex topologies.
 
-    The UDP transport is essentially a trivial stateless UDP blaster.
-    In the spirit of UAVCAN, it is designed to be simple and robust.
-    Much of the data handling work is offloaded to the standard underlying UDP/IP stack.
-
-    The data specifier is manifested on the wire as the destination UDP port number;
-    the mapping function is implemented in :func:`udp_port_from_data_specifier`.
-    The source port number can be arbitrary (ephemeral), its value is ignored.
-
-    UAVCAN uses a wide range of UDP ports: [15360, 49151].
-    UDP/IP stacks that comply with the IANA ephemeral port range recommendations are expected to be
-    compatible with this; otherwise, there may be port assignment conflicts.
-    All new versions of MS Windows starting with Vista and Server 2008 are compatible with the IANA recommendations.
-    Many versions of GNU/Linux, however, are not, but it can be fixed by manual reconfiguration:
-    https://stackoverflow.com/questions/28573390/how-to-view-and-edit-the-ephemeral-port-range-on-linux.
-
-    The node-ID of a node is the value of its host address (i.e., IP address with the subnet bits zeroed out);
-    the bits above the :attr:`NODE_ID_BIT_LENGTH`-th bit shall be zero::
-
-        IPv4 address:   127.000.012.123/8
-        Subnet mask:    255.000.000.000
-        Host mask:      000.255.255.255
-                        \_/ \_________/
-                      subnet    host
-                     address   address
-                                 \____/
-                               node-ID=3195
-
-        IPv6 address:   fe80:0000:0000:0000:0000:0000:0000:0c7b%enp6s0/64
-        Subnet mask:    ffff:ffff:ffff:ffff:0000:0000:0000:0000
-        Host mask:      0000:0000:0000:0000:ffff:ffff:ffff:ffff
-                        \_________________/ \_________________/
-                          subnet address        host address
-                                                           \__/
-                                                        node-ID=3195
-
-    An IP address that does not match the above requirement cannot be mapped to a node-ID value.
-    Nodes that are configured with such IP addresses are considered anonymous.
-    Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value is rejected;
-    this behavior enables co-existence of UAVCAN/UDP with other UDP protocols on the same network.
-
-    The concept of anonymous transfer is not defined for UDP/IP;
-    in this transport, in order to be able to emit a transfer, the node shall have a valid node-ID value.
-    This means that an anonymous UAVCAN/UDP node can only listen to broadcast
-    network traffic (i.e., can subscribe to subjects) but cannot transmit anything.
-    If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
-
-    Both IPv4 and IPv6 are supported with minimal differences, although IPv6 is not expected to be useful in
-    a vehicular network because virtually none of its advantages are relevant there,
-    and the increased overhead is detrimental to the network's latency and throughput.
-    If IPv6 is used, the flow-ID of UAVCAN packets is set to zero.
-
-    Applications relying on this particular transport implementation will be unable to detect a node-ID conflict on
-    the bus because the implementation discards all broadcast traffic originating from its own IP address.
-    This is a very environment-specific edge case resulting from certain peculiarities of the Berkeley socket API.
-    Other implementations of UAVCAN/UDP (particularly those for embedded systems) may not have this limitation.
-
-    The datagram payload format is documented in :class:`UDPFrame`.
-    Again, it is designed to be simple and low-overhead, which is not difficult considering that
-    the entirety of the session specifier is reified through the UDP/IP stack:
-
-    +---------------------------------------+---------------------------------------+
-    | Parameter                             | Manifested in                         |
-    +=======================================+=======================================+
-    | Transfer priority                     |                                       |
-    +---------------------------------------+                                       |
-    | Transfer-ID                           | UDP datagram payload (frame header)   |
-    +---------------------------------------+                                       |
-    | Data type hash                        |                                       |
-    +-------------------+-------------------+---------------------------------------+
-    |                   | Route specifier   | IP address (least significant bits)   |
-    | Session specifier +-------------------+---------------------------------------+
-    |                   | Data specifier    | UDP destination port number           |
-    +-------------------+-------------------+---------------------------------------+
-
-    For unreliable networks, deterministic data loss mitigation is supported.
-    This measure is only available for service transfers, not for message transfers due to their different semantics.
-    If the probability of a frame loss exceeds the desired reliability threshold,
-    the transport can be configured to repeat every outgoing service transfer a specified number of times,
-    on the assumption that the probability of losing any given frame is uncorrelated (or weakly correlated)
-    with that of its neighbors.
-    For instance, suppose that a service transfer contains three frames, F0 to F2,
-    and the service transfer multiplication factor is two,
-    then the resulting frame sequence would be as follows::
-
-        F0      F1      F2      F0      F1      F2
-        \_______________/       \_______________/
-           main copy             redundant copy
-         (TX timestamp)      (never TX-timestamped)
-
-        ------------------ time ------------------>
-
-    As shown on the diagram, if the transmission timestamping is requested, only the first copy is timestamped.
-    Further, any errors occurring during the transmission of redundant copies
-    may be silently ignored by the stack, provided that the main copy is transmitted successfully.
-
-    The resulting behavior in the provided example is that the transport network may
-    lose up to three unique frames without affecting the application.
-    In the following example, the frames F0 and F2 of the main copy are lost, but the transfer survives::
-
-        F0 F1 F2 F0 F1 F2
-        |  |  |  |  |  |
-        x  |  x  |  |  \_____ F2 __________________________
-           |     |  \________ F1 (redundant, discarded) x  \
-           |     \___________ F0 ________________________  |
-           \_________________ F1 ______________________  \ |
-                                                       \ | |
-        ----- time ----->                              v v v
-                                                    reassembled
-                                                    multi-frame
-                                                     transfer
-
-    For time-deterministic (real-time) networks this strategy is preferred over the conventional
-    confirmation-retry approach (e.g., the TCP model) because it results in more predictable
-    network load, lower worst-case latency, and is stateless (participants do not make assumptions
-    about the state of other agents involved in data exchange).
-
-    The UDP transport supports all transfer categories:
-
-    +--------------------+--------------------------+---------------------------+
-    | Supported transfers| Unicast                  | Broadcast                 |
-    +====================+==========================+===========================+
-    |**Message**         | Yes                      | Yes                       |
-    +--------------------+--------------------------+---------------------------+
-    |**Service**         | Yes                      | Banned by Specification   |
-    +--------------------+--------------------------+---------------------------+
+    Please read the module documentation for details.
     """
 
     #: By default, service transfer multiplication is disabled for UDP.
@@ -248,23 +123,16 @@ class UDPTransport(pyuavcan.transport.Transport):
             equal ``128 - NODE_ID_BIT_LENGTH``.
             Don't forget to specify the scope-ID for link-local IPv6 addresses.
 
-        :param mtu: The application-level MTU for outgoing packets. In other words, this is the maximum
-            number of payload bytes per UDP frame. Transfers with a fewer number of payload bytes will be
-            single-frame transfers, otherwise multi-frame transfers will be used.
-            This setting affects only outgoing frames; the MTU of incoming frames is fixed at a sufficiently
-            large value to accept any meaningful UDP frame.
+        :param mtu: The application-level MTU for outgoing packets.
+            In other words, this is the maximum number of payload bytes per UDP frame.
+            Transfers with a fewer number of payload bytes will be single-frame transfers,
+            otherwise, multi-frame transfers will be used.
+            This setting affects only outgoing frames;
+            the MTU of incoming frames is fixed at a sufficiently large value to accept any meaningful UDP frame.
 
         :param service_transfer_multiplier: Deterministic data loss mitigation is disabled by default.
-            This parameter specifies the number of times each outgoing service transfer will be
-            repeated. The duplicates are emitted subsequently immediately following the original. This feature
-            can be used to reduce the likelihood of service transfer loss over unreliable networks. Assuming that
-            the probability of transfer loss ``P`` is time-invariant, the influence of the multiplier ``M`` can
-            be approximately modeled as ``P' = P^M``. For example, given a network that successfully delivers 90%
-            of transfers, and the probabilities of adjacent transfer loss are uncorrelated, the multiplication
-            factor of 2 can increase the link reliability up to ``100% - (100% - 90%)^2 = 99%``. Removal of
-            duplicate transfers at the opposite end of the link is natively guaranteed by the UAVCAN protocol;
-            no special activities are needed there (read the UAVCAN Specification for background). This setting
-            does not affect message transfers.
+            This parameter specifies the number of times each outgoing service transfer will be repeated.
+            This setting does not affect message transfers.
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
