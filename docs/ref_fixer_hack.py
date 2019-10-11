@@ -75,24 +75,8 @@ def doctree_resolved(_app:     sphinx.application.Sphinx,
 
 
 def setup(app: sphinx.application.Sphinx):
-    # app.add_config_value('ref_fixer_pattern', r'.*', True, (str,))
     app.connect('missing-reference', missing_reference)
     app.connect('doctree-resolved', doctree_resolved)
-
-    '''
-    def print_report() -> None:
-        print('REF FIXER HACK HAS MADE',
-              len(_replacements_made), 'REPLACEMENTS TOTAL,',
-              len(set(_replacements_made)), 'UNIQUE:')
-        for orig, result in set(_replacements_made):
-            print('\t', orig)
-            print('\t', result)
-            print()
-
-    import atexit
-    atexit.register(print_report)
-    '''
-
     return {
         'parallel_read_safe': True,
     }
