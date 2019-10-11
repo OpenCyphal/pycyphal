@@ -7,7 +7,8 @@
 
 def _unittest_transport_primitives() -> None:
     from pytest import raises
-    from pyuavcan.transport import SessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata
+    from pyuavcan.transport import InputSessionSpecifier, OutputSessionSpecifier
+    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata
 
     with raises(ValueError):
         MessageDataSpecifier(-1)
@@ -19,7 +20,10 @@ def _unittest_transport_primitives() -> None:
         ServiceDataSpecifier(-1, ServiceDataSpecifier.Role.REQUEST)
 
     with raises(ValueError):
-        SessionSpecifier(MessageDataSpecifier(123), -1)
+        InputSessionSpecifier(MessageDataSpecifier(123), -1)
+
+    with raises(ValueError):
+        OutputSessionSpecifier(ServiceDataSpecifier(100, ServiceDataSpecifier.Role.RESPONSE), None)
 
     with raises(ValueError):
         PayloadMetadata(-1, 0)

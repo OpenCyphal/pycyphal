@@ -30,6 +30,8 @@ def main() -> None:
         _logger.info('Interrupted')
         _logger.debug('Stack trace where the program has been interrupted', exc_info=True)
         exit(1)
+    except AssertionError:
+        raise  # Re-raise directly in order to have the stack trace printed. The user is not expected to see this.
     except Exception as ex:
         print('Error: %s:' % type(ex).__name__, ex, file=sys.stderr)
         _logger.info('Unhandled exception: %s', ex, exc_info=True)

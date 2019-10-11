@@ -17,27 +17,23 @@ _RX_TIMEOUT = 1.0
 # noinspection PyProtectedMember
 @pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
-                                              transport_factory:  TransportFactory) -> None:
+async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
+                                                   transport_factory:  TransportFactory) -> None:
     assert generated_packages
     import uavcan.node
-    import uavcan.time
     import uavcan.diagnostic
     from pyuavcan.transport import Priority
 
-    tran_a, tran_b = transport_factory()
+    tran_a, tran_b, transmits_anon = transport_factory(None, None)
+    assert tran_a.local_node_id is None
+    assert tran_b.local_node_id is None
 
     pres_a = pyuavcan.presentation.Presentation(tran_a)
     pres_b = pyuavcan.presentation.Presentation(tran_b)
 
     assert pres_a.transport is tran_a
 
-    pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
     sub_heart = pres_b.make_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
-
-    pub_record = pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
-    sub_record = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
-    sub_record2 = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
@@ -45,6 +41,13 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
         pres_a.get_server_with_fixed_service_id(uavcan.node.Heartbeat_1_0)  # type: ignore
+
+    if transmits_anon:
+        pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    else:
+        with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+            pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+        return  # The test ends here.
 
     assert pub_heart._maybe_impl is not None
     assert pub_heart._maybe_impl.proxy_count == 1
@@ -77,6 +80,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     pub_heart.priority = Priority.SLOW
     assert pub_heart.priority == Priority.SLOW
     await pub_heart.publish(heart)
+
     rx, transfer = await sub_heart.receive()  # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id is None
@@ -84,29 +88,72 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert transfer.transfer_id == 0
 
     stat = sub_heart.sample_statistics()
-    assert stat.transport_session.transfers == 1
-    assert stat.transport_session.frames == 1
+    # Remember that anonymous transfers over redundant transports are NOT deduplicated.
+    # Hence, to support the case of redundant transports, we use 'greater or equal' here.
+    assert stat.transport_session.transfers >= 1
+    assert stat.transport_session.frames >= 1
     assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 0
-    assert stat.messages == 1
+    assert stat.messages >= 1
 
-    tran_a.set_local_node_id(123)
-    tran_b.set_local_node_id(42)
+    pres_a.close()
+    pres_a.close()  # Double-close has no effect
+    pres_b.close()
+    pres_b.close()  # Double-close has no effect
+
+    # Make sure the transport sessions have been closed properly, this is supremely important.
+    assert list(pres_a.transport.input_sessions) == []
+    assert list(pres_b.transport.input_sessions) == []
+    assert list(pres_a.transport.output_sessions) == []
+    assert list(pres_b.transport.output_sessions) == []
+
+
+# noinspection PyProtectedMember
+@pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
+@pytest.mark.asyncio  # type: ignore
+async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
+                                              transport_factory:  TransportFactory) -> None:
+    assert generated_packages
+    import uavcan.node
+    import uavcan.time
+    import uavcan.diagnostic
+    from pyuavcan.transport import Priority
+
+    tran_a, tran_b, _ = transport_factory(123, 42)
+    assert tran_a.local_node_id == 123
+    assert tran_b.local_node_id == 42
+
+    pres_a = pyuavcan.presentation.Presentation(tran_a)
+    pres_b = pyuavcan.presentation.Presentation(tran_b)
+
+    assert pres_a.transport is tran_a
+
+    pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+    sub_heart = pres_b.make_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+
+    pub_record = pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    sub_record = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    sub_record2 = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+
+    heart = uavcan.node.Heartbeat_1_0(uptime=123456,
+                                      health=uavcan.node.Heartbeat_1_0.HEALTH_CAUTION,
+                                      mode=uavcan.node.Heartbeat_1_0.MODE_OPERATIONAL,
+                                      vendor_specific_status_code=0xc0fe)
 
     pub_heart.transfer_id_counter.override(23)
     await pub_heart.publish(heart)
-    rx, transfer = await sub_heart.receive()
+    rx, transfer = await sub_heart.receive()  # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id == 123
-    assert transfer.priority == Priority.SLOW
+    assert transfer.priority == Priority.NOMINAL
     assert transfer.transfer_id == 23
 
     stat = sub_heart.sample_statistics()
-    assert stat.transport_session.transfers == 2
-    assert stat.transport_session.frames == 2
+    assert stat.transport_session.transfers == 1
+    assert stat.transport_session.frames >= 1  # 'greater' is needed to accommodate redundant transports.
     assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 0
-    assert stat.messages == 2
+    assert stat.messages == 1
 
     await pub_heart.publish(heart)
     rx = (await sub_heart.receive())[0]
@@ -151,7 +198,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     # Broken transfer
     stat = sub_record.sample_statistics()
     assert stat.transport_session.transfers == 1
-    assert stat.transport_session.frames == 1
+    assert stat.transport_session.frames >= 1  # 'greater' is needed to accommodate redundant transports.
     assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 0
     assert stat.messages == 1
@@ -166,7 +213,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     stat = sub_record.sample_statistics()
     assert stat.transport_session.transfers == 2
-    assert stat.transport_session.frames == 2
+    assert stat.transport_session.frames >= 2  # 'greater' is needed to accommodate redundant transports.
     assert stat.transport_session.drops == 0
     assert stat.deserialization_failures == 1
     assert stat.messages == 1

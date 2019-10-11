@@ -28,7 +28,7 @@ class LoopbackFeedback(pyuavcan.transport.Feedback):
 
 class LoopbackOutputSession(pyuavcan.transport.OutputSession):
     def __init__(self,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  loop:             asyncio.AbstractEventLoop,
                  closer:           typing.Callable[[], None],
@@ -40,6 +40,8 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         self._router = router
         self._stats = pyuavcan.transport.SessionStatistics()
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
+        self._injected_exception: typing.Optional[Exception] = None
+        self._should_timeout = False
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
         self._feedback_handler = handler
@@ -48,7 +50,10 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         self._feedback_handler = None
 
     async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
-        out = await self._router(transfer, monotonic_deadline)
+        if self._injected_exception is not None:
+            raise self._injected_exception
+
+        out = False if self._should_timeout else await self._router(transfer, monotonic_deadline)
         if out:
             self._stats.transfers += 1
             self._stats.frames += 1
@@ -61,7 +66,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         return out
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
         return self._specifier
 
     @property
@@ -72,13 +77,39 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         return self._stats
 
     def close(self) -> None:
+        self._injected_exception = pyuavcan.transport.ResourceClosedError(f'{self} is closed')
         self._closer()
+
+    @property
+    def exception(self) -> typing.Optional[Exception]:
+        """
+        This is a test rigging.
+        Use this property to configure an exception object that will be raised when :func:`send_until` is invoked.
+        Set None to remove the injected exception (None is the default value).
+        Useful for testing error handling logic.
+        """
+        return self._injected_exception
+
+    @exception.setter
+    def exception(self, value: typing.Optional[Exception]) -> None:
+        if isinstance(value, Exception) or value is None:
+            self._injected_exception = value
+        else:
+            raise ValueError(f'Bad exception: {value}')
+
+    @property
+    def should_timeout(self) -> bool:
+        return self._should_timeout
+
+    @should_timeout.setter
+    def should_timeout(self, value: bool) -> None:
+        self._should_timeout = bool(value)
 
 
 def _unittest_session() -> None:
     closed = False
 
-    specifier = pyuavcan.transport.SessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
+    specifier = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
     payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
 
     def do_close() -> None:

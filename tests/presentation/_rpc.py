@@ -22,10 +22,9 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     import uavcan.time
     from pyuavcan.transport import Priority, Timestamp
 
-    tran_a, tran_b = transport_factory()
-
-    tran_a.set_local_node_id(123)
-    tran_b.set_local_node_id(42)
+    tran_a, tran_b, _ = transport_factory(123, 42)
+    assert tran_a.local_node_id == 123
+    assert tran_b.local_node_id == 42
 
     pres_a = pyuavcan.presentation.Presentation(tran_a)
     pres_b = pyuavcan.presentation.Presentation(tran_b)

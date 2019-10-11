@@ -27,19 +27,18 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     The only valid usage is sending and receiving same data on the same node.
     """
 
-    def __init__(self, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self,
+                 local_node_id: typing.Optional[int],
+                 loop:          typing.Optional[asyncio.AbstractEventLoop] = None):
         self._loop = loop if loop is not None else asyncio.get_event_loop()
-
-        self._local_node_id: typing.Optional[int] = None
-
-        self._input_sessions: typing.Dict[pyuavcan.transport.SessionSpecifier, LoopbackInputSession] = {}
-        self._output_sessions: typing.Dict[pyuavcan.transport.SessionSpecifier, LoopbackOutputSession] = {}
-
+        self._local_node_id = int(local_node_id) if local_node_id is not None else None
+        self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
+        self._output_sessions: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, LoopbackOutputSession] = {}
         # Unlimited protocol capabilities by default.
         self._protocol_parameters = pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=2 ** 64,
-            node_id_set_cardinality=2 ** 64,
-            single_frame_transfer_payload_capacity_bytes=2 ** 64 - 1,
+            max_nodes=2 ** 64,
+            mtu=2 ** 64 - 1,
         )
 
     @property
@@ -61,22 +60,15 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     def local_node_id(self) -> typing.Optional[int]:
         return self._local_node_id
 
-    def set_local_node_id(self, node_id: int) -> None:
-        if self._local_node_id is None:
-            node_id = int(node_id)
-            if 0 <= node_id < self._protocol_parameters.node_id_set_cardinality:
-                self._local_node_id = node_id
-            else:
-                raise ValueError(f'Invalid node-ID value: {node_id}')
-        else:
-            raise pyuavcan.transport.InvalidTransportConfigurationError('Node-ID is already assigned')
-
     def close(self) -> None:
+        sessions = (*self._input_sessions.values(), *self._output_sessions.values())
         self._input_sessions.clear()
         self._output_sessions.clear()
+        for s in sessions:
+            s.close()
 
     def get_input_session(self,
-                          specifier:        pyuavcan.transport.SessionSpecifier,
+                          specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> LoopbackInputSession:
         def do_close() -> None:
             try:
@@ -95,7 +87,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         return sess
 
     def get_output_session(self,
-                           specifier:        pyuavcan.transport.SessionSpecifier,
+                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> LoopbackOutputSession:
         def do_close() -> None:
             try:
@@ -119,7 +111,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
             for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                 try:
                     destination_session = self._input_sessions[
-                        pyuavcan.transport.SessionSpecifier(specifier.data_specifier, remote_node_id)
+                        pyuavcan.transport.InputSessionSpecifier(specifier.data_specifier, remote_node_id)
                     ]
                 except LookupError:
                     pass
@@ -143,11 +135,11 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         return LoopbackTransportStatistics()
 
     @property
-    def input_sessions(self) -> typing.Sequence[pyuavcan.transport.InputSession]:
+    def input_sessions(self) -> typing.Sequence[LoopbackInputSession]:
         return list(self._input_sessions.values())
 
     @property
-    def output_sessions(self) -> typing.Sequence[pyuavcan.transport.OutputSession]:
+    def output_sessions(self) -> typing.Sequence[LoopbackOutputSession]:
         return list(self._output_sessions.values())
 
     @property

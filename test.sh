@@ -14,6 +14,8 @@
 
 set -o nounset
 
+started_at=$(python3 -c 'import time; print(time.monotonic())')
+
 function die()
 {
     echo >&2 "FAILURE: $*"
@@ -27,10 +29,13 @@ function banner()
     local fill_seq=$(seq 1 $((${#text} + 2)))
     [[ -t 0 && -t 1 ]] && printf >&2 '\033[1;36m'
     printf >&2 '+'
+    # shellcheck disable=SC2086
     printf >&2 '%.0s-' $fill_seq
     printf >&2 '+\n| %s |\n+' "$text"
+    # shellcheck disable=SC2086
     printf >&2 '%.0s-' $fill_seq
     printf >&2 '+\n'
+    # shellcheck disable=SC2015
     [[ -t 0 && -t 1 ]] && printf >&2 '\033[0m' || :
 }
 
@@ -65,11 +70,15 @@ pip install -r requirements.txt || die "Could not install dependencies"
 sudo modprobe can
 sudo modprobe can_raw
 sudo modprobe vcan
-sudo ip link add dev vcan0 type vcan
-sudo ip link set up vcan0
-sudo ifconfig vcan0 down
-sudo ip link set vcan0 mtu 72        || die "Could not configure MTU on vcan0"
-sudo ifconfig vcan0 up               || die "Could not bring up vcan0"
+for index in 0 1 2  # Multiple interfaces are needed for testing redundant transports.
+do
+    iface="vcan$index"
+    sudo ip link add dev $iface type vcan
+    sudo ip link set up $iface
+    sudo ifconfig $iface down
+    sudo ip link set $iface mtu 72        || die "Could not configure MTU on $iface"
+    sudo ifconfig $iface up               || die "Could not bring up $iface"
+done
 
 # TCP broker for serial port testing.
 ncat --broker --listen -p 50905 &>/dev/null &
@@ -104,6 +113,10 @@ coverage report
 banner STATIC ANALYSIS
 
 # We typecheck after the tests have run in order to be able to typecheck the generated Python packages as well.
+# Also, dear mypy, please stuff your caching, it's fucking broken.
+rm -rf .mypy_cache/ &> /dev/null
+echo 'YOU SHALL NOT PASS' > .mypy_cache
+chmod 444 .mypy_cache
 mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg pyuavcan tests .test_dsdl_generated \
     || die "MyPy returned $?"
 
@@ -118,5 +131,7 @@ pushd docs || die "Couldn't change directory"
 popd       || die "Couldn't change directory"
 
 # ---------------------------------------------------------------------------------------------------------------------
+
+python3 -c "import time; print(f'Done in {(time.monotonic() - $started_at) / 60:0.0f} minutes')"
 
 banner SUCCESS

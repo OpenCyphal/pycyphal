@@ -65,25 +65,27 @@ class CANTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class CANTransport(pyuavcan.transport.Transport):
     """
-    CAN 2.0 and CAN FD transport implementation.
-    Whether CAN 2.0 or CAN FD is used is determined by the underlying media instance.
-    This class makes no distinction between the two; as such, a CAN 2.0 bus and a CAN FD bus with MTU 8 bytes
-    are identical to this class.
+    Standard CAN 2.0 and CAN FD transport implementation as defined in the UAVCAN specification.
+    Please read the module documentation for details.
     """
 
-    def __init__(self, media: Media, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self,
+                 media:         Media,
+                 local_node_id: typing.Optional[int],
+                 loop:          typing.Optional[asyncio.AbstractEventLoop] = None):
         """
-        :param media: The media implementation.
-        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+        :param media:         The media implementation.
+        :param local_node_id: The node-ID to use. Can't be changed. None means anonymous (useful for PnP allocation).
+        :param loop:          The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._maybe_media: typing.Optional[Media] = media
-        self._local_node_id: typing.Optional[int] = None
+        self._local_node_id = int(local_node_id) if local_node_id is not None else None
         self._media_lock = asyncio.Lock(loop=loop)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         # Lookup performance for the output registry is not important because it's only used for loopback frames.
         # Hence we don't trade-off memory for speed here.
-        self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, CANOutputSession] = {}
+        self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, CANOutputSession] = {}
 
         # Input lookup must be fast, so we use constant-complexity static lookup table.
         self._input_dispatch_table = InputDispatchTable()
@@ -92,11 +94,14 @@ class CANTransport(pyuavcan.transport.Transport):
 
         self._frame_stats = CANTransportStatistics()
 
+        if self._local_node_id is not None and not (0 <= self._local_node_id <= CANID.NODE_ID_MASK):
+            raise ValueError(f'Invalid node ID for CAN: {self._local_node_id}')
+
         if media.mtu not in Media.VALID_MTU_SET:
             raise pyuavcan.transport.InvalidMediaConfigurationError(
                 f'The MTU value {media.mtu} is not a member of {Media.VALID_MTU_SET}')
-        self._frame_payload_capacity = media.mtu - 1
-        assert self._frame_payload_capacity > 0
+        self._mtu = media.mtu - 1
+        assert self._mtu > 0
 
         if media.number_of_acceptance_filters < 1:
             raise pyuavcan.transport.InvalidMediaConfigurationError(
@@ -110,7 +115,7 @@ class CANTransport(pyuavcan.transport.Transport):
         self._descriptor = \
             f'<can><{media_name} mtu="{media.mtu}">{media.interface_name}</{media_name}></can>'
 
-        media.set_received_frames_handler(self._on_frames_received)   # Starts the transport.
+        media.start(self._on_frames_received, no_automatic_retransmission=self._local_node_id is None)
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -120,16 +125,9 @@ class CANTransport(pyuavcan.transport.Transport):
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=TRANSFER_ID_MODULO,
-            node_id_set_cardinality=CANID.NODE_ID_MASK + 1,
-            single_frame_transfer_payload_capacity_bytes=self.frame_payload_capacity_bytes
+            max_nodes=CANID.NODE_ID_MASK + 1,
+            mtu=self._mtu,
         )
-
-    @property
-    def frame_payload_capacity_bytes(self) -> int:
-        """
-        This is the MTU minus one; i.e., 7 for CAN 2.0.
-        """
-        return self._frame_payload_capacity
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
@@ -140,20 +138,6 @@ class CANTransport(pyuavcan.transport.Transport):
         Anonymous transfers are always single-frame transfers, so their payload carrying capacity is very limited.
         """
         return self._local_node_id
-
-    def set_local_node_id(self, node_id: int) -> None:
-        if self._local_node_id is None:
-            if 0 <= node_id <= CANID.NODE_ID_MASK:
-                if self._maybe_media is not None:
-                    self._local_node_id = int(node_id)
-                    self._maybe_media.enable_automatic_retransmission()
-                    self._reconfigure_acceptance_filters()
-                else:
-                    raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
-            else:
-                raise ValueError(f'Invalid node ID for CAN: {node_id}')
-        else:
-            raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     @property
     def input_sessions(self) -> typing.Sequence[CANInputSession]:
@@ -182,7 +166,7 @@ class CANTransport(pyuavcan.transport.Transport):
         return copy.copy(self._frame_stats)
 
     def get_input_session(self,
-                          specifier:        pyuavcan.transport.SessionSpecifier,
+                          specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANInputSession:
         """
         See the base class docs for background.
@@ -207,7 +191,7 @@ class CANTransport(pyuavcan.transport.Transport):
         return session
 
     def get_output_session(self,
-                           specifier:        pyuavcan.transport.SessionSpecifier,
+                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> CANOutputSession:
         if self._maybe_media is None:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
@@ -223,7 +207,7 @@ class CANTransport(pyuavcan.transport.Transport):
         def finalizer() -> None:
             self._output_registry.pop(specifier)
 
-        if specifier.remote_node_id is None:
+        if specifier.is_broadcast:
             session: CANOutputSession = \
                 BroadcastCANOutputSession(specifier=specifier,
                                           payload_metadata=payload_metadata,
@@ -294,7 +278,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     def _handle_received_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> bool:
         assert not frame.loopback
-        ss = pyuavcan.transport.SessionSpecifier(can_id.data_specifier, can_id.source_node_id)
+        ss = pyuavcan.transport.InputSessionSpecifier(can_id.data_specifier, can_id.source_node_id)
         accepted = False
         dest_nid = can_id.get_destination_node_id()
         if dest_nid is None or dest_nid == self._local_node_id:
@@ -305,7 +289,7 @@ class CANTransport(pyuavcan.transport.Transport):
                 accepted = True
 
             if ss.remote_node_id is not None:
-                ss = pyuavcan.transport.SessionSpecifier(ss.data_specifier, None)
+                ss = pyuavcan.transport.InputSessionSpecifier(ss.data_specifier, None)
                 session = self._input_dispatch_table.get(ss)
                 if session is not None:
                     # noinspection PyProtectedMember
@@ -316,7 +300,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
     def _handle_loopback_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> None:
         assert frame.loopback
-        ss = pyuavcan.transport.SessionSpecifier(can_id.data_specifier, can_id.get_destination_node_id())
+        ss = pyuavcan.transport.OutputSessionSpecifier(can_id.data_specifier, can_id.get_destination_node_id())
         try:
             session = self._output_registry[ss]
         except KeyError:

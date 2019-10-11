@@ -49,14 +49,16 @@ class Presentation:
         """
         self._transport = transport
         self._closed = False
-        self._emitted_transfer_id_map: typing.Dict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter] = {}
+        self._emitted_transfer_id_map: typing.Dict[pyuavcan.transport.OutputSessionSpecifier,
+                                                   OutgoingTransferIDCounter] = {}
         # For services, the session is the input session.
         self._registry: typing.Dict[typing.Tuple[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
                                                  pyuavcan.transport.SessionSpecifier],
                                     Closable] = {}
 
     @property
-    def emitted_transfer_id_map(self) -> typing.Dict[pyuavcan.transport.SessionSpecifier, OutgoingTransferIDCounter]:
+    def emitted_transfer_id_map(self) -> typing.Dict[pyuavcan.transport.OutputSessionSpecifier,
+                                                     OutgoingTransferIDCounter]:
         """
         This property is designed for very short-lived processes like CLI tools. Most applications will not
         benefit from it and should not use it. The term "emitted transfer-ID map" is borrowed from Specification.
@@ -114,7 +116,7 @@ class Presentation:
         self._raise_if_closed()
 
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
-        session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
+        session_specifier = pyuavcan.transport.OutputSessionSpecifier(data_specifier, None)
         try:
             impl = self._registry[Publisher, session_specifier]
             assert isinstance(impl, PublisherImpl)
@@ -159,7 +161,7 @@ class Presentation:
         self._raise_if_closed()
 
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
-        session_specifier = pyuavcan.transport.SessionSpecifier(data_specifier, None)
+        session_specifier = pyuavcan.transport.InputSessionSpecifier(data_specifier, None)
         try:
             impl = self._registry[Subscriber, session_specifier]
             assert isinstance(impl, SubscriberImpl)
@@ -204,11 +206,11 @@ class Presentation:
         def transfer_id_modulo_factory() -> int:
             return self._transport.protocol_parameters.transfer_id_modulo
 
-        input_session_specifier = pyuavcan.transport.SessionSpecifier(
+        input_session_specifier = pyuavcan.transport.InputSessionSpecifier(
             pyuavcan.transport.ServiceDataSpecifier(service_id, pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE),
             server_node_id
         )
-        output_session_specifier = pyuavcan.transport.SessionSpecifier(
+        output_session_specifier = pyuavcan.transport.OutputSessionSpecifier(
             pyuavcan.transport.ServiceDataSpecifier(service_id, pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST),
             server_node_id
         )
@@ -258,10 +260,10 @@ class Presentation:
             _logger.info('%r has requested a new output session to client node %s', impl, client_node_id)
             ds = pyuavcan.transport.ServiceDataSpecifier(service_id,
                                                          pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE)
-            return self._transport.get_output_session(specifier=pyuavcan.transport.SessionSpecifier(ds, client_node_id),
-                                                      payload_metadata=self._make_payload_metadata(dtype.Response))
+            return self._transport.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, client_node_id),
+                                                      self._make_payload_metadata(dtype.Response))
 
-        input_session_specifier = pyuavcan.transport.SessionSpecifier(
+        input_session_specifier = pyuavcan.transport.InputSessionSpecifier(
             pyuavcan.transport.ServiceDataSpecifier(service_id, pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST),
             None
         )

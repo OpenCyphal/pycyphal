@@ -16,12 +16,9 @@ import argparse
 import xml.etree.ElementTree
 import pyuavcan
 from .._yaml import YAMLLoader, YAMLDumper
-from .._paths import EMITTED_TRANSFER_ID_MAP_DIR
+from .._paths import EMITTED_TRANSFER_ID_MAP_DIR, EMITTED_TRANSFER_ID_MAP_MAX_AGE
 from .transport import TransportFactory
 from ._base import SubsystemFactory
-
-
-_EMITTED_TRANSFER_ID_MAP_MAX_AGE = 10.0
 
 
 _logger = logging.getLogger(__name__)
@@ -42,37 +39,6 @@ class NodeFactory(SubsystemFactory):
 
     def register_arguments(self, parser: argparse.ArgumentParser) -> None:
         self._transport_factory.register_arguments(parser)
-        if not self._allow_anonymous:
-            local_node_id_epilogue = '''
-If not specified, the default node-ID of the specified transport will be used,
-if such is specified. If the transport does not have a pre-defined node-ID,
-the command will fail.
-'''.strip()
-        else:
-            local_node_id_epilogue = '''
-If not specified, no node-ID will be assigned to the local node. On most
-transports this results in the node running in the anonymous mode; some
-transports, however, may have a default node-ID value assigned by the
-transport layer, in which case that node-ID will be used. Beware that
-anonymous transfers may have limitations; for example, some transports
-don't support multi-frame anonymous transfers.
-'''.strip()
-        parser.add_argument(
-            '--local-node-id', '-L',
-            metavar='NATURAL',
-            type=int,
-            help=f'''
-Node-ID to use for the requested operation. Also see the command pick-node-id.
-Valid values range from zero (inclusive) to a transport-specific upper limit.
-
-The emitted transfer-ID map is stored on disk, keyed by node-ID; the path is:
-{EMITTED_TRANSFER_ID_MAP_DIR}
-The map files are managed automatically. They can be removed to reset all
-transfer-ID counters to zero. Files that are more than {_EMITTED_TRANSFER_ID_MAP_MAX_AGE} seconds
-old are no longer used.
-
-{local_node_id_epilogue}
-'''.strip())
         parser.add_argument(
             '--heartbeat-fields',
             default='{}',
@@ -155,14 +121,11 @@ Default: %(default)s
             if args.heartbeat_fields:
                 raise ValueError(f'Unrecognized heartbeat fields: {args.heartbeat_fields}')
 
-            # Configure the node-ID.
-            if args.local_node_id is not None:
-                node.presentation.transport.set_local_node_id(args.local_node_id)
-            else:
-                if not self._allow_anonymous and node.presentation.transport.local_node_id is None:
-                    raise ValueError('The specified transport does not have a predefined node-ID, '
-                                     'and the command cannot be used with an anonymous node. '
-                                     'Please specify the node-ID explicitly, or use a different transport.')
+            # Check the node-ID configuration.
+            if not self._allow_anonymous and node.presentation.transport.local_node_id is None:
+                raise ValueError('The specified transport is configured in anonymous mode, '
+                                 'which cannot be used with the selected command. '
+                                 'Please specify the node-ID explicitly, or use a different transport.')
 
             # Configure the transfer-ID map.
             # Register save on exit even if we're anonymous because the local node-ID may be provided later.
@@ -198,7 +161,7 @@ Default: %(default)s
             return {}
 
         mtime_abs_diff = abs(file_path.stat().st_mtime - time.time())
-        if mtime_abs_diff > _EMITTED_TRANSFER_ID_MAP_MAX_AGE:
+        if mtime_abs_diff > EMITTED_TRANSFER_ID_MAP_MAX_AGE:
             _logger.debug('Emitted TID map: File %s is valid but too old: mtime age diff %.0f s',
                           file_path, mtime_abs_diff)
             return {}
@@ -213,10 +176,14 @@ Default: %(default)s
 
     @staticmethod
     def _register_emitted_transfer_id_map_save_at_exit(presentation: pyuavcan.presentation.Presentation) -> None:
+        # We MUST sample the configuration early because if this is a redundant transport it may reset its
+        # reported descriptor and local node-ID back to default after close().
+        local_node_id = presentation.transport.local_node_id
+        descriptor = presentation.transport.descriptor
+
         def do_save_at_exit() -> None:
-            if presentation.transport.local_node_id is not None:
-                file_path = _get_emitted_transfer_id_file_path(presentation.transport.local_node_id,
-                                                               presentation.transport.descriptor)
+            if local_node_id is not None:
+                file_path = _get_emitted_transfer_id_file_path(local_node_id, descriptor)
                 tmp_path = f'{file_path}.{os.getpid()}.{time.time_ns()}.tmp'
                 _logger.debug('Emitted TID map save: %s --> %s', tmp_path, file_path)
                 with open(tmp_path, 'wb') as f:
@@ -229,6 +196,8 @@ Default: %(default)s
                     os.unlink(tmp_path)
                 except OSError:
                     pass
+            else:
+                _logger.debug('Emitted TID map NOT saved because the transport instance is anonymous')
 
         atexit.register(do_save_at_exit)
 

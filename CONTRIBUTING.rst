@@ -168,7 +168,7 @@ but it is intended for CI use only.
 
 The script ``test.sh`` can be used to run the unit tests, static code analysis, documentation generation,
 and so on, locally or on a CI server.
-At the time of writing, the script takes some 10 minutes to run, so it may not work well for development;
+At the time of writing, the script takes some 20 minutes to run, so it may not work well for development;
 consider invoking pytest manually on a specific directory, file, or function instead (command-line option ``-k``).
 For more information refer to the PyTest documentation.
 

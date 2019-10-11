@@ -18,6 +18,8 @@ import pyuavcan
 import pyuavcan.transport.can
 import pyuavcan.transport.can.media.socketcan
 import pyuavcan.transport.serial
+import pyuavcan.transport.udp
+import pyuavcan.transport.redundant
 
 # We will need a directory to store the generated Python packages in.
 #
@@ -65,25 +67,41 @@ except (ImportError, AttributeError):
 
 # Import other namespaces we're planning to use. Nested namespaces are not auto-imported, so in order to reach,
 # say, "uavcan.node.Heartbeat", you have to do "import uavcan.node".
-import uavcan.node              # noqa E402
-import uavcan.diagnostic        # noqa E402
-import uavcan.si.temperature    # noqa E402
+import uavcan.node                      # noqa E402
+import uavcan.diagnostic                # noqa E402
+import uavcan.si.sample.temperature     # noqa E402
 
 
 class DemoApplication:
     def __init__(self):
         # The interface to run the demo against is selected via the environment variable with a default option provided.
         # Virtual CAN bus is supported only on GNU/Linux, but other interfaces used here should be compatible
-        # with at least Windows and macOS.
+        # with at least Windows as well.
         # Frankly, the main reason we need this here is to simplify automatic testing of this demo script.
         # Feel free to remove the selection logic and just hard-code whatever interface you need.
         interface_kind = os.environ.get('DEMO_INTERFACE_KIND', '').lower()
-        if interface_kind == 'serial' or not interface_kind:  # This is the default.
+        # The node-ID is configured per transport instance.
+        # Some transports (e.g., UDP/IP) derive the node-ID value from the configuration of the underlying layers.
+        # Other transports (e.g., CAN or serial) must be provided with the node-ID value explicitly during
+        # initialization, or None can be used to select the anonymous mode.
+        # Some of the protocol features are unavailable in the anonymous mode (read Specification for more info).
+        # For example, anonymous node cannot be a server, since without an ID it cannot be addressed.
+        # Here, we assign a node-ID statically, because this is a simplified demo.
+        # Most applications would need this to be configurable, some may support the PnP node-ID allocation protocol.
+        if interface_kind == 'udp' or not interface_kind:  # This is the default.
+            # The UDP/IP transport in this example runs on the local loopback interface, so no setup is needed.
+            # The UDP transport requires us to assign the IP address; the node-ID equals the value of several least
+            # significant bits of its IP address. If you want an anonymous UDP/IPv4 node, just use the subnet's
+            # broadcast address as its local IP address (e.g., 127.255.255.255/8, 192.168.0.255/24, and so on).
+            # For more info, please read the API documentation.
+            transport = pyuavcan.transport.udp.UDPTransport('127.0.0.42/8')
+
+        elif interface_kind == 'serial':
             # For demo purposes we're using not an actual serial port (which could have been specified like "COM9"
             # for example) but a virtualized TCP/IP tunnel. The background is explained in the API documentation
             # for the serial transport, please read that. For a quick start, just install Ncat (part of Nmap) and run:
             #   ncat --broker --listen -p 50905
-            transport = pyuavcan.transport.serial.SerialTransport('socket://localhost:50905')
+            transport = pyuavcan.transport.serial.SerialTransport('socket://localhost:50905', local_node_id=42)
 
         elif interface_kind == 'can':
             # Make sure to initialize the virtual CAN interface. For example (run as root):
@@ -96,10 +114,37 @@ class DemoApplication:
             #   candump -decaxta any
             # Here we select CAN 2.0 by setting MTU=8 bytes. We can switch to CAN FD by simply increasing the MTU.
             media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=8)
-            transport = pyuavcan.transport.can.CANTransport(media)
+            transport = pyuavcan.transport.can.CANTransport(media, local_node_id=42)
+
+        elif interface_kind == 'can_can_can':
+            # One of the selling points of UAVCAN is the built-in support for modular redundancy.
+            # In this section, we set up a triply modular redundant (TMR) CAN bus.
+            transport = pyuavcan.transport.redundant.RedundantTransport()
+            # Like vcan0, this case requires vcan1 and vcan2 to be available as well.
+            media_0 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f'vcan0', mtu=8)
+            media_1 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f'vcan1', mtu=32)
+            media_2 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f'vcan2', mtu=64)
+            # All transports in a redundant group MUST share the same node-ID.
+            transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_0, local_node_id=42))
+            transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_1, local_node_id=42))
+            transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_2, local_node_id=42))
+            assert len(transport.inferiors) == 3  # Yup, it's a triply redundant transport.
+
+        elif interface_kind == 'udp_serial':
+            # UAVCAN supports dissimilar transport redundancy for safety-critical/high-reliability systems.
+            # In this example, we set up a transport that operates over UDP and serial concurrently.
+            # This is just an example, however. Major advantages of dissimilar redundant architectures
+            # may be observed with wired+wireless links used concurrently; see https://forum.uavcan.org/t/557.
+            # All transports in a redundant group MUST share the same node-ID.
+            transport = pyuavcan.transport.redundant.RedundantTransport()
+            transport.attach_inferior(pyuavcan.transport.udp.UDPTransport('127.0.0.42/8'))
+            transport.attach_inferior(pyuavcan.transport.serial.SerialTransport('socket://localhost:50905',
+                                                                                local_node_id=42))
 
         else:
-            raise RuntimeError(f'Unrecognized interface kind: {interface_kind}')
+            raise RuntimeError(f'Unrecognized interface kind: {interface_kind}')  # pragma: no cover
+
+        assert transport.local_node_id == 42  # Yup, the node-ID is configured.
 
         # Populate the node info for use with the Node class. Please see the DSDL definition of uavcan.node.GetInfo.
         node_info = uavcan.node.GetInfo_1_0.Response(
@@ -136,18 +181,11 @@ class DemoApplication:
         # Create another server using shorthand for fixed port ID. We could also use it with an application-specific
         # service-ID as well, of course:
         #   get_server(uavcan.node.ExecuteCommand_1_0, 42).serve_in_background(self._serve_execute_command)
+        # If the transport does not yet have a node-ID, the server will stay idle until a node-ID is assigned
+        # because the node won't be able to receive unicast transfers carrying service requests.
         self._node.presentation.get_server_with_fixed_service_id(
             uavcan.node.ExecuteCommand_1_0
         ).serve_in_background(self._serve_execute_command)
-
-        # By default, the node operates in anonymous mode, without a node-ID.
-        # In this mode, some of the protocol features are unavailable (read Specification for more info).
-        # For example, anonymous node cannot be a server, since without an ID it cannot be addressed.
-        assert self._node.presentation.transport.local_node_id is None
-
-        # Here, we assign a node-ID statically, because this is a simplified demo. Most applications would need this
-        # to be configurable, some may support the plug-and-play node-ID allocation protocol.
-        self._node.presentation.transport.set_local_node_id(42)
 
         # We'll be publishing diagnostic messages using this publisher instance. The method we use is a shortcut for:
         #   make_publisher(uavcan.diagnostic.Record_1_0, pyuavcan.dsdl.get_fixed_port_id(uavcan.diagnostic.Record_1_0))
@@ -157,7 +195,7 @@ class DemoApplication:
         self._pub_diagnostic_record.send_timeout = 2.0
 
         # A message subscription.
-        self._sub_temperature = self._node.presentation.make_subscriber(uavcan.si.temperature.Scalar_1_0, 12345)
+        self._sub_temperature = self._node.presentation.make_subscriber(uavcan.si.sample.temperature.Scalar_1_0, 12345)
         self._sub_temperature.receive_in_background(self._handle_temperature)
 
         # When all is initialized, don't forget to start the node!
@@ -238,7 +276,7 @@ class DemoApplication:
             return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND)
 
     async def _handle_temperature(self,
-                                  msg:      uavcan.si.temperature.Scalar_1_0,
+                                  msg:      uavcan.si.sample.temperature.Scalar_1_0,
                                   metadata: pyuavcan.transport.TransferFrom) -> None:
         """
         A subscription message handler. This is also an async function, so we can block inside if necessary.

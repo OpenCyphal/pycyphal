@@ -44,20 +44,40 @@ repository. This is the command:
 
 .. code-block:: sh
 
-    uc dsdl-gen-pkg ../dsdl/namespaces/sirius_cyber_corp/ https://github.com/UAVCAN/public_regulated_data_types/archive/a532bfa7.zip
+    uvc dsdl-gen-pkg ../dsdl/namespaces/sirius_cyber_corp/ https://github.com/UAVCAN/public_regulated_data_types/archive/a532bfa7.zip
 
 That's it. If you want to know what exactly has been done, rerun the command with ``-v`` (V for Verbose).
 
 The DSDL packages have been stored on your computer in a directory known to the CLI tool, so now we can use them.
 
+
 Configuring the transport
 +++++++++++++++++++++++++
 
 The commands shown later have to be instructed to use the same transport interface as the demo.
-Please use one of the options depending on your demo configuration:
+Please use one of the following options depending on your demo configuration:
 
-- ``--serial=socket://loopback:50905`` -- TCP/IP-tunneled serial port connection (any major OS).
-- ``--socketcan=vcan0,8`` -- virtual CAN bus via SocketCAN (GNU/Linux systems only).
+- ``--tr="UDP('127.0.0.111/8')"`` --
+  UDP/IP transport on localhost. Local node-ID 111.
+
+- ``--tr="Serial('socket://loopback:50905',111)"`` --
+  serial transport emulated over a TCP/IP tunnel instead of a real serial port (use Ncat for TCP connection brokering).
+  Local node-ID 111.
+
+- ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"`` --
+  virtual CAN bus via SocketCAN (GNU/Linux systems only).
+  Local node-ID 111.
+
+Redundant transports can be configured by specifying the ``--tr`` option more than once:
+
+- ``--tr="UDP('127.0.0.111/8')" --tr="Serial('socket://loopback:50905',111)"`` --
+  dissimilar double redundancy, UDP plus serial.
+
+- ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"``
+  ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan1',32),111)"``
+  ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan2',64),111)"`` --
+  triple redundant CAN bus, classic CAN with CAN FD.
+
 
 Running the application
 +++++++++++++++++++++++
@@ -68,8 +88,8 @@ In a new terminal, run the following commands to listen to the demo's heartbeat 
 
 .. code-block:: sh
 
-    uc sub uavcan.node.Heartbeat.1.0 --with-metadata --count=3
-    uc sub uavcan.diagnostic.Record.1.0 --with-metadata
+    uvc sub uavcan.node.Heartbeat.1.0 --with-metadata --count=3
+    uvc sub uavcan.diagnostic.Record.1.0 --with-metadata
 
 The latter may not output anything because the demo application is not doing anything interesting,
 so it has nothing to report.
@@ -77,13 +97,13 @@ Keep the command running, and open a yet another terminal, whereat run this:
 
 .. code-block:: sh
 
-    uc call 42 123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0 '{points: [{x: 10, y: 1}, {x: 20, y: 2}]}' --local-node-id=11
+    uvc call 42 123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0 '{points: [{x: 10, y: 1}, {x: 20, y: 2}]}'
 
 Once you've executed the last command, you should see a diagnostic message being emitted in the other terminal.
 Now let's publish temperature:
 
 .. code-block:: sh
 
-    uc pub 12345.uavcan.si.temperature.Scalar.1.0 '{kelvin: 123.456}' --count=2
+    uvc pub 12345.uavcan.si.temperature.Scalar.1.0 '{kelvin: 123.456}' --count=2
 
 You will see the demo application emit two more diagnostic messages.
