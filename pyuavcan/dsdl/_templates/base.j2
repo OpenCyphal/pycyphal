@@ -34,7 +34,6 @@ import {{ n }}
 
 {%- from 'serialization.j2' import serialize -%}
 {%- from 'deserialization.j2' import deserialize -%}
-{%- from 'unique_reference.j2' import reset_unique_ref -%}
 
 
 {#-
@@ -45,7 +44,7 @@ import {{ n }}
     {%- elif t is IntegerType   -%} int
     {%- elif t is FloatType     -%} float
     {%- elif t is ArrayType     -%} _np_.ndarray
-    {%- elif t is CompositeType -%} {{ t|full_reference }}
+    {%- elif t is CompositeType -%} {{ t|full_reference_name }}
     {%- else -%}{% assert False %}
     {%- endif -%}
 {%- endmacro -%}
@@ -54,7 +53,7 @@ import {{ n }}
     {%-   if t is BooleanType   -%} bool
     {%- elif t is IntegerType   -%} _ty_.Union[int, {{ t|numpy_scalar_type }}]
     {%- elif t is FloatType     -%} _ty_.Union[int, float, {{ t|numpy_scalar_type }}]
-    {%- elif t is CompositeType -%} {{ t|full_reference }}
+    {%- elif t is CompositeType -%} {{ t|full_reference_name }}
     {%- elif t is ArrayType -%}
         {%- if (t.element_type is UnsignedIntegerType) and t.element_type.bit_length <= 8 -%}
             _ty_.Union[_np_.ndarray, _ty_.List[int], bytes, bytearray{%- if t.string_like -%}, str{%- endif -%}]
@@ -134,7 +133,6 @@ import {{ n }}
  # Accepts the name of the generated type and its DSDL type descriptor object of type pydsdl.CompositeType.
 -#}
 {%- macro data_schema(name, type, parent_class_name=None) -%}
-{%- do reset_unique_ref() -%}
 {%- set full_class_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
 # noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection
 class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}CompositeObject):
@@ -216,7 +214,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
         {%- elif f.data_type is FixedLengthArrayType %}
         if {{ f|id }} is None:
             {%- if f.data_type.element_type is CompositeType %}
-            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference }}() {# -#}
+            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference_name }}() {# -#}
                                           for _ in range({{ f.data_type.capacity }})], {#  -#}
                                          {{ f.data_type.element_type|numpy_scalar_type }})
             {%- else %}
@@ -234,11 +232,12 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 
         {%- elif f.data_type is CompositeType %}
         if {{ f|id }} is None:
-            self.{{ f|id }} = {{ f.data_type|full_reference }}()
-        elif isinstance({{ f|id }}, {{ f.data_type|full_reference }}):
+            self.{{ f|id }} = {{ f.data_type|full_reference_name }}()
+        elif isinstance({{ f|id }}, {{ f.data_type|full_reference_name }}):
             self.{{ f|id }} = {{ f|id }}
         else:
-            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference }} got {type({{ f|id }}).__name__}')
+            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference_name }} '
+                             f'got {type({{ f|id }}).__name__}')
 
         {%- else -%}{%- assert False -%}
         {%- endif %}
@@ -270,7 +269,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 
     {%- elif f.data_type is FixedLengthArrayType %}
         {%- if f.data_type.element_type is CompositeType %}
-            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference }}() {# -#}
+            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference_name }}() {# -#}
                                              for _ in range({{ f.data_type.capacity }})], {#  -#}
                                             {{ f.data_type.element_type|numpy_scalar_type }})
         {%- else %}
@@ -282,7 +281,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
             self.{{ f|id }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
 
     {%- elif f.data_type is CompositeType %}
-            self.{{ f|id }} = {{ f.data_type|full_reference }}()
+            self.{{ f|id }} = {{ f.data_type|full_reference_name }}()
 
     {%- else -%}{%- assert False -%}
     {%- endif %}  # Default initialization
@@ -350,10 +349,10 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
         {{ assign_array(f, 'x') | indent(4) }}
 
     {%- elif f.data_type is CompositeType %}
-        if isinstance(x, {{ f.data_type|full_reference }}):
+        if isinstance(x, {{ f.data_type|full_reference_name }}):
             self._{{ f|id }} = x
         else:
-            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference }} got {type(x).__name__}')
+            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference_name }} got {type(x).__name__}')
 
     {%- else -%}{%- assert False -%}
     {%- endif %}

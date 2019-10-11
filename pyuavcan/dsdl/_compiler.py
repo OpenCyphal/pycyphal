@@ -19,14 +19,6 @@ import nunavut
 import nunavut.jinja
 import nunavut.postprocessors
 
-#: Set of identifier names that are automatically stropped by the DSDL compiler.
-#: The stropping is necessary because these identifiers cannot be safely overridden in a Python program.
-#: Stropping is implemented by the addition of one underscore at the end of a disallowed identifier;
-#: e.g., ``if`` transforms into ``if_``. This applies to all entities, including module names.
-#: This is not to be confused with identifiers reserved by the DSDL language itself -- those are managed entirely
-#: by the DSDL front-end, this library is not concerned with that at all.
-ILLEGAL_IDENTIFIERS: typing.Set[str] = set(map(str, list(keyword.kwlist) + dir(builtins)))
-
 _AnyPath = typing.Union[str, pathlib.Path]
 
 _TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).absolute().parent / pathlib.Path('_templates')
@@ -45,7 +37,7 @@ class GeneratedPackageInfo:
     models: typing.List[pydsdl.CompositeType]
 
     #: The name of the generated package, which is the same as the name of the DSDL root namespace unless
-    #: the name had to be stropped. See :data:`ILLEGAL_IDENTIFIERS`.
+    #: the name had to be stropped. See ``nunavut.lang.py.PYTHON_RESERVED_IDENTIFIERS``.
     name: str
 
 
@@ -66,8 +58,8 @@ def generate_package(package_parent_directory:        _AnyPath,
     ``import uavcan`` is not sufficient.
 
     If the source definition contains identifiers, type names, namespace components, or other entities whose
-    names are listed in :data:`ILLEGAL_IDENTIFIERS`, the compiler applies stropping by suffixing such entities
-    with an underscore ``_``.
+    names are listed in ``nunavut.lang.py.PYTHON_RESERVED_IDENTIFIERS``,
+    the compiler applies stropping by suffixing such entities with an underscore ``_``.
 
     A small subset of applications may require access to a generated entity without knowing in advance whether
     its name is a reserved identifier or not (i.e., whether it's stropped or not). To simplify usage,
@@ -166,34 +158,29 @@ def generate_package(package_parent_directory:        _AnyPath,
                                             lookup_directories=list(map(str, lookup_directories)),
                                             allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
     root_namespace_name, = set(map(lambda x: x.root_namespace, composite_types))  # type: str,
-    # TODO: the root namespace name may have to be stropped. For example, if it's named "if", it'd break.
 
     # Template primitives
     filters = {
-        'id':                _make_identifier,
-        'alignment_prefix':  _make_serialization_alignment_prefix,
         'pickle':            _pickle_object,
         'numpy_scalar_type': _numpy_scalar_type,
-        'longest_id_length': lambda c: max(map(len, map(_make_identifier, c))),
-        'imports':           _list_imports,
-        'bit_length_set':    pydsdl.BitLengthSet,
-        'full_reference':    (lambda t: f'{t.full_name}_{t.version.major}_{t.version.minor}'),
-        'short_reference':   (lambda t: f'{t.short_name}_{t.version.major}_{t.version.minor}'),
     }
 
-    tests = _construct_instance_tests_from_root(pydsdl.SerializableType)
-    tests['PaddingField'] = lambda x: isinstance(x, pydsdl.PaddingField)
-    tests['saturated'] = _test_if_saturated
+    tests = {
+        'PaddingField': lambda x: isinstance(x, pydsdl.PaddingField),
+        'saturated':    _test_if_saturated,
+    }
 
     # Generate code
-    # TODO: add support for stropping; see https://github.com/UAVCAN/nunavut/issues/23.
+    language_context = nunavut.lang.LanguageContext('py')
     root_ns = nunavut.build_namespace_tree(types=composite_types,
                                            root_namespace_dir=root_namespace_directory,
                                            output_dir=str(package_parent_directory),
                                            extension='.py',
-                                           namespace_output_stem='__init__')
+                                           namespace_output_stem='__init__',
+                                           language_context=language_context)
     generator = nunavut.jinja.Generator(namespace=root_ns,
                                         generate_namespace_types=True,
+                                        language_context=language_context,
                                         templates_dir=_TEMPLATE_DIRECTORY,
                                         followlinks=True,
                                         additional_filters=filters,
@@ -209,19 +196,6 @@ def generate_package(package_parent_directory:        _AnyPath,
     return GeneratedPackageInfo(path=pathlib.Path(package_parent_directory) / pathlib.Path(root_namespace_name),
                                 models=composite_types,
                                 name=root_namespace_name)
-
-
-def _make_identifier(a: pydsdl.Attribute) -> str:
-    out = (a.name + '_') if a.name in ILLEGAL_IDENTIFIERS else a.name
-    assert isinstance(out, str)
-    return out
-
-
-def _make_serialization_alignment_prefix(offset: pydsdl.BitLengthSet) -> str:
-    if isinstance(offset, pydsdl.BitLengthSet):
-        return 'aligned' if offset.is_aligned_at_byte() else 'unaligned'
-    else:  # pragma: no cover
-        raise TypeError(f'Expected BitLengthSet, got {type(offset).__name__}')
 
 
 def _pickle_object(x: typing.Any) -> str:
@@ -250,23 +224,6 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
         return f'_np_.object_'
 
 
-def _list_imports(t: pydsdl.CompositeType) -> typing.List[str]:
-    # Make a list of all attributes defined by this type
-    if isinstance(t, pydsdl.ServiceType):
-        atr = t.request_type.attributes + t.response_type.attributes
-    else:
-        atr = t.attributes
-
-    # Extract data types of said attributes; for type constructors such as arrays extract the element type
-    dep_types = list(map(lambda x: x.data_type, atr))  # type: ignore
-    for t in dep_types[:]:
-        if isinstance(t, pydsdl.ArrayType):
-            dep_types.append(t.element_type)
-
-    # Make a list of unique full namespaces of referenced composites
-    return list(sorted(set(x.full_namespace for x in dep_types if isinstance(x, pydsdl.CompositeType))))
-
-
 def _test_if_saturated(t: pydsdl.PrimitiveType) -> bool:
     if isinstance(t, pydsdl.PrimitiveType):
         return {
@@ -275,31 +232,3 @@ def _test_if_saturated(t: pydsdl.PrimitiveType) -> bool:
         }[t.cast_mode]
     else:  # pragma: no cover
         raise TypeError(f'Cast mode is not defined for {type(t).__name__}')
-
-
-def _construct_instance_tests_from_root(root: typing.Type[object]) \
-        -> typing.Dict[str, typing.Callable[[typing.Any], bool]]:
-    out = {
-        root.__name__: lambda x: isinstance(x, root)
-    }
-    # noinspection PyArgumentList
-    for derived in root.__subclasses__():
-        out.update(_construct_instance_tests_from_root(derived))
-    return out
-
-
-# noinspection PyUnusedLocal
-def _unittest_instance_tests_from_root() -> None:
-    class Aa:
-        pass
-
-    class Bb(Aa):
-        pass
-
-    class Cc(Bb):
-        pass
-
-    class Dd(Aa):
-        pass
-
-    assert set(_construct_instance_tests_from_root(Aa).keys()) == {'Aa', 'Bb', 'Cc', 'Dd'}
