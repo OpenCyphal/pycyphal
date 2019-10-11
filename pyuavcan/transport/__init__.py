@@ -149,6 +149,8 @@ from ._data_specifier import MessageDataSpecifier as MessageDataSpecifier
 from ._data_specifier import ServiceDataSpecifier as ServiceDataSpecifier
 
 from ._session import SessionSpecifier as SessionSpecifier
+from ._session import InputSessionSpecifier as InputSessionSpecifier
+from ._session import OutputSessionSpecifier as OutputSessionSpecifier
 from ._session import Session as Session
 from ._session import InputSession as InputSession
 from ._session import OutputSession as OutputSession

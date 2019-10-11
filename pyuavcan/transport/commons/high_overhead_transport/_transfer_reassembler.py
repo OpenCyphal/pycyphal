@@ -28,10 +28,19 @@ class TransferReassembler:
 
     Out-of-order frame reception is supported, and therefore the reassembler can be used with
     redundant interfaces directly, without preliminary frame deduplication procedures or explicit
-    interface index assignment.
-    Distantly relevant discussion: https://github.com/UAVCAN/specification/issues/8.
+    interface index assignment, provided that all involved redundant interfaces share the same MTU setting.
     OOO support includes edge cases where the first frame of a transfer is not received first and/or the last
     frame is not received last.
+
+    OOO is required for frame-level modular transport redundancy (more than one transport operating concurrently)
+    and temporal transfer redundancy (every transfer repeated several times to mitigate frame loss).
+    The necessity of OOO is due to the fact that frames sourced concurrently from multiple transport interfaces
+    and/or frames of a temporally redundant transfer where some of the frames are lost
+    result in an out-of-order arrival of the frames.
+    Additionally, various non-vehicular and/or non-mission-critical networks
+    (such as conventional IP networks) may deliver frames out-of-order even without redundancy.
+
+    Distantly relevant discussion: https://github.com/UAVCAN/specification/issues/8.
 
     A multi-frame transfer shall not contain frames with empty payload.
     """
@@ -212,7 +221,7 @@ class TransferReassembler:
         Otherwise, returns None.
         Observe that this is a static method because anonymous transfers are fundamentally stateless.
         """
-        if frame.index == 0 and frame.end_of_transfer:
+        if frame.single_frame_transfer:
             return pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
                                                    priority=frame.priority,
                                                    transfer_id=frame.transfer_id,

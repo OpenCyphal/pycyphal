@@ -55,6 +55,10 @@ class Frame:
         if not isinstance(self.payload, memoryview):
             raise TypeError(f'Bad payload type: {type(self.payload).__name__}')
 
+    @property
+    def single_frame_transfer(self) -> bool:
+        return self.index == 0 and self.end_of_transfer
+
 
 # noinspection PyTypeChecker
 def _unittest_frame_base_ctor() -> None:
@@ -77,28 +81,28 @@ def _unittest_frame_base_ctor() -> None:
               payload=memoryview(b''))
 
     with raises(TypeError):
-        Frame(timestamp=Timestamp.now(),  # type: ignore
-              priority=2,
+        Frame(timestamp=Timestamp.now(),
+              priority=2,  # type: ignore
               transfer_id=1234,
               index=321,
               end_of_transfer=True,
               payload=memoryview(b''))
 
     with raises(TypeError):
-        Frame(timestamp=Timestamp.now(),  # type: ignore
+        Frame(timestamp=Timestamp.now(),
               priority=Priority.LOW,
               transfer_id=1234,
               index=321,
-              end_of_transfer=1,
+              end_of_transfer=1,  # type: ignore
               payload=memoryview(b''))
 
     with raises(TypeError):
-        Frame(timestamp=Timestamp.now(),  # type: ignore
+        Frame(timestamp=Timestamp.now(),
               priority=Priority.LOW,
               transfer_id=1234,
               index=321,
               end_of_transfer=False,
-              payload=b'')
+              payload=b'')  # type: ignore
 
     with raises(ValueError):
         Frame(timestamp=Timestamp.now(),

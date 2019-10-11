@@ -7,6 +7,7 @@
 from __future__ import annotations
 import abc
 import typing
+import warnings
 import dataclasses
 import pyuavcan.util
 from ._transfer import Transfer, TransferFrom
@@ -60,13 +61,10 @@ class Feedback(abc.ABC):
 @dataclasses.dataclass(frozen=True)
 class SessionSpecifier:
     """
-    This is like a regular session specifier (https://forum.uavcan.org/t/alternative-transport-protocols/324)
-    except that we assume that one end of a session terminates at the local node.
-
-    If the remote node-ID is not set, then for output sessions this implies broadcast and for input
-    sessions this implies promiscuity.
-    If it is set, then output sessions will be unicast to that node-ID and input sessions will ignore
-    all transfers except those originating from the specified node-ID.
+    This dataclass models the session specifier (https://forum.uavcan.org/t/alternative-transport-protocols/324)
+    except that we assume that one end of the session terminates at the local node.
+    There are specializations for input and output sessions with additional logic,
+    but they do not add extra data (because remember this class follows the protocol model definition).
     """
     #: See :class:`pyuavcan.transport.DataSpecifier`.
     data_specifier: DataSpecifier
@@ -81,6 +79,63 @@ class SessionSpecifier:
             raise ValueError(f'Invalid remote node-ID: {self.remote_node_id}')
 
 
+@dataclasses.dataclass(frozen=True)
+class InputSessionSpecifier(SessionSpecifier):
+    """
+    If the remote node-ID is set, this is a selective session (accept data from the specified remote node only);
+    otherwise this is a promiscuous session (accept data from any node).
+    """
+    @property
+    def is_promiscuous(self) -> bool:
+        return self.remote_node_id is None
+
+
+@dataclasses.dataclass(frozen=True)
+class OutputSessionSpecifier(SessionSpecifier):
+    """
+    If the remote node-ID is set, this is a unicast session (use unicast transfers);
+    otherwise this is a broadcast session (use broadcast transfers).
+    The Specification v1.0 allows the following kinds of transfers:
+
+    - Broadcast message transfers.
+    - Unicast service transfers.
+
+    Anything else is invalid per UAVCAN v1.0.
+    A future version of the specification may add support for unicast messages for at least some transports.
+    Here, we go ahead and assume that unicast message transfers are valid in general;
+    it is up to a particular transport implementation to choose whether they are supported.
+    Beware that this is a non-standard experimental protocol extension and it may be removed
+    depending on how the next versions of the Specification evolve.
+    You can influence that by leaving feedback at https://forum.uavcan.org.
+
+    To summarize:
+
+    +--------------------+--------------------------------------+---------------------------------------+
+    |                    | Unicast                              | Broadcast                             |
+    +====================+======================================+=======================================+
+    | **Message**        | Experimental, may be allowed in v1.x | Allowed by Specification              |
+    +--------------------+--------------------------------------+---------------------------------------+
+    | **Service**        | Allowed by Specification             | Banned by Specification               |
+    +--------------------+--------------------------------------+---------------------------------------+
+    """
+    def __post_init__(self) -> None:
+        if isinstance(self.data_specifier, pyuavcan.transport.ServiceDataSpecifier) and self.remote_node_id is None:
+            raise ValueError('Service transfers shall be unicast')
+
+        if isinstance(self.data_specifier, pyuavcan.transport.MessageDataSpecifier) and self.remote_node_id is not None:
+            warnings.warn(
+                f'Unicast message transfers are an experimental extension of the protocol which '
+                f'should not be used in production yet. '
+                f'If your application relies on this feature, leave feedback at https://forum.uavcan.org.',
+                category=RuntimeWarning,
+                stacklevel=-2
+            )
+
+    @property
+    def is_broadcast(self) -> bool:
+        return self.remote_node_id is None
+
+
 @dataclasses.dataclass
 class SessionStatistics:
     """
@@ -88,9 +143,9 @@ class SessionStatistics:
     Transport implementations are encouraged to extend this class to add more transport-specific information.
     The statistical counters start from zero when a session is first instantiated.
     """
-    transfers:     int = 0  #: UAVCAN transfer count.
+    transfers:     int = 0  #: Successful transfer count.
     frames:        int = 0  #: UAVCAN transport frame count (CAN frames, UDP packets, wireless frames, etc).
-    payload_bytes: int = 0  #: Transport layer payload bytes, i.e., not including transport metadata or padding.
+    payload_bytes: int = 0  #: Successful transfer payload bytes (not including transport metadata or padding).
     errors:        int = 0  #: Failures of any kind, even if they are also logged using other means, excepting drops.
     drops:         int = 0  #: Frames lost to buffer overruns and expired deadlines.
 
@@ -147,7 +202,7 @@ class Session(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, specifier=self.specifier, payload_metadata=self.payload_metadata)
+        return pyuavcan.util.repr_attributes(self, self.specifier, self.payload_metadata)
 
 
 # noinspection PyAbstractClass
@@ -159,6 +214,11 @@ class InputSession(Session):
     Users shall never construct instances themselves;
     instead, the factory method :meth:`pyuavcan.transport.Transport.get_input_session` shall be used.
     """
+    @property
+    @abc.abstractmethod
+    def specifier(self) -> InputSessionSpecifier:
+        raise NotImplementedError
+
     @abc.abstractmethod
     async def receive_until(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
         """
@@ -209,6 +269,11 @@ class OutputSession(Session):
     Users shall never construct instances themselves;
     instead, the factory method :meth:`pyuavcan.transport.Transport.get_output_session` shall be used.
     """
+    @property
+    @abc.abstractmethod
+    def specifier(self) -> OutputSessionSpecifier:
+        raise NotImplementedError
+
     @abc.abstractmethod
     async def send_until(self, transfer: Transfer, monotonic_deadline: float) -> bool:
         """

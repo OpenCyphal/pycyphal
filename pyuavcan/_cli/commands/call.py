@@ -11,9 +11,9 @@ import decimal
 import logging
 import argparse
 import contextlib
-import argparse_utils
 import pyuavcan
 from . import _util, _subsystems
+from ._argparse_helpers import make_enum_action
 from ._yaml import YAMLLoader
 from ._base import Command, SubsystemFactory
 
@@ -95,7 +95,7 @@ Default: %(default)s
         parser.add_argument(
             '--priority',
             default=pyuavcan.presentation.DEFAULT_PRIORITY,
-            action=argparse_utils.enum_action(pyuavcan.transport.Priority),
+            action=make_enum_action(pyuavcan.transport.Priority),
             help='''
 Priority of the request transfer. Applies to the heartbeat as well.
 Default: %(default)s

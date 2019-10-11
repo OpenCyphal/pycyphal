@@ -22,7 +22,7 @@ from tests.dsdl.conftest import TEST_DATA_TYPES_DIR, PUBLIC_REGULATED_DATA_TYPES
 @dataclasses.dataclass
 class _IfaceOption:
     demo_env_vars: typing.Dict[str, str]
-    cli_arguments: typing.Sequence[str]
+    make_cli_args: typing.Callable[[typing.Optional[int]], typing.Sequence[str]]
 
 
 def _get_iface_options() -> typing.Iterable[_IfaceOption]:
@@ -31,20 +31,54 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
     When adding new transports, add them to the demo and update this factory accordingly.
     Don't forget about redundant configurations, too.
     """
-    # TODO: Add more transports when redundancy is supported.
     if sys.platform == 'linux':
+        # CAN
         yield _IfaceOption(
             demo_env_vars={'DEMO_INTERFACE_KIND': 'can'},
-            cli_arguments=[
-                '--socketcan=vcan0,8',  # The demo uses CAN 2.0! SocketCAN does not support nonuniform MTU well.
-            ],
+            make_cli_args=lambda nid: (  # The demo uses CAN 2.0! SocketCAN does not support nonuniform MTU well.
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan0",8),local_node_id={nid})',
+            ),
         )
 
+        # TMR CAN
+        yield _IfaceOption(
+            demo_env_vars={'DEMO_INTERFACE_KIND': 'can_can_can'},
+            make_cli_args=lambda nid: (  # The MTU values are like in the demo otherwise SocketCAN may misbehave.
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan0",8),local_node_id={nid})',
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan1",32),local_node_id={nid})',
+                f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan2",64),local_node_id={nid})',
+            ),
+        )
+
+    # Serial
     yield _IfaceOption(
-        demo_env_vars={},   # Defaults to this, no variable has to be specified. If the default is changed, update this.
-        cli_arguments=[
-            '--serial=socket://localhost:50905',
-        ],
+        demo_env_vars={'DEMO_INTERFACE_KIND': 'serial'},
+        make_cli_args=lambda nid: (
+            f'--tr=Serial("socket://localhost:50905",local_node_id={nid})',
+        ),
+    )
+
+    # UDP
+    yield _IfaceOption(
+        demo_env_vars={'DEMO_INTERFACE_KIND': 'udp'},
+        make_cli_args=lambda nid: (
+            (f'--tr=UDP("127.0.0.{nid}/8")', )      # Regular node
+            if nid is not None else
+            (f'--tr=UDP("127.255.255.255/8")', )    # Anonymous node
+        ),
+    )
+
+    # DMR UDP+Serial
+    yield _IfaceOption(
+        demo_env_vars={'DEMO_INTERFACE_KIND': 'udp_serial'},
+        make_cli_args=lambda nid: (
+            (
+                f'--tr=UDP("127.0.0.{nid}/8")'          # Regular node
+                if nid is not None else
+                f'--tr=UDP("127.255.255.255/8")'        # Anonymous node
+            ),
+            f'--tr=Serial("socket://localhost:50905",local_node_id={nid})',
+        ),
     )
 
 
@@ -83,18 +117,18 @@ def _unittest_slow_cli_demo_basic_usage(
     assert demo_proc.alive
 
     proc_sub_heartbeat = BackgroundChildProcess.cli(
-        'sub', 'uavcan.node.Heartbeat.1.0', '--format=JSON',    # Count unlimited
-        '--with-metadata', *iface_option.cli_arguments
+        'sub', 'uavcan.node.Heartbeat.1.0', '--format=json',    # Count unlimited
+        '--with-metadata', *iface_option.make_cli_args(None)  # type: ignore
     )
 
     proc_sub_temperature = BackgroundChildProcess.cli(
-        'sub', '12345.uavcan.si.sample.temperature.Scalar.1.0', '--count=3', '--format=JSON',
-        '--with-metadata', *iface_option.cli_arguments
+        'sub', '12345.uavcan.si.sample.temperature.Scalar.1.0', '--count=3', '--format=json',
+        '--with-metadata', *iface_option.make_cli_args(None)  # type: ignore
     )
 
     proc_sub_diagnostic = BackgroundChildProcess.cli(
-        'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=JSON',
-        '--with-metadata', *iface_option.cli_arguments
+        'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=json',
+        '--with-metadata', *iface_option.make_cli_args(None)  # type: ignore
     )
 
     try:
@@ -107,9 +141,9 @@ def _unittest_slow_cli_demo_basic_usage(
         run_cli_tool(
             '-v',
             'pub', '12345.uavcan.si.sample.temperature.Scalar.1.0', '{kelvin: 321.5}',
-            '--count=3', '--period=0.1', '--priority=SLOW', '--local-node-id=0',
+            '--count=3', '--period=0.1', '--priority=slow',
             '--heartbeat-fields={vendor_specific_status_code: 123456}',
-            *iface_option.cli_arguments,
+            *iface_option.make_cli_args(1),  # type: ignore
             timeout=5.0
         )
 
@@ -120,10 +154,9 @@ def _unittest_slow_cli_demo_basic_usage(
         out_sub_diagnostic = proc_sub_diagnostic.wait(1.0, interrupt=True)[1].splitlines()
 
         # Run service tests while the demo process is still running.
-        node_info_text = run_cli_tool('-v', 'call', '42', 'uavcan.node.GetInfo.1.0', '{}',
-                                      '--local-node-id', '123', '--format', 'JSON', '--with-metadata',
-                                      '--priority', 'SLOW', '--timeout', '3.0',
-                                      *iface_option.cli_arguments,
+        node_info_text = run_cli_tool('-v', 'call', '42', 'uavcan.node.GetInfo.1.0', '{}', '--format', 'json',
+                                      '--with-metadata', '--priority', 'slow', '--timeout', '3.0',
+                                      *iface_option.make_cli_args(123),  # type: ignore
                                       timeout=5.0)
         print('node_info_text:', node_info_text)
         node_info = json.loads(node_info_text)
@@ -137,21 +170,21 @@ def _unittest_slow_cli_demo_basic_usage(
         command_response = json.loads(run_cli_tool(
             '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0',
             f'{{command: {uavcan.node.ExecuteCommand_1_0.Request.COMMAND_STORE_PERSISTENT_STATES} }}',
-            '--local-node-id', '123', '--format', 'JSON', *iface_option.cli_arguments, timeout=5.0
+            '--format', 'json', *iface_option.make_cli_args(123), timeout=5.0  # type: ignore
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND
 
         # Next request - this fails if the EMITTED TRANSFER-ID MAP save/restore logic is not working.
         command_response = json.loads(run_cli_tool(
             '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0', '{command: 23456}',
-            '--local-node-id', '123', '--format', 'JSON', *iface_option.cli_arguments, timeout=5.0
+            '--format', 'json', *iface_option.make_cli_args(123), timeout=5.0  # type: ignore
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
 
         least_squares_response = json.loads(run_cli_tool(
             '-vv', 'call', '42', '123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0',
             '{points: [{x: 1, y: 2}, {x: 10, y: 20}]}', '--timeout=5',
-            '--local-node-id', '123', '--format', 'JSON', *iface_option.cli_arguments, timeout=6.0
+            '--format', 'json', *iface_option.make_cli_args(123), timeout=6.0  # type: ignore
         ))
         assert least_squares_response['123']['slope'] == pytest.approx(2.0)
         assert least_squares_response['123']['y_intercept'] == pytest.approx(0.0)
@@ -160,7 +193,7 @@ def _unittest_slow_cli_demo_basic_usage(
         command_response = json.loads(run_cli_tool(
             '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0',
             f'{{command: {uavcan.node.ExecuteCommand_1_0.Request.COMMAND_POWER_OFF} }}',
-            '--local-node-id', '123', '--format', 'JSON', *iface_option.cli_arguments, timeout=5.0
+            '--format', 'json', *iface_option.make_cli_args(123), timeout=5.0  # type: ignore
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
 
@@ -185,7 +218,7 @@ def _unittest_slow_cli_demo_basic_usage(
 
         assert 'slow' in heartbeat_pub['32085']['_metadata_']['priority'].lower()
         assert heartbeat_pub['32085']['_metadata_']['transfer_id'] >= 0
-        assert heartbeat_pub['32085']['_metadata_']['source_node_id'] == 0
+        assert heartbeat_pub['32085']['_metadata_']['source_node_id'] == 1
         assert heartbeat_pub['32085']['uptime'] in (0, 1)
         assert heartbeat_pub['32085']['vendor_specific_status_code'] == 123456
 
@@ -196,7 +229,7 @@ def _unittest_slow_cli_demo_basic_usage(
         for parsed in (json.loads(s) for s in out_sub_temperature):
             assert 'slow' in parsed['12345']['_metadata_']['priority'].lower()
             assert parsed['12345']['_metadata_']['transfer_id'] >= 0
-            assert parsed['12345']['_metadata_']['source_node_id'] == 0
+            assert parsed['12345']['_metadata_']['source_node_id'] == 1
             assert parsed['12345']['kelvin'] == pytest.approx(321.5)
 
         assert len(out_sub_diagnostic) >= 1

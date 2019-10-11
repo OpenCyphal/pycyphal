@@ -156,11 +156,11 @@ class Deserializer(abc.ABC):
 
     def fetch_aligned_i32(self) -> int:
         x = self.fetch_aligned_u32()
-        return (x - 2 ** 32) if x >= 2 ** 31 else x
+        return int(x - 2 ** 32) if x >= 2 ** 31 else x  # wrapped in int() to appease MyPy
 
     def fetch_aligned_i64(self) -> int:
         x = self.fetch_aligned_u64()
-        return (x - 2 ** 64) if x >= 2 ** 63 else x
+        return int(x - 2 ** 64) if x >= 2 ** 63 else x  # wrapped in int() to appease MyPy
 
     def fetch_aligned_f16(self) -> float:  # noinspection PyTypeChecker
         out, = struct.unpack('<e', self.fetch_aligned_bytes(2))

@@ -13,7 +13,6 @@ import pathlib
 import zipfile
 import tempfile
 import argparse
-import requests
 import pyuavcan
 from ._base import Command
 from ._paths import DEFAULT_DSDL_GENERATED_PACKAGES_DIR, DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
@@ -153,6 +152,8 @@ option. If not sure, ask for advice at https://forum.uavcan.org.
         Downloads an archive from the specified URL, unpacks it into a temporary directory, and returns the list of
         directories in the root of the unpacked archive.
         """
+        import requests  # Takes over 100 ms to import! Having it in the file scope is a performance disaster.
+
         # TODO: autodetect the type of the archive
         arch_dir = tempfile.mkdtemp(prefix='pyuavcan-cli-dsdl')
         arch_file = str(pathlib.Path(arch_dir) / 'dsdl.zip')

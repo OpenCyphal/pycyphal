@@ -52,7 +52,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
     def __init__(self,
                  transport:        pyuavcan.transport.can.CANTransport,
                  send_handler:     SendHandler,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  finalizer:        _base.SessionFinalizer):
         """Use the factory method."""
@@ -91,7 +91,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
                                           f'{self._feedback_handler}: {ex}')
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
         return self._specifier
 
     @property
@@ -122,7 +122,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
             compiled_identifier=can_id.compile(transfer.fragmented_payload),
             transfer_id=transfer.transfer_id,
             fragmented_payload=transfer.fragmented_payload,
-            max_frame_payload_bytes=self._transport.mtu,
+            max_frame_payload_bytes=self._transport.protocol_parameters.mtu,
             loopback_first_frame=self._feedback_handler is not None
         ))
         first_frame = next(auxiliary_iter)
@@ -166,7 +166,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
 
 class BroadcastCANOutputSession(CANOutputSession):
     def __init__(self,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  transport:        pyuavcan.transport.can.CANTransport,
                  send_handler:     SendHandler,
@@ -195,7 +195,7 @@ class BroadcastCANOutputSession(CANOutputSession):
 
 class UnicastCANOutputSession(CANOutputSession):
     def __init__(self,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  transport:        pyuavcan.transport.can.CANTransport,
                  send_handler:     SendHandler,

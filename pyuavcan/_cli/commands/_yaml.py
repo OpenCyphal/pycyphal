@@ -48,7 +48,7 @@ class YAMLLoader:
         return self._impl.load(text)
 
 
-def _represent_decimal(self: ruamel.yaml.BaseRepresenter,                   # type: ignore
+def _represent_decimal(self: ruamel.yaml.BaseRepresenter,
                        data: decimal.Decimal) -> ruamel.yaml.ScalarNode:
     if data.is_finite():
         s = str(_POINT_ZERO_DECIMAL + data)  # The zero addition is to force float-like string representation
@@ -63,7 +63,7 @@ def _represent_decimal(self: ruamel.yaml.BaseRepresenter,                   # ty
 
 ruamel.yaml.add_representer(decimal.Decimal,
                             _represent_decimal,
-                            representer=ruamel.yaml.RoundTripRepresenter)  # type: ignore
+                            representer=ruamel.yaml.RoundTripRepresenter)
 
 _POINT_ZERO_DECIMAL = decimal.Decimal('0.0')
 

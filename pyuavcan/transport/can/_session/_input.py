@@ -32,7 +32,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
     _QueueItem = typing.Tuple[_identifier.CANID, _frame.TimestampedUAVCANFrame]
 
     def __init__(self,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 specifier:        pyuavcan.transport.InputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  loop:             asyncio.AbstractEventLoop,
                  finalizer:        _base.SessionFinalizer):
@@ -92,7 +92,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
             pass
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.InputSessionSpecifier:
         return self._specifier
 
     @property

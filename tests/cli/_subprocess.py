@@ -12,6 +12,7 @@ import typing
 import logging
 import pathlib
 import subprocess
+from subprocess import CalledProcessError as CalledProcessError
 
 
 DEMO_DIR = pathlib.Path(__file__).absolute().parent.parent / 'demo'
@@ -40,9 +41,9 @@ def run_process(*args: str, timeout: typing.Optional[float] = None) -> str:
     cmd = _make_process_args(*args)
     _logger.info('Running process with timeout=%s: %s', timeout if timeout is not None else 'inf', ' '.join(cmd))
     # Can't use shell=True with timeout; see https://stackoverflow.com/questions/36952245/subprocess-timeout-failure
-    stdout = subprocess.check_output(cmd,  # type: ignore
+    stdout = subprocess.check_output(cmd,
                                      stderr=sys.stderr,
-                                     timeout=timeout,
+                                     timeout=timeout,  # type: ignore
                                      encoding='utf8',
                                      env=_get_env())
     assert isinstance(stdout, str)

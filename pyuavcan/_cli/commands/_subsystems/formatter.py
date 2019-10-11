@@ -9,9 +9,9 @@ import enum
 import typing
 import logging
 import argparse
-import argparse_utils
-from ._base import SubsystemFactory
 from .._yaml import YAMLDumper  # Reaching to an upper-level module like this is not great, do something about it.
+from .._argparse_helpers import make_enum_action
+from ._base import SubsystemFactory
 
 
 Formatter = typing.Callable[[typing.Dict[int, typing.Dict[str, typing.Any]]], str]
@@ -25,7 +25,7 @@ class FormatterFactory(SubsystemFactory):
         parser.add_argument(
             '--format', '-F',
             default=next(iter(_Format)),
-            action=argparse_utils.enum_action(_Format),
+            action=make_enum_action(_Format),
             help='''
 The format of the data printed into stdout. The final representation is
 constructed from an intermediate "builtin-based" representation, which is

@@ -5,19 +5,151 @@
 #
 
 """
+Serial transport overview
++++++++++++++++++++++++++
+
+The serial transport is experimental and is not yet part of the UAVCAN specification.
+Future revisions may break wire compatibility until the transport is formally specified.
+Context: https://forum.uavcan.org/t/alternative-transport-protocols/324, also see the discussion at
+https://forum.uavcan.org/t/yukon-design-megathread/390/115?u=pavel.kirienko.
+
+The serial transport is designed for OSI L1 byte-level serial links:
+
+- UART, RS-232/485/422 (the recommended rates are: 115200 bps, 921600 bps, 3 Mbps, 10 Mbps, 100 Mbps);
+  copper or fiber optics.
+- USB CDC ACM.
+
+It is also suitable for raw transport log storage, because one-dimensional flat binary files are structurally
+similar to serial byte-level links.
+
 This transport module contains no media sublayers because the media abstraction
 is handled directly by the `PySerial <https://pypi.org/project/pyserial>`_
 library and the underlying operating system.
 
+The serial transport supports all transfer categories:
+
++--------------------+--------------------------+---------------------------+
+| Supported transfers| Unicast                  | Broadcast                 |
++====================+==========================+===========================+
+|**Message**         | Yes                      | Yes                       |
++--------------------+--------------------------+---------------------------+
+|**Service**         | Yes                      | Banned by Specification   |
++--------------------+--------------------------+---------------------------+
+
+
+Protocol definition
++++++++++++++++++++
+
+The packet header is defined as follows (byte and bit ordering in this definition follow the DSDL specification:
+least significant byte first, most significant bit first)::
+
+    uint8   version                 # Always zero. Discard the frame if not.
+    uint8   priority                # 0 = highest, 7 = lowest; the rest are unused.
+    uint16  source node ID          # 0xFFFF = anonymous.
+    uint16  destination node ID     # 0xFFFF = broadcast.
+    uint16  data specifier
+
+    uint64  data type hash
+    uint64  transfer ID
+
+    uint32  frame index EOT         # MSB set if last frame of the transfer.
+    void32                          # Set to zero when sending, ignore when receiving.
+
+For message frames, the data specifier field contains the subject-ID value,
+so that the most significant bit is always cleared.
+For service frames, the most significant bit (15th) is always set,
+and the second-to-most-significant bit (14th) is set for response transfers only;
+the remaining 14 least significant bits contain the service-ID value.
+
+Total header size: 32 bytes (256 bits).
+
+The header is prepended before the frame payload; the resulting structure is
+encoded into its serialized form using the following packet format (influenced by HDLC, SLIP, POPCOP):
+
++------------------------+-----------------------+-----------------------+------------------------+
+|Frame delimiter **0x9E**|Escaped header+payload |CRC32C (Castagnoli)    |Frame delimiter **0x9E**|
++========================+=======================+=======================+========================+
+|Single-byte frame       |The following bytes are|Four bytes long,       |Same frame delimiter as |
+|delimiter **0x9E**.     |escaped: **0x9E**      |little-endian byte     |at the start.           |
+|Begins a new frame and  |(frame delimiter);     |order; bytes 0x9E      |Terminates the current  |
+|possibly terminates the |**0x8E** (escape       |(frame delimiter) and  |frame and possibly      |
+|previous frame.         |character). An escaped |0x8E (escape character)|begins the next frame.  |
+|                        |byte is bitwise        |are escaped like in    |                        |
+|                        |inverted and prepended |the payload.           |                        |
+|                        |with the escape        |The CRC is computed    |                        |
+|                        |character 0x8E. For    |over the unescaped     |                        |
+|                        |example: byte 0x9E is  |(i.e., original form)  |                        |
+|                        |transformed into 0x8E  |payload, not including |                        |
+|                        |followed by 0x71.      |the start delimiter.   |                        |
++------------------------+-----------------------+-----------------------+------------------------+
+
+There are no magic bytes in this format because the strong CRC and the data type hash field render the
+format sufficiently recognizable. The worst case overhead exceeds 100% if every byte of the payload and the CRC
+is either 0x9E or 0x8E. Despite the overhead, this format is still considered superior to the alternatives
+since it is robust and guarantees a constant recovery time. Consistent-overhead byte stuffing (COBS) is sometimes
+employed for similar tasks, but it should be understood that while it offers a substantially lower overhead,
+it undermines the synchronization recovery properties of the protocol. There is a somewhat relevant discussion
+at https://github.com/vedderb/bldc/issues/79.
+
+The format can share the same serial medium with ASCII text exchanges such as command-line interfaces or
+real-time logging. The special byte values employed by the format do not belong to the ASCII character set.
+
+The last four bytes of a multi-frame transfer payload contain the CRC32C (Castagnoli) hash of the transfer
+payload in little-endian byte order.
+The multi-frame transfer logic (decomposition and reassembly) is implemented in a separate
+transport-agnostic module :mod:`pyuavcan.transport.commons.high_overhead_transport`.
+
+
+Unreliable links and temporal redundancy
+++++++++++++++++++++++++++++++++++++++++
+
+The serial transport supports the deterministic data loss mitigation option,
+where a transfer can be repeated several times to reduce the probability of its loss.
+This feature is discussed in detail in the documentation for the UDP transport :mod:`pyuavcan.transport.udp`.
+
+
+Usage
++++++
+
+>>> import pyuavcan
+>>> import pyuavcan.transport.serial
+>>> tr = pyuavcan.transport.serial.SerialTransport('loop://', local_node_id=1234, baudrate=115200)
+>>> tr.local_node_id
+1234
+>>> tr.serial_port.baudrate
+115200
+>>> pm = pyuavcan.transport.PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 1024)
+>>> ds = pyuavcan.transport.MessageDataSpecifier(12345)
+>>> pub = tr.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
+>>> sub = tr.get_input_session(pyuavcan.transport.InputSessionSpecifier(ds, None), pm)
+>>> await_ = tr.loop.run_until_complete
+>>> await_(pub.send_until(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
+...                                                   pyuavcan.transport.Priority.LOW,
+...                                                   1111,
+...                                                   fragmented_payload=[]),
+...                       tr.loop.time() + 1.0))
+True
+>>> await_(sub.receive_until(tr.loop.time() + 1.0))
+TransferFrom(..., transfer_id=1111, ...)
+>>> tr.close()
+
+
+Tooling
++++++++
+
+Serial data logging
+~~~~~~~~~~~~~~~~~~~
+
+The underlying PySerial library provides a convenient method of logging exchange through a serial port into a file.
+To invoke this feature, embed the name of the serial port into the URI ``spy:///dev/ttyUSB0?file=dump.txt``,
+where ``/dev/ttyUSB0`` is the name of the serial port, ``dump.txt`` is the name of the log file.
+
 
 TCP/IP tunneling
-++++++++++++++++
+~~~~~~~~~~~~~~~~
 
 For testing or experimentation it is often convenient to use a virtual link instead of a real one.
-
-The underlying PySerial library includes support for many auxiliary features that help with testing
-(please read its user documentation, particularly the section on URL handlers).
-One of such features is the support for tunneling of raw serial data over TCP connections,
+The underlying PySerial library supports tunneling of raw serial data over TCP connections,
 which can be leveraged for local testing without accessing any physical serial ports.
 This option can be accessed by specifying the URI of the form ``socket://<address>:<port>``
 instead of a real serial port name when establishing the connection.
@@ -26,7 +158,7 @@ The location specified in the URL must point to the TCP server port that will fo
 to and from the other end of the link.
 While such a server can be trivially coded manually by the developer,
 it is possible to avoid the effort by relying on the TCP connection brokering mode available in
-`Ncat <https://nmap.org/ncat/>`_ (which is a part of the Nmap project, thanks Fyodor).
+Ncat (which is a part of the `Nmap <https://nmap.org>`_ project, thanks Fyodor).
 
 For example, one could set up the TCP broker as follows
 (add ``-v`` to see what's happening; more info at https://nmap.org/ncat/guide/ncat-broker.html)
@@ -69,3 +201,4 @@ from ._session import SerialFeedback as SerialFeedback
 from ._session import SerialInputSessionStatistics as SerialInputSessionStatistics
 
 from ._frame import SerialFrame as SerialFrame
+from ._stream_parser import StreamParser as StreamParser

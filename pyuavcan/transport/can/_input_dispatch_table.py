@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 import typing
-from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, SessionSpecifier
+from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, InputSessionSpecifier
 from ._session import CANInputSession
 from ._identifier import CANID
 
@@ -29,7 +29,7 @@ class InputDispatchTable:
         self._table: typing.List[typing.Optional[CANInputSession]] = [None] * (self._TABLE_SIZE + 1)
 
         # A parallel dict is necessary for constant-complexity element listing. Traversing the table takes forever.
-        self._dict: typing.Dict[SessionSpecifier, CANInputSession] = {}
+        self._dict: typing.Dict[InputSessionSpecifier, CANInputSession] = {}
 
     @property
     def items(self) -> typing.Iterable[CANInputSession]:
@@ -43,13 +43,13 @@ class InputDispatchTable:
         self._table[self._compute_index(key)] = session
         self._dict[key] = session
 
-    def get(self, specifier: SessionSpecifier) -> typing.Optional[CANInputSession]:
+    def get(self, specifier: InputSessionSpecifier) -> typing.Optional[CANInputSession]:
         """
         Constant-time lookup. Invoked for every received frame.
         """
         return self._table[self._compute_index(specifier)]
 
-    def remove(self, specifier: SessionSpecifier) -> None:
+    def remove(self, specifier: InputSessionSpecifier) -> None:
         """
         This method is used only when an input session is destroyed; performance is not a priority.
         """
@@ -57,7 +57,7 @@ class InputDispatchTable:
         del self._dict[specifier]
 
     @staticmethod
-    def _compute_index(specifier: SessionSpecifier) -> int:
+    def _compute_index(specifier: InputSessionSpecifier) -> int:
         ds, nid = specifier.data_specifier, specifier.remote_node_id
         if isinstance(ds, MessageDataSpecifier):
             dim1 = ds.subject_id
@@ -87,19 +87,19 @@ def _unittest_input_dispatch_table() -> None:
 
     t = InputDispatchTable()
     assert len(list(t.items)) == 0
-    assert t.get(SessionSpecifier(MessageDataSpecifier(1234), None)) is None
+    assert t.get(InputSessionSpecifier(MessageDataSpecifier(1234), None)) is None
     with raises(LookupError):
-        t.remove(SessionSpecifier(MessageDataSpecifier(1234), 123))
+        t.remove(InputSessionSpecifier(MessageDataSpecifier(1234), 123))
 
-    a = CANInputSession(SessionSpecifier(MessageDataSpecifier(1234), None),
+    a = CANInputSession(InputSessionSpecifier(MessageDataSpecifier(1234), None),
                         PayloadMetadata(456, 789),
                         asyncio.get_event_loop(),
                         lambda: None)
     t.add(a)
     t.add(a)
     assert list(t.items) == [a]
-    assert t.get(SessionSpecifier(MessageDataSpecifier(1234), None)) == a
-    t.remove(SessionSpecifier(MessageDataSpecifier(1234), None))
+    assert t.get(InputSessionSpecifier(MessageDataSpecifier(1234), None)) == a
+    t.remove(InputSessionSpecifier(MessageDataSpecifier(1234), None))
     assert len(list(t.items)) == 0
 
 
@@ -108,14 +108,15 @@ def _unittest_slow_input_dispatch_table_index() -> None:
     values: typing.Set[int] = set()
     for node_id in (*range(InputDispatchTable._NUM_NODE_IDS), None):
         for subj in range(InputDispatchTable._NUM_SUBJECTS):
-            out = InputDispatchTable._compute_index(SessionSpecifier(MessageDataSpecifier(subj), node_id))
+            out = InputDispatchTable._compute_index(InputSessionSpecifier(MessageDataSpecifier(subj), node_id))
             assert out not in values
             values.add(out)
             assert out < InputDispatchTable._TABLE_SIZE
 
         for serv in range(InputDispatchTable._NUM_SERVICES):
             for role in ServiceDataSpecifier.Role:
-                out = InputDispatchTable._compute_index(SessionSpecifier(ServiceDataSpecifier(serv, role), node_id))
+                out = InputDispatchTable._compute_index(InputSessionSpecifier(ServiceDataSpecifier(serv, role),
+                                                                              node_id))
                 assert out not in values
                 values.add(out)
                 assert out < InputDispatchTable._TABLE_SIZE

@@ -14,7 +14,7 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2
 
     def __init__(self,
-                 specifier:        pyuavcan.transport.SessionSpecifier,
+                 specifier:        pyuavcan.transport.InputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  loop:             asyncio.AbstractEventLoop,
                  closer:           typing.Callable[[], None]):
@@ -65,7 +65,7 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
             raise ValueError(f'Invalid TID timeout: {value!r}')
 
     @property
-    def specifier(self) -> pyuavcan.transport.SessionSpecifier:
+    def specifier(self) -> pyuavcan.transport.InputSessionSpecifier:
         return self._specifier
 
     @property
@@ -84,7 +84,7 @@ def _unittest_session() -> None:
 
     closed = False
 
-    specifier = pyuavcan.transport.SessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
+    specifier = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
     payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
 
     def do_close() -> None:

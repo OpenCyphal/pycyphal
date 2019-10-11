@@ -16,22 +16,22 @@ _RX_TIMEOUT = 10e-3
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_can_transport() -> None:
+async def _unittest_can_transport_anon() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
-    from pyuavcan.transport import InvalidTransportConfigurationError, OperationNotDefinedForAnonymousNodeError
-    from pyuavcan.transport import ResourceClosedError, SessionSpecifier
+    from pyuavcan.transport import OperationNotDefinedForAnonymousNodeError
+    from pyuavcan.transport import InputSessionSpecifier, OutputSessionSpecifier
     # noinspection PyProtectedMember
-    from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
+    from pyuavcan.transport.can._identifier import MessageCANID
     # noinspection PyProtectedMember
     from pyuavcan.transport.can._frame import UAVCANFrame
     from .media.mock import MockMedia, FrameCollector
 
     with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
-        can.CANTransport(MockMedia(set(), 64, 0))
+        can.CANTransport(MockMedia(set(), 64, 0), None)
 
     with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
-        can.CANTransport(MockMedia(set(), 7, 16))
+        can.CANTransport(MockMedia(set(), 7, 16), None)
 
     peers: typing.Set[MockMedia] = set()
     media = MockMedia(peers, 64, 10)
@@ -39,63 +39,63 @@ async def _unittest_can_transport() -> None:
     peeper = MockMedia(peers, 64, 10)
     assert len(peers) == 3
 
-    tr = can.CANTransport(media)
-    tr2 = can.CANTransport(media2)
+    tr = can.CANTransport(media, None)
+    tr2 = can.CANTransport(media2, None)
 
     assert tr.protocol_parameters == pyuavcan.transport.ProtocolParameters(
         transfer_id_modulo=32,
         max_nodes=128,
         mtu=63
     )
-    assert tr.mtu == 63
     assert tr.local_node_id is None
     assert tr.protocol_parameters == tr2.protocol_parameters
 
     assert not media.automatic_retransmission_enabled
     assert not media2.automatic_retransmission_enabled
 
-    assert tr.descriptor == '<can><mock mtu="64">mock</mock></can>'
+    assert tr.descriptor == f'<can><mock mtu="64">mock@{id(peers):08x}</mock></can>'
 
     #
     # Instantiate session objects
     #
     meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
 
-    with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't broadcast service calls
-        tr.get_output_session(SessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE), None),
+    with pytest.raises(Exception):                                                      # Can't broadcast service calls
+        tr.get_output_session(OutputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
+                                                     None),
                               meta)
 
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't unicast messages
-        tr.get_output_session(SessionSpecifier(MessageDataSpecifier(1234), 123), meta)
+        tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(1234), 123), meta)
 
-    broadcaster = tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert broadcaster is tr.get_output_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
-    subscriber_promiscuous = tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
-    assert subscriber_promiscuous is tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
+    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), None), meta)
+    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), None), meta)
 
-    subscriber_selective = tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
-    assert subscriber_selective is tr.get_input_session(SessionSpecifier(MessageDataSpecifier(2222), 123), meta)
+    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), 123), meta)
+    assert subscriber_selective is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), 123), meta)
 
     server_listener = tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
     assert server_listener is tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
 
     server_responder = tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
     assert server_responder is tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
 
     client_requester = tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta)
     assert client_requester is tr.get_output_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta)
 
     client_listener = tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
     assert client_listener is tr.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
 
     assert broadcaster.destination_node_id is None
     assert subscriber_promiscuous.source_node_id is None
@@ -119,7 +119,7 @@ async def _unittest_can_transport() -> None:
     peeper.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
 
     collector = FrameCollector()
-    peeper.set_received_frames_handler(collector.give)
+    peeper.start(collector.give, False)
 
     assert tr.sample_statistics() == can.CANTransportStatistics()
     assert tr2.sample_statistics() == can.CANTransportStatistics()
@@ -176,9 +176,9 @@ async def _unittest_can_transport() -> None:
     #
     # Broadcast exchange with input dispatch test
     #
-    selective_m12345_5 = tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 5), meta)
-    selective_m12345_9 = tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), 9), meta)
-    promiscuous_m12345 = tr2.get_input_session(SessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    selective_m12345_5 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 5), meta)
+    selective_m12345_9 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 9), meta)
+    promiscuous_m12345 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
     assert await broadcaster.send_until(Transfer(
         timestamp=ts,
@@ -208,16 +208,171 @@ async def _unittest_can_transport() -> None:
     assert not media.automatic_retransmission_enabled
     assert not media2.automatic_retransmission_enabled
 
-    with pytest.raises(ValueError):
-        tr.set_local_node_id(128)
-    with pytest.raises(ValueError):
-        tr.set_local_node_id(-1)
-    tr.set_local_node_id(5)
-    with pytest.raises(InvalidTransportConfigurationError, match='.*once.*'):
-        tr.set_local_node_id(123)
+    #
+    # Finalization.
+    #
+    print('str(CANTransport):', tr)
+    print('str(CANTransport):', tr2)
+    client_listener.close()
+    server_listener.close()
+    subscriber_promiscuous.close()
+    subscriber_selective.close()
+    tr.close()
+    tr2.close()
+    # Double-close has no effect:
+    client_listener.close()
+    server_listener.close()
+    subscriber_promiscuous.close()
+    subscriber_selective.close()
+    tr.close()
+    tr2.close()
+
+
+@pytest.mark.asyncio    # type: ignore
+async def _unittest_can_transport_non_anon() -> None:
+    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
+    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
+    from pyuavcan.transport import ResourceClosedError, InputSessionSpecifier, OutputSessionSpecifier
+    # noinspection PyProtectedMember
+    from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
+    # noinspection PyProtectedMember
+    from pyuavcan.transport.can._frame import UAVCANFrame
+    from .media.mock import MockMedia, FrameCollector
+
+    peers: typing.Set[MockMedia] = set()
+    media = MockMedia(peers, 64, 10)
+    media2 = MockMedia(peers, 64, 3)
+    peeper = MockMedia(peers, 64, 10)
+    assert len(peers) == 3
+
+    tr = can.CANTransport(media, 5)
+    tr2 = can.CANTransport(media2, 123)
+
+    assert tr.protocol_parameters == pyuavcan.transport.ProtocolParameters(
+        transfer_id_modulo=32,
+        max_nodes=128,
+        mtu=63
+    )
+    assert tr.local_node_id == 5
+    assert tr.protocol_parameters == tr2.protocol_parameters
 
     assert media.automatic_retransmission_enabled
-    assert not media2.automatic_retransmission_enabled
+    assert media2.automatic_retransmission_enabled
+
+    #
+    # Instantiate session objects
+    #
+    meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
+
+    with pytest.raises(Exception):                                                      # Can't broadcast service calls
+        tr.get_output_session(OutputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
+                                                     None),
+                              meta)
+
+    with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't unicast messages
+        tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(1234), 123), meta)
+
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+
+    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), None), meta)
+    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), None), meta)
+
+    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), 123), meta)
+
+    server_listener = tr.get_input_session(
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+
+    server_responder = tr.get_output_session(
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
+
+    client_requester = tr.get_output_session(
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta)
+
+    client_listener = tr.get_input_session(
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta)
+
+    assert set(tr.input_sessions) == {subscriber_promiscuous, subscriber_selective, server_listener, client_listener}
+    assert set(tr.output_sessions) == {broadcaster, server_responder, client_requester}
+
+    #
+    # Basic exchange test, no one is listening
+    #
+    media2.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
+    peeper.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
+
+    collector = FrameCollector()
+    peeper.start(collector.give, False)
+
+    assert tr.sample_statistics() == can.CANTransportStatistics()
+    assert tr2.sample_statistics() == can.CANTransportStatistics()
+
+    ts = Timestamp.now()
+
+    def validate_timestamp(timestamp: Timestamp) -> None:
+        assert ts.monotonic_ns <= timestamp.monotonic_ns <= time.monotonic_ns()
+        assert ts.system_ns <= timestamp.system_ns <= time.time_ns()
+
+    assert await broadcaster.send_until(Transfer(
+        timestamp=ts,
+        priority=Priority.IMMEDIATE,
+        transfer_id=32 + 11,            # Modulus 11
+        fragmented_payload=[_mem('abc'), _mem('def')]
+    ), tr.loop.time() + 1.0)
+    assert broadcaster.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
+
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=1)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=1, in_frames_uavcan=1)
+    assert tr.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(1)
+    assert tr2.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(0)
+    assert tr.sample_statistics().lost_loopback_frames == 0
+    assert tr2.sample_statistics().lost_loopback_frames == 0
+
+    assert collector.pop().is_same_manifestation(UAVCANFrame(
+        identifier=MessageCANID(Priority.IMMEDIATE, 5, 12345).compile([_mem('abcdef')]),  # payload fragments joined
+        padded_payload=_mem('abcdef'),
+        transfer_id=11,
+        start_of_transfer=True,
+        end_of_transfer=True,
+        toggle_bit=True,
+        loopback=False
+    ).compile())
+    assert collector.empty
+
+    #
+    # Broadcast exchange with input dispatch test
+    #
+    selective_m12345_5 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 5), meta)
+    selective_m12345_9 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 9), meta)
+    promiscuous_m12345 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+
+    assert await broadcaster.send_until(Transfer(
+        timestamp=ts,
+        priority=Priority.IMMEDIATE,
+        transfer_id=32 + 11,            # Modulus 11
+        fragmented_payload=[_mem('abc'), _mem('def')]
+    ), tr.loop.time() + 1.0)
+    assert broadcaster.sample_statistics() == SessionStatistics(transfers=2, frames=2, payload_bytes=12)
+
+    assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=2)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(
+        in_frames=2, in_frames_uavcan=2, in_frames_uavcan_accepted=1)
+
+    received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
+    assert received is not None
+    assert isinstance(received, TransferFrom)
+    assert received.transfer_id == 11
+    assert received.source_node_id == 5
+    assert received.priority == Priority.IMMEDIATE
+    validate_timestamp(received.timestamp)
+    assert received.fragmented_payload == [_mem('abcdef')]
+
+    assert selective_m12345_5.sample_statistics() == SessionStatistics()       # Nothing
+    assert selective_m12345_9.sample_statistics() == SessionStatistics()       # Nothing
+    assert promiscuous_m12345.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
+
+    assert media.automatic_retransmission_enabled
+    assert media2.automatic_retransmission_enabled
 
     feedback_collector = _FeedbackCollector()
 
@@ -293,38 +448,50 @@ async def _unittest_can_transport() -> None:
 
     received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
     assert received is not None
+    assert isinstance(received, TransferFrom)
+    assert received.transfer_id == 11
+    assert received.source_node_id == 5
+    assert received.priority == Priority.IMMEDIATE
+    validate_timestamp(received.timestamp)
+    assert received.fragmented_payload == [_mem('abcdef')]
+
+    received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
+    assert received is not None
+    assert isinstance(received, TransferFrom)
     assert received.transfer_id == 2
+    assert received.source_node_id == 5
     assert received.priority == Priority.SLOW
     validate_timestamp(received.timestamp)
     assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x55' * 13  # The 0x55 at the end is padding
 
     received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
     assert received is not None
+    assert isinstance(received, TransferFrom)
     assert received.transfer_id == 3
+    assert received.source_node_id == 5
     assert received.priority == Priority.OPTIONAL
     validate_timestamp(received.timestamp)
     assert list(received.fragmented_payload) == [_mem('qwerty')]
 
-    assert selective_m12345_5.sample_statistics() == SessionStatistics(transfers=2, frames=6, payload_bytes=319)
+    assert selective_m12345_5.sample_statistics() == promiscuous_m12345.sample_statistics()
 
     #
     # Unicast exchange test
     #
     selective_server_s333_5 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 5), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 5), meta)
     selective_server_s333_9 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 9), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 9), meta)
     promiscuous_server_s333 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
 
     selective_client_s333_5 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 5), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 5), meta)
     selective_client_s333_9 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 9), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 9), meta)
     promiscuous_client_s333 = tr2.get_input_session(
-        SessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), None), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), None), meta)
 
-    # No one is listening, this one will be lost.
     assert await client_requester.send_until(Transfer(
         timestamp=ts,
         priority=Priority.FAST,
@@ -333,12 +500,25 @@ async def _unittest_can_transport() -> None:
     ), tr.loop.time() + 1.0)
     assert client_requester.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=0)
 
-    assert (await selective_server_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    received = await selective_server_s333_5.receive_until(tr.loop.time() + 1.0)     # Same thing here
+    assert received is not None
+    assert received.transfer_id == 11
+    assert received.priority == Priority.FAST
+    validate_timestamp(received.timestamp)
+    assert list(map(bytes, received.fragmented_payload)) == [b'']
+
     assert (await selective_server_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert (await promiscuous_server_s333.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert selective_server_s333_5.sample_statistics() == SessionStatistics()
+
+    received = await promiscuous_server_s333.receive_until(tr.loop.time() + 1.0)     # Same thing here
+    assert received is not None
+    assert received.transfer_id == 11
+    assert received.priority == Priority.FAST
+    validate_timestamp(received.timestamp)
+    assert list(map(bytes, received.fragmented_payload)) == [b'']
+
+    assert selective_server_s333_5.sample_statistics() == SessionStatistics(transfers=1, frames=1)
     assert selective_server_s333_9.sample_statistics() == SessionStatistics()
-    assert promiscuous_server_s333.sample_statistics() == SessionStatistics()
+    assert promiscuous_server_s333.sample_statistics() == SessionStatistics(transfers=1, frames=1)
 
     assert (await selective_client_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
     assert (await selective_client_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
@@ -346,17 +526,6 @@ async def _unittest_can_transport() -> None:
     assert selective_client_s333_5.sample_statistics() == SessionStatistics()
     assert selective_client_s333_9.sample_statistics() == SessionStatistics()
     assert promiscuous_client_s333.sample_statistics() == SessionStatistics()
-
-    assert media.automatic_retransmission_enabled
-    assert not media2.automatic_retransmission_enabled
-
-    tr2.set_local_node_id(123)
-    with pytest.raises(InvalidTransportConfigurationError):
-        tr2.set_local_node_id(10)
-    assert tr2.local_node_id == 123
-
-    assert media.automatic_retransmission_enabled
-    assert media2.automatic_retransmission_enabled
 
     client_requester.enable_feedback(feedback_collector.give)       # FEEDBACK ENABLED HERE
 
@@ -480,9 +649,9 @@ async def _unittest_can_transport() -> None:
     assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=16,
                                                                 out_frames_loopback=2,
                                                                 in_frames_loopback=5)
-    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=15,
-                                                                 in_frames_uavcan=15,
-                                                                 in_frames_uavcan_accepted=14)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=16,
+                                                                 in_frames_uavcan=16,
+                                                                 in_frames_uavcan_accepted=15)
 
     #
     # Drop non-UAVCAN frames silently
@@ -524,14 +693,14 @@ async def _unittest_can_transport() -> None:
                                                                 out_frames_loopback=2,
                                                                 in_frames_loopback=6)
 
-    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=15,
-                                                                 in_frames_uavcan=15,
-                                                                 in_frames_uavcan_accepted=14)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=16,
+                                                                 in_frames_uavcan=16,
+                                                                 in_frames_uavcan_accepted=15)
 
     #
     # Reception logic test.
     #
-    pub_m2222 = tr2.get_output_session(SessionSpecifier(MessageDataSpecifier(2222), None), meta)
+    pub_m2222 = tr2.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2222), None), meta)
 
     # Transfer ID timeout configuration - one of them will be configured very short for testing purposes
     subscriber_promiscuous.transfer_id_timeout = 1e-9       # Very low, basically zero timeout
@@ -573,9 +742,9 @@ async def _unittest_can_transport() -> None:
                                                                 in_frames_loopback=6)
 
     assert tr2.sample_statistics() == can.CANTransportStatistics(out_frames=2,
-                                                                 in_frames=15,
-                                                                 in_frames_uavcan=15,
-                                                                 in_frames_uavcan_accepted=14)
+                                                                 in_frames=16,
+                                                                 in_frames_uavcan=16,
+                                                                 in_frames_uavcan_accepted=15)
 
     received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -615,9 +784,9 @@ async def _unittest_can_transport() -> None:
                                                                 in_frames_loopback=6)
 
     assert tr2.sample_statistics() == can.CANTransportStatistics(out_frames=3,
-                                                                 in_frames=15,
-                                                                 in_frames_uavcan=15,
-                                                                 in_frames_uavcan_accepted=14)
+                                                                 in_frames=16,
+                                                                 in_frames_uavcan=16,
+                                                                 in_frames_uavcan_accepted=15)
 
     received = await subscriber_promiscuous.receive_until(tr.loop.time() + 3.0)
     assert received is not None

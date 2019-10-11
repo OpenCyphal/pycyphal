@@ -40,113 +40,58 @@ class SerialTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class SerialTransport(pyuavcan.transport.Transport):
     """
-    The serial transport is experimental and is not yet part of the UAVCAN specification.
-    Future revisions may break wire compatibility until the transport is formally specified.
-    Context: https://forum.uavcan.org/t/alternative-transport-protocols/324, also see the discussion at
-    https://forum.uavcan.org/t/yukon-design-megathread/390/115?u=pavel.kirienko.
-
-    The serial transport is designed for basic raw byte-level low-speed serial links:
-
-    - UART, RS-232/485/422 (the recommended baud rates are: 115200, 921600, 3'000'000).
-    - USB CDC ACM.
-
-    It is also suitable for raw transport log storage, because one-dimensional flat binary files are structurally
-    similar to serial byte-level links.
-
-    The packet header is defined as follows (byte and bit ordering follow the DSDL specification:
-    least significant byte first, most significant bit first)::
-
-        uint8   version                 # Always zero. Discard the frame if not.
-        uint8   priority                # Like IEEE 802.15.4, three most significant bits: 0 = highest, 7 = lowest.
-        uint16  source node ID          # 0xFFFF = anonymous.
-        uint16  destination node ID     # 0xFFFF = broadcast.
-        uint16  data specifier          # Like IEEE 802.15.4.
-
-        uint64  data type hash
-        uint64  transfer ID
-
-        uint32  frame index EOT         # Like IEEE 802.15.4; MSB set if last frame of the transfer.
-        void32                          # Set to zero when sending, ignore when receiving.
-
-    For message frames, the data specifier field contains the subject-ID value,
-    so that the most significant bit is always cleared.
-    For service frames, the most significant bit (15th) is always set,
-    and the second-to-most-significant bit (14th) is set for response transfers only;
-    the remaining 14 least significant bits contain the service-ID value.
-
-    Total header size: 32 bytes (256 bits).
-
-    The header is prepended before the frame payload; the resulting structure is
-    encoded into its serialized form using the following packet format (influenced by HDLC, SLIP, POPCOP):
-
-    +------------------------+-----------------------+-----------------------+------------------------+
-    |Frame delimiter **0x9E**|Escaped header+payload |CRC32C (Castagnoli)    |Frame delimiter **0x9E**|
-    +========================+=======================+=======================+========================+
-    |Single-byte frame       |The following bytes are|Four bytes long,       |Same frame delimiter as |
-    |delimiter **0x9E**.     |escaped: **0x9E**      |little-endian byte     |at the start.           |
-    |Begins a new frame and  |(frame delimiter);     |order; bytes 0x9E      |Terminates the current  |
-    |possibly terminates the |**0x8E** (escape       |(frame delimiter) and  |frame and possibly      |
-    |previous frame.         |character). An escaped |0x8E (escape character)|begins the next frame.  |
-    |                        |byte is bitwise        |are escaped like in    |                        |
-    |                        |inverted and prepended |the payload.           |                        |
-    |                        |with the escape        |The CRC is computed    |                        |
-    |                        |character 0x8E. For    |over the unescaped     |                        |
-    |                        |example: byte 0x9E is  |(i.e., original form)  |                        |
-    |                        |transformed into 0x8E  |payload, not including |                        |
-    |                        |followed by 0x71.      |the start delimiter.   |                        |
-    +------------------------+-----------------------+-----------------------+------------------------+
-
-    There are no magic bytes in this format because the strong CRC and the data type hash field render the
-    format sufficiently recognizable. The worst case overhead exceeds 100% if every byte of the payload and the CRC
-    is either 0x9E or 0x8E. Despite the overhead, this format is still considered superior to the alternatives
-    since it is robust and guarantees a constant recovery time. Consistent-overhead byte stuffing (COBS) is sometimes
-    employed for similar tasks, but it should be understood that while it offers a substantially lower overhead,
-    it undermines the synchronization recovery properties of the protocol. There is a somewhat relevant discussion
-    at https://github.com/vedderb/bldc/issues/79.
-
-    The format can share the same serial medium with ASCII text exchanges such as command-line interfaces or
-    real-time logging. The special byte values employed by the format do not belong to the ASCII character set.
-
-    The last four bytes of a multi-frame transfer payload contain the CRC32C (Castagnoli) hash of the transfer
-    payload in little-endian byte order.
+    The serial transport is designed for OSI L1 byte-level serial links, such as RS-485, UART, USB CDC ACM, etc.
+    Please read the module documentation for details.
     """
 
-    DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
     DEFAULT_MTU = 1024
-
-    VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
     VALID_MTU_RANGE = (1024, 1024 * 10)
+
+    DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
+    VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
 
     def __init__(self,
                  serial_port:                 typing.Union[str, serial.SerialBase],
-                 service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
+                 local_node_id:               typing.Optional[int],
                  mtu:                         int = DEFAULT_MTU,
+                 service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
+                 baudrate:                    typing.Optional[int] = None,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
         """
         :param serial_port: The serial port instance to communicate over, or its name.
             In the latter case, the port will be constructed via :func:`serial.serial_for_url`
             (refer to the PySerial docs for the background).
             The new instance takes ownership of the port; when the instance is closed, its port will also be closed.
+            Examples:
 
-        :param service_transfer_multiplier: Specifies the number of times each outgoing service transfer will be
-            repeated. The duplicates are emitted subsequently immediately following the original. This feature
-            can be used to reduce the likelihood of service transfer loss over unreliable links. Assuming that
-            the probability of transfer loss ``P`` is time-invariant, the influence of the multiplier ``M`` can
-            be approximately modeled as ``P' = P^M``. For example, given a link that successfully delivers 90%
-            of transfers, and the probabilities of adjacent transfer loss are uncorrelated, the multiplication
-            factor of 2 can increase the link reliability up to ``100% - (100% - 90%)^2 = 99%``. Removal of
-            duplicate transfers at the opposite end of the link is natively guaranteed by the UAVCAN protocol;
-            no special activities are needed there (read the UAVCAN Specification for background). This setting
-            does not affect message transfers.
+            - ``/dev/ttyACM0`` -- a regular serial port on GNU/Linux (USB CDC ACM in this example).
+            - ``COM9`` -- likewise, on Windows.
+            - ``/dev/serial/by-id/usb-Black_Sphere_Technologies_Black_Magic_Probe_B5DCABF5-if02`` -- a regular
+              USB CDC ACM port referenced by the device name and ID (GNU/Linux).
+            - ``hwgrep:///dev/serial/by-id/*Black_Magic_Probe*-if02`` -- glob instead of exact name.
+            - ``socket://localhost:50905`` -- a TCP/IP tunnel instead of a physical port.
+            - ``spy://COM3?file=dump.txt`` -- open a regular port and dump all data exchange into a text file.
+
+            Read the PySerial docs for more info.
+
+        :param local_node_id: The node-ID to use. Can't be changed after initialization.
+            None means that the transport will operate in the anonymous mode.
 
         :param mtu: Use single-frame transfers for all outgoing transfers containing not more than than
             this many bytes of payload. Otherwise, use multi-frame transfers.
             This setting does not affect transfer reception; the RX MTU is hard-coded as ``max(VALID_MTU_RANGE)``.
 
+        :param service_transfer_multiplier: Deterministic data loss mitigation is disabled by default.
+            This parameter specifies the number of times each outgoing service transfer will be repeated.
+            This setting does not affect message transfers.
+
+        :param baudrate: If not None, the specified baud rate will be configured on the serial port.
+            Otherwise, the baudrate will be left unchanged.
+
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
         self._service_transfer_multiplier = int(service_transfer_multiplier)
-        self._sft_payload_capacity_bytes = int(mtu)
+        self._mtu = int(mtu)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         low, high = self.VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE
@@ -154,10 +99,12 @@ class SerialTransport(pyuavcan.transport.Transport):
             raise ValueError(f'Invalid service transfer multiplier: {self._service_transfer_multiplier}')
 
         low, high = self.VALID_MTU_RANGE
-        if not (low <= self._sft_payload_capacity_bytes <= high):
-            raise ValueError(f'Invalid SFT payload limit: {self._sft_payload_capacity_bytes} bytes')
+        if not (low <= self._mtu <= high):
+            raise ValueError(f'Invalid MTU: {self._mtu} bytes')
 
-        self._local_node_id: typing.Optional[int] = None
+        self._local_node_id = int(local_node_id) if local_node_id is not None else None
+        if self._local_node_id is not None and not (0 <= self._local_node_id < self.protocol_parameters.max_nodes):
+            raise ValueError(f'Invalid node ID for serial: {self._local_node_id}')
 
         # At first I tried using serial.is_open, but unfortunately that doesn't work reliably because the close()
         # method on most serial port classes is non-atomic, which causes all sorts of weird race conditions
@@ -170,10 +117,10 @@ class SerialTransport(pyuavcan.transport.Transport):
         # The serialization buffer is pre-allocated for performance reasons;
         # it is needed to store frame contents before they are emitted into the serial port.
         # Access must be protected with the port lock!
-        self._serialization_buffer = bytearray(0 for _ in range(self._sft_payload_capacity_bytes * 3))
+        self._serialization_buffer = bytearray(0 for _ in range(self._mtu * 3))
 
-        self._input_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialInputSession] = {}
-        self._output_registry: typing.Dict[pyuavcan.transport.SessionSpecifier, SerialOutputSession] = {}
+        self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, SerialInputSession] = {}
+        self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, SerialOutputSession] = {}
 
         self._statistics = SerialTransportStatistics()
 
@@ -184,6 +131,8 @@ class SerialTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidMediaConfigurationError('The serial port instance is not open')
         serial_port.timeout = _SERIAL_PORT_READ_TIMEOUT
         self._serial_port = serial_port
+        if baudrate is not None:
+            self._serial_port.baudrate = int(baudrate)
 
         self._background_executor = concurrent.futures.ThreadPoolExecutor()
 
@@ -199,22 +148,12 @@ class SerialTransport(pyuavcan.transport.Transport):
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=SerialFrame.TRANSFER_ID_MASK + 1,
             max_nodes=len(SerialFrame.NODE_ID_RANGE),
-            mtu=self._sft_payload_capacity_bytes,
+            mtu=self._mtu,
         )
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
         return self._local_node_id
-
-    def set_local_node_id(self, node_id: int) -> None:
-        if self._local_node_id is None:
-            if 0 <= node_id < self.protocol_parameters.max_nodes:
-                self._ensure_not_closed()
-                self._local_node_id = int(node_id)
-            else:
-                raise ValueError(f'Invalid node ID for serial: {node_id}')
-        else:
-            raise pyuavcan.transport.InvalidTransportConfigurationError('Node ID can be assigned only once')
 
     def close(self) -> None:
         self._closed = True
@@ -228,7 +167,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             self._serial_port.close()
 
     def get_input_session(self,
-                          specifier:        pyuavcan.transport.SessionSpecifier,
+                          specifier:        pyuavcan.transport.InputSessionSpecifier,
                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> SerialInputSession:
         def finalizer() -> None:
             del self._input_registry[specifier]
@@ -249,7 +188,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         return out
 
     def get_output_session(self,
-                           specifier:        pyuavcan.transport.SessionSpecifier,
+                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> SerialOutputSession:
         self._ensure_not_closed()
         if specifier not in self._output_registry:
@@ -272,8 +211,8 @@ class SerialTransport(pyuavcan.transport.Transport):
             self._output_registry[specifier] = SerialOutputSession(
                 specifier=specifier,
                 payload_metadata=payload_metadata,
-                sft_payload_capacity_bytes=self._sft_payload_capacity_bytes,
-                local_node_id_accessor=lambda: self._local_node_id,
+                mtu=self._mtu,
+                local_node_id=self._local_node_id,
                 send_handler=send_transfer,
                 finalizer=finalizer
             )
@@ -294,8 +233,8 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def descriptor(self) -> str:
         return \
-            f'<serial baudrate="{self._serial_port.baudrate}" sft_capacity="{self._sft_payload_capacity_bytes}" ' \
-            f'srv_mult="{self._service_transfer_multiplier}">{self._serial_port.name}</serial>'
+            f'<serial baudrate="{self._serial_port.baudrate}" srv_mult="{self._service_transfer_multiplier}">' \
+            f'{self._serial_port.name}</serial>'
 
     @property
     def serial_port(self) -> serial.SerialBase:
@@ -309,7 +248,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         self._statistics.in_frames += 1
         if frame.destination_node_id in (self._local_node_id, None):
             for source_node_id in {None, frame.source_node_id}:
-                ss = pyuavcan.transport.SessionSpecifier(frame.data_specifier, source_node_id)
+                ss = pyuavcan.transport.InputSessionSpecifier(frame.data_specifier, source_node_id)
                 try:
                     session = self._input_registry[ss]
                 except LookupError:

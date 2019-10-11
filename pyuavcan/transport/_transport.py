@@ -10,7 +10,7 @@ import typing
 import asyncio
 import dataclasses
 import pyuavcan.util
-from ._session import InputSession, OutputSession, SessionSpecifier
+from ._session import InputSession, OutputSession, InputSessionSpecifier, OutputSessionSpecifier
 from ._payload_metadata import PayloadMetadata
 
 
@@ -70,31 +70,31 @@ class Transport(abc.ABC):
     @property
     @abc.abstractmethod
     def protocol_parameters(self) -> ProtocolParameters:
+        """
+        Provides information about the properties of the transport protocol implemented by the instance.
+        See :class:`ProtocolParameters`.
+        """
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
     def local_node_id(self) -> typing.Optional[int]:
         """
-        Generally, the local node ID is not assigned by default, meaning that the local node is in the anonymous mode.
-        In that case, the value is None. In general, None is used to represent unspecified node-ID across the library.
+        The node-ID is set once during initialization of the transport,
+        either explicitly (e.g., CAN) or by deriving the node-ID value from the configuration
+        of the underlying protocol layers (e.g., UDP/IP).
 
-        While in the anonymous mode, some transports may choose to operate in a particular mode to facilitate
-        plug-and-play node ID allocation. For example, a CAN transport may disable automatic retransmission.
+        If the transport does not have a node-ID, this property has the value of None,
+        and the transport (and the node that uses it) is said to be in the anonymous mode.
+        While in the anonymous mode, some transports may choose to operate in a particular regime to facilitate
+        plug-and-play node-ID allocation (for example, a CAN transport may disable automatic retransmission).
 
-        Some transports, however, may initialize with a node-ID already set if such is dictated by
-        the media configuration (for example, a UDP transfer may initialize with the node-ID
-        derived from the address of the local network interface).
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def set_local_node_id(self, node_id: int) -> None:
-        """
-        This method can be invoked only if the local node-ID is not assigned;
-        otherwise, :class:`pyuavcan.transport.InvalidTransportConfigurationError` will be raised.
-        Once a local node ID is assigned, this method should not be invoked anymore.
-        In other words, it can be successfully invoked at most once.
+        Protip: If you feel like assigning the node-ID after initialization,
+        make a proxy that implements this interface and keeps a private transport instance.
+        When the node-ID is assigned, the private transport instance is destroyed,
+        a new one is implicitly created in its place, and all of the dependent session instances are automatically
+        recreated transparently for the user of the proxy.
+        I call this pattern "prestige".
         """
         raise NotImplementedError
 
@@ -116,7 +116,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_input_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
+    def get_input_session(self, specifier: InputSessionSpecifier, payload_metadata: PayloadMetadata) -> InputSession:
         """
         This factory method is the only valid way of constructing input session instances.
         Beware that construction and retirement of sessions may be costly.
@@ -129,7 +129,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def get_output_session(self, specifier: SessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
+    def get_output_session(self, specifier: OutputSessionSpecifier, payload_metadata: PayloadMetadata) -> OutputSession:
         """
         This factory method is the only valid way of constructing output session instances.
         Beware that construction and retirement of sessions may be costly.
@@ -171,8 +171,7 @@ class Transport(abc.ABC):
     def descriptor(self) -> str:
         """
         A transport-specific specification string containing sufficient information to recreate the current
-        configuration in a human-readable XML-like format. The format is currently very unstable;
-        it is probably going to change in the future, so applications should not depend on it yet.
+        configuration in a human-readable XML-like format.
 
         The returned string shall contain exactly one top-level XML element. The tag name of the element shall match
         the name of the transport class in lower case without the "transport" suffix; e.g:
@@ -182,8 +181,10 @@ class Transport(abc.ABC):
         or another element, e.g., further specifying the media layer or similar, which in turn contains the name
         of the associated OS resource in it.
         If it is a pseudo-transport, the element should contain nested elements describing the contained transports,
-        if there are any. The attributes of a transport element should contain the values of applicable
-        configuration parameters. The charset is ASCII.
+        if there are any.
+        The attributes of a transport element should represent the values of applicable configuration parameters,
+        excepting those that are already exposed via :attr:`protocol_parameters` to avoid redundancy.
+        The charset is ASCII.
 
         In general, one can view this as an XML-based representation of a Python constructor invocation expression,
         where the first argument is represented as the XML element data, and all following arguments
