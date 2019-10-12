@@ -107,9 +107,8 @@ class DemoApplication:
             # Make sure to initialize the virtual CAN interface. For example (run as root):
             #   modprobe vcan
             #   ip link add dev vcan0 type vcan
-            #   ip link set up vcan0
             #   ip link set vcan0 mtu 72
-            #   ifconfig vcan0 up
+            #   ip link set up vcan0
             # CAN interfaces can me monitored using can-utils:
             #   candump -decaxta any
             # Here we select CAN 2.0 by setting MTU=8 bytes. We can switch to CAN FD by simply increasing the MTU.
