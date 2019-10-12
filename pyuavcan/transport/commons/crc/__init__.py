@@ -6,6 +6,9 @@
 
 """
 This module contains implementations of various CRC algorithms used by the transports.
+
+`32-Bit Cyclic Redundancy Codes for Internet Applications (Philip Koopman)
+<https://users.ece.cmu.edu/~koopman/networks/dsn02/dsn02_koopman.pdf>`_.
 """
 
 from ._base import CRCAlgorithm as CRCAlgorithm
