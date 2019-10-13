@@ -159,7 +159,7 @@ from ._port import MessagePort as MessagePort
 from ._port import ServicePort as ServicePort
 
 from ._port import OutgoingTransferIDCounter as OutgoingTransferIDCounter
-from ._port import PresentationSessionClosedError as PresentationSessionClosedError
+from ._port import PortClosedError as PortClosedError
 from ._port import RequestTransferIDVariabilityExhaustedError as RequestTransferIDVariabilityExhaustedError
 from ._port import DEFAULT_PRIORITY as DEFAULT_PRIORITY
 from ._port import DEFAULT_SERVICE_REQUEST_TIMEOUT as DEFAULT_SERVICE_REQUEST_TIMEOUT

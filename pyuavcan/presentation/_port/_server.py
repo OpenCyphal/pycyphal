@@ -12,7 +12,7 @@ import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
 from ._base import ServiceClass, ServicePort, TypedSessionFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
-from ._error import PresentationSessionClosedError
+from ._error import PortClosedError
 
 
 # Shouldn't be too large as this value defines how quickly the serving task will detect that the underlying
@@ -279,4 +279,4 @@ class Server(ServicePort[ServiceClass]):
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            raise PresentationSessionClosedError(repr(self))
+            raise PortClosedError(repr(self))

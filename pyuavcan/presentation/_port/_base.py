@@ -72,7 +72,7 @@ class Closable(abc.ABC):
         Invalidates the object and closes the underlying resources if necessary.
 
         If the closed object had a blocked task waiting for data, the task will raise a
-        :class:`pyuavcan.presentation.PresentationSessionClosedError` shortly after close;
+        :class:`pyuavcan.presentation.PortClosedError` shortly after close;
         or, if the task was started by the closed instance itself, it will be silently cancelled.
         At the moment the library provides no guarantees regarding how quickly the exception will be raised
         or the task cancelled; it is only guaranteed that it will happen automatically eventually, the

@@ -7,7 +7,7 @@
 import pyuavcan.transport
 
 
-class PresentationSessionClosedError(pyuavcan.transport.ResourceClosedError):
+class PortClosedError(pyuavcan.transport.ResourceClosedError):
     """
     Raised when an attempt is made to use a presentation-layer session instance that has been closed.
     Observe that it is a specialization of the corresponding transport-layer error type.
