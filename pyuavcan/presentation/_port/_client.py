@@ -11,7 +11,7 @@ import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import ServiceClass, ServicePresentationSession, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
+from ._base import ServiceClass, ServicePort, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PresentationSessionClosedError, RequestTransferIDVariabilityExhaustedError
 
@@ -36,7 +36,7 @@ class ClientStatistics:
     unexpected_responses:       int  #: Response transfers that could not be matched with a request state.
 
 
-class Client(ServicePresentationSession[ServiceClass]):
+class Client(ServicePort[ServiceClass]):
     """
     A task should request its own client instance from the presentation layer controller.
     Do not share the same client instance across different tasks. This class implements the RAII pattern.

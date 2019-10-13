@@ -81,9 +81,10 @@ class Closable(abc.ABC):
         raise NotImplementedError
 
 
-class PresentationSession(Closable, typing.Generic[TypeClass]):
+class Port(Closable, typing.Generic[TypeClass]):
     """
     The base class for any presentation layer session such as publisher, subscriber, client, or server.
+    The term "port" came to be from <https://forum.uavcan.org/t/a-generic-term-for-either-subject-or-service/182>.
     """
     @property
     @abc.abstractmethod
@@ -107,7 +108,7 @@ class PresentationSession(Closable, typing.Generic[TypeClass]):
 
 
 # noinspection DuplicatedCode
-class MessagePresentationSession(PresentationSession[MessageClass]):
+class MessagePort(Port[MessageClass]):
     """
     The base class for publishers and subscribers.
     """
@@ -133,7 +134,7 @@ class MessagePresentationSession(PresentationSession[MessageClass]):
 
 
 # noinspection DuplicatedCode
-class ServicePresentationSession(PresentationSession[ServiceClass]):
+class ServicePort(Port[ServiceClass]):
     @property
     @abc.abstractmethod
     def input_transport_session(self) -> pyuavcan.transport.InputSession:

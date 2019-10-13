@@ -11,7 +11,7 @@ import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import ServiceClass, ServicePresentationSession, TypedSessionFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
+from ._base import ServiceClass, ServicePort, TypedSessionFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PresentationSessionClosedError
 
 
@@ -58,7 +58,7 @@ ServiceRequestHandler = typing.Callable[[ServiceRequestClass, ServiceRequestMeta
                                         typing.Awaitable[typing.Optional[ServiceResponseClass]]]
 
 
-class Server(ServicePresentationSession[ServiceClass]):
+class Server(ServicePort[ServiceClass]):
     """
     At most one task can use the server at any given time.
     The instance must be closed manually to stop the server.

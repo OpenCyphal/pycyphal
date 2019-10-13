@@ -4,10 +4,10 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._base import PresentationSession as PresentationSession
+from ._base import Port as Port
 from ._base import Closable as Closable
-from ._base import MessagePresentationSession as MessagePresentationSession
-from ._base import ServicePresentationSession as ServicePresentationSession
+from ._base import MessagePort as MessagePort
+from ._base import ServicePort as ServicePort
 from ._base import DEFAULT_PRIORITY as DEFAULT_PRIORITY
 from ._base import DEFAULT_SERVICE_REQUEST_TIMEOUT as DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._base import OutgoingTransferIDCounter as OutgoingTransferIDCounter

@@ -12,7 +12,7 @@ import dataclasses
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessagePresentationSession, MessageClass, TypedSessionFinalizer, Closable
+from ._base import MessagePort, MessageClass, TypedSessionFinalizer, Closable
 from ._error import PresentationSessionClosedError
 
 
@@ -35,7 +35,7 @@ class SubscriberStatistics:
     deserialization_failures: int  #: Number of messages lost to deserialization errors; shared per session specifier.
 
 
-class Subscriber(MessagePresentationSession[MessageClass]):
+class Subscriber(MessagePort[MessageClass]):
     """
     A task should request its own independent subscriber instance from the presentation layer controller.
     Do not share the same subscriber instance across different tasks. This class implements the RAII pattern.
