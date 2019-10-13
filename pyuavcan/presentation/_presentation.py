@@ -11,11 +11,11 @@ import asyncio
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._session import OutgoingTransferIDCounter, TypedSessionFinalizer, Closable, PresentationSession
-from ._session import Publisher, PublisherImpl
-from ._session import Subscriber, SubscriberImpl
-from ._session import Client, ClientImpl
-from ._session import Server
+from ._port import OutgoingTransferIDCounter, TypedSessionFinalizer, Closable, Port
+from ._port import Publisher, PublisherImpl
+from ._port import Subscriber, SubscriberImpl
+from ._port import Client, ClientImpl
+from ._port import Server
 
 
 MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
@@ -52,7 +52,7 @@ class Presentation:
         self._emitted_transfer_id_map: typing.Dict[pyuavcan.transport.OutputSessionSpecifier,
                                                    OutgoingTransferIDCounter] = {}
         # For services, the session is the input session.
-        self._registry: typing.Dict[typing.Tuple[typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
+        self._registry: typing.Dict[typing.Tuple[typing.Type[Port[pyuavcan.dsdl.CompositeObject]],
                                                  pyuavcan.transport.SessionSpecifier],
                                     Closable] = {}
 
@@ -340,7 +340,7 @@ class Presentation:
         self._transport.close()
 
     def _make_finalizer(self,
-                        session_type:      typing.Type[PresentationSession[pyuavcan.dsdl.CompositeObject]],
+                        session_type:      typing.Type[Port[pyuavcan.dsdl.CompositeObject]],
                         session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
         done = False
 

@@ -11,9 +11,9 @@ import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import ServiceClass, ServicePresentationSession, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
+from ._base import ServiceClass, ServicePort, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
-from ._error import PresentationSessionClosedError, RequestTransferIDVariabilityExhaustedError
+from ._error import PortClosedError, RequestTransferIDVariabilityExhaustedError
 
 
 # Shouldn't be too large as this value defines how quickly the task will detect that the underlying transport is closed.
@@ -36,7 +36,7 @@ class ClientStatistics:
     unexpected_responses:       int  #: Response transfers that could not be matched with a request state.
 
 
-class Client(ServicePresentationSession[ServiceClass]):
+class Client(ServicePort[ServiceClass]):
     """
     A task should request its own client instance from the presentation layer controller.
     Do not share the same client instance across different tasks. This class implements the RAII pattern.
@@ -85,7 +85,7 @@ class Client(ServicePresentationSession[ServiceClass]):
         if there are too many concurrent requests.
         """
         if self._maybe_impl is None:
-            raise PresentationSessionClosedError(repr(self))
+            raise PortClosedError(repr(self))
         else:
             return await self._maybe_impl.call(request=request,
                                                priority=self._priority,
@@ -157,7 +157,7 @@ class Client(ServicePresentationSession[ServiceClass]):
         Clients that use the same session specifier will have the same set of statistical counters.
         """
         if self._maybe_impl is None:
-            raise PresentationSessionClosedError(repr(self))
+            raise PortClosedError(repr(self))
         else:
             return ClientStatistics(request_transport_session=self.output_transport_session.sample_statistics(),
                                     response_transport_session=self.input_transport_session.sample_statistics(),
@@ -343,7 +343,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
             _logger.exception(f'Failed to finalize %s: %s', self, ex)
 
-        exception = exception if exception is not None else PresentationSessionClosedError(repr(self))
+        exception = exception if exception is not None else PortClosedError(repr(self))
         for fut in self._response_futures_by_transfer_id.values():
             try:
                 fut.set_exception(exception)
@@ -359,7 +359,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            raise PresentationSessionClosedError(repr(self))
+            raise PortClosedError(repr(self))
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,

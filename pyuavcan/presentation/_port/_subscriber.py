@@ -12,8 +12,8 @@ import dataclasses
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessagePresentationSession, MessageClass, TypedSessionFinalizer, Closable
-from ._error import PresentationSessionClosedError
+from ._base import MessagePort, MessageClass, TypedSessionFinalizer, Closable
+from ._error import PortClosedError
 
 
 # Shouldn't be too large as this value defines how quickly the task will detect that the underlying transport is closed.
@@ -35,7 +35,7 @@ class SubscriberStatistics:
     deserialization_failures: int  #: Number of messages lost to deserialization errors; shared per session specifier.
 
 
-class Subscriber(MessagePresentationSession[MessageClass]):
+class Subscriber(MessagePort[MessageClass]):
     """
     A task should request its own independent subscriber instance from the presentation layer controller.
     Do not share the same subscriber instance across different tasks. This class implements the RAII pattern.
@@ -221,7 +221,7 @@ class Subscriber(MessagePresentationSession[MessageClass]):
 
     def _raise_if_closed_or_failed(self) -> None:
         if self._closed:
-            raise PresentationSessionClosedError(repr(self))
+            raise PortClosedError(repr(self))
 
         if self._rx.exception is not None:
             self._closed = True
@@ -303,7 +303,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
             _logger.exception('Failed to finalize %s: %s', self, ex)
 
-        exception = exception if exception is not None else PresentationSessionClosedError(repr(self))
+        exception = exception if exception is not None else PortClosedError(repr(self))
         for rx in self._listeners:
             rx.exception = exception
 
@@ -333,7 +333,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            raise PresentationSessionClosedError(repr(self))
+            raise PortClosedError(repr(self))
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,
