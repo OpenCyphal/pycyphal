@@ -3,10 +3,22 @@
 Basic usage demo
 ================
 
+The reader is assumed to have read the **UAVCAN v1** specification beforehand.
+See `uavcan.org <https://uavcan.org>`_ for details.
+
+
 Custom data types
 -----------------
 
-The following application-specific data types are used in the demo.
+The demo relies on two vendor-specific data types located in the root namespace ``sirius_cyber_corp``.
+The root namespace directory layout is as follows::
+
+    sirius_cyber_corp/                              <-- root namespace directory
+        PerformLinearLeastSquaresFit.1.0.uavcan     <-- service type definition
+        PointXY.1.0.uavcan                          <-- nested message type definition
+
+If this doesn't look familiar, please read the UAVCAN specification first.
+The referenced DSDL definitions are provided below.
 
 ``sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0``:
 
@@ -23,7 +35,7 @@ The following application-specific data types are used in the demo.
 Source code
 -----------
 
-The source code relies on the custom data types presented above.
+The demo relies on the custom data types presented above.
 In order to run the demo, please copy-paste its source code into a file on your computer
 and update the DSDL paths to match your environment.
 
@@ -39,7 +51,7 @@ Generating data type packages from DSDL
 
 First, we need to make sure that the required DSDL-generated packages are available for the command-line tool.
 Suppose that the application-specific data types listed above are located at ``../dsdl/namespaces/``,
-and that instead of using a local copy of the public regulated data types we prefer to download it from the
+and that instead of using a local copy of the public regulated data types we prefer to download them from the
 repository. This is the command:
 
 .. code-block:: sh

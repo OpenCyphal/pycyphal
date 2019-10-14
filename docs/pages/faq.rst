@@ -3,8 +3,9 @@ Frequently asked questions
 
 What is UAVCAN?
     It's a data exchange solution for modern software-defined vehicles: drones, manned aircraft, robots, cars,
-    and spacecraft. There is a `post on the UAVCAN forum <https://forum.uavcan.org/t/557>`_ explaining its
-    principles and design goals.
+    and spacecraft.
+    UAVCAN stands for *Uncomplicated Application-level Vehicular Communication and Networking*.
+    There is a `post on the UAVCAN forum <https://forum.uavcan.org/t/557>`_ explaining its principles and design goals.
 
 
 How can I deploy PyUAVCAN on my embedded system?

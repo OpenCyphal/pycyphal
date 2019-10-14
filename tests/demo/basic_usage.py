@@ -300,9 +300,17 @@ if __name__ == '__main__':
 
     async def list_tasks_periodically() -> None:
         """Print active tasks periodically for demo purposes."""
-        while True:  # The splitting and slicing mess here is to abridge the strings to make them fit in one line.
-            print('Active tasks:\n' + '\n'.join('  ' + str(t).split(' wait_for=')[0].split(' cb=')[0][len('<Task '):]
-                                                for t in asyncio.Task.all_tasks()), file=sys.stderr)
+        import re
+
+        def repr_task(t: asyncio.Task) -> str:
+            try:
+                out, = re.findall(r'^<([^<]+<[^>]+>)', str(t))
+            except ValueError:
+                out = str(t)
+            return out
+
+        while True:
+            print('\nActive tasks:\n' + '\n'.join(map(repr_task, asyncio.Task.all_tasks())), file=sys.stderr)
             await asyncio.sleep(10)
 
     asyncio.get_event_loop().create_task(list_tasks_periodically())
