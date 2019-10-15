@@ -21,9 +21,12 @@ PyUAVCAN seems complex. Does that mean that UAVCAN is a complex protocol?
     implementation in C called ``libcanard`` that is only ~1k SLoC large.
 
 
-Library import fails with ``ImportError``. Do I need additional packages to get it working?
+Imports fail with ``ImportError``. Do I need to install additional packages?
     No. The missing packages (usually it's ``uavcan``) are supposed to be auto-generated from DSDL definitions.
     We no longer ship the public regulated DSDL definitions together with UAVCAN implementations
     in order to simplify maintenance and integration; also, this underlines our commitment to make
     vendor-specific (or application-specific) data types first-class citizens in UAVCAN v1.
     Please read the user documentation to learn how to generate Python packages from DSDL namespaces.
+
+Imports fail with ``AttributeError: module 'uavcan...' has no attribute '...'``. What am I doing wrong?
+    Remove the old library: ``pip uninstall -y uavcan``. Read the :ref:`installation` guide for details.
