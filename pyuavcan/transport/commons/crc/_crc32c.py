@@ -10,6 +10,11 @@ from ._base import CRCAlgorithm
 
 class CRC32C(CRCAlgorithm):
     """
+    `32-Bit Cyclic Redundancy Codes for Internet Applications (Philip Koopman)
+    <https://users.ece.cmu.edu/~koopman/networks/dsn02/dsn02_koopman.pdf>`_.
+
+    `CRC-32C (Castagnoli) for C++ and .NET <https://crc32c.machinezoo.com/>`_.
+
     - Name:           CRC-32/ISCSI, CRC-32C, CRC-32/CASTAGNOLI
     - Initial value:  0xFFFFFFFF
     - Polynomial:     0x1EDC6F41

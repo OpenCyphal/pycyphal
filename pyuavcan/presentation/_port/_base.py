@@ -72,7 +72,7 @@ class Closable(abc.ABC):
         Invalidates the object and closes the underlying resources if necessary.
 
         If the closed object had a blocked task waiting for data, the task will raise a
-        :class:`pyuavcan.presentation.PresentationSessionClosedError` shortly after close;
+        :class:`pyuavcan.presentation.PortClosedError` shortly after close;
         or, if the task was started by the closed instance itself, it will be silently cancelled.
         At the moment the library provides no guarantees regarding how quickly the exception will be raised
         or the task cancelled; it is only guaranteed that it will happen automatically eventually, the
@@ -81,9 +81,10 @@ class Closable(abc.ABC):
         raise NotImplementedError
 
 
-class PresentationSession(Closable, typing.Generic[TypeClass]):
+class Port(Closable, typing.Generic[TypeClass]):
     """
     The base class for any presentation layer session such as publisher, subscriber, client, or server.
+    The term "port" came to be from <https://forum.uavcan.org/t/a-generic-term-for-either-subject-or-service/182>.
     """
     @property
     @abc.abstractmethod
@@ -107,7 +108,7 @@ class PresentationSession(Closable, typing.Generic[TypeClass]):
 
 
 # noinspection DuplicatedCode
-class MessagePresentationSession(PresentationSession[MessageClass]):
+class MessagePort(Port[MessageClass]):
     """
     The base class for publishers and subscribers.
     """
@@ -133,7 +134,7 @@ class MessagePresentationSession(PresentationSession[MessageClass]):
 
 
 # noinspection DuplicatedCode
-class ServicePresentationSession(PresentationSession[ServiceClass]):
+class ServicePort(Port[ServiceClass]):
     @property
     @abc.abstractmethod
     def input_transport_session(self) -> pyuavcan.transport.InputSession:

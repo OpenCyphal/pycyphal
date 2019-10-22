@@ -11,17 +11,15 @@ Presentation layer overview
 
 The presentation layer provides a high-level object-oriented interface on top of the transport layer.
 This is the highest level of abstraction available to the user of the library.
-When creating a new network session instance (e.g., a publisher), the calling code will always interact
+When creating a new port instance (e.g., a publisher), the calling code will always interact
 directly with the presentation layer.
 The application layer functions provided on top of the presentation layer by the respective submodule are
 entirely optional; it is expected that some applications will bypass the application layer entirely.
 
-The presentation layer uses the term *presentation layer session* (or just *session*)
-to refer to an instance of publisher, subscriber, service client, or service server
-for a specific subject or service (see the inheritance diagram below).
-The presentation layer allows the application to create multiple presentation layer session instances
-that access the same underlying transport layer instance concurrently, taking care of all related
-data management and synchronization issues automatically.
+The presentation layer uses the term *port* to refer to an instance of publisher, subscriber, service client,
+or service server for a specific subject or service (see the inheritance diagram below).
+The presentation layer allows the application to create multiple ports that access the same underlying transport
+layer instance concurrently, taking care of all related data management and synchronization issues automatically.
 This minimizes the logical coupling between different components
 of the application that have to rely on the same UAVCAN network resource.
 For example, when the application creates more than one subscriber for a given subject, the presentation
@@ -34,11 +32,11 @@ Classes named ``*Impl`` are not accessible to the user; their instances are mana
 presentation layer controller class.
 Trivial types may be omitted from the diagram.
 
-.. inheritance-diagram:: pyuavcan.presentation._session._publisher
-                         pyuavcan.presentation._session._subscriber
-                         pyuavcan.presentation._session._server
-                         pyuavcan.presentation._session._client
-                         pyuavcan.presentation._session._error
+.. inheritance-diagram:: pyuavcan.presentation._port._publisher
+                         pyuavcan.presentation._port._subscriber
+                         pyuavcan.presentation._port._server
+                         pyuavcan.presentation._port._client
+                         pyuavcan.presentation._port._error
    :parts: 1
 
 
@@ -57,7 +55,7 @@ This example is based on a simple loopback transport that does not interact with
 >>> transport = pyuavcan.transport.loopback.LoopbackTransport(None)  # Use your real transport instead.
 >>> presentation = pyuavcan.presentation.Presentation(transport)
 
-Having prepared a presentation layer controller, we can create presentation-layer sessions.
+Having prepared a presentation layer controller, we can create *ports*.
 They are the main points of network access for the application.
 Let's start with a publisher and a subscriber:
 
@@ -145,23 +143,23 @@ For example, here we create a client for a nonexistent service; the call times o
 
 from ._presentation import Presentation as Presentation
 
-from ._session import Publisher as Publisher
-from ._session import Subscriber as Subscriber
-from ._session import Client as Client
-from ._session import Server as Server
+from ._port import Publisher as Publisher
+from ._port import Subscriber as Subscriber
+from ._port import Client as Client
+from ._port import Server as Server
 
-from ._session import SubscriberStatistics as SubscriberStatistics
-from ._session import ClientStatistics as ClientStatistics
-from ._session import ServerStatistics as ServerStatistics
-from ._session import ServiceRequestMetadata as ServiceRequestMetadata
-from ._session import ServiceRequestHandler as ServiceRequestHandler
+from ._port import SubscriberStatistics as SubscriberStatistics
+from ._port import ClientStatistics as ClientStatistics
+from ._port import ServerStatistics as ServerStatistics
+from ._port import ServiceRequestMetadata as ServiceRequestMetadata
+from ._port import ServiceRequestHandler as ServiceRequestHandler
 
-from ._session import PresentationSession as PresentationSession
-from ._session import MessagePresentationSession as MessagePresentationSession
-from ._session import ServicePresentationSession as ServicePresentationSession
+from ._port import Port as Port
+from ._port import MessagePort as MessagePort
+from ._port import ServicePort as ServicePort
 
-from ._session import OutgoingTransferIDCounter as OutgoingTransferIDCounter
-from ._session import PresentationSessionClosedError as PresentationSessionClosedError
-from ._session import RequestTransferIDVariabilityExhaustedError as RequestTransferIDVariabilityExhaustedError
-from ._session import DEFAULT_PRIORITY as DEFAULT_PRIORITY
-from ._session import DEFAULT_SERVICE_REQUEST_TIMEOUT as DEFAULT_SERVICE_REQUEST_TIMEOUT
+from ._port import OutgoingTransferIDCounter as OutgoingTransferIDCounter
+from ._port import PortClosedError as PortClosedError
+from ._port import RequestTransferIDVariabilityExhaustedError as RequestTransferIDVariabilityExhaustedError
+from ._port import DEFAULT_PRIORITY as DEFAULT_PRIORITY
+from ._port import DEFAULT_SERVICE_REQUEST_TIMEOUT as DEFAULT_SERVICE_REQUEST_TIMEOUT

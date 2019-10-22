@@ -55,6 +55,7 @@ with open(_os.path.join(_os.path.dirname(__file__), 'VERSION')) as _version:
     __version__ = _version.read().strip()
 __version_info__ = tuple(map(int, __version__.split('.')))
 __license__ = 'MIT'
+__author__ = 'UAVCAN Development Team'
 
 
 #: Version of the UAVCAN protocol implemented by this library, major and minor.

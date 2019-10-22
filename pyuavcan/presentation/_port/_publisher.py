@@ -11,15 +11,15 @@ import asyncio
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessagePresentationSession, OutgoingTransferIDCounter, MessageClass, Closable
+from ._base import MessagePort, OutgoingTransferIDCounter, MessageClass, Closable
 from ._base import DEFAULT_PRIORITY, TypedSessionFinalizer
-from ._error import PresentationSessionClosedError
+from ._error import PortClosedError
 
 
 _logger = logging.getLogger(__name__)
 
 
-class Publisher(MessagePresentationSession[MessageClass]):
+class Publisher(MessagePort[MessageClass]):
     """
     A task should request its own independent publisher instance from the presentation layer controller.
     Do not share the same publisher instance across different tasks. This class implements the RAII pattern.
@@ -110,7 +110,7 @@ class Publisher(MessagePresentationSession[MessageClass]):
         Returns False if the publication could not be completed in :attr:`send_timeout`, True otherwise.
         """
         if self._maybe_impl is None:
-            raise PresentationSessionClosedError(repr(self))
+            raise PortClosedError(repr(self))
         else:
             return await self._maybe_impl.publish_until(message,
                                                         self._priority,
@@ -209,7 +209,7 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
 
     def _raise_if_closed(self) -> None:
         if self._closed:
-            raise PresentationSessionClosedError(repr(self))
+            raise PortClosedError(repr(self))
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,

@@ -74,10 +74,8 @@ for index in 0 1 2  # Multiple interfaces are needed for testing redundant trans
 do
     iface="vcan$index"
     sudo ip link add dev $iface type vcan
-    sudo ip link set up $iface
-    sudo ifconfig $iface down
     sudo ip link set $iface mtu 72        || die "Could not configure MTU on $iface"
-    sudo ifconfig $iface up               || die "Could not bring up $iface"
+    sudo ip link set up $iface            || die "Could not bring up $iface"
 done
 
 # TCP broker for serial port testing.
