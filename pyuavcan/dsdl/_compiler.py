@@ -175,8 +175,6 @@ def generate_package(package_parent_directory:        _AnyPath,
     root_ns = nunavut.build_namespace_tree(types=composite_types,
                                            root_namespace_dir=root_namespace_directory,
                                            output_dir=str(package_parent_directory),
-                                           extension='.py',
-                                           namespace_output_stem='__init__',
                                            language_context=language_context)
     generator = nunavut.jinja.Generator(namespace=root_ns,
                                         generate_namespace_types=True,
