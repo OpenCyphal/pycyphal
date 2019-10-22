@@ -8,10 +8,10 @@
 {%- block contents -%}
 
 # noinspection PyPep8Naming, SpellCheckingInspection
-class {{ T|short_reference_name }}(_dsdl_.{%- if T.has_fixed_port_id -%}FixedPort{%- endif -%}ServiceObject):
-    {{ data_schema('Request',  T.request_type, T|short_reference_name)|indent }}
+class {{ T|short_reference_name|id }}(_dsdl_.{%- if T.has_fixed_port_id -%}FixedPort{%- endif -%}ServiceObject):
+    {{ data_schema('Request',  T.request_type, T|short_reference_name|id)|indent }}
 
-    {{ data_schema('Response', T.response_type, T|short_reference_name)|indent }}
+    {{ data_schema('Response', T.response_type, T|short_reference_name|id)|indent }}
 
     def __repr__(self) -> str:
         return '{{ T }}()'

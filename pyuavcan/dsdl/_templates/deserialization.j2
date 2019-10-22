@@ -90,7 +90,7 @@
     # END STRUCTURE FIELD DESERIALIZATION: {{ f }}
     {%- endfor %}
     {%- set assignment_root -%}
-        {{ ref }} = {{ ref_type_name or t|full_reference_name }}(
+        {{ ref }} = {{ ref_type_name or t|full_reference_name|ns_id }}(
     {%- endset %}
     {{ assignment_root }}
     {%- for f in t.fields_except_padding -%}
@@ -111,7 +111,7 @@
     # BEGIN UNION FIELD DESERIALIZATION: {{ f }}
     {{ 'if' if loop.first else 'elif' }} {{ tag_ref }} == {{ loop.index0 }}:
         {{ _deserialize_any(f.data_type, field_ref, offset)|indent }}
-        {{ ref }} = {{ ref_type_name or t|full_reference_name }}({{ f|id }}={{ field_ref }})
+        {{ ref }} = {{ ref_type_name or t|full_reference_name|ns_id }}({{ f|id }}={{ field_ref }})
     # END UNION FIELD DESERIALIZATION: {{ f }}
     {%- endfor %}
     else:
@@ -138,7 +138,7 @@
     {%- elif t is VariableLengthArrayType -%}   {{ _deserialize_variable_length_array(t, ref, offset) }}
     {%- elif t is CompositeType -%}
         {%- if offset.is_aligned_at_byte() -%}
-    {{ ref }} = {{ t|full_reference_name }}._deserialize_aligned_(_des_)
+    {{ ref }} = {{ t|full_reference_name|ns_id }}._deserialize_aligned_(_des_)
         {%- else -%}
     # The object is not always byte-aligned, deserializing in-place.
     {{ _deserialize_composite(t, ref, offset) }}
