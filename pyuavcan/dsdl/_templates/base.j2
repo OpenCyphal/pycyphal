@@ -44,7 +44,7 @@ import {{ n }}
     {%- elif t is IntegerType   -%} int
     {%- elif t is FloatType     -%} float
     {%- elif t is ArrayType     -%} _np_.ndarray
-    {%- elif t is CompositeType -%} {{ t|full_reference_name|ns_id }}
+    {%- elif t is CompositeType -%} {{ t|full_reference_name }}
     {%- else -%}{% assert False %}
     {%- endif -%}
 {%- endmacro -%}
@@ -53,7 +53,7 @@ import {{ n }}
     {%-   if t is BooleanType   -%} bool
     {%- elif t is IntegerType   -%} _ty_.Union[int, {{ t|numpy_scalar_type }}]
     {%- elif t is FloatType     -%} _ty_.Union[int, float, {{ t|numpy_scalar_type }}]
-    {%- elif t is CompositeType -%} {{ t|full_reference_name|ns_id }}
+    {%- elif t is CompositeType -%} {{ t|full_reference_name }}
     {%- elif t is ArrayType -%}
         {%- if (t.element_type is UnsignedIntegerType) and t.element_type.bit_length <= 8 -%}
             _ty_.Union[_np_.ndarray, _ty_.List[int], bytes, bytearray{%- if t.string_like -%}, str{%- endif -%}]
@@ -214,7 +214,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
         {%- elif f.data_type is FixedLengthArrayType %}
         if {{ f|id }} is None:
             {%- if f.data_type.element_type is CompositeType %}
-            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference_name|ns_id }}() {# -#}
+            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference_name }}() {# -#}
                                           for _ in range({{ f.data_type.capacity }})], {#  -#}
                                          {{ f.data_type.element_type|numpy_scalar_type }})
             {%- else %}
@@ -232,11 +232,11 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 
         {%- elif f.data_type is CompositeType %}
         if {{ f|id }} is None:
-            self.{{ f|id }} = {{ f.data_type|full_reference_name|ns_id }}()
-        elif isinstance({{ f|id }}, {{ f.data_type|full_reference_name|ns_id }}):
+            self.{{ f|id }} = {{ f.data_type|full_reference_name }}()
+        elif isinstance({{ f|id }}, {{ f.data_type|full_reference_name }}):
             self.{{ f|id }} = {{ f|id }}
         else:
-            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference_name|ns_id }} '
+            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference_name }} '
                              f'got {type({{ f|id }}).__name__}')
 
         {%- else -%}{%- assert False -%}
@@ -269,7 +269,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 
     {%- elif f.data_type is FixedLengthArrayType %}
         {%- if f.data_type.element_type is CompositeType %}
-            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference_name|ns_id }}() {# -#}
+            self.{{ f|id }} = _np_.array([{{ f.data_type.element_type|full_reference_name }}() {# -#}
                                              for _ in range({{ f.data_type.capacity }})], {#  -#}
                                             {{ f.data_type.element_type|numpy_scalar_type }})
         {%- else %}
@@ -281,7 +281,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
             self.{{ f|id }} = _np_.array([], {{ f.data_type.element_type|numpy_scalar_type }})
 
     {%- elif f.data_type is CompositeType %}
-            self.{{ f|id }} = {{ f.data_type|full_reference_name|ns_id }}()
+            self.{{ f|id }} = {{ f.data_type|full_reference_name }}()
 
     {%- else -%}{%- assert False -%}
     {%- endif %}  # Default initialization
@@ -349,10 +349,10 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
         {{ assign_array(f, 'x') | indent(4) }}
 
     {%- elif f.data_type is CompositeType %}
-        if isinstance(x, {{ f.data_type|full_reference_name|ns_id }}):
+        if isinstance(x, {{ f.data_type|full_reference_name }}):
             self._{{ f|id }} = x
         else:
-            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference_name|ns_id }} got {type(x).__name__}')
+            raise ValueError(f'{{ f|id }}: expected {{ f.data_type|full_reference_name }} got {type(x).__name__}')
 
     {%- else -%}{%- assert False -%}
     {%- endif %}
