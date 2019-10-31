@@ -43,7 +43,7 @@ def run_process(*args: str, timeout: typing.Optional[float] = None) -> str:
     # Can't use shell=True with timeout; see https://stackoverflow.com/questions/36952245/subprocess-timeout-failure
     stdout = subprocess.check_output(cmd,
                                      stderr=sys.stderr,
-                                     timeout=timeout,  # type: ignore
+                                     timeout=timeout,
                                      encoding='utf8',
                                      env=_get_env())
     assert isinstance(stdout, str)
