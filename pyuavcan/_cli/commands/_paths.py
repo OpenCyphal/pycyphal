@@ -32,8 +32,7 @@ This is always a subdirectory of :data:`VERSION_AGNOSTIC_DATA_DIR`.
 The version is specified down to the minor version, ignoring the patch version (e.g, 1.1),
 so that versions of the library that differ only by the patch version number will use the same directory.
 
-This directory contains the default destination path for highly volatile or low-value files such as
-generated DSDL packages and some CLI-specific entities.
+This directory contains the default destination path for highly volatile or low-value files.
 Having such files segregated by the library version number ensures that when the library is updated,
 it will not encounter compatibility issues with older formats.
 """

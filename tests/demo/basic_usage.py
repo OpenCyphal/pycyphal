@@ -32,9 +32,6 @@ import pyuavcan.transport.redundant
 #
 # Another sensible location for the generated package directory is somewhere in the application data directory,
 # like "~/.my-app/dsdl/{pyuavcan.__version__}/"; or, for Windows: "%APPDATA%/my-app/dsdl/{pyuavcan.__version__}/".
-#
-# Simple applications may not specify this directory at all, in which case the default directory will be used.
-# Read the documentation for the function to learn more about the default.
 dsdl_generated_dir = pathlib.Path(tempfile.gettempdir(), 'dsdl-for-my-program', f'pyuavcan-v{pyuavcan.__version__}')
 dsdl_generated_dir.mkdir(parents=True, exist_ok=True)
 print('Generated DSDL packages will be stored in:', dsdl_generated_dir, file=sys.stderr)
