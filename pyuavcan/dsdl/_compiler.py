@@ -21,10 +21,14 @@ import nunavut.jinja
 import pyuavcan
 
 
-DEFAULT_GENERATED_PACKAGES_DIR = pyuavcan.VERSION_SPECIFIC_DATA_DIR / 'dsdl-generated-packages'
+DEFAULT_GENERATED_PACKAGES_DIR = pyuavcan.VERSION_SPECIFIC_DATA_DIR / 'dsdl-generated'
 """
 By default, generated packages are stored into this directory, unless overridden.
 The directory is specific per the current version of the library.
+
+If the default path is used, the user code should add this directory to the import lookup path manually by
+invoking ``sys.path.insert(0, pyuavcan.dsdl.DEFAULT_GENERATED_PACKAGES_DIR)``.
+Automatic registration is not done in order to avoid lookup path conflicts when the default directory is not used.
 """
 
 

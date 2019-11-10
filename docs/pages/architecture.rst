@@ -162,7 +162,14 @@ classes from DSDL type definitions.
 The auto-generated classes have a high-level application-facing API and built-in auto-generated
 serialization and deserialization routines.
 
-The main API functions are:
+The library defines a directory path where DSDL-generated packages are stored by default
+unless a different location is specified explicitly.
+DSDL definitions are changed extremely infrequently, so having a default location for generated code
+reduces the amount of boilerplate code, and simplifies the usage of the command-line code generation tool.
+The default directory has to be added to the import lookup path manually,
+this is done in order to avoid collisions with custom directories, if they are used.
+
+The main API entries are:
 
 - :func:`pyuavcan.dsdl.generate_package` -- generates a Python package from a DSDL namespace.
 - :func:`pyuavcan.dsdl.serialize` and :func:`pyuavcan.dsdl.deserialize` -- serialize and deserialize
