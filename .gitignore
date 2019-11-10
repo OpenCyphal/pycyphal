@@ -48,3 +48,8 @@ coverage.xml
 *.exe
 *.code-workspace
 .vscode
+
+# DSDL generated namespaces
+/uavcan/*
+/sirius_cyber_corp/*
+/test/*

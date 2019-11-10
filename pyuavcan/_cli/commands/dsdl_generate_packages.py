@@ -84,20 +84,13 @@ This option can be specified more than once.
 '''.strip())
         parser.add_argument(
             '--output', '-O',
-            default=pyuavcan.dsdl.DEFAULT_GENERATED_PACKAGES_DIR,
             help='''
 Path to the directory where the generated packages will be stored.
+If not specified, defaults to the current working directory.
 Existing packages will be overwritten entirely.
 
 The destination directory should be in PYTHONPATH to use the generated
-packages; the default directory is already added to the local package
-look-up list, so if the default directory is used, no additional steps
-are necessary. Note that the default directory is computed individually
-per local system; the default value shown here may be different on another
-computer.
-
-The default value is the global library-default generated package directory
-pyuavcan.dsdl.DEFAULT_GENERATED_PACKAGES_DIR: %(default)s
+packages unless the output is the current working directory.
 '''.strip())
         parser.add_argument(
             '--allow-unregulated-fixed-port-id',
@@ -109,7 +102,7 @@ option. If not sure, ask for advice at https://forum.uavcan.org.
 '''.strip())
 
     def execute(self, args: argparse.Namespace, _subsystems: typing.Sequence[object]) -> int:
-        output = pathlib.Path(args.output)
+        output = pathlib.Path(args.output or pathlib.Path.cwd())
         allow_unregulated_fixed_port_id = bool(args.allow_unregulated_fixed_port_id)
 
         inputs: typing.List[pathlib.Path] = []

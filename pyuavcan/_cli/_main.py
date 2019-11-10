@@ -18,10 +18,6 @@ _LOG_FORMAT = '%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s'
 
 
 def main() -> None:
-    # noinspection PyCompatibility
-    from pyuavcan.dsdl import DEFAULT_GENERATED_PACKAGES_DIR
-    sys.path.insert(0, str(DEFAULT_GENERATED_PACKAGES_DIR))
-
     logging.basicConfig(format=_LOG_FORMAT)  # Using the default log level; it will be overridden later.
 
     try:
