@@ -18,12 +18,12 @@ _logger = logging.getLogger(__name__)
 
 # noinspection PyUnusedLocal
 def _unittest_slow_manual_a(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    import test.str
+    import test_dsdl_namespace.str
 
-    assert pyuavcan.dsdl.deserialize(test.str.A_1_0, [memoryview(b'')]) is None
+    assert pyuavcan.dsdl.deserialize(test_dsdl_namespace.str.A_1_0, [memoryview(b'')]) is None
 
     obj = pyuavcan.dsdl.deserialize(
-        test.str.A_1_0,
+        test_dsdl_namespace.str.A_1_0,
         _compile_serialized_representation(
             # void1
             '0'

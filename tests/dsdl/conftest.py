@@ -61,7 +61,7 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
                 DESTINATION_DIR,
             ),
             pyuavcan.dsdl.generate_package(
-                TEST_DATA_TYPES_DIR / 'test',
+                TEST_DATA_TYPES_DIR / 'test_dsdl_namespace',
                 [
                     PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'
                 ],

@@ -52,4 +52,4 @@ coverage.xml
 # DSDL generated namespaces
 /uavcan/*
 /sirius_cyber_corp/*
-/test/*
+/test_dsdl_namespace/*
