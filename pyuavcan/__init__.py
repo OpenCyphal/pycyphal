@@ -94,7 +94,7 @@ if hasattr(_sys, 'getwindowsversion'):  # pragma: no cover
 else:
     VERSION_AGNOSTIC_DATA_DIR = _pathlib.Path('~/.uavcan/pyuavcan').expanduser()
 
-VERSION_SPECIFIC_DATA_DIR = VERSION_AGNOSTIC_DATA_DIR / ('v' + '.'.join(map(str, __version_info__[:2])))
+VERSION_SPECIFIC_DATA_DIR: _pathlib.Path = VERSION_AGNOSTIC_DATA_DIR / ('v' + '.'.join(map(str, __version_info__[:2])))
 """
 The directory specific to this version of the library where resources and files are stored.
 This directory contains the default destination path for generated DSDL packages and some CLI-specific entities.
