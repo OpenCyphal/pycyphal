@@ -72,13 +72,17 @@ class ServiceObject(CompositeObject):
     This is the base class for all Python classes generated from DSDL service type definitions.
     Observe that it inherits from the composite object class, just like the nested types Request and Response.
     """
-    #: Nested request type. Inherits from :class:`CompositeObject`.
-    #: The base class provides a stub which is overridden in generated classes.
     Request: typing.Type[CompositeObject]
+    """
+    Nested request type. Inherits from :class:`CompositeObject`.
+    The base class provides a stub which is overridden in generated classes.
+    """
 
-    #: Nested response type. Inherits from :class:`CompositeObject`.
-    #: The base class provides a stub which is overridden in generated classes.
     Response: typing.Type[CompositeObject]
+    """
+    Nested response type. Inherits from :class:`CompositeObject`.
+    The base class provides a stub which is overridden in generated classes.
+    """
 
     _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_ = 0
 

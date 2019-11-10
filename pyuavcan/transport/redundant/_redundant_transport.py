@@ -22,8 +22,10 @@ class RedundantTransportStatistics(pyuavcan.transport.TransportStatistics):
     Aggregate statistics for all inferior transports in a redundant group.
     This is an atomic immutable sample; it is not updated after construction.
     """
-    #: The ordering is guaranteed to match that of :attr:`RedundantTransport.inferiors`.
     inferiors: typing.List[pyuavcan.transport.TransportStatistics] = dataclasses.field(default_factory=list)
+    """
+    The ordering is guaranteed to match that of :attr:`RedundantTransport.inferiors`.
+    """
 
 
 class RedundantTransport(pyuavcan.transport.Transport):
@@ -32,12 +34,14 @@ class RedundantTransport(pyuavcan.transport.Transport):
     Please read the module documentation for details.
     """
 
-    #: An inferior transport whose transfer-ID modulo is less than this value is expected to experience
-    #: transfer-ID overflows routinely during its operation. Otherwise, the transfer-ID is not expected to
-    #: overflow for centuries.
-    #: A transfer-ID counter that is expected to overflow is called "cyclic", otherwise it's "monotonic".
-    #: Read https://forum.uavcan.org/t/alternative-transport-protocols/324.
     MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD = int(2 ** 48)
+    """
+    An inferior transport whose transfer-ID modulo is less than this value is expected to experience
+    transfer-ID overflows routinely during its operation. Otherwise, the transfer-ID is not expected to
+    overflow for centuries.
+    A transfer-ID counter that is expected to overflow is called "cyclic", otherwise it's "monotonic".
+    Read https://forum.uavcan.org/t/alternative-transport-protocols/324.
+    """
 
     def __init__(self, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
         """

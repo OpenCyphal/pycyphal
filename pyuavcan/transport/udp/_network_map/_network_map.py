@@ -31,9 +31,11 @@ class NetworkMap(abc.ABC):
     :class:`pyuavcan.transport.InvalidMediaConfigurationError`.
     """
 
-    #: The maximum theoretical number of nodes on the network is determined by raising 2 into this power.
-    #: A node-ID is the set of this many least significant bits of the IP address of the node.
     NODE_ID_BIT_LENGTH = 12
+    """
+    The maximum theoretical number of nodes on the network is determined by raising 2 into this power.
+    A node-ID is the set of this many least significant bits of the IP address of the node.
+    """
 
     @staticmethod
     def new(ip_address: str) -> NetworkMap:

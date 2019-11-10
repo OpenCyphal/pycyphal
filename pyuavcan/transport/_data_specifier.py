@@ -32,12 +32,16 @@ class MessageDataSpecifier(DataSpecifier):
 @dataclasses.dataclass(frozen=True)
 class ServiceDataSpecifier(DataSpecifier):
     class Role(enum.Enum):
-        #: Request output role is for clients.
-        #: Request input role is for servers.
         REQUEST  = enum.auto()
-        #: Response output role is for servers.
-        #: Response input role is for clients.
+        """
+        Request output role is for clients.
+        Request input role is for servers.
+        """
         RESPONSE = enum.auto()
+        """
+        Response output role is for servers.
+        Response input role is for clients.
+        """
 
     SERVICE_ID_MASK = 511
 

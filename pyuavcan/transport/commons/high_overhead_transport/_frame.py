@@ -16,25 +16,37 @@ class Frame:
     It is used with the common transport algorithms defined in this module.
     Concrete transport implementations should make their transport-specific frame dataclasses inherit from this class.
     """
-    #: For outgoing frames, this is the timestamp of the transfer instance.
-    #: For incoming frames, this is the reception timestamp from the media implementation (hardware or software).
     timestamp: pyuavcan.transport.Timestamp
+    """
+    For outgoing frames, this is the timestamp of the transfer instance.
+    For incoming frames, this is the reception timestamp from the media implementation (hardware or software).
+    """
 
-    #: Transfer priority should be the same for all frames within the transfer.
     priority: pyuavcan.transport.Priority
+    """
+    Transfer priority should be the same for all frames within the transfer.
+    """
 
-    #: Transfer-ID is incremented whenever a transfer under a specific session-specifier is emitted.
-    #: Always non-negative.
     transfer_id: int
+    """
+    Transfer-ID is incremented whenever a transfer under a specific session-specifier is emitted.
+    Always non-negative.
+    """
 
-    #: Index of the frame within its transfer, starting from zero. Always non-negative.
     index: int
+    """
+    Index of the frame within its transfer, starting from zero. Always non-negative.
+    """
 
-    #: True for the last frame within the transfer.
     end_of_transfer: bool
+    """
+    True for the last frame within the transfer.
+    """
 
-    #: The data carried by the frame. Multi-frame transfer payload is suffixed with its CRC32C. May be empty.
     payload: memoryview
+    """
+    The data carried by the frame. Multi-frame transfer payload is suffixed with its CRC32C. May be empty.
+    """
 
     def __post_init__(self) -> None:
         if not isinstance(self.timestamp, pyuavcan.transport.Timestamp):

@@ -18,10 +18,11 @@ class FrameFormat(enum.IntEnum):
 
 @dataclasses.dataclass(frozen=True)
 class DataFrame:
-    identifier: int             #: CAN ID value.
-    data:       bytearray       #: Frame payload.
-    format:     FrameFormat     #:
-    loopback:   bool            #: Loopback request for outgoing frames; loopback indicator for received frames.
+    identifier: int
+    data:       bytearray
+    format:     FrameFormat
+    loopback:   bool
+    """Loopback request for outgoing frames; loopback indicator for received frames."""
 
     def __post_init__(self) -> None:
         assert isinstance(self.format, FrameFormat)
@@ -81,7 +82,7 @@ class DataFrame:
 
 @dataclasses.dataclass(frozen=True)
 class TimestampedDataFrame(DataFrame):
-    timestamp: pyuavcan.transport.Timestamp  #:
+    timestamp: pyuavcan.transport.Timestamp
 
     def __str__(self) -> str:
         return f'{self.timestamp}: {super(TimestampedDataFrame, self).__str__()}'
