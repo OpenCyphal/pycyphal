@@ -187,8 +187,15 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
     Returns a generated native class implementing the specified DSDL type represented by its PyDSDL model object.
     This is the inverse of :func:`get_model`.
 
-    :raises: :class:`ImportError` if the generated package or subpackage cannot be found;
-        :class:`AttributeError` if the package is found but it does not contain the requested type.
+    :raises:
+        - :class:`ImportError` if the generated package or subpackage cannot be found.
+
+        - :class:`AttributeError` if the package is found but it does not contain the requested type.
+
+        - :class:`TypeError` if the requested type is found, but its model does not match the input argument.
+          This error may occur if the DSDL source has changed since the type was generated.
+          To fix this, regenerate the package and make sure that all components of the application use identical
+          or compatible DSDL source files.
     """
     if model.parent_service is not None:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
         out = get_class(model.parent_service)
@@ -204,8 +211,14 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
                 mod = importlib.import_module(name + '_')
         ref = f'{model.short_name}_{model.version.major}_{model.version.minor}'
         out = getattr(mod, ref)
-        assert get_model(out) == model
 
+    out_model = get_model(out)
+    if out_model != model:
+        raise TypeError(f'The class has been generated using an incompatible DSDL definition. '
+                        f'Requested model: {model} defined in {model.source_file_path}. '
+                        f'Model found in the class: {out_model} defined in {out_model.source_file_path}.')
+
+    assert get_model(out) == model
     assert issubclass(out, CompositeObject)
     return out
 
