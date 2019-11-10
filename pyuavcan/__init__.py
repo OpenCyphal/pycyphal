@@ -58,9 +58,11 @@ __license__ = 'MIT'
 __author__ = 'UAVCAN Development Team'
 
 
-#: Version of the UAVCAN protocol implemented by this library, major and minor.
-#: Use this value to populate the corresponding field in ``uavcan.node.GetInfo.Response``.
 UAVCAN_SPECIFICATION_VERSION = 1, 0
+"""
+Version of the UAVCAN protocol implemented by this library, major and minor.
+Use this value to populate the corresponding field in ``uavcan.node.GetInfo.Response``.
+"""
 
 
 if _sys.version_info[:2] < (3, 7):   # pragma: no cover

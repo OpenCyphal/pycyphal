@@ -26,8 +26,10 @@ class CANInputSessionStatistics(pyuavcan.transport.SessionStatistics):
 
 
 class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
-    #: Per the UAVCAN specification. Units are seconds. Can be overridden after instantiation if needed.
     DEFAULT_TRANSFER_ID_TIMEOUT = 2
+    """
+    Per the UAVCAN specification. Units are seconds. Can be overridden after instantiation if needed.
+    """
 
     _QueueItem = typing.Tuple[_identifier.CANID, _frame.TimestampedUAVCANFrame]
 

@@ -25,22 +25,28 @@ class ProtocolParameters:
     the set of aggregated transports is changed (i.e., a transport is added or removed).
     """
 
-    #: The cardinality of the set of distinct transfer-ID values; i.e., the overflow period.
-    #: All high-overhead transports (UDP, Serial, etc.) use a sufficiently large value that will never overflow
-    #: in a realistic, practical scenario.
-    #: The background and motivation are explained at https://forum.uavcan.org/t/alternative-transport-protocols/324.
-    #: Example: 32 for CAN, 72057594037927936 (2**56) for UDP.
     transfer_id_modulo: int
+    """
+    The cardinality of the set of distinct transfer-ID values; i.e., the overflow period.
+    All high-overhead transports (UDP, Serial, etc.) use a sufficiently large value that will never overflow
+    in a realistic, practical scenario.
+    The background and motivation are explained at https://forum.uavcan.org/t/alternative-transport-protocols/324.
+    Example: 32 for CAN, 72057594037927936 (2**56) for UDP.
+    """
 
-    #: How many nodes can the transport accommodate in a given network.
-    #: Example: 128 for CAN, 4096 for Serial.
     max_nodes: int
+    """
+    How many nodes can the transport accommodate in a given network.
+    Example: 128 for CAN, 4096 for Serial.
+    """
 
-    #: The maximum number of payload bytes in a single-frame transfer.
-    #: If the number of payload bytes in a transfer exceeds this limit, the transport will spill
-    #: the data into a multi-frame transfer.
-    #: Example: 7 for CAN 2.0, <=63 for CAN FD.
     mtu: int
+    """
+    The maximum number of payload bytes in a single-frame transfer.
+    If the number of payload bytes in a transfer exceeds this limit, the transport will spill
+    the data into a multi-frame transfer.
+    Example: 7 for CAN 2.0, <=63 for CAN FD.
+    """
 
 
 @dataclasses.dataclass
@@ -94,7 +100,7 @@ class Transport(abc.ABC):
         When the node-ID is assigned, the private transport instance is destroyed,
         a new one is implicitly created in its place, and all of the dependent session instances are automatically
         recreated transparently for the user of the proxy.
-        I call this pattern "prestige".
+        This logic is implemented in the redundant transport, which can be used even if no redundancy is needed.
         """
         raise NotImplementedError
 
@@ -189,11 +195,12 @@ class Transport(abc.ABC):
         In general, one can view this as an XML-based representation of a Python constructor invocation expression,
         where the first argument is represented as the XML element data, and all following arguments
         are represented as named XML attributes.
-        This is not a hard requirement though. Examples:
-        ``<can><socketcan mtu="64">vcan0</socketcan></can>``,
-        ``<serial baudrate="115200">/dev/ttyACM0</serial>``,
-        ``<ieee802154><xbee>/dev/ttyACM0</xbee></ieee802154>``,
-        ``<redundant><can><socketcan mtu="8">can0</socketcan></can><serial baudrate="115200">COM9</serial></redundant>``
+        Examples:
+
+        - ``<can><socketcan mtu="64">vcan0</socketcan></can>``
+        - ``<serial baudrate="115200">/dev/ttyACM0</serial>``
+        - ``<ieee802154><xbee>/dev/ttyACM0</xbee></ieee802154>``
+        - ``<redundant><udp srv_mult="1">127.0.0.42/8</udp><serial baudrate="115200">COM9</serial></redundant>``
 
         We should consider defining a reverse static factory method that attempts to locate the necessary transport
         implementation class and instantiate it from a supplied descriptor. This would benefit transport-agnostic

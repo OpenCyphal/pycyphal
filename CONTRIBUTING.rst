@@ -136,10 +136,12 @@ Documentation is the last resort; use prose only for things that cannot be conci
 For simple cases prefer doctests to regular test functions because they address two problems at once:
 testing and documentation.
 
-When documenting attributes and variables, use the prefix octothorp-colon syntax::
+When documenting attributes and variables, use the standard docstring syntax::
 
-    #: What do you get when you multiply six by nine.
     THE_ANSWER = 42
+    """
+    What do you get when you multiply six by nine.
+    """
 
 Avoid stating obvious things in the docs. It is best to write no doc at all than restating things that
 are evident from the code::

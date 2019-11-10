@@ -29,9 +29,11 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
-    #: Basic input session statistics: instances of :class:`UDPDemultiplexerStatistics` keyed by data specifier.
     demultiplexer: typing.Dict[pyuavcan.transport.DataSpecifier, UDPDemultiplexerStatistics] = \
         dataclasses.field(default_factory=dict)
+    """
+    Basic input session statistics: instances of :class:`UDPDemultiplexerStatistics` keyed by data specifier.
+    """
 
 
 class UDPTransport(pyuavcan.transport.Transport):
@@ -42,26 +44,35 @@ class UDPTransport(pyuavcan.transport.Transport):
     Please read the module documentation for details.
     """
 
-    #: By default, service transfer multiplication is disabled for UDP.
-    #: This option is only justified for extremely unreliable experimental networks, not in production.
     DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 1
+    """
+    By default, service transfer multiplication is disabled for UDP.
+    This option may be justified for extremely unreliable experimental networks.
+    """
+
     VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
 
-    #: The recommended application-level MTU is one kibibyte. Lower values should not be used.
-    #: This is compatible with the IPv6 minimum MTU requirement, which is 1280 bytes.
-    #: The IPv4 has a lower MTU requirement of 576 bytes, but for local networks the MTU is normally much higher.
-    #: The transport can always accept any MTU regardless of its configuration.
     DEFAULT_MTU = 1024
+    """
+    The recommended application-level MTU is one kibibyte. Lower values should not be used.
+    This is compatible with the IPv6 minimum MTU requirement, which is 1280 bytes.
+    The IPv4 has a lower MTU requirement of 576 bytes, but for local networks the MTU is normally much higher.
+    The transport can always accept any MTU regardless of its configuration.
+    """
 
-    #: A conventional Ethernet jumbo frame can carry up to 9 KiB (9216 bytes).
-    #: These are the application-level MTU values, so we take overheads into account.
-    #: An attempt to transmit a larger frame than supported by L2 may lead to IP fragmentation,
-    #: which is undesirable for time-deterministic networks.
     VALID_MTU_RANGE = (1024, 9000)
+    """
+    A conventional Ethernet jumbo frame can carry up to 9 KiB (9216 bytes).
+    These are the application-level MTU values, so we take overheads into account.
+    An attempt to transmit a larger frame than supported by L2 may lead to IP fragmentation,
+    which is undesirable for time-deterministic networks.
+    """
 
-    #: The maximum theoretical number of nodes on the network is determined by raising 2 into this power.
-    #: A node-ID is the set of this many least significant bits of the IP address of the node.
     NODE_ID_BIT_LENGTH = NetworkMap.NODE_ID_BIT_LENGTH
+    """
+    The maximum theoretical number of nodes on the network is determined by raising 2 into this power.
+    A node-ID is the set of this many least significant bits of the IP address of the node.
+    """
 
     def __init__(self,
                  ip_address:                  str,

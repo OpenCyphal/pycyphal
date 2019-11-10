@@ -33,8 +33,10 @@ class Publisher(MessagePort[MessageClass]):
     and therefore are shared per session specifier.
     """
 
-    #: Default value for :attr:`send_timeout`. The value is an implementation detail, not required by Specification.
     DEFAULT_SEND_TIMEOUT = 1.0
+    """
+    Default value for :attr:`send_timeout`. The value is an implementation detail, not required by Specification.
+    """
 
     def __init__(self,
                  impl: PublisherImpl[MessageClass],

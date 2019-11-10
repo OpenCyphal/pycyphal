@@ -102,7 +102,7 @@ def _unittest_slow_cli_demo_basic_usage(
                  '--lookup', DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
 
     # Generate DSDL namespace "test"
-    run_cli_tool('dsdl-gen-pkg', str(TEST_DATA_TYPES_DIR / 'test'),
+    run_cli_tool('dsdl-gen-pkg', str(TEST_DATA_TYPES_DIR / 'test_dsdl_namespace'),
                  '--lookup', DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
 
     # Generate DSDL namespace "uavcan"

@@ -56,11 +56,17 @@ repository. This is the command:
 
 .. code-block:: sh
 
-    uvc dsdl-gen-pkg ../dsdl/namespaces/sirius_cyber_corp/ https://github.com/UAVCAN/public_regulated_data_types/archive/a532bfa7.zip
+    uvc dsdl-gen-pkg ../dsdl/namespaces/sirius_cyber_corp/ https://github.com/UAVCAN/public_regulated_data_types/archive/master.zip
 
-That's it. If you want to know what exactly has been done, rerun the command with ``-v`` (V for Verbose).
+That's it.
+The DSDL-generated packages have been stored in the current working directory, so now we can use them.
+If you decided to change the working directory, please make sure to update the ``PYTHONPATH`` environment
+variable to include the path where the generated packages are stored, otherwise you won't be able to import them.
+Alternatively, you can just move the generated packages to a new location (they are location-invariant)
+or just generate them anew where needed.
 
-The DSDL packages have been stored on your computer in a directory known to the CLI tool, so now we can use them.
+If you want to know what exactly has been done, rerun the command with ``-v`` (V for Verbose).
+As always, use ``--help`` to get the full usage information.
 
 
 Configuring the transport

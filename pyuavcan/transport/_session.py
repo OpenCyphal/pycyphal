@@ -66,13 +66,17 @@ class SessionSpecifier:
     There are specializations for input and output sessions with additional logic,
     but they do not add extra data (because remember this class follows the protocol model definition).
     """
-    #: See :class:`pyuavcan.transport.DataSpecifier`.
     data_specifier: DataSpecifier
+    """
+    See :class:`pyuavcan.transport.DataSpecifier`.
+    """
 
-    #: If not None: output sessions are unicast to that node-ID, and input sessions ignore all transfers
-    #: except those that originate from the specified remote node-ID.
-    #: If None: output sessions are broadcast and input sessions are promiscuous.
     remote_node_id: typing.Optional[int]
+    """
+    If not None: output sessions are unicast to that node-ID, and input sessions ignore all transfers
+    except those that originate from the specified remote node-ID.
+    If None: output sessions are broadcast and input sessions are promiscuous.
+    """
 
     def __post_init__(self) -> None:
         if self.remote_node_id is not None and self.remote_node_id < 0:

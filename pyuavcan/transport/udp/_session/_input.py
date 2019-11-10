@@ -21,9 +21,11 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPInputSessionStatistics(pyuavcan.transport.SessionStatistics):
-    #: Keys are data type hash values collected from received frames that did not match the local type configuration.
-    #: Values are the number of times each hash value has been encountered.
     mismatched_data_type_hashes: typing.Dict[int, int] = dataclasses.field(default_factory=dict)
+    """
+    Keys are data type hash values collected from received frames that did not match the local type configuration.
+    Values are the number of times each hash value has been encountered.
+    """
 
 
 class UDPInputSession(pyuavcan.transport.InputSession):
@@ -91,8 +93,10 @@ class UDPInputSession(pyuavcan.transport.InputSession):
     It should be understood that actual safety-critical implementations used in production systems
     can be far simpler because generally they do not have to be multi-transport and multi-platform.
     """
-    #: Units are seconds. Can be overridden after instantiation if needed.
     DEFAULT_TRANSFER_ID_TIMEOUT = 2.0
+    """
+    Units are seconds. Can be overridden after instantiation if needed.
+    """
 
     def __init__(self,
                  specifier:        pyuavcan.transport.InputSessionSpecifier,
@@ -199,9 +203,11 @@ class UDPInputSession(pyuavcan.transport.InputSession):
 
 @dataclasses.dataclass
 class PromiscuousUDPInputSessionStatistics(UDPInputSessionStatistics):
-    #: Keys are source node-IDs; values are dicts where keys are error enum members and values are counts.
     reassembly_errors_per_source_node_id: typing.Dict[int, typing.Dict[TransferReassembler.Error, int]] = \
         dataclasses.field(default_factory=dict)
+    """
+    Keys are source node-IDs; values are dicts where keys are error enum members and values are counts.
+    """
 
 
 class PromiscuousUDPInputSession(UDPInputSession):
@@ -251,8 +257,10 @@ class PromiscuousUDPInputSession(UDPInputSession):
 
 @dataclasses.dataclass
 class SelectiveUDPInputSessionStatistics(UDPInputSessionStatistics):
-    #: Keys are error enum members and values are counts.
     reassembly_errors: typing.Dict[TransferReassembler.Error, int] = dataclasses.field(default_factory=dict)
+    """
+    Keys are error enum members and values are counts.
+    """
 
 
 class SelectiveUDPInputSession(UDPInputSession):

@@ -30,15 +30,19 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class ServerStatistics:
-    #: There is only one input transport session per server.
-    request_transport_session:   pyuavcan.transport.SessionStatistics
+    request_transport_session: pyuavcan.transport.SessionStatistics
+    """There is only one input transport session per server."""
 
-    #: This is a mapping keyed by the remote client node-ID value. One transport session per client.
     response_transport_sessions: typing.Dict[int, pyuavcan.transport.SessionStatistics]
+    """This is a mapping keyed by the remote client node-ID value. One transport session per client."""
 
-    served_requests:             int
-    deserialization_failures:    int    #: Requests that could not be received because of bad input transfers.
-    malformed_requests:          int    #: Problems at the transport layer.
+    served_requests: int
+
+    deserialization_failures: int
+    """Requests that could not be received because of bad input transfers."""
+
+    malformed_requests: int
+    """Problems at the transport layer."""
 
 
 @dataclasses.dataclass
@@ -47,15 +51,22 @@ class ServiceRequestMetadata:
     This structure is supplied with every received request for informational purposes.
     The application is not required to do anything with it.
     """
-    timestamp:      pyuavcan.transport.Timestamp  #: Timestamp of the first frame of the request transfer.
-    priority:       pyuavcan.transport.Priority   #: Same priority will be used for the response (see Specification).
-    transfer_id:    int                           #: Same transfer-ID will be used for the response (see Specification).
-    client_node_id: int                           #: The response will be sent back to this node.
+    timestamp: pyuavcan.transport.Timestamp
+    """Timestamp of the first frame of the request transfer."""
+
+    priority: pyuavcan.transport.Priority
+    """Same priority will be used for the response (see Specification)."""
+
+    transfer_id: int
+    """Same transfer-ID will be used for the response (see Specification)."""
+
+    client_node_id: int
+    """The response will be sent back to this node."""
 
 
-#: Type of the async request handler callable.
 ServiceRequestHandler = typing.Callable[[ServiceRequestClass, ServiceRequestMetadata],
                                         typing.Awaitable[typing.Optional[ServiceResponseClass]]]
+"""Type of the async request handler callable."""
 
 
 class Server(ServicePort[ServiceClass]):

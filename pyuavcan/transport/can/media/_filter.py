@@ -13,9 +13,14 @@ from ._frame import FrameFormat
 
 @dataclasses.dataclass(frozen=True)
 class FilterConfiguration:
-    identifier: int                             #: CAN ID value.
-    mask:       int                             #: Mask applies to the identifier only.
-    format:     typing.Optional[FrameFormat]    #: None means no preference.
+    identifier: int
+    """The reference CAN ID value."""
+
+    mask: int
+    """Mask applies to the identifier only. It does not contain any special flags."""
+
+    format: typing.Optional[FrameFormat]
+    """None means no preference -- both formats will be accepted."""
 
     def __post_init__(self) -> None:
         max_bit_length = 2 ** self.identifier_bit_length - 1

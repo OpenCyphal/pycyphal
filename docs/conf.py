@@ -40,7 +40,7 @@ try:
 except (ImportError, AttributeError) as ex:
     print('GENERATING DSDL PACKAGE; EXCEPTION:', ex)
     DSDL_GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
-    pyuavcan.dsdl.generate_package(DSDL_GENERATED_ROOT, PUBLIC_REGULATED_DATA_TYPES_ROOT / 'uavcan', [])
+    pyuavcan.dsdl.generate_package(PUBLIC_REGULATED_DATA_TYPES_ROOT / 'uavcan', [], DSDL_GENERATED_ROOT)
     importlib.invalidate_caches()
     import pyuavcan.application
 

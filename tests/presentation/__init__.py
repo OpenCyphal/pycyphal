@@ -10,9 +10,11 @@ import pyuavcan
 
 TransportPack = typing.Tuple[pyuavcan.transport.Transport, pyuavcan.transport.Transport, bool]
 
-#: The factory yields two new transports connected to the same (virtual) bus so that they can intercommunicate.
-#: The boolean flag is True if the transports are capable of sending anonymous transfers.
 TransportFactory = typing.Callable[[typing.Optional[int], typing.Optional[int]], TransportPack]
+"""
+The factory yields two new transports connected to the same (virtual) bus so that they can intercommunicate.
+The boolean flag is True if the transports are capable of sending anonymous transfers.
+"""
 
 
 def _make_transport_can(node_id_a: typing.Optional[int], node_id_b: typing.Optional[int]) -> TransportPack:

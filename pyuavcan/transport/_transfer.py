@@ -11,10 +11,12 @@ import dataclasses
 from ._timestamp import Timestamp
 
 
-#: Transfer payload is allowed to be segmented to facilitate zero-copy implementations.
-#: The format of the memoryview object should be 'B'.
-#: We're using Sequence and not Iterable to permit sharing across multiple consumers.
 FragmentedPayload = typing.Sequence[memoryview]
+"""
+Transfer payload is allowed to be segmented to facilitate zero-copy implementations.
+The format of the memoryview object should be 'B'.
+We're using Sequence and not Iterable to permit sharing across multiple consumers.
+"""
 
 
 class Priority(enum.IntEnum):
@@ -38,24 +40,32 @@ class Transfer:
     """
     UAVCAN transfer representation.
     """
-    #: For output (tx) transfers this field contains the transfer creation timestamp.
-    #: For input (rx) transfers this field contains the first frame reception timestamp.
     timestamp: Timestamp
+    """
+    For output (tx) transfers this field contains the transfer creation timestamp.
+    For input (rx) transfers this field contains the first frame reception timestamp.
+    """
 
-    #: See :class:`Priority`.
     priority: Priority
+    """
+    See :class:`Priority`.
+    """
 
-    #: When transmitting, the appropriate modulus will be computed by the transport automatically.
-    #: Higher layers shall use monotonically increasing transfer-ID counters.
     transfer_id: int
+    """
+    When transmitting, the appropriate modulus will be computed by the transport automatically.
+    Higher layers shall use monotonically increasing transfer-ID counters.
+    """
 
-    #: See :class:`FragmentedPayload`. This is the serialized application-level payload.
-    #: Fragmentation may be completely arbitrary.
-    #: Received transfers usually have it fragmented such that one fragment corresponds to one received frame.
-    #: Outgoing transfers usually fragment it according to the structure of the serialized data object.
-    #: The purpose of fragmentation is to eliminate unnecessary data copying within the protocol stack.
-    #: :func:`pyuavcan.util.refragment` is designed to facilitate regrouping when sending a transfer.
     fragmented_payload: FragmentedPayload
+    """
+    See :class:`FragmentedPayload`. This is the serialized application-level payload.
+    Fragmentation may be completely arbitrary.
+    Received transfers usually have it fragmented such that one fragment corresponds to one received frame.
+    Outgoing transfers usually fragment it according to the structure of the serialized data object.
+    The purpose of fragmentation is to eliminate unnecessary data copying within the protocol stack.
+    :func:`pyuavcan.util.refragment` is designed to facilitate regrouping when sending a transfer.
+    """
 
 
 @dataclasses.dataclass
@@ -63,5 +73,7 @@ class TransferFrom(Transfer):
     """
     Specialization for received transfers.
     """
-    #: None indicates anonymous transfers.
     source_node_id: typing.Optional[int]
+    """
+    None indicates anonymous transfers.
+    """

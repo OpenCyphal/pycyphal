@@ -22,11 +22,11 @@ class Media(abc.ABC):
     needed for SLCAN). Python packages containing such media implementations shall be always importable.
     """
 
-    #: The frames handler is non-blocking and non-yielding; returns immediately.
     ReceivedFramesHandler = typing.Callable[[typing.Iterable[TimestampedDataFrame]], None]
+    """The frames handler is non-blocking and non-yielding; returns immediately."""
 
-    #: Valid MTU values for CAN 2.0 and CAN FD.
     VALID_MTU_SET = {8, 12, 16, 20, 24, 32, 48, 64}
+    """Valid MTU values for CAN 2.0 and CAN FD."""
 
     @property
     @abc.abstractmethod
