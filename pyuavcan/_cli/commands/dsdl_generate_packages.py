@@ -96,7 +96,8 @@ are necessary. Note that the default directory is computed individually
 per local system; the default value shown here may be different on another
 computer.
 
-Default: %(default)s
+The default value is the global library-default generated package directory
+pyuavcan.dsdl.DEFAULT_GENERATED_PACKAGES_DIR: %(default)s
 '''.strip())
         parser.add_argument(
             '--allow-unregulated-fixed-port-id',
