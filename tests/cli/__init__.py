@@ -15,9 +15,11 @@ class TransportConfig:
     can_transmit: bool
 
 
-#: This factory constructs arguments for the CLI instructing it to use a particular transport configuration.
-#: The factory takes one argument - the node-ID - which can be None (anonymous).
 TransportFactory = typing.Callable[[typing.Optional[int]], TransportConfig]
+"""
+This factory constructs arguments for the CLI instructing it to use a particular transport configuration.
+The factory takes one argument - the node-ID - which can be None (anonymous).
+"""
 
 
 def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:

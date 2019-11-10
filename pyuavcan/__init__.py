@@ -49,6 +49,7 @@ If not set, the log level is determined following the regular policies of the Py
 
 import os as _os
 import sys as _sys
+import pathlib as _pathlib
 
 
 with open(_os.path.join(_os.path.dirname(__file__), 'VERSION')) as _version:
@@ -58,9 +59,11 @@ __license__ = 'MIT'
 __author__ = 'UAVCAN Development Team'
 
 
-#: Version of the UAVCAN protocol implemented by this library, major and minor.
-#: Use this value to populate the corresponding field in ``uavcan.node.GetInfo.Response``.
 UAVCAN_SPECIFICATION_VERSION = 1, 0
+"""
+Version of the UAVCAN protocol implemented by this library, major and minor.
+Use this value to populate the corresponding field in ``uavcan.node.GetInfo.Response``.
+"""
 
 
 if _sys.version_info[:2] < (3, 7):   # pragma: no cover
@@ -77,6 +80,25 @@ if _log_level_from_env is not None:
     _logging.getLogger(__name__).setLevel(_log_level_from_env)
     _logging.getLogger(__name__).info('Log config from env var; level: %r', _log_level_from_env)
 
+
+VERSION_AGNOSTIC_DATA_DIR: _pathlib.Path
+"""
+The root directory of version-specific data directories.
+It is shared for all versions of the library.
+"""
+
+if hasattr(_sys, 'getwindowsversion'):  # pragma: no cover
+    _appdata_env = _os.getenv('LOCALAPPDATA') or _os.getenv('APPDATA')
+    assert _appdata_env, 'Cannot determine the location of the app data directory'
+    VERSION_AGNOSTIC_DATA_DIR = _pathlib.Path(_appdata_env, 'UAVCAN', 'PyUAVCAN')
+else:
+    VERSION_AGNOSTIC_DATA_DIR = _pathlib.Path('~/.uavcan/pyuavcan').expanduser()
+
+VERSION_SPECIFIC_DATA_DIR = VERSION_AGNOSTIC_DATA_DIR / ('v' + '.'.join(map(str, __version_info__[:2])))
+"""
+The directory specific to this version of the library where resources and files are stored.
+This directory contains the default destination path for generated DSDL packages and some CLI-specific entities.
+"""
 
 # The sub-packages are imported in the order of their interdependency.
 import pyuavcan.util as util                    # noqa

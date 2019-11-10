@@ -15,7 +15,7 @@ import tempfile
 import argparse
 import pyuavcan
 from ._base import Command
-from ._paths import DEFAULT_DSDL_GENERATED_PACKAGES_DIR, DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
+from ._paths import DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
 from ._subsystems import SubsystemFactory
 
 
@@ -84,7 +84,7 @@ This option can be specified more than once.
 '''.strip())
         parser.add_argument(
             '--output', '-O',
-            default=DEFAULT_DSDL_GENERATED_PACKAGES_DIR,
+            default=pyuavcan.dsdl.DEFAULT_GENERATED_PACKAGES_DIR,
             help='''
 Path to the directory where the generated packages will be stored.
 Existing packages will be overwritten entirely.
@@ -189,9 +189,9 @@ option. If not sure, ask for advice at https://forum.uavcan.org.
             _logger.info('Generating DSDL package %r from root namespace %r with lookup dirs: %r',
                          dest_dir, ns, list(map(str, lookup_root_namespace_dirs)))
             shutil.rmtree(dest_dir, ignore_errors=True)
-            gpi = pyuavcan.dsdl.generate_package(package_parent_directory=generated_packages_dir,
-                                                 root_namespace_directory=ns,
+            gpi = pyuavcan.dsdl.generate_package(root_namespace_directory=ns,
                                                  lookup_directories=lookup_root_namespace_dirs,
+                                                 output_directory=generated_packages_dir,
                                                  allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
             out.append(gpi)
         return out

@@ -56,21 +56,21 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
         pydsdl_logger.setLevel(logging.INFO)
         out = [
             pyuavcan.dsdl.generate_package(
-                DESTINATION_DIR,
                 PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan',
-                []
+                [],
+                DESTINATION_DIR,
             ),
             pyuavcan.dsdl.generate_package(
-                DESTINATION_DIR,
                 TEST_DATA_TYPES_DIR / 'test',
                 [
                     PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'
-                ]
+                ],
+                DESTINATION_DIR,
             ),
             pyuavcan.dsdl.generate_package(
-                DESTINATION_DIR,
                 TEST_DATA_TYPES_DIR / 'sirius_cyber_corp',
-                []
+                [],
+                DESTINATION_DIR,
             ),
         ]
     finally:
