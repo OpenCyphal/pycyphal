@@ -229,8 +229,8 @@ class HeartbeatPublisher:
         local_node_id = self._presentation.transport.local_node_id
         remote_node_id = metadata.source_node_id
         if local_node_id is not None and remote_node_id is not None and local_node_id == remote_node_id:
-            _logger.error('NODE-ID CONFLICT: There is another node on the network that uses the same node-ID %d. '
-                          'Its latest heartbeat is %s with transfer metadata %s', remote_node_id, msg, metadata)
+            _logger.warning('NODE-ID CONFLICT: There is another node on the network that uses the same node-ID %d. '
+                            'Its latest heartbeat is %s with transfer metadata %s', remote_node_id, msg, metadata)
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, heartbeat=self.make_message(), publisher=self._publisher)
