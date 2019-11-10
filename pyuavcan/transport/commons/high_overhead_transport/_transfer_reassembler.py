@@ -50,25 +50,37 @@ class TransferReassembler:
         Whenever an error is encountered, the corresponding error counter is incremented by one,
         and a verbose report is dumped into the log at the DEBUG level.
         """
-        #: New transfer started before the old one could be completed. Old transfer discarded.
         MULTIFRAME_MISSING_FRAMES = enum.auto()
+        """
+        New transfer started before the old one could be completed. Old transfer discarded.
+        """
 
-        #: A reassembled multi-frame transfer payload did not pass integrity checks. Transfer discarded.
         MULTIFRAME_INTEGRITY_ERROR = enum.auto()
+        """
+        A reassembled multi-frame transfer payload did not pass integrity checks. Transfer discarded.
+        """
 
-        #: A frame without payload received as part of a multiframe transfer (not permitted by Specification).
-        #: Only single-frame transfers can have empty payload.
         MULTIFRAME_EMPTY_FRAME = enum.auto()
+        """
+        A frame without payload received as part of a multiframe transfer (not permitted by Specification).
+        Only single-frame transfers can have empty payload.
+        """
 
-        #: The end-of-transfer flag is set in a frame with index N,
-        #: but the transfer contains at least one frame with index > N. Transfer discarded.
         MULTIFRAME_EOT_MISPLACED = enum.auto()
+        """
+        The end-of-transfer flag is set in a frame with index N,
+        but the transfer contains at least one frame with index > N. Transfer discarded.
+        """
 
-        #: The end-of-transfer flag is set in frames with indexes N and M, where N != M. Transfer discarded.
         MULTIFRAME_EOT_INCONSISTENT = enum.auto()
+        """
+        The end-of-transfer flag is set in frames with indexes N and M, where N != M. Transfer discarded.
+        """
 
-        #: The payload exceeds the configured limit. Transfer discarded.
         PAYLOAD_SIZE_EXCEEDS_LIMIT = enum.auto()
+        """
+        The payload exceeds the configured limit. Transfer discarded.
+        """
 
     def __init__(self,
                  source_node_id:         int,

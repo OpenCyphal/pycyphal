@@ -50,14 +50,14 @@ except (ImportError, AttributeError):
     # because the standard root namespace contains important basic types), so we include it in the lookup path set.
     # The paths are hard-coded here for the sake of conciseness.
     pyuavcan.dsdl.generate_package(
-        package_parent_directory=dsdl_generated_dir,
         root_namespace_directory=os.path.join(script_path, '../dsdl/namespaces/sirius_cyber_corp/'),
-        lookup_directories=[os.path.join(script_path, '../public_regulated_data_types/uavcan')]
+        lookup_directories=[os.path.join(script_path, '../public_regulated_data_types/uavcan')],
+        output_directory=dsdl_generated_dir,
     )
     # Generate the standard namespace. The order actually doesn't matter.
     pyuavcan.dsdl.generate_package(
-        package_parent_directory=dsdl_generated_dir,
-        root_namespace_directory=os.path.join(script_path, '../public_regulated_data_types/uavcan')
+        root_namespace_directory=os.path.join(script_path, '../public_regulated_data_types/uavcan'),
+        output_directory=dsdl_generated_dir,
     )
     # Okay, we can try importing again. We need to clear the import cache first because Python's import machinery
     # requires that; see the docs for importlib.invalidate_caches() for more info.

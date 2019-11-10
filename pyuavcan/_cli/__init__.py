@@ -10,4 +10,3 @@ from ._main import main as main
 from . import commands as commands
 
 from .commands import DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL as DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
-from .commands import DEFAULT_DSDL_GENERATED_PACKAGES_DIR as DEFAULT_DSDL_GENERATED_PACKAGES_DIR

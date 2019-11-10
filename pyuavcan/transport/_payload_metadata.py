@@ -17,13 +17,17 @@ class PayloadMetadata:
 
     DATA_TYPE_HASH_MASK = 2 ** 64 - 1
 
-    #: Obtainable from DSDL; https://forum.uavcan.org/t/alternative-transport-protocols/324.
     data_type_hash: int
+    """
+    Obtainable from DSDL; https://forum.uavcan.org/t/alternative-transport-protocols/324.
+    """
 
-    #: Maximum size of the serialized representation; obtainable from DSDL.
-    #: Transport implementations may use this information to statically size receive buffers or
-    #: to perform early detection of malformed transfers if the size of their payload exceeds this limit.
     max_size_bytes: int
+    """
+    Maximum size of the serialized representation; obtainable from DSDL.
+    Transport implementations may use this information to statically size receive buffers or
+    to perform early detection of malformed transfers if the size of their payload exceeds this limit.
+    """
 
     def __post_init__(self) -> None:
         if not (0 <= self.data_type_hash <= self.DATA_TYPE_HASH_MASK):

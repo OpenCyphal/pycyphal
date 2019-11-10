@@ -20,8 +20,10 @@ class RedundantSessionStatistics(pyuavcan.transport.SessionStatistics):
     Aggregate statistics for all inferior sessions in a redundant group.
     This is an atomic immutable sample; it is not updated after construction.
     """
-    #: The ordering is guaranteed to match that of :attr:`RedundantSession.inferiors`.
     inferiors: typing.List[pyuavcan.transport.SessionStatistics] = dataclasses.field(default_factory=list)
+    """
+    The ordering is guaranteed to match that of :attr:`RedundantSession.inferiors`.
+    """
 
 
 class RedundantSession(abc.ABC):

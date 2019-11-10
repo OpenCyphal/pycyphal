@@ -26,15 +26,19 @@ class UDPDemultiplexerStatistics:
     """
     Incoming UDP datagram statistics for an input socket.
     """
-    #: Key is the remote node-ID; value is the number of datagrams received from that node.
-    #: The counters are invariant to the validity of the frame contained in the datagram.
     accepted_datagrams: typing.Dict[int, int] = dataclasses.field(default_factory=dict)
+    """
+    Key is the remote node-ID; value is the number of datagrams received from that node.
+    The counters are invariant to the validity of the frame contained in the datagram.
+    """
 
-    #: Counters of datagrams received from IP addresses that cannot be mapped to a valid node-ID,
-    #: and from nodes that no listener is registered for.
-    #: In the former case, the key is the IP address as a string; in the latter case, the key is the node-ID.
-    #: The counters are invariant to the validity of the frame contained in the datagram.
     dropped_datagrams: typing.Dict[typing.Union[str, int], int] = dataclasses.field(default_factory=dict)
+    """
+    Counters of datagrams received from IP addresses that cannot be mapped to a valid node-ID,
+    and from nodes that no listener is registered for.
+    In the former case, the key is the IP address as a string; in the latter case, the key is the node-ID.
+    The counters are invariant to the validity of the frame contained in the datagram.
+    """
 
 
 class UDPDemultiplexer:
@@ -49,11 +53,13 @@ class UDPDemultiplexer:
     The UDP transport is unable to detect a node-ID conflict because it has to discard broadcast traffic generated
     by itself in user space. To this transport, its own traffic and a node-ID conflict would look identical.
     """
-    #: The callback is invoked with the source node-ID and the frame instance upon successful reception.
-    #: Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that.
-    #: If a UDP frame is received that does not contain a valid UAVCAN frame,
-    #: the callback is invoked with None for error statistic collection purposes.
     Listener = typing.Callable[[int, typing.Optional[UDPFrame]], None]
+    """
+    The callback is invoked with the source node-ID and the frame instance upon successful reception.
+    Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that.
+    If a UDP frame is received that does not contain a valid UAVCAN frame,
+    the callback is invoked with None for error statistic collection purposes.
+    """
 
     def __init__(self,
                  sock:           socket.socket,

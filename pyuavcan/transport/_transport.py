@@ -25,22 +25,28 @@ class ProtocolParameters:
     the set of aggregated transports is changed (i.e., a transport is added or removed).
     """
 
-    #: The cardinality of the set of distinct transfer-ID values; i.e., the overflow period.
-    #: All high-overhead transports (UDP, Serial, etc.) use a sufficiently large value that will never overflow
-    #: in a realistic, practical scenario.
-    #: The background and motivation are explained at https://forum.uavcan.org/t/alternative-transport-protocols/324.
-    #: Example: 32 for CAN, 72057594037927936 (2**56) for UDP.
     transfer_id_modulo: int
+    """
+    The cardinality of the set of distinct transfer-ID values; i.e., the overflow period.
+    All high-overhead transports (UDP, Serial, etc.) use a sufficiently large value that will never overflow
+    in a realistic, practical scenario.
+    The background and motivation are explained at https://forum.uavcan.org/t/alternative-transport-protocols/324.
+    Example: 32 for CAN, 72057594037927936 (2**56) for UDP.
+    """
 
-    #: How many nodes can the transport accommodate in a given network.
-    #: Example: 128 for CAN, 4096 for Serial.
     max_nodes: int
+    """
+    How many nodes can the transport accommodate in a given network.
+    Example: 128 for CAN, 4096 for Serial.
+    """
 
-    #: The maximum number of payload bytes in a single-frame transfer.
-    #: If the number of payload bytes in a transfer exceeds this limit, the transport will spill
-    #: the data into a multi-frame transfer.
-    #: Example: 7 for CAN 2.0, <=63 for CAN FD.
     mtu: int
+    """
+    The maximum number of payload bytes in a single-frame transfer.
+    If the number of payload bytes in a transfer exceeds this limit, the transport will spill
+    the data into a multi-frame transfer.
+    Example: 7 for CAN 2.0, <=63 for CAN FD.
+    """
 
 
 @dataclasses.dataclass

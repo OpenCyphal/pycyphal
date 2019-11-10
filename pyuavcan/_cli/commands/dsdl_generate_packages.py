@@ -15,7 +15,7 @@ import tempfile
 import argparse
 import pyuavcan
 from ._base import Command
-from ._paths import DEFAULT_DSDL_GENERATED_PACKAGES_DIR, DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
+from ._paths import DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL
 from ._subsystems import SubsystemFactory
 
 
@@ -84,19 +84,13 @@ This option can be specified more than once.
 '''.strip())
         parser.add_argument(
             '--output', '-O',
-            default=DEFAULT_DSDL_GENERATED_PACKAGES_DIR,
             help='''
 Path to the directory where the generated packages will be stored.
+If not specified, defaults to the current working directory.
 Existing packages will be overwritten entirely.
 
 The destination directory should be in PYTHONPATH to use the generated
-packages; the default directory is already added to the local package
-look-up list, so if the default directory is used, no additional steps
-are necessary. Note that the default directory is computed individually
-per local system; the default value shown here may be different on another
-computer.
-
-Default: %(default)s
+packages unless the output is the current working directory.
 '''.strip())
         parser.add_argument(
             '--allow-unregulated-fixed-port-id',
@@ -108,7 +102,7 @@ option. If not sure, ask for advice at https://forum.uavcan.org.
 '''.strip())
 
     def execute(self, args: argparse.Namespace, _subsystems: typing.Sequence[object]) -> int:
-        output = pathlib.Path(args.output)
+        output = pathlib.Path(args.output or pathlib.Path.cwd())
         allow_unregulated_fixed_port_id = bool(args.allow_unregulated_fixed_port_id)
 
         inputs: typing.List[pathlib.Path] = []
@@ -189,9 +183,9 @@ option. If not sure, ask for advice at https://forum.uavcan.org.
             _logger.info('Generating DSDL package %r from root namespace %r with lookup dirs: %r',
                          dest_dir, ns, list(map(str, lookup_root_namespace_dirs)))
             shutil.rmtree(dest_dir, ignore_errors=True)
-            gpi = pyuavcan.dsdl.generate_package(package_parent_directory=generated_packages_dir,
-                                                 root_namespace_directory=ns,
+            gpi = pyuavcan.dsdl.generate_package(root_namespace_directory=ns,
                                                  lookup_directories=lookup_root_namespace_dirs,
+                                                 output_directory=generated_packages_dir,
                                                  allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
             out.append(gpi)
         return out
