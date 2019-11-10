@@ -49,4 +49,4 @@ This is not a path but a related parameter so it's kept here. Files older that t
 """
 
 DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL = \
-    'https://github.com/UAVCAN/public_regulated_data_types/archive/a532bfa7.zip'
+    'https://github.com/UAVCAN/public_regulated_data_types/archive/90a1feeb.zip'
