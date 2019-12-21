@@ -165,3 +165,7 @@ def _configure_logging(verbosity_level: int) -> None:
     except Exception as ex:
         _logger.debug('Colored logs are not available: %s: %s', type(ex), ex)
         _logger.info('Consider installing "coloredlogs" from PyPI to make log messages look better')
+
+    # Handle special cases one by one.
+    if log_level < logging.INFO:
+        logging.getLogger('pydsdl').setLevel(logging.INFO)  # Too much low-level logs from PyDSDL.
