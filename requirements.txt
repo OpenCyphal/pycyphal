@@ -16,7 +16,7 @@ coverage        ~= 4.5
 
 # Static analysis. PyLint is needed for the SonarQube scanner.
 # Newer versions of MyPy tend to be more useful so the version is not frozen. This may change later.
-mypy        >= 0.730, < 2.0
+mypy        >= 0.761, < 2.0
 pycodestyle ~= 2.5
 pylint      ~= 2.3
 

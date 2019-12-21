@@ -18,12 +18,12 @@ _logger = logging.getLogger(__name__)
 
 # noinspection PyUnusedLocal
 def _unittest_slow_manual_a(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    import test_dsdl_namespace.str
+    import test_dsdl_namespace.if_
 
-    assert pyuavcan.dsdl.deserialize(test_dsdl_namespace.str.A_1_0, [memoryview(b'')]) is None
+    assert pyuavcan.dsdl.deserialize(test_dsdl_namespace.if_.del_1_0, [memoryview(b'')]) is None
 
     obj = pyuavcan.dsdl.deserialize(
-        test_dsdl_namespace.str.A_1_0,
+        test_dsdl_namespace.if_.del_1_0,
         _compile_serialized_representation(
             # void1
             '0'
@@ -49,20 +49,20 @@ def _unittest_slow_manual_a(generated_packages: typing.List[pyuavcan.dsdl.Genera
         )
     )
     assert obj is not None
-    assert obj.x[0].x is None
-    assert obj.x[0].y is not None
-    assert len(obj.x[0].y) == 2
-    assert obj.x[0].y[0].x is None
-    assert obj.x[0].y[0].y == 1
-    assert obj.x[0].y[1].x == 1
-    assert obj.x[0].y[1].y is None
-    assert obj.x[1].x is not None
-    assert obj.x[1].y is None
-    assert obj.x[1].x[0].x == 0
-    assert obj.x[1].x[0].y is None
-    assert obj.x[1].x[1].x is None
-    assert obj.x[1].x[1].y == 1
-    assert len(obj.y) == 0
+    assert obj.else_[0].x is None
+    assert obj.else_[0].y is not None
+    assert len(obj.else_[0].y) == 2
+    assert obj.else_[0].y[0].x is None
+    assert obj.else_[0].y[0].y == 1
+    assert obj.else_[0].y[1].x == 1
+    assert obj.else_[0].y[1].y is None
+    assert obj.else_[1].x is not None
+    assert obj.else_[1].y is None
+    assert obj.else_[1].x[0].x == 0
+    assert obj.else_[1].x[0].y is None
+    assert obj.else_[1].x[1].x is None
+    assert obj.else_[1].x[1].y == 1
+    assert len(obj.raise_) == 0
 
     with pytest.raises(AttributeError, match='nonexistent'):
         pyuavcan.dsdl.get_attribute(obj, 'nonexistent')

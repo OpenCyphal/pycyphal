@@ -8,9 +8,7 @@ import gzip
 import typing
 import pickle
 import base64
-import keyword
 import pathlib
-import builtins
 import itertools
 import dataclasses
 
