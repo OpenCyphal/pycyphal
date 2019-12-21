@@ -195,7 +195,8 @@ def generate_package(root_namespace_directory:        _AnyPath,
 
     # Generate code
     output_directory = pathlib.Path.cwd() if output_directory is None else output_directory
-    language_context = nunavut.lang.LanguageContext('py')
+    language_context = nunavut.lang.LanguageContext('py',
+                                                    namespace_output_stem='__init__')
     root_ns = nunavut.build_namespace_tree(types=composite_types,
                                            root_namespace_dir=root_namespace_directory,
                                            output_dir=str(output_directory),
