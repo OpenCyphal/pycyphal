@@ -21,12 +21,6 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class SerialInputSessionStatistics(pyuavcan.transport.SessionStatistics):
-    mismatched_data_type_hashes: typing.Dict[int, int] = dataclasses.field(default_factory=dict)
-    """
-    Keys are data type hash values collected from received frames that did not match the local type configuration.
-    Values are the number of times each hash value has been encountered.
-    """
-
     reassembly_errors_per_source_node_id: typing.Dict[int, typing.Dict[TransferReassembler.Error, int]] = \
         dataclasses.field(default_factory=dict)
     """
@@ -74,13 +68,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         assert frame.data_specifier == self._specifier.data_specifier, 'Internal protocol violation'
         self._statistics.frames += 1
 
-        if frame.data_type_hash != self._payload_metadata.data_type_hash:
-            self._statistics.errors += 1
-            try:
-                self._statistics.mismatched_data_type_hashes[frame.data_type_hash] += 1
-            except LookupError:
-                self._statistics.mismatched_data_type_hashes[frame.data_type_hash] = 1
-            return
+        # TODO: implement data type hash validation. https://github.com/UAVCAN/specification/issues/60
 
         transfer: typing.Optional[pyuavcan.transport.TransferFrom]
         if frame.source_node_id is None:
@@ -260,27 +248,6 @@ def _unittest_input_session() -> None:
     assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
     assert run_until_complete(sis.receive_until(0.0)) is None
 
-    # BAD DATA TYPE HASH.
-    sis._process_frame(
-        SerialFrame(timestamp=ts,
-                    priority=prio,
-                    transfer_id=0,
-                    index=0,
-                    end_of_transfer=True,
-                    payload=memoryview(nihil_supernum),
-                    source_node_id=None,
-                    destination_node_id=None,
-                    data_specifier=session_spec.data_specifier,
-                    data_type_hash=0xbad_bad_bad_bad_bad)
-    )
-    assert sis.sample_statistics() == SerialInputSessionStatistics(
-        transfers=1,
-        frames=4,
-        payload_bytes=len(nihil_supernum),
-        errors=3,
-        mismatched_data_type_hashes={0xbad_bad_bad_bad_bad: 1},
-    )
-
     # VALID TRANSFERS. Notice that they are unordered on purpose. The reassembler can deal with that.
     sis._process_frame(mk_frame(transfer_id=0,
                                 index=1,
@@ -296,10 +263,9 @@ def _unittest_input_session() -> None:
 
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=2,
-        frames=6,
+        frames=5,
         payload_bytes=len(nihil_supernum) * 2,
-        errors=3,
-        mismatched_data_type_hashes={0xbad_bad_bad_bad_bad: 1},
+        errors=2,
         reassembly_errors_per_source_node_id={
             1111: {},
             2222: {},
@@ -326,10 +292,9 @@ def _unittest_input_session() -> None:
 
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=3,
-        frames=9,
+        frames=8,
         payload_bytes=len(nihil_supernum) * 5,
-        errors=3,
-        mismatched_data_type_hashes={0xbad_bad_bad_bad_bad: 1},
+        errors=2,
         reassembly_errors_per_source_node_id={
             1111: {},
             2222: {},
@@ -366,10 +331,9 @@ def _unittest_input_session() -> None:
 
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=3,
-        frames=11,
+        frames=10,
         payload_bytes=len(nihil_supernum) * 5,
-        errors=5,
-        mismatched_data_type_hashes={0xbad_bad_bad_bad_bad: 1},
+        errors=4,
         reassembly_errors_per_source_node_id={
             1111: {
                 TransferReassembler.Error.MULTIFRAME_EMPTY_FRAME: 2,

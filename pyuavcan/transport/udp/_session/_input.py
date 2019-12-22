@@ -19,13 +19,8 @@ from .._frame import UDPFrame
 _logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
 class UDPInputSessionStatistics(pyuavcan.transport.SessionStatistics):
-    mismatched_data_type_hashes: typing.Dict[int, int] = dataclasses.field(default_factory=dict)
-    """
-    Keys are data type hash values collected from received frames that did not match the local type configuration.
-    Values are the number of times each hash value has been encountered.
-    """
+    pass
 
 
 class UDPInputSession(pyuavcan.transport.InputSession):
@@ -131,13 +126,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
             return
         self._statistics.frames += 1
 
-        if frame.data_type_hash != self._payload_metadata.data_type_hash:
-            self._statistics.errors += 1
-            try:
-                self._statistics.mismatched_data_type_hashes[frame.data_type_hash] += 1
-            except LookupError:
-                self._statistics.mismatched_data_type_hashes[frame.data_type_hash] = 1
-            return
+        # TODO: implement data type hash validation. https://github.com/UAVCAN/specification/issues/60
 
         transfer = self._get_reassembler(source_node_id).process_frame(frame, self._transfer_id_timeout)
         if transfer is not None:
