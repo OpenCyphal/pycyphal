@@ -37,25 +37,25 @@ class Deserializer(abc.ABC):
         """
         pass
 
-    def __init__(self, source_bytes: typing.Union[bytearray, numpy.ndarray]):
+    def __init__(self, fragmented_buffer: typing.Sequence[memoryview]):
         """
         Do not call this directly. Use :meth:`new` to instantiate.
         """
-        self._buf = ZeroExtendingBuffer(source_bytes)
+        self._buf = ZeroExtendingBuffer(fragmented_buffer)
         self._bit_offset = 0
         assert self.consumed_bit_length + self.remaining_bit_length == self._buf.bit_length
 
     @staticmethod
-    def new(source_bytes: typing.Union[bytearray, numpy.ndarray]) -> Deserializer:
+    def new(fragmented_buffer: typing.Sequence[memoryview]) -> Deserializer:
         """
-        :param source_bytes: The source serialized representation. The deserializer will attempt to avoid copying
+        :param fragmented_buffer: The source serialized representation. The deserializer will attempt to avoid copying
             any data from the serialized representation, establishing direct references to its memory instead.
-            If the source buffer is read-only, some of the deserialized array-typed values may end up being
-            read-only as well. If that is undesirable, use writeable buffer.
+            If any of the source buffer fragments are read-only, some of the deserialized array-typed values
+            may end up being read-only as well. If that is undesirable, use writeable buffer.
 
         :return: A new instance of Deserializer, either little-endian or big-endian, depending on the platform.
         """
-        return _PlatformSpecificDeserializer(source_bytes)
+        return _PlatformSpecificDeserializer(fragmented_buffer)
 
     @property
     def consumed_bit_length(self) -> int:
@@ -338,18 +338,15 @@ class ZeroExtendingBuffer:
     This class implements the implicit zero extension logic as described in the Specification.
     A read beyond the end of the buffer returns zero bytes.
     """
-    def __init__(self, source_bytes: typing.Union[bytearray, numpy.ndarray]):
-        if not isinstance(source_bytes, numpy.ndarray):
-            source_bytes = numpy.frombuffer(source_bytes, dtype=_Byte)  # Zero-copy! The buffer is NOT copied here.
+    def __init__(self, fragmented_buffer: typing.Sequence[memoryview]):
+        # TODO: Concatenation is a tentative measure. Add proper support for fragmented buffers for speed.
+        if len(fragmented_buffer) == 1:
+            contiguous: typing.Union[bytearray, memoryview] = fragmented_buffer[0]  # Fast path.
+        else:
+            contiguous = bytearray().join(fragmented_buffer)
 
-        assert isinstance(source_bytes, numpy.ndarray)
-        if source_bytes.dtype != _Byte:
-            raise ValueError(f'Buffer dtype must be {_Byte}, not {source_bytes.dtype}')
-        if source_bytes.ndim != 1:
-            raise ValueError(f'The buffer must be a flat array of bytes; found {source_bytes.ndim} dimensions instead')
-
-        assert isinstance(source_bytes, numpy.ndarray) and source_bytes.dtype == _Byte and source_bytes.ndim == 1
-        self._buf = source_bytes
+        self._buf = numpy.frombuffer(contiguous, dtype=_Byte)
+        assert isinstance(self._buf, numpy.ndarray) and self._buf.dtype == _Byte and self._buf.ndim == 1
 
     @property
     def bit_length(self) -> int:
@@ -415,13 +412,7 @@ def _unittest_deserializer_aligned() -> None:
         '000'.split()))                                                             # auto trailing padding
     assert len(sample) == 45
 
-    with raises(ValueError):
-        Deserializer.new(numpy.array([1, 2, 3], dtype=numpy.int8))
-
-    with raises(ValueError):
-        Deserializer.new(numpy.array([[1, 2, 3], [4, 5, 6]], dtype=_Byte))
-
-    des = Deserializer.new(numpy.frombuffer(sample, dtype=_Byte).copy())
+    des = Deserializer.new([memoryview(sample)])
     assert des.remaining_bit_length == 45 * 8
 
     assert des.fetch_aligned_u8() == 0b1010_0111
@@ -456,7 +447,7 @@ def _unittest_deserializer_aligned() -> None:
 
     print('repr(deserializer):', repr(des))
 
-    des = Deserializer.new(numpy.array([1, 2, 3], dtype=_Byte))
+    des = Deserializer.new([memoryview(bytes([1, 2, 3]))])
 
     assert list(des.fetch_aligned_array_of_bits(0)) == []
     assert list(des.fetch_aligned_bytes(0)) == []
@@ -488,7 +479,7 @@ def _unittest_deserializer_aligned() -> None:
 def _unittest_deserializer_unaligned() -> None:
     from pytest import approx
 
-    des = Deserializer.new(bytearray([0b10101010, 0b01011101, 0b11001100, 0b10010001]))
+    des = Deserializer.new([memoryview(bytearray([0b10101010, 0b01011101, 0b11001100, 0b10010001]))])
     assert des.consumed_bit_length == 0
     assert des.consumed_bit_length % 8 == 0
     assert list(des.fetch_aligned_array_of_bits(3)) == [True, False, True]
@@ -504,7 +495,7 @@ def _unittest_deserializer_unaligned() -> None:
     assert des.consumed_bit_length == 43
     assert des.remaining_bit_length == -11
 
-    des = Deserializer.new(bytearray([0b10101010, 0b01011101, 0b11001100, 0b10010001]))
+    des = Deserializer.new([memoryview(bytearray([0b10101010, 0b01011101, 0b11001100, 0b10010001]))])
     assert list(des.fetch_unaligned_bytes(0)) == []
     assert list(des.fetch_unaligned_bytes(2)) == [0b10101010, 0b01011101]  # Actually aligned
     assert list(des.fetch_unaligned_bytes(1)) == [0b11001100]
@@ -532,7 +523,7 @@ def _unittest_deserializer_unaligned() -> None:
         ''.split()))
     assert len(sample) == 31
 
-    des = Deserializer.new(sample)
+    des = Deserializer.new([memoryview(sample[:])])
     assert des.remaining_bit_length == 31 * 8
 
     assert list(des.fetch_unaligned_array_of_bits(11)) == [
