@@ -158,10 +158,7 @@ def deserialize(dtype: typing.Type[CompositeObjectTypeVar],
     try:
         return dtype._deserialize_aligned_(deserializer)  # type: ignore
     except _serialized_representation.Deserializer.FormatError:
-        # Use explicit level check to avoid unnecessary load in production.
-        # This is necessary because we perform complex data transformations before invoking the logger.
-        if _logger.isEnabledFor(logging.INFO):  # pragma: no branch
-            _logger.info('Invalid serialized representation of %s: %s', get_model(dtype), deserializer, exc_info=True)
+        _logger.info('Invalid serialized representation of %s: %s', get_model(dtype), deserializer, exc_info=True)
         return None
 
 
