@@ -90,7 +90,7 @@ If not specified, defaults to the current working directory.
 Existing packages will be overwritten entirely.
 
 The destination directory should be in PYTHONPATH to use the generated
-packages unless the output is the current working directory.
+packages.
 '''.strip())
         parser.add_argument(
             '--allow-unregulated-fixed-port-id',

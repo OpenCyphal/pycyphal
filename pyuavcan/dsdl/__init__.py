@@ -26,7 +26,6 @@ Below is the inheritance diagram for the classes defined in this module.
 
 from ._compiler import generate_package as generate_package
 from ._compiler import GeneratedPackageInfo as GeneratedPackageInfo
-from ._compiler import ILLEGAL_IDENTIFIERS as ILLEGAL_IDENTIFIERS
 
 from ._composite_object import serialize as serialize
 from ._composite_object import deserialize as deserialize

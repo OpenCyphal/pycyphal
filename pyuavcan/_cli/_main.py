@@ -52,7 +52,7 @@ def _main_impl() -> int:
             # If the application submodule fails to import with an import error, a DSDL data type package
             # probably needs to be generated first, which we suggest the user to do.
             from .commands.dsdl_generate_packages import DSDLGeneratePackagesCommand
-            raise ImportError(DSDLGeneratePackagesCommand.make_usage_suggestion_text(ex.name))
+            raise ImportError(DSDLGeneratePackagesCommand.make_usage_suggestion_text(ex.name or ''))
 
         _logger.debug('Command executed in %.1f seconds', time.monotonic() - started_at)
         assert isinstance(result, int)
@@ -165,3 +165,7 @@ def _configure_logging(verbosity_level: int) -> None:
     except Exception as ex:
         _logger.debug('Colored logs are not available: %s: %s', type(ex), ex)
         _logger.info('Consider installing "coloredlogs" from PyPI to make log messages look better')
+
+    # Handle special cases one by one.
+    if log_level < logging.INFO:
+        logging.getLogger('pydsdl').setLevel(logging.INFO)  # Too much low-level logs from PyDSDL.

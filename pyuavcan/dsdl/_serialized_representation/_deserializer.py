@@ -58,7 +58,7 @@ class Deserializer(abc.ABC):
 
         :return: A new instance of Deserializer, either little-endian or big-endian, depending on the platform.
         """
-        return _PlatformSpecificDeserializer(source_bytes)  # type: ignore
+        return _PlatformSpecificDeserializer(source_bytes)
 
     @property
     def consumed_bit_length(self) -> int:

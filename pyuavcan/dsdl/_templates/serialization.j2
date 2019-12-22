@@ -4,9 +4,6 @@
  # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 -#}
 
-{%- from 'unique_reference.j2' import make_unique_ref -%}
-
-
 {%- macro serialize(t) -%}
     {{ _serialize_composite(t, 'self', 0|bit_length_set) }}
 {%- endmacro -%}
@@ -89,7 +86,7 @@
           _array_of_standard_bit_length_primitives({{ ref }})
 
 {%- else %}
-    {%- set element_ref = make_unique_ref('elem') %}
+    {%- set element_ref = 'elem'|to_template_unique_name %}
     for {{ element_ref }} in {{ ref }}:
         {{ _serialize_any(t.element_type, element_ref, offset + t.bit_length_set)|indent }}
 

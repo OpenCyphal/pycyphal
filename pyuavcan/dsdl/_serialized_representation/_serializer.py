@@ -36,7 +36,7 @@ class Serializer(abc.ABC):
 
     @staticmethod
     def new(buffer_size_in_bytes: int) -> Serializer:
-        return _PlatformSpecificSerializer(buffer_size_in_bytes)  # type: ignore
+        return _PlatformSpecificSerializer(buffer_size_in_bytes)
 
     @property
     def current_bit_length(self) -> int:
