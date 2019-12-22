@@ -91,7 +91,7 @@ def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
         assert m['4321']['text'] == 'Hello world!'
 
     assert len(temperatures) == 3
-    assert all(map(lambda mt: mt['555']['kelvin'] == pytest.approx(123.456), temperatures))  # type: ignore
+    assert all(map(lambda mt: mt['555']['kelvin'] == pytest.approx(123.456), temperatures))
 
     assert proc_sub_diagnostic_wrong_pid.alive
     assert proc_sub_diagnostic_wrong_pid.wait(1.0, interrupt=True)[1].strip() == ''

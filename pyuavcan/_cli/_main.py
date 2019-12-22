@@ -52,7 +52,7 @@ def _main_impl() -> int:
             # If the application submodule fails to import with an import error, a DSDL data type package
             # probably needs to be generated first, which we suggest the user to do.
             from .commands.dsdl_generate_packages import DSDLGeneratePackagesCommand
-            raise ImportError(DSDLGeneratePackagesCommand.make_usage_suggestion_text(ex.name))
+            raise ImportError(DSDLGeneratePackagesCommand.make_usage_suggestion_text(ex.name or ''))
 
         _logger.debug('Command executed in %.1f seconds', time.monotonic() - started_at)
         assert isinstance(result, int)

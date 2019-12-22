@@ -135,8 +135,8 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         if version != 0:
             return None     # Bad version
 
-        transfer_id = int.from_bytes(image[0:8], _BYTE_ORDER) & UDPFrame.TRANSFER_ID_MASK  # type: ignore
-        data_type_hash = int.from_bytes(image[8:16], _BYTE_ORDER)  # type: ignore
+        transfer_id = int.from_bytes(image[0:8], _BYTE_ORDER) & UDPFrame.TRANSFER_ID_MASK
+        data_type_hash = int.from_bytes(image[8:16], _BYTE_ORDER)
         single_frame_transfer = flags & 16 == 0
         priority = pyuavcan.transport.Priority(flags >> 5)
 
@@ -148,7 +148,7 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
             if len(image) < 20:
                 return None     # Insufficient length
 
-            idx_eot = int.from_bytes(image[16:20], _BYTE_ORDER)  # type: ignore
+            idx_eot = int.from_bytes(image[16:20], _BYTE_ORDER)
             index = idx_eot & UDPFrame.INDEX_MASK
             end_of_transfer = idx_eot > UDPFrame.INDEX_MASK
             payload = image[20:]

@@ -135,7 +135,7 @@ async def _unittest_udp_transport() -> None:
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.LOW
     assert rx_transfer.transfer_id == 77777
-    assert rx_transfer.fragmented_payload == [b''.join(payload_single)]  # type: ignore
+    assert rx_transfer.fragmented_payload == [b''.join(payload_single)]
 
     print('tr :', tr.sample_statistics())
     assert tr.sample_statistics().demultiplexer[
