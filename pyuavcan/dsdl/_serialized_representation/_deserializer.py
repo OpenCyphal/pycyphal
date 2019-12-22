@@ -21,6 +21,11 @@ _PrimitiveType = typing.Union[typing.Type[numpy.integer], typing.Type[numpy.inex
 
 
 class Deserializer(abc.ABC):
+    """
+    The deserializer class is used for deconstruction of serialized representations of DSDL objects into Python objects.
+    It implements the implicit zero extension rule as described in the Specification.
+    """
+
     class FormatError(ValueError):
         """
         This exception class is used when an auto-generated deserialization routine is supplied with invalid input data;
@@ -295,10 +300,10 @@ class _LittleEndianDeserializer(Deserializer):
             -> numpy.ndarray:
         assert dtype not in (numpy.bool, numpy.bool_, numpy.object), 'Invalid usage'
         assert self._bit_offset % 8 == 0
+        bo = self._byte_offset
         # Interestingly, numpy doesn't care about alignment. If the source buffer is not properly aligned, it will
         # work anyway but slower.
-        out: numpy.ndarray = numpy.frombuffer(self._buf.slice(self._byte_offset,
-                                                              self._byte_offset + count * numpy.dtype(dtype).itemsize),
+        out: numpy.ndarray = numpy.frombuffer(self._buf.slice(bo, bo + count * numpy.dtype(dtype).itemsize),
                                               dtype=dtype)
         assert len(out) == count
         self._bit_offset += out.nbytes * 8
@@ -331,7 +336,7 @@ _PlatformSpecificDeserializer = {
 class ZeroExtendingBuffer:
     """
     This class implements the implicit zero extension logic as described in the Specification.
-    A read beyond the end of the buffer returns zero bits.
+    A read beyond the end of the buffer returns zero bytes.
     """
     def __init__(self, source_bytes: typing.Union[bytearray, numpy.ndarray]):
         if not isinstance(source_bytes, numpy.ndarray):
@@ -362,7 +367,7 @@ class ZeroExtendingBuffer:
 
     def slice(self, left: int, right: int) -> numpy.ndarray:
         """
-        Like the standard ``x[f:t]`` except that neither index may be negative,
+        Like the standard ``x[left:right]`` except that neither index may be negative,
         left may not exceed right (otherwise it's a :class:`ValueError`),
         and the returned value is always of size ``right-left`` right-zero-padded if necessary.
         """
