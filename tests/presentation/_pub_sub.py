@@ -207,7 +207,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=Priority.NOMINAL,
         transfer_id=12,
-        fragmented_payload=[memoryview(b'Broken')],
+        fragmented_payload=[memoryview(b'\xFF' * 15)],  # Array length prefix is too long
     ), tran_a.loop.time() + 1.0)
     assert (await sub_record.receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT)) is None
 

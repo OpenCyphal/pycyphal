@@ -16,10 +16,10 @@ def _unittest_slow_cli_pick_nid(transport_factory: TransportFactory) -> None:
     # unable to maintain sufficiently real-time operation for the test to pass. Hm.
     used_node_ids = list(range(20))
     pubs = [
-        BackgroundChildProcess.cli('pub', '--period=0.3', '--count=100', *transport_factory(idx).cli_args)
+        BackgroundChildProcess.cli('pub', '--period=0.4', '--count=200', *transport_factory(idx).cli_args)
         for idx in used_node_ids
     ]
-    result = run_cli_tool('-v', 'pick-nid', *transport_factory(None).cli_args, timeout=60.0)
+    result = run_cli_tool('-v', 'pick-nid', *transport_factory(None).cli_args, timeout=100.0)
     print('pick-nid result:', result)
     assert int(result) not in used_node_ids
     for p in pubs:

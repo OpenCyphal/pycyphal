@@ -788,7 +788,7 @@ async def _unittest_can_transport_non_anon() -> None:
                                                                  in_frames_uavcan=16,
                                                                  in_frames_uavcan_accepted=15)
 
-    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 3.0)
+    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 10.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123

@@ -154,20 +154,11 @@ def deserialize(dtype: typing.Type[CompositeObjectTypeVar],
     .. important:: The supplied fragments of the serialized representation should be writeable.
         If they are not, some of the array-typed fields of the constructed object may be read-only.
     """
-    # TODO: update the Deserializer class to support fragmented input.
-    # join() on one element will create a copy, so that is very expensive.
-    if len(fragmented_serialized_representation) == 1:  # Optimized hot path; no memory reallocation whatsoever
-        contiguous: typing.Union[bytearray, memoryview] = fragmented_serialized_representation[0]
-    else:
-        contiguous = bytearray().join(fragmented_serialized_representation)
-    deserializer = _serialized_representation.Deserializer.new(contiguous)
+    deserializer = _serialized_representation.Deserializer.new(fragmented_serialized_representation)
     try:
         return dtype._deserialize_aligned_(deserializer)  # type: ignore
     except _serialized_representation.Deserializer.FormatError:
-        # Use explicit level check to avoid unnecessary load in production.
-        # This is necessary because we perform complex data transformations before invoking the logger.
-        if _logger.isEnabledFor(logging.INFO):  # pragma: no branch
-            _logger.info('Invalid serialized representation of %s: %s', get_model(dtype), deserializer, exc_info=True)
+        _logger.info('Invalid serialized representation of %s: %s', get_model(dtype), deserializer, exc_info=True)
         return None
 
 

@@ -17,10 +17,13 @@ _logger = logging.getLogger(__name__)
 
 
 # noinspection PyUnusedLocal
-def _unittest_slow_manual_a(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_manual_del(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import test_dsdl_namespace.if_
 
-    assert pyuavcan.dsdl.deserialize(test_dsdl_namespace.if_.del_1_0, [memoryview(b'')]) is None
+    # Implicit zero extension
+    ize = pyuavcan.dsdl.deserialize(test_dsdl_namespace.if_.del_1_0, [memoryview(b'')])
+    assert ize is not None
+    assert repr(ize) == repr(test_dsdl_namespace.if_.del_1_0())
 
     obj = pyuavcan.dsdl.deserialize(
         test_dsdl_namespace.if_.del_1_0,
@@ -75,7 +78,12 @@ def _unittest_slow_manual_a(generated_packages: typing.List[pyuavcan.dsdl.Genera
 def _unittest_slow_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import uavcan.node
 
-    assert pyuavcan.dsdl.deserialize(uavcan.node.Heartbeat_1_0, [memoryview(b'')]) is None
+    # Implicit zero extension
+    ize = pyuavcan.dsdl.deserialize(uavcan.node.Heartbeat_1_0, [memoryview(b'')])
+    assert ize is not None
+    assert repr(ize) == repr(uavcan.node.Heartbeat_1_0())
+    assert ize.uptime == 0
+    assert ize.vendor_specific_status_code == 0
 
     obj = pyuavcan.dsdl.deserialize(
         uavcan.node.Heartbeat_1_0,

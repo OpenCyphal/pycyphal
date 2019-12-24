@@ -198,7 +198,7 @@ def _unittest_slow_cli_demo_basic_usage(
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
 
         # We've just asked the node to terminate, wait for it here.
-        out_demo_proc = demo_proc.wait(2.0)[1].splitlines()
+        out_demo_proc = demo_proc.wait(10.0)[1].splitlines()
 
         print('out_demo_proc:', *out_demo_proc, sep='\n\t')
         print('out_sub_heartbeat:', *out_sub_heartbeat, sep='\n\t')
