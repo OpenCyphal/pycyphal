@@ -92,7 +92,7 @@ class Deserializer(abc.ABC):
         """
         _ensure_cardinal(count)
         assert self._bit_offset % 8 == 0
-        bs = self._buf.slice(self._byte_offset, self._byte_offset + (count + 7) // 8)
+        bs = self._buf.get_unsigned_slice(self._byte_offset, self._byte_offset + (count + 7) // 8)
         out = numpy.unpackbits(bs)[:count]
         self._bit_offset += count
         assert len(out) == count
@@ -101,14 +101,14 @@ class Deserializer(abc.ABC):
     def fetch_aligned_bytes(self, count: int) -> numpy.ndarray:
         _ensure_cardinal(count)
         assert self._bit_offset % 8 == 0
-        out = self._buf.slice(self._byte_offset, self._byte_offset + count)
+        out = self._buf.get_unsigned_slice(self._byte_offset, self._byte_offset + count)
         self._bit_offset += count * 8
         assert len(out) == count
         return out
 
     def fetch_aligned_u8(self) -> int:
         assert self._bit_offset % 8 == 0
-        out = self._buf.at(self._byte_offset)
+        out = self._buf.get_byte(self._byte_offset)
         assert isinstance(out, int)  # Make sure it's not a NumPy's integer type like numpy.uint8. We need native int.
         self._bit_offset += 8
         return out
@@ -167,7 +167,7 @@ class Deserializer(abc.ABC):
     def fetch_aligned_unsigned(self, bit_length: int) -> int:
         _ensure_cardinal(bit_length)
         assert self._bit_offset % 8 == 0
-        bs = self._buf.slice(self._byte_offset, self._byte_offset + (bit_length + 7) // 8)
+        bs = self._buf.get_unsigned_slice(self._byte_offset, self._byte_offset + (bit_length + 7) // 8)
         self._bit_offset += bit_length
         return self._unsigned_from_bytes(bs, bit_length)
 
@@ -216,7 +216,8 @@ class Deserializer(abc.ABC):
                 # byte access will be always out of range. We don't care because of the implicit zero extension rule.
                 for i in range(count):
                     byte_offset = self._byte_offset
-                    out[i] = ((self._buf.at(byte_offset) << left) & 0xFF) | (self._buf.at(byte_offset + 1) >> right)
+                    out[i] = (((self._buf.get_byte(byte_offset) << left) & 0xFF)
+                              | (self._buf.get_byte(byte_offset + 1) >> right))
                     self._bit_offset += 8
                 assert len(out) == count
                 return out
@@ -260,7 +261,7 @@ class Deserializer(abc.ABC):
     def fetch_unaligned_bit(self) -> bool:
         mask = 1 << (7 - self._bit_offset % 8)
         assert 1 <= mask <= 128
-        out = self._buf.at(self._byte_offset) & mask == mask
+        out = self._buf.get_byte(self._byte_offset) & mask == mask
         self._bit_offset += 1
         return bool(out)
 
@@ -303,7 +304,8 @@ class _LittleEndianDeserializer(Deserializer):
         bo = self._byte_offset
         # Interestingly, numpy doesn't care about alignment. If the source buffer is not properly aligned, it will
         # work anyway but slower.
-        out: numpy.ndarray = numpy.frombuffer(self._buf.slice(bo, bo + count * numpy.dtype(dtype).itemsize),
+        out: numpy.ndarray = numpy.frombuffer(self._buf.get_unsigned_slice(bo,
+                                                                           bo + count * numpy.dtype(dtype).itemsize),
                                               dtype=dtype)
         assert len(out) == count
         self._bit_offset += out.nbytes * 8
@@ -352,17 +354,18 @@ class ZeroExtendingBuffer:
     def bit_length(self) -> int:
         return len(self._buf) * 8
 
-    def at(self, index: int) -> int:
+    def get_byte(self, index: int) -> int:
         """
         Like the standard ``x[i]`` except that i may not be negative and out of range access returns zero.
         """
-        assert index >= 0
+        if index < 0:
+            raise ValueError('Byte index may not be negative because the end of a zero-extended buffer is undefined.')
         try:
             return int(self._buf[index])
         except IndexError:
             return 0        # Implicit zero extension rule
 
-    def slice(self, left: int, right: int) -> numpy.ndarray:
+    def get_unsigned_slice(self, left: int, right: int) -> numpy.ndarray:
         """
         Like the standard ``x[left:right]`` except that neither index may be negative,
         left may not exceed right (otherwise it's a :class:`ValueError`),
