@@ -20,10 +20,10 @@ mypy        >= 0.761, < 2.0
 pycodestyle ~= 2.5
 pylint      ~= 2.3
 
-# Documentation. Sphinx is not the most reliable piece of software out there:
+# Documentation. Pending issues with Sphinx (update when resolved):
 #   - https://github.com/sphinx-doc/sphinx/issues/6574
 #   - https://github.com/sphinx-doc/sphinx/issues/6607
-git+https://github.com/sphinx-doc/sphinx@47cd262b3e50ed650a82f272ba128a1f872cda4d
+sphinx           == 2.3.1
 sphinx_rtd_theme == 0.4.3
 sphinxemoji      >= 0.1.4
 sphinx-computron >= 0.1.0
