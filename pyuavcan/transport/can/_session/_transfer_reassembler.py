@@ -21,7 +21,6 @@ class TransferReassemblyErrorID(enum.Enum):
     UNEXPECTED_TOGGLE_BIT    = enum.auto()
     UNEXPECTED_TRANSFER_ID   = enum.auto()
     TRANSFER_CRC_MISMATCH    = enum.auto()
-    PAYLOAD_TOO_LARGE        = enum.auto()
 
 
 class TransferReassembler:
@@ -29,11 +28,13 @@ class TransferReassembler:
                  source_node_id:         int,
                  max_payload_size_bytes: int):
         self._source_node_id = int(source_node_id)
-        self._fragmented_payload: typing.List[memoryview] = []
         self._timestamp = pyuavcan.transport.Timestamp(0, 0)
         self._transfer_id = 0
         self._toggle_bit = False
         self._max_payload_size_bytes_with_crc = int(max_payload_size_bytes) + _frame.TRANSFER_CRC_LENGTH_BYTES
+        self._crc = pyuavcan.transport.commons.crc.CRC16CCITT()
+        self._payload_truncated = False
+        self._fragmented_payload: typing.List[memoryview] = []
 
     def process_frame(self,
                       priority:               pyuavcan.transport.Priority,
@@ -72,6 +73,8 @@ class TransferReassembler:
         # THIRD STAGE - PAYLOAD REASSEMBLY AND VERIFICATION.
         # Collect the data and check its correctness.
         if frame.start_of_transfer:
+            self._crc = pyuavcan.transport.commons.crc.CRC16CCITT()
+            self._payload_truncated = False
             self._fragmented_payload.clear()
             self._timestamp = frame.timestamp   # Initialization from the first frame
 
@@ -81,7 +84,12 @@ class TransferReassembler:
             self._timestamp = pyuavcan.transport.Timestamp.combine_oldest(self._timestamp, frame.timestamp)
 
         self._toggle_bit = not self._toggle_bit
-        self._fragmented_payload.append(frame.padded_payload)
+        # Implicit truncation rule - discard the unexpected data at the end of the payload but compute the CRC anyway.
+        self._crc.add(frame.padded_payload)
+        if sum(map(len, self._fragmented_payload)) < self._max_payload_size_bytes_with_crc:
+            self._fragmented_payload.append(frame.padded_payload)
+        else:
+            self._payload_truncated = True
 
         if frame.end_of_transfer:
             fragmented_payload = self._fragmented_payload.copy()
@@ -92,20 +100,21 @@ class TransferReassembler:
                 assert len(fragmented_payload) == 1     # Single-frame transfer, additional checks not needed
             else:
                 assert len(fragmented_payload) > 1      # Multi-frame transfer, check and remove the trailing CRC
-                if not pyuavcan.transport.commons.crc.CRC16CCITT.new(*fragmented_payload).check_residue():
+                if not self._crc.check_residue():
                     return TransferReassemblyErrorID.TRANSFER_CRC_MISMATCH
 
-                # Cut off the CRC
-                expected_length = sum(map(len, fragmented_payload)) - _frame.TRANSFER_CRC_LENGTH_BYTES
-                if len(fragmented_payload[-1]) > _frame.TRANSFER_CRC_LENGTH_BYTES:
-                    fragmented_payload[-1] = fragmented_payload[-1][:-_frame.TRANSFER_CRC_LENGTH_BYTES]
-                else:
-                    cutoff = _frame.TRANSFER_CRC_LENGTH_BYTES - len(fragmented_payload[-1])
-                    assert cutoff >= 0
-                    fragmented_payload = fragmented_payload[:-1]                    # Drop the last fragment
-                    if cutoff > 0:
-                        fragmented_payload[-1] = fragmented_payload[-1][:-cutoff]   # Truncate the previous fragment
-                assert expected_length == sum(map(len, fragmented_payload))
+                # Cut off the CRC, unless it's already been removed by the implicit payload truncation rule.
+                if not self._payload_truncated:
+                    expected_length = sum(map(len, fragmented_payload)) - _frame.TRANSFER_CRC_LENGTH_BYTES
+                    if len(fragmented_payload[-1]) > _frame.TRANSFER_CRC_LENGTH_BYTES:
+                        fragmented_payload[-1] = fragmented_payload[-1][:-_frame.TRANSFER_CRC_LENGTH_BYTES]
+                    else:
+                        cutoff = _frame.TRANSFER_CRC_LENGTH_BYTES - len(fragmented_payload[-1])
+                        assert cutoff >= 0
+                        fragmented_payload = fragmented_payload[:-1]                    # Drop the last fragment
+                        if cutoff > 0:
+                            fragmented_payload[-1] = fragmented_payload[-1][:-cutoff]   # Truncate the previous fragment
+                    assert expected_length == sum(map(len, fragmented_payload))
 
             return pyuavcan.transport.TransferFrom(timestamp=self._timestamp,
                                                    priority=priority,
@@ -113,14 +122,6 @@ class TransferReassembler:
                                                    fragmented_payload=fragmented_payload,
                                                    source_node_id=self._source_node_id)
         else:
-            if sum(map(len, self._fragmented_payload)) > self._max_payload_size_bytes_with_crc:
-                # Observe that padding bytes at the end of the last frame are not counted towards the maximum
-                # transfer length because when we receive the last frame we blindly accept it, not checking the
-                # resulting transfer size.
-                self._prepare_for_next_transfer()
-                self._fragmented_payload.clear()
-                return TransferReassemblyErrorID.PAYLOAD_TOO_LARGE
-
             return None     # Expect more frames to come
 
     def _prepare_for_next_transfer(self) -> None:
@@ -239,10 +240,17 @@ def _unittest_can_transfer_reassembler_manual() -> None:
     ])
     assert proc(frm(4004, b'\x1c\x1d' b'\x35\x54', 8, False, True, True)) == err.UNEXPECTED_TRANSFER_ID  # Not toggle!
 
-    # Transfer that is too large (above the configured limit) and rejected. Time goes back but it's fine.
+    # Transfer that is too large (above the configured limit) is implicitly truncated. Time goes back but it's fine.
     assert proc(frm(1000, b'0123456789abcdefghi', 0, True, False, True)) is None       # 19
     assert proc(frm(1001, b'0123456789abcdefghi', 0, False, False, False)) is None     # 38
-    assert proc(frm(1001, b'0123456789abcdefghi', 0, False, False, True)) == err.PAYLOAD_TOO_LARGE
+    assert proc(frm(1001, b'0123456789abcdefghi', 0, False, False, True)) is None      # 57
+    assert proc(frm(1001, b'0123456789abcdefghi', 0, False, False, False)) is None     # 76
+    assert proc(frm(1001, b':B', 0, False, True, True)) == trn(1000, 0, [
+        b'0123456789abcdefghi',
+        b'0123456789abcdefghi',
+        b'0123456789abcdefghi',
+        # Last two are truncated away.
+    ])
 
     # Transfer above the limit but accepted nevertheless because the overflow induced by the last frame is not checked.
     assert proc(frm(1000, b'0123456789abcdefghi', 31, True, False, True)) is None       # 19

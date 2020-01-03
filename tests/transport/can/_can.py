@@ -403,7 +403,7 @@ async def _unittest_can_transport_non_anon() -> None:
     assert received.source_node_id == 5
     assert received.priority == Priority.SLOW
     validate_timestamp(received.timestamp)
-    assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x55' * 13  # The 0x55 at the end is padding
+    assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x00' * 13  # The 0x00 at the end is padding
 
     assert await broadcaster.send_until(Transfer(
         timestamp=ts,
@@ -462,7 +462,7 @@ async def _unittest_can_transport_non_anon() -> None:
     assert received.source_node_id == 5
     assert received.priority == Priority.SLOW
     validate_timestamp(received.timestamp)
-    assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x55' * 13  # The 0x55 at the end is padding
+    assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x00' * 13  # The 0x00 at the end is padding
 
     received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -754,7 +754,7 @@ async def _unittest_can_transport_non_anon() -> None:
     assert received.transfer_id == 7
     validate_timestamp(received.timestamp)
     assert bytes(received.fragmented_payload[0]).startswith(b'Finally')
-    assert bytes(received.fragmented_payload[-1]).rstrip(b'\x55').endswith(b'out of his mind.')
+    assert bytes(received.fragmented_payload[-1]).rstrip(b'\x00').endswith(b'out of his mind.')
 
     received = await subscriber_selective.receive_until(tr.loop.time() + 1.0)
     assert received is not None
@@ -762,7 +762,7 @@ async def _unittest_can_transport_non_anon() -> None:
     assert received.transfer_id == 7
     validate_timestamp(received.timestamp)
     assert bytes(received.fragmented_payload[0]).startswith(b'Finally')
-    assert bytes(received.fragmented_payload[-1]).rstrip(b'\x55').endswith(b'out of his mind.')
+    assert bytes(received.fragmented_payload[-1]).rstrip(b'\x00').endswith(b'out of his mind.')
 
     assert subscriber_selective.sample_statistics() == subscriber_promiscuous.sample_statistics()
     assert subscriber_promiscuous.sample_statistics() == SessionStatistics(transfers=1,

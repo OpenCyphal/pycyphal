@@ -10,7 +10,7 @@ import pyuavcan
 from .. import _frame
 
 
-_PADDING_PATTERN = b'\x55'
+_PADDING_PATTERN = b'\x00'
 
 
 def serialize_transfer(compiled_identifier:     int,
@@ -121,7 +121,7 @@ def _unittest_can_serialize_transfer() -> None:
     assert mkf(0xbadc0fe, b'Hello', 0, True, True, True) \
         == one(run(0xbadc0fe, 32, [mv(b'Hell'), mv(b'o')], 7, False))
 
-    assert mkf(0xbadc0fe, bytes(range(60)) + b'\x55\x55\x55', 19, True, True, True, True) \
+    assert mkf(0xbadc0fe, bytes(range(60)) + b'\x00\x00\x00', 19, True, True, True, True) \
         == one(run(0xbadc0fe, 32 + 19, [mv(bytes(range(60)))], 63, True))
 
     crc = pyuavcan.transport.commons.crc.CRC16CCITT()
@@ -145,10 +145,10 @@ def _unittest_can_serialize_transfer() -> None:
     ] == list(run(123456, 32323219, [mv(bytes(range(0x1D)))], 15, True))
 
     crc = pyuavcan.transport.commons.crc.CRC16CCITT()
-    crc.add(bytes(range(0x1E)) + b'\x55')
-    assert crc.value == 0x38A6
+    crc.add(bytes(range(0x1E)) + b'\x00')
+    assert crc.value == 0x32F6
     assert [
         mkf(123456, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a', 19, True, False, True),
         mkf(123456, b'\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15', 19, False, False, False),
-        mkf(123456, b'\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x55\x38\xa6', 19, False, True, True),
+        mkf(123456, b'\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x00\x32\xF6', 19, False, True, True),
     ] == list(run(123456, 32323219, [mv(bytes(range(0x1E)))], 11, False))

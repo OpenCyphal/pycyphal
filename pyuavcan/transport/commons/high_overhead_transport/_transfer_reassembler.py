@@ -77,11 +77,6 @@ class TransferReassembler:
         The end-of-transfer flag is set in frames with indexes N and M, where N != M. Transfer discarded.
         """
 
-        PAYLOAD_SIZE_EXCEEDS_LIMIT = enum.auto()
-        """
-        The payload exceeds the configured limit. Transfer discarded.
-        """
-
     def __init__(self,
                  source_node_id:         int,
                  max_payload_size_bytes: int,
@@ -92,6 +87,8 @@ class TransferReassembler:
             reassembly activities.
 
         :param max_payload_size_bytes: The maximum number of payload bytes per transfer.
+            Payload that exceeds this size limit may be implicitly truncated (in the Specification this behavior
+            is described as "implicit truncation rule").
             This value can be derived from the corresponding DSDL definition.
 
         :param on_error_callback: The callback is invoked whenever an error is detected.
@@ -157,16 +154,14 @@ class TransferReassembler:
             return None
 
         # ACCEPT THE PAYLOAD. Duplicates are accepted too, assuming they carry the same payload.
+        # Implicit truncation is implemented by not limiting the maximum payload size.
+        # Real truncation is hard to implement if frames are delivered out-of-order, although it's not impossible:
+        # instead of storing actual payload fragments above the limit, we can store their CRCs.
+        # When the last fragment is received, CRC of all fragments are then combined to validate the final transfer-CRC.
+        # This method, however, requires knowledge of the MTU to determine which fragments will be above the limit.
         while len(self._payloads) <= frame.index:
             self._payloads.append(memoryview(b''))
         self._payloads[frame.index] = frame.payload
-
-        # ENFORCE PAYLOAD SIZE LIMIT. Don't let a babbling sender exhaust our memory quota.
-        if self._pure_payload_size_bytes > self._max_payload_size_bytes:
-            self._restart(frame.timestamp,
-                          frame.transfer_id + 1,
-                          self.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT)
-            return None
 
         # CHECK IF ALL FRAMES ARE RECEIVED. If not, simply wait for next frame.
         # Single-frame transfers with empty payload are legal.
@@ -185,6 +180,12 @@ class TransferReassembler:
         self._restart(frame.timestamp,
                       frame.transfer_id + 1,
                       self.Error.MULTIFRAME_INTEGRITY_ERROR if result is None else None)
+        if result is not None:
+            # Late implicit truncation. Normally, it should be done on-the-fly, by not storing payload fragments
+            # above the maximum expected size, but it is hard to combine with out-of-order frame acceptance.
+            while result.fragmented_payload and \
+                    sum(map(len, result.fragmented_payload[:-1])) > self._max_payload_size_bytes:
+                result.fragmented_payload = result.fragmented_payload[:-1]
         return result
 
     @property
@@ -363,23 +364,6 @@ def _unittest_transfer_reassembler() -> None:
                  payload=hedgehog)
     ) is None
 
-    # Valid transfer but the payload is above the limit.
-    assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=1,
-                 index=0,
-                 end_of_transfer=True,
-                 payload=hedgehog * 2)
-    ) is None
-    assert error_counters == {
-        ta.Error.MULTIFRAME_MISSING_FRAMES:     0,
-        ta.Error.MULTIFRAME_EMPTY_FRAME:        0,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
-        ta.Error.MULTIFRAME_EOT_MISPLACED:      0,
-        ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
-    }
-
     # Valid multi-frame transfer.
     assert push(
         mk_frame(timestamp=mk_ts(1000.0),
@@ -476,6 +460,70 @@ def _unittest_transfer_reassembler() -> None:
                      transfer_id=11,
                      fragmented_payload=[hedgehog[:50], hedgehog[50:]])
 
+    # Valid multi-frame transfer with payload size above the limit.
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=102,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=hedgehog)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=102,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=hedgehog)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=102,
+                 index=2,
+                 end_of_transfer=False,
+                 payload=hedgehog)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=102,
+                 index=3,
+                 end_of_transfer=True,
+                 payload=hedgehog + TransferCRC.new(hedgehog * 4).value_as_bytes)
+    ) == mk_transfer(timestamp=mk_ts(1000.0),
+                     transfer_id=102,
+                     fragmented_payload=[hedgehog] * 2)
+
+    # Same as above, but the frames are reordered.
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=103,
+                 index=2,
+                 end_of_transfer=False,
+                 payload=horse)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=103,
+                 index=3,
+                 end_of_transfer=True,
+                 payload=horse + TransferCRC.new(horse * 4).value_as_bytes)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=103,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=horse)
+    ) is None
+    assert push(
+        mk_frame(timestamp=mk_ts(1000.0),
+                 transfer_id=103,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=horse)
+    ) == mk_transfer(timestamp=mk_ts(1000.0),
+                     transfer_id=103,
+                     fragmented_payload=[horse] * 2)
+
     # Transfer-ID timeout. No error registered.
     assert push(
         mk_frame(timestamp=mk_ts(2000.0),
@@ -492,7 +540,6 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
         ta.Error.MULTIFRAME_EOT_MISPLACED:      0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
 
     # Start a transfer, then start a new one with higher TID.
@@ -516,7 +563,6 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
         ta.Error.MULTIFRAME_EOT_MISPLACED:      0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
     assert push(
         mk_frame(timestamp=mk_ts(3000.0),
@@ -540,7 +586,6 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
         ta.Error.MULTIFRAME_EOT_MISPLACED:      0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
 
     # Start a transfer, then start a new one with lower TID when a TID timeout is reached.
@@ -564,7 +609,6 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
         ta.Error.MULTIFRAME_EOT_MISPLACED:      0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
     assert push(
         mk_frame(timestamp=mk_ts(4000.0),
@@ -588,7 +632,6 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    0,
         ta.Error.MULTIFRAME_EOT_MISPLACED:      0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
 
     # Multi-frame transfer with bad CRC.
@@ -619,7 +662,6 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
         ta.Error.MULTIFRAME_EOT_MISPLACED:      0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
 
     # Frame past end of transfer.
@@ -650,7 +692,6 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
         ta.Error.MULTIFRAME_EOT_MISPLACED:      1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
 
     # Inconsistent end-of-transfer flag.
@@ -681,7 +722,6 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
         ta.Error.MULTIFRAME_EOT_MISPLACED:      1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   1,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
 
     # Valid single-frame transfer with no payload.
@@ -700,7 +740,6 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_INTEGRITY_ERROR:    1,
         ta.Error.MULTIFRAME_EOT_MISPLACED:      1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   1,
-        ta.Error.PAYLOAD_SIZE_EXCEEDS_LIMIT:    1,
     }
 
 
