@@ -99,6 +99,14 @@ payload in little-endian byte order.
 The multi-frame transfer logic (decomposition and reassembly) is implemented in a separate
 transport-agnostic module :mod:`pyuavcan.transport.commons.high_overhead_transport`.
 
+Note that we use CRC-32C (Castagnoli) as the frame CRC instead of CRC-32K2 (Koopman-2)
+which is superior at short data blocks offering the Hamming distance of 6 as opposed to 4.
+This is because Castagnoli is superior for transfer CRC which is often sufficiently long
+to flip the balance in favor of Castagnoli rather than Koopman.
+We could use Koopman for frame CRC and keep Castagnoli for transfer CRC,
+but such diversity is harmful because it would require implementers to keep two separate CRC tables
+which may be costly in embedded applications and may deteriorate the performance of CPU caches.
+
 
 Unreliable links and temporal redundancy
 ++++++++++++++++++++++++++++++++++++++++
