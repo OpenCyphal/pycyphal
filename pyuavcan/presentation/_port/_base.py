@@ -32,8 +32,7 @@ ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)
 
 class OutgoingTransferIDCounter:
     """
-    A member of the *emitted transfer-ID map*; see the specification for technical details.
-    Essentially this is just a boxed integer.
+    A member of the output transfer-ID map. Essentially this is just a boxed integer.
     The value is monotonically increasing starting from zero;
     transport-specific modulus is computed by the underlying transport(s).
     """

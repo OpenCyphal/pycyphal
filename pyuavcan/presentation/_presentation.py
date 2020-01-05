@@ -49,21 +49,21 @@ class Presentation:
         """
         self._transport = transport
         self._closed = False
-        self._emitted_transfer_id_map: typing.Dict[pyuavcan.transport.OutputSessionSpecifier,
-                                                   OutgoingTransferIDCounter] = {}
+        self._output_transfer_id_map: typing.Dict[pyuavcan.transport.OutputSessionSpecifier,
+                                                  OutgoingTransferIDCounter] = {}
         # For services, the session is the input session.
         self._registry: typing.Dict[typing.Tuple[typing.Type[Port[pyuavcan.dsdl.CompositeObject]],
                                                  pyuavcan.transport.SessionSpecifier],
                                     Closable] = {}
 
     @property
-    def emitted_transfer_id_map(self) -> typing.Dict[pyuavcan.transport.OutputSessionSpecifier,
-                                                     OutgoingTransferIDCounter]:
+    def output_transfer_id_map(self) -> typing.Dict[pyuavcan.transport.OutputSessionSpecifier,
+                                                    OutgoingTransferIDCounter]:
         """
         This property is designed for very short-lived processes like CLI tools. Most applications will not
-        benefit from it and should not use it. The term "emitted transfer-ID map" is borrowed from Specification.
+        benefit from it and should not use it.
 
-        Access to the emitted transfer-ID map allows short-running applications
+        Access to the output transfer-ID map allows short-running applications
         to store/restore the map to/from a persistent storage that retains data across restarts of the application.
         That may allow applications with very short life cycles (typically under several seconds) to adhere to the
         transfer-ID computation requirements presented in the specification. If the requirement were to be violated,
@@ -80,7 +80,7 @@ class Presentation:
         Nodes sharing the same node-ID cannot exist on the same transport, but the local system might be running
         nodes under the same node-ID on different transports concurrently, so this needs to be accounted for.
         """
-        return self._emitted_transfer_id_map
+        return self._output_transfer_id_map
 
     @property
     def transport(self) -> pyuavcan.transport.Transport:
@@ -123,8 +123,8 @@ class Presentation:
         except LookupError:
             transport_session = self._transport.get_output_session(session_specifier,
                                                                    self._make_payload_metadata(dtype))
-            transfer_id_counter = self._emitted_transfer_id_map.setdefault(session_specifier,
-                                                                           OutgoingTransferIDCounter())
+            transfer_id_counter = self._output_transfer_id_map.setdefault(session_specifier,
+                                                                          OutgoingTransferIDCounter())
             impl = PublisherImpl(dtype=dtype,
                                  transport_session=transport_session,
                                  transfer_id_counter=transfer_id_counter,
@@ -222,8 +222,8 @@ class Presentation:
                                                                           self._make_payload_metadata(dtype.Request))
             input_transport_session = self._transport.get_input_session(input_session_specifier,
                                                                         self._make_payload_metadata(dtype.Response))
-            transfer_id_counter = self._emitted_transfer_id_map.setdefault(output_session_specifier,
-                                                                           OutgoingTransferIDCounter())
+            transfer_id_counter = self._output_transfer_id_map.setdefault(output_session_specifier,
+                                                                          OutgoingTransferIDCounter())
             impl = ClientImpl(dtype=dtype,
                               input_transport_session=input_transport_session,
                               output_transport_session=output_transport_session,

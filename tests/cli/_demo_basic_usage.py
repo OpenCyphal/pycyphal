@@ -174,7 +174,7 @@ def _unittest_slow_cli_demo_basic_usage(
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND
 
-        # Next request - this fails if the EMITTED TRANSFER-ID MAP save/restore logic is not working.
+        # Next request - this fails if the OUTPUT TRANSFER-ID MAP save/restore logic is not working.
         command_response = json.loads(run_cli_tool(
             '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0', '{command: 23456}',
             '--format', 'json', *iface_option.make_cli_args(123), timeout=5.0  # type: ignore
@@ -189,7 +189,7 @@ def _unittest_slow_cli_demo_basic_usage(
         assert least_squares_response['123']['slope'] == pytest.approx(2.0)
         assert least_squares_response['123']['y_intercept'] == pytest.approx(0.0)
 
-        # Next request - this fails if the EMITTED TRANSFER-ID MAP save/restore logic is not working.
+        # Next request - this fails if the OUTPUT TRANSFER-ID MAP save/restore logic is not working.
         command_response = json.loads(run_cli_tool(
             '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0',
             f'{{command: {uavcan.node.ExecuteCommand_1_0.Request.COMMAND_POWER_OFF} }}',

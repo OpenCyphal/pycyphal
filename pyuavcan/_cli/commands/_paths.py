@@ -37,12 +37,12 @@ Having such files segregated by the library version number ensures that when the
 it will not encounter compatibility issues with older formats.
 """
 
-EMITTED_TRANSFER_ID_MAP_DIR: pathlib.Path = VERSION_SPECIFIC_DATA_DIR / 'emitted-transfer-id-maps'
+OUTPUT_TRANSFER_ID_MAP_DIR: pathlib.Path = VERSION_SPECIFIC_DATA_DIR / 'output-transfer-id-maps'
 """
 The path is version-specific so that we won't attempt to restore transfer-ID maps stored from another version.
 """
 
-EMITTED_TRANSFER_ID_MAP_MAX_AGE = 60.0  # [second]
+OUTPUT_TRANSFER_ID_MAP_MAX_AGE = 60.0  # [second]
 """
 This is not a path but a related parameter so it's kept here. Files older that this are not used.
 """
