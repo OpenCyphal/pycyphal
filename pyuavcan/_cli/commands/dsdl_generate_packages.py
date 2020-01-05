@@ -125,7 +125,7 @@ option. If not sure, ask for advice at https://forum.uavcan.org.
 
     @staticmethod
     def make_usage_suggestion_text(root_namespace_name: str) -> str:
-        prefix = f'{sys.argv[0]} {DSDLGeneratePackagesCommand._SHORT_NAME}'
+        prefix = f'{pathlib.Path(sys.argv[0]).name} {DSDLGeneratePackagesCommand._SHORT_NAME}'
         return f'Run "{prefix} DSDL_ROOT_NAMESPACE_PATH_OR_URI" ' \
             f'to generate the missing Python package from the DSDL namespace {root_namespace_name!r}. ' \
             f'Run "{prefix} --help" for full usage manual.'
