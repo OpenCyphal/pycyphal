@@ -232,13 +232,11 @@ Releasing
 
 PyUAVCAN is versioned by following `Semantic Versioning <https://semver.org>`_.
 
-The release process is as follows:
+To release a new version, bump the version number in ``pyuavcan/VERSION``,
+commit and push the change, then run ``release.sh``.
+Ask the maintainers for PyPI access credentials.
 
-#. Ensure you are on the default branch.
-#. Bump the version number in ``pyuavcan/VERSION``. Commit the change.
-#. Add a new tag. The tag format is ``<major>.<minor>.<patch>``.
-#. Push the changes and the tag to the upstream remote.
-#. Run ``release.sh`` to push the package to PyPI. Ask the maintainers for access credentials.
+TODO: https://github.com/UAVCAN/pyuavcan/issues/76
 
 
 Tools
