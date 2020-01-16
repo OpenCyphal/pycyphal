@@ -138,6 +138,8 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
 }
 
+pygments_style = 'friendly'
+
 # -- Options for HTML output -------------------------------------------------
 
 html_favicon = '_static/favicon.ico'
