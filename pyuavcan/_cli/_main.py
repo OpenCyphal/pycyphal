@@ -74,7 +74,15 @@ def _construct_argument_parser(command_instances: typing.Sequence[commands.Comma
 
     root_parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
-        description='''
+        description=r'''
+     __   __   _______   __   __   _______   _______   __   __
+    |  | |  | /   _   \ |  | |  | /   ____| /   _   \ |  \ |  |
+    |  | |  | |  |_|  | |  | |  | |  |      |  |_|  | |   \|  |
+    |  |_|  | |   _   | \  \_/  / |  |____  |   _   | |  |\   |
+    \_______/ |__| |__|  \_____/  \_______| |__| |__| |__| \__|
+        |      |            |         |      |         |
+    ----o------o------------o---------o------o---------o-------
+
 A command line tool for diagnostics and management of UAVCAN networks.
 This tool is built on top of PyUAVCAN -- a full-featured Python implementation
 of the UAVCAN stack for high-level operating systems.
@@ -85,7 +93,7 @@ is machine-readable. The stderr output is designed to be human-readable;
 most of it is suppressed by default but it can be enabled with '-v'.
 
 Find documentation and support at https://uavcan.org.
-'''.strip())
+'''.strip('\r\n'))
 
     # Register common arguments
     root_parser.add_argument(
