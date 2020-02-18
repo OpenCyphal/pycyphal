@@ -37,7 +37,7 @@ async def _unittest_serial_transport() -> None:
     with pytest.raises(pyuavcan.transport.InvalidMediaConfigurationError):
         _ = SerialTransport(serial_port=serial.serial_for_url('loop://', do_not_open=True), local_node_id=None)
 
-    tr = SerialTransport(serial_port='loop://', local_node_id=None)
+    tr = SerialTransport(serial_port='loop://', local_node_id=None, mtu=1024)
 
     assert tr.loop is asyncio.get_event_loop()
     assert tr.local_node_id is None
@@ -51,7 +51,7 @@ async def _unittest_serial_transport() -> None:
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
         max_nodes=4096,
-        mtu=max(SerialTransport.VALID_MTU_RANGE),
+        mtu=1024,
     )
 
     assert tr.sample_statistics() == SerialTransportStatistics()
@@ -159,7 +159,7 @@ async def _unittest_serial_transport() -> None:
     #
     # Replace the transport with a different one where the local node-ID is not None.
     #
-    tr = SerialTransport(serial_port='loop://', local_node_id=3210)
+    tr = SerialTransport(serial_port='loop://', local_node_id=3210, mtu=1024)
     assert tr.local_node_id == 3210
 
     #
