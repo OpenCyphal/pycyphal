@@ -127,10 +127,10 @@ class SerialTransport(pyuavcan.transport.Transport):
         # For serial port write serialization. Read operations are performed concurrently (no sync) in separate thread.
         self._port_lock = asyncio.Lock(loop=loop)
 
-        # The serialization buffer is re-used for performance reasons;
-        # it is needed to store frame contents before they are emitted into the serial port.
+        # The serialization buffer is re-used for performance reasons; it is needed to store frame contents before
+        # they are emitted into the serial port. It may grow as necessary at runtime; the initial size is a guess.
         # Access must be protected with the port lock!
-        self._serialization_buffer = bytearray()
+        self._serialization_buffer = bytearray(b'\x00' * 1024)
 
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, SerialInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, SerialOutputSession] = {}
