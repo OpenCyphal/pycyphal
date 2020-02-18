@@ -44,8 +44,13 @@ class SerialTransport(pyuavcan.transport.Transport):
     Please read the module documentation for details.
     """
 
-    DEFAULT_MTU = 1024
-    VALID_MTU_RANGE = (1024, 1024 * 10)
+    VALID_MTU_RANGE = (1024, 1024 ** 3)
+    """
+    The maximum MTU is practically unlimited, and it is also the default MTU.
+    This is by design to ensure that all frames are single-frame transfers.
+    Compliant implementations of the serial transport do not have to support multi-frame transfers,
+    which removes the greatest chunk of complexity from the protocol.
+    """
 
     DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 2
     VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
@@ -53,7 +58,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     def __init__(self,
                  serial_port:                 typing.Union[str, serial.SerialBase],
                  local_node_id:               typing.Optional[int],
-                 mtu:                         int = DEFAULT_MTU,
+                 mtu:                         int = max(VALID_MTU_RANGE),
                  service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
                  baudrate:                    typing.Optional[int] = None,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
@@ -79,7 +84,15 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         :param mtu: Use single-frame transfers for all outgoing transfers containing not more than than
             this many bytes of payload. Otherwise, use multi-frame transfers.
-            This setting does not affect transfer reception; the RX MTU is hard-coded as ``max(VALID_MTU_RANGE)``.
+
+            By default, the MTU is virtually unlimited (to be precise, it is set to a very large number that
+            is unattainable in practice), meaning that all transfers will be single-frame transfers.
+            Such behavior is optimal for the serial transport because it does not have native framing
+            and as such it supports frames of arbitrary sizes. Implementations may omit the support for
+            multi-frame transfers completely, which removes the greatest chunk of complexity from the protocol.
+
+            This setting does not affect transfer reception -- the RX MTU is always set to the maximum valid MTU
+            (i.e., practically unlimited).
 
         :param service_transfer_multiplier: Deterministic data loss mitigation is disabled by default.
             This parameter specifies the number of times each outgoing service transfer will be repeated.
@@ -114,10 +127,10 @@ class SerialTransport(pyuavcan.transport.Transport):
         # For serial port write serialization. Read operations are performed concurrently (no sync) in separate thread.
         self._port_lock = asyncio.Lock(loop=loop)
 
-        # The serialization buffer is pre-allocated for performance reasons;
+        # The serialization buffer is re-used for performance reasons;
         # it is needed to store frame contents before they are emitted into the serial port.
         # Access must be protected with the port lock!
-        self._serialization_buffer = bytearray(0 for _ in range(self._mtu * 3))
+        self._serialization_buffer = bytearray()
 
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, SerialInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, SerialOutputSession] = {}
@@ -294,6 +307,11 @@ class SerialTransport(pyuavcan.transport.Transport):
         try:  # Jeez this is getting complex
             for fr in frames:
                 async with self._port_lock:       # TODO: the lock acquisition should be prioritized by frame priority!
+                    min_buffer_size = len(fr.payload) * 3
+                    if len(self._serialization_buffer) < min_buffer_size:
+                        _logger.debug('%s: The serialization buffer is being enlarged from %d to %d bytes',
+                                      self, len(self._serialization_buffer), min_buffer_size)
+                        self._serialization_buffer = bytearray(0 for _ in range(min_buffer_size))
                     compiled = fr.compile_into(self._serialization_buffer)
                     timeout = monotonic_deadline - self._loop.time()
                     if timeout > 0:

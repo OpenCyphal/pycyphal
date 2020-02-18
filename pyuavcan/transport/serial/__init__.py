@@ -43,17 +43,17 @@ Protocol definition
 The packet header is defined as follows (byte and bit ordering in this definition follow the DSDL specification:
 least significant byte first, most significant bit first)::
 
-    uint8   version                 # Always zero. Discard the frame if not.
-    uint8   priority                # 0 = highest, 7 = lowest; the rest are unused.
-    uint16  source node ID          # 0xFFFF = anonymous.
-    uint16  destination node ID     # 0xFFFF = broadcast.
+    uint8   version              # Always zero. Discard the frame if not.
+    uint8   priority             # 0 = highest, 7 = lowest; the rest are unused.
+    uint16  source node ID       # 0xFFFF = anonymous.
+    uint16  destination node ID  # 0xFFFF = broadcast.
     uint16  data specifier
 
     uint64  data type hash
     uint64  transfer ID
 
-    uint32  frame index EOT         # MSB set if last frame of the transfer.
-    void32                          # Set to zero when sending, ignore when receiving.
+    uint32  frame index EOT      # MSB set if last frame of the transfer; i.e., 0x8000_0000 if single-frame transfer.
+    void32                       # Set to zero when sending, ignore when receiving.
 
 For message frames, the data specifier field contains the subject-ID value,
 so that the most significant bit is always cleared.
@@ -106,6 +106,12 @@ to flip the balance in favor of Castagnoli rather than Koopman.
 We could use Koopman for frame CRC and keep Castagnoli for transfer CRC,
 but such diversity is harmful because it would require implementers to keep two separate CRC tables
 which may be costly in embedded applications and may deteriorate the performance of CPU caches.
+
+**Despite the fact that the support for multi-frame transfers is built into the transport layer,
+it should not be relied on and it may be removed later.** The reason is that serial links do not have native support
+for framing, and as such, it is possible to configure the MTU to be arbitrarily high to avoid multi-frame transfers
+completely. **The lack of multi-frame transfers simplifies implementations drastically, which is important for
+deeply-embedded systems. As such, all serial transfers should be single-frame transfers.**
 
 
 Unreliable links and temporal redundancy

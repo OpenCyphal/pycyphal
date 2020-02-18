@@ -51,12 +51,12 @@ async def _unittest_serial_transport() -> None:
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
         max_nodes=4096,
-        mtu=SerialTransport.DEFAULT_MTU,
+        mtu=max(SerialTransport.VALID_MTU_RANGE),
     )
 
     assert tr.sample_statistics() == SerialTransportStatistics()
 
-    sft_capacity = SerialTransport.DEFAULT_MTU
+    sft_capacity = 1024
 
     payload_single = [_mem('qwertyui'), _mem('01234567')] * (sft_capacity // 16)
     assert sum(map(len, payload_single)) == sft_capacity
