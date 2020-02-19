@@ -20,7 +20,7 @@ before_script:
   - pip install coveralls
 
 script:
-  - ./test.sh
+  - travis_wait 60 ./test.sh
   - sonar-scanner
 
 after_success:
