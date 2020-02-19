@@ -10,9 +10,9 @@
 .[transport_serial]
 
 # Testing.
-pytest          ~= 4.5
+pytest          ~= 5.3
 pytest-asyncio  >= 0.10, < 2.0
-coverage        ~= 4.5
+coverage        ~= 5.0
 
 # Static analysis. PyLint is needed for the SonarQube scanner.
 # Newer versions of MyPy tend to be more useful so the version is not frozen. This may change later.
