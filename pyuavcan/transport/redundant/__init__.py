@@ -305,7 +305,12 @@ RedundantTransferFrom(..., transfer_id=1111, fragmented_payload=[], ...)
 Inject a failure into one inferior.
 The redundant transfer will continue to function with the other inferior; an error message will be logged:
 
->>> lo_0.output_sessions[0].exception = RuntimeError('Injected failure')
+.. The 'doctest: +SKIP' is needed because PyTest is broken. If a failure is actually injected,
+.. the transport will be logging errors, which in turn break the PyTest's doctest plugin.
+.. This is a known bug which is documented here: https://github.com/pytest-dev/pytest/issues/5908.
+.. When that is fixed (I suppose it should be by PyTest v6?), please, remove this comment and the 'doctest: +SKIP'.
+
+>>> lo_0.output_sessions[0].exception = RuntimeError('Injected failure')  # doctest: +SKIP
 >>> await_(s0.send_until(Transfer(Timestamp.now(), Priority.LOW, 1112, fragmented_payload=[]), tr.loop.time() + 1.0))
 True
 >>> await_(s1.receive_until(tr.loop.time() + 1.0))   # Still works.
