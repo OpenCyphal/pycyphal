@@ -193,26 +193,23 @@ def generate_package(root_namespace_directory:        _AnyPath,
 
     # Generate code
     output_directory = pathlib.Path.cwd() if output_directory is None else output_directory
-    language_context = nunavut.lang.LanguageContext('py',
-                                                    namespace_output_stem='__init__')
+    language_context = nunavut.lang.LanguageContext('py', namespace_output_stem='__init__')
     root_ns = nunavut.build_namespace_tree(types=composite_types,
                                            root_namespace_dir=root_namespace_directory,
                                            output_dir=str(output_directory),
                                            language_context=language_context)
     generator = nunavut.jinja.Generator(namespace=root_ns,
-                                        generate_namespace_types=True,
-                                        language_context=language_context,
+                                        generate_namespace_types=nunavut.YesNoDefault.YES,
                                         templates_dir=_TEMPLATE_DIRECTORY,
                                         followlinks=True,
                                         additional_filters=filters,
-                                        additional_tests=tests)
-    generator.generate_all(
-        post_processors=[
-            nunavut.postprocessors.SetFileMode(_OUTPUT_FILE_PERMISSIONS),
-            nunavut.postprocessors.LimitEmptyLines(2),
-            nunavut.postprocessors.TrimTrailingWhitespace(),
-        ],
-    )
+                                        additional_tests=tests,
+                                        post_processors=[
+                                            nunavut.postprocessors.SetFileMode(_OUTPUT_FILE_PERMISSIONS),
+                                            nunavut.postprocessors.LimitEmptyLines(2),
+                                            nunavut.postprocessors.TrimTrailingWhitespace(),
+                                        ])
+    generator.generate_all()
 
     return GeneratedPackageInfo(path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),
                                 models=composite_types,
