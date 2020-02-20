@@ -1,16 +1,16 @@
-UAVCAN stack in Python
-======================
+UAVCAN v0 stack in Python
+==========================
 
 [![Travis CI](https://travis-ci.org/UAVCAN/pyuavcan.svg?branch=master)](https://travis-ci.org/UAVCAN/pyuavcan)
 [![Gitter](https://img.shields.io/badge/gitter-join%20chat-green.svg)](https://gitter.im/UAVCAN/general)
 
-Python implementation of the [UAVCAN protocol stack](http://uavcan.org).
+Python implementation of the [UAVCAN v0 protocol stack](http://uavcan.github.io).
 
 UAVCAN is a lightweight protocol designed for reliable communication in aerospace and robotic applications via CAN bus.
 
 ## Documentation
 
-* [UAVCAN website](http://uavcan.org)
+* [UAVCAN v0 website](http://uavcan.github.io)
 * [UAVCAN forum](https://forum.uavcan.org)
 * [Pyuavcan documentation and tutorials](http://uavcan.org/Implementations/Pyuavcan/)
 
