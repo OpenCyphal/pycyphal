@@ -38,8 +38,8 @@ class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class UDPTransport(pyuavcan.transport.Transport):
     """
-    The UDP/IP (v4/v6) transport is intended for
-    low-latency, high-throughput switched Ethernet vehicular networks with complex topologies.
+    The UDP/IP (v4/v6) transport is designed for low-latency, high-throughput, high-reliability
+    vehicular networks based on Ethernet.
 
     Please read the module documentation for details.
     """

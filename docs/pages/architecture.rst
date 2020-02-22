@@ -163,8 +163,7 @@ The auto-generated classes have a high-level application-facing API and built-in
 serialization and deserialization routines.
 
 By default, DSDL-generated packages are stored in the current working directory.
-This is convenient because the packages contained in the current working directory
-are importable by default.
+This is convenient because the packages contained in the same directory are importable by default.
 If a different directory is used, it has to be added to the import lookup path manually
 either via the ``PYTHONPATH`` environment variable or via :data:`sys.path`.
 
