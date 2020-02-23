@@ -93,7 +93,7 @@ class Deserializer(abc.ABC):
         _ensure_cardinal(count)
         assert self._bit_offset % 8 == 0
         bs = self._buf.get_unsigned_slice(self._byte_offset, self._byte_offset + (count + 7) // 8)
-        out = numpy.unpackbits(bs)[:count]
+        out = numpy.unpackbits(bs, bitorder='little')[:count]
         self._bit_offset += count
         assert len(out) == count
         return out.astype(dtype=numpy.bool)
@@ -196,7 +196,7 @@ class Deserializer(abc.ABC):
         backtrack = byte_count * 8 - count
         assert 0 <= backtrack < 8
         self._bit_offset -= backtrack
-        out: numpy.ndarray = numpy.unpackbits(bs)[:count].astype(dtype=numpy.bool)
+        out: numpy.ndarray = numpy.unpackbits(bs, bitorder='little')[:count].astype(dtype=numpy.bool)
         assert len(out) == count
         return out
 
@@ -209,15 +209,15 @@ class Deserializer(abc.ABC):
                 # advantage of. This algorithm breaks for byte-aligned offset, so we have to delegate the aligned
                 # case to the aligned copy method (which is also much faster).
                 out = numpy.empty(count, dtype=_Byte)
-                left = self._bit_offset % 8
-                right = 8 - left
+                right = self._bit_offset % 8
+                left = 8 - right
                 assert (1 <= right <= 7) and (1 <= left <= 7)
                 # The last byte is a special case because if we're reading the last few unaligned bits, the very last
                 # byte access will be always out of range. We don't care because of the implicit zero extension rule.
                 for i in range(count):
                     byte_offset = self._byte_offset
-                    out[i] = (((self._buf.get_byte(byte_offset) << left) & 0xFF)
-                              | (self._buf.get_byte(byte_offset + 1) >> right))
+                    out[i] = ((self._buf.get_byte(byte_offset) >> right)
+                              | ((self._buf.get_byte(byte_offset + 1) << left) & 0xFF))
                     self._bit_offset += 8
                 assert len(out) == count
                 return out
@@ -259,7 +259,7 @@ class Deserializer(abc.ABC):
         return out
 
     def fetch_unaligned_bit(self) -> bool:
-        mask = 1 << (7 - self._bit_offset % 8)
+        mask = 1 << (self._bit_offset % 8)
         assert 1 <= mask <= 128
         out = self._buf.get_byte(self._byte_offset) & mask == mask
         self._bit_offset += 1
@@ -278,10 +278,9 @@ class Deserializer(abc.ABC):
         out = 0
         for i in range(last_byte_index):
             out |= int(x[i]) << (i * 8)
-        # The trailing bits must be shifted right because the most significant bit has index zero. If the bit length
-        # is an integer multiple of eight, this won't be necessary and the operation will have no effect.
-        shift = (8 - bit_length % 8) & 0b111
-        out |= (int(x[last_byte_index]) >> shift) << (last_byte_index * 8)
+        msb_mask = (2 ** (bit_length % 8) - 1) if bit_length % 8 != 0 else 0xFF
+        assert msb_mask in (1, 3, 7, 15, 31, 63, 127, 255)
+        out |= (int(x[last_byte_index]) & msb_mask) << (last_byte_index * 8)
         assert 0 <= out < (2 ** bit_length)
         return out
 
@@ -393,26 +392,13 @@ def _ensure_cardinal(i: int) -> None:
 def _unittest_deserializer_aligned() -> None:
     from pytest import raises, approx
     # The buffer is constructed from the corresponding serialization test.
+    # The final bit padding is done with 1's to ensure that they are correctly discarded.
     sample = bytes(map(
         lambda x: int(x, 2),
-        '10100111 '                                                                 # u8
-        '11101111 11001101 10101011 10010000 01111000 01010110 00110100 00010010 '  # i64
-        '10001000 10101001 11001011 11101101 '                                      # i32   -0x1234_5678
-        '11111110 11111111 '                                                        # i16   -2
-        '00000000 '                                                                 # padding
-        '01111111 '                                                                 # i8    127
-        '00000000 00000000 00000000 00000000 00000000 00000000 11110000 00111111 '  # f64   1.0
-        '00000000 00000000 10000000 00111111 '                                      # f32   1.0
-        '00000000 01111100 '                                                        # f16   +inf
-        '11011010 1110'                                                             # u12   0xEDA
-        '0000 '                                                                     # padding
-        '11011010 10111110 '                                                        # u16   0xBEDA
-        '11111110 1'                                                                # i9    -2
-        '0000000 '                                                                  # padding
-        '10101101 11011110 11101111 10111110 '                                      # u16   [0xdead 0xbeef]
-        '10100011 11100110 '                                                        # 16 bits
-        '10100011 11010'                                                            # 13 bits
-        '000'.split()))                                                             # auto trailing padding
+        '10100111 11101111 11001101 10101011 10010000 01111000 01010110 00110100 00010010 10001000 10101001 11001011 '
+        '11101101 11111110 11111111 00000000 01111111 00000000 00000000 00000000 00000000 00000000 00000000 11110000 '
+        '00111111 00000000 00000000 10000000 00111111 00000000 01111100 11011010 00001110 11011010 10111110 11111110 '
+        '00000001 10101101 11011110 11101111 10111110 11000101 01100111 11000101 11101011'.split()))
     assert len(sample) == 45
 
     des = Deserializer.new([memoryview(sample)])
@@ -485,16 +471,16 @@ def _unittest_deserializer_unaligned() -> None:
     des = Deserializer.new([memoryview(bytearray([0b10101010, 0b01011101, 0b11001100, 0b10010001]))])
     assert des.consumed_bit_length == 0
     assert des.consumed_bit_length % 8 == 0
-    assert list(des.fetch_aligned_array_of_bits(3)) == [True, False, True]
+    assert list(des.fetch_aligned_array_of_bits(3)) == [False, True, False]
     assert des.consumed_bit_length == 3
     assert des.consumed_bit_length % 8 == 3
     assert list(des.fetch_unaligned_bytes(0)) == []
-    assert list(des.fetch_unaligned_bytes(2)) == [0b01010_010, 0b11101_110]
-    assert list(des.fetch_unaligned_bytes(1)) == [0b01100_100]
+    assert list(des.fetch_unaligned_bytes(2)) == [0b10110101, 0b10001011]
+    assert list(des.fetch_unaligned_bytes(1)) == [0b00111001]
     assert des.consumed_bit_length == 27
     assert des.consumed_bit_length % 8 == 3
     assert des.remaining_bit_length == 5
-    assert all(numpy.array([0b10001000, 0], dtype=_Byte) == des.fetch_unaligned_bytes(2))
+    assert all(numpy.array([0b00010010, 0], dtype=_Byte) == des.fetch_unaligned_bytes(2))
     assert des.consumed_bit_length == 43
     assert des.remaining_bit_length == -11
 
@@ -509,21 +495,9 @@ def _unittest_deserializer_unaligned() -> None:
     # The buffer is constructed from the corresponding serialization test.
     sample = bytearray(map(
         lambda x: int(x, 2),
-        '10100011 111'                          # 11 bits
-        '10100 11101'                           # 10 bits
-        '000 10010001 10100010 10110'           # u8    [0x12, 0x34, 0x56]
-        '011 '                                  # 3 bits
-        '00010010 00110100 01010110 '           # u8    [0x12, 0x34, 0x56]
-        '10011'                                 # 5 bits
-        '111 11110'                             # u8    -2
-        '011 00101111 '                         # u11   0b111_0110_0101
-        '110'                                   # u3    0b110
-        '00000 00000000 00000000 00000000 00000000 00000000 00011110 00000111 111'  # f64   1.0
-        '00000 00000000 00010000 00000111 111'                                      # f32   1.0
-        '00000 00011111 100'                                                        # f16   -inf
-        '10101 10111011 11011101 11110111 110'                                      # u16 [0xdead, 0xbeef]
-        '00000'                                                                     # padding
-        ''.split()))
+        '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 10111111 11101100 '
+        '00000110 00000000 00000000 00000000 00000000 00000000 10000000 11111111 00000001 00000000 00000000 11111100 '
+        '00000001 11100000 01101111 11110101 01111110 11110111 00000101'.split()))
     assert len(sample) == 31
 
     des = Deserializer.new([memoryview(sample[:])])
