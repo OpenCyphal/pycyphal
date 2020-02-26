@@ -44,7 +44,7 @@ class Serializer(abc.ABC):
 
     @property
     def buffer(self) -> numpy.ndarray:
-        """Returns a properly sized read-only slice of the destination buffer padded to byte."""
+        """Returns a properly sized read-only slice of the destination buffer zero-bit-padded to byte."""
         out = self._buf[:(self._bit_offset + 7) // 8]
         out.flags.writeable = False
         assert out.base is self._buf    # Making sure we're not creating a copy, that might be costly
@@ -74,7 +74,7 @@ class Serializer(abc.ABC):
         """
         assert x.dtype in (numpy.bool, numpy.bool_)
         assert self._bit_offset % 8 == 0
-        packed = numpy.packbits(x)  # Fortunately, numpy uses same bit ordering as DSDL, no additional transforms needed
+        packed = numpy.packbits(x, bitorder='little')
         assert len(packed) * 8 >= len(x)
         self._buf[self._byte_offset:self._byte_offset + len(packed)] = packed
         self._bit_offset += len(x)
@@ -153,7 +153,7 @@ class Serializer(abc.ABC):
 
     def add_unaligned_array_of_bits(self, x: numpy.ndarray) -> None:
         assert x.dtype in (numpy.bool, numpy.bool_)
-        packed = numpy.packbits(x)  # Fortunately, numpy uses same bit ordering as DSDL, no additional transforms needed
+        packed = numpy.packbits(x, bitorder='little')
         backtrack = len(packed) * 8 - len(x)
         assert backtrack >= 0
         self.add_unaligned_bytes(packed)
@@ -164,12 +164,12 @@ class Serializer(abc.ABC):
         # This is a faster variant of Ben Dyer's unaligned bit copy algorithm:
         # https://github.com/UAVCAN/libuavcan/blob/fd8ba19bc9c09c05a/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12
         # It is faster because here we are aware that the source is always aligned, which we take advantage of.
-        right = self._bit_offset % 8
-        left = 8 - right
+        left = self._bit_offset % 8
+        right = 8 - left
         for b in value:
-            self._buf[self._byte_offset] |= b >> right
+            self._buf[self._byte_offset] |= (b << left) & 0xFF
             self._bit_offset += 8
-            self._buf[self._byte_offset] = (b << left) & 0xFF  # Does nothing if aligned
+            self._buf[self._byte_offset] = b >> right
 
     def add_unaligned_unsigned(self, value: int, bit_length: int) -> None:
         self._ensure_not_negative(value)
@@ -193,7 +193,7 @@ class Serializer(abc.ABC):
         self.add_unaligned_bytes(self._float_to_bytes('d', x))
 
     def add_unaligned_bit(self, x: bool) -> None:
-        self._buf[self._byte_offset] |= bool(x) << (7 - self._bit_offset % 8)
+        self._buf[self._byte_offset] |= bool(x) << (self._bit_offset % 8)
         self._bit_offset += 1
 
     #
@@ -209,9 +209,6 @@ class Serializer(abc.ABC):
         for i in range(num_bytes):      # Oh, why is my life like this?
             out[i] = value & 0xFF
             value >>= 8
-        # The trailing bits must be shifted left because the most significant bit has index zero. If the bit length
-        # is an integer multiple of eight, this won't be necessary and the operation will have no effect.
-        out[-1] <<= (8 - bit_length % 8) & 0b111
         return out
 
     @staticmethod
@@ -235,8 +232,10 @@ class Serializer(abc.ABC):
     def __str__(self) -> str:
         s = ' '.join(map(_byte_as_bit_string, self.buffer))
         if self._bit_offset % 8 != 0:
+            s, tail = s.rsplit(maxsplit=1)
             bits_to_cut_off = 8 - self._bit_offset % 8
-            return s[:-bits_to_cut_off]
+            tail = ('x' * bits_to_cut_off) + tail[bits_to_cut_off:]
+            return s + ' ' + tail
         else:
             return s
 
@@ -277,6 +276,19 @@ _PlatformSpecificSerializer = {
 
 def _byte_as_bit_string(x: int) -> str:
     return bin(x)[2:].zfill(8)
+
+
+def _unittest_serializer_to_str() -> None:
+    ser = Serializer.new(50)
+    assert str(ser) == ''
+    ser.add_aligned_u8(0b11001110)
+    assert str(ser) == '11001110'
+    ser.add_aligned_i16(-1)
+    assert str(ser) == '11001110 11111111 11111111'
+    ser.add_aligned_unsigned(0, 1)
+    assert str(ser) == '11001110 11111111 11111111 xxxxxxx0'
+    ser.add_unaligned_signed(-1, 3)
+    assert str(ser) == '11001110 11111111 11111111 xxxx1110'
 
 
 def _unittest_serializer_aligned() -> None:
@@ -321,11 +333,11 @@ def _unittest_serializer_aligned() -> None:
     assert unseparate(ser) == unseparate(expected)
 
     ser.add_aligned_unsigned(0xBEDA, 12)                        # 0xBxxx will be truncated away
-    expected += '1101 1010 1110'                                # This case is from the examples from the specification
+    expected += '1101 1010 xxxx1110'
     assert unseparate(ser) == unseparate(expected)
 
     ser.skip_bits(4)                                            # Bring back into alignment
-    expected += '0000'
+    expected = expected[:-8] + '00001110'
     assert unseparate(ser) == unseparate(expected)
 
     ser.add_aligned_unsigned(0xBEDA, 16)                        # Making sure byte-size-aligned are handled well, too
@@ -333,11 +345,11 @@ def _unittest_serializer_aligned() -> None:
     assert unseparate(ser) == unseparate(expected)
 
     ser.add_aligned_signed(-2, 9)                               # Two's complement: 510 = 0b1_1111_1110
-    expected += '11111110 1'                                    # MSB is at the end
+    expected += '11111110 xxxxxxx1'                             # MSB is at the end
     assert unseparate(ser) == unseparate(expected)
 
     ser.skip_bits(7)                                            # Bring back into alignment
-    expected += '0' * 7
+    expected = expected[:-8] + '00000001'
     assert unseparate(ser) == unseparate(expected)
 
     ser.add_aligned_array_of_standard_bit_length_primitives(numpy.array([0xdead, 0xbeef], numpy.uint16))
@@ -348,14 +360,14 @@ def _unittest_serializer_aligned() -> None:
         True, False, True, False, False, False, True, True,     # 10100011
         True, True, True, False, False, True, True, False,      # 11100110
     ], numpy.bool))
-    expected += '10100011 11100110'
+    expected += '11000101 01100111'
     assert unseparate(ser) == unseparate(expected)
 
     ser.add_aligned_array_of_bits(numpy.array([
         True, False, True, False, False, False, True, True,     # 10100011
         True, True, False, True, False,                         # 11010
     ], numpy.bool))
-    expected += '10100011 11010'
+    expected += '11000101 xxx01011'
     assert unseparate(ser) == unseparate(expected)
 
     print('repr(serializer):', repr(ser))
@@ -367,67 +379,80 @@ def _unittest_serializer_aligned() -> None:
 # noinspection PyProtectedMember
 def _unittest_serializer_unaligned() -> None:                   # Tricky cases with unaligned fields (very tricky)
     ser = Serializer.new(40)
-    expected = ''
-
-    def validate_addition(bit_string: str) -> None:
-        nonlocal expected
-        expected += bit_string
-        assert str(ser).replace(' ', '') == str(expected).replace(' ', '')
 
     ser.add_unaligned_array_of_bits(numpy.array([
         True, False, True, False, False, False, True, True,     # 10100011
         True, True, True,                                       # 111
     ], numpy.bool))
-    validate_addition('10100011 111')
+    assert str(ser) == '11000101 xxxxx111'
 
     ser.add_unaligned_array_of_bits(numpy.array([
         True, False, True, False, False,                        # ???10100 (byte alignment restored here)
         True, True, True, False, True,                          # 11101 (byte alignment lost, three bits short)
     ], numpy.bool))
-    validate_addition('10100 11101')
+    assert str(ser) == '11000101 00101111 xxx10111'
 
+    # Adding '00010010 00110100 01010110'
     ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=_Byte))
-    validate_addition(_byte_as_bit_string(0x12) + _byte_as_bit_string(0x34) + _byte_as_bit_string(0x56))
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 xxx01010'
 
     ser.add_unaligned_array_of_bits(numpy.array([False, True, True], numpy.bool))
-    validate_addition('011')
     assert ser._bit_offset % 8 == 0, 'Byte alignment is not restored'
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010'
 
     ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=_Byte))     # We're actually aligned here
-    validate_addition(_byte_as_bit_string(0x12) + _byte_as_bit_string(0x34) + _byte_as_bit_string(0x56))
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110'
 
     ser.add_unaligned_bit(True)
     ser.add_unaligned_bit(False)
     ser.add_unaligned_bit(False)
     ser.add_unaligned_bit(True)
-    ser.add_unaligned_bit(True)
-    validate_addition('10011')                                  # Three bits short until alignment
+    ser.add_unaligned_bit(True)   # Three bits short until alignment
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 xxx11001'
 
     ser.add_unaligned_signed(-2, 8)                             # Two's complement: 254 = 1111 1110
-    validate_addition('1111 1110')
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 ' \
+                       'xxx11111'
 
-    ser.add_unaligned_unsigned(0b111_0110_0101, 11)             # Tricky, eh? Eleven bits, unaligned write
-    validate_addition('0110 0101 111')                          # We are aligned now
+    ser.add_unaligned_unsigned(0b11101100101, 11)             # Tricky, eh? Eleven bits, unaligned write
     assert ser._bit_offset % 8 == 0, 'Byte alignment is not restored'
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 ' \
+                       '10111111 11101100'
 
     ser.add_unaligned_unsigned(0b1110, 3)                       # MSB truncated away
-    validate_addition('110')
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 ' \
+                       '10111111 11101100 xxxxx110'
 
+    # Adding '00000000 00000000 00000000 00000000 00000000 00000000 11110000 00111111'
     ser.add_unaligned_f64(1)
-    validate_addition('00000000 00000000 00000000 00000000 00000000 00000000 11110000 00111111')
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 ' \
+                       '10111111 11101100 00000110 00000000 00000000 00000000 00000000 00000000 10000000 11111111 ' \
+                       'xxxxx001'
 
+    # Adding '00000000 00000000 10000000 00111111'
     ser.add_unaligned_f32(1)
-    validate_addition('00000000 00000000 10000000 00111111')
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 ' \
+                       '10111111 11101100 00000110 00000000 00000000 00000000 00000000 00000000 10000000 11111111 ' \
+                       '00000001 00000000 00000000 11111100 xxxxx001'
 
+    # Adding '00000000 11111100'
     ser.add_unaligned_f16(-99999.9)
-    validate_addition('00000000 11111100')
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 ' \
+                       '10111111 11101100 00000110 00000000 00000000 00000000 00000000 00000000 10000000 11111111 ' \
+                       '00000001 00000000 00000000 11111100 00000001 11100000 xxxxx111'
 
+    # Adding '10101101 11011110 11101111 10111110'
     ser.add_unaligned_array_of_standard_bit_length_primitives(numpy.array([0xdead, 0xbeef], numpy.uint16))
-    validate_addition('10101101 11011110'   # dead :(
-                      '11101111 10111110')  # beef
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 ' \
+                       '10111111 11101100 00000110 00000000 00000000 00000000 00000000 00000000 10000000 11111111 ' \
+                       '00000001 00000000 00000000 11111100 00000001 11100000 01101111 11110101 01111110 11110111 ' \
+                       'xxxxx101'
 
     ser.skip_bits(5)
-    validate_addition('00000')
     assert ser._bit_offset % 8 == 0, 'Byte alignment is not restored'
+    assert str(ser) == '11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 ' \
+                       '10111111 11101100 00000110 00000000 00000000 00000000 00000000 00000000 10000000 11111111 ' \
+                       '00000001 00000000 00000000 11111100 00000001 11100000 01101111 11110101 01111110 11110111 ' \
+                       '00000101'
 
     print('repr(serializer):', repr(ser))

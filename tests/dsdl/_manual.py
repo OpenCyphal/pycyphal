@@ -28,27 +28,32 @@ def _unittest_slow_manual_del(generated_packages: typing.List[pyuavcan.dsdl.Gene
     obj = pyuavcan.dsdl.deserialize(
         test_dsdl_namespace.if_.del_1_0,
         _compile_serialized_representation(
+            # Second element C.1.0
+            '1'  # x = 1
+            '0'  # first field selected uint1 x
+            # First element C.1.0
+            '1'  # y = 1
+            '1'  # second field selected uint1 y
+            # B union, second field C.1.0[<=2] y
+            '10'  # length 2 elements
+            '1'
             # void1
             '0'
-            # B union, second field C.1.0[<=2] y
-            '1'
-            '10'  # length 2 elements
-            # First element C.1.0
-            '1'  # second field selected uint1 y
-            '1'  # y = 1
-            # Second element C.1.0
-            '0'  # first field selected uint1 x
-            '1'  # x = 1
-            # B union, first field C.1.0[2] x
+            # ^^^ THE FIRST FIELD STARTS HERE AND THE REST GOES IN THE REVERSE ORDER UPWARDS ^^^
+
+            # Padding to byte.
             '0'
-            # First element C.1.0
-            '0'  # first field selected uint1 x
-            '0'  # x = 0
-            # Second element C.1.0
-            '1'  # second field selected uint1 y
-            '1'  # y = 1
             # empty B.1.0[<=2] y
             '00'
+            # Second element C.1.0
+            '1'  # y = 1
+            '1'  # second field selected uint1 y
+            # First element C.1.0
+            '0'  # x = 0
+            '0'  # first field selected uint1 x
+            # B union, first field C.1.0[2] x
+            '0'
+            # ^^^ FIELDS OF THE SECOND BYTE OF THE SERIALIZED REPRESENTATION BEGIN HERE ^^^
         )
     )
     assert obj is not None
@@ -89,9 +94,10 @@ def _unittest_slow_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsd
         uavcan.node.Heartbeat_1_0,
         _compile_serialized_representation(
             _bin(0xefbe_adde, 32),              # uptime dead beef in little-endian byte order
-            '10',                               # health caution
+            '111',                              # vendor-specific, fragment
             '010',                              # mode maintenance
-            '111''11111111''11111111'           # vendor-specific, 19 bits, little-endian
+            '10',                               # health caution
+            '11111111''11111111'                # vendor-specific, the remaining 16 bits
         )
     )
     assert obj is not None
