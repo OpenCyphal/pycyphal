@@ -833,7 +833,8 @@ class Transfer(object):
                 not self.request_not_response and
                 transfer.dest_node_id == self.source_node_id and
                 transfer.source_node_id == self.dest_node_id and
-                transfer.data_type_id == self.data_type_id):
+                transfer.data_type_id == self.data_type_id and
+                transfer.transfer_id == self.transfer_id):
             return True
         else:
             return False
