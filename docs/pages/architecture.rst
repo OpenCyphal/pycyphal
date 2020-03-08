@@ -26,7 +26,7 @@ Each of the submodules can be used separately depending on the level of abstract
 - :mod:`pyuavcan.dsdl` -- DSDL language support: code generation and object serialization.
 
 - :mod:`pyuavcan.transport` -- the abstract UAVCAN transport layer model and several
-  concrete transport implementations (CAN, serial, etc.).
+  concrete transport implementations (UAVCAN/CAN, UAVCAN/UDP, UAVCAN/Serial, etc.).
   The transport layer exposes a low-level API where data is represented as unstructured blocks of bytes.
   Users may build custom concrete transports based on this module as well.
 
@@ -66,7 +66,8 @@ For example::
 Transport layer
 ---------------
 
-The UAVCAN protocol itself is designed to support multiple transports such as CAN bus, UDP, serial, and so on.
+The UAVCAN protocol itself is designed to support multiple transports such as CAN bus (aka UAVCAN/CAN),
+UDP (aka UAVCAN//UDP), serial (aka UAVCAN/Serial), and so on.
 Generally, a real-time safety-critical implementation of UAVCAN would support a limited subset of
 transports defined by the protocol (often just one) in order to reduce the validation & verification efforts.
 PyUAVCAN is different -- it is created for user-facing software rather than reliable deeply embedded systems;
@@ -149,7 +150,7 @@ Virtualization
 
 Some transports support virtual interfaces that can be used for testing and experimentation
 instead of real physical connections.
-For example, the CAN transport supports virtual CAN buses via SocketCAN,
+For example, the UAVCAN/CAN transport supports virtual CAN buses via SocketCAN,
 and the serial transport supports TCP/IP tunneling and local loopback mode.
 Read the API documentation for more information about these features.
 

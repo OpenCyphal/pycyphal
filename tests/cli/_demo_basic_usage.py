@@ -35,7 +35,7 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
         # CAN
         yield _IfaceOption(
             demo_env_vars={'DEMO_INTERFACE_KIND': 'can'},
-            make_cli_args=lambda nid: (  # The demo uses CAN 2.0! SocketCAN does not support nonuniform MTU well.
+            make_cli_args=lambda nid: (  # The demo uses Classic CAN! SocketCAN does not support nonuniform MTU well.
                 f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan0",8),local_node_id={nid})',
             ),
         )

@@ -5,12 +5,13 @@
 #
 
 """
-CAN transport overview
-++++++++++++++++++++++
+UAVCAN/CAN transport overview
++++++++++++++++++++++++++++++
 
-This module implements the CAN transport for UAVCAN, both CAN 2.0 and CAN FD, as defined in the UAVCAN specification.
+This module implements UAVCAN/CAN -- the CAN transport for UAVCAN, both Classic CAN and CAN FD,
+as defined in the UAVCAN specification.
 UAVCAN does not distinguish between the two aside from the MTU difference; neither does this implementation.
-CAN 2.0 is essentially treated as CAN FD with MTU of 8 bytes.
+Classic CAN is essentially treated as CAN FD with MTU of 8 bytes.
 
 Different CAN hardware is supported through the media sublayer; please refer to :mod:`pyuavcan.transport.can.media`.
 

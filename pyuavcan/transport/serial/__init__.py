@@ -5,15 +5,15 @@
 #
 
 """
-Serial transport overview
-+++++++++++++++++++++++++
+UAVCAN/Serial transport overview
+++++++++++++++++++++++++++++++++
 
-The serial transport is experimental and is not yet part of the UAVCAN specification.
+The UAVCAN/Serial transport is experimental and is not yet part of the UAVCAN specification.
 Future revisions may break wire compatibility until the transport is formally specified.
 Context: https://forum.uavcan.org/t/alternative-transport-protocols/324, also see the discussion at
 https://forum.uavcan.org/t/yukon-design-megathread/390/115?u=pavel.kirienko.
 
-The serial transport is designed for OSI L1 byte-level serial links:
+The UAVCAN/Serial transport is designed for OSI L1 byte-level serial links:
 
 - UART, RS-232/485/422 (the recommended rates are: 115200 bps, 921600 bps, 3 Mbps, 10 Mbps, 100 Mbps);
   copper or fiber optics.

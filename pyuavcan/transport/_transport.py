@@ -45,7 +45,7 @@ class ProtocolParameters:
     The maximum number of payload bytes in a single-frame transfer.
     If the number of payload bytes in a transfer exceeds this limit, the transport will spill
     the data into a multi-frame transfer.
-    Example: 7 for CAN 2.0, <=63 for CAN FD.
+    Example: 7 for Classic CAN, <=63 for CAN FD.
     """
 
 

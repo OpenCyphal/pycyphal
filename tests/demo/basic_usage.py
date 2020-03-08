@@ -111,7 +111,7 @@ class DemoApplication:
             #   ip link set up vcan0
             # CAN interfaces can me monitored using can-utils:
             #   candump -decaxta any
-            # Here we select CAN 2.0 by setting MTU=8 bytes. We can switch to CAN FD by simply increasing the MTU.
+            # Here we select Classic CAN by setting MTU=8 bytes. We can switch to CAN FD by simply increasing the MTU.
             media = pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', mtu=8)
             transport = pyuavcan.transport.can.CANTransport(media, local_node_id=42)
 

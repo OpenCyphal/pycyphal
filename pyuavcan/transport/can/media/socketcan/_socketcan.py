@@ -35,11 +35,11 @@ class SocketCANMedia(_media.Media):
     """
     def __init__(self, iface_name: str, mtu: int, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
         """
-        CAN 2.0/FD is selected automatically based on the MTU. It is not possible to use CAN FD with MTU of 8 bytes.
+        CAN Classic/FD is selected automatically based on the MTU. It is not possible to use CAN FD with MTU of 8 bytes.
 
         :param iface_name: E.g., ``can0``.
 
-        :param mtu: The maximum data field size in bytes. CAN FD is used if this value > 8, CAN 2.0 otherwise.
+        :param mtu: The maximum data field size in bytes. CAN FD is used if this value > 8, Classic CAN otherwise.
             This value must belong to Media.VALID_MTU_SET.
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
@@ -51,9 +51,9 @@ class SocketCANMedia(_media.Media):
         self._iface_name = str(iface_name)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
-        self._is_fd = self._mtu > _NativeFrameDataCapacity.CAN_20
+        self._is_fd = self._mtu > _NativeFrameDataCapacity.CAN_CLASSIC
         self._native_frame_data_capacity = int({
-            False: _NativeFrameDataCapacity.CAN_20,
+            False: _NativeFrameDataCapacity.CAN_CLASSIC,
             True:  _NativeFrameDataCapacity.CAN_FD,
         }[self._is_fd])
         self._native_frame_size = _FRAME_HEADER_STRUCT.size + self._native_frame_data_capacity
@@ -237,7 +237,7 @@ class SocketCANMedia(_media.Media):
 
 
 class _NativeFrameDataCapacity(enum.IntEnum):
-    CAN_20 = 8
+    CAN_CLASSIC = 8
     CAN_FD = 64
 
 

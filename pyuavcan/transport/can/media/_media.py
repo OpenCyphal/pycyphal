@@ -26,7 +26,7 @@ class Media(abc.ABC):
     """The frames handler is non-blocking and non-yielding; returns immediately."""
 
     VALID_MTU_SET = {8, 12, 16, 20, 24, 32, 48, 64}
-    """Valid MTU values for CAN 2.0 and CAN FD."""
+    """Valid MTU values for Classic CAN and CAN FD."""
 
     @property
     @abc.abstractmethod

@@ -57,9 +57,9 @@ Whenever the application desires to establish communication
 it commands the transport layer to open a particular session.
 The session abstraction is sufficiently high-level to permit efficient mapping to features
 natively available to concrete transport implementations.
-For example, a CAN transport uses the set of active input sessions to automatically compute the
+For example, the UAVCAN/CAN transport uses the set of active input sessions to automatically compute the
 optimal hardware acceptance filter configuration;
-the UDP transport can map sessions onto UDP port numbers,
+the UAVCAN/UDP transport can map sessions onto UDP port numbers,
 establishing close equivalence between sessions and Berkeley sockets.
 
 There can be at most one session per session specifier.
@@ -94,7 +94,7 @@ Implementing new transports
 
 New transports can be added trivially by subclassing :class:`pyuavcan.transport.Transport`.
 This module contains several nested submodules providing standard transport implementations
-according to the UAVCAN specification (e.g., the CAN transport) alongside with experimental implementations.
+according to the UAVCAN specification (e.g., the UAVCAN/CAN transport) alongside with experimental implementations.
 
 Each specific transport implementation included in the library shall reside in its own separate
 submodule under :mod:`pyuavcan.transport`.
@@ -104,7 +104,7 @@ should begin with capitalized name of the submodule followed by ``Transport``.
 If the new transport contains a media sub-layer, the media interface class should be at
 ``pyuavcan.transport.*.media.Media``, where the asterisk is the transport name placeholder;
 the media sub-layer should follow the same organization patterns as the transport layer.
-See the CAN transport as an example.
+See the UAVCAN/CAN transport as an example.
 
 Implementations included in the library are never auto-imported, nor do they need to be.
 The same should be true for transport-specific media sub-layers.

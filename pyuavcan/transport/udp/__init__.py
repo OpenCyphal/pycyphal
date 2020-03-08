@@ -5,14 +5,14 @@
 #
 
 r"""
-UDP transport overview
-++++++++++++++++++++++
+UAVCAN/UDP transport overview
++++++++++++++++++++++++++++++
 
-The UDP transport is experimental and is not yet part of the UAVCAN specification.
+The UAVCAN/UDP transport is experimental and is not yet part of the UAVCAN specification.
 Future revisions may break wire compatibility until the transport is formally specified.
 Context: https://forum.uavcan.org/t/alternative-transport-protocols/324.
 
-The UDP/IP transport is essentially a trivial stateless UDP blaster.
+The UAVCAN/UDP transport is essentially a trivial stateless UDP blaster.
 This transport is intended for low-latency, high-throughput switched Ethernet networks with complex topologies.
 In the spirit of UAVCAN, it is designed to be simple and robust;
 much of the data handling work is offloaded to the standard underlying UDP/IP stack.
