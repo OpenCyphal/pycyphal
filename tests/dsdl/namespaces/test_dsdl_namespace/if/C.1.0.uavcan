@@ -1,4 +1,4 @@
 @union
 @deprecated
-uint1 x
-uint1 y
+uint8 x
+int8 y

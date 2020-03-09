@@ -4,7 +4,6 @@
 # This service doesn't have a fixed subject-ID.
 #
 
-void2
 PointXY.1.0[<64] points
 
 @assert _offset_ % 8 == {0}
