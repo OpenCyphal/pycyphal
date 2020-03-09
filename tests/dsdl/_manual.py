@@ -28,32 +28,29 @@ def _unittest_slow_manual_del(generated_packages: typing.List[pyuavcan.dsdl.Gene
     obj = pyuavcan.dsdl.deserialize(
         test_dsdl_namespace.if_.del_1_0,
         _compile_serialized_representation(
-            # Second element C.1.0
-            '1'  # x = 1
-            '0'  # first field selected uint1 x
-            # First element C.1.0
-            '1'  # y = 1
-            '1'  # second field selected uint1 y
+            # void8
+            '00000000'
             # B union, second field C.1.0[<=2] y
-            '10'  # length 2 elements
-            '1'
-            # void1
-            '0'
-            # ^^^ THE FIRST FIELD STARTS HERE AND THE REST GOES IN THE REVERSE ORDER UPWARDS ^^^
-
-            # Padding to byte.
-            '0'
-            # empty B.1.0[<=2] y
-            '00'
-            # Second element C.1.0
-            '1'  # y = 1
-            '1'  # second field selected uint1 y
+            '00000001'
+            '00000010'  # length 2 elements
             # First element C.1.0
-            '0'  # x = 0
-            '0'  # first field selected uint1 x
+            '00000001'  # second field selected uint1 y
+            '00000111'  # y = 7
+            # Second element C.1.0
+            '00000000'  # first field selected uint1 x
+            '00000101'  # x = 5
+
             # B union, first field C.1.0[2] x
-            '0'
-            # ^^^ FIELDS OF THE SECOND BYTE OF THE SERIALIZED REPRESENTATION BEGIN HERE ^^^
+            '00000000'
+            # First element C.1.0
+            '00000000'  # first field selected uint1 x
+            '00001000'  # x = 8
+            # Second element C.1.0
+            '00000001'  # second field selected uint1 y
+            '00001101'  # y = 13
+
+            # empty B.1.0[<=2] y
+            '00000000'
         )
     )
     assert obj is not None
@@ -61,15 +58,15 @@ def _unittest_slow_manual_del(generated_packages: typing.List[pyuavcan.dsdl.Gene
     assert obj.else_[0].y is not None
     assert len(obj.else_[0].y) == 2
     assert obj.else_[0].y[0].x is None
-    assert obj.else_[0].y[0].y == 1
-    assert obj.else_[0].y[1].x == 1
+    assert obj.else_[0].y[0].y == 7
+    assert obj.else_[0].y[1].x == 5
     assert obj.else_[0].y[1].y is None
     assert obj.else_[1].x is not None
     assert obj.else_[1].y is None
-    assert obj.else_[1].x[0].x == 0
+    assert obj.else_[1].x[0].x == 8
     assert obj.else_[1].x[0].y is None
     assert obj.else_[1].x[1].x is None
-    assert obj.else_[1].x[1].y == 1
+    assert obj.else_[1].x[1].y == 13
     assert len(obj.raise_) == 0
 
     with pytest.raises(AttributeError, match='nonexistent'):

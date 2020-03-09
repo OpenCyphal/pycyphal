@@ -36,7 +36,9 @@ coverage.xml
 .pydevproject
 .DS_Store
 .settings/
-.idea/
+**/.idea/*
+!**/.idea/dictionaries
+!**/.idea/dictionaries/*
 
 *.log
 *_generated
