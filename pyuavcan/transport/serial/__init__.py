@@ -67,8 +67,10 @@ The header is prepended before the frame payload; the resulting structure is
 encoded into its serialized form using the following packet format (influenced by HDLC, SLIP, POPCOP):
 
 +-------------------------+--------------+---------------+--------------------------------+-------------------------+
-| Frame delimiter **0x9E**|Escaped header|Escaped payload| Payload CRC32C (Castagnoli)    | Frame delimiter **0x9E**|
+| Frame delimiter **0x9E**|Escaped header|Escaped payload| Escaped CRC-32C of the payload | Frame delimiter **0x9E**|
 +=========================+==============+===============+================================+=========================+
+| 1 byte                  | 32..64 bytes | >=0 bytes     | 4..8 bytes                     | 1 byte                  |
++-------------------------+--------------+---------------+--------------------------------+-------------------------+
 | Single-byte frame       | The following bytes are      | Four bytes long, little-endian | Same frame delimiter as |
 | delimiter **0x9E**.     | escaped: **0x9E** (frame     | byte order; bytes 0x9E (frame  | at the start.           |
 | Begins a new frame and  | delimiter); **0x8E**         | delimiter) and 0x8E (escape    | Terminates the current  |
