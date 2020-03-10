@@ -244,8 +244,7 @@ def _unittest_output_session() -> None:
     rx_data, endpoint = sock_rx.recvfrom(1000)
     assert endpoint[0] == '127.100.0.2'
     assert rx_data == (
-        12340 .to_bytes(7, 'little') + bytes([int(Priority.NOMINAL) << 5])
-        + 0xdead_beef_badc0ffe .to_bytes(8, 'little')
+        b'\x00\x04\x00\x00\x00\x00\x00\x8040\x00\x00\x00\x00\x00\x00\xfe\x0f\xdc\xba\xef\xbe\xad\xde'
         + b'one' b'two' b'three'
     )
     with raises(socket_.timeout):
@@ -330,15 +329,11 @@ def _unittest_output_session() -> None:
     assert data_main_a == data_redundant_a
     assert data_main_b == data_redundant_b
     assert data_main_a == (
-        54321 .to_bytes(7, 'little') + bytes([0xF0])
-        + 0xdead_beef_badc0ffe .to_bytes(8, 'little')
-        + 0x_00_00_00_00 .to_bytes(4, 'little')
+        b'\x00\x07\x00\x00\x00\x00\x00\x001\xd4\x00\x00\x00\x00\x00\x00\xfe\x0f\xdc\xba\xef\xbe\xad\xde'
         + b'one' b'two' b'three'[:-1]
     )
     assert data_main_b == (
-        54321 .to_bytes(7, 'little') + bytes([0xF0])
-        + 0xdead_beef_badc0ffe .to_bytes(8, 'little')
-        + 0x_80_00_00_01 .to_bytes(4, 'little')
+        b'\x00\x07\x00\x00\x01\x00\x00\x801\xd4\x00\x00\x00\x00\x00\x00\xfe\x0f\xdc\xba\xef\xbe\xad\xde'
         + b'e' + pyuavcan.transport.commons.crc.CRC32C.new(b'one', b'two', b'three').value_as_bytes
     )
 

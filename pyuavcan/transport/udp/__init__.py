@@ -118,22 +118,16 @@ Datagram header format
 Every UAVCAN/UDP frame contains the following header before the payload,
 encoded in the little-endian byte order, expressed here in the DSDL notation::
 
-    uint56 transfer_id
-    uint8  flags             # priority bits 7..5, multi-frame flag bit 4, version bits 3..0
-    uint64 data_type_hash
+    uint8 version           # =0 in this revision; ignore frame otherwise.
+    uint8 priority          # Like in CAN: 0 -- highest priority, 7 -- lowest priority.
+    void16                  # Set to zero when transmitting, ignore when receiving.
+    uint32 frame_index_eot  # MSB is set if the current frame is the last frame of the transfer.
+    uint64 transfer_id      # The transfer-ID never overflows.
+    uint64 data_type_hash   # Identifies the data type carried by this transfer (and frame).
 
-For multi-frame transfers, the header is appended with an extra field immediately before the payload::
-
-    uint56 transfer_id
-    uint8  flags             # priority bits 7..5, multi-frame flag bit 4, version bits 3..0
-    uint64 data_type_hash
-    uint32 frame_index_eot
-
-The bit 4 of the field ``flags`` is set for multi-frame transfers, cleared otherwise.
 The 31 least significant bits of the field ``frame_index_eot`` contain the frame index within the current transfer;
 the most significant bit (31st) is set if the current frame is the last frame of the transfer.
-
-An in-depth description of the header format is provided in the documentation for :class:`UDPFrame`.
+Also see the documentation for :class:`UDPFrame`.
 
 Multi-frame transfers contain four bytes of CRC32-C (Castagnoli) at the end computed over the entire transfer payload.
 For more info on multi-frame transfers, please see
