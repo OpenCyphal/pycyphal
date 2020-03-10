@@ -53,7 +53,7 @@ least significant byte first, most significant bit first)::
     uint64  transfer ID
 
     uint32  frame index EOT      # MSB set if last frame of the transfer; i.e., 0x8000_0000 if single-frame transfer.
-    void32                       # Set to zero when sending, ignore when receiving.
+    uint32  header CRC           # CRC-32C (Castagnoli) of the header (all fields above).
 
 For message frames, the data specifier field contains the subject-ID value,
 so that the most significant bit is always cleared.
@@ -66,22 +66,20 @@ Total header size: 32 bytes (256 bits).
 The header is prepended before the frame payload; the resulting structure is
 encoded into its serialized form using the following packet format (influenced by HDLC, SLIP, POPCOP):
 
-+------------------------+-----------------------+-----------------------+------------------------+
-|Frame delimiter **0x9E**|Escaped header+payload |CRC32C (Castagnoli)    |Frame delimiter **0x9E**|
-+========================+=======================+=======================+========================+
-|Single-byte frame       |The following bytes are|Four bytes long,       |Same frame delimiter as |
-|delimiter **0x9E**.     |escaped: **0x9E**      |little-endian byte     |at the start.           |
-|Begins a new frame and  |(frame delimiter);     |order; bytes 0x9E      |Terminates the current  |
-|possibly terminates the |**0x8E** (escape       |(frame delimiter) and  |frame and possibly      |
-|previous frame.         |character). An escaped |0x8E (escape character)|begins the next frame.  |
-|                        |byte is bitwise        |are escaped like in    |                        |
-|                        |inverted and prepended |the payload.           |                        |
-|                        |with the escape        |The CRC is computed    |                        |
-|                        |character 0x8E. For    |over the unescaped     |                        |
-|                        |example: byte 0x9E is  |(i.e., original form)  |                        |
-|                        |transformed into 0x8E  |payload, not including |                        |
-|                        |followed by 0x71.      |the start delimiter.   |                        |
-+------------------------+-----------------------+-----------------------+------------------------+
++-------------------------+--------------+---------------+--------------------------------+-------------------------+
+| Frame delimiter **0x9E**|Escaped header|Escaped payload| CRC32C (Castagnoli)            | Frame delimiter **0x9E**|
++=========================+==============+===============+================================+=========================+
+| Single-byte frame       | The following bytes are      | Four bytes long, little-endian | Same frame delimiter as |
+| delimiter **0x9E**.     | escaped: **0x9E** (frame     | byte order; bytes 0x9E (frame  | at the start.           |
+| Begins a new frame and  | delimiter); **0x8E**         | delimiter) and 0x8E (escape    | Terminates the current  |
+| possibly terminates the | (escape character). An       | character) are escaped like in | frame and possibly      |
+| previous frame.         | escaped byte is bitwise      | the payload. The CRC is        | begins the next frame.  |
+|                         | inverted and prepended with  | computed over the unescaped    |                         |
+|                         | the escape character 0x8E.   | (i.e., original form) payload, |                         |
+|                         | For example: byte 0x9E is    | not including the header       |                         |
+|                         | transformed into 0x8E        | (because the header has a      |                         |
+|                         | followed by 0x71.            | dedicated CRC).                |                         |
++-------------------------+------------------------------+--------------------------------+-------------------------+
 
 There are no magic bytes in this format because the strong CRC and the data type hash field render the
 format sufficiently recognizable. The worst case overhead exceeds 100% if every byte of the payload and the CRC
@@ -99,11 +97,11 @@ payload in little-endian byte order.
 The multi-frame transfer logic (decomposition and reassembly) is implemented in a separate
 transport-agnostic module :mod:`pyuavcan.transport.commons.high_overhead_transport`.
 
-Note that we use CRC-32C (Castagnoli) as the frame CRC instead of CRC-32K2 (Koopman-2)
+Note that we use CRC-32C (Castagnoli) as the header/frame CRC instead of CRC-32K2 (Koopman-2)
 which is superior at short data blocks offering the Hamming distance of 6 as opposed to 4.
 This is because Castagnoli is superior for transfer CRC which is often sufficiently long
 to flip the balance in favor of Castagnoli rather than Koopman.
-We could use Koopman for frame CRC and keep Castagnoli for transfer CRC,
+We could use Koopman for the header/frame CRC and keep Castagnoli for the transfer CRC,
 but such diversity is harmful because it would require implementers to keep two separate CRC tables
 which may be costly in embedded applications and may deteriorate the performance of CPU caches.
 

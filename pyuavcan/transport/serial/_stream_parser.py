@@ -153,7 +153,7 @@ def _unittest_stream_parser() -> None:
                      index=1234567,
                      end_of_transfer=True,
                      payload=f1.compile_into(bytearray(1000)))
-    assert len(f2.payload) == 46
+    assert len(f2.payload) == 46 + 2  # The extra two are escapes.
     result = proc(f2.compile_into(bytearray(1000)))
     assert len(result) == 1
     assert isinstance(result[0], memoryview)

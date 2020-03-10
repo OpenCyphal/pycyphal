@@ -16,6 +16,15 @@ _VERSION = 0
 # Same value represents broadcast node ID when transmitting.
 _ANONYMOUS_NODE_ID = 0xFFFF
 
+_HEADER_WITHOUT_CRC_FORMAT = struct.Struct('<'
+                                           'BB'   # Version, priority
+                                           'HHH'  # source NID, destination NID, data specifier
+                                           'QQ'   # Data type hash, transfer-ID
+                                           'L')   # Frame index with end-of-transfer flag in the MSB
+_CRC_SIZE_BYTES = len(pyuavcan.transport.commons.high_overhead_transport.TransferCRC().value_as_bytes)
+_HEADER_SIZE = _HEADER_WITHOUT_CRC_FORMAT.size + _CRC_SIZE_BYTES
+assert _HEADER_SIZE == 32
+
 
 @dataclasses.dataclass(frozen=True)
 class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
@@ -28,15 +37,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     FRAME_DELIMITER_BYTE = 0x9E
     ESCAPE_PREFIX_BYTE   = 0x8E
 
-    HEADER_STRUCT = struct.Struct('<'
-                                  'BB'      # Version, priority
-                                  'HHH'     # source NID, destination NID, data specifier
-                                  'QQ'      # Data type hash, transfer-ID
-                                  'L'       # Frame index with end-of-transfer flag in the MSB
-                                  '4x')
-    CRC_SIZE_BYTES = len(pyuavcan.transport.commons.high_overhead_transport.TransferCRC().value_as_bytes)
-
-    NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = HEADER_STRUCT.size + CRC_SIZE_BYTES
+    NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_SIZE + _CRC_SIZE_BYTES
 
     source_node_id:      typing.Optional[int]
     destination_node_id: typing.Optional[int]
@@ -91,22 +92,23 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
         index_eot = self.index | ((1 << 31) if self.end_of_transfer else 0)
 
-        header = self.HEADER_STRUCT.pack(_VERSION,
-                                         int(self.priority),
-                                         src_nid,
-                                         dst_nid,
-                                         data_spec,
-                                         self.data_type_hash,
-                                         self.transfer_id,
-                                         index_eot)
-        assert len(header) == 32
+        header = _HEADER_WITHOUT_CRC_FORMAT.pack(_VERSION,
+                                                 int(self.priority),
+                                                 src_nid,
+                                                 dst_nid,
+                                                 data_spec,
+                                                 self.data_type_hash,
+                                                 self.transfer_id,
+                                                 index_eot)
+        header += pyuavcan.transport.commons.crc.CRC32C.new(header).value_as_bytes
+        assert len(header) == _HEADER_SIZE
 
-        crc_bytes = pyuavcan.transport.commons.crc.CRC32C.new(header, self.payload).value_as_bytes
+        payload_crc_bytes = pyuavcan.transport.commons.crc.CRC32C.new(self.payload).value_as_bytes
 
         escapees = self.FRAME_DELIMITER_BYTE, self.ESCAPE_PREFIX_BYTE
         out_buffer[0] = self.FRAME_DELIMITER_BYTE
         next_byte_index = 1
-        for nb in itertools.chain(header, self.payload, crc_bytes):
+        for nb in itertools.chain(header, self.payload, payload_crc_bytes):
             if nb in escapees:
                 out_buffer[next_byte_index] = self.ESCAPE_PREFIX_BYTE
                 next_byte_index += 1
@@ -117,7 +119,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         out_buffer[next_byte_index] = self.FRAME_DELIMITER_BYTE
         next_byte_index += 1
 
-        assert (next_byte_index - 2) >= (len(header) + len(self.payload) + len(crc_bytes))
+        assert (next_byte_index - 2) >= (len(header) + len(self.payload) + len(payload_crc_bytes))
         return memoryview(out_buffer)[:next_byte_index]
 
     @staticmethod
@@ -129,15 +131,18 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         if len(header_payload_crc_image) < SerialFrame.NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING:
             return None
 
-        if not pyuavcan.transport.commons.crc.CRC32C.new(header_payload_crc_image).check_residue():
+        header = header_payload_crc_image[:_HEADER_SIZE]
+        if not pyuavcan.transport.commons.crc.CRC32C.new(header).check_residue():
             return None
 
-        header = header_payload_crc_image[:SerialFrame.HEADER_STRUCT.size]
-        payload = header_payload_crc_image[SerialFrame.HEADER_STRUCT.size:-SerialFrame.CRC_SIZE_BYTES]
+        payload_with_crc = header_payload_crc_image[_HEADER_SIZE:]
+        if not pyuavcan.transport.commons.crc.CRC32C.new(payload_with_crc).check_residue():
+            return None
+        payload = payload_with_crc[:-_CRC_SIZE_BYTES]
 
         # noinspection PyTypeChecker
         version, int_priority, src_nid, dst_nid, int_data_spec, dt_hash, transfer_id, index_eot = \
-            SerialFrame.HEADER_STRUCT.unpack(header)
+            _HEADER_WITHOUT_CRC_FORMAT.unpack_from(header)
         if version != _VERSION:
             return None
 
@@ -171,8 +176,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
 
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
-
-assert SerialFrame.HEADER_STRUCT.size == 32
 
 
 def _unittest_frame_compile_message() -> None:
@@ -208,7 +211,7 @@ def _unittest_frame_compile_message() -> None:
     assert segment[10:18] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
     assert segment[18:26] == 1234567890123456789 .to_bytes(8, 'little')
     assert segment[26:30] == (1234567 + 0x8000_0000).to_bytes(4, 'little')
-    assert segment[30:34] == b'\x00' * 4
+    # Header CRC here
 
     # Payload validation
     assert segment[34:38] == b'abcd'
@@ -217,17 +220,7 @@ def _unittest_frame_compile_message() -> None:
     assert segment[40:42] == b'ef'
     assert segment[42] == SerialFrame.ESCAPE_PREFIX_BYTE
     assert segment[43] == 0x8E ^ 0xFF
-
-    # CRC validation
-    header = SerialFrame.HEADER_STRUCT.pack(_VERSION,
-                                            int(f.priority),
-                                            f.source_node_id,
-                                            f.destination_node_id,
-                                            12345,
-                                            f.data_type_hash,
-                                            f.transfer_id,
-                                            f.index + 0x8000_0000)
-    assert segment[44:] == pyuavcan.transport.commons.crc.CRC32C.new(header, f.payload).value_as_bytes
+    assert segment[44:] == pyuavcan.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
 
 
 def _unittest_frame_compile_service() -> None:
@@ -261,18 +254,10 @@ def _unittest_frame_compile_service() -> None:
     assert segment[9:17] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
     assert segment[17:25] == 1234567890123456789 .to_bytes(8, 'little')
     assert segment[25:29] == 1234567 .to_bytes(4, 'little')
-    assert segment[29:33] == b'\x00' * 4
+    # Header CRC here
 
     # CRC validation
-    header = SerialFrame.HEADER_STRUCT.pack(_VERSION,
-                                            int(f.priority),
-                                            f.source_node_id,
-                                            _ANONYMOUS_NODE_ID,
-                                            (1 << 15) | (1 << 14) | 123,
-                                            f.data_type_hash,
-                                            f.transfer_id,
-                                            f.index)
-    assert segment[33:] == pyuavcan.transport.commons.crc.CRC32C.new(header, f.payload).value_as_bytes
+    assert segment[33:] == pyuavcan.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
 
 
 def _unittest_frame_parse() -> None:
@@ -293,11 +278,11 @@ def _unittest_frame_parse() -> None:
         0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,     # Data type hash    0xbad_c0ffee_0dd_f00d
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,     # Transfer ID       12345678901234567890
         0x31, 0xD4, 0x00, 0x80,                             # Frame index, EOT  54321 with EOT flag set
-        0x12, 0x34, 0x56, 0x78,                             # Padding ignored
     ])
+    header += get_crc(header)
     assert len(header) == 32
     payload = b'Squeeze mayonnaise onto a hamster'
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + payload + get_crc(header, payload)), ts)
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + payload + get_crc(payload)), ts)
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=123,
@@ -321,9 +306,10 @@ def _unittest_frame_parse() -> None:
         0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,
         0x31, 0xD4, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
     ])
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts)
+    header += get_crc(header)
+    assert len(header) == 32
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')), ts)
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
@@ -347,9 +333,10 @@ def _unittest_frame_parse() -> None:
         0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,
         0x31, 0xD4, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
     ])
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts)
+    header += get_crc(header)
+    assert len(header) == 32
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')), ts)
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
@@ -364,7 +351,7 @@ def _unittest_frame_parse() -> None:
     )
 
     # Too short
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(header, payload)), ts) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(payload)), ts) is None
 
     # Bad CRC
     assert SerialFrame.parse_from_unescaped_image(memoryview(header + payload + b'1234'), ts) is None
@@ -379,9 +366,10 @@ def _unittest_frame_parse() -> None:
         0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,
         0x31, 0xD4, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
     ])
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
+    header += get_crc(header)
+    assert len(header) == 32
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')), ts) is None
 
     # Bad fields
     header = bytes([
@@ -393,16 +381,17 @@ def _unittest_frame_parse() -> None:
         0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,
         0x31, 0xD4, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00,
     ])
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(header)), ts) is None
+    header += get_crc(header)
+    assert len(header) == 32
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')), ts) is None
 
 
 def _unittest_frame_check() -> None:
     from pytest import raises
     from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier, Timestamp
 
-    f = SerialFrame(timestamp=Timestamp.now(),
+    _ = SerialFrame(timestamp=Timestamp.now(),
                     priority=Priority.HIGH,
                     source_node_id=123,
                     destination_node_id=456,
@@ -412,7 +401,6 @@ def _unittest_frame_check() -> None:
                     index=1234567,
                     end_of_transfer=False,
                     payload=memoryview(b'abcdef'))
-    del f
 
     with raises(ValueError):
         SerialFrame(timestamp=Timestamp.now(),
