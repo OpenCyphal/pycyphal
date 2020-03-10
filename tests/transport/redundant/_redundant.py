@@ -229,7 +229,7 @@ async def _unittest_redundant_transport() -> None:
     print('tr_b.descriptor', tr_b.descriptor)
 
     assert tr_a.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2 ** 56,
+        transfer_id_modulo=2 ** 64,
         max_nodes=4096,
         mtu=1024,
     )
@@ -237,7 +237,7 @@ async def _unittest_redundant_transport() -> None:
     assert tr_a.descriptor == f'<redundant>{udp_a.descriptor}{serial_a.descriptor}</redundant>'
 
     assert tr_b.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2 ** 56,
+        transfer_id_modulo=2 ** 64,
         max_nodes=4096,
         mtu=1024,
     )
