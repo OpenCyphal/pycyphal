@@ -51,7 +51,7 @@ async def _unittest_udp_transport() -> None:
 
     assert list(xml.etree.ElementTree.fromstring(tr2.descriptor).itertext()) == ['127.0.0.222/8']
     assert tr2.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2 ** 56,
+        transfer_id_modulo=2 ** 64,
         max_nodes=2 ** UDPTransport.NODE_ID_BIT_LENGTH,
         mtu=UDPTransport.DEFAULT_MTU,
     )
