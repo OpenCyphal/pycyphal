@@ -832,13 +832,13 @@ def parse_namespaces(source_dirs, search_dirs=None):
     """
 
     # noinspection PyShadowingNames
-    def walk():
+    def walk(walk_dirs):
         import fnmatch
         from functools import partial
 
         def on_walk_error(directory, ex):
             raise DsdlException('OS error in [%s]: %s' % (directory, str(ex)))
-        for source_dir in source_dirs:
+        for source_dir in walk_dirs:
             walker = os.walk(source_dir, onerror=partial(on_walk_error, source_dir), followlinks=True)
             for root, _dirnames, filenames in walker:
                 for filename in fnmatch.filter(filenames, '*.uavcan'):
@@ -866,7 +866,12 @@ def parse_namespaces(source_dirs, search_dirs=None):
 
     parser = Parser(source_dirs + (search_dirs or []))
     output_types = []
-    for filename in walk():
+    if search_dirs:
+        for filename in walk(search_dirs):
+            t = parser.parse(filename)
+            ensure_unique_dtid(t, filename)
+
+    for filename in walk(source_dirs):
         t = parser.parse(filename)
         ensure_unique_dtid(t, filename)
         output_types.append(t)
