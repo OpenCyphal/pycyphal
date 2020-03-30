@@ -51,7 +51,7 @@ class GeneratedPackageInfo:
 
 
 def generate_package(root_namespace_directory:        _AnyPath,
-                     lookup_directories:              typing.Iterable[_AnyPath] = (),
+                     lookup_directories:              typing.Optional[typing.List[_AnyPath]] = None,
                      output_directory:                typing.Optional[_AnyPath] = None,
                      allow_unregulated_fixed_port_id: bool = False) -> GeneratedPackageInfo:
     """
@@ -72,7 +72,6 @@ def generate_package(root_namespace_directory:        _AnyPath,
     If the source definition contains identifiers, type names, namespace components, or other entities whose
     names are listed in ``nunavut.lang.py.PYTHON_RESERVED_IDENTIFIERS``,
     the compiler applies stropping by suffixing such entities with an underscore ``_``.
-
     A small subset of applications may require access to a generated entity without knowing in advance whether
     its name is a reserved identifier or not (i.e., whether it's stropped or not). To simplify usage,
     this submodule provides helper functions
@@ -80,8 +79,7 @@ def generate_package(root_namespace_directory:        _AnyPath,
     class/object attributes using their original names before stropping.
     Likewise, the function :func:`pyuavcan.dsdl.get_model` can find a generated type even if any of its name
     components are stropped; e.g., a DSDL type ``str.Type.1.0`` would be imported as ``str_.Type_1_0``.
-
-    The above, however, is irrelevant for an application that does not require genericity (vast majority of
+    None of it, however, is relevant for an application that does not require genericity (vast majority of
     applications don't), so a much easier approach in that case is just to look at the generated code and see
     if there are any stropped identifiers in it, and then just use appropriate names statically.
 
@@ -175,8 +173,11 @@ def generate_package(root_namespace_directory:        _AnyPath,
     ...     import uavcan.si.sample.volumetric_flow_rate
     """
     # Read the DSDL definitions
+    if isinstance(lookup_directories, (str, bytes)):
+        # https://forum.uavcan.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
+        raise TypeError(f'Lookup directories shall be an iterable of strings, not {type(lookup_directories).__name__}')
     composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
-                                            lookup_directories=list(map(str, lookup_directories)),
+                                            lookup_directories=list(map(str, lookup_directories or [])),
                                             allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
     root_namespace_name, = set(map(lambda x: x.root_namespace, composite_types))  # type: str,
 

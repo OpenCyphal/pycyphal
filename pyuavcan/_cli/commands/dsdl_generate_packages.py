@@ -184,7 +184,7 @@ option. If not sure, ask for advice at https://forum.uavcan.org.
                          dest_dir, ns, list(map(str, lookup_root_namespace_dirs)))
             shutil.rmtree(dest_dir, ignore_errors=True)
             gpi = pyuavcan.dsdl.generate_package(root_namespace_directory=ns,
-                                                 lookup_directories=lookup_root_namespace_dirs,
+                                                 lookup_directories=list(lookup_root_namespace_dirs),
                                                  output_directory=generated_packages_dir,
                                                  allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
             out.append(gpi)
