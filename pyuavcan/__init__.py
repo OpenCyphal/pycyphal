@@ -53,7 +53,7 @@ import sys as _sys
 
 with open(_os.path.join(_os.path.dirname(__file__), 'VERSION')) as _version:
     __version__ = _version.read().strip()
-__version_info__ = tuple(map(int, __version__.split('.')))
+__version_info__ = tuple(map(int, __version__.split('.')[:3]))
 __license__ = 'MIT'
 __author__ = 'UAVCAN Development Team'
 
