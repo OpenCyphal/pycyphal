@@ -1,15 +1,14 @@
 environment:
   matrix:
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
-      PYTHON: 'C:\\Python37-x64'
-      PYTHON_ARCH: 64
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      PYTHON: 'C:\\Python38-x64'
+      PYTHON_ARCH: '64'
 
     - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
       PYTHON: '3.7'
 
-# NumPy is not yet compatible with Python 3.8; see https://github.com/cython/cython/issues/2938
-#    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
-#      PYTHON: "3.8"
+    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
+      PYTHON: '3.8'
 
 stack: python %PYTHON%
 
@@ -27,7 +26,7 @@ install:
   # MS Windows build config
   - cmd: 'systeminfo'
   - cmd: 'set PATH=%PYTHON%;%PATH%'
-  - cmd: 'set PATH=C:\\Python37-x64\\Scripts;%PATH%'
+  - cmd: 'set PATH=C:\\Python38-x64\\Scripts;%PATH%'
 
   # Config check
   - 'python -V'

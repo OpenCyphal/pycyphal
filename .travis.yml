@@ -5,8 +5,8 @@ os:
   - linux   # TODO: Migrate to a different CI service because Travis does not natively support Python on OSX or Windows.
 
 python:
-  - '3.7-dev'     # TODO: Replace with plain "3.7" when supported by Travis.
-#  - '3.8-dev'    # TODO: Compatibility issues with MyPy, see https://travis-ci.org/UAVCAN/pydsdl/jobs/519988157
+  - '3.7'
+  - '3.8'
 
 before_script:
   # Extra module package is needed for vcan (virtual SocketCAN iface).
