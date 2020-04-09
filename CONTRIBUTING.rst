@@ -170,7 +170,7 @@ but it is intended for CI use only.
 
 The script ``test.sh`` can be used to run the unit tests, static code analysis, documentation generation,
 and so on, locally or on a CI server.
-At the time of writing, the script takes some 20 minutes to run, so it may not work well for development;
+At the time of writing, the script takes some 30 minutes to run, so it may not work well for development;
 consider invoking pytest manually on a specific directory, file, or function instead (command-line option ``-k``).
 For more information refer to the PyTest documentation.
 
@@ -225,6 +225,12 @@ At least the following locations should be checked first:
 - ``tests/presentation`` -- generic presentation layer test cases.
 - ``tests/cli`` -- CLI and demo test cases.
 - The list may not be exhaustive, please grep the sources to locate all relevant modules.
+
+Many tests rely on the DSDL-generated packages being available for importing.
+The DSDL package generation is implemented in ``tests/dsdl``.
+After the packages are generated, the output is cached on disk to permit fast re-testing during development.
+The cache can be invalidated manually by removing the output directories.
+It is also invalidated automatically when ``clean.sh`` or ``test.sh`` are executed.
 
 
 Releasing
