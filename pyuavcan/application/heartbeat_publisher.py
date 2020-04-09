@@ -4,6 +4,11 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+"""
+Publishes ``uavcan.node.Heartbeat`` periodically and provides a couple of basic auxiliary services;
+see :class:`HeartbeatPublisher`.
+"""
+
 import enum
 import time
 import typing

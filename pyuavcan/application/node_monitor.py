@@ -4,6 +4,11 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+"""
+Keeps track of online nodes by subscribing to ``uavcan.node.Heartbeat`` and requesting ``uavcan.node.GetInfo``
+when necessary; see :class:`NodeMonitor`.
+"""
+
 import typing
 import asyncio
 import logging
@@ -23,7 +28,7 @@ The info is None until the node responds to the GetInfo request.
 """
 
 
-Hook = typing.Callable[[int, typing.Optional[Entry], typing.Optional[Entry]], None]
+EventHandler = typing.Callable[[int, typing.Optional[Entry], typing.Optional[Entry]], None]
 
 
 _logger = logging.getLogger(__name__)
@@ -40,7 +45,7 @@ class NodeMonitor:
     If the local node is anonymous, the info request functionality will be automatically disabled;
     it will be re-enabled automatically if the local node is assigned a node-ID later.
 
-    The class provides event notification hooks which are invoked on change.
+    The class provides IoC events which are triggered on change.
     The collected data can also be accessed by direct polling synchronously.
     """
 
@@ -70,7 +75,7 @@ class NodeMonitor:
         self._offline_timers: typing.Dict[int, asyncio.TimerHandle] = {}
         self._info_tasks: typing.Dict[int, asyncio.Task] = {}
 
-        self._hooks: typing.List[Hook] = []
+        self._handlers: typing.List[EventHandler] = []
 
     @property
     def registry(self) -> typing.Dict[int, Entry]:
@@ -85,15 +90,17 @@ class NodeMonitor:
         """
         The registry is empty and hooks are not invoked until the instance is started.
         """
+        _logger.debug('Starting %s', self)
         self._sub_heartbeat.receive_in_background(self._on_heartbeat)  # Idempotent
 
     def close(self) -> None:
         """
         When closed the registry is emptied. This is to avoid accidental reliance on obsolete data.
         """
+        _logger.debug('Closing %s', self)
         self._sub_heartbeat.close()
         self._registry.clear()
-        self._hooks.clear()
+        self._handlers.clear()
 
         for tm in self._offline_timers.values():
             tm.cancel()
@@ -103,7 +110,7 @@ class NodeMonitor:
             tsk.cancel()
         self._info_tasks.clear()
 
-    def add_hook(self, handler: Hook) -> None:
+    def add_handler(self, handler: EventHandler) -> None:
         """
         Register a callable that will be invoked whenever the node registry is changed.
         The arguments are: node-ID, old entry, new entry.
@@ -118,13 +125,13 @@ class NodeMonitor:
         """
         if not callable(handler):  # pragma: no cover
             raise ValueError(f'Bad handler: {handler}')
-        self._hooks.append(handler)
+        self._handlers.append(handler)
 
-    def remove_hook(self, handler: Hook) -> None:
+    def remove_handler(self, handler: EventHandler) -> None:
         """
         Remove a previously added hook identified by referential equivalence. Behaves like :meth:`list.remove`.
         """
-        self._hooks.remove(handler)
+        self._handlers.remove(handler)
 
     async def _on_heartbeat(self, msg: Heartbeat, metadata: pyuavcan.transport.TransferFrom) -> None:
         node_id = metadata.source_node_id
@@ -226,8 +233,8 @@ class NodeMonitor:
     def _notify(self, node_id: int, old_entry: typing.Optional[Entry], new_entry: typing.Optional[Entry]) -> None:
         assert isinstance(old_entry, Entry) or old_entry is None
         assert isinstance(new_entry, Entry) or new_entry is None
-        for hk in self._hooks:
+        for eh in self._handlers:
             try:
-                hk(node_id, old_entry, new_entry)
+                eh(node_id, old_entry, new_entry)
             except Exception as ex:
-                _logger.exception(f'Unhandled exception suppressed in hook {hk}: {ex}')
+                _logger.exception(f'Unhandled exception suppressed in handler {eh}: {ex}')
