@@ -50,9 +50,10 @@ def _to_builtin_impl(obj:   typing.Union[CompositeObject, numpy.ndarray, str, bo
         -> typing.Union[typing.Dict[str, typing.Any], typing.List[typing.Any], str, bool, int, float]:
     if isinstance(model, pydsdl.CompositeType):
         assert isinstance(obj, CompositeObject)
+        fields = (model.union_type if isinstance(model, pydsdl.TaggedUnionType) else model).fields_except_padding
         return {
             f.name: _to_builtin_impl(get_attribute(obj, f.name), f.data_type)
-            for f in model.fields_except_padding
+            for f in fields
             if get_attribute(obj, f.name) is not None  # The check is to hide inactive union variants.
         }
 
@@ -133,8 +134,8 @@ def update_from_builtin(destination: CompositeObjectTypeVar,
 
     model = get_model(destination)
     _raise_if_service_type(model)
-
-    for f in model.fields_except_padding:
+    fields = (model.union_type if isinstance(model, pydsdl.TaggedUnionType) else model).fields_except_padding
+    for f in fields:
         field_type = f.data_type
         try:
             value = source.pop(f.name)

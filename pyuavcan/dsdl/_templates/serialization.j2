@@ -104,10 +104,10 @@
     # END STRUCTURE FIELD SERIALIZATION: {{ f }}
     {%- endfor -%}
 
-{%- elif t is UnionType %}
+{%- elif t is TaggedUnionType %}
     # Tag field byte-aligned: {{ base_offset.is_aligned_at_byte() }}; {# -#}
       values byte-aligned: {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
-    {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
+    {%- for f, offset in t.union_type.iterate_fields_with_offsets(base_offset) %}
         {%- set field_ref = ref + '.' + (f|id) %}
     # BEGIN UNION FIELD SERIALIZATION: {{ f }}
     {{ 'if' if loop.first else 'elif' }} {{ field_ref }} is not None:

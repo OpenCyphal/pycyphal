@@ -12,16 +12,18 @@ from . import _util
 
 def _unittest_slow_textual(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     def validate(obj: pyuavcan.dsdl.CompositeObject, s: str) -> None:
-        for f in model.fields_except_padding:
-            field_present = (f'{f.name}=' in s) or (f'{f.name}_=' in s)
-            if isinstance(model, pydsdl.UnionType):
+        if isinstance(model, pydsdl.TaggedUnionType):
+            for f in model.union_type.fields_except_padding:
                 # In unions only the active field is printed.
                 # The active field may contain nested fields which  may be named similarly to other fields
                 # in the current union, so we can't easily ensure lack of non-active fields in the output.
+                field_present = (f'{f.name}=' in s) or (f'{f.name}_=' in s)
                 field_active = pyuavcan.dsdl.get_attribute(obj, f.name) is not None
                 if field_active:
                     assert field_present, f'{f.name}: {s}'
-            else:
+        else:
+            for f in model.fields_except_padding:
+                field_present = (f'{f.name}=' in s) or (f'{f.name}_=' in s)
                 # In structures all fields are printed always.
                 assert field_present, f'{f.name}: {s}'
 

@@ -98,12 +98,12 @@
             )
     {%- endfor %}
 
-{%- elif t is UnionType %}
+{%- elif t is TaggedUnionType %}
     {%- set tag_ref = 'tag'|to_template_unique_name %}
     # Tag field byte-aligned: {{ base_offset.is_aligned_at_byte() }}; {# -#}
       values byte-aligned: {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
     {{ _deserialize_integer(t.tag_field_type, tag_ref, base_offset) }}
-    {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
+    {%- for f, offset in t.union_type.iterate_fields_with_offsets(base_offset) %}
     {#- We generate new temporary for each variant to prevent MyPy from complaining. #}
     {%- set field_ref = 'uni'|to_template_unique_name %}
     # BEGIN UNION FIELD DESERIALIZATION: {{ f }}
