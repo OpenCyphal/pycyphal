@@ -84,6 +84,7 @@ class Subscriber(MessagePort[MessageClass]):
     def receive_in_background(self, handler: ReceivedMessageHandler[MessageClass]) -> None:
         """
         Configures the subscriber to invoke the specified handler whenever a message is received.
+        The handler is an async callable or returns an awaitable.
 
         If the caller attempts to configure multiple handlers by invoking this method repeatedly,
         only the last configured handler will be active (the old ones will be forgotten).
