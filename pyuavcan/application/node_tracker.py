@@ -6,7 +6,7 @@
 
 """
 Keeps track of online nodes by subscribing to ``uavcan.node.Heartbeat`` and requesting ``uavcan.node.GetInfo``
-when necessary; see :class:`NodeMonitor`.
+when necessary; see :class:`NodeTracker`.
 """
 
 import typing
@@ -29,19 +29,24 @@ The info is None until the node responds to the GetInfo request.
 
 
 EventHandler = typing.Callable[[int, typing.Optional[Entry], typing.Optional[Entry]], None]
+"""
+Arguments: node-ID, old entry, new entry. See :meth:`NodeTracker.add_handler` for details.
+"""
 
 
 _logger = logging.getLogger(__name__)
 
 
-class NodeMonitor:
+class NodeTracker:
     """
     This class is designed for tracking the list of online nodes in real time.
     It subscribes to ``uavcan.node.Heartbeat`` to keep a list of online nodes.
-    Whenever a new node appears online or an existing node is restarted (restart is detected through the uptime counter)
-    and if the local node is not anonymous,
-    the monitor invokes ``uavcan.node.GetInfo`` on it and keeps the response until the node is restarted again.
+    Whenever a new node appears online or an existing node is restarted
+    (restart is detected via the uptime counter),
+    the tracker invokes ``uavcan.node.GetInfo`` on it and keeps the response until the node is restarted again
+    or until it goes offline (offline nodes detected via heartbeat timeout).
     If the node did not reply to ``uavcan.node.GetInfo``, the request will be retried later.
+
     If the local node is anonymous, the info request functionality will be automatically disabled;
     it will be re-enabled automatically if the local node is assigned a node-ID later.
 
@@ -119,7 +124,7 @@ class NodeMonitor:
         - New node appeared online. The old-entry is None. The new-entry info is None.
         - A known node went offline. The new-entry is None.
         - A known node restarted. Neither entry is None. The new-entry info is None.
-        - A node responds to a ``uavcan.node.GetInfo`` request. Neither entry is None.
+        - A node responds to a ``uavcan.node.GetInfo`` request. Neither entry is None. The new-entry info is not None.
 
         Received Heartbeat messages change the registry as well, but they do not trigger the hook.
         """
