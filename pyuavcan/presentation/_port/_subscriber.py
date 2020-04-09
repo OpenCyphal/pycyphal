@@ -230,7 +230,10 @@ class Subscriber(MessagePort[MessageClass]):
 
     def __del__(self) -> None:
         if not self._closed:
-            _logger.debug('%s has not been disposed of properly; fixing', self)
+            # https://docs.python.org/3/reference/datamodel.html#object.__del__
+            # DO NOT invoke logging from the finalizer because it may resurrect the object!
+            # Once it is resurrected, we may run into resource management issue if __del__() is invoked again.
+            # Whether it is invoked the second time is an implementation detail.
             self._closed = True
             self._impl.remove_listener(self._rx)
 

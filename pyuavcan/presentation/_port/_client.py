@@ -172,8 +172,15 @@ class Client(ServicePort[ServiceClass]):
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
-            _logger.debug('%s has not been disposed of properly; fixing', self)
+            # https://docs.python.org/3/reference/datamodel.html#object.__del__
+            # DO NOT invoke logging from the finalizer because it may resurrect the object!
+            # Once it is resurrected, we may run into resource management issue if __del__() is invoked again.
+            # Whether it is invoked the second time is an implementation detail.
+            # If it is invoked again, then we may terminate the client implementation prematurely, leaving existing
+            # client proxy instances with a dead reference to a finalized implementation.
+            # RAII is difficult in Python. Maybe we should require the user to manage resources manually?
             self._maybe_impl.remove_proxy()
+            self._maybe_impl = None
 
 
 class ClientImpl(Closable, typing.Generic[ServiceClass]):

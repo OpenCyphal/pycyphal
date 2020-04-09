@@ -107,6 +107,13 @@ Methods and functions that command a new state should be idempotent;
 i.e., if the commanded state is already reached, do nothing.
 Example: ``start()`` -- do nothing if already started; ``close()`` -- do nothing if already closed.
 
+If you intend to implement some form of RAII with the help of object finalizers ``__del__()``,
+beware that if the object is accidentally resurrected in the process, the finalizer may or may not be invoked
+again later, which breaks the RAII logic.
+A nasty pitfall I encountered is that if the object is referenced in a logging call from the finalizer,
+the logging library may retain the reference until the next GC cycle, causing the finalizer to be invoked again.
+This led to RAII reference counting bugs which took over an hour to debug.
+
 API functions and methods that contain the following parameters should adhere to the semantic naming conventions:
 
 +-----------------------------------------+-------------------------+-----------------------------------------------------------+
