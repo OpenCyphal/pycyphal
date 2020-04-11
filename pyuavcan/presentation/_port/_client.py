@@ -63,13 +63,15 @@ class Client(ServicePort[ServiceClass]):
         """
         Do not call this directly! Use :meth:`Presentation.make_client`.
         """
+        assert not impl.is_closed, 'Internal logic error'
         self._maybe_impl: typing.Optional[ClientImpl[ServiceClass]] = impl
+        impl.register_proxy()  # Register ASAP to ensure correct finalization.
+
         self._loop = loop
         self._dtype = impl.dtype                                        # Permit usage after close()
         self._input_transport_session = impl.input_transport_session    # Same
         self._output_transport_session = impl.output_transport_session  # Same
         self._transfer_id_counter = impl.transfer_id_counter            # Same
-        impl.register_proxy()
         self._response_timeout = DEFAULT_SERVICE_REQUEST_TIMEOUT
         self._priority = DEFAULT_PRIORITY
 
@@ -211,11 +213,10 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         # common use case, but it makes sense supporting it in this library since it's supposed to be usable with
         # diagnostic and inspection tools.
         self._transfer_id_modulo_factory = transfer_id_modulo_factory
-        self._finalizer = finalizer
+        self._maybe_finalizer: typing.Optional[TypedSessionFinalizer] = finalizer
         self._loop = loop
 
         self._lock = asyncio.Lock(loop=loop)
-        self._closed = False
         self._proxy_count = 0
         self._response_futures_by_transfer_id: \
             typing.Dict[int, asyncio.Future[typing.Tuple[pyuavcan.dsdl.CompositeObject,
@@ -223,13 +224,18 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
         self._task = loop.create_task(self._task_function())
 
+    @property
+    def is_closed(self) -> bool:
+        return self._maybe_finalizer is None
+
     async def call(self,
                    request:          pyuavcan.dsdl.CompositeObject,
                    priority:         pyuavcan.transport.Priority,
                    response_timeout: float) \
             -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
         async with self._lock:
-            self._raise_if_closed()
+            if self.is_closed:
+                raise PortClosedError(repr(self))
 
             # We have to compute the modulus here manually instead of just letting the transport do that because
             # the response will use the modulus instead of the full TID and we have to match it with the request.
@@ -268,24 +274,18 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         finally:
             self._forget_future(transfer_id)
 
-    def register_proxy(self) -> None:
-        self._raise_if_closed()
+    def register_proxy(self) -> None:  # Proxy (de-)registration is always possible even if closed.
+        assert not self.is_closed, 'Internal logic error: cannot register a new proxy on a closed instance'
         assert self._proxy_count >= 0
         self._proxy_count += 1
         _logger.debug('%s got a new proxy, new count %s', self, self._proxy_count)
 
     def remove_proxy(self) -> None:
-        # Removal is always possible, even if closed.
         self._proxy_count -= 1
         _logger.debug('%s has lost a proxy, new count %s', self, self._proxy_count)
         assert self._proxy_count >= 0
-        if self._proxy_count <= 0 and not self._closed:
-            _logger.debug('%s is being closed', self)
-            self._closed = True
-            try:
-                self._task.cancel()
-            except Exception as ex:
-                _logger.debug('Proxy removal: could not cancel the task %r: %s', self._task, ex, exc_info=True)
+        if self._proxy_count <= 0:
+            self.close()  # RAII auto-close
 
     @property
     def proxy_count(self) -> int:
@@ -294,8 +294,11 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         return self._proxy_count
 
     def close(self) -> None:
-        # This is a no-op - explicit close is not needed for client because it has no work-forever methods.
-        pass
+        try:
+            self._task.cancel()
+        except Exception as ex:
+            _logger.debug('Could not cancel the task %r: %s', self._task, ex, exc_info=True)
+        self._finalize()
 
     async def _do_send_until(self,
                              request:            pyuavcan.dsdl.CompositeObject,
@@ -317,7 +320,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
     async def _task_function(self) -> None:
         exception: typing.Optional[Exception] = None
         try:
-            while not self._closed:
+            while not self.is_closed:
                 transfer = await self.input_transport_session.receive_until(self._loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is None:
                     continue
@@ -341,22 +344,9 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
             _logger.exception('Fatal error in the task of %s: %s', self, ex)
-
-        try:
-            self._closed = True
-            self._finalizer([self.input_transport_session, self.output_transport_session])
-        except Exception as ex:
-            exception = ex
-            # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
-            _logger.exception(f'Failed to finalize %s: %s', self, ex)
-
-        exception = exception if exception is not None else PortClosedError(repr(self))
-        for fut in self._response_futures_by_transfer_id.values():
-            try:
-                fut.set_exception(exception)
-            except asyncio.InvalidStateError:
-                pass
-        assert self._closed
+        finally:
+            self._finalize(exception)
+            assert self.is_closed
 
     def _forget_future(self, transfer_id: int) -> None:
         try:
@@ -364,9 +354,19 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         except LookupError:
             pass
 
-    def _raise_if_closed(self) -> None:
-        if self._closed:
-            raise PortClosedError(repr(self))
+    def _finalize(self, exception: typing.Optional[Exception] = None) -> None:
+        exception = exception if exception is not None else PortClosedError(repr(self))
+        try:
+            if self._maybe_finalizer is not None:
+                self._maybe_finalizer([self.input_transport_session, self.output_transport_session])
+                self._maybe_finalizer = None
+        except Exception as ex:
+            _logger.exception('%s failed to finalize: %s', self, ex)
+        for fut in self._response_futures_by_transfer_id.values():
+            try:
+                fut.set_exception(exception)
+            except asyncio.InvalidStateError:
+                pass
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,
