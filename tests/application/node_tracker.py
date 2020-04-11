@@ -65,6 +65,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         assert len(last_update_args) == 1
         assert last_update_args[0][0] == 0xA
         assert last_update_args[0][1] is None
+        assert last_update_args[0][2] is not None
         assert last_update_args[0][2].heartbeat.uptime == 0
         assert last_update_args[0][2].heartbeat.vendor_specific_status_code == 0xdead
         last_update_args.clear()
@@ -79,6 +80,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         assert len(last_update_args) == 1
         assert last_update_args[0][0] == 0xB
         assert last_update_args[0][1] is None
+        assert last_update_args[0][2] is not None
         assert last_update_args[0][2].heartbeat.uptime == 0
         assert last_update_args[0][2].heartbeat.vendor_specific_status_code == 0xbeef
         last_update_args.clear()
@@ -209,9 +211,11 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         assert list(trk.registry.keys()) == [0xA, 0xB]
         assert 12 >= trk.registry[0xA].heartbeat.uptime >= 8
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xdead
+        assert trk.registry[0xA].info is not None
         assert trk.registry[0xA].info.name.tobytes().decode() == 'node-A'
         assert 9 >= trk.registry[0xB].heartbeat.uptime >= 6
         assert trk.registry[0xB].heartbeat.vendor_specific_status_code == 0xbeef
+        assert trk.registry[0xB].info is not None
         assert trk.registry[0xB].info.name.tobytes().decode() == 'node-B'
 
         # Node B goes offline.
@@ -223,6 +227,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         assert list(trk.registry.keys()) == [0xA]
         assert 20 >= trk.registry[0xA].heartbeat.uptime >= 12
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xdead
+        assert trk.registry[0xA].info is not None
         assert trk.registry[0xA].info.name.tobytes().decode() == 'node-A'
 
         # Node C appears online. It does not respond to GetInfo.
@@ -234,6 +239,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         assert list(trk.registry.keys()) == [0xA, 0xC]
         assert 28 >= trk.registry[0xA].heartbeat.uptime >= 17
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xdead
+        assert trk.registry[0xA].info is not None
         assert trk.registry[0xA].info.name.tobytes().decode() == 'node-A'
         assert 7 >= trk.registry[0xC].heartbeat.uptime >= 5
         assert trk.registry[0xC].heartbeat.vendor_specific_status_code == 0xf00d
@@ -250,6 +256,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         assert list(trk.registry.keys()) == [0xA]
         assert 7 >= trk.registry[0xA].heartbeat.uptime >= 5
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xc0fe
+        assert trk.registry[0xA].info is not None
         assert trk.registry[0xA].info.name.tobytes().decode() == 'node-A'
 
         # Node A goes offline. No online nodes are left standing.
@@ -292,4 +299,4 @@ def _serve_get_info(pres: pyuavcan.presentation.Presentation, name: str) -> None
         _logger.info(f'GetInfo request {req} metadata {meta} response {resp}')
         return resp
 
-    srv.serve_in_background(handler)
+    srv.serve_in_background(handler)  # type: ignore

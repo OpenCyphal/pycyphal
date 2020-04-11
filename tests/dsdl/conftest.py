@@ -94,4 +94,6 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
     with open(cache_file, 'wb') as f:
         pickle.dump(out, f)
 
+    assert out and isinstance(out, list)
+    assert all(map(lambda x: isinstance(x, pyuavcan.dsdl.GeneratedPackageInfo), out))
     return out
