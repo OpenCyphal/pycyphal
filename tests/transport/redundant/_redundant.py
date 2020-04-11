@@ -300,3 +300,5 @@ async def _unittest_redundant_transport() -> None:
                      fragmented_payload=[]),
             monotonic_deadline=loop.time() + 1.0
         )
+
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.

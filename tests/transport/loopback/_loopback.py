@@ -128,11 +128,11 @@ async def _unittest_loopback_transport() -> None:
         payload_bytes=len('Hello world!'),
     )
 
-    out_bc.exception = RuntimeError('EXCEPTION SUKA')
+    out_bc.exception = RuntimeError('INTENDED EXCEPTION')
     with pytest.raises(ValueError):
         # noinspection PyTypeHints
         out_bc.exception = 123  # type: ignore
-    with pytest.raises(RuntimeError, match='EXCEPTION SUKA'):
+    with pytest.raises(RuntimeError, match='INTENDED EXCEPTION'):
         assert await out_bc.send_until(pyuavcan.transport.Transfer(
             timestamp=pyuavcan.transport.Timestamp.now(),
             priority=pyuavcan.transport.Priority.IMMEDIATE,
@@ -150,6 +150,7 @@ async def _unittest_loopback_transport() -> None:
     tr.close()
     assert len(tr.input_sessions) == 0
     assert len(tr.output_sessions) == 0
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
 @pytest.mark.asyncio    # type: ignore

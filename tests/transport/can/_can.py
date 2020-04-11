@@ -7,6 +7,7 @@
 import time
 import typing
 import pytest
+import asyncio
 import pyuavcan.transport
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pyuavcan.transport import can
@@ -864,6 +865,7 @@ async def _unittest_can_transport_non_anon() -> None:
     subscriber_selective.close()
     tr.close()
     tr2.close()
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

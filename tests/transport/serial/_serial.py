@@ -344,6 +344,8 @@ async def _unittest_serial_transport() -> None:
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         _ = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
 
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
+
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
     return memoryview(data.encode() if isinstance(data, str) else data)

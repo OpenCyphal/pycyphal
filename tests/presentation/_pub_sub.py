@@ -107,6 +107,8 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     assert list(pres_a.transport.output_sessions) == []
     assert list(pres_b.transport.output_sessions) == []
 
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
+
 
 # noinspection PyProtectedMember
 @pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
@@ -242,3 +244,5 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert record_handler_output[0][1].source_node_id == 42
     assert record_handler_output[0][1].transfer_id == 0
     assert record_handler_output[0][1].priority == Priority.NOMINAL
+
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.

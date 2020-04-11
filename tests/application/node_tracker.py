@@ -116,7 +116,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
 
         def validating_handler(node_id: int, old: typing.Optional[Entry], new: typing.Optional[Entry]) -> None:
             nonlocal num_events_a, num_events_b, num_events_c
-            print('VALIDATING HANDLER', node_id, old, new)
+            _logger.info('VALIDATING HANDLER %s %s %s', node_id, old, new)
             if node_id == 0xA:
                 if num_events_a == 0:  # First detection
                     assert old is None
@@ -275,6 +275,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
     finally:
         for p in [p_a, p_b, p_c, p_trk]:
             p.close()
+        await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
 async def _publish_heartbeat(pres: pyuavcan.presentation.Presentation, vssc: int) -> None:
