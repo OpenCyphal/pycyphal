@@ -185,7 +185,6 @@ def generate_package(root_namespace_directory:        _AnyPath,
     filters = {
         'pickle':            _pickle_object,
         'numpy_scalar_type': _numpy_scalar_type,
-        'explicit_fields':   _get_explicit_fields,
     }
 
     tests = {
@@ -242,14 +241,6 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
     else:
         assert not isinstance(t, pydsdl.PrimitiveType), 'Forgot to handle some primitive types'
         return f'_np_.object_'
-
-
-def _get_explicit_fields(t: pydsdl.CompositeType, skip_padding: bool = False) -> typing.Iterable[pydsdl.Field]:
-    if not isinstance(t, pydsdl.CompositeType):
-        raise TypeError(f'Unexpected operand type: {type(t).__name__}')
-    if isinstance(t, pydsdl.TaggedUnionType):
-        t = t.union_type
-    return list(t.fields_except_padding if skip_padding else t.fields)
 
 
 def _test_if_saturated(t: pydsdl.PrimitiveType) -> bool:

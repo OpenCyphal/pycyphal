@@ -92,8 +92,8 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
             pyuavcan.dsdl.set_attribute(o, f.name, v)
         return o
 
-    elif isinstance(model, pydsdl.TaggedUnionType):
-        f = random.choice(model.union_type.fields)
+    elif isinstance(model, pydsdl.UnionType):
+        f = random.choice(model.fields)
         v = make_random_object(f.data_type)
         o = pyuavcan.dsdl.get_class(model)()
         pyuavcan.dsdl.set_attribute(o, f.name, v)
@@ -115,11 +115,7 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
     elif isinstance(model, pydsdl.CompositeType):
         if type(a) != type(b):  # pragma: no cover
             return False
-        if isinstance(model, pydsdl.TaggedUnionType):
-            fields = model.union_type.fields_except_padding
-        else:
-            fields = model.fields_except_padding
-        for f in fields:  # pragma: no cover
+        for f in pyuavcan.dsdl.get_model(a).fields_except_padding:  # pragma: no cover
             if not are_close(f.data_type,
                              pyuavcan.dsdl.get_attribute(a, f.name),
                              pyuavcan.dsdl.get_attribute(b, f.name)):
