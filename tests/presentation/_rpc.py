@@ -121,4 +121,7 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     assert list(pres_a.transport.output_sessions) == []
     assert list(pres_b.transport.output_sessions) == []
 
+    pres_a.close()
+    pres_b.close()
+
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.

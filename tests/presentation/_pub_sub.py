@@ -47,6 +47,8 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     else:
         with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
             pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+        pres_a.close()
+        pres_b.close()
         return  # The test ends here.
 
     assert pub_heart._maybe_impl is not None

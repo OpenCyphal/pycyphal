@@ -20,7 +20,7 @@ from tests.transport.serial import VIRTUAL_BUS_URI as SERIAL_URI
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_redundant_transport() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
+    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
     from pyuavcan.transport import ProtocolParameters
 
