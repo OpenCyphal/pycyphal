@@ -364,8 +364,8 @@ class SerialTransport(pyuavcan.transport.Transport):
                 parser.process_next_chunk(chunk, timestamp)
 
         except Exception as ex:  # pragma: no cover
-            if self._closed or not self._serial_port.is_open or self._loop.is_closed():
-                _logger.debug('%s: The instance is closed, exception ignored: %r', self, ex)
+            if self._closed or not self._serial_port.is_open:
+                _logger.debug('%s: The serial port is closed, exception ignored: %r', self, ex)
             else:
                 _logger.exception('%s: Reader thread has failed, the instance with port %s will be terminated: %s',
                                   self, self._serial_port, ex)
