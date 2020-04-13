@@ -97,6 +97,7 @@ Default: %(default)s
         We use object instead of Node because the Node class requires generated code to be generated.
         """
         from pyuavcan import application
+        from pyuavcan.application import heartbeat_publisher
 
         node_info = pyuavcan.dsdl.update_from_builtin(application.NodeInfo(), args.node_info_fields)
         _logger.debug('Node info: %r', node_info)
@@ -109,12 +110,12 @@ Default: %(default)s
             if args.heartbeat_fields.pop('uptime', None) is not None:
                 _logger.warning('Specifying uptime has no effect because it will be overridden by the node.')
             node.heartbeat_publisher.health = \
-                args.heartbeat_fields.pop('health', application.heartbeat_publisher.Health.NOMINAL)
+                args.heartbeat_fields.pop('health', heartbeat_publisher.Health.NOMINAL)
             node.heartbeat_publisher.mode = \
-                args.heartbeat_fields.pop('mode', application.heartbeat_publisher.Mode.OPERATIONAL)
+                args.heartbeat_fields.pop('mode', heartbeat_publisher.Mode.OPERATIONAL)
             node.heartbeat_publisher.vendor_specific_status_code = args.heartbeat_fields.pop(
                 'vendor_specific_status_code',
-                os.getpid() & (2 ** min(pyuavcan.dsdl.get_model(application.heartbeat_publisher.Heartbeat)
+                os.getpid() & (2 ** min(pyuavcan.dsdl.get_model(heartbeat_publisher.Heartbeat)
                                         ['vendor_specific_status_code'].data_type.bit_length_set) - 1)
             )
             _logger.debug('Node heartbeat: %r', node.heartbeat_publisher.make_message())

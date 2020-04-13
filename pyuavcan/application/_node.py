@@ -9,6 +9,8 @@ import logging
 import uavcan.node
 import pyuavcan
 import pyuavcan.application
+import pyuavcan.application.heartbeat_publisher
+import pyuavcan.application.diagnostic
 
 
 NodeInfo = uavcan.node.GetInfo_1_0.Response
@@ -25,6 +27,11 @@ class Node:
     to node info requests ``uavcan.node.GetInfo``.
 
     Start the instance when initialization is finished by invoking :meth:`start`.
+
+    This class automatically instantiates the following application-level function implementations:
+
+    - :class:`pyuavcan.application.heartbeat_publisher.HeartbeatPublisher` (see :attr:`heartbeat_publisher`).
+    - :class:`pyuavcan.application.diagnostic.DiagnosticSubscriber`.
     """
 
     def __init__(self,
@@ -41,6 +48,7 @@ class Node:
         self._presentation = presentation
         self._info = info
         self._heartbeat_publisher = pyuavcan.application.heartbeat_publisher.HeartbeatPublisher(self._presentation)
+        self._diagnostic_subscriber = pyuavcan.application.diagnostic.DiagnosticSubscriber(self._presentation)
         self._srv_info = self._presentation.get_server_with_fixed_service_id(uavcan.node.GetInfo_1_0)
         self._started = False
 
@@ -68,6 +76,7 @@ class Node:
         if not self._started:
             self._srv_info.serve_in_background(self._handle_get_info_request)
             self._heartbeat_publisher.start()
+            self._diagnostic_subscriber.start()
             self._started = True
 
     def close(self) -> None:
@@ -77,6 +86,7 @@ class Node:
         """
         try:
             self._heartbeat_publisher.close()
+            self._diagnostic_subscriber.close()
             self._srv_info.close()
         finally:
             self._presentation.close()
