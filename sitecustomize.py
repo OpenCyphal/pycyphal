@@ -9,7 +9,7 @@ import sys
 import pathlib
 
 own_path = pathlib.Path(__file__).absolute()
-print(f'  LOADING {own_path}  '.center(80, '-'), file=sys.stderr)
+print(f'PROFILING {sys.argv[0]} with {own_path}', file=sys.stderr)
 
 try:
     import coverage  # The module may be missing during early stage setup, no need to abort everything.
