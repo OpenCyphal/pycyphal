@@ -396,3 +396,5 @@ def _unittest_output_session() -> None:
                      fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
             loop.time() + 10.0
         ))
+
+    sock_rx.close()

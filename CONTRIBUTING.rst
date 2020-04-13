@@ -187,6 +187,9 @@ The scanner should not be run before the full general test suite since it relies
 
 When writing tests, aim to cover at least 90% of branches, excepting the DSDL generated packages (at least for now)
 (the DSDL test data is synthesized at run time).
+Ensure that your tests do not emit any errors or warnings into the CLI output upon successful execution,
+because that may distract the developer from noticing true abnormalities
+(you may use ``caplog.at_level('CRITICAL')`` to suppress undesirable output).
 
 Write unit tests as functions without arguments prefixed with ``_unittest_``;
 optionally, for slow test functions use the prefix ``_unittest_slow_``.

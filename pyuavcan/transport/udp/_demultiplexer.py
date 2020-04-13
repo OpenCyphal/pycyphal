@@ -234,7 +234,7 @@ class UDPDemultiplexer:
         return pyuavcan.util.repr_attributes_noexcept(self, self._sock, remote_node_ids=list(self._listeners.keys()))
 
 
-def _unittest_demultiplexer() -> None:
+def _unittest_demultiplexer(caplog: typing.Any) -> None:
     from pytest import raises
     from pyuavcan.transport import Priority, Timestamp
 
@@ -453,18 +453,18 @@ def _unittest_demultiplexer() -> None:
     assert sock_rx.fileno() < 0, 'The socket has not been closed'
 
     # SOCKET FAILURE
-    sock_rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock_rx.bind(('127.100.0.100', 0))
-    stats = UDPDemultiplexerStatistics()
-    demux = UDPDemultiplexer(sock=sock_rx,
-                             udp_mtu=10240,
-                             node_id_mapper=node_id_map.get,
-                             local_node_id=1234,
-                             statistics=stats,
-                             loop=loop)
-    _logger.error("DON'T PANIC: THE ERROR MESSAGE YOU ARE GOING TO SEE JUST BELOW THIS ONE IS EXPECTED")
-    # noinspection PyProtectedMember
-    demux._sock.close()
-    run_until_complete(asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
-    # noinspection PyProtectedMember
-    assert demux._closed
+    with caplog.at_level(logging.CRITICAL, logger=__name__):
+        sock_rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock_rx.bind(('127.100.0.100', 0))
+        stats = UDPDemultiplexerStatistics()
+        demux = UDPDemultiplexer(sock=sock_rx,
+                                 udp_mtu=10240,
+                                 node_id_mapper=node_id_map.get,
+                                 local_node_id=1234,
+                                 statistics=stats,
+                                 loop=loop)
+        # noinspection PyProtectedMember
+        demux._sock.close()
+        run_until_complete(asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
+        # noinspection PyProtectedMember
+        assert demux._closed

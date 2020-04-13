@@ -16,7 +16,8 @@ _logger = logging.getLogger(__name__)
 
 # noinspection PyProtectedMember
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
+                                      caplog: typing.Any) -> None:
     from . import get_transport
     from pyuavcan.presentation import Presentation
     from pyuavcan.application.node_tracker import NodeTracker, Entry, GetInfo, Heartbeat
@@ -49,30 +50,34 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         assert pytest.approx(trk.get_info_timeout) == 1.0
         assert trk.get_info_attempts == 2
 
-        trk.add_update_handler(faulty_handler)
-        trk.add_update_handler(simple_handler)
+        with caplog.at_level(logging.CRITICAL, logger=pyuavcan.application.node_tracker.__name__):
+            trk.add_update_handler(faulty_handler)
+            trk.add_update_handler(simple_handler)
 
-        trk.start()
-        trk.start()  # Idempotency
+            trk.start()
+            trk.start()  # Idempotency
 
-        await asyncio.sleep(1)
-        assert not last_update_args
-        assert not trk.registry
+            await asyncio.sleep(1)
+            assert not last_update_args
+            assert not trk.registry
 
-        # Bring the first node online and make sure it is detected and reported.
-        hb_a = asyncio.create_task(_publish_heartbeat(p_a, 0xdead))
-        await asyncio.sleep(2.5)
-        assert len(last_update_args) == 1
-        assert last_update_args[0][0] == 0xA
-        assert last_update_args[0][1] is None
-        assert last_update_args[0][2] is not None
-        assert last_update_args[0][2].heartbeat.uptime == 0
-        assert last_update_args[0][2].heartbeat.vendor_specific_status_code == 0xdead
-        last_update_args.clear()
-        assert list(trk.registry.keys()) == [0xA]
-        assert 3 >= trk.registry[0xA].heartbeat.uptime >= 2
-        assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xdead
-        assert trk.registry[0xA].info is None
+            # Bring the first node online and make sure it is detected and reported.
+            hb_a = asyncio.create_task(_publish_heartbeat(p_a, 0xdead))
+            await asyncio.sleep(2.5)
+            assert len(last_update_args) == 1
+            assert last_update_args[0][0] == 0xA
+            assert last_update_args[0][1] is None
+            assert last_update_args[0][2] is not None
+            assert last_update_args[0][2].heartbeat.uptime == 0
+            assert last_update_args[0][2].heartbeat.vendor_specific_status_code == 0xdead
+            last_update_args.clear()
+            assert list(trk.registry.keys()) == [0xA]
+            assert 3 >= trk.registry[0xA].heartbeat.uptime >= 2
+            assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xdead
+            assert trk.registry[0xA].info is None
+
+            # Remove the faulty handler -- no point keeping the noise in the log.
+            trk.remove_update_handler(faulty_handler)
 
         # Bring the second node online and make sure it is detected and reported.
         hb_b = asyncio.create_task(_publish_heartbeat(p_b, 0xbeef))
@@ -91,9 +96,6 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         assert 3 >= trk.registry[0xB].heartbeat.uptime >= 2
         assert trk.registry[0xB].heartbeat.vendor_specific_status_code == 0xbeef
         assert trk.registry[0xB].info is None
-
-        # Remove the faulty handler -- no point keeping the noise in the log.
-        trk.remove_update_handler(faulty_handler)
 
         # Enable get info servers. They will not be queried yet because the tracker node is anonymous.
         _serve_get_info(p_a, 'node-A')

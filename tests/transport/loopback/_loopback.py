@@ -7,6 +7,7 @@
 import time
 import typing
 import asyncio
+import logging
 import pytest
 
 import pyuavcan.transport
@@ -14,7 +15,7 @@ import pyuavcan.transport.loopback
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_loopback_transport() -> None:
+async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     tr = pyuavcan.transport.loopback.LoopbackTransport(None)
     protocol_params = pyuavcan.transport.ProtocolParameters(
         transfer_id_modulo=32,
@@ -128,20 +129,21 @@ async def _unittest_loopback_transport() -> None:
         payload_bytes=len('Hello world!'),
     )
 
-    out_bc.exception = RuntimeError('INTENDED EXCEPTION')
-    with pytest.raises(ValueError):
-        # noinspection PyTypeHints
-        out_bc.exception = 123  # type: ignore
-    with pytest.raises(RuntimeError, match='INTENDED EXCEPTION'):
-        assert await out_bc.send_until(pyuavcan.transport.Transfer(
-            timestamp=pyuavcan.transport.Timestamp.now(),
-            priority=pyuavcan.transport.Priority.IMMEDIATE,
-            transfer_id=123,        # mod 32 = 27
-            fragmented_payload=[memoryview(b'Hello world!')],
-        ), tr.loop.time() + 1.0)
-    assert isinstance(out_bc.exception, RuntimeError)
-    out_bc.exception = None
-    assert out_bc.exception is None
+    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.loopback.__name__):
+        out_bc.exception = RuntimeError('INTENDED EXCEPTION')
+        with pytest.raises(ValueError):
+            # noinspection PyTypeHints
+            out_bc.exception = 123  # type: ignore
+        with pytest.raises(RuntimeError, match='INTENDED EXCEPTION'):
+            assert await out_bc.send_until(pyuavcan.transport.Transfer(
+                timestamp=pyuavcan.transport.Timestamp.now(),
+                priority=pyuavcan.transport.Priority.IMMEDIATE,
+                transfer_id=123,        # mod 32 = 27
+                fragmented_payload=[memoryview(b'Hello world!')],
+            ), tr.loop.time() + 1.0)
+        assert isinstance(out_bc.exception, RuntimeError)
+        out_bc.exception = None
+        assert out_bc.exception is None
 
     assert None is await inp_42.receive_until(0)
 
