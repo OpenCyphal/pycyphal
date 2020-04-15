@@ -1,12 +1,14 @@
 <component name="ProjectDictionaryState">
   <dictionary name="pavel">
     <words>
+      <w>aabbccddeeff</w>
       <w>abcd</w>
       <w>abcde</w>
       <w>abcdefghi</w>
       <w>abstractmethods</w>
       <w>aega</w>
       <w>afdx</w>
+      <w>allocatee</w>
       <w>antipattern</w>
       <w>apidoc</w>
       <w>appveyor</w>
@@ -35,6 +37,7 @@
       <w>cyber</w>
       <w>datagrams</w>
       <w>dcabf</w>
+      <w>deadbeefdeadbeefdeadbeefdeadbeef</w>
       <w>deallocated</w>
       <w>debian</w>
       <w>decaxta</w>
@@ -124,6 +127,7 @@
       <w>prog</w>
       <w>protip</w>
       <w>pycodestyle</w>
+      <w>pydev</w>
       <w>pydsdl</w>
       <w>pydsdlgen</w>
       <w>pylint</w>
