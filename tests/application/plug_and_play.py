@@ -23,12 +23,9 @@ _logger = logging.getLogger(__name__)
 @pytest.mark.parametrize('mtu', [8, 16, 20, 64])  # type: ignore
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_plug_and_play_centralized(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
-                                                   caplog: typing.Any,
                                                    mtu: int) -> None:
     from pyuavcan.application.plug_and_play import CentralizedAllocator, Allocatee
-
     assert generated_packages
-    assert caplog
 
     peers: typing.Set[MockMedia] = set()
     pres_client = Presentation(CANTransport(MockMedia(peers, mtu, 1), None))
@@ -105,9 +102,10 @@ async def _unittest_slow_plug_and_play_centralized(generated_packages: typing.Li
 
 
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_plug_and_play_allocatee(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
-                                                 caplog: typing.Any) -> None:
+async def _unittest_slow_plug_and_play_allocatee(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) \
+        -> None:
     from pyuavcan.application.plug_and_play import Allocatee, NodeIDAllocationData_2, ID
+    assert generated_packages
 
     peers: typing.Set[MockMedia] = set()
     pres_client = Presentation(CANTransport(MockMedia(peers, 64, 1), None))

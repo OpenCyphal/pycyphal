@@ -24,7 +24,6 @@ from uavcan.pnp import NodeIDAllocationData_1_0 as NodeIDAllocationData_1
 from uavcan.pnp import NodeIDAllocationData_2_0 as NodeIDAllocationData_2
 from uavcan.node import ID_1_0 as ID
 import pyuavcan
-from pyuavcan.transport.commons.crc import CRC64WE
 
 
 _PSEUDO_UNIQUE_ID_MASK = \
@@ -453,5 +452,6 @@ def _make_pseudo_unique_id(unique_id: bytes) -> int:
     """
     The recommended mapping function from unique-ID to pseudo unique-ID.
     """
+    from pyuavcan.transport.commons.crc import CRC64WE
     assert isinstance(unique_id, bytes) and len(unique_id) == _UNIQUE_ID_SIZE_BYTES
     return int(CRC64WE.new(unique_id).value & _PSEUDO_UNIQUE_ID_MASK)
