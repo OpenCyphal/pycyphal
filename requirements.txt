@@ -11,7 +11,7 @@
 
 # Testing.
 pytest          ~= 4.6
-pytest-asyncio  >= 0.10, < 2.0
+pytest-asyncio  == 0.10
 coverage        ~= 5.0
 
 # Static analysis. PyLint is needed for the SonarQube scanner.
