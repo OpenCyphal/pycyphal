@@ -122,6 +122,6 @@ Now let's publish temperature:
 
 .. code-block:: sh
 
-    uvc pub 12345.uavcan.si.temperature.Scalar.1.0 '{kelvin: 123.456}' --count=2
+    uvc pub 12345.uavcan.si.sample.temperature.Scalar.1.0 '{kelvin: 123.456}' --count=2
 
 You will see the demo application emit two more diagnostic messages.
