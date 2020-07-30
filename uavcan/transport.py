@@ -423,7 +423,7 @@ class ArrayValue(BaseValue, MutableSequence):
         else:
             del self[:]
             count_width = array_len_bits_from_max_size(self._type.max_size)
-            count = int(stream[0:count_width], 2)
+            count = int(be_from_le_bits(stream[0:count_width], count_width), 2)
             stream = stream[count_width:]
             for _, last, i in enum_mark_last(range(count)):
                 new_item = self.__item_ctor()
@@ -445,7 +445,7 @@ class ArrayValue(BaseValue, MutableSequence):
 
         else:
             count_width = array_len_bits_from_max_size(self._type.max_size)
-            count = format(len(self), '0{0:1d}b'.format(count_width))
+            count = le_from_be_bits(format(len(self), '0{0:1d}b'.format(count_width)), count_width)
             return count + ''.join(i._pack(tao and last) for _, last, i in enum_mark_last(self.__items))
 
     def from_bytes(self, value):
