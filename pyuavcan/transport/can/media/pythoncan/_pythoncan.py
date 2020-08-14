@@ -24,10 +24,14 @@ _logger = logging.getLogger(__name__)
 class PythonCANMedia(_media.Media):
     """
     A media interface adapter for `python-can <https://github.com/hardbyte/python-can>`_.
-      * Usage example for PCAN-USB channel 1 (bitrate = 500k, mtu = 8, Node-ID = 10): 
-          --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan','PCAN_USBBUS1',5000000,8),10)"
-      * Usage example for Kvaser channel 0 (bitrate = 500k, mtu = 8, Node-ID = 10): 
-          --tr="CAN(can.media.pythoncan.PythonCANMedia('kvaser','0',5000000,8),10)"
+
+    - Usage example for PCAN-USB channel 1 (bitrate = 500k, mtu = 8, Node-ID = 10)::
+
+        --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan','PCAN_USBBUS1',5000000,8),10)"
+
+    - Usage example for Kvaser channel 0 (bitrate = 500k, mtu = 8, Node-ID = 10)::
+
+        --tr="CAN(can.media.pythoncan.PythonCANMedia('kvaser','0',5000000,8),10)"
     """
 
     def __init__(self, iface_name: str, channel_name: str, bitrate: int, mtu: int) -> None:
