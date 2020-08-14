@@ -113,7 +113,7 @@ class PythonCANMedia(_media.Media):
         self._closed = True
         try:
             self._bus.shutdown()
-        except:
+        except Exception:
             _logger.exception('Bus closing error')
 
     @staticmethod
