@@ -118,7 +118,7 @@ class PythonCANMedia(_media.Media):
 
     @staticmethod
     def list_available_interface_names() -> typing.Iterable[str]:
-        return ['No support is possible now']
+        return []  # No support is possible now
 
     def _thread_function(self, handler: _media.Media.ReceivedFramesHandler) -> None:
         def handler_wrapper(frs: typing.Sequence[_media.TimestampedDataFrame]) -> None:
