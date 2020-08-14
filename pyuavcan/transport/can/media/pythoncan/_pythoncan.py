@@ -46,7 +46,7 @@ class PythonCANMedia(_media.Media):
         self._loopback_enabled = False
         self._bus = can.ThreadSafeBus(interface=iface_name, channel=channel_name, bitrate=bitrate)
         self._loopback_lock = threading.RLock()
-        self._loop_frames = []
+        self._loop_frames: typing.List[_media.DataFrame] = []
         super(PythonCANMedia, self).__init__()
 
     @property
