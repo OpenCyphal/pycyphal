@@ -13,7 +13,7 @@ import asyncio
 import concurrent.futures
 import logging
 import threading
-import can
+import can  # type: ignore
 import pyuavcan.transport
 import pyuavcan.transport.can.media as _media
 
