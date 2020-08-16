@@ -26,11 +26,8 @@ class PythonCANMedia(_media.Media):
     A media interface adapter for `python-can <https://github.com/hardbyte/python-can>`_.
 
     - Usage example for PCAN-USB channel 1 (bitrate = 500k, mtu = 8, Node-ID = 10)::
-
         --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan','PCAN_USBBUS1',5000000,8),10)"
-
     - Usage example for Kvaser channel 0 (bitrate = 500k, mtu = 8, Node-ID = 10)::
-
         --tr="CAN(can.media.pythoncan.PythonCANMedia('kvaser','0',5000000,8),10)"
     """
 
@@ -90,9 +87,10 @@ class PythonCANMedia(_media.Media):
             filters.append(f_dict)
         _logger.info('Acceptance filters activated: %s', ', '.join(map(str, configuration)))
         self._bus.set_filters(filters)
-                        
-    def send_msg(self, msg: can.Message) -> None:
+"""
+    def _send_msg(self, msg: can.Message) -> None:
         self._bus.send(msg, timeout=0.1)    # 0.1s to send CAN packet
+"""
 
     async def send_until(self, frames: typing.Iterable[_media.DataFrame], monotonic_deadline: float) -> int:
         num_sent = 0
@@ -106,7 +104,7 @@ class PythonCANMedia(_media.Media):
                 with self._loopback_lock:
                     self._loop_frames.append(f)
             try:
-                await self._loop.run_in_executor(self._background_executor, self.send_msg, message)
+                await self._loop.run_in_executor(self._background_executor, lambda: self._bus.send(message, timeout=monotonic_deadline - self._loop.time()))
             except asyncio.TimeoutError:
                 break
             else:
@@ -142,12 +140,12 @@ class PythonCANMedia(_media.Media):
                 if len(self._loop_frames) > 0:
                     with self._loopback_lock:
                         for frame in self._loop_frames:
-                          loop_ts = pyuavcan.transport.Timestamp(system_ns=time.time_ns(), monotonic_ns=time.monotonic_ns())
-                          frames.append(_media.TimestampedDataFrame(identifier=frame.identifier,
-                                               data=frame.data,
-                                               format=frame.format,
-                                               loopback=frame.loopback,
-                                               timestamp=loop_ts))
+                            loop_ts = pyuavcan.transport.Timestamp(system_ns=time.time_ns(), monotonic_ns=time.monotonic_ns())
+                            frames.append(_media.TimestampedDataFrame(identifier=frame.identifier,
+                                          data=frame.data,
+                                          format=frame.format,
+                                          loopback=frame.loopback,
+                                          timestamp=loop_ts))
                         self._loop_frames.clear()
                 if len(frames) > 0:
                     self._loop.call_soon_threadsafe(handler_wrapper, frames)
@@ -174,14 +172,14 @@ class PythonCANMedia(_media.Media):
                 out = self._parse_native_frame(msg, loopback=loopback, timestamp=timestamp)
                 if out is not None:
                     return out
-                
+
     @staticmethod
     def _parse_native_frame(msg: can.Message,
                             loopback: bool,
                             timestamp: pyuavcan.transport.Timestamp) \
             -> typing.Optional[_media.TimestampedDataFrame]:
         if (msg.error_state_indicator == True) or (msg.is_error_frame == True):  # error frame, ignore silently
-            _logger.debug('Frame dropped: id_raw=%08x', ident_raw)
+            _logger.debug('Frame dropped: id_raw=%08x', msg.arbitration_id)
             return None
         frame_format = _media.FrameFormat.EXTENDED if msg.is_extended_id else _media.FrameFormat.BASE
         data = msg.data
@@ -189,7 +187,7 @@ class PythonCANMedia(_media.Media):
                                            data=data,
                                            format=frame_format,
                                            loopback=loopback,
-                                           timestamp=timestamp)                
+                                           timestamp=timestamp)
 
     def _set_loopback_enabled(self, enable: bool) -> None:
         # it do nothing at the moment
