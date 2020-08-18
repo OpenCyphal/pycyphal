@@ -26,22 +26,64 @@ class PythonCANMedia(_media.Media):
     A media interface adapter for `python-can <https://github.com/hardbyte/python-can>`_.
 
     - Usage example for PCAN-USB channel 1 (bitrate = 500k, mtu = 8, Node-ID = 10)::
-        --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan','PCAN_USBBUS1',5000000,8),10)"
+        --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',5000000,8),10)"
+    - Usage example for PCAN-USB channel 1 (nom.bitrate = 500k, data.bitrate = 2M, mtu = 8, Node-ID = 10)::
+        --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',[5000000,2000000],8),10)"
     - Usage example for Kvaser channel 0 (bitrate = 500k, mtu = 8, Node-ID = 10)::
-        --tr="CAN(can.media.pythoncan.PythonCANMedia('kvaser','0',5000000,8),10)"
+        --tr="CAN(can.media.pythoncan.PythonCANMedia('kvaser:0',5000000,8),10)"
     """
 
-    def __init__(self, iface_name: str, channel_name: str, bitrate: int, mtu: int) -> None:
+    VALID_FD_ADAPTER_SET = {'pcan', 'kvaser'}
+
+    def __init__(self, iface_name: str, bitrate: typing.Union[int, typing.Tuple[int, int]], mtu: int) -> None:
         self._iface_name = str(iface_name)
-        self._channel_name = str(channel_name)
+        self._conn_name = self._iface_name.split(':')
+        if len(self._conn_name) != 2:
+            raise RuntimeError('Wrong interface name format')
+        if mtu not in self.VALID_MTU_SET:
+            raise RuntimeError('Wrong MTU value: {}'.format(mtu))
         self._mtu = int(mtu)
-        self._is_fd = self._mtu > _NativeFrameDataCapacity.CAN_CLASSIC
+        self._is_fd = self._mtu > min(self.VALID_MTU_SET) or type(bitrate) != int
         self._loop = asyncio.get_event_loop()
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
         self._loopback_enabled = False
-        self._bus = can.ThreadSafeBus(interface=iface_name, channel=channel_name, bitrate=bitrate)
+        if type(bitrate) != int:
+            nom_br = int(bitrate[0])
+            data_br = int(bitrate[1])
+        else:
+            nom_br = int(bitrate)
+            data_br = int(bitrate)
+        if self._is_fd == False:
+            #
+            self._bus = can.ThreadSafeBus(interface=self._conn_name[0], channel=self._conn_name[1], bitrate=nom_br)
+        elif self._conn_name[0] == 'pcan':
+            f_clock = 40000000
+            nom_tseg1, nom_tseg2, nom_sjw = 3, 1, 1
+            data_tseg1, data_tseg2, data_sjw = 3, 1, 1
+            nom_br = int(f_clock / nom_br / (nom_tseg1 + nom_tseg2 + nom_sjw))
+            data_br = int(f_clock / data_br / (data_tseg1 + data_tseg2 + data_sjw))
+            self._bus = can.ThreadSafeBus(interface=self._conn_name[0],
+                                          channel=self._conn_name[1],
+                                          f_clock=f_clock,
+                                          nom_brp=nom_br,
+                                          data_brp=data_br,
+                                          nom_tseg1=nom_tseg1,
+                                          nom_tseg2=nom_tseg2,
+                                          nom_sjw=nom_sjw,
+                                          data_tseg1=data_tseg1,
+                                          data_tseg2=data_tseg2,
+                                          data_sjw=data_sjw,
+                                          fd=True)
+        elif self._conn_name[0] == 'kvaser':
+            self._bus = can.ThreadSafeBus(interface=self._conn_name[0],
+                                          channel=self._conn_name[1],
+                                          bitrate=nom_br,
+                                          data_bitrate=data_br)
+        else:
+            #have to define other adapters here, not every adapter supports CAN FD!
+            raise RuntimeError('Interface doesn\'t support CAN FD: {}'.format(self._conn_name[0]))
         self._loopback_lock = threading.RLock()
         self._loop_frames: typing.List[_media.DataFrame] = []
         super(PythonCANMedia, self).__init__()
@@ -61,7 +103,7 @@ class PythonCANMedia(_media.Media):
     @property
     def number_of_acceptance_filters(self) -> int:
         #just a placeholder to avoid error
-        return 16
+        return 1
 
     def start(self, handler: _media.Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._maybe_thread is None:
@@ -87,10 +129,6 @@ class PythonCANMedia(_media.Media):
             filters.append(f_dict)
         _logger.info('Acceptance filters activated: %s', ', '.join(map(str, configuration)))
         self._bus.set_filters(filters)
-"""
-    def _send_msg(self, msg: can.Message) -> None:
-        self._bus.send(msg, timeout=0.1)    # 0.1s to send CAN packet
-"""
 
     async def send_until(self, frames: typing.Iterable[_media.DataFrame], monotonic_deadline: float) -> int:
         num_sent = 0
@@ -98,7 +136,6 @@ class PythonCANMedia(_media.Media):
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(repr(self))
             self._set_loopback_enabled(f.loopback)
-            # check settings for CAN FD, not implemented yet!
             message = can.Message(arbitration_id=f.identifier, is_extended_id=True, data=f.data, is_fd=self._is_fd)
             if f.loopback == True:
                 with self._loopback_lock:
@@ -107,6 +144,8 @@ class PythonCANMedia(_media.Media):
                 await self._loop.run_in_executor(self._background_executor, lambda: self._bus.send(message, timeout=monotonic_deadline - self._loop.time()))
             except asyncio.TimeoutError:
                 break
+            except:
+                _logger.exception('Can\'t send message: {}'.format(message))
             else:
                 num_sent += 1
         return num_sent
