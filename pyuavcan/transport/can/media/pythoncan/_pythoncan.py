@@ -49,7 +49,7 @@ class PythonCANMedia(_media.Media):
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
         self._loopback_enabled = False
-        if type(bitrate) != int:
+        if not isinstance(bitrate, int):
             nom_br = int(bitrate[0])
             data_br = int(bitrate[1])
         else:
