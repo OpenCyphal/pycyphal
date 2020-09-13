@@ -219,7 +219,7 @@ class PythonCANMedia(_media.Media):
                             loopback: bool,
                             timestamp: pyuavcan.transport.Timestamp) \
             -> typing.Optional[_media.TimestampedDataFrame]:
-        if (msg.error_state_indicator == True) or (msg.is_error_frame == True):  # error frame, ignore silently
+        if msg.is_error_frame:  # error frame, ignore silently
             _logger.debug('Frame dropped: id_raw=%08x', msg.arbitration_id)
             return None
         frame_format = _media.FrameFormat.EXTENDED if msg.is_extended_id else _media.FrameFormat.BASE
