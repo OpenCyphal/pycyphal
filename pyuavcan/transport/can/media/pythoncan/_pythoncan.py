@@ -231,8 +231,3 @@ class PythonCANMedia(_media.Media):
         # it do nothing at the moment
         if enable != self._loopback_enabled:
             self._loopback_enabled = enable
-
-
-class _NativeFrameDataCapacity(enum.IntEnum):
-    CAN_CLASSIC = 8
-    CAN_FD = 64
