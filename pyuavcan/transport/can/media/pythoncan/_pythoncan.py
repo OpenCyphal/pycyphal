@@ -180,10 +180,10 @@ class PythonCANMedia(_media.Media):
                         for frame in self._loop_frames:
                             loop_ts = pyuavcan.transport.Timestamp(system_ns=time.time_ns(), monotonic_ns=time.monotonic_ns())
                             frames.append(_media.TimestampedDataFrame(identifier=frame.identifier,
-                                          data=frame.data,
-                                          format=frame.format,
-                                          loopback=frame.loopback,
-                                          timestamp=loop_ts))
+                                                                      data=frame.data,
+                                                                      format=frame.format,
+                                                                      loopback=frame.loopback,
+                                                                      timestamp=loop_ts))
                         self._loop_frames.clear()
                 if len(frames) > 0:
                     self._loop.call_soon_threadsafe(handler_wrapper, frames)
