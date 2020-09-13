@@ -55,8 +55,7 @@ class PythonCANMedia(_media.Media):
         else:
             nom_br = int(bitrate)
             data_br = int(bitrate)
-        if self._is_fd == False:
-            #
+        if not self._is_fd:
             self._bus = can.ThreadSafeBus(interface=self._conn_name[0], channel=self._conn_name[1], bitrate=nom_br)
         elif self._conn_name[0] == 'pcan':
             f_clock = 40000000
