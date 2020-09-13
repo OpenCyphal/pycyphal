@@ -39,7 +39,9 @@ class PythonCANMedia(_media.Media):
         self._iface_name = str(iface_name)
         self._conn_name = self._iface_name.split(':')
         if len(self._conn_name) != 2:
-            raise RuntimeError('Wrong interface name format')
+            raise pyuavcan.transport.InvalidMediaConfigurationError(
+                "Interface name %r does not match the format 'interface:channel'" % self._iface_name
+            )
         if mtu not in self.VALID_MTU_SET:
             raise RuntimeError('Wrong MTU value: {}'.format(mtu))
         self._mtu = int(mtu)
