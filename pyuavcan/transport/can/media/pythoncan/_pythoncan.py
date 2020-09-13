@@ -148,8 +148,6 @@ class PythonCANMedia(_media.Media):
                 )
             except asyncio.TimeoutError:
                 break
-            except:
-                _logger.exception('Can\'t send message: {}'.format(message))
             else:
                 num_sent += 1
         return num_sent
