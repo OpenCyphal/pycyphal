@@ -140,7 +140,10 @@ class PythonCANMedia(_media.Media):
                 with self._loopback_lock:
                     self._loop_frames.append(f)
             try:
-                await self._loop.run_in_executor(self._background_executor, lambda: self._bus.send(message, timeout=monotonic_deadline - self._loop.time()))
+                await self._loop.run_in_executor(
+                    self._background_executor,
+                    lambda: self._bus.send(message, timeout=monotonic_deadline - self._loop.time()),
+                )
             except asyncio.TimeoutError:
                 break
             except:
