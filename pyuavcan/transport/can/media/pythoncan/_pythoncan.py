@@ -26,10 +26,13 @@ class PythonCANMedia(_media.Media):
     A media interface adapter for `python-can <https://github.com/hardbyte/python-can>`_.
 
     - Usage example for PCAN-USB channel 1 (bitrate = 500k, mtu = 8, Node-ID = 10)::
+    
         --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',5000000,8),10)"
     - Usage example for PCAN-USB channel 1 (nom.bitrate = 500k, data.bitrate = 2M, mtu = 8, Node-ID = 10)::
+    
         --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',[5000000,2000000],8),10)"
     - Usage example for Kvaser channel 0 (bitrate = 500k, mtu = 8, Node-ID = 10)::
+    
         --tr="CAN(can.media.pythoncan.PythonCANMedia('kvaser:0',5000000,8),10)"
     """
 
