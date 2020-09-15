@@ -27,13 +27,13 @@ class PythonCANMedia(_media.Media):
 
     - Usage example for PCAN-USB channel 1 (bitrate = 500k, mtu = 8, Node-ID = 10)::
     
-        --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',5000000,8),10)"
+        CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',5000000,8),10)
     - Usage example for PCAN-USB channel 1 (nom.bitrate = 500k, data.bitrate = 2M, mtu = 8, Node-ID = 10)::
     
-        --tr="CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',[5000000,2000000],8),10)"
+        CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',[5000000,2000000],8),10)
     - Usage example for Kvaser channel 0 (bitrate = 500k, mtu = 8, Node-ID = 10)::
     
-        --tr="CAN(can.media.pythoncan.PythonCANMedia('kvaser:0',5000000,8),10)"
+        CAN(can.media.pythoncan.PythonCANMedia('kvaser:0',5000000,8),10)
     """
 
     VALID_FD_ADAPTER_SET = {'pcan', 'kvaser'}
