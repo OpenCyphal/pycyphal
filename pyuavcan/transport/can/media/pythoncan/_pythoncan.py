@@ -106,7 +106,7 @@ class PythonCANMedia(_media.Media):
 
     @property
     def number_of_acceptance_filters(self) -> int:
-        #just a placeholder to avoid error
+        # TODO: obtain the correct value from the adapter.
         return 1
 
     def start(self, handler: _media.Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
