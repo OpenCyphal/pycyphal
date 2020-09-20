@@ -16,9 +16,129 @@ import threading
 import can  # type: ignore
 import pyuavcan.transport
 import pyuavcan.transport.can.media as _media
+import dataclasses
+import collections
 
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass(frozen=True)
+class _InterfaceParameters:
+    interface_name: str
+    channel_name:   str
+
+
+@dataclasses.dataclass(frozen=True)
+class _ClassicInterfaceParameters(_InterfaceParameters):
+    bitrate: int
+
+
+@dataclasses.dataclass(frozen=True)
+class _FDInterfaceParameters(_InterfaceParameters):
+    bitrate: typing.Tuple[int, int]
+
+
+def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name,
+                                 channel=parameters.channel_name,
+                                 fd=False)    
+    elif isinstance(parameters, _FDInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name,
+                                 channel=parameters.channel_name,
+                                 fd=True)    
+    else:
+        raise TypeError(f'Invalid parameters: {parameters}')   
+
+
+def _construct_kvaser(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name,
+                                 channel=parameters.channel_name,
+                                 bitrate=parameters.bitrate,
+                                 fd=False)
+    elif isinstance(parameters, _FDInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name,
+                                 channel=parameters.channel_name,
+                                 bitrate=parameters.bitrate[0],
+                                 fd=True,
+                                 data_bitrate=parameters.bitrate[1])
+    else:
+        raise TypeError(f'Invalid parameters: {parameters}')
+
+
+def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        # only default ttyBaudrate is possible (115200)
+        return can.ThreadSafeBus(interface=parameters.interface_name,
+                                 channel=parameters.channel_name,
+                                 bitrate=parameters.bitrate)
+    elif isinstance(parameters, _FDInterfaceParameters):
+        raise TypeError('Interface does not support CAN FD: {}'.format(parameters.interface_name))
+    else:
+        raise TypeError(f'Invalid parameters: {parameters}')
+
+
+def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name,
+                                 channel=parameters.channel_name,
+                                 bitrate=parameters.bitrate)
+    elif isinstance(parameters, _FDInterfaceParameters):
+        """
+        These magic numbers come from the settings of PCAN adapter.
+        They don't allow any direct baudrate settings, you have to set all lengths and value of the main frequency. 
+        Bit lengths below are very universal and can be applied for almost every popular baudrate. 
+        There is probably a better solution here, but it needs significantly more time to implement it.
+        """
+        f_clock = 40000000
+        nom_tseg1, nom_tseg2, nom_sjw = 3, 1, 1
+        data_tseg1, data_tseg2, data_sjw = 3, 1, 1
+
+        nom_br = int(f_clock / parameters.bitrate[0] / (nom_tseg1 + nom_tseg2 + nom_sjw))
+        data_br = int(f_clock / parameters.bitrate[1] / (data_tseg1 + data_tseg2 + data_sjw))
+        # TODO: validate the result and see if it is within an acceptable range
+        
+        return can.ThreadSafeBus(interface=parameters.interface_name,
+                                 channel=parameters.channel_name,
+                                 f_clock=f_clock,
+                                 nom_brp=nom_br,
+                                 data_brp=data_br,
+                                 nom_tseg1=nom_tseg1,
+                                 nom_tseg2=nom_tseg2,
+                                 nom_sjw=nom_sjw,
+                                 data_tseg1=data_tseg1,
+                                 data_tseg2=data_tseg2,
+                                 data_sjw=data_sjw,
+                                 fd=True)
+    else:
+        raise TypeError(f'Invalid parameters: {parameters}')
+
+
+def _construct_nican(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name,
+                                 channel=parameters.channel_name,
+                                 bitrate=parameters.bitrate)
+    elif isinstance(parameters, _FDInterfaceParameters):
+        raise TypeError('Interface does not support CAN FD: {}'.format(parameters.interface_name))
+    else:
+        raise TypeError(f'Invalid parameters: {parameters}')
+
+
+def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+        raise TypeError('Interface not supported yet: {}'.format(parameters.interface_name))
+
+
+_CONSTRUCTORS: typing.DefaultDict[str, typing.Callable[[_InterfaceParameters],
+                                                       can.ThreadSafeBus]] = collections.defaultdict(
+        lambda: _construct_any, {'socketcan': _construct_socketcan,
+                                 'kvaser':    _construct_kvaser,
+                                 'slcan':     _construct_slcan,
+                                 'pcan':      _construct_pcan,
+                                 'nican':     _construct_nican,}
+    )
 
 
 class PythonCANMedia(_media.Media):
@@ -36,58 +156,47 @@ class PythonCANMedia(_media.Media):
         CAN(can.media.pythoncan.PythonCANMedia('kvaser:0',5000000,8),10)
     """
 
-    VALID_FD_ADAPTER_SET = {'pcan', 'kvaser'}
-
     def __init__(self, iface_name: str, bitrate: typing.Union[int, typing.Tuple[int, int]], mtu: int) -> None:
-        self._iface_name = str(iface_name)
-        self._conn_name = self._iface_name.split(':')
+        """
+        CAN Classic/FD are possible. CAN FD is used if MTU value > 8 or two bitrates are used (nom and data).
+        
+        :param iface_name: Interface name consisting of interface and channel separated with a colon.
+            E.g., ``kvaser:0``.
+
+        :bitrate: bitrate value in bauds. 
+            Single integer for CAN Classic, two values for CAN FD.
+        
+        :param mtu: The maximum data field size in bytes.
+            This value must belong to Media.VALID_MTU_SET.
+
+        """
+        #self._iface_name = str(iface_name)
+        self._conn_name = str(iface_name).split(':')
         if len(self._conn_name) != 2:
             raise pyuavcan.transport.InvalidMediaConfigurationError(
-                "Interface name %r does not match the format 'interface:channel'" % self._iface_name
+                "Interface name %r does not match the format 'interface:channel'" % str(iface_name)#self._iface_name
             )
         if mtu not in self.VALID_MTU_SET:
             raise RuntimeError('Wrong MTU value: {}'.format(mtu))
         self._mtu = int(mtu)
-        self._is_fd = self._mtu > min(self.VALID_MTU_SET) or type(bitrate) != int
         self._loop = asyncio.get_event_loop()
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
-        self._loopback_enabled = False
-        if not isinstance(bitrate, int):
-            nom_br = int(bitrate[0])
-            data_br = int(bitrate[1])
+        bitrate = (int(bitrate), int(bitrate)) if isinstance(bitrate, int) else (int(bitrate[0]), int(bitrate[1]))
+        nom_br = int(bitrate[0])
+        data_br = int(bitrate[1])
+        self._is_fd = self._mtu > min(self.VALID_MTU_SET) or len(set(bitrate)) > 1
+        params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
+        if self._is_fd:
+            params = _FDInterfaceParameters(interface_name=self._conn_name[0],
+                                            channel_name=self._conn_name[1],
+                                            bitrate=bitrate)
         else:
-            nom_br = int(bitrate)
-            data_br = int(bitrate)
-        if not self._is_fd:
-            self._bus = can.ThreadSafeBus(interface=self._conn_name[0], channel=self._conn_name[1], bitrate=nom_br)
-        elif self._conn_name[0] == 'pcan':
-            f_clock = 40000000
-            nom_tseg1, nom_tseg2, nom_sjw = 3, 1, 1
-            data_tseg1, data_tseg2, data_sjw = 3, 1, 1
-            nom_br = int(f_clock / nom_br / (nom_tseg1 + nom_tseg2 + nom_sjw))
-            data_br = int(f_clock / data_br / (data_tseg1 + data_tseg2 + data_sjw))
-            self._bus = can.ThreadSafeBus(interface=self._conn_name[0],
-                                          channel=self._conn_name[1],
-                                          f_clock=f_clock,
-                                          nom_brp=nom_br,
-                                          data_brp=data_br,
-                                          nom_tseg1=nom_tseg1,
-                                          nom_tseg2=nom_tseg2,
-                                          nom_sjw=nom_sjw,
-                                          data_tseg1=data_tseg1,
-                                          data_tseg2=data_tseg2,
-                                          data_sjw=data_sjw,
-                                          fd=True)
-        elif self._conn_name[0] == 'kvaser':
-            self._bus = can.ThreadSafeBus(interface=self._conn_name[0],
-                                          channel=self._conn_name[1],
-                                          bitrate=nom_br,
-                                          data_bitrate=data_br)
-        else:
-            #have to define other adapters here, not every adapter supports CAN FD!
-            raise RuntimeError('Interface doesn\'t support CAN FD: {}'.format(self._conn_name[0]))
+            params = _ClassicInterfaceParameters(interface_name=self._conn_name[0],
+                                                 channel_name=self._conn_name[1],
+                                                 bitrate=bitrate[0])
+        self._bus = _CONSTRUCTORS[self._conn_name[0]](params)
         self._loopback_lock = threading.RLock()
         self._loop_frames: typing.List[_media.DataFrame] = []
         super(PythonCANMedia, self).__init__()
@@ -98,7 +207,7 @@ class PythonCANMedia(_media.Media):
 
     @property
     def interface_name(self) -> str:
-        return self._iface_name
+        return ':'.join(self._conn_name)
 
     @property
     def mtu(self) -> int:
@@ -106,7 +215,7 @@ class PythonCANMedia(_media.Media):
 
     @property
     def number_of_acceptance_filters(self) -> int:
-        # TODO: obtain the correct value from the adapter.
+        #just a placeholder to avoid error
         return 1
 
     def start(self, handler: _media.Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
@@ -134,12 +243,14 @@ class PythonCANMedia(_media.Media):
         _logger.info('Acceptance filters activated: %s', ', '.join(map(str, configuration)))
         self._bus.set_filters(filters)
 
+    def send_msg(self, msg: can.Message, timeout: float) -> None:
+        self._bus.send(msg, timeout=timeout)
+
     async def send_until(self, frames: typing.Iterable[_media.DataFrame], monotonic_deadline: float) -> int:
         num_sent = 0
         for f in frames:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(repr(self))
-            self._set_loopback_enabled(f.loopback)
             message = can.Message(arbitration_id=f.identifier, is_extended_id=True, data=f.data, is_fd=self._is_fd)
             if f.loopback == True:
                 with self._loopback_lock:
@@ -147,7 +258,8 @@ class PythonCANMedia(_media.Media):
             try:
                 await self._loop.run_in_executor(
                     self._background_executor,
-                    lambda: self._bus.send(message, timeout=monotonic_deadline - self._loop.time()),
+                    lambda: self.send_msg(message, timeout=monotonic_deadline - self._loop.time())
+                    #lambda: self._bus.send(message, timeout=monotonic_deadline - self._loop.time())
                 )
             except asyncio.TimeoutError:
                 break
@@ -184,7 +296,7 @@ class PythonCANMedia(_media.Media):
                 if len(self._loop_frames) > 0:
                     with self._loopback_lock:
                         for frame in self._loop_frames:
-                            loop_ts = pyuavcan.transport.Timestamp(system_ns=time.time_ns(), monotonic_ns=time.monotonic_ns())
+                            loop_ts = pyuavcan.transport.Timestamp.now()#(system_ns=time.time_ns(), monotonic_ns=time.monotonic_ns())
                             frames.append(_media.TimestampedDataFrame(identifier=frame.identifier,
                                                                       data=frame.data,
                                                                       format=frame.format,
@@ -232,8 +344,3 @@ class PythonCANMedia(_media.Media):
                                            format=frame_format,
                                            loopback=loopback,
                                            timestamp=timestamp)
-
-    def _set_loopback_enabled(self, enable: bool) -> None:
-        # it do nothing at the moment
-        if enable != self._loopback_enabled:
-            self._loopback_enabled = enable
