@@ -75,7 +75,7 @@ def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
                                  channel=parameters.channel_name,
                                  bitrate=parameters.bitrate)
     elif isinstance(parameters, _FDInterfaceParameters):
-        raise TypeError('Interface does not support CAN FD: {}'.format(parameters.interface_name))
+        raise TypeError(f'Interface does not support CAN FD: {parameters.interface_name}')
     else:
         raise TypeError(f'Invalid parameters: {parameters}')
 
