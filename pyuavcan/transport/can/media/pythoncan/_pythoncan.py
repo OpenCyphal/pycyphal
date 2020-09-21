@@ -297,7 +297,7 @@ class PythonCANMedia(_media.Media):
                 if len(self._loop_frames) > 0:
                     with self._loopback_lock:
                         for frame in self._loop_frames:
-                            loop_ts = pyuavcan.transport.Timestamp.now()#(system_ns=time.time_ns(), monotonic_ns=time.monotonic_ns())
+                            loop_ts = pyuavcan.transport.Timestamp.now()
                             frames.append(_media.TimestampedDataFrame(identifier=frame.identifier,
                                                                       data=frame.data,
                                                                       format=frame.format,
