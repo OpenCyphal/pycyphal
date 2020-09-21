@@ -133,12 +133,15 @@ def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 _CONSTRUCTORS: typing.DefaultDict[str, typing.Callable[[_InterfaceParameters],
                                                        can.ThreadSafeBus]] = collections.defaultdict(
-        lambda: _construct_any, {'socketcan': _construct_socketcan,
-                                 'kvaser':    _construct_kvaser,
-                                 'slcan':     _construct_slcan,
-                                 'pcan':      _construct_pcan,
-                                 'nican':     _construct_nican,}
-    )
+    lambda: _construct_any,
+    {
+        'socketcan': _construct_socketcan,
+        'kvaser':    _construct_kvaser,
+        'slcan':     _construct_slcan,
+        'pcan':      _construct_pcan,
+        'nican':     _construct_nican,
+    }
+)
 
 
 class PythonCANMedia(_media.Media):
