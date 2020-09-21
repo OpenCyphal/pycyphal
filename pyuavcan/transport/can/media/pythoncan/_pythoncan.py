@@ -128,7 +128,7 @@ def _construct_nican(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-        raise TypeError('Interface not supported yet: {}'.format(parameters.interface_name))
+    raise TypeError('Interface not supported yet: {}'.format(parameters.interface_name))
 
 
 _CONSTRUCTORS: typing.DefaultDict[str, typing.Callable[[_InterfaceParameters],
