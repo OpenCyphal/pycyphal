@@ -187,8 +187,6 @@ class PythonCANMedia(_media.Media):
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
         bitrate = (int(bitrate), int(bitrate)) if isinstance(bitrate, int) else (int(bitrate[0]), int(bitrate[1]))
-        nom_br = int(bitrate[0])
-        data_br = int(bitrate[1])
         self._is_fd = self._mtu > min(self.VALID_MTU_SET) or len(set(bitrate)) > 1
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
         if self._is_fd:
