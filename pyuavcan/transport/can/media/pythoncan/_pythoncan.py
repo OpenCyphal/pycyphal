@@ -163,7 +163,7 @@ class PythonCANMedia(_media.Media):
         :param iface_name: Interface name consisting of interface and channel separated with a colon.
             E.g., ``kvaser:0``.
 
-        :bitrate: bitrate value in bauds. 
+        :param bitrate: bitrate value in bauds. 
             Single integer for CAN Classic, two values for CAN FD.
         
         :param mtu: The maximum data field size in bytes.
