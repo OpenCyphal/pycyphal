@@ -81,7 +81,6 @@ extensions = [
     'sphinx.ext.inheritance_diagram',
     'sphinx.ext.graphviz',
     'sphinx_computron',
-    'sphinxemoji.sphinxemoji',
     'ref_fixer_hack',
 ]
 sys.path.append(str(DOC_ROOT))  # This is for the hack to be importable
