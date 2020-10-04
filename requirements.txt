@@ -12,23 +12,22 @@
 # Testing.
 pytest          ~= 4.6
 pytest-asyncio  >= 0.10, < 2.0
-coverage        ~= 5.0
+coverage        ~= 5.3
 
 # Static analysis. PyLint is needed for the SonarQube scanner.
 # Newer versions of MyPy tend to be more useful so the version is not frozen. This may change later.
-mypy        >= 0.770, < 2.0
-pycodestyle ~= 2.5
-pylint      ~= 2.3
+mypy        >= 0.782, < 2.0
+pycodestyle ~= 2.6
+pylint      ~= 2.6
 
 # Documentation. Pending issues with Sphinx (update when resolved):
 #   - https://github.com/sphinx-doc/sphinx/issues/6574
 #   - https://github.com/sphinx-doc/sphinx/issues/6607
 sphinx           == 2.3.1
-sphinx_rtd_theme == 0.4.3
-sphinxemoji      >= 0.1.4
+sphinx_rtd_theme == 0.5.0
 sphinx-computron >= 0.1.0
 
 # Packaging and distribution.
-setuptools >= 40.8
-wheel      >= 0.33, < 2.0
-twine      ~= 1.13
+setuptools >= 46.0
+wheel      >= 0.34, < 2.0
+twine      ~= 3.2
