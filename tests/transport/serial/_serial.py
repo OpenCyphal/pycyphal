@@ -9,13 +9,14 @@ import asyncio
 import xml.etree.ElementTree
 import pytest
 import serial
+import logging
 import pyuavcan.transport
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pyuavcan.transport.serial import SerialTransport, SerialTransportStatistics, SerialFrame
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_serial_transport() -> None:
+async def _unittest_serial_transport(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
     from pyuavcan.transport import ProtocolParameters
@@ -282,37 +283,38 @@ async def _unittest_serial_transport() -> None:
     #
     # Out-of-band data test.
     #
-    stats_reference = tr.sample_statistics()
+    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.serial.__name__):
+        stats_reference = tr.sample_statistics()
 
-    grownups = b"Aren't there any grownups at all? - No grownups!"
+        grownups = b"Aren't there any grownups at all? - No grownups!"
 
-    # The frame delimiter is needed to force new frame in the state machine.
-    tr.serial_port.write(grownups + bytes([SerialFrame.FRAME_DELIMITER_BYTE]))
-    stats_reference.in_bytes += len(grownups) + 1
-    stats_reference.in_out_of_band_bytes += len(grownups)
+        # The frame delimiter is needed to force new frame in the state machine.
+        tr.serial_port.write(grownups + bytes([SerialFrame.FRAME_DELIMITER_BYTE]))
+        stats_reference.in_bytes += len(grownups) + 1
+        stats_reference.in_out_of_band_bytes += len(grownups)
 
-    # Wait for the reader thread to catch up.
-    assert None is await subscriber_selective.receive_until(get_monotonic() + 0.2)
-    assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.2)
-    assert None is await server_listener.receive_until(get_monotonic() + 0.2)
-    assert None is await client_listener.receive_until(get_monotonic() + 0.2)
+        # Wait for the reader thread to catch up.
+        assert None is await subscriber_selective.receive_until(get_monotonic() + 0.2)
+        assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.2)
+        assert None is await server_listener.receive_until(get_monotonic() + 0.2)
+        assert None is await client_listener.receive_until(get_monotonic() + 0.2)
 
-    print(tr.sample_statistics())
-    assert tr.sample_statistics() == stats_reference
+        print(tr.sample_statistics())
+        assert tr.sample_statistics() == stats_reference
 
-    # The frame delimiter is needed to force new frame in the state machine.
-    tr.serial_port.write(bytes([0xFF, 0xFF, SerialFrame.FRAME_DELIMITER_BYTE]))
-    stats_reference.in_bytes += 3
-    stats_reference.in_out_of_band_bytes += 2
+        # The frame delimiter is needed to force new frame in the state machine.
+        tr.serial_port.write(bytes([0xFF, 0xFF, SerialFrame.FRAME_DELIMITER_BYTE]))
+        stats_reference.in_bytes += 3
+        stats_reference.in_out_of_band_bytes += 2
 
-    # Wait for the reader thread to catch up.
-    assert None is await subscriber_selective.receive_until(get_monotonic() + 0.2)
-    assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.2)
-    assert None is await server_listener.receive_until(get_monotonic() + 0.2)
-    assert None is await client_listener.receive_until(get_monotonic() + 0.2)
+        # Wait for the reader thread to catch up.
+        assert None is await subscriber_selective.receive_until(get_monotonic() + 0.2)
+        assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.2)
+        assert None is await server_listener.receive_until(get_monotonic() + 0.2)
+        assert None is await client_listener.receive_until(get_monotonic() + 0.2)
 
-    print(tr.sample_statistics())
-    assert tr.sample_statistics() == stats_reference
+        print(tr.sample_statistics())
+        assert tr.sample_statistics() == stats_reference
 
     #
     # Termination.

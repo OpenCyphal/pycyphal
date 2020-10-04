@@ -20,11 +20,12 @@ from tests.transport.serial import VIRTUAL_BUS_URI as SERIAL_URI
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_redundant_transport(caplog: typing.Any) -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
+    from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
     from pyuavcan.transport import ProtocolParameters
 
     loop = asyncio.get_event_loop()
+    loop.slow_callback_duration = 1.0
 
     tr_a = RedundantTransport()
     tr_b = RedundantTransport(loop)
