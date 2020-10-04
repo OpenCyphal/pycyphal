@@ -63,9 +63,3 @@ p {
 div, section, img {
     background-color: inherit;
 }
-
-.thumby-floaty {
-    float: right;
-    width: 33%;
-    padding: 10px;
-}
