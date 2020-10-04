@@ -27,6 +27,8 @@ async def _unittest_slow_plug_and_play_centralized(generated_packages: typing.Li
     from pyuavcan.application.plug_and_play import CentralizedAllocator, Allocatee
     assert generated_packages
 
+    asyncio.get_running_loop().slow_callback_duration = 1.0
+
     peers: typing.Set[MockMedia] = set()
     pres_client = Presentation(CANTransport(MockMedia(peers, mtu, 1), None))
     pres_server = Presentation(CANTransport(MockMedia(peers, mtu, 1), 123))
@@ -102,10 +104,12 @@ async def _unittest_slow_plug_and_play_centralized(generated_packages: typing.Li
 
 
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_plug_and_play_allocatee(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) \
-        -> None:
+async def _unittest_slow_plug_and_play_allocatee(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
+                                                 caplog: typing.Any) -> None:
     from pyuavcan.application.plug_and_play import Allocatee, NodeIDAllocationData_2, ID
     assert generated_packages
+
+    asyncio.get_running_loop().slow_callback_duration = 1.0
 
     peers: typing.Set[MockMedia] = set()
     pres_client = Presentation(CANTransport(MockMedia(peers, 64, 1), None))
@@ -118,9 +122,10 @@ async def _unittest_slow_plug_and_play_allocatee(generated_packages: typing.List
     await asyncio.sleep(1.0)
     assert allocatee.get_result() is None
 
-    await pub.publish(NodeIDAllocationData_2(ID(999), unique_id=_uid('00112233445566778899aabbccddeeff')))  # Bad NID.
-    await asyncio.sleep(1.0)
-    assert allocatee.get_result() is None
+    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.application.plug_and_play.__name__):  # Bad NID.
+        await pub.publish(NodeIDAllocationData_2(ID(999), unique_id=_uid('00112233445566778899aabbccddeeff')))
+        await asyncio.sleep(1.0)
+        assert allocatee.get_result() is None
 
     await pub.publish(NodeIDAllocationData_2(ID(0), unique_id=_uid('00112233445566778899aabbccddeeff')))  # Correct.
     await asyncio.sleep(1.0)

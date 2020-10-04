@@ -24,6 +24,8 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     import uavcan.diagnostic
     from pyuavcan.transport import Priority
 
+    asyncio.get_running_loop().slow_callback_duration = 1.0
+
     tran_a, tran_b, transmits_anon = transport_factory(None, None)
     assert tran_a.local_node_id is None
     assert tran_b.local_node_id is None
@@ -122,6 +124,8 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     import uavcan.time
     import uavcan.diagnostic
     from pyuavcan.transport import Priority
+
+    asyncio.get_running_loop().slow_callback_duration = 1.0
 
     tran_a, tran_b, _ = transport_factory(123, 42)
     assert tran_a.local_node_id == 123
