@@ -116,9 +116,11 @@ class BackgroundChildProcess:
 
     def interrupt(self) -> None:
         import signal
-        # On Windows, SIGINT is not supported, and CTRL_C_EVENT does nothing.
-        options = [getattr(signal, n, None) for n in ['SIGINT', 'CTRL_BREAK_EVENT']]
-        self._inferior.send_signal(next(x for x in options if x is not None))
+        try:
+            self._inferior.send_signal(signal.SIGINT)
+        except ValueError:  # pragma: no cover
+            # On Windows, SIGINT is not supported, and CTRL_C_EVENT does nothing.
+            self._inferior.send_signal(getattr(signal, 'CTRL_BREAK_EVENT'))
 
     @property
     def pid(self) -> int:
