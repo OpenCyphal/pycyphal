@@ -233,13 +233,8 @@ The presentation layer is the main part of the library API.
 Application layer
 -----------------
 
-The main entity of the application layer is the node class :class:`pyuavcan.application.Node`.
-There are also several submodules containing implementations of various higher-level functions of the protocol,
-one submodule per function; for example, :class:`pyuavcan.application.heartbeat_publisher`.
-
-The node class is essentially a helper class, it does not provide any new abstractions.
-The higher-level functions provided at this level are implemented directly on top of the presentation layer;
-there are no internal/private APIs used.
+The higher-level functions are implemented in the module :mod:`pyuavcan.application`.
+They operate directly on the presentation layer; there are no internal/private APIs used.
 Since the submodule relies exclusively on the public library API,
 it can be studied as a solid collection of usage examples and best practices.
 
@@ -254,6 +249,25 @@ an :class:`ImportError` is raised (with ``name='uavcan'``).
 Applications may choose to catch that exception to implement lazy code generation.
 For a hands-on guide on how to do that read the :ref:`basic_usage` chapter
 and the API documentation for :mod:`pyuavcan.dsdl`.
+
+Node class
+++++++++++
+
+The main entity of the application layer is the node class :class:`pyuavcan.application.Node`.
+This is essentially a helper class, it does not provide significant new abstractions.
+PyUAVCAN-based applications should use this class to implement UAVCAN nodes.
+
+High-level functions
+++++++++++++++++++++
+
+There are several submodules containing implementations of various higher-level functions of the protocol,
+one submodule per function. Here is the full list of such modules:
+
+.. computron-injection::
+   :filename: synth/application_module_summary.py
+
+Normally, such modules are not pre-imported; the user should do that explicitly for required modules.
+This is done to avoid loading modules that may not be needed.
 
 
 Utilities

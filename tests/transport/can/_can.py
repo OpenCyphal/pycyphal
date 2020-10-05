@@ -7,6 +7,8 @@
 import time
 import typing
 import pytest
+import asyncio
+import logging
 import pyuavcan.transport
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pyuavcan.transport import can
@@ -26,6 +28,8 @@ async def _unittest_can_transport_anon() -> None:
     # noinspection PyProtectedMember
     from pyuavcan.transport.can._frame import UAVCANFrame
     from .media.mock import MockMedia, FrameCollector
+
+    asyncio.get_running_loop().slow_callback_duration = 1.0
 
     with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
         can.CANTransport(MockMedia(set(), 64, 0), None)
@@ -229,7 +233,7 @@ async def _unittest_can_transport_anon() -> None:
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_can_transport_non_anon() -> None:
+async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
     from pyuavcan.transport import ResourceClosedError, InputSessionSpecifier, OutputSessionSpecifier
@@ -238,6 +242,8 @@ async def _unittest_can_transport_non_anon() -> None:
     # noinspection PyProtectedMember
     from pyuavcan.transport.can._frame import UAVCANFrame
     from .media.mock import MockMedia, FrameCollector
+
+    asyncio.get_running_loop().slow_callback_duration = 1.0
 
     peers: typing.Set[MockMedia] = set()
     media = MockMedia(peers, 64, 10)
@@ -571,19 +577,20 @@ async def _unittest_can_transport_non_anon() -> None:
 
     # Now, this transmission will succeed, but a pending loopback registry entry will be overwritten, which will be
     # reflected in the error counter.
-    assert await client_requester.send_until(Transfer(
-        timestamp=ts,
-        priority=Priority.FAST,
-        transfer_id=12,
-        fragmented_payload=[
-            _mem('Until philosophers are kings, or the kings and princes of this world have the spirit and power of '
-                 'philosophy, and political greatness and wisdom meet in one, and those commoner natures who pursue '
-                 'either to the exclusion of the other are compelled to stand aside, cities will never have rest from '
-                 'their evils '),
-            _mem('- no, nor the human race, as I believe - '),
-            _mem('and then only will this our State have a possibility of life and behold the light of day.'),
-        ]
-    ), tr.loop.time() + 1.0)
+    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.can.__name__):
+        assert await client_requester.send_until(Transfer(
+            timestamp=ts,
+            priority=Priority.FAST,
+            transfer_id=12,
+            fragmented_payload=[
+                _mem('Until philosophers are kings, or the kings and princes of this world have the spirit and power '
+                     'of philosophy, and political greatness and wisdom meet in one, and those commoner natures who '
+                     'pursue either to the exclusion of the other are compelled to stand aside, cities will never '
+                     'have rest from their evils '),
+                _mem('- no, nor the human race, as I believe - '),
+                _mem('and then only will this our State have a possibility of life and behold the light of day.'),
+            ]
+        ), tr.loop.time() + 1.0)
     client_requester.disable_feedback()
     assert client_requester.sample_statistics() == SessionStatistics(transfers=2, frames=8, payload_bytes=438, errors=2)
 
@@ -864,6 +871,7 @@ async def _unittest_can_transport_non_anon() -> None:
     subscriber_selective.close()
     tr.close()
     tr2.close()
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

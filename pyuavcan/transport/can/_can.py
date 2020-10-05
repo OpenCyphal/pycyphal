@@ -132,10 +132,8 @@ class CANTransport(pyuavcan.transport.Transport):
     @property
     def local_node_id(self) -> typing.Optional[int]:
         """
-        The local node-ID is always unset (None) by default.
-        While a node-ID is not assigned, automatic retransmission in the media implementation is disabled to
+        If the local node-ID is not assigned, automatic retransmission in the media implementation is disabled to
         facilitate plug-and-play node-ID allocation.
-        Anonymous transfers are always single-frame transfers, so their payload carrying capacity is very limited.
         """
         return self._local_node_id
 

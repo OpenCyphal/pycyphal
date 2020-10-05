@@ -65,6 +65,7 @@ class Subscriber(MessagePort[MessageClass]):
         """
         Do not call this directly! Use :meth:`Presentation.make_subscriber`.
         """
+        assert not impl.is_closed, 'Internal logic error'
         if queue_capacity is None:
             queue_capacity = 0      # This case is defined by the Queue API. Means unlimited.
         else:
@@ -84,6 +85,7 @@ class Subscriber(MessagePort[MessageClass]):
     def receive_in_background(self, handler: ReceivedMessageHandler[MessageClass]) -> None:
         """
         Configures the subscriber to invoke the specified handler whenever a message is received.
+        The handler is an async callable or returns an awaitable.
 
         If the caller attempts to configure multiple handlers by invoking this method repeatedly,
         only the last configured handler will be active (the old ones will be forgotten).
@@ -228,8 +230,15 @@ class Subscriber(MessagePort[MessageClass]):
             raise self._rx.exception from RuntimeError('The subscriber has failed and been closed')
 
     def __del__(self) -> None:
-        if not self._closed:
-            _logger.debug('%s has not been disposed of properly; fixing', self)
+        try:
+            closed = self._closed
+        except AttributeError:
+            closed = True  # Incomplete construction.
+        if not closed:
+            # https://docs.python.org/3/reference/datamodel.html#object.__del__
+            # DO NOT invoke logging from the finalizer because it may resurrect the object!
+            # Once it is resurrected, we may run into resource management issue if __del__() is invoked again.
+            # Whether it is invoked the second time is an implementation detail.
             self._closed = True
             self._impl.remove_listener(self._rx)
 
@@ -270,16 +279,19 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         self.dtype = dtype
         self.transport_session = transport_session
         self.deserialization_failure_count = 0
-        self._finalizer = finalizer
+        self._maybe_finalizer: typing.Optional[TypedSessionFinalizer] = finalizer
         self._loop = loop
         self._task = loop.create_task(self._task_function())
         self._listeners: typing.List[_Listener[MessageClass]] = []
-        self._closed = False
+
+    @property
+    def is_closed(self) -> bool:
+        return self._maybe_finalizer is None
 
     async def _task_function(self) -> None:
         exception: typing.Optional[Exception] = None
         try:
-            while not self._closed:
+            while not self.is_closed:
                 transfer = await self.transport_session.receive_until(self._loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is not None:
                     message = pyuavcan.dsdl.deserialize(self.dtype, transfer.fragmented_payload)
@@ -294,46 +306,38 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
             _logger.exception('Fatal error in the subscriber task of %s: %s', self, ex)
+        finally:
+            self._finalize(exception)
 
-        try:
-            self._closed = True
-            self._finalizer([self.transport_session])
-        except Exception as ex:
-            exception = ex
-            # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
-            _logger.exception('Failed to finalize %s: %s', self, ex)
-
+    def _finalize(self, exception: typing.Optional[Exception] = None) -> None:
         exception = exception if exception is not None else PortClosedError(repr(self))
+        try:
+            if self._maybe_finalizer is not None:
+                self._maybe_finalizer([self.transport_session])
+                self._maybe_finalizer = None
+        except Exception as ex:
+            _logger.exception('Failed to finalize %s: %s', self, ex)
         for rx in self._listeners:
             rx.exception = exception
 
     def close(self) -> None:
-        self._closed = True
         try:
             self._task.cancel()         # Force the task to be stopped ASAP without waiting for timeout
         except Exception as ex:
             _logger.debug('Explicit close: could not cancel the task %r: %s', self._task, ex, exc_info=True)
+        self._finalize()
 
     def add_listener(self, rx: _Listener[MessageClass]) -> None:
-        self._raise_if_closed()
+        assert not self.is_closed, 'Internal logic error: cannot add listener to a closed subscriber implementation'
         self._listeners.append(rx)
 
     def remove_listener(self, rx: _Listener[MessageClass]) -> None:
-        # Removal is always possible, even if closed.
         try:
             self._listeners.remove(rx)
         except ValueError:
             _logger.exception('%r does not have listener %r', self, rx)
-        if len(self._listeners) == 0 and not self._closed:
-            self._closed = True
-            try:
-                self._task.cancel()         # Force the task to be stopped ASAP without waiting for timeout
-            except Exception as ex:
-                _logger.debug('Listener removal: could not cancel the task %r: %s', self._task, ex, exc_info=True)
-
-    def _raise_if_closed(self) -> None:
-        if self._closed:
-            raise PortClosedError(repr(self))
+        if len(self._listeners) == 0:
+            self.close()
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,
@@ -341,4 +345,4 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
                                                       transport_session=self.transport_session,
                                                       deserialization_failure_count=self.deserialization_failure_count,
                                                       listeners=self._listeners,
-                                                      closed=self._closed)
+                                                      closed=self.is_closed)

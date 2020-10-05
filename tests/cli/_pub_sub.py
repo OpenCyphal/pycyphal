@@ -4,9 +4,9 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import typing
 import time
 import json
+import pathlib
 import pytest
 from tests.dsdl.conftest import PUBLIC_REGULATED_DATA_TYPES_DIR
 from ._subprocess import run_cli_tool, BackgroundChildProcess
@@ -16,7 +16,8 @@ from . import TRANSPORT_FACTORIES, TransportFactory
 @pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
 def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
     # Generate DSDL namespace "uavcan"
-    run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
+    if not pathlib.Path('uavcan').exists():
+        run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
     proc_sub_heartbeat = BackgroundChildProcess.cli(
         'sub', 'uavcan.node.Heartbeat.1.0', '--format=json',    # Count unlimited
@@ -100,7 +101,8 @@ def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
 @pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
 def _unittest_slow_cli_pub_sub_anon(transport_factory: TransportFactory) -> None:
     # Generate DSDL namespace "uavcan"
-    run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
+    if not pathlib.Path('uavcan').exists():
+        run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
     proc_sub_heartbeat = BackgroundChildProcess.cli(
         '-v', 'sub', 'uavcan.node.Heartbeat.1.0', '--format=json', *transport_factory(None).cli_args  # Count unlimited

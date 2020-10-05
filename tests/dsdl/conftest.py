@@ -5,6 +5,7 @@
 #
 
 import sys
+import pickle
 import typing
 import shutil
 import pathlib
@@ -23,6 +24,8 @@ LIBRARY_ROOT_DIR = TEST_ROOT_DIR.parent
 DESTINATION_DIR = LIBRARY_ROOT_DIR / pathlib.Path('.test_dsdl_generated')
 PUBLIC_REGULATED_DATA_TYPES_DIR = TEST_ROOT_DIR / 'public_regulated_data_types'
 TEST_DATA_TYPES_DIR = pathlib.Path(__file__).parent / 'namespaces'
+
+_CACHE_FILE_NAME = 'pydsdl_cache.pickle.tmp'
 
 
 @pytest.fixture('session')  # type: ignore
@@ -43,10 +46,22 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
     """
     Runs the DSDL package generator against the standard and test namespaces, emits a list of GeneratedPackageInfo.
     Automatically adds the path to the generated packages to sys path to make them importable.
-    The output is cached permanently for the process' lifetime because the workings of PyDSDL or Nunavut are
-    outside of the scope of responsibilities of this test suite, yet generation takes a long time.
+    The output is cached permanently on disk in a file in the output directory because the workings of PyDSDL or
+    Nunavut are outside of the scope of responsibilities of this test suite, yet generation takes a long time.
+    To force regeneration, remove the generated package directories.
     """
+    sys.path.insert(0, str(DESTINATION_DIR))
+    importlib.invalidate_caches()
+    cache_file = DESTINATION_DIR / _CACHE_FILE_NAME
+
     if DESTINATION_DIR.exists():  # pragma: no cover
+        if cache_file.exists():
+            with open(cache_file, 'rb') as f:
+                out = pickle.load(f)
+            assert out and isinstance(out, list)
+            assert all(map(lambda x: isinstance(x, pyuavcan.dsdl.GeneratedPackageInfo), out))
+            return out
+
         shutil.rmtree(DESTINATION_DIR, ignore_errors=True)
     DESTINATION_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -76,6 +91,9 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
     finally:
         pydsdl_logger.setLevel(pydsdl_logging_level)
 
-    sys.path.insert(0, str(DESTINATION_DIR))
-    importlib.invalidate_caches()
+    with open(cache_file, 'wb') as f:
+        pickle.dump(out, f)
+
+    assert out and isinstance(out, list)
+    assert all(map(lambda x: isinstance(x, pyuavcan.dsdl.GeneratedPackageInfo), out))
     return out

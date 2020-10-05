@@ -600,7 +600,7 @@ def _unittest_redundant_output() -> None:
     assert None is await_(rx_b.receive_until(loop.time() + 1))
 
 
-def _unittest_redundant_output_exceptions() -> None:
+def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     import pytest
     from pyuavcan.transport import Transfer, Timestamp, Priority, SessionStatistics
     from pyuavcan.transport import TransferFrom
@@ -642,73 +642,74 @@ def _unittest_redundant_output_exceptions() -> None:
 
     # Transmission with exceptions.
     # If at least one transmission succeeds, the call succeeds.
-    inf_a.exception = RuntimeError('EXCEPTION SUKA')
-    assert await_(ses.send_until(
-        Transfer(timestamp=ts,
-                 priority=Priority.FAST,
-                 transfer_id=444444444444,
-                 fragmented_payload=[memoryview(b'exception suka')]),
-        loop.time() + 1.0
-    ))
-    assert ses.sample_statistics() == RedundantSessionStatistics(
-        transfers=1,
-        frames=1,
-        payload_bytes=len('exception suka'),
-        errors=0,
-        drops=0,
-        inferiors=[
-            SessionStatistics(
-                transfers=0,
-                frames=0,
-                payload_bytes=0,
-            ),
-            SessionStatistics(
-                transfers=1,
-                frames=1,
-                payload_bytes=len('exception suka'),
-            ),
-        ],
-    )
-    assert None is await_(rx_a.receive_until(loop.time() + 1))
-    tf_rx = await_(rx_b.receive_until(loop.time() + 1))
-    assert isinstance(tf_rx, TransferFrom)
-    assert tf_rx.transfer_id == 444444444444
-    assert tf_rx.fragmented_payload == [memoryview(b'exception suka')]
-
-    # Transmission timeout.
-    # One times out, one raises an exception --> the result is timeout.
-    inf_b.should_timeout = True
-    assert not await_(ses.send_until(
-        Transfer(timestamp=ts,
-                 priority=Priority.FAST,
-                 transfer_id=2222222222222,
-                 fragmented_payload=[memoryview(b'exception suka')]),
-        loop.time() + 1.0
-    ))
-    assert ses.sample_statistics().transfers == 1
-    assert ses.sample_statistics().payload_bytes == len('exception suka')
-    assert ses.sample_statistics().errors == 0
-    assert ses.sample_statistics().drops == 1
-    assert None is await_(rx_a.receive_until(loop.time() + 1))
-    assert None is await_(rx_b.receive_until(loop.time() + 1))
-
-    # Transmission with exceptions.
-    # If all transmissions fail, the call fails.
-    inf_b.exception = RuntimeError('EXCEPTION SUKA')
-    with pytest.raises(RuntimeError, match='EXCEPTION SUKA'):
+    with caplog.at_level(logging.CRITICAL, logger=__name__):
+        inf_a.exception = RuntimeError('INTENDED EXCEPTION')
         assert await_(ses.send_until(
             Transfer(timestamp=ts,
                      priority=Priority.FAST,
-                     transfer_id=3333333333333,
-                     fragmented_payload=[memoryview(b'exception suka')]),
+                     transfer_id=444444444444,
+                     fragmented_payload=[memoryview(b'INTENDED EXCEPTION')]),
             loop.time() + 1.0
         ))
-    assert ses.sample_statistics().transfers == 1
-    assert ses.sample_statistics().payload_bytes == len('exception suka')
-    assert ses.sample_statistics().errors == 1
-    assert ses.sample_statistics().drops == 1
-    assert None is await_(rx_a.receive_until(loop.time() + 1))
-    assert None is await_(rx_b.receive_until(loop.time() + 1))
+        assert ses.sample_statistics() == RedundantSessionStatistics(
+            transfers=1,
+            frames=1,
+            payload_bytes=len('INTENDED EXCEPTION'),
+            errors=0,
+            drops=0,
+            inferiors=[
+                SessionStatistics(
+                    transfers=0,
+                    frames=0,
+                    payload_bytes=0,
+                ),
+                SessionStatistics(
+                    transfers=1,
+                    frames=1,
+                    payload_bytes=len('INTENDED EXCEPTION'),
+                ),
+            ],
+        )
+        assert None is await_(rx_a.receive_until(loop.time() + 1))
+        tf_rx = await_(rx_b.receive_until(loop.time() + 1))
+        assert isinstance(tf_rx, TransferFrom)
+        assert tf_rx.transfer_id == 444444444444
+        assert tf_rx.fragmented_payload == [memoryview(b'INTENDED EXCEPTION')]
+
+        # Transmission timeout.
+        # One times out, one raises an exception --> the result is timeout.
+        inf_b.should_timeout = True
+        assert not await_(ses.send_until(
+            Transfer(timestamp=ts,
+                     priority=Priority.FAST,
+                     transfer_id=2222222222222,
+                     fragmented_payload=[memoryview(b'INTENDED EXCEPTION')]),
+            loop.time() + 1.0
+        ))
+        assert ses.sample_statistics().transfers == 1
+        assert ses.sample_statistics().payload_bytes == len('INTENDED EXCEPTION')
+        assert ses.sample_statistics().errors == 0
+        assert ses.sample_statistics().drops == 1
+        assert None is await_(rx_a.receive_until(loop.time() + 1))
+        assert None is await_(rx_b.receive_until(loop.time() + 1))
+
+        # Transmission with exceptions.
+        # If all transmissions fail, the call fails.
+        inf_b.exception = RuntimeError('INTENDED EXCEPTION')
+        with pytest.raises(RuntimeError, match='INTENDED EXCEPTION'):
+            assert await_(ses.send_until(
+                Transfer(timestamp=ts,
+                         priority=Priority.FAST,
+                         transfer_id=3333333333333,
+                         fragmented_payload=[memoryview(b'INTENDED EXCEPTION')]),
+                loop.time() + 1.0
+            ))
+        assert ses.sample_statistics().transfers == 1
+        assert ses.sample_statistics().payload_bytes == len('INTENDED EXCEPTION')
+        assert ses.sample_statistics().errors == 1
+        assert ses.sample_statistics().drops == 1
+        assert None is await_(rx_a.receive_until(loop.time() + 1))
+        assert None is await_(rx_b.receive_until(loop.time() + 1))
 
     # Retirement.
     assert not is_retired

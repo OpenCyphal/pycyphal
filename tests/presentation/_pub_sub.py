@@ -24,6 +24,8 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     import uavcan.diagnostic
     from pyuavcan.transport import Priority
 
+    asyncio.get_running_loop().slow_callback_duration = 1.0
+
     tran_a, tran_b, transmits_anon = transport_factory(None, None)
     assert tran_a.local_node_id is None
     assert tran_b.local_node_id is None
@@ -47,6 +49,8 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     else:
         with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
             pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
+        pres_a.close()
+        pres_b.close()
         return  # The test ends here.
 
     assert pub_heart._maybe_impl is not None
@@ -107,6 +111,8 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     assert list(pres_a.transport.output_sessions) == []
     assert list(pres_b.transport.output_sessions) == []
 
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
+
 
 # noinspection PyProtectedMember
 @pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
@@ -118,6 +124,8 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     import uavcan.time
     import uavcan.diagnostic
     from pyuavcan.transport import Priority
+
+    asyncio.get_running_loop().slow_callback_duration = 1.0
 
     tran_a, tran_b, _ = transport_factory(123, 42)
     assert tran_a.local_node_id == 123
@@ -242,3 +250,5 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert record_handler_output[0][1].source_node_id == 42
     assert record_handler_output[0][1].transfer_id == 0
     assert record_handler_output[0][1].priority == Priority.NOMINAL
+
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.

@@ -98,15 +98,18 @@ def _unittest_slow_cli_demo_basic_usage(
         pass
 
     # Generate DSDL namespace "sirius_cyber_corp"
-    run_cli_tool('dsdl-gen-pkg', str(TEST_DATA_TYPES_DIR / 'sirius_cyber_corp'),
-                 '--lookup', DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
+    if not pathlib.Path('sirius_cyber_corp').exists():
+        run_cli_tool('dsdl-gen-pkg', str(TEST_DATA_TYPES_DIR / 'sirius_cyber_corp'),
+                     '--lookup', DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
 
     # Generate DSDL namespace "test"
-    run_cli_tool('dsdl-gen-pkg', str(TEST_DATA_TYPES_DIR / 'test_dsdl_namespace'),
-                 '--lookup', DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
+    if not pathlib.Path('test_dsdl_namespace').exists():
+        run_cli_tool('dsdl-gen-pkg', str(TEST_DATA_TYPES_DIR / 'test_dsdl_namespace'),
+                     '--lookup', DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL)
 
     # Generate DSDL namespace "uavcan"
-    run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
+    if not pathlib.Path('uavcan').exists():
+        run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
     demo_proc_env_vars = iface_option.demo_env_vars.copy()
     demo_proc_env_vars['PYUAVCAN_LOGLEVEL'] = 'DEBUG'

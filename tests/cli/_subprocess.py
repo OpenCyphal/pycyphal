@@ -120,7 +120,7 @@ class BackgroundChildProcess:
             self._inferior.send_signal(signal.SIGINT)
         except ValueError:  # pragma: no cover
             # On Windows, SIGINT is not supported, and CTRL_C_EVENT does nothing.
-            self._inferior.send_signal(signal.CTRL_BREAK_EVENT)
+            self._inferior.send_signal(getattr(signal, 'CTRL_BREAK_EVENT'))
 
     @property
     def pid(self) -> int:

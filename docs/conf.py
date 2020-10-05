@@ -81,7 +81,6 @@ extensions = [
     'sphinx.ext.inheritance_diagram',
     'sphinx.ext.graphviz',
     'sphinx_computron',
-    'sphinxemoji.sphinxemoji',
     'ref_fixer_hack',
 ]
 sys.path.append(str(DOC_ROOT))  # This is for the hack to be importable
@@ -113,7 +112,7 @@ autodoc_default_options = {
     'member-order':     'bysource',
     'exclude-members':
         '__weakref__, __module__, __dict__, __dataclass_fields__, __dataclass_params__, __annotations__, '
-        '__abstractmethods__, __orig_bases__, __parameters__, __post_init__',
+        '__abstractmethods__, __orig_bases__, __parameters__, __post_init__, __getnewargs__',
 }
 
 # For sphinx.ext.todo_

@@ -107,6 +107,13 @@ Methods and functions that command a new state should be idempotent;
 i.e., if the commanded state is already reached, do nothing.
 Example: ``start()`` -- do nothing if already started; ``close()`` -- do nothing if already closed.
 
+If you intend to implement some form of RAII with the help of object finalizers ``__del__()``,
+beware that if the object is accidentally resurrected in the process, the finalizer may or may not be invoked
+again later, which breaks the RAII logic.
+A nasty pitfall I encountered is that if the object is referenced in a logging call from the finalizer,
+the logging library may retain the reference until the next GC cycle, causing the finalizer to be invoked again.
+This led to RAII reference counting bugs which took over an hour to debug.
+
 API functions and methods that contain the following parameters should adhere to the semantic naming conventions:
 
 +-----------------------------------------+-------------------------+-----------------------------------------------------------+
@@ -170,7 +177,7 @@ but it is intended for CI use only.
 
 The script ``test.sh`` can be used to run the unit tests, static code analysis, documentation generation,
 and so on, locally or on a CI server.
-At the time of writing, the script takes some 20 minutes to run, so it may not work well for development;
+At the time of writing, the script takes some 30 minutes to run, so it may not work well for development;
 consider invoking pytest manually on a specific directory, file, or function instead (command-line option ``-k``).
 For more information refer to the PyTest documentation.
 
@@ -180,6 +187,9 @@ The scanner should not be run before the full general test suite since it relies
 
 When writing tests, aim to cover at least 90% of branches, excepting the DSDL generated packages (at least for now)
 (the DSDL test data is synthesized at run time).
+Ensure that your tests do not emit any errors or warnings into the CLI output upon successful execution,
+because that may distract the developer from noticing true abnormalities
+(you may use ``caplog.at_level('CRITICAL')`` to suppress undesirable output).
 
 Write unit tests as functions without arguments prefixed with ``_unittest_``;
 optionally, for slow test functions use the prefix ``_unittest_slow_``.
@@ -225,6 +235,12 @@ At least the following locations should be checked first:
 - ``tests/presentation`` -- generic presentation layer test cases.
 - ``tests/cli`` -- CLI and demo test cases.
 - The list may not be exhaustive, please grep the sources to locate all relevant modules.
+
+Many tests rely on the DSDL-generated packages being available for importing.
+The DSDL package generation is implemented in ``tests/dsdl``.
+After the packages are generated, the output is cached on disk to permit fast re-testing during development.
+The cache can be invalidated manually by removing the output directories.
+It is also invalidated automatically when ``clean.sh`` or ``test.sh`` are executed.
 
 
 Releasing

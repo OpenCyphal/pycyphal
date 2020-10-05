@@ -6,7 +6,7 @@
 
 import typing
 import asyncio
-import xml.etree.ElementTree
+import logging
 import pytest
 import pyuavcan.transport
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
@@ -19,12 +19,13 @@ from tests.transport.serial import VIRTUAL_BUS_URI as SERIAL_URI
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_redundant_transport() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
+async def _unittest_redundant_transport(caplog: typing.Any) -> None:
+    from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
     from pyuavcan.transport import ProtocolParameters
 
     loop = asyncio.get_event_loop()
+    loop.slow_callback_duration = 1.0
 
     tr_a = RedundantTransport()
     tr_b = RedundantTransport(loop)
@@ -141,20 +142,21 @@ async def _unittest_redundant_transport() -> None:
     #
     # Incapacitate one inferior, ensure things are still OK.
     #
-    for s in lo_mono_0.output_sessions:
-        s.exception = RuntimeError('EXCEPTION BLIN')
+    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.redundant.__name__):
+        for s in lo_mono_0.output_sessions:
+            s.exception = RuntimeError('INTENDED EXCEPTION')
 
-    assert await pub_a.send_until(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
-                 transfer_id=3,
-                 fragmented_payload=[memoryview(b'qwe')]),
-        monotonic_deadline=loop.time() + 1.0
-    )
-    rx = await sub_any_a.receive_until(loop.time() + 1.0)
-    assert rx is not None
-    assert rx.fragmented_payload == [memoryview(b'qwe')]
-    assert rx.transfer_id == 3
+        assert await pub_a.send_until(
+            Transfer(timestamp=Timestamp.now(),
+                     priority=Priority.LOW,
+                     transfer_id=3,
+                     fragmented_payload=[memoryview(b'qwe')]),
+            monotonic_deadline=loop.time() + 1.0
+        )
+        rx = await sub_any_a.receive_until(loop.time() + 1.0)
+        assert rx is not None
+        assert rx.fragmented_payload == [memoryview(b'qwe')]
+        assert rx.transfer_id == 3
 
     #
     # Remove old loopback transports. Configure new ones with cyclic TID.
@@ -300,3 +302,5 @@ async def _unittest_redundant_transport() -> None:
                      fragmented_payload=[]),
             monotonic_deadline=loop.time() + 1.0
         )
+
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.

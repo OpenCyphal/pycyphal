@@ -45,11 +45,12 @@ class Publisher(MessagePort[MessageClass]):
         Do not call this directly! Use :meth:`Presentation.make_publisher`.
         """
         self._maybe_impl: typing.Optional[PublisherImpl[MessageClass]] = impl
+        impl.register_proxy()  # Register ASAP to ensure correct finalization.
+
         self._dtype = impl.dtype                              # Permit usage after close()
         self._transport_session = impl.transport_session      # Same
         self._transfer_id_counter = impl.transfer_id_counter  # Same
         self._loop = loop
-        impl.register_proxy()
         self._priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY
         self._send_timeout = self.DEFAULT_SEND_TIMEOUT
 
@@ -142,8 +143,12 @@ class Publisher(MessagePort[MessageClass]):
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
-            _logger.debug('%s has not been disposed of properly; fixing', self)
+            # https://docs.python.org/3/reference/datamodel.html#object.__del__
+            # DO NOT invoke logging from the finalizer because it may resurrect the object!
+            # Once it is resurrected, we may run into resource management issue if __del__() is invoked again.
+            # Whether it is invoked the second time is an implementation detail.
             self._maybe_impl.remove_proxy()
+            self._maybe_impl = None
 
 
 class PublisherImpl(Closable, typing.Generic[MessageClass]):
@@ -161,11 +166,10 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         self.dtype = dtype
         self.transport_session = transport_session
         self.transfer_id_counter = transfer_id_counter
-        self._finalizer = finalizer
+        self._maybe_finalizer: typing.Optional[TypedSessionFinalizer] = finalizer
         self._loop = loop
         self._lock = asyncio.Lock(loop=loop)
         self._proxy_count = 0
-        self._closed = False
 
     async def publish_until(self,
                             message:            MessageClass,
@@ -175,7 +179,8 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
             raise TypeError(f'Expected a message object of type {self.dtype}, found this: {message}')
 
         async with self._lock:
-            self._raise_if_closed()
+            if self._is_closed:
+                raise PortClosedError(repr(self))
             timestamp = pyuavcan.transport.Timestamp.now()
             fragmented_payload = list(pyuavcan.dsdl.serialize(message))
             transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
@@ -185,19 +190,17 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
             return await self.transport_session.send_until(transfer, monotonic_deadline)
 
     def register_proxy(self) -> None:
-        self._raise_if_closed()
-        assert self._proxy_count >= 0
         self._proxy_count += 1
         _logger.debug('%s got a new proxy, new count %s', self, self._proxy_count)
+        assert not self._is_closed, 'Internal protocol violation'
+        assert self._proxy_count >= 1
 
     def remove_proxy(self) -> None:
         self._proxy_count -= 1
         _logger.debug('%s has lost a proxy, new count %s', self, self._proxy_count)
+        if self._proxy_count <= 0:
+            self.close()  # RAII auto-close
         assert self._proxy_count >= 0
-        if self._proxy_count <= 0 and not self._closed:
-            _logger.debug('%s is being closed', self)
-            self._closed = True
-            self._finalizer([self.transport_session])
 
     @property
     def proxy_count(self) -> int:
@@ -206,12 +209,13 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         return self._proxy_count
 
     def close(self) -> None:
-        # This is a no-op - we manage closure though reference counting only.
-        pass
+        if self._maybe_finalizer is not None:
+            self._maybe_finalizer([self.transport_session])
+            self._maybe_finalizer = None
 
-    def _raise_if_closed(self) -> None:
-        if self._closed:
-            raise PortClosedError(repr(self))
+    @property
+    def _is_closed(self) -> bool:
+        return self._maybe_finalizer is None
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,

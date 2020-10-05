@@ -6,7 +6,7 @@ Installation
 PyUAVCAN requires **Python v3.7** or newer.
 
 Install the library from PyPI; the package name is ``pyuavcan``.
-Specify the installation options (known as "package extras" in parseltongue |:snake:|)
+Specify the installation options (known as "package extras" in parseltongue)
 depending on which UAVCAN transports and features you are planning to use.
 
 Installation options

@@ -113,3 +113,5 @@ async def _unittest_can_socketcan() -> None:
 
     media_a.close()
     media_b.close()
+
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.

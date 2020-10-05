@@ -110,9 +110,7 @@ class MockMedia(_media.Media):
         return len(frames)
 
     def close(self) -> None:
-        if self._closed:
-            raise pyuavcan.transport.ResourceClosedError
-        else:
+        if not self._closed:
             self._closed = True
             self._peers.remove(self)
 
@@ -215,13 +213,13 @@ async def _unittest_can_mock_media() -> None:
     assert pe_collector.empty
 
     me.close()
+    me.close()  # Idempotency.
     assert peers == {pe}
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         await me.send_until([], asyncio.get_event_loop().time() + 1.0)
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         me.configure_acceptance_filters([])
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        me.close()
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
 class FrameCollector:

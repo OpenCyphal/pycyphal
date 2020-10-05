@@ -108,6 +108,7 @@ Default: %(default)s
 
     def execute(self, args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:
         import pyuavcan.application
+        import pyuavcan.application.heartbeat_publisher
         node, = subsystems
         assert isinstance(node, pyuavcan.application.Node)
 

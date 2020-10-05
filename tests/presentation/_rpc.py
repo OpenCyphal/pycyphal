@@ -22,6 +22,8 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     import uavcan.time
     from pyuavcan.transport import Priority, Timestamp
 
+    asyncio.get_running_loop().slow_callback_duration = 1.0
+
     tran_a, tran_b, _ = transport_factory(123, 42)
     assert tran_a.local_node_id == 123
     assert tran_b.local_node_id == 42
@@ -120,3 +122,8 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     assert list(pres_b.transport.input_sessions) == []
     assert list(pres_a.transport.output_sessions) == []
     assert list(pres_b.transport.output_sessions) == []
+
+    pres_a.close()
+    pres_b.close()
+
+    await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
