@@ -9,6 +9,7 @@ environment:
 
     - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
       PYTHON: '3.8'
+      coverage: 1    # The coverage information shall be published from exactly one job.
 
 stack: python %PYTHON%
 
@@ -37,3 +38,10 @@ test_script:
 
   # MS Windows test
   - cmd: 'powershell .\test.ps1'
+
+after_test:
+  # Publish the coverage. The deps are not listed in the requirements file because they are only useful in the CI.
+  - sh: "if ((coverage)); then
+             pip install pyyaml coveralls;
+             coveralls;
+         fi"

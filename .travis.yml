@@ -1,8 +1,5 @@
 language: python
-dist: xenial
-
-os:
-  - linux   # TODO: Migrate to a different CI service because Travis does not natively support Python on OSX or Windows.
+dist: focal
 
 python:
   - '3.7'
@@ -16,15 +13,9 @@ before_script:
   # Graphviz is needed for documentation build.
   - sudo apt-get install $extras_pkg graphviz nmap
 
-  # Intentionally removed from requirements.txt because it's only useful in the CI environment.
-  - pip install coveralls
-
 script:
   - ./test.sh
   - sonar-scanner
-
-after_success:
-  - coveralls       # Publish the coverage stats online.
 
 addons:
   sonarcloud:
