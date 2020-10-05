@@ -23,7 +23,7 @@ def _unittest_slow_cli_pick_nid(transport_factory: TransportFactory) -> None:
     print('pick-nid result:', result)
     assert int(result) not in used_node_ids
     for p in pubs:
-        p.wait(60.0, interrupt=True)
+        p.wait(100.0, interrupt=True)
 
 
 def _unittest_slow_cli_pick_nid_loopback() -> None:
