@@ -59,7 +59,7 @@ echo "PYTHONPATH: $PYTHONPATH"
 export PYTHONASYNCIODEBUG=1
 
 command -v dot  || die "Please install graphviz. On Debian-based: apt install graphviz"
-command -v ncat || die "Please install nmap. On Debian-based: apt install nmap"
+command -v ncat || die "Please install nmap. On Debian-based: apt install ncat"
 
 ./clean.sh || die "Failed to clean"
 

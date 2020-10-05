@@ -4,10 +4,10 @@ environment:
       PYTHON: 'C:\\Python38-x64'
       PYTHON_ARCH: '64'
 
-    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
+    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.7'
 
-    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu
+    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.8'
       coverage: 1    # The coverage information shall be published from exactly one job.
 
@@ -22,7 +22,7 @@ install:
   - sh: 'lsb_release -a'
   - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
   - sh: 'echo $extras_pkg'
-  - sh: 'sudo apt-get install -y $extras_pkg graphviz nmap'
+  - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'
 
   # MS Windows build config
   - cmd: 'systeminfo'

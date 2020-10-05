@@ -11,11 +11,13 @@ before_script:
   - echo $extras_pkg
 
   # Graphviz is needed for documentation build.
-  - sudo apt-get install $extras_pkg graphviz nmap
+  - sudo apt-get install $extras_pkg graphviz ncat
 
 script:
   - ./test.sh
-  - sonar-scanner
+
+after_success:
+  - sonar-scanner  # Do not run analysis after failure to avoid reporting incorrect coverage estimates.
 
 addons:
   sonarcloud:
