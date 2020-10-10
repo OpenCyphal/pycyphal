@@ -9,7 +9,7 @@ import typing
 import struct
 import dataclasses
 import pyuavcan
-from cobs import cobs
+from cobs import cobs  # type: ignore
 
 _VERSION = 0
 
