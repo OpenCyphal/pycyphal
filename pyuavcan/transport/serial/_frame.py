@@ -39,10 +39,10 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
     NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_SIZE + _CRC_SIZE_BYTES
 
-    source_node_id: typing.Optional[int]
+    source_node_id:      typing.Optional[int]
     destination_node_id: typing.Optional[int]
-    data_specifier: pyuavcan.transport.DataSpecifier
-    data_type_hash: int
+    data_specifier:      pyuavcan.transport.DataSpecifier
+    data_type_hash:      int
 
     def __post_init__(self) -> None:
         if not isinstance(self.priority, pyuavcan.transport.Priority):

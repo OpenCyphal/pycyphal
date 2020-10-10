@@ -77,7 +77,7 @@ class StreamParser:
         try:
             mv = memoryview(self._frame_buffer)
             parsed: typing.Optional[SerialFrame] = None
-            if (not known_invalid) and len(mv) <= self._max_frame_size_bytes:  # and
+            if (not known_invalid) and len(mv) <= self._max_frame_size_bytes:
                 assert self._current_frame_timestamp is not None
                 parsed = SerialFrame.parse_from_cobs_image(mv, self._current_frame_timestamp)
             if parsed:
@@ -85,7 +85,7 @@ class StreamParser:
             elif mv:
                 self._callback(mv)
             else:
-                pass  # Empty - nothing to report.
+                pass    # Empty - nothing to report.
         finally:
             self._unescape_next = False
             self._current_frame_timestamp = None
@@ -116,9 +116,6 @@ def _unittest_stream_parser() -> None:
     assert [memoryview(b'abcdef')] == proc(b'abcdef')
     assert [] == proc(b'')
 
-    # The frame is well-delimited, but the content is invalid. Notice the unescaping in action.
-    # assert [] == proc(b'\x9E\x8E\x61')
-    # assert [memoryview(b'\x9E\x8E')] == proc(b'\x8E\x71\x9E')
 
     # Valid frame.
     f1 = SerialFrame(timestamp=ts,
@@ -148,16 +145,15 @@ def _unittest_stream_parser() -> None:
                      end_of_transfer=True,
                      payload=f1.compile_into(bytearray(1000)))
     assert len(f2.payload) == 43  # Cobs escaping
-
     result = proc(f2.compile_into(bytearray(1000)))
     assert len(result) == 1
-    assert isinstance(result[0], memoryview)  # no message size enforcement yet
+    assert isinstance(result[0], memoryview)
 
     # Create new instance with much larger frame size limit; feed both frames but let the first one be incomplete.
-    sp = StreamParser(outputs.append, 10 ** 6)
-    assert [] == proc(f1.compile_into(bytearray(100))[:-2])  # First one is ended abruptly.
-    result = proc(f2.compile_into(bytearray(100)))  # Then the second frame begins.
-    assert len(result) == 2  # Make sure the second one is retrieved correctly.
+    sp = StreamParser(outputs.append, 10**6)
+    assert [] == proc(f1.compile_into(bytearray(100))[:-2])     # First one is ended abruptly.
+    result = proc(f2.compile_into(bytearray(100)))              # Then the second frame begins.
+    assert len(result) == 2                                     # Make sure the second one is retrieved correctly.
     assert isinstance(result[0], memoryview)
     assert isinstance(result[1], SerialFrame)
     assert SerialFrame.__eq__(f2, result)
