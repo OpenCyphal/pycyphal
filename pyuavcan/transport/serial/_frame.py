@@ -219,9 +219,9 @@ def _unittest_frame_compile_message() -> None:
     assert segment[1] == int(Priority.HIGH)
     assert (segment[2], segment[3]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
     assert (segment[4], segment[5]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
-    assert segment[6:8] == 12345.to_bytes(2, 'little')
-    assert segment[8:16] == 0xdead_beef_bad_c0ffe.to_bytes(8, 'little')
-    assert segment[16:24] == 1234567890123456789.to_bytes(8, 'little')
+    assert segment[6:8] == 12345 .to_bytes(2, 'little')
+    assert segment[8:16] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
+    assert segment[16:24] == 1234567890123456789 .to_bytes(8, 'little')
     assert segment[24:28] == (1234567 + 0x8000_0000).to_bytes(4, 'little')
     # Header CRC here
 
@@ -259,9 +259,9 @@ def _unittest_frame_compile_service() -> None:
     assert (segment[2], segment[3]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
     assert (segment[4], segment[5]) == (0xFF, 0xFF)
     assert segment[6:8] == ((1 << 15) | (1 << 14) | 123).to_bytes(2, 'little')
-    assert segment[8:16] == 0xdead_beef_bad_c0ffe.to_bytes(8, 'little')
-    assert segment[16:24] == 1234567890123456789.to_bytes(8, 'little')
-    assert segment[24:28] == 1234567.to_bytes(4, 'little')
+    assert segment[8:16] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
+    assert segment[16:24] == 1234567890123456789 .to_bytes(8, 'little')
+    assert segment[24:28] == 1234567 .to_bytes(4, 'little')
     # Header CRC here
 
     # CRC validation
