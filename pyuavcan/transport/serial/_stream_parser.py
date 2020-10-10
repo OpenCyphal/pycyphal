@@ -6,7 +6,6 @@
 
 import typing
 import pyuavcan
-import math
 from ._frame import SerialFrame
 
 
@@ -34,7 +33,7 @@ class StreamParser:
         :param max_payload_size_bytes: Frames containing more that this many bytes of payload (after escaping and
             not including the header and CRC) will be considered invalid.
         """
-        max_payload_size_bytes = int(math.ceil(max_payload_size_bytes * 255.0 / 254.0))  # COBS stuffing overhead
+        max_payload_size_bytes = SerialFrame.calc_cobs_size(max_payload_size_bytes)
         if not (callable(callback) and max_payload_size_bytes > 0):
             raise ValueError('Invalid parameters')
 

@@ -7,7 +7,7 @@
 from __future__ import annotations
 import typing
 import struct
-import itertools
+import math
 import dataclasses
 import pyuavcan
 from cobs import cobs
@@ -119,6 +119,10 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
         assert (next_byte_index - 2) >= (len(header) + len(self.payload) + len(payload_crc_bytes))
         return memoryview(out_buffer)[:next_byte_index]
+
+    @staticmethod
+    def calc_cobs_size(payload_size_bytes: int) -> int:
+        return int(math.ceil(payload_size_bytes * 255.0 / 254.0))
 
     @staticmethod
     def parse_from_cobs_image(header_payload_crc_image: memoryview,
