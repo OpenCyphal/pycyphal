@@ -10,6 +10,7 @@ import struct
 import itertools
 import dataclasses
 import pyuavcan
+from cobs import cobs
 
 _VERSION = 0
 
@@ -28,21 +29,21 @@ assert _HEADER_SIZE == 32
 
 @dataclasses.dataclass(frozen=True)
 class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
-    NODE_ID_MASK     = 4095
+    NODE_ID_MASK = 4095
     TRANSFER_ID_MASK = 2 ** 64 - 1
-    INDEX_MASK       = 2 ** 31 - 1
+    INDEX_MASK = 2 ** 31 - 1
 
     NODE_ID_RANGE = range(NODE_ID_MASK + 1)
 
-    FRAME_DELIMITER_BYTE = 0x9E
-    ESCAPE_PREFIX_BYTE   = 0x8E
+    FRAME_DELIMITER_BYTE = 0x00
+    # ESCAPE_PREFIX_BYTE   = 0x8E
 
     NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_SIZE + _CRC_SIZE_BYTES
 
-    source_node_id:      typing.Optional[int]
+    source_node_id: typing.Optional[int]
     destination_node_id: typing.Optional[int]
-    data_specifier:      pyuavcan.transport.DataSpecifier
-    data_type_hash:      int
+    data_specifier: pyuavcan.transport.DataSpecifier
+    data_type_hash: int
 
     def __post_init__(self) -> None:
         if not isinstance(self.priority, pyuavcan.transport.Priority):
@@ -105,22 +106,32 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
         payload_crc_bytes = pyuavcan.transport.commons.crc.CRC32C.new(self.payload).value_as_bytes
 
-        escapees = self.FRAME_DELIMITER_BYTE, self.ESCAPE_PREFIX_BYTE
         out_buffer[0] = self.FRAME_DELIMITER_BYTE
         next_byte_index = 1
-        for nb in itertools.chain(header, self.payload, payload_crc_bytes):
-            if nb in escapees:
-                out_buffer[next_byte_index] = self.ESCAPE_PREFIX_BYTE
-                next_byte_index += 1
-                nb ^= 0xFF
-            out_buffer[next_byte_index] = nb
-            next_byte_index += 1
+
+        packet_bytes = header + self.payload + payload_crc_bytes
+        encoded_image = cobs.encode(packet_bytes)
+        # place in the buffer and update next_byte_index:
+        out_buffer[next_byte_index:next_byte_index] = encoded_image
+        next_byte_index += len(encoded_image)
 
         out_buffer[next_byte_index] = self.FRAME_DELIMITER_BYTE
         next_byte_index += 1
 
         assert (next_byte_index - 2) >= (len(header) + len(self.payload) + len(payload_crc_bytes))
         return memoryview(out_buffer)[:next_byte_index]
+
+    @staticmethod
+    def parse_from_cobs_image(header_payload_crc_image: memoryview,
+                              timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[SerialFrame]:
+        """
+        :returns: Frame or None if the image is invalid.
+        """
+        try:
+            unescaped_image = cobs.decode(bytearray(header_payload_crc_image))
+        except cobs.DecodeError:
+            return None
+        return SerialFrame.parse_from_unescaped_image(memoryview(unescaped_image), timestamp)
 
     @staticmethod
     def parse_from_unescaped_image(header_payload_crc_image: memoryview,
@@ -184,43 +195,39 @@ def _unittest_frame_compile_message() -> None:
     f = SerialFrame(timestamp=Timestamp.now(),
                     priority=Priority.HIGH,
                     source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
-                    destination_node_id=SerialFrame.ESCAPE_PREFIX_BYTE,
+                    destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                     data_specifier=MessageDataSpecifier(12345),
                     data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=True,
-                    payload=memoryview(b'abcd\x9Eef\x8E'))
+                    payload=memoryview(b'abcd\x00ef\x00'))
 
     buffer = bytearray(0 for _ in range(1000))
     mv = f.compile_into(buffer)
 
     assert mv[0] == SerialFrame.FRAME_DELIMITER_BYTE
     assert mv[-1] == SerialFrame.FRAME_DELIMITER_BYTE
-    segment = bytes(mv[1:-1])
-    assert SerialFrame.FRAME_DELIMITER_BYTE not in segment
+
+    segment_cobs = bytes(mv[1:-1])
+    assert SerialFrame.FRAME_DELIMITER_BYTE not in segment_cobs
+
+    segment = cobs.decode(segment_cobs)
 
     # Header validation
     assert segment[0] == _VERSION
     assert segment[1] == int(Priority.HIGH)
-    assert segment[2] == SerialFrame.ESCAPE_PREFIX_BYTE
-    assert (segment[3], segment[4]) == (SerialFrame.FRAME_DELIMITER_BYTE ^ 0xFF, 0)
-    assert segment[5] == SerialFrame.ESCAPE_PREFIX_BYTE
-    assert (segment[6], segment[7]) == (SerialFrame.ESCAPE_PREFIX_BYTE ^ 0xFF, 0)
-    assert segment[8:10] == 12345 .to_bytes(2, 'little')
-    assert segment[10:18] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
-    assert segment[18:26] == 1234567890123456789 .to_bytes(8, 'little')
-    assert segment[26:30] == (1234567 + 0x8000_0000).to_bytes(4, 'little')
+    assert (segment[2], segment[3]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
+    assert (segment[4], segment[5]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
+    assert segment[6:8] == 12345.to_bytes(2, 'little')
+    assert segment[8:16] == 0xdead_beef_bad_c0ffe.to_bytes(8, 'little')
+    assert segment[16:24] == 1234567890123456789.to_bytes(8, 'little')
+    assert segment[24:28] == (1234567 + 0x8000_0000).to_bytes(4, 'little')
     # Header CRC here
 
     # Payload validation
-    assert segment[34:38] == b'abcd'
-    assert segment[38] == SerialFrame.ESCAPE_PREFIX_BYTE
-    assert segment[39] == 0x9E ^ 0xFF
-    assert segment[40:42] == b'ef'
-    assert segment[42] == SerialFrame.ESCAPE_PREFIX_BYTE
-    assert segment[43] == 0x8E ^ 0xFF
-    assert segment[44:] == pyuavcan.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
+    assert segment[32:40] == b'abcd\x00ef\x00'
+    assert segment[40:] == pyuavcan.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
 
 
 def _unittest_frame_compile_service() -> None:
@@ -241,23 +248,24 @@ def _unittest_frame_compile_service() -> None:
     mv = f.compile_into(buffer)
 
     assert mv[0] == mv[-1] == SerialFrame.FRAME_DELIMITER_BYTE
-    segment = bytes(mv[1:-1])
-    assert SerialFrame.FRAME_DELIMITER_BYTE not in segment
+    segment_cobs = bytes(mv[1:-1])
+    assert SerialFrame.FRAME_DELIMITER_BYTE not in segment_cobs
+
+    segment = cobs.decode(segment_cobs)
 
     # Header validation
     assert segment[0] == _VERSION
     assert segment[1] == int(Priority.FAST)
-    assert segment[2] == SerialFrame.ESCAPE_PREFIX_BYTE
-    assert (segment[3], segment[4]) == (SerialFrame.FRAME_DELIMITER_BYTE ^ 0xFF, 0)
-    assert (segment[5], segment[6]) == (0xFF, 0xFF)
-    assert segment[7:9] == ((1 << 15) | (1 << 14) | 123) .to_bytes(2, 'little')
-    assert segment[9:17] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
-    assert segment[17:25] == 1234567890123456789 .to_bytes(8, 'little')
-    assert segment[25:29] == 1234567 .to_bytes(4, 'little')
+    assert (segment[2], segment[3]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
+    assert (segment[4], segment[5]) == (0xFF, 0xFF)
+    assert segment[6:8] == ((1 << 15) | (1 << 14) | 123).to_bytes(2, 'little')
+    assert segment[8:16] == 0xdead_beef_bad_c0ffe.to_bytes(8, 'little')
+    assert segment[16:24] == 1234567890123456789.to_bytes(8, 'little')
+    assert segment[24:28] == 1234567.to_bytes(4, 'little')
     # Header CRC here
 
     # CRC validation
-    assert segment[33:] == pyuavcan.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
+    assert segment[32:] == pyuavcan.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
 
 
 def _unittest_frame_parse() -> None:

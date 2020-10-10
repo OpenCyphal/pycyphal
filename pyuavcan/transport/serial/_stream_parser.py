@@ -6,6 +6,7 @@
 
 import typing
 import pyuavcan
+import math
 from ._frame import SerialFrame
 
 
@@ -33,7 +34,7 @@ class StreamParser:
         :param max_payload_size_bytes: Frames containing more that this many bytes of payload (after escaping and
             not including the header and CRC) will be considered invalid.
         """
-        max_payload_size_bytes = int(max_payload_size_bytes)
+        max_payload_size_bytes = int(math.ceil(max_payload_size_bytes * 255.0 / 254.0))  # COBS stuffing overhead
         if not (callable(callback) and max_payload_size_bytes > 0):
             raise ValueError('Invalid parameters')
 
@@ -64,13 +65,6 @@ class StreamParser:
             return
 
         # Unescaping is done only if we're inside a frame currently.
-        if self._is_inside_frame():
-            if b == SerialFrame.ESCAPE_PREFIX_BYTE:
-                self._unescape_next = True
-                return
-            if self._unescape_next:
-                self._unescape_next = False
-                b ^= 0xFF
 
         # Appending to the buffer always, regardless of whether we're in a frame or not.
         # We may find out that the data does not belong to the protocol only much later; can't look ahead.
@@ -83,15 +77,15 @@ class StreamParser:
         try:
             mv = memoryview(self._frame_buffer)
             parsed: typing.Optional[SerialFrame] = None
-            if (not known_invalid) and len(mv) <= self._max_frame_size_bytes:
+            if (not known_invalid) and len(mv) <= self._max_frame_size_bytes:  # and
                 assert self._current_frame_timestamp is not None
-                parsed = SerialFrame.parse_from_unescaped_image(mv, self._current_frame_timestamp)
+                parsed = SerialFrame.parse_from_cobs_image(mv, self._current_frame_timestamp)
             if parsed:
                 self._callback(parsed)
             elif mv:
                 self._callback(mv)
             else:
-                pass    # Empty - nothing to report.
+                pass  # Empty - nothing to report.
         finally:
             self._unescape_next = False
             self._current_frame_timestamp = None
@@ -123,14 +117,14 @@ def _unittest_stream_parser() -> None:
     assert [] == proc(b'')
 
     # The frame is well-delimited, but the content is invalid. Notice the unescaping in action.
-    assert [] == proc(b'\x9E\x8E\x61')
-    assert [memoryview(b'\x9E\x8E')] == proc(b'\x8E\x71\x9E')
+    # assert [] == proc(b'\x9E\x8E\x61')
+    # assert [memoryview(b'\x9E\x8E')] == proc(b'\x8E\x71\x9E')
 
     # Valid frame.
     f1 = SerialFrame(timestamp=ts,
                      priority=Priority.HIGH,
                      source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
-                     destination_node_id=SerialFrame.ESCAPE_PREFIX_BYTE,
+                     destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                      data_specifier=MessageDataSpecifier(12345),
                      data_type_hash=0xdead_beef_bad_c0ffe,
                      transfer_id=1234567890123456789,
@@ -146,23 +140,24 @@ def _unittest_stream_parser() -> None:
     f2 = SerialFrame(timestamp=ts,
                      priority=Priority.HIGH,
                      source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
-                     destination_node_id=SerialFrame.ESCAPE_PREFIX_BYTE,
+                     destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                      data_specifier=MessageDataSpecifier(12345),
                      data_type_hash=0xdead_beef_bad_c0ffe,
                      transfer_id=1234567890123456789,
                      index=1234567,
                      end_of_transfer=True,
                      payload=f1.compile_into(bytearray(1000)))
-    assert len(f2.payload) == 46 + 2  # The extra two are escapes.
+    assert len(f2.payload) == 43  # Cobs escaping
+
     result = proc(f2.compile_into(bytearray(1000)))
     assert len(result) == 1
-    assert isinstance(result[0], memoryview)
+    assert isinstance(result[0], memoryview)  # no message size enforcement yet
 
     # Create new instance with much larger frame size limit; feed both frames but let the first one be incomplete.
-    sp = StreamParser(outputs.append, 10**6)
-    assert [] == proc(f1.compile_into(bytearray(100))[:-2])     # First one is ended abruptly.
-    result = proc(f2.compile_into(bytearray(100)))              # Then the second frame begins.
-    assert len(result) == 2                                     # Make sure the second one is retrieved correctly.
+    sp = StreamParser(outputs.append, 10 ** 6)
+    assert [] == proc(f1.compile_into(bytearray(100))[:-2])  # First one is ended abruptly.
+    result = proc(f2.compile_into(bytearray(100)))  # Then the second frame begins.
+    assert len(result) == 2  # Make sure the second one is retrieved correctly.
     assert isinstance(result[0], memoryview)
     assert isinstance(result[1], SerialFrame)
     assert SerialFrame.__eq__(f2, result)
