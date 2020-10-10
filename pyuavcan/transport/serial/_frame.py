@@ -110,7 +110,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         packet_bytes = header + self.payload + payload_crc_bytes
         encoded_image = cobs.encode(packet_bytes)
         # place in the buffer and update next_byte_index:
-        out_buffer[next_byte_index:next_byte_index+len(encoded_image)] = encoded_image
+        out_buffer[next_byte_index:next_byte_index + len(encoded_image)] = encoded_image
         next_byte_index += len(encoded_image)
 
         out_buffer[next_byte_index] = self.FRAME_DELIMITER_BYTE
@@ -124,7 +124,8 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         """
         :returns: worst case COBS-encoded message size for a given payload size.
         """
-        return (payload_size_bytes * 255 + 253) // 254 # equivalent to int(math.ceil(payload_size_bytes * 255.0 / 254.0)
+        # equivalent to int(math.ceil(payload_size_bytes * 255.0 / 254.0)
+        return (payload_size_bytes * 255 + 253) // 254
 
     @staticmethod
     def parse_from_cobs_image(header_payload_crc_image: memoryview,

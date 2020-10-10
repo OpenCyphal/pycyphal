@@ -113,7 +113,6 @@ def _unittest_stream_parser() -> None:
     assert [memoryview(b'abcdef')] == proc(b'abcdef')
     assert [] == proc(b'')
 
-
     # Valid frame.
     f1 = SerialFrame(timestamp=ts,
                      priority=Priority.HIGH,
