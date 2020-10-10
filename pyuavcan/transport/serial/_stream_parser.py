@@ -63,8 +63,6 @@ class StreamParser:
             self._current_frame_timestamp = timestamp
             return
 
-        # Unescaping is done only if we're inside a frame currently.
-
         # Appending to the buffer always, regardless of whether we're in a frame or not.
         # We may find out that the data does not belong to the protocol only much later; can't look ahead.
         self._frame_buffer.append(b)

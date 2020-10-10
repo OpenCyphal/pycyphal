@@ -7,7 +7,6 @@
 from __future__ import annotations
 import typing
 import struct
-import math
 import dataclasses
 import pyuavcan
 from cobs import cobs
@@ -122,7 +121,10 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
     @staticmethod
     def calc_cobs_size(payload_size_bytes: int) -> int:
-        return int(math.ceil(payload_size_bytes * 255.0 / 254.0))
+        """
+        :returns: worst case COBS-encoded message size for a given payload size.
+        """
+        return (payload_size_bytes * 255 + 253) // 254 # equivalent to int(math.ceil(payload_size_bytes * 255.0 / 254.0)
 
     @staticmethod
     def parse_from_cobs_image(header_payload_crc_image: memoryview,

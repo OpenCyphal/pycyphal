@@ -69,7 +69,7 @@ encoded into its serialized form using the following packet format:
 +-------------------------+--------------+---------------+--------------------------------+-------------------------+
 | Frame delimiter **0x00**|Escaped header|Escaped payload| Escaped CRC-32C of the payload | Frame delimiter **0x00**|
 +=========================+==============+===============+================================+=========================+
-| 1 byte                  | 32..64 bytes | >=0 bytes     | 4..8 bytes                     | 1 byte                  |
+| 1 byte                  | 32 bytes     | >=0 bytes     | 4 bytes                        | 1 byte                  |
 +-------------------------+--------------+---------------+--------------------------------+-------------------------+
 | Single-byte frame       |                              | Four bytes long, little-endian | Same frame delimiter as |
 | delimiter **0x00**.     |                              | byte order; The CRC is         | at the start.           |
