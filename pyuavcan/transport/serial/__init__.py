@@ -64,32 +64,29 @@ the remaining 14 least significant bits contain the service-ID value.
 Total header size: 32 bytes (256 bits).
 
 The header is prepended before the frame payload; the resulting structure is
-encoded into its serialized form using the following packet format (influenced by HDLC, SLIP, POPCOP):
+encoded into its serialized form using the following packet format:
 
 +-------------------------+--------------+---------------+--------------------------------+-------------------------+
-| Frame delimiter **0x9E**|Escaped header|Escaped payload| Escaped CRC-32C of the payload | Frame delimiter **0x9E**|
+| Frame delimiter **0x00**|Escaped header|Escaped payload| Escaped CRC-32C of the payload | Frame delimiter **0x00**|
 +=========================+==============+===============+================================+=========================+
-| 1 byte                  | 32..64 bytes | >=0 bytes     | 4..8 bytes                     | 1 byte                  |
+| 1 byte                  | 32 bytes     | >=0 bytes     | 4 bytes                        | 1 byte                  |
 +-------------------------+--------------+---------------+--------------------------------+-------------------------+
-| Single-byte frame       | The following bytes are      | Four bytes long, little-endian | Same frame delimiter as |
-| delimiter **0x9E**.     | escaped: **0x9E** (frame     | byte order; bytes 0x9E (frame  | at the start.           |
-| Begins a new frame and  | delimiter); **0x8E**         | delimiter) and 0x8E (escape    | Terminates the current  |
-| possibly terminates the | (escape character). An       | character) are escaped like in | frame and possibly      |
-| previous frame.         | escaped byte is bitwise      | the header/payload. The CRC is | begins the next frame.  |
-|                         | inverted and prepended with  | computed over the unescaped    |                         |
-|                         | the escape character 0x8E.   | (i.e., original form) payload, |                         |
-|                         | For example: byte 0x9E is    | not including the header       |                         |
-|                         | transformed into 0x8E        | (because the header has a      |                         |
-|                         | followed by 0x71.            | dedicated CRC).                |                         |
+| Single-byte frame       |                              | Four bytes long, little-endian | Same frame delimiter as |
+| delimiter **0x00**.     |                              | byte order; The CRC is         | at the start.           |
+| Begins a new frame and  |                              | computed over the unescaped    | Terminates the current  |
+| possibly terminates the |                              | (i.e., original form) payload, | frame and possibly      |
+| previous frame.         |                              | not including the header       | begins the next frame.  |
+|                         |                              | (because the header has a      |                         |
+|                         |                              | dedicated CRC).                |                         |
+|                         +------------------------------+--------------------------------+                         |
+|                         | This part is escaped using COBS alorithm by Chesire and Baker |                         |
+|                         | http://www.stuartcheshire.org/papers/COBSforToN.pdf           |                         |
 +-------------------------+------------------------------+--------------------------------+-------------------------+
 
 There are no magic bytes in this format because the strong CRC and the data type hash field render the
-format sufficiently recognizable. The worst case overhead exceeds 100% if every byte of the payload and the CRC
-is either 0x9E or 0x8E. Despite the overhead, this format is still considered superior to the alternatives
-since it is robust and guarantees a constant recovery time. Consistent-overhead byte stuffing (COBS) is sometimes
-employed for similar tasks, but it should be understood that while it offers a substantially lower overhead,
-it undermines the synchronization recovery properties of the protocol. There is a somewhat relevant discussion
-at https://github.com/vedderb/bldc/issues/79.
+format sufficiently recognizable. The worst case overhead 1 byte in every 254 bytes of the payload and the CRC
+There is a somewhat relevant discussion
+at https://forum.uavcan.org/t/uavcan-serial-issues-with-dma-friendliness-and-bandwidth-overhead/846.
 
 The format can share the same serial medium with ASCII text exchanges such as command-line interfaces or
 real-time logging. The special byte values employed by the format do not belong to the ASCII character set.
