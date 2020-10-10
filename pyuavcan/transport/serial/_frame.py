@@ -29,9 +29,9 @@ assert _HEADER_SIZE == 32
 
 @dataclasses.dataclass(frozen=True)
 class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
-    NODE_ID_MASK = 4095
+    NODE_ID_MASK     = 4095
     TRANSFER_ID_MASK = 2 ** 64 - 1
-    INDEX_MASK = 2 ** 31 - 1
+    INDEX_MASK       = 2 ** 31 - 1
 
     NODE_ID_RANGE = range(NODE_ID_MASK + 1)
 
