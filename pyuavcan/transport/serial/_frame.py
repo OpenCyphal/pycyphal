@@ -36,7 +36,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     NODE_ID_RANGE = range(NODE_ID_MASK + 1)
 
     FRAME_DELIMITER_BYTE = 0x00
-    # ESCAPE_PREFIX_BYTE   = 0x8E
 
     NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_SIZE + _CRC_SIZE_BYTES
 
