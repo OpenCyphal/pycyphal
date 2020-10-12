@@ -4,7 +4,7 @@ Frequently asked questions
 What is UAVCAN?
     It's a data exchange solution for modern software-defined vehicles: drones, manned aircraft, robots, cars,
     and spacecraft.
-    UAVCAN stands for *Uncomplicated Application-level Vehicular Communication and Networking*.
+    UAVCAN stands for *Uncomplicated Application-level Vehicular Computing and Networking*.
     There is a `post on the UAVCAN forum <https://forum.uavcan.org/t/557>`_ explaining its principles and design goals.
 
 

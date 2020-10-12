@@ -49,7 +49,7 @@ least significant byte first, most significant bit first)::
     uint16  destination node ID  # 0xFFFF = broadcast.
     uint16  data specifier
 
-    uint64  data type hash
+    void64
     uint64  transfer ID
 
     uint32  frame index EOT      # MSB set if last frame of the transfer; i.e., 0x8000_0000 if single-frame transfer.
@@ -80,16 +80,18 @@ encoded into its serialized form using the following packet format:
 |                         |                              | dedicated CRC).                |                         |
 |                         +------------------------------+--------------------------------+                         |
 |                         | This part is escaped using COBS alorithm by Chesire and Baker |                         |
-|                         | http://www.stuartcheshire.org/papers/COBSforToN.pdf           |                         |
+|                         | http://www.stuartcheshire.org/papers/COBSforToN.pdf.          |                         |
+|                         | A frame delimiter (0) is guaranteed to never occur here.      |                         |
 +-------------------------+------------------------------+--------------------------------+-------------------------+
 
-There are no magic bytes in this format because the strong CRC and the data type hash field render the
-format sufficiently recognizable. The worst case overhead 1 byte in every 254 bytes of the payload and the CRC
-There is a somewhat relevant discussion
-at https://forum.uavcan.org/t/uavcan-serial-issues-with-dma-friendliness-and-bandwidth-overhead/846.
+There are no magic bytes in this format because the strong CRC in the header renders the
+format sufficiently recognizable.
+The frame encoding overhead is 1 byte in every 254 bytes of the header+payload+CRC, which is about ~0.4%.
+There is a somewhat relevant discussion at
+https://forum.uavcan.org/t/uavcan-serial-issues-with-dma-friendliness-and-bandwidth-overhead/846.
 
 The format can share the same serial medium with ASCII text exchanges such as command-line interfaces or
-real-time logging. The special byte values employed by the format do not belong to the ASCII character set.
+real-time logging.
 
 The last four bytes of a multi-frame transfer payload contain the CRC32C (Castagnoli) hash of the transfer
 payload in little-endian byte order.

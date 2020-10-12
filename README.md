@@ -26,7 +26,7 @@ so it should be usable with other systems as well.
 [UAVCAN](https://uavcan.org) is an open lightweight data bus standard designed for reliable intravehicular
 communication in aerospace and robotic applications via
 CAN bus, Ethernet, RS-485, IEEE 802.15.4, and other robust transports.
-The acronym *UAVCAN* stands for ***Uncomplicated Application-level Vehicular Communication And Networking***.
+The acronym *UAVCAN* stands for ***Uncomplicated Application-level Vehicular Computing And Networking***.
 
 <big>**READ THE DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**</big>
 

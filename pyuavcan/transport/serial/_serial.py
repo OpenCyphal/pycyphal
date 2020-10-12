@@ -94,7 +94,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             This setting does not affect transfer reception -- the RX MTU is always set to the maximum valid MTU
             (i.e., practically unlimited).
 
-        :param service_transfer_multiplier: Deterministic data loss mitigation is disabled by default.
+        :param service_transfer_multiplier: Deterministic data loss mitigation for service transfers.
             This parameter specifies the number of times each outgoing service transfer will be repeated.
             This setting does not affect message transfers.
 
