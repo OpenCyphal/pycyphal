@@ -1,24 +1,14 @@
-UAVCAN v0 stack in Python
-==========================
+Legacy UAVCAN/CAN v0 in Python
+==============================
 
-[![Travis CI](https://travis-ci.org/UAVCAN/pyuavcan.svg?branch=master)](https://travis-ci.org/UAVCAN/pyuavcan)
-[![Gitter](https://img.shields.io/badge/gitter-join%20chat-green.svg)](https://gitter.im/UAVCAN/general)
+***LEGACY -- DO NOT USE IN NEW DESIGNS***
 
-Python implementation of the [UAVCAN v0 protocol stack](http://uavcan.github.io).
+This is a **legacy** Python implementation of UAVCAN/CAN v0.
+Read the docs at [legacy.uavcan.org/Implementations/Pyuavcan](http://legacy.uavcan.org/Implementations/Pyuavcan).
 
-UAVCAN is a lightweight protocol designed for reliable communication in aerospace and robotic applications via CAN bus.
-
-## Documentation
-
-* [UAVCAN v0 website](http://uavcan.github.io)
-* [UAVCAN forum](https://forum.uavcan.org)
-* [Pyuavcan documentation and tutorials](http://uavcan.org/Implementations/Pyuavcan/)
+New applications should adopt PyUAVCAN v1 instead; please consult with [uavcan.org](https://uavcan.org) for details.
 
 ## Installation
-
-Compatible Python versions are 2.7 and 3.3 and newer.
-If the library is used with Python 3, which is recommended, it does not require any additional dependencies.
-If Python 2.7 is used, additional dependencies are needed - refer to `setup.py` for more info.
 
 ```bash
 pip install uavcan
