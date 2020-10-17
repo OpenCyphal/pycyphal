@@ -137,6 +137,7 @@
       <w>pydsdl</w>
       <w>pydsdlgen</w>
       <w>pylint</w>
+      <w>pyserial</w>
       <w>pythonasynciodebug</w>
       <w>pythoncan</w>
       <w>pythonpath</w>
