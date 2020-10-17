@@ -10,8 +10,8 @@
 .[transport_serial]
 
 # Testing.
-pytest          ~= 6.1
-pytest-asyncio  == 0.14
+pytest          ~= 4.6   # Update when https://github.com/UAVCAN/nunavut/issues/144 is fixed
+pytest-asyncio  == 0.10  # Update when https://github.com/UAVCAN/nunavut/issues/144 is fixed
 coverage        ~= 5.3
 
 # Static analysis. PyLint is needed for the SonarQube scanner.
