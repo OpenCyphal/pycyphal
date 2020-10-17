@@ -14,7 +14,7 @@ function die()
 
 [[ "$(git rev-parse --abbrev-ref HEAD)" = 'master' ]]  || die "Can only release from the master branch."
 [[ -z "$(git diff)" ]]                                 || die "Please commit all changes, then try again."
-[[ -z "$(git log @{u}..)" ]]                           || die "Please push all commits, then try again."
+[[ -z "$(git log '@{u}..')" ]]                         || die "Please push all commits, then try again."
 
 ./test.sh  || die "Test failed."
 ./clean.sh ||\
@@ -25,4 +25,4 @@ python3 -m twine upload dist/* || die "Twine upload has failed."
 ./clean.sh  # May fail, we don't care.
 
 version=$(cat pyuavcan/VERSION)
-(git tag -a $version -m $version && git push --tags) || die "Could not tag the release. Please do it manually."
+(git tag -a "$version" -m "$version" && git push --tags) || die "Could not tag the release. Please do it manually."
