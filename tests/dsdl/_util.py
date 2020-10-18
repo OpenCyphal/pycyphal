@@ -99,6 +99,9 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
         pyuavcan.dsdl.set_attribute(o, f.name, v)
         return o
 
+    elif isinstance(model, pydsdl.DelimitedType):
+        return make_random_object(model.inner_type)  # Unwrap and delegate
+
     else:   # pragma: no cover
         raise TypeError(f'Unsupported type: {type(model)}')
 

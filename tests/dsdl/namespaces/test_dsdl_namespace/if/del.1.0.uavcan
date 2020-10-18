@@ -1,3 +1,4 @@
 void8
 B.1.0[2] else
 B.1.0[<=2] raise
+@sealed

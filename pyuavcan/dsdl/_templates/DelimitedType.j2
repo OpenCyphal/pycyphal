@@ -4,9 +4,4 @@
  # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 -#}
 
-{% extends "base.j2" -%}
-{%- block contents -%}
-
-{{ data_schema(T|short_reference_name, T.inner_type) }}
-
-{%- endblock -%}
+{%- include 'StructureType.j2' -%}
