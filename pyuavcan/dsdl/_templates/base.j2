@@ -412,7 +412,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_ = {{ ((type.bit_length_set|max|int) + 7) // 8 }}  {# -#}
                                                  # {{ type.bit_length_set|max }} bits
 
-    {% set meta_type = 'UnionType' if type is UnionType else 'StructureType' -%}
+    {% set meta_type = type.__class__.__name__ -%}
     _MODEL_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
         {{ type | pickle | indent(8) }}
     )
