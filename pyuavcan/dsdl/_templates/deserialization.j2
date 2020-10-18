@@ -77,7 +77,7 @@
     {%- set field_ref_map = {} %}
     {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
     # BEGIN STRUCTURE FIELD DESERIALIZATION: {{ f }}
-    {%- if f is not PaddingField %}
+    {%- if f is not padding %}
     {%- set field_ref = 'f'|to_template_unique_name %}
     {%- do field_ref_map.update({f: field_ref}) %}
     # The temporary {{ field_ref }} holds the value of the field "{{ f.name }}"
@@ -114,6 +114,9 @@
     {%- endfor %}
     else:
         raise _des_.FormatError(f'{{ t }}: Union tag value { {{- tag_ref -}} } is invalid')
+
+{%- elif t is DelimitedType %}
+    {{ _deserialize_composite(t.inner_type, ref, base_offset, ref_type_name) }}
 
 {%- else -%}{%- assert False -%}
 {%- endif %}

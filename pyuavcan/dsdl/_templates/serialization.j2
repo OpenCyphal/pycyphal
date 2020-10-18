@@ -118,6 +118,9 @@
     else:
         raise RuntimeError('Malformed union {{ t }}')
 
+{%- elif t is DelimitedType %}
+    {{ _serialize_composite(t.inner_type, ref, base_offset) }}
+
 {%- else -%}{%- assert False -%}
 {%- endif %}
     # END COMPOSITE SERIALIZATION: {{ t }}

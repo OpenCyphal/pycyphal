@@ -6,6 +6,7 @@
       <w>abcde</w>
       <w>abcdefghi</w>
       <w>abstractmethods</w>
+      <w>addopts</w>
       <w>aega</w>
       <w>afdx</w>
       <w>allocatee</w>
@@ -13,6 +14,7 @@
       <w>apidoc</w>
       <w>appveyor</w>
       <w>argparse</w>
+      <w>asctime</w>
       <w>asyncio</w>
       <w>atexit</w>
       <w>autoclass</w>
@@ -63,6 +65,8 @@
       <w>edgeitems</w>
       <w>elif</w>
       <w>emptor</w>
+      <w>endfor</w>
+      <w>endmacro</w>
       <w>facto</w>
       <w>ffee</w>
       <w>ffff</w>
@@ -75,6 +79,7 @@
       <w>genericity</w>
       <w>getpeername</w>
       <w>getsockopt</w>
+      <w>gibibyte</w>
       <w>graphviz</w>
       <w>hardbass</w>
       <w>hdlc</w>
@@ -92,6 +97,7 @@
       <w>kibibyte</w>
       <w>kirienko</w>
       <w>koopman</w>
+      <w>levelname</w>
       <w>libcanard</w>
       <w>linkcode</w>
       <w>lnid</w>
@@ -139,6 +145,7 @@
       <w>pydsdlgen</w>
       <w>pylint</w>
       <w>pyserial</w>
+      <w>pytest</w>
       <w>pythonasynciodebug</w>
       <w>pythoncan</w>
       <w>pythonpath</w>
@@ -182,6 +189,7 @@
       <w>serv</w>
       <w>setcap</w>
       <w>sheremet</w>
+      <w>signedness</w>
       <w>sitecustomize</w>
       <w>sitl</w>
       <w>socketcan</w>

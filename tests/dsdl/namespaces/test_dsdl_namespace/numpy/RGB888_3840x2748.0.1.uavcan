@@ -9,4 +9,4 @@ void8
 uint8[PIXELS_PER_IMAGE * 3] pixels                  # Row major, top-left pixel first, color ordering RGB
 
 @assert _offset_.count == 1                         # Fixed size message
-@print _offset_.max / 1024 / 1024                   # Print size in mebibytes
+@print _offset_.max / 8 / 1024 / 1024               # Print size in mebibytes
