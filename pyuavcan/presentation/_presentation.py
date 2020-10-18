@@ -370,9 +370,8 @@ class Presentation:
 
     @staticmethod
     def _make_payload_metadata(dtype: typing.Type[pyuavcan.dsdl.CompositeObject]) -> pyuavcan.transport.PayloadMetadata:
-        model = pyuavcan.dsdl.get_model(dtype)
-        max_size_bytes = pyuavcan.dsdl.get_max_serialized_representation_size_bytes(dtype)
-        return pyuavcan.transport.PayloadMetadata(data_type_hash=model.data_type_hash, max_size_bytes=max_size_bytes)
+        extent_bytes = pyuavcan.dsdl.get_extent_bytes(dtype)
+        return pyuavcan.transport.PayloadMetadata(extent_bytes=extent_bytes)
 
     def _raise_if_closed(self) -> None:
         if self._closed:

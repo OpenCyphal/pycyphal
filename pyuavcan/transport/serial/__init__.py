@@ -49,8 +49,8 @@ least significant byte first, most significant bit first)::
     uint16  destination node ID  # 0xFFFF = broadcast.
     uint16  data specifier
 
-    void64
-    uint64  transfer ID
+    void64                       # Reserved; later may be leveraged for runtime type identification.
+    uint64  transfer-ID
 
     uint32  frame index EOT      # MSB set if last frame of the transfer; i.e., 0x8000_0000 if single-frame transfer.
     uint32  header CRC           # CRC-32C (Castagnoli) of the header (all fields above).
@@ -131,7 +131,7 @@ Usage
 1234
 >>> tr.serial_port.baudrate
 115200
->>> pm = pyuavcan.transport.PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 1024)
+>>> pm = pyuavcan.transport.PayloadMetadata(1024)
 >>> ds = pyuavcan.transport.MessageDataSpecifier(12345)
 >>> pub = tr.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
 >>> sub = tr.get_input_session(pyuavcan.transport.InputSessionSpecifier(ds, None), pm)

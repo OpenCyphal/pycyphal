@@ -62,7 +62,7 @@ async def _unittest_can_transport_anon() -> None:
     #
     # Instantiate session objects
     #
-    meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
+    meta = PayloadMetadata(10000)
 
     with pytest.raises(Exception):                                                      # Can't broadcast service calls
         tr.get_output_session(OutputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
@@ -268,7 +268,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     #
     # Instantiate session objects
     #
-    meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
+    meta = PayloadMetadata(10000)
 
     with pytest.raises(Exception):                                                      # Can't broadcast service calls
         tr.get_output_session(OutputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),

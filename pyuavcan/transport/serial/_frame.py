@@ -19,7 +19,8 @@ _ANONYMOUS_NODE_ID = 0xFFFF
 _HEADER_WITHOUT_CRC_FORMAT = struct.Struct('<'
                                            'BB'   # Version, priority
                                            'HHH'  # source NID, destination NID, data specifier
-                                           'QQ'   # Data type hash, transfer-ID
+                                           '8x'   # reserved 64 bits
+                                           'Q'    # transfer-ID
                                            'L')   # Frame index with end-of-transfer flag in the MSB
 _CRC_SIZE_BYTES = len(pyuavcan.transport.commons.high_overhead_transport.TransferCRC().value_as_bytes)
 _HEADER_SIZE = _HEADER_WITHOUT_CRC_FORMAT.size + _CRC_SIZE_BYTES
@@ -41,7 +42,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     source_node_id:      typing.Optional[int]
     destination_node_id: typing.Optional[int]
     data_specifier:      pyuavcan.transport.DataSpecifier
-    data_type_hash:      int
 
     def __post_init__(self) -> None:
         if not isinstance(self.priority, pyuavcan.transport.Priority):
@@ -58,9 +58,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
         if not isinstance(self.data_specifier, pyuavcan.transport.DataSpecifier):
             raise TypeError(f'Invalid data specifier: {self.data_specifier}')  # pragma: no cover
-
-        if not (0 <= self.data_type_hash <= pyuavcan.transport.PayloadMetadata.DATA_TYPE_HASH_MASK):
-            raise ValueError(f'Invalid data type hash: {self.data_type_hash}')
 
         if not (0 <= self.transfer_id <= self.TRANSFER_ID_MASK):
             raise ValueError(f'Invalid transfer-ID: {self.transfer_id}')
@@ -96,7 +93,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
                                                  src_nid,
                                                  dst_nid,
                                                  data_spec,
-                                                 self.data_type_hash,
                                                  self.transfer_id,
                                                  index_eot)
         header += pyuavcan.transport.commons.crc.CRC32C.new(header).value_as_bytes
@@ -158,7 +154,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         payload = payload_with_crc[:-_CRC_SIZE_BYTES]
 
         # noinspection PyTypeChecker
-        version, int_priority, src_nid, dst_nid, int_data_spec, dt_hash, transfer_id, index_eot = \
+        version, int_priority, src_nid, dst_nid, int_data_spec, transfer_id, index_eot = \
             _HEADER_WITHOUT_CRC_FORMAT.unpack_from(header)
         if version != _VERSION:
             return None
@@ -183,7 +179,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
                                source_node_id=src_nid,
                                destination_node_id=dst_nid,
                                data_specifier=data_specifier,
-                               data_type_hash=dt_hash,
                                transfer_id=transfer_id,
                                index=index_eot & SerialFrame.INDEX_MASK,
                                end_of_transfer=index_eot & (1 << 31) != 0,
@@ -203,7 +198,6 @@ def _unittest_frame_compile_message() -> None:
                     source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                     destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                     data_specifier=MessageDataSpecifier(12345),
-                    data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=True,
@@ -226,7 +220,7 @@ def _unittest_frame_compile_message() -> None:
     assert (segment[2], segment[3]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
     assert (segment[4], segment[5]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
     assert segment[6:8] == 12345 .to_bytes(2, 'little')
-    assert segment[8:16] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
+    assert segment[8:16] == b'\x00' * 8
     assert segment[16:24] == 1234567890123456789 .to_bytes(8, 'little')
     assert segment[24:28] == (1234567 + 0x8000_0000).to_bytes(4, 'little')
     # Header CRC here
@@ -244,7 +238,6 @@ def _unittest_frame_compile_service() -> None:
                     source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                     destination_node_id=None,
                     data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
-                    data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=False,
@@ -265,7 +258,7 @@ def _unittest_frame_compile_service() -> None:
     assert (segment[2], segment[3]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
     assert (segment[4], segment[5]) == (0xFF, 0xFF)
     assert segment[6:8] == ((1 << 15) | (1 << 14) | 123).to_bytes(2, 'little')
-    assert segment[8:16] == 0xdead_beef_bad_c0ffe .to_bytes(8, 'little')
+    assert segment[8:16] == b'\x00' * 8
     assert segment[16:24] == 1234567890123456789 .to_bytes(8, 'little')
     assert segment[24:28] == 1234567 .to_bytes(4, 'little')
     # Header CRC here
@@ -289,7 +282,7 @@ def _unittest_frame_parse() -> None:
         0x7B, 0x00,                                         # Source NID        123
         0xC8, 0x01,                                         # Destination NID   456
         0xE1, 0x10,                                         # Data specifier    4321
-        0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,     # Data type hash    0xbad_c0ffee_0dd_f00d
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,     # Reserved
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,     # Transfer ID       12345678901234567890
         0x31, 0xD4, 0x00, 0x80,                             # Frame index, EOT  54321 with EOT flag set
     ])
@@ -302,7 +295,6 @@ def _unittest_frame_parse() -> None:
         source_node_id=123,
         destination_node_id=456,
         data_specifier=MessageDataSpecifier(4321),
-        data_type_hash=0xbad_c0ffee_0dd_f00d,
         transfer_id=12345678901234567890,
         index=54321,
         end_of_transfer=True,
@@ -317,7 +309,7 @@ def _unittest_frame_parse() -> None:
         0x01, 0x00,
         0x00, 0x00,
         0x10, 0xC0,                                         # Response, service ID 16
-        0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,
         0x31, 0xD4, 0x00, 0x00,
     ])
@@ -329,7 +321,6 @@ def _unittest_frame_parse() -> None:
         source_node_id=1,
         destination_node_id=0,
         data_specifier=ServiceDataSpecifier(16, ServiceDataSpecifier.Role.RESPONSE),
-        data_type_hash=0xbad_c0ffee_0dd_f00d,
         transfer_id=12345678901234567890,
         index=54321,
         end_of_transfer=False,
@@ -344,7 +335,7 @@ def _unittest_frame_parse() -> None:
         0x01, 0x00,
         0x00, 0x00,
         0x10, 0x80,                                         # Request, service ID 16
-        0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,
         0x31, 0xD4, 0x00, 0x00,
     ])
@@ -356,7 +347,6 @@ def _unittest_frame_parse() -> None:
         source_node_id=1,
         destination_node_id=0,
         data_specifier=ServiceDataSpecifier(16, ServiceDataSpecifier.Role.REQUEST),
-        data_type_hash=0xbad_c0ffee_0dd_f00d,
         transfer_id=12345678901234567890,
         index=54321,
         end_of_transfer=False,
@@ -377,7 +367,7 @@ def _unittest_frame_parse() -> None:
         0xFF, 0xFF,
         0x00, 0x00,
         0xE1, 0x10,
-        0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,
         0x31, 0xD4, 0x00, 0x00,
     ])
@@ -392,7 +382,7 @@ def _unittest_frame_parse() -> None:
         0xFF, 0xFF,
         0x00, 0xFF,
         0xE1, 0x10,
-        0x0D, 0xF0, 0xDD, 0xE0, 0xFE, 0x0F, 0xDC, 0xBA,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0xD2, 0x0A, 0x1F, 0xEB, 0x8C, 0xA9, 0x54, 0xAB,
         0x31, 0xD4, 0x00, 0x00,
     ])
@@ -410,7 +400,6 @@ def _unittest_frame_check() -> None:
                     source_node_id=123,
                     destination_node_id=456,
                     data_specifier=MessageDataSpecifier(12345),
-                    data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=False,
@@ -422,7 +411,6 @@ def _unittest_frame_check() -> None:
                     source_node_id=123456,
                     destination_node_id=456,
                     data_specifier=MessageDataSpecifier(12345),
-                    data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=False,
@@ -434,7 +422,6 @@ def _unittest_frame_check() -> None:
                     source_node_id=123,
                     destination_node_id=123456,
                     data_specifier=MessageDataSpecifier(12345),
-                    data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=False,
@@ -446,7 +433,6 @@ def _unittest_frame_check() -> None:
                     source_node_id=None,
                     destination_node_id=456,
                     data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
-                    data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=False,
@@ -458,19 +444,6 @@ def _unittest_frame_check() -> None:
                     source_node_id=None,
                     destination_node_id=None,
                     data_specifier=MessageDataSpecifier(12345),
-                    data_type_hash=2 ** 64,
-                    transfer_id=1234567890123456789,
-                    index=1234567,
-                    end_of_transfer=False,
-                    payload=memoryview(b'abcdef'))
-
-    with raises(ValueError):
-        SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
-                    source_node_id=None,
-                    destination_node_id=None,
-                    data_specifier=MessageDataSpecifier(12345),
-                    data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=-1,
                     index=1234567,
                     end_of_transfer=False,
@@ -482,7 +455,6 @@ def _unittest_frame_check() -> None:
                     source_node_id=None,
                     destination_node_id=None,
                     data_specifier=MessageDataSpecifier(12345),
-                    data_type_hash=0xdead_beef_bad_c0ffe,
                     transfer_id=0,
                     index=-1,
                     end_of_transfer=False,

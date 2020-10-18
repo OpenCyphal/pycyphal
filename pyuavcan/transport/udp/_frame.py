@@ -25,30 +25,25 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         struct Header {
             uint8_t  version;
             uint8_t  priority;
-            uint16_t _zero_padding;
+            uint16_t _reserved_a;   // Set to zero when encoding, ignore when decoding.
             uint32_t frame_index_eot;
             uint64_t transfer_id;
-            uint64_t data_type_hash;
+            uint64_t _reserved_b;   // Set to zero when encoding, ignore when decoding.
         };
         static_assert(sizeof(struct Header) == 24, "Invalid layout");
 
     If you have any feedback concerning the frame format, please bring it to
     https://forum.uavcan.org/t/alternative-transport-protocols/324.
     """
-    _HEADER_FORMAT = struct.Struct('<BBxxIQQ')
+    _HEADER_FORMAT = struct.Struct('<BB2xIQ8x')
     _VERSION = 0
 
     TRANSFER_ID_MASK = 2 ** 64 - 1
     INDEX_MASK       = 2 ** 31 - 1
 
-    data_type_hash: int
-
     def __post_init__(self) -> None:
         if not isinstance(self.priority, pyuavcan.transport.Priority):
             raise TypeError(f'Invalid priority: {self.priority}')  # pragma: no cover
-
-        if not (0 <= self.data_type_hash <= pyuavcan.transport.PayloadMetadata.DATA_TYPE_HASH_MASK):
-            raise ValueError(f'Invalid data type hash: {self.data_type_hash}')
 
         if not (0 <= self.transfer_id <= self.TRANSFER_ID_MASK):
             raise ValueError(f'Invalid transfer-ID: {self.transfer_id}')
@@ -69,8 +64,7 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         header = self._HEADER_FORMAT.pack(self._VERSION,
                                           int(self.priority),
                                           self.index | ((1 << 31) if self.end_of_transfer else 0),
-                                          self.transfer_id,
-                                          self.data_type_hash)
+                                          self.transfer_id)
         return memoryview(header), self.payload
 
     @staticmethod
@@ -86,8 +80,7 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
                             transfer_id=transfer_id,
                             index=(frame_index_eot & UDPFrame.INDEX_MASK),
                             end_of_transfer=bool(frame_index_eot & (UDPFrame.INDEX_MASK + 1)),
-                            payload=image[UDPFrame._HEADER_FORMAT.size:],
-                            data_type_hash=data_type_hash)
+                            payload=image[UDPFrame._HEADER_FORMAT.size:])
         else:
             return None
 
@@ -108,8 +101,7 @@ def _unittest_udp_frame_compile() -> None:
                  transfer_id=0,
                  index=0,
                  end_of_transfer=False,
-                 payload=memoryview(b''),
-                 data_type_hash=0)
+                 payload=memoryview(b''))
 
     with raises(ValueError):
         _ = UDPFrame(timestamp=ts,
@@ -117,8 +109,7 @@ def _unittest_udp_frame_compile() -> None:
                      transfer_id=2 ** 64,
                      index=0,
                      end_of_transfer=False,
-                     payload=memoryview(b''),
-                     data_type_hash=0)
+                     payload=memoryview(b''))
 
     with raises(ValueError):
         _ = UDPFrame(timestamp=ts,
@@ -126,24 +117,14 @@ def _unittest_udp_frame_compile() -> None:
                      transfer_id=0,
                      index=2 ** 31,
                      end_of_transfer=False,
-                     payload=memoryview(b''),
-                     data_type_hash=0)
-
-    with raises(ValueError):
-        _ = UDPFrame(timestamp=ts,
-                     priority=Priority.LOW,
-                     transfer_id=0,
-                     index=0,
-                     end_of_transfer=False,
-                     payload=memoryview(b''),
-                     data_type_hash=2 ** 64)
+                     payload=memoryview(b''))
 
     # Multi-frame, not the end of the transfer.
     assert (
         memoryview(b'\x00\x06\x00\x00'
                    b'\r\xf0\xdd\x00'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
-                   b'\r\xf0\xad\xeb\xfe\x0f\xdc\r'),
+                   b'\x00\x00\x00\x00\x00\x00\x00\x00'),
         memoryview(b'Well, I got here the same way the coin did.'),
     ) == UDPFrame(
         timestamp=ts,
@@ -152,7 +133,6 @@ def _unittest_udp_frame_compile() -> None:
         index=0x_0dd_f00d,
         end_of_transfer=False,
         payload=memoryview(b'Well, I got here the same way the coin did.'),
-        data_type_hash=0x_0dd_c0ffee_bad_f00d,
     ).compile_header_and_payload()
 
     # Multi-frame, end of the transfer.
@@ -160,7 +140,7 @@ def _unittest_udp_frame_compile() -> None:
         memoryview(b'\x00\x07\x00\x00'
                    b'\r\xf0\xdd\x80'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
-                   b'\r\xf0\xad\xeb\xfe\x0f\xdc\r'),
+                   b'\x00\x00\x00\x00\x00\x00\x00\x00'),
         memoryview(b'Well, I got here the same way the coin did.'),
     ) == UDPFrame(
         timestamp=ts,
@@ -169,7 +149,6 @@ def _unittest_udp_frame_compile() -> None:
         index=0x_0dd_f00d,
         end_of_transfer=True,
         payload=memoryview(b'Well, I got here the same way the coin did.'),
-        data_type_hash=0x_0dd_c0ffee_bad_f00d,
     ).compile_header_and_payload()
 
     # Single-frame.
@@ -177,7 +156,7 @@ def _unittest_udp_frame_compile() -> None:
         memoryview(b'\x00\x00\x00\x00'
                    b'\x00\x00\x00\x80'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
-                   b'\r\xf0\xad\xeb\xfe\x0f\xdc\r'),
+                   b'\x00\x00\x00\x00\x00\x00\x00\x00'),
         memoryview(b'Well, I got here the same way the coin did.'),
     ) == UDPFrame(
         timestamp=ts,
@@ -186,7 +165,6 @@ def _unittest_udp_frame_compile() -> None:
         index=0,
         end_of_transfer=True,
         payload=memoryview(b'Well, I got here the same way the coin did.'),
-        data_type_hash=0x_0dd_c0ffee_bad_f00d,
     ).compile_header_and_payload()
 
 
@@ -206,12 +184,11 @@ def _unittest_udp_frame_parse() -> None:
         index=0x_0dd_f00d,
         end_of_transfer=False,
         payload=memoryview(b'Well, I got here the same way the coin did.'),
-        data_type_hash=0x_0dd_c0ffee_bad_f00d,
     ) == UDPFrame.parse(
         memoryview(b'\x00\x06\x00\x00'
                    b'\r\xf0\xdd\x00'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
-                   b'\r\xf0\xad\xeb\xfe\x0f\xdc\r'
+                   b'\x00\x00\x00\x00\x00\x00\x00\x00'
                    b'Well, I got here the same way the coin did.'),
         ts,
     )
@@ -224,12 +201,11 @@ def _unittest_udp_frame_parse() -> None:
         index=0x_0dd_f00d,
         end_of_transfer=True,
         payload=memoryview(b'Well, I got here the same way the coin did.'),
-        data_type_hash=0x_0dd_c0ffee_bad_f00d,
     ) == UDPFrame.parse(
         memoryview(b'\x00\x07\x00\x00'
                    b'\r\xf0\xdd\x80'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
-                   b'\r\xf0\xad\xeb\xfe\x0f\xdc\r'
+                   b'\x00\x00\x00\x00\x00\x00\x00\x00'
                    b'Well, I got here the same way the coin did.'),
         ts,
     )
@@ -242,12 +218,11 @@ def _unittest_udp_frame_parse() -> None:
         index=0,
         end_of_transfer=True,
         payload=memoryview(b'Well, I got here the same way the coin did.'),
-        data_type_hash=0x_0dd_c0ffee_bad_f00d,
     ) == UDPFrame.parse(
         memoryview(b'\x00\x00\x00\x00'
                    b'\x00\x00\x00\x80'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
-                   b'\r\xf0\xad\xeb\xfe\x0f\xdc\r'
+                   b'\x00\x00\x00\x00\x00\x00\x00\x00'
                    b'Well, I got here the same way the coin did.'),
         ts,
     )
@@ -257,7 +232,7 @@ def _unittest_udp_frame_parse() -> None:
         memoryview(b'\x00\x07\x00\x00'
                    b'\r\xf0\xdd\x80'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
-                   b'\r\xf0\xad\xeb\xfe\x0f\xdc\r')[:-1],
+                   b'\x00\x00\x00\x00\x00\x00\x00\x00')[:-1],
         ts,
     )
     # Bad version.
@@ -265,6 +240,6 @@ def _unittest_udp_frame_parse() -> None:
         memoryview(b'\x01\x07\x00\x00'
                    b'\r\xf0\xdd\x80'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
-                   b'\r\xf0\xad\xeb\xfe\x0f\xdc\r'),
+                   b'\x00\x00\x00\x00\x00\x00\x00\x00'),
         ts,
     )

@@ -31,7 +31,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     tr.protocol_parameters = protocol_params
     assert 42 == tr.local_node_id
 
-    payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
+    payload_metadata = pyuavcan.transport.PayloadMetadata(1234)
 
     message_spec_123_in = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
     message_spec_123_out = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
@@ -159,7 +159,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
 async def _unittest_loopback_transport_service() -> None:
     from pyuavcan.transport import ServiceDataSpecifier, InputSessionSpecifier, OutputSessionSpecifier
 
-    payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
+    payload_metadata = pyuavcan.transport.PayloadMetadata(1234)
 
     tr = pyuavcan.transport.loopback.LoopbackTransport(1234)
 

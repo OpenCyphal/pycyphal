@@ -92,7 +92,7 @@ def _unittest_input_dispatch_table() -> None:
         t.remove(InputSessionSpecifier(MessageDataSpecifier(1234), 123))
 
     a = CANInputSession(InputSessionSpecifier(MessageDataSpecifier(1234), None),
-                        PayloadMetadata(456, 789),
+                        PayloadMetadata(456),
                         asyncio.get_event_loop(),
                         lambda: None)
     t.add(a)

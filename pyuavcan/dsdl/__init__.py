@@ -40,8 +40,7 @@ from ._composite_object import FixedPortServiceObject as FixedPortServiceObject
 from ._composite_object import get_fixed_port_id as get_fixed_port_id
 from ._composite_object import get_model as get_model
 from ._composite_object import get_class as get_class
-from ._composite_object import get_max_serialized_representation_size_bytes as \
-    get_max_serialized_representation_size_bytes
+from ._composite_object import get_extent_bytes as get_extent_bytes
 
 from ._composite_object import get_attribute as get_attribute
 from ._composite_object import set_attribute as set_attribute

@@ -48,7 +48,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     # Instantiate session objects.
     #
-    meta = PayloadMetadata(0xdeadbeef_deadbeef, 10_240)
+    meta = PayloadMetadata(10_240)
 
     pub_a = tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
     sub_any_a = tr_a.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)

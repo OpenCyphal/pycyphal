@@ -37,18 +37,15 @@ Protocol definition
 
 The entirety of the session specifier (:class:`pyuavcan.transport.SessionSpecifier`)
 is reified through the standard UDP/IP stack without any special extensions.
-The data type hash, transfer-ID, transfer priority,
-and the multi-frame transfer reassembly metadata are allocated in the
+The transfer-ID, transfer priority, and the multi-frame transfer reassembly metadata are allocated in the
 UAVCAN-specific UDP datagram header.
 
 +---------------------------------------+---------------------------------------+
 | Parameter                             | Manifested in                         |
 +=======================================+=======================================+
 | Transfer priority                     |                                       |
-+---------------------------------------+                                       |
-| Transfer-ID                           | UDP datagram payload (frame header)   |
-+---------------------------------------+                                       |
-| Data type hash                        |                                       |
++---------------------------------------+ UDP datagram payload (frame header)   |
+| Transfer-ID                           |                                       |
 +-------------------+-------------------+---------------------------------------+
 |                   | Route specifier   | IP address (least significant bits)   |
 | Session specifier +-------------------+---------------------------------------+
@@ -123,7 +120,7 @@ encoded in the little-endian byte order, expressed here in the DSDL notation::
     void16                  # Set to zero when transmitting, ignore when receiving.
     uint32 frame_index_eot  # MSB is set if the current frame is the last frame of the transfer.
     uint64 transfer_id      # The transfer-ID never overflows.
-    uint64 data_type_hash   # Identifies the data type carried by this transfer (and frame).
+    void64                  # This space may be used later for runtime type identification.
 
 The 31 least significant bits of the field ``frame_index_eot`` contain the frame index within the current transfer;
 the most significant bit (31st) is set if the current frame is the last frame of the transfer.
@@ -216,7 +213,7 @@ True
 
 Create an output and an input session:
 
->>> pm = pyuavcan.transport.PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 1024)
+>>> pm = pyuavcan.transport.PayloadMetadata(1024)
 >>> ds = pyuavcan.transport.MessageDataSpecifier(12345)
 >>> pub = tr_0.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
 >>> pub.socket.getpeername()   # UDP port number derived from the subject ID: 12345 + 16384 = 28729

@@ -69,7 +69,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     #
     # Instantiate session objects.
     #
-    meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
+    meta = PayloadMetadata(10000)
 
     broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
     assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)

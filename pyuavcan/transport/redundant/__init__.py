@@ -260,7 +260,7 @@ Any future changes will update all dependent session instances automatically.
 
 >>> from pyuavcan.transport import OutputSessionSpecifier, InputSessionSpecifier, MessageDataSpecifier
 >>> from pyuavcan.transport import PayloadMetadata, Transfer, Timestamp, Priority, ProtocolParameters
->>> pm = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 1024)
+>>> pm = PayloadMetadata(1024)
 >>> s0 = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), pm)
 >>> s0.inferiors    # No inferior transports; hence, no inferior sessions.
 []

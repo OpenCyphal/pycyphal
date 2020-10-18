@@ -27,11 +27,11 @@ class CompositeObject(abc.ABC):  # Members are surrounded with underscores to av
     It does not have any public members.
     """
 
-    # Type definition as provided by PyDSDL.
     _MODEL_: pydsdl.CompositeType
+    """Type definition as provided by PyDSDL."""
 
-    # Defined in generated classes.
-    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_: int
+    _EXTENT_BYTES_: int
+    """Defined in generated classes."""
 
     @abc.abstractmethod
     def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
@@ -84,7 +84,7 @@ class ServiceObject(CompositeObject):
     The base class provides a stub which is overridden in generated classes.
     """
 
-    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_ = 0
+    _EXTENT_BYTES_ = 0
 
     def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
         raise TypeError(f'Service type {type(self).__name__} cannot be serialized')
@@ -131,7 +131,7 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     It is guaranteed that at least one fragment is always returned (which may be empty).
     """
     # TODO: update the Serializer class to emit an iterable of fragments.
-    ser = _serialized_representation.Serializer.new(obj._MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_)
+    ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)
     obj._serialize_aligned_(ser)
     yield ser.buffer.data
 
@@ -214,10 +214,9 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
     return out
 
 
-def get_max_serialized_representation_size_bytes(class_or_instance: typing.Union[typing.Type[CompositeObject],
-                                                                                 CompositeObject]) -> int:
+def get_extent_bytes(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> int:
     # noinspection PyProtectedMember
-    return int(class_or_instance._MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_)
+    return int(class_or_instance._EXTENT_BYTES_)
 
 
 def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[FixedPortObject],
