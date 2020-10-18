@@ -235,7 +235,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
 
             self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id, {})
             reasm = TransferReassembler(source_node_id=source_node_id,
-                                        max_payload_size_bytes=self._payload_metadata.extent_bytes,
+                                        extent_bytes=self._payload_metadata.extent_bytes,
                                         on_error_callback=on_reassembly_error)
             self._reassemblers[source_node_id] = reasm
             _logger.debug('%s: New %s (%d total)', self, reasm, len(self._reassemblers))
@@ -272,7 +272,7 @@ class SelectiveUDPInputSession(UDPInputSession):
                 self._statistics.reassembly_errors[error] = 1
 
         self._reassembler = TransferReassembler(source_node_id=source_node_id,
-                                                max_payload_size_bytes=payload_metadata.extent_bytes,
+                                                extent_bytes=payload_metadata.extent_bytes,
                                                 on_error_callback=on_reassembly_error)
 
         super(SelectiveUDPInputSession, self).__init__(specifier=specifier,

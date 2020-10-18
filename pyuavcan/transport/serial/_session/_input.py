@@ -139,7 +139,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
             self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id, {})
             reasm = TransferReassembler(source_node_id=source_node_id,
-                                        max_payload_size_bytes=self._payload_metadata.extent_bytes,
+                                        extent_bytes=self._payload_metadata.extent_bytes,
                                         on_error_callback=on_reassembly_error)
             self._reassemblers[source_node_id] = reasm
             _logger.debug('%s: New %s (%d total)', self, reasm, len(self._reassemblers))

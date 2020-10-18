@@ -70,8 +70,7 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     @staticmethod
     def parse(image: memoryview, timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[UDPFrame]:
         try:
-            version, int_priority, frame_index_eot, transfer_id, data_type_hash = \
-                UDPFrame._HEADER_FORMAT.unpack_from(image)
+            version, int_priority, frame_index_eot, transfer_id = UDPFrame._HEADER_FORMAT.unpack_from(image)
         except struct.error:
             return None
         if version == UDPFrame._VERSION:

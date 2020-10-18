@@ -298,8 +298,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
                  transfer_id=0x_dead_beef_c0ffee,
                  index=0,
                  end_of_transfer=True,
-                 payload=memoryview(b'HARDBASS'),
-                 data_type_hash=0x_deadbeef_deadbeef).compile_header_and_payload()
+                 payload=memoryview(b'HARDBASS')).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == UDPDemultiplexerStatistics(
@@ -313,7 +312,6 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
     assert bytes(rxf.payload) == b'HARDBASS'
     assert rxf.priority == Priority.HIGH
     assert rxf.transfer_id == 0x_dead_beef_c0ffee
-    assert rxf.data_type_hash == 0x_deadbeef_deadbeef
     assert rxf.single_frame_transfer
 
     assert not received_frames_promiscuous
@@ -326,8 +324,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
                  transfer_id=0x_deadbeef_deadbe,
                  index=0,
                  end_of_transfer=False,
-                 payload=memoryview(b'Oy blin!'),
-                 data_type_hash=0x_dead_beef_c0ffee).compile_header_and_payload()
+                 payload=memoryview(b'Oy blin!')).compile_header_and_payload()
     ))
 
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
@@ -342,7 +339,6 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
     assert bytes(rxf.payload) == b'Oy blin!'
     assert rxf.priority == Priority.LOW
     assert rxf.transfer_id == 0x_deadbeef_deadbe
-    assert rxf.data_type_hash == 0x_dead_beef_c0ffee
     assert not rxf.single_frame_transfer
 
     assert (3, rxf) == received_frames_3.pop()   # Same exact frame in the other listener.
@@ -362,8 +358,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
                  transfer_id=0x_dead_beef_c0ffee,
                  index=0,
                  end_of_transfer=True,
-                 payload=memoryview(b'HARDBASS'),
-                 data_type_hash=0x_deadbeef_deadbeef).compile_header_and_payload()
+                 payload=memoryview(b'HARDBASS')).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == UDPDemultiplexerStatistics(
@@ -377,7 +372,6 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
     assert bytes(rxf.payload) == b'HARDBASS'
     assert rxf.priority == Priority.HIGH
     assert rxf.transfer_id == 0x_dead_beef_c0ffee
-    assert rxf.data_type_hash == 0x_deadbeef_deadbeef
     assert rxf.single_frame_transfer
 
     assert not received_frames_promiscuous
@@ -390,8 +384,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
                  transfer_id=0x_deadbeef_deadbe,
                  index=0,
                  end_of_transfer=False,
-                 payload=memoryview(b'Oy blin!'),
-                 data_type_hash=0x_dead_beef_c0ffee).compile_header_and_payload()
+                 payload=memoryview(b'Oy blin!')).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == UDPDemultiplexerStatistics(
@@ -408,8 +401,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
                  transfer_id=0x_deadbeef_deadbe,
                  index=0,
                  end_of_transfer=False,
-                 payload=memoryview(b'Oy blin!'),
-                 data_type_hash=0x_dead_beef_c0ffee).compile_header_and_payload()
+                 payload=memoryview(b'Oy blin!')).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == UDPDemultiplexerStatistics(

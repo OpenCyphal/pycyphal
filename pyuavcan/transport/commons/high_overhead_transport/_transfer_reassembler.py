@@ -78,15 +78,15 @@ class TransferReassembler:
         """
 
     def __init__(self,
-                 source_node_id:         int,
-                 max_payload_size_bytes: int,
-                 on_error_callback:      typing.Callable[[TransferReassembler.Error], None]):
+                 source_node_id:    int,
+                 extent_bytes:      int,
+                 on_error_callback: typing.Callable[[TransferReassembler.Error], None]):
         """
         :param source_node_id: The remote node-ID whose transfers this instance will be listening for.
             Anonymous transfers cannot be multi-frame transfers, so they are to be accepted as-is without any
             reassembly activities.
 
-        :param max_payload_size_bytes: The maximum number of payload bytes per transfer.
+        :param extent_bytes: The maximum number of payload bytes per transfer.
             Payload that exceeds this size limit may be implicitly truncated (in the Specification this behavior
             is described as "implicit truncation rule").
             This value can be derived from the corresponding DSDL definition.
@@ -97,9 +97,9 @@ class TransferReassembler:
         """
         # Constant configuration.
         self._source_node_id = int(source_node_id)
-        self._max_payload_size_bytes = int(max_payload_size_bytes)
+        self._extent_bytes = int(extent_bytes)
         self._on_error_callback = on_error_callback
-        if self._source_node_id < 0 or self._max_payload_size_bytes < 0 or not callable(self._on_error_callback):
+        if self._source_node_id < 0 or self._extent_bytes < 0 or not callable(self._on_error_callback):
             raise ValueError('Invalid parameters')
 
         # Internal state.
@@ -184,7 +184,7 @@ class TransferReassembler:
             # Late implicit truncation. Normally, it should be done on-the-fly, by not storing payload fragments
             # above the maximum expected size, but it is hard to combine with out-of-order frame acceptance.
             while result.fragmented_payload and \
-                    sum(map(len, result.fragmented_payload[:-1])) > self._max_payload_size_bytes:
+                    sum(map(len, result.fragmented_payload[:-1])) > self._extent_bytes:
                 result.fragmented_payload = result.fragmented_payload[:-1]
         return result
 
@@ -224,7 +224,7 @@ class TransferReassembler:
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes_noexcept(self,
                                                       source_node_id=self._source_node_id,
-                                                      max_payload_size_bytes=self._max_payload_size_bytes)
+                                                      extent_bytes=self._extent_bytes)
 
     @staticmethod
     def construct_anonymous_transfer(frame: Frame) -> typing.Optional[pyuavcan.transport.TransferFrom]:
@@ -321,12 +321,12 @@ def _unittest_transfer_reassembler() -> None:
         return Timestamp(system_ns=monotonic_ns + 10 ** 12, monotonic_ns=monotonic_ns)
 
     with raises(ValueError):
-        _ = TransferReassembler(source_node_id=-1, max_payload_size_bytes=100, on_error_callback=on_error_callback)
+        _ = TransferReassembler(source_node_id=-1, extent_bytes=100, on_error_callback=on_error_callback)
 
     with raises(ValueError):
-        _ = TransferReassembler(source_node_id=0, max_payload_size_bytes=-1, on_error_callback=on_error_callback)
+        _ = TransferReassembler(source_node_id=0, extent_bytes=-1, on_error_callback=on_error_callback)
 
-    ta = TransferReassembler(source_node_id=src_nid, max_payload_size_bytes=100, on_error_callback=on_error_callback)
+    ta = TransferReassembler(source_node_id=src_nid, extent_bytes=100, on_error_callback=on_error_callback)
     assert ta.source_node_id == src_nid
 
     def push(frame: Frame) -> typing.Optional[TransferFrom]:
