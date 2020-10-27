@@ -162,10 +162,6 @@ are evident from the code::
     def get_thing(self) -> typing.Optional[Thing]:  # Good.
         return self._maybe_thing
 
-When writing the built-in help docs for the CLI tool,
-ensure that the line width does not exceed 80 characters unless it's absolutely unavoidable (e.g., long URIs),
-otherwise the text may fail to render properly on some terminals.
-
 
 Testing
 -------
