@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import re
 import gzip
 import typing
 import pickle
@@ -187,8 +188,9 @@ def generate_package(root_namespace_directory:        _AnyPath,
 
     # Template primitives
     filters = {
-        'pickle':            _pickle_object,
-        'numpy_scalar_type': _numpy_scalar_type,
+        'pickle':             _pickle_object,
+        'numpy_scalar_type':  _numpy_scalar_type,
+        'remove_blank_lines': lambda s: re.sub(r'\n([ \t]*\n)+', r'\n', s),
     }
 
     # Generate code

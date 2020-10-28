@@ -54,6 +54,10 @@ class Serializer(abc.ABC):
         """This is used for padding bits."""
         self._bit_offset += bit_length
 
+    def pad_to_alignment(self, bit_length: int) -> None:
+        while self._bit_offset % bit_length != 0:
+            self.add_unaligned_bit(False)
+
     #
     # Fast methods optimized for aligned primitive fields.
     # The most specialized methods must be used whenever possible for best performance.

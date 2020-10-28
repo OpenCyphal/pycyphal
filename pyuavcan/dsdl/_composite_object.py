@@ -34,23 +34,21 @@ class CompositeObject(abc.ABC):  # Members are surrounded with underscores to av
     """Defined in generated classes."""
 
     @abc.abstractmethod
-    def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
+    def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
         """
         Auto-generated serialization method.
         Appends the serialized representation of its object to the supplied Serializer instance.
-        The current bit offset of the Serializer instance MUST be byte-aligned.
         This is not a part of the API.
         """
         raise NotImplementedError
 
     @staticmethod
     @abc.abstractmethod
-    def _deserialize_aligned_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
+    def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
         """
         Auto-generated deserialization method. Consumes (some) data from the supplied Deserializer instance.
         Raises a Deserializer.FormatError if the supplied serialized representation is invalid.
         Always returns a valid object unless an exception is raised.
-        The current bit offset of the Deserializer instance MUST be byte-aligned.
         This is not a part of the API.
         """
         raise NotImplementedError
@@ -86,11 +84,11 @@ class ServiceObject(CompositeObject):
 
     _EXTENT_BYTES_ = 0
 
-    def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
+    def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
         raise TypeError(f'Service type {type(self).__name__} cannot be serialized')
 
     @staticmethod
-    def _deserialize_aligned_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
+    def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
         raise TypeError('Service types cannot be deserialized')
 
 
@@ -103,12 +101,12 @@ class FixedPortObject(abc.ABC):
 
 class FixedPortCompositeObject(CompositeObject, FixedPortObject):
     @abc.abstractmethod
-    def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
+    def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
         raise NotImplementedError
 
     @staticmethod
     @abc.abstractmethod
-    def _deserialize_aligned_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
+    def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
         raise NotImplementedError
 
 
@@ -132,7 +130,7 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     """
     # TODO: update the Serializer class to emit an iterable of fragments.
     ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)
-    obj._serialize_aligned_(ser)
+    obj._serialize_(ser)
     yield ser.buffer.data
 
 
@@ -156,7 +154,7 @@ def deserialize(dtype: typing.Type[CompositeObjectTypeVar],
     """
     deserializer = _serialized_representation.Deserializer.new(fragmented_serialized_representation)
     try:
-        return dtype._deserialize_aligned_(deserializer)  # type: ignore
+        return dtype._deserialize_(deserializer)  # type: ignore
     except _serialized_representation.Deserializer.FormatError:
         _logger.info('Invalid serialized representation of %s: %s', get_model(dtype), deserializer, exc_info=True)
         return None

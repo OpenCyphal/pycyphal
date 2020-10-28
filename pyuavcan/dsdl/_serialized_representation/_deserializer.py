@@ -71,6 +71,10 @@ class Deserializer(abc.ABC):
         _ensure_cardinal(bit_length)
         self._bit_offset += bit_length
 
+    def pad_to_alignment(self, bit_length: int) -> None:
+        while self._bit_offset % bit_length != 0:
+            self._bit_offset += 1
+
     #
     # Fast methods optimized for aligned primitive fields.
     # The most specialized methods must be used whenever possible for best performance.
