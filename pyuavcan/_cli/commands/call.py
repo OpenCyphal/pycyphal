@@ -69,8 +69,8 @@ Valid values range from zero (inclusive) to a transport-specific upper limit.
 The full service type name with version and optional service-ID.
 The service-ID can be omitted if a fixed one is defined for the data type.
 Examples:
-    123.uavcan.node.ExecuteCommand.1.0 (using service-ID 123)
-    uavcan.node.ExecuteCommand.1.0 (using the fixed service-ID 435)
+    123.uavcan.node.ExecuteCommand.1.1 (using service-ID 123)
+    uavcan.node.ExecuteCommand.1.1 (using the fixed service-ID 435)
 '''.strip())
         parser.add_argument(
             'field_spec',

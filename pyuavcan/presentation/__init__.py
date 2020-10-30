@@ -113,27 +113,27 @@ Generally, anonymous nodes are useful in two cases:
 
 Having configured the node-ID, let's set up a service and invoke it:
 
->>> async def on_request(request: uavcan.node.ExecuteCommand_1_0.Request,
+>>> async def on_request(request: uavcan.node.ExecuteCommand_1_1.Request,
 ...                      metadata: pyuavcan.presentation.ServiceRequestMetadata) \
-...         -> uavcan.node.ExecuteCommand_1_0.Response:
+...         -> uavcan.node.ExecuteCommand_1_1.Response:
 ...     print(f'Received command {request.command} from node {metadata.client_node_id}')
-...     return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND)
->>> srv_exec_command = presentation.get_server_with_fixed_service_id(uavcan.node.ExecuteCommand_1_0)
+...     return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND)
+>>> srv_exec_command = presentation.get_server_with_fixed_service_id(uavcan.node.ExecuteCommand_1_1)
 >>> srv_exec_command.serve_in_background(on_request)
->>> client_exec_command = presentation.make_client_with_fixed_service_id(uavcan.node.ExecuteCommand_1_0,
+>>> client_exec_command = presentation.make_client_with_fixed_service_id(uavcan.node.ExecuteCommand_1_1,
 ...                                                                      server_node_id=1234)
->>> request_object = uavcan.node.ExecuteCommand_1_0.Request(
-...     uavcan.node.ExecuteCommand_1_0.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
+>>> request_object = uavcan.node.ExecuteCommand_1_1.Request(
+...     uavcan.node.ExecuteCommand_1_1.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
 ...     '/path/to/the/firmware/image.bin')
 >>> received_response, response_transfer = run_until_complete(client_exec_command.call(request_object))
 Received command 65533 from node 1234
 >>> received_response
-uavcan.node.ExecuteCommand.Response.1.0(status=3)
+uavcan.node.ExecuteCommand.Response.1.1(status=3)
 
 Methods that receive data from the network return None on timeout.
 For example, here we create a client for a nonexistent service; the call times out and returns None:
 
->>> bad_client = presentation.make_client(uavcan.node.ExecuteCommand_1_0,
+>>> bad_client = presentation.make_client(uavcan.node.ExecuteCommand_1_1,
 ...                                       service_id=234,       # There is no such service.
 ...                                       server_node_id=321)   # There is no such server.
 >>> bad_client.response_timeout = 0.1                           # Override the default.

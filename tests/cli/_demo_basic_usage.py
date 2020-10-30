@@ -171,18 +171,18 @@ def _unittest_slow_cli_demo_basic_usage(
         assert node_info['430']['protocol_version']['minor'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[1]
 
         command_response = json.loads(run_cli_tool(
-            '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0',
-            f'{{command: {uavcan.node.ExecuteCommand_1_0.Request.COMMAND_STORE_PERSISTENT_STATES} }}',
+            '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.1',
+            f'{{command: {uavcan.node.ExecuteCommand_1_1.Request.COMMAND_STORE_PERSISTENT_STATES} }}',
             '--format', 'json', *iface_option.make_cli_args(123), timeout=5.0  # type: ignore
         ))
-        assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND
+        assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND
 
         # Next request - this fails if the OUTPUT TRANSFER-ID MAP save/restore logic is not working.
         command_response = json.loads(run_cli_tool(
-            '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0', '{command: 23456}',
+            '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.1', '{command: 23456}',
             '--format', 'json', *iface_option.make_cli_args(123), timeout=5.0  # type: ignore
         ))
-        assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
+        assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS
 
         least_squares_response = json.loads(run_cli_tool(
             '-vv', 'call', '42', '123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0',
@@ -194,11 +194,11 @@ def _unittest_slow_cli_demo_basic_usage(
 
         # Next request - this fails if the OUTPUT TRANSFER-ID MAP save/restore logic is not working.
         command_response = json.loads(run_cli_tool(
-            '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.0',
-            f'{{command: {uavcan.node.ExecuteCommand_1_0.Request.COMMAND_POWER_OFF} }}',
+            '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.1',
+            f'{{command: {uavcan.node.ExecuteCommand_1_1.Request.COMMAND_POWER_OFF} }}',
             '--format', 'json', *iface_option.make_cli_args(123), timeout=5.0  # type: ignore
         ))
-        assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS
+        assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS
 
         # We've just asked the node to terminate, wait for it here.
         out_demo_proc = demo_proc.wait(10.0)[1].splitlines()

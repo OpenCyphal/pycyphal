@@ -198,7 +198,7 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
         return mod
 
     if model.has_parent_service:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
-        parent_name, child_name = model.name_components[-2], model.name_components[-1]
+        parent_name, child_name = model.name_components[-2:]
         mod = do_import(model.name_components[:-2])
         out = getattr(mod, f'{parent_name}_{model.version.major}_{model.version.minor}')
         assert issubclass(out, ServiceObject)
