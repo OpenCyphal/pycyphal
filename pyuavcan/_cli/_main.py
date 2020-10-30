@@ -75,24 +75,22 @@ def _construct_argument_parser(command_instances: typing.Sequence[commands.Comma
     root_parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
         description=r'''
-     __   __   _______   __   __   _______   _______   __   __
-    |  | |  | /   _   \ |  | |  | /   ____| /   _   \ |  \ |  |
-    |  | |  | |  |_|  | |  | |  | |  |      |  |_|  | |   \|  |
-    |  |_|  | |   _   | \  \_/  / |  |____  |   _   | |  |\   |
-    \_______/ |__| |__|  \_____/  \_______| |__| |__| |__| \__|
-        |      |            |         |      |         |
-    ----o------o------------o---------o------o---------o-------
+         __   __   _______   __   __   _______   _______   __   __
+        |  | |  | /   _   \ |  | |  | /   ____| /   _   \ |  \ |  |
+        |  | |  | |  |_|  | |  | |  | |  |      |  |_|  | |   \|  |
+        |  |_|  | |   _   | \  \_/  / |  |____  |   _   | |  |\   |
+        \_______/ |__| |__|  \_____/  \_______| |__| |__| |__| \__|
+            |      |            |         |      |         |
+        ----o------o------------o---------o------o---------o-------
 
-A command line tool for diagnostics and management of UAVCAN networks.
-This tool is built on top of PyUAVCAN -- a full-featured Python implementation
-of the UAVCAN stack for high-level operating systems.
+PyUAVCAN CLI -- a command line tool for diagnostics and management of UAVCAN networks.
+PyUAVCAN is a Python library implementing the UAVCAN stack for high-level operating systems (GNU/Linux, Windows, macOS)
+supporting different transport protocols (UAVCAN/CAN, UAVCAN/UDP/IP, UAVCAN/serial, etc).
 
-The tool is designed for use either directly by humans or from automation
-scripts. The data printed into stdout follows well-defined formats so that it
-is machine-readable. The stderr output is designed to be human-readable;
-most of it is suppressed by default but it can be enabled with '-v'.
+This tool is designed for use either directly by humans or from automation scripts.
 
-Find documentation and support at https://uavcan.org.
+Read the docs: https://pyuavcan.readthedocs.io
+Ask questions: https://forum.uavcan.org
 '''.strip('\r\n'))
 
     # Register common arguments
@@ -101,8 +99,7 @@ Find documentation and support at https://uavcan.org.
         action='version',
         version=f'%(prog)s {__version__}',
         help='''
-Print the PyUAVCAN version string and exit.
-The tool is versioned synchronously with the PyUAVCAN library.
+Print the PyUAVCAN version string and exit. The tool is versioned synchronously with the PyUAVCAN library.
 '''.strip())
     root_parser.add_argument(
         '--verbose', '-v',

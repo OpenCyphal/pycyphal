@@ -28,15 +28,13 @@ class SubscribeCommand(Command):
     @property
     def help(self) -> str:
         return '''
-Subscribe to the specified subject, receive and print messages into stdout.
-This command does not instantiate a local node; the bus is accessed directly
-at the presentation layer, so many instances can be cheaply executed
-concurrently to subscribe to multiple message streams.
+Subscribe to the specified subject, receive and print messages into stdout. This command does not instantiate a local
+node; the bus is accessed directly at the presentation layer, so many instances can be cheaply executed concurrently
+to subscribe to multiple message streams.
 
-Each emitted output unit is a key-value mapping where the number of elements
-equals the number of subjects the command is asked to subscribe to; the keys
-are subject-IDs and values are the received message objects.
-The output format is configurable.
+Each emitted output unit is a key-value mapping where the number of elements equals the number of subjects the command
+is asked to subscribe to; the keys are subject-IDs and values are the received message objects. The output format is
+configurable.
 '''.strip()
 
     @property
@@ -58,9 +56,8 @@ pyuavcan sub uavcan.node.Heartbeat.1.0
             metavar='[SUBJECT_ID.]FULL_MESSAGE_TYPE_NAME.MAJOR.MINOR',
             nargs='+',
             help='''
-A set of full message type names with version and optional subject-ID for each.
-The subject-ID can be omitted if a fixed one is defined for the data type.
-If multiple subjects are selected, a synchronizing subscription will be used,
+A set of full message type names with version and optional subject-ID for each. The subject-ID can be omitted if a
+fixed one is defined for the data type. If multiple subjects are selected, a synchronizing subscription will be used,
 reporting received messages in synchronous groups.
 Examples:
     1234.uavcan.node.Heartbeat.1.0 (using subject-ID 1234)
@@ -70,16 +67,14 @@ Examples:
             '--with-metadata', '-M',
             action='store_true',
             help='''
-Emit metadata together with each message.
-The metadata fields will be contained under the key "_metadata_".
+Emit metadata together with each message. The metadata fields will be contained under the key "_metadata_".
 '''.strip())
         parser.add_argument(
             '--count', '-C',
             type=int,
             metavar='NATURAL',
             help='''
-Exit automatically after this many messages (or synchronous message groups)
-have been received. No limit by default.
+Exit automatically after this many messages (or synchronous message groups) have been received. No limit by default.
 '''.strip())
 
     def execute(self, args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:
