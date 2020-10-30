@@ -6,7 +6,13 @@
 
 {% macro serialize(t) -%}
     assert _ser_.current_bit_length % 8 == 0, 'Serializer is not aligned'
-    {{ _serialize_composite(t, 'self', 0|bit_length_set) }}
+    {{
+        _serialize_composite(t|unwrap_delimited,
+                             'self',
+                             0|bit_length_set)
+        | remove_blank_lines
+        | fold_idempotent
+    }}
     _ser_.pad_to_alignment({{ t.alignment_requirement }})
 {%- endmacro %}
 
@@ -123,7 +129,7 @@
 
 {% macro _serialize_any(t, ref, offset) %}
     {% if t.alignment_requirement > 1 %}
-    _ser_.pad_to_alignment({{ t.alignment_requirement }})
+    _ser_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent]
     {% endif %}
 
     {%- if t is VoidType -%}                    _ser_.skip_bits({{ t.bit_length }})
@@ -132,11 +138,13 @@
     {%- elif t is FloatType -%}                 {{ _serialize_float(t, ref, offset) }}
     {%- elif t is FixedLengthArrayType -%}      {{ _serialize_fixed_length_array(t, ref, offset) }}
     {%- elif t is VariableLengthArrayType -%}   {{ _serialize_variable_length_array(t, ref, offset) }}
-    {%- elif t is CompositeType -%}             {{ ref }}._serialize_(_ser_)
+    {%- elif t is CompositeType -%}
+    # TODO: serialize the delimiter header.
+    {{ ref }}._serialize_(_ser_)
     {%- else %}{% assert False %}
     {%- endif %}
 
     {% if t.alignment_requirement > 1 %}
-    _ser_.pad_to_alignment({{ t.alignment_requirement }})
+    _ser_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent]
     {% endif %}
 {% endmacro %}

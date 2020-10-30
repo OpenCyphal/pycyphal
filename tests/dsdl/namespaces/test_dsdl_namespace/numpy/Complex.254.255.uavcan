@@ -5,3 +5,4 @@ uavcan.node.port.ID.1.0[<=2] property
 uavcan.register.Value.1.0[2] id
 truncated uint2[<=5] bytes
 truncated uint7[5] str
+@extent 1024 * 8

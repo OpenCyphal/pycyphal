@@ -368,7 +368,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     # noinspection PyProtectedMember
     def _serialize_(self, _ser_: {{ full_class_name }}._SerializerTypeVar_) -> None:
         _orig_bit_length_ = _ser_.current_bit_length
-        {{ serialize(type)|remove_blank_lines|indent }}
+        {{ serialize(type)|indent }}
         assert {{ type.bit_length_set|min }} <= (_ser_.current_bit_length - _orig_bit_length_) {# -#}
                                              <= {{ type.bit_length_set|max }}, \
             'Bad serialization of {{ type }}'
@@ -377,7 +377,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     @staticmethod
     def _deserialize_(_des_: {{ full_class_name }}._DeserializerTypeVar_) -> {{ full_class_name }}:
         _bit_length_base_ = _des_.consumed_bit_length
-        {{ deserialize(type, full_class_name)|remove_blank_lines|indent }}
+        {{ deserialize(type, full_class_name)|indent }}
         assert {{ type.bit_length_set|min }} <= (_des_.consumed_bit_length - _bit_length_base_) {# -#}
                                              <= {{ type.bit_length_set|max }}, \
             'Bad deserialization of {{ type }}'
@@ -407,7 +407,8 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     {%- if T.has_fixed_port_id %}
     _FIXED_PORT_ID_ = {{ T.fixed_port_id|int }}
     {%- endif %}
-    _EXTENT_BYTES_ = {{ type.extent }}
+    {% assert type.extent % 8 == 0 %}
+    _EXTENT_BYTES_ = {{ type.extent // 8 }}
 
     {% set meta_type = type.__class__.__name__ -%}
     _MODEL_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(

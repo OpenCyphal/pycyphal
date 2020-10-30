@@ -6,7 +6,14 @@
 
 {% macro deserialize(t, self_type_name) -%}
     assert _des_.consumed_bit_length % 8 == 0, 'Deserializer is not aligned'
-    {{ _deserialize_composite(t, 'self', 0|bit_length_set, self_type_name) }}
+    {{
+        _deserialize_composite(t|unwrap_delimited,
+                               'self',
+                               0|bit_length_set,
+                               self_type_name)
+        | remove_blank_lines
+        | fold_idempotent
+    }}
     _des_.pad_to_alignment({{ t.alignment_requirement }})
 {%- endmacro %}
 
@@ -119,7 +126,7 @@
 
 {% macro _deserialize_any(t, ref, offset) %}
     {% if t.alignment_requirement > 1 %}
-    _des_.pad_to_alignment({{ t.alignment_requirement }})
+    _des_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent]
     {% endif %}
 
     {%- if t is VoidType -%}                 _des_.skip_bits({{ t.bit_length }})
@@ -128,11 +135,13 @@
     {%- elif t is FloatType -%}              {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_f{{ t.bit_length }}()
     {%- elif t is FixedLengthArrayType -%}   {{ _deserialize_fixed_length_array(t, ref, offset) }}
     {%- elif t is VariableLengthArrayType -%}{{ _deserialize_variable_length_array(t, ref, offset) }}
-    {%- elif t is CompositeType -%}          {{ ref }} = {{ t|full_reference_name }}._deserialize_(_des_)
+    {%- elif t is CompositeType -%}
+    # TODO: deserialize the delimiter header and limit the size of the nested deserializer.
+    {{ ref }} = {{ t|full_reference_name }}._deserialize_(_des_)
     {%- else %}{% assert False %}
     {%- endif %}
 
     {% if t.alignment_requirement > 1 %}
-    _des_.pad_to_alignment({{ t.alignment_requirement }})
+    _des_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent]
     {% endif %}
 {% endmacro %}
