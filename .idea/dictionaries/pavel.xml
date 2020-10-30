@@ -30,6 +30,7 @@
       <w>bysource</w>
       <w>candump</w>
       <w>canfd</w>
+      <w>canid</w>
       <w>caplog</w>
       <w>ccitt</w>
       <w>coloredlogs</w>

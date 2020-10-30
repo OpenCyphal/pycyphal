@@ -13,11 +13,12 @@ import pyuavcan.transport.can
 
 _CANID_EXT_MASK = 2 ** 29 - 1
 
-_BIT_SRV_NOT_MSG = 1 << 25
-_BIT_MSG_ANON    = 1 << 24
-_BIT_SRV_REQ     = 1 << 24
-_BIT_R23         = 1 << 23
-_BIT_MSG_R7      = 1 << 7
+_BIT_SRV_NOT_MSG    = 1 << 25
+_BIT_MSG_ANON       = 1 << 24
+_BIT_SRV_REQ        = 1 << 24
+_BIT_R23            = 1 << 23
+_BIT_MSG_SET_IGNORE = 3 << 21
+_BIT_MSG_R7         = 1 << 7
 
 
 @dataclasses.dataclass(frozen=True)
@@ -87,7 +88,7 @@ class MessageCANID(CANID):
             _validate_unsigned_range(self.source_node_id, self.NODE_ID_MASK)
 
     def compile(self, fragmented_transfer_payload: typing.Iterable[memoryview]) -> int:
-        identifier = (int(self.priority) << 26) | (self.subject_id << 8)
+        identifier = (int(self.priority) << 26) | _BIT_MSG_SET_IGNORE | (self.subject_id << 8)
 
         source_node_id = self.source_node_id
         if source_node_id is None:  # Anonymous frame
@@ -101,7 +102,7 @@ class MessageCANID(CANID):
 
         assert 0 <= identifier <= _CANID_EXT_MASK
         assert identifier & self.NODE_ID_MASK == source_node_id
-        assert (identifier >> 8) & 0xFFFF == self.subject_id
+        assert (identifier >> 8) & pyuavcan.transport.MessageDataSpecifier.SUBJECT_ID_MASK == self.subject_id
         assert identifier >> 26 == int(self.priority)
         return identifier
 
@@ -230,54 +231,54 @@ def _unittest_can_filter_configuration() -> None:
     retained = optimize_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 999)
     assert retained == [
         ext(idn=0b_000_1_0_0_000000000_1010101_0000000,
-            msk=0b_000_1_0_1_000000000_1111111_0000000),     # Services
-
-        ext(idn=0b_000_0_0_0_0000000000000000_1010101,      # Loopback frames (both messages and services)
-            msk=0b_000_0_0_1_0000000000000000_1111111),
-
-        ext(idn=0b_000_0_0_0_000000000000000_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),
-
-        ext(idn=0b_000_0_0_0_000000000000101_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),
-
-        ext(idn=0b_000_0_0_0_000000000001010_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),
-
-        ext(idn=0b_000_0_0_0_000000000010101_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),
-
-        ext(idn=0b_000_0_0_0_000000000101010_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),     # Duplicates removed
-
-        ext(idn=0b_000_0_0_0_000000000101011_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),
-    ]
-
-    reduced = optimize_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 7)
-    assert reduced == [
-        ext(idn=0b_000_1_0_0_000000000_1010101_0000000,
             msk=0b_000_1_0_1_000000000_1111111_0000000),    # Services
 
         ext(idn=0b_000_0_0_0_0000000000000000_1010101,      # Loopback frames (both messages and services)
             msk=0b_000_0_0_1_0000000000000000_1111111),
 
         ext(idn=0b_000_0_0_0_000000000000000_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),
+            msk=0b_000_1_0_1_001111111111111_1_0000000),
 
         ext(idn=0b_000_0_0_0_000000000000101_0_0000000,
-            msk=0b_000_1_0_1_111111111101111_1_0000000),     # Merged with 6th
+            msk=0b_000_1_0_1_001111111111111_1_0000000),
 
         ext(idn=0b_000_0_0_0_000000000001010_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),
+            msk=0b_000_1_0_1_001111111111111_1_0000000),
+
+        ext(idn=0b_000_0_0_0_000000000010101_0_0000000,
+            msk=0b_000_1_0_1_001111111111111_1_0000000),
+
+        ext(idn=0b_000_0_0_0_000000000101010_0_0000000,
+            msk=0b_000_1_0_1_001111111111111_1_0000000),     # Duplicates removed
+
+        ext(idn=0b_000_0_0_0_000000000101011_0_0000000,
+            msk=0b_000_1_0_1_001111111111111_1_0000000),
+    ]
+
+    reduced = optimize_filter_configurations(generate_filter_configurations(reference_subject_ids, 0b1010101), 7)
+    assert reduced == [
+        ext(idn=0b_000_1_0_0_000000000_1010101_0000000,
+            msk=0b_000_1_0_1_000000000_1111111_0000000),     # Services
+
+        ext(idn=0b_000_0_0_0_0000000000000000_1010101,       # Loopback frames (both messages and services)
+            msk=0b_000_0_0_1_0000000000000000_1111111),
+
+        ext(idn=0b_000_0_0_0_000000000000000_0_0000000,
+            msk=0b_000_1_0_1_001111111111111_1_0000000),
+
+        ext(idn=0b_000_0_0_0_000000000000101_0_0000000,
+            msk=0b_000_1_0_1_001111111101111_1_0000000),     # Merged with 6th
+
+        ext(idn=0b_000_0_0_0_000000000001010_0_0000000,
+            msk=0b_000_1_0_1_001111111111111_1_0000000),
 
         # This one removed, merged with 4th
 
         ext(idn=0b_000_0_0_0_000000000101010_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),     # Duplicates removed
+            msk=0b_000_1_0_1_001111111111111_1_0000000),     # Duplicates removed
 
         ext(idn=0b_000_0_0_0_000000000101011_0_0000000,
-            msk=0b_000_1_0_1_111111111111111_1_0000000),
+            msk=0b_000_1_0_1_001111111111111_1_0000000),
     ]
     print([str(r) for r in reduced])
 
@@ -290,7 +291,7 @@ def _unittest_can_filter_configuration() -> None:
             msk=0b_000_0_0_1_0000000000000000_1111111),
 
         ext(idn=0b_000_0_0_0_000000000000000_0_0000000,
-            msk=0b_000_1_0_1_111111111000000_1_0000000),
+            msk=0b_000_1_0_1_001111111000000_1_0000000),
     ]
     print([str(r) for r in reduced])
 
@@ -346,18 +347,22 @@ def _unittest_can_identifier_parse() -> None:
     with raises(ValueError):
         ServiceCANID(Priority.HIGH, 123, 123, 42, True)   # Same source and destination
 
+    assert CANID.parse(0b_010_0_0_0110100100101001_1_1111011) is None
     reference_message = MessageCANID(Priority.FAST, 123, 2345)
-    reference_message_id = 0b_010_0_0_0011000000111001_0_1111011
-    assert CANID.parse(0b_010_0_0_0011000000111001_1_1111011) is None
-    assert CANID.parse(reference_message_id) == reference_message
-    assert reference_message_id == reference_message.compile([])
+    assert CANID.parse(0b_010_0_0_0110100100101001_0_1111011) == reference_message
+    assert CANID.parse(0b_010_0_0_0100100100101001_0_1111011) == reference_message
+    assert CANID.parse(0b_010_0_0_0010100100101001_0_1111011) == reference_message
+    assert CANID.parse(0b_010_0_0_0000100100101001_0_1111011) == reference_message
+    assert 0b_010_0_0_0110100100101001_0_1111011 == reference_message.compile([])
     assert reference_message.data_specifier == MessageDataSpecifier(2345)
 
+    assert CANID.parse(0b_010_0_1_0111000011100001_1_1111111) is None
     reference_message = MessageCANID(Priority.FAST, None, 4321)
-    reference_message_id = 0b_010_0_1_0001000011100001_0_1111111
-    assert CANID.parse(0b_010_0_1_0001000011100001_1_1111111) is None
-    assert CANID.parse(reference_message_id) == reference_message
-    assert reference_message_id == reference_message.compile([memoryview(bytes([100, 27]))])
+    assert CANID.parse(0b_010_0_1_0111000011100001_0_1111111) == reference_message
+    assert CANID.parse(0b_010_0_1_0101000011100001_0_1111111) == reference_message
+    assert CANID.parse(0b_010_0_1_0011000011100001_0_1111111) == reference_message
+    assert CANID.parse(0b_010_0_1_0001000011100001_0_1111111) == reference_message
+    assert 0b_010_0_1_0111000011100001_0_1111111 == reference_message.compile([memoryview(bytes([100, 27]))])
     assert reference_message.data_specifier == MessageDataSpecifier(4321)
 
     reference_service = ServiceCANID(Priority.OPTIONAL, 123, 42, 300, True)

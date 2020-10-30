@@ -138,18 +138,18 @@ def _unittest_slow_cli_pub_sub_anon(transport_factory: TransportFactory) -> None
         # Hence, to support the case of redundant transports, we use 'greater or equal' here.
         assert len(diagnostics) >= 2
         for m in diagnostics:
-            assert 'nominal' in m['32760']['_metadata_']['priority'].lower()
-            assert m['32760']['_metadata_']['transfer_id'] >= 0
-            assert m['32760']['_metadata_']['source_node_id'] is None
-            assert m['32760']['timestamp']['microsecond'] == 0
-            assert m['32760']['text'] == ''
+            assert 'nominal' in m['8184']['_metadata_']['priority'].lower()
+            assert m['8184']['_metadata_']['transfer_id'] >= 0
+            assert m['8184']['_metadata_']['source_node_id'] is None
+            assert m['8184']['timestamp']['microsecond'] == 0
+            assert m['8184']['text'] == ''
 
         diagnostics = list(json.loads(s) for s in proc_sub_diagnostic_no_meta.wait(1.0, interrupt=True)[1].splitlines())
         print('diagnostics:', diagnostics)
         assert len(diagnostics) >= 2  # >= because see above
         for index, m in enumerate(diagnostics):
-            assert m['32760']['timestamp']['microsecond'] == 0
-            assert m['32760']['text'] == ''
+            assert m['8184']['timestamp']['microsecond'] == 0
+            assert m['8184']['text'] == ''
     else:
         proc = BackgroundChildProcess.cli(
             '-v', 'pub', 'uavcan.diagnostic.Record.1.1', '{}', '--count=2', '--period=2',

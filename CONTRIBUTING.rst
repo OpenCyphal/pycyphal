@@ -220,6 +220,12 @@ source directories.
 The scattered coverage files are then located automatically and combined into one file,
 which is then analyzed by report generators and other tools like SonarQube.
 
+When tests that spawn new processes fail, they may leave their children running in the background,
+which may adversely influence other tests that are executed later,
+so an error in one test may crash a dozen of unrelated ones invoked afterwards.
+You need to be prepared for that and always start analyzing the test report starting with the first failure.
+Ideally, though, this should be fixed by adding robust cleanup logic for each test.
+
 Some of the components of the library and of the test suite require DSDL packages to be generated.
 Those must be dealt with carefully as it needs to be ensured that the code that requires generated
 packages to be available is not executed until they are generated.

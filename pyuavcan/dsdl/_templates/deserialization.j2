@@ -11,7 +11,7 @@
     {{
         _deserialize_composite(inner, 'self', 0|bit_length_set, self_type_name) | remove_blank_lines | fold_idempotent
     }}
-    _des_.pad_to_alignment({{ t.alignment_requirement }})
+    _des_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent]
     assert {{ inner.bit_length_set|min }} <= (_des_.consumed_bit_length - _base_offset_) {# -#}
                                           <= {{ inner.bit_length_set|max }}, \
         'Bad deserialization of {{ t }}'
