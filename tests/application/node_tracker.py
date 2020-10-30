@@ -250,14 +250,14 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         # Node A is restarted. Node C goes offline.
         hb_c.cancel()
         hb_a.cancel()
-        hb_a = asyncio.create_task(_publish_heartbeat(p_a, 0xc0fe))
+        hb_a = asyncio.create_task(_publish_heartbeat(p_a, 0xfe))
         await asyncio.sleep(6)
         assert num_events_a == 4  # Two extra events: node restart detection, then get info reception.
         assert num_events_b == 3
         assert num_events_c == 2
         assert list(trk.registry.keys()) == [0xA]
         assert 7 >= trk.registry[0xA].heartbeat.uptime >= 5
-        assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xc0fe
+        assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xfe
         assert trk.registry[0xA].info is not None
         assert trk.registry[0xA].info.name.tobytes().decode() == 'node-A'
 
