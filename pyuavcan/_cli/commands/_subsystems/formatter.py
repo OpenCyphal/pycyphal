@@ -82,7 +82,7 @@ def _make_tsv_formatter() -> Formatter:
 
 def _unittest_formatter() -> None:
     obj = {
-        12345: {
+        2345: {
             'abc': {
                 'def': [123, 456, ],
             },
@@ -90,7 +90,7 @@ def _unittest_formatter() -> None:
         }
     }
     assert FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.YAML))(obj) == """---
-12345:
+2345:
   abc:
     def:
     - 123
@@ -98,4 +98,4 @@ def _unittest_formatter() -> None:
   ghi: 789
 """
     assert FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.JSON))(obj) == \
-        '{"12345":{"abc":{"def":[123,456]},"ghi":789}}'
+        '{"2345":{"abc":{"def":[123,456]},"ghi":789}}'

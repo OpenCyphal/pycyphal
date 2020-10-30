@@ -6,14 +6,14 @@
 
 {% macro deserialize(t, self_type_name) -%}
     assert _des_.consumed_bit_length % 8 == 0, 'Deserializer is not aligned'
-    {{-
+    {{
         _deserialize_composite(t|unwrap_delimited,
                                'self',
                                0|bit_length_set,
                                self_type_name)
         | remove_blank_lines
         | fold_idempotent
-    -}}
+    }}
     _des_.pad_to_alignment({{ t.alignment_requirement }})
 {%- endmacro %}
 
@@ -141,7 +141,11 @@
     {%- else %}{% assert False %}
     {%- endif %}
 
-    {% if t.alignment_requirement > 1 %}
+    {# No point enforcing the alignment if t is a composite because the invoked deserialization method will do it. #}
+    {% if t is CompositeType %}
+    assert _des_.consumed_bit_length % {{ t.alignment_requirement }} == 0, 'Nested object alignment error'
+    {% endif %}
+    {% if t is not CompositeType and t.alignment_requirement > 1 %}
     _des_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent]
     {% endif %}
 {% endmacro %}

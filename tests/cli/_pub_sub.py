@@ -25,12 +25,12 @@ def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
     )
 
     proc_sub_diagnostic = BackgroundChildProcess.cli(
-        'sub', '4321.uavcan.diagnostic.Record.1.0', '--count=3', '--format=json',
+        'sub', '4321.uavcan.diagnostic.Record.1.1', '--count=3', '--format=json',
         '--with-metadata', *transport_factory(None).cli_args
     )
 
     proc_sub_diagnostic_wrong_pid = BackgroundChildProcess.cli(
-        'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=yaml',
+        'sub', 'uavcan.diagnostic.Record.1.1', '--count=3', '--format=yaml',
         '--with-metadata', *transport_factory(None).cli_args
     )
 
@@ -44,15 +44,15 @@ def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
     run_cli_tool(
         '-v', 'pub',
 
-        '4321.uavcan.diagnostic.Record.1.0',
+        '4321.uavcan.diagnostic.Record.1.1',
         '{severity: {value: 6}, timestamp: {microsecond: 123456}, text: "Hello world!"}',
 
-        '1234.uavcan.diagnostic.Record.1.0', '{text: "Goodbye world."}',
+        '1234.uavcan.diagnostic.Record.1.1', '{text: "Goodbye world."}',
 
         '555.uavcan.si.sample.temperature.Scalar.1.0', '{kelvin: 123.456}',
 
         '--count=3', '--period=0.1', '--priority=slow',
-        '--heartbeat-fields={vendor_specific_status_code: 54321}',
+        '--heartbeat-fields={vendor_specific_status_code: 54}',
         *transport_factory(51).cli_args,
         timeout=10.0
     )
@@ -77,11 +77,11 @@ def _unittest_slow_cli_pub_sub(transport_factory: TransportFactory) -> None:
 
     assert 2 <= len(heartbeats) <= 6
     for m in heartbeats:
-        assert 'slow' in m['32085']['_metadata_']['priority'].lower()
-        assert m['32085']['_metadata_']['transfer_id'] >= 0
-        assert m['32085']['_metadata_']['source_node_id'] == 51
-        assert m['32085']['uptime'] in (0, 1)
-        assert m['32085']['vendor_specific_status_code'] == 54321
+        assert 'slow' in m['7509']['_metadata_']['priority'].lower()
+        assert m['7509']['_metadata_']['transfer_id'] >= 0
+        assert m['7509']['_metadata_']['source_node_id'] == 51
+        assert m['7509']['uptime'] in (0, 1)
+        assert m['7509']['vendor_specific_status_code'] == 54
 
     assert len(diagnostics) == 3
     for m in diagnostics:
@@ -109,19 +109,19 @@ def _unittest_slow_cli_pub_sub_anon(transport_factory: TransportFactory) -> None
     )
 
     proc_sub_diagnostic_with_meta = BackgroundChildProcess.cli(
-        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=json', '--with-metadata',
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.1', '--format=json', '--with-metadata',
         *transport_factory(None).cli_args,
     )
 
     proc_sub_diagnostic_no_meta = BackgroundChildProcess.cli(
-        '-v', 'sub', 'uavcan.diagnostic.Record.1.0', '--format=json', *transport_factory(None).cli_args,
+        '-v', 'sub', 'uavcan.diagnostic.Record.1.1', '--format=json', *transport_factory(None).cli_args,
     )
 
     time.sleep(3.0)     # Time to let the background processes finish initialization
 
     if transport_factory(None).can_transmit:
         proc = BackgroundChildProcess.cli(
-            '-v', 'pub', 'uavcan.diagnostic.Record.1.0', '{}', '--count=2', '--period=2',
+            '-v', 'pub', 'uavcan.diagnostic.Record.1.1', '{}', '--count=2', '--period=2',
             *transport_factory(None).cli_args,
         )
         proc.wait(timeout=8)
@@ -152,7 +152,7 @@ def _unittest_slow_cli_pub_sub_anon(transport_factory: TransportFactory) -> None
             assert m['32760']['text'] == ''
     else:
         proc = BackgroundChildProcess.cli(
-            '-v', 'pub', 'uavcan.diagnostic.Record.1.0', '{}', '--count=2', '--period=2',
+            '-v', 'pub', 'uavcan.diagnostic.Record.1.1', '{}', '--count=2', '--period=2',
             *transport_factory(None).cli_args,
         )
         assert 0 < proc.wait(timeout=8)[0]

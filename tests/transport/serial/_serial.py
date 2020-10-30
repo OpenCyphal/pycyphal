@@ -71,15 +71,15 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     #
     meta = PayloadMetadata(10000)
 
-    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None),
+    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None),
                                                           meta)
 
-    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
-    assert subscriber_selective is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
+    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
+    assert subscriber_selective is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
 
     server_listener = tr.get_input_session(
         InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
@@ -166,12 +166,12 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     #
     # Re-instantiate session objects because the transport instances have been replaced.
     #
-    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
+    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
 
     server_listener = tr.get_input_session(
         InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
@@ -341,10 +341,10 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert not set(tr.output_sessions)
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        _ = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+        _ = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        _ = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+        _ = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 

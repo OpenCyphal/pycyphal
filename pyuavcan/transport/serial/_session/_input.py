@@ -169,7 +169,7 @@ def _unittest_input_session() -> None:
         nonlocal finalized
         finalized = True
 
-    session_spec = InputSessionSpecifier(MessageDataSpecifier(12345), None)
+    session_spec = InputSessionSpecifier(MessageDataSpecifier(2345), None)
     payload_meta = PayloadMetadata(100)
 
     sis = SerialInputSession(specifier=session_spec,

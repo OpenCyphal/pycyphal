@@ -36,7 +36,7 @@ unless it is configured to be anonymous.
     @property
     def examples(self) -> typing.Optional[str]:
         return '''
-pyuavcan pub uavcan.diagnostic.Record.1.0 '{text: "Hello world!"}'
+pyuavcan pub uavcan.diagnostic.Record.1.1 '{text: "Hello world!"}'
 '''.strip()
 
     @property
@@ -67,8 +67,8 @@ a non-anonymous node must publish heartbeat; this requirement is respected.
 Additionally, the recommended standard service uavcan.node.GetInfo is served.
 
 Examples:
-    1234.uavcan.diagnostic.Record.1.0 '{"text": "Hello world!"}'
-    uavcan.diagnostic.Record.1.0 '{"text": "Hello world!"}'
+    1234.uavcan.diagnostic.Record.1.1 '{"text": "Hello world!"}'
+    uavcan.diagnostic.Record.1.1 '{"text": "Hello world!"}'
 '''.strip())
         parser.add_argument(
             '--period', '-P',

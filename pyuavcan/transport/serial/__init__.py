@@ -132,7 +132,7 @@ Usage
 >>> tr.serial_port.baudrate
 115200
 >>> pm = pyuavcan.transport.PayloadMetadata(1024)
->>> ds = pyuavcan.transport.MessageDataSpecifier(12345)
+>>> ds = pyuavcan.transport.MessageDataSpecifier(2345)
 >>> pub = tr.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
 >>> sub = tr.get_input_session(pyuavcan.transport.InputSessionSpecifier(ds, None), pm)
 >>> await_ = tr.loop.run_until_complete

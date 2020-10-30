@@ -125,12 +125,12 @@ def _unittest_slow_cli_demo_basic_usage(
     )
 
     proc_sub_temperature = BackgroundChildProcess.cli(
-        'sub', '12345.uavcan.si.sample.temperature.Scalar.1.0', '--count=3', '--format=json',
+        'sub', '2345.uavcan.si.sample.temperature.Scalar.1.0', '--count=3', '--format=json',
         '--with-metadata', *iface_option.make_cli_args(None)  # type: ignore
     )
 
     proc_sub_diagnostic = BackgroundChildProcess.cli(
-        'sub', 'uavcan.diagnostic.Record.1.0', '--count=3', '--format=json',
+        'sub', 'uavcan.diagnostic.Record.1.1', '--count=3', '--format=json',
         '--with-metadata', *iface_option.make_cli_args(None)  # type: ignore
     )
 
@@ -143,9 +143,9 @@ def _unittest_slow_cli_demo_basic_usage(
 
         run_cli_tool(
             '-v',
-            'pub', '12345.uavcan.si.sample.temperature.Scalar.1.0', '{kelvin: 321.5}',
+            'pub', '2345.uavcan.si.sample.temperature.Scalar.1.0', '{kelvin: 321.5}',
             '--count=3', '--period=0.1', '--priority=slow',
-            '--heartbeat-fields={vendor_specific_status_code: 123456}',
+            '--heartbeat-fields={vendor_specific_status_code: 123}',
             *iface_option.make_cli_args(1),  # type: ignore
             timeout=5.0
         )
@@ -214,26 +214,26 @@ def _unittest_slow_cli_demo_basic_usage(
         # We receive three heartbeats in order to eliminate possible edge cases due to timing jitter.
         # Sort by source node ID and eliminate the middle; thus we eliminate the uncertainty.
         heartbeats_ordered_by_nid = list(sorted((json.loads(s) for s in out_sub_heartbeat),
-                                                key=lambda x: x['32085']['_metadata_']['source_node_id']))
+                                                key=lambda x: x['7509']['_metadata_']['source_node_id']))
         heartbeat_pub, heartbeat_demo = heartbeats_ordered_by_nid[0], heartbeats_ordered_by_nid[-1]
         print('heartbeat_pub :', heartbeat_pub)
         print('heartbeat_demo:', heartbeat_demo)
 
-        assert 'slow' in heartbeat_pub['32085']['_metadata_']['priority'].lower()
-        assert heartbeat_pub['32085']['_metadata_']['transfer_id'] >= 0
-        assert heartbeat_pub['32085']['_metadata_']['source_node_id'] == 1
-        assert heartbeat_pub['32085']['uptime'] in (0, 1)
-        assert heartbeat_pub['32085']['vendor_specific_status_code'] == 123456
+        assert 'slow' in heartbeat_pub['7509']['_metadata_']['priority'].lower()
+        assert heartbeat_pub['7509']['_metadata_']['transfer_id'] >= 0
+        assert heartbeat_pub['7509']['_metadata_']['source_node_id'] == 1
+        assert heartbeat_pub['7509']['uptime'] in (0, 1)
+        assert heartbeat_pub['7509']['vendor_specific_status_code'] == 123
 
-        assert 'nominal' in heartbeat_demo['32085']['_metadata_']['priority'].lower()
-        assert heartbeat_demo['32085']['_metadata_']['source_node_id'] == 42
-        assert heartbeat_demo['32085']['vendor_specific_status_code'] == demo_proc.pid
+        assert 'nominal' in heartbeat_demo['7509']['_metadata_']['priority'].lower()
+        assert heartbeat_demo['7509']['_metadata_']['source_node_id'] == 42
+        assert heartbeat_demo['7509']['vendor_specific_status_code'] == demo_proc.pid
 
         for parsed in (json.loads(s) for s in out_sub_temperature):
-            assert 'slow' in parsed['12345']['_metadata_']['priority'].lower()
-            assert parsed['12345']['_metadata_']['transfer_id'] >= 0
-            assert parsed['12345']['_metadata_']['source_node_id'] == 1
-            assert parsed['12345']['kelvin'] == pytest.approx(321.5)
+            assert 'slow' in parsed['2345']['_metadata_']['priority'].lower()
+            assert parsed['2345']['_metadata_']['transfer_id'] >= 0
+            assert parsed['2345']['_metadata_']['source_node_id'] == 1
+            assert parsed['2345']['kelvin'] == pytest.approx(321.5)
 
         assert len(out_sub_diagnostic) >= 1
     finally:

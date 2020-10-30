@@ -64,7 +64,7 @@ If multiple subjects are selected, a synchronizing subscription will be used,
 reporting received messages in synchronous groups.
 Examples:
     1234.uavcan.node.Heartbeat.1.0 (using subject-ID 1234)
-    uavcan.node.Heartbeat.1.0 (using the fixed subject-ID 32085)
+    uavcan.node.Heartbeat.1.0 (using the fixed subject-ID 7509)
 '''.strip())
         parser.add_argument(
             '--with-metadata', '-M',

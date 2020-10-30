@@ -346,12 +346,12 @@ def _unittest_can_identifier_parse() -> None:
     with raises(ValueError):
         ServiceCANID(Priority.HIGH, 123, 123, 42, True)   # Same source and destination
 
-    reference_message = MessageCANID(Priority.FAST, 123, 12345)
+    reference_message = MessageCANID(Priority.FAST, 123, 2345)
     reference_message_id = 0b_010_0_0_0011000000111001_0_1111011
     assert CANID.parse(0b_010_0_0_0011000000111001_1_1111011) is None
     assert CANID.parse(reference_message_id) == reference_message
     assert reference_message_id == reference_message.compile([])
-    assert reference_message.data_specifier == MessageDataSpecifier(12345)
+    assert reference_message.data_specifier == MessageDataSpecifier(2345)
 
     reference_message = MessageCANID(Priority.FAST, None, 4321)
     reference_message_id = 0b_010_0_1_0001000011100001_0_1111111

@@ -197,7 +197,7 @@ def _unittest_frame_compile_message() -> None:
                     priority=Priority.HIGH,
                     source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                     destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
-                    data_specifier=MessageDataSpecifier(12345),
+                    data_specifier=MessageDataSpecifier(2345),
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=True,
@@ -219,7 +219,7 @@ def _unittest_frame_compile_message() -> None:
     assert segment[1] == int(Priority.HIGH)
     assert (segment[2], segment[3]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
     assert (segment[4], segment[5]) == (SerialFrame.FRAME_DELIMITER_BYTE, 0)
-    assert segment[6:8] == 12345 .to_bytes(2, 'little')
+    assert segment[6:8] == 2345 .to_bytes(2, 'little')
     assert segment[8:16] == b'\x00' * 8
     assert segment[16:24] == 1234567890123456789 .to_bytes(8, 'little')
     assert segment[24:28] == (1234567 + 0x8000_0000).to_bytes(4, 'little')
@@ -399,7 +399,7 @@ def _unittest_frame_check() -> None:
                     priority=Priority.HIGH,
                     source_node_id=123,
                     destination_node_id=456,
-                    data_specifier=MessageDataSpecifier(12345),
+                    data_specifier=MessageDataSpecifier(2345),
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=False,
@@ -410,7 +410,7 @@ def _unittest_frame_check() -> None:
                     priority=Priority.HIGH,
                     source_node_id=123456,
                     destination_node_id=456,
-                    data_specifier=MessageDataSpecifier(12345),
+                    data_specifier=MessageDataSpecifier(2345),
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=False,
@@ -421,7 +421,7 @@ def _unittest_frame_check() -> None:
                     priority=Priority.HIGH,
                     source_node_id=123,
                     destination_node_id=123456,
-                    data_specifier=MessageDataSpecifier(12345),
+                    data_specifier=MessageDataSpecifier(2345),
                     transfer_id=1234567890123456789,
                     index=1234567,
                     end_of_transfer=False,
@@ -443,7 +443,7 @@ def _unittest_frame_check() -> None:
                     priority=Priority.HIGH,
                     source_node_id=None,
                     destination_node_id=None,
-                    data_specifier=MessageDataSpecifier(12345),
+                    data_specifier=MessageDataSpecifier(2345),
                     transfer_id=-1,
                     index=1234567,
                     end_of_transfer=False,
@@ -454,7 +454,7 @@ def _unittest_frame_check() -> None:
                     priority=Priority.HIGH,
                     source_node_id=None,
                     destination_node_id=None,
-                    data_specifier=MessageDataSpecifier(12345),
+                    data_specifier=MessageDataSpecifier(2345),
                     transfer_id=0,
                     index=-1,
                     end_of_transfer=False,

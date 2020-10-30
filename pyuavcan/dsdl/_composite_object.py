@@ -174,6 +174,7 @@ def get_model(class_or_instance: typing.Union[typing.Type[CompositeObject], Comp
 def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
     """
     Returns a generated native class implementing the specified DSDL type represented by its PyDSDL model object.
+    Promotes the model to delimited type automatically if necessary.
     This is the inverse of :func:`get_model`.
 
     :raises:
@@ -186,28 +187,36 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
           To fix this, regenerate the package and make sure that all components of the application use identical
           or compatible DSDL source files.
     """
-    if model.parent_service is not None:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
-        out = get_class(model.parent_service)
-        assert issubclass(out, ServiceObject)
-        out = getattr(out, model.short_name)
-    else:
+    def do_import(name_components: typing.List[str]) -> typing.Any:
         mod = None
-        for comp in model.name_components[:-1]:
+        for comp in name_components:
             name = (mod.__name__ + '.' + comp) if mod else comp  # type: ignore
             try:
                 mod = importlib.import_module(name)
             except ImportError:                         # We seem to have hit a reserved word; try with an underscore.
                 mod = importlib.import_module(name + '_')
-        ref = f'{model.short_name}_{model.version.major}_{model.version.minor}'
-        out = getattr(mod, ref)
+        return mod
+
+    if model.has_parent_service:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
+        parent_name, child_name = model.name_components[-2], model.name_components[-1]
+        mod = do_import(model.name_components[:-2])
+        out = getattr(mod, f'{parent_name}_{model.version.major}_{model.version.minor}')
+        assert issubclass(out, ServiceObject)
+        out = getattr(out, child_name)
+    else:
+        mod = do_import(model.name_components[:-1])
+        out = getattr(mod, f'{model.short_name}_{model.version.major}_{model.version.minor}')
 
     out_model = get_model(out)
     if out_model != model:
-        raise TypeError(f'The class has been generated using an incompatible DSDL definition. '
-                        f'Requested model: {model} defined in {model.source_file_path}. '
-                        f'Model found in the class: {out_model} defined in {out_model.source_file_path}.')
+        if isinstance(out_model, pydsdl.DelimitedType) and not isinstance(model, pydsdl.DelimitedType):
+            out_model = out_model.inner_type
+        if out_model != model:
+            raise TypeError(f'The class has been generated using an incompatible DSDL definition. '
+                            f'Requested model: {model} defined in {model.source_file_path}. '
+                            f'Model found in the class: {out_model} defined in {out_model.source_file_path}.')
 
-    assert get_model(out) == model
+    assert str(get_model(out)) == str(model)
     assert issubclass(out, CompositeObject)
     return out
 

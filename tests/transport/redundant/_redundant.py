@@ -50,17 +50,17 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     meta = PayloadMetadata(10_240)
 
-    pub_a = tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    sub_any_a = tr_a.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert pub_a is tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    pub_a = tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    sub_any_a = tr_a.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    assert pub_a is tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
     assert set(tr_a.input_sessions) == {sub_any_a}
     assert set(tr_a.output_sessions) == {pub_a}
     assert tr_a.sample_statistics() == RedundantTransportStatistics()
 
-    pub_b = tr_b.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    sub_any_b = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    sub_sel_b = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
-    assert sub_sel_b is tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 3210), meta)
+    pub_b = tr_b.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    sub_any_b = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    sub_sel_b = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
+    assert sub_sel_b is tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
     assert set(tr_b.input_sessions) == {sub_any_b, sub_sel_b}
     assert set(tr_b.output_sessions) == {pub_b}
     assert tr_b.sample_statistics() == RedundantTransportStatistics()
@@ -264,8 +264,8 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     # Construct new session with the transports configured.
     #
-    pub_a_new = tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), 222), meta)
-    assert pub_a_new is tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), 222), meta)
+    pub_a_new = tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), 222), meta)
+    assert pub_a_new is tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), 222), meta)
     assert set(tr_a.output_sessions) == {pub_a, pub_a_new}
 
     assert await pub_a_new.send_until(
@@ -289,10 +289,10 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     tr_b.close()  # Idempotency
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):  # Make sure the inferiors are closed.
-        udp_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+        udp_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):  # Make sure the inferiors are closed.
-        serial_b.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+        serial_b.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):  # Make sure the sessions are closed.
         await pub_a.send_until(

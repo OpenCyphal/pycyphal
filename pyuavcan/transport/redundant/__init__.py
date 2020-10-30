@@ -261,7 +261,7 @@ Any future changes will update all dependent session instances automatically.
 >>> from pyuavcan.transport import OutputSessionSpecifier, InputSessionSpecifier, MessageDataSpecifier
 >>> from pyuavcan.transport import PayloadMetadata, Transfer, Timestamp, Priority, ProtocolParameters
 >>> pm = PayloadMetadata(1024)
->>> s0 = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), pm)
+>>> s0 = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), pm)
 >>> s0.inferiors    # No inferior transports; hence, no inferior sessions.
 []
 
@@ -282,7 +282,7 @@ Add another inferior and another session:
 
 >>> lo_1 = LoopbackTransport(local_node_id=42)
 >>> tr.attach_inferior(lo_1)
->>> s1 = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), pm)
+>>> s1 = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), pm)
 >>> len(tr.inferiors)
 2
 >>> len(s0.inferiors)  # Updated automatically.

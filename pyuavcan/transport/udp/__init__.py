@@ -61,7 +61,7 @@ is manifested on the wire as the destination UDP port number;
 the mapping function is implemented in :func:`udp_port_from_data_specifier`.
 The source port number can be arbitrary (ephemeral), its value is ignored.
 
-UAVCAN uses a wide range of UDP ports: [15360, 49151].
+UAVCAN uses a wide range of UDP ports: [15360, 24575].
 UDP/IP stacks that comply with the IANA ephemeral port range recommendations are expected to be
 compatible with this; otherwise, there may be port assignment conflicts.
 All new versions of MS Windows starting with Vista and Server 2008 are compatible with the IANA recommendations.
@@ -214,10 +214,10 @@ True
 Create an output and an input session:
 
 >>> pm = pyuavcan.transport.PayloadMetadata(1024)
->>> ds = pyuavcan.transport.MessageDataSpecifier(12345)
+>>> ds = pyuavcan.transport.MessageDataSpecifier(2345)
 >>> pub = tr_0.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
->>> pub.socket.getpeername()   # UDP port number derived from the subject ID: 12345 + 16384 = 28729
-('127.255.255.255', 28729)
+>>> pub.socket.getpeername()   # UDP port number derived from the subject ID: 2345 + 16384 = 18729
+('127.255.255.255', 18729)
 >>> sub = tr_1.get_input_session(pyuavcan.transport.InputSessionSpecifier(ds, None), pm)
 
 Send a transfer from one instance to another:

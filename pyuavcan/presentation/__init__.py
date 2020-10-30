@@ -59,14 +59,14 @@ Having prepared a presentation layer controller, we can create *ports*.
 They are the main points of network access for the application.
 Let's start with a publisher and a subscriber:
 
->>> pub_record = presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
->>> sub_record = presentation.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+>>> pub_record = presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
+>>> sub_record = presentation.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
 
 Publish a message and receive it also (the loopback transport just returns all outgoing transfers back):
 
 >>> import asyncio
 >>> run_until_complete = asyncio.get_event_loop().run_until_complete
->>> record = uavcan.diagnostic.Record_1_0(
+>>> record = uavcan.diagnostic.Record_1_1(
 ...     severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
 ...     text='Neither man nor animal can be influenced by anything but suggestion.')
 >>> run_until_complete(pub_record.publish(record))  # publish() returns False on timeout.
@@ -81,7 +81,7 @@ We can use custom subject-ID with any data type, even if there is a fixed subjec
 (the background is explained in Specification, please read it).
 Here is an example; we also show here that when a receive call times out, it returns None:
 
->>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_0, subject_id=12345)
+>>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_1, subject_id=2345)
 >>> run_until_complete(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
 
 You can see above that the node-ID of the received transfer metadata is None,

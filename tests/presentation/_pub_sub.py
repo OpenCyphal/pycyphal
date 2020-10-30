@@ -77,9 +77,9 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     assert sub_heart.dtype is uavcan.node.Heartbeat_1_0
 
     heart = uavcan.node.Heartbeat_1_0(uptime=123456,
-                                      health=uavcan.node.Heartbeat_1_0.HEALTH_CAUTION,
-                                      mode=uavcan.node.Heartbeat_1_0.MODE_OPERATIONAL,
-                                      vendor_specific_status_code=0xc0fe)
+                                      health=uavcan.node.Health_1_0(uavcan.node.Health_1_0.CAUTION),
+                                      mode=uavcan.node.Mode_1_0(uavcan.node.Mode_1_0.OPERATIONAL),
+                                      vendor_specific_status_code=0xc0)
     assert pub_heart.priority == pyuavcan.presentation.DEFAULT_PRIORITY
     pub_heart.priority = Priority.SLOW
     assert pub_heart.priority == Priority.SLOW
@@ -139,14 +139,14 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
     sub_heart = pres_b.make_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
 
-    pub_record = pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
-    sub_record = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
-    sub_record2 = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+    pub_record = pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
+    sub_record = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
+    sub_record2 = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
 
     heart = uavcan.node.Heartbeat_1_0(uptime=123456,
-                                      health=uavcan.node.Heartbeat_1_0.HEALTH_CAUTION,
-                                      mode=uavcan.node.Heartbeat_1_0.MODE_OPERATIONAL,
-                                      vendor_specific_status_code=0xc0fe)
+                                      health=uavcan.node.Health_1_0(uavcan.node.Health_1_0.CAUTION),
+                                      mode=uavcan.node.Mode_1_0(uavcan.node.Mode_1_0.OPERATIONAL),
+                                      vendor_specific_status_code=0xc0)
 
     pub_heart.transfer_id_counter.override(23)
     await pub_heart.publish(heart)
@@ -176,16 +176,16 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     sub_heart.close()
     sub_heart.close()       # Shall not raise.
 
-    record_handler_output: typing.List[typing.Tuple[uavcan.diagnostic.Record_1_0, pyuavcan.transport.TransferFrom]] = []
+    record_handler_output: typing.List[typing.Tuple[uavcan.diagnostic.Record_1_1, pyuavcan.transport.TransferFrom]] = []
 
-    async def record_handler(message: uavcan.diagnostic.Record_1_0,
+    async def record_handler(message: uavcan.diagnostic.Record_1_1,
                              cb_transfer: pyuavcan.transport.TransferFrom) -> None:
         print('RECORD HANDLER:', message, cb_transfer)
         record_handler_output.append((message, cb_transfer))
 
     sub_record2.receive_in_background(record_handler)
 
-    record = uavcan.diagnostic.Record_1_0(timestamp=uavcan.time.SynchronizedTimestamp_1_0(1234567890),
+    record = uavcan.diagnostic.Record_1_1(timestamp=uavcan.time.SynchronizedTimestamp_1_0(1234567890),
                                           severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.ALERT),
                                           text='Hello world!')
     assert pub_record.priority == pyuavcan.presentation.DEFAULT_PRIORITY

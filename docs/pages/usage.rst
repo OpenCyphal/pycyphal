@@ -107,7 +107,7 @@ In a new terminal, run the following commands to listen to the demo's heartbeat 
 .. code-block:: sh
 
     uvc sub uavcan.node.Heartbeat.1.0 --with-metadata --count=3
-    uvc sub uavcan.diagnostic.Record.1.0 --with-metadata
+    uvc sub uavcan.diagnostic.Record.1.1 --with-metadata
 
 The latter may not output anything because the demo application is not doing anything interesting,
 so it has nothing to report.
