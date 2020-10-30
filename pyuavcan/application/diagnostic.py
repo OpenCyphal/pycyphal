@@ -11,7 +11,7 @@ over the standard subject-ID and the local logging facilities.
 
 import logging
 import textwrap
-from uavcan.diagnostic import Record_1_0 as Record
+from uavcan.diagnostic import Record_1_1 as Record
 from uavcan.diagnostic import Severity_1_0 as Severity
 import pyuavcan
 

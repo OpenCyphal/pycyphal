@@ -407,7 +407,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     {%- if T.has_fixed_port_id %}
     _FIXED_PORT_ID_ = {{ T.fixed_port_id|int }}
     {%- endif %}
-    {% assert type.extent % 8 == 0 %}
+    {%- assert type.extent % 8 == 0 %}
     _EXTENT_BYTES_ = {{ type.extent // 8 }}
 
     {% set meta_type = type.__class__.__name__ -%}

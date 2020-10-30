@@ -6,13 +6,13 @@
 
 {% macro serialize(t) -%}
     assert _ser_.current_bit_length % 8 == 0, 'Serializer is not aligned'
-    {{
+    {{-
         _serialize_composite(t|unwrap_delimited,
                              'self',
                              0|bit_length_set)
         | remove_blank_lines
         | fold_idempotent
-    }}
+    -}}
     _ser_.pad_to_alignment({{ t.alignment_requirement }})
 {%- endmacro %}
 

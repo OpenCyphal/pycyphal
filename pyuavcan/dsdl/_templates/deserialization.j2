@@ -6,14 +6,14 @@
 
 {% macro deserialize(t, self_type_name) -%}
     assert _des_.consumed_bit_length % 8 == 0, 'Deserializer is not aligned'
-    {{
+    {{-
         _deserialize_composite(t|unwrap_delimited,
                                'self',
                                0|bit_length_set,
                                self_type_name)
         | remove_blank_lines
         | fold_idempotent
-    }}
+    -}}
     _des_.pad_to_alignment({{ t.alignment_requirement }})
 {%- endmacro %}
 
