@@ -293,24 +293,17 @@ class DemoApplication:
 
 if __name__ == '__main__':
     app = DemoApplication()
-    app_tasks = asyncio.Task.all_tasks()
+    app_tasks = asyncio.all_tasks(loop=asyncio.get_event_loop())
 
     async def list_tasks_periodically() -> None:
         """Print active tasks periodically for demo purposes."""
-        import re
-
-        def repr_task(t: asyncio.Task) -> str:
-            try:
-                out, = re.findall(r'^<([^<]+<[^>]+>)', str(t))
-            except ValueError:
-                out = str(t)
-            return out
-
         while True:
-            print('\nActive tasks:\n' + '\n'.join(map(repr_task, asyncio.Task.all_tasks())), file=sys.stderr)
+            print('\nRunning tasks:\n' + '\n'.join(f'{i:4}: {t.get_coro()}' for i, t in enumerate(asyncio.all_tasks())),
+                  file=sys.stderr)
             await asyncio.sleep(10)
 
-    asyncio.get_event_loop().create_task(list_tasks_periodically())
+    if sys.version_info >= (3, 8):  # The task introspection API we use is not available before Python 3.8
+        asyncio.get_event_loop().create_task(list_tasks_periodically())
 
     # The node and PyUAVCAN objects have created internal tasks, which we need to run now.
     # In this case we want to automatically stop and exit when no tasks are left to run.

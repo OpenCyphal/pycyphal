@@ -97,6 +97,15 @@ def _unittest_slow_cli_demo_basic_usage(
     except OSError:
         pass
 
+    # The demo may need to generate packages as well, so we launch it first.
+    demo_proc_env_vars = iface_option.demo_env_vars.copy()
+    demo_proc_env_vars['PYUAVCAN_LOGLEVEL'] = 'DEBUG'
+    demo_proc = BackgroundChildProcess(
+        'python', str(DEMO_DIR / 'basic_usage.py'),
+        environment_variables=demo_proc_env_vars
+    )
+    assert demo_proc.alive
+
     # Generate DSDL namespace "sirius_cyber_corp"
     if not pathlib.Path('sirius_cyber_corp').exists():
         run_cli_tool('dsdl-gen-pkg', str(TEST_DATA_TYPES_DIR / 'sirius_cyber_corp'),
@@ -111,16 +120,8 @@ def _unittest_slow_cli_demo_basic_usage(
     if not pathlib.Path('uavcan').exists():
         run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
-    demo_proc_env_vars = iface_option.demo_env_vars.copy()
-    demo_proc_env_vars['PYUAVCAN_LOGLEVEL'] = 'DEBUG'
-    demo_proc = BackgroundChildProcess(
-        'python', str(DEMO_DIR / 'basic_usage.py'),
-        environment_variables=demo_proc_env_vars
-    )
-    assert demo_proc.alive
-
     proc_sub_heartbeat = BackgroundChildProcess.cli(
-        'sub', 'uavcan.node.Heartbeat.1.0', '--format=json',    # Count unlimited
+        'sub', 'uavcan.node.Heartbeat.1.0', '--format=json',  # Count unlimited
         '--with-metadata', *iface_option.make_cli_args(None)  # type: ignore
     )
 
@@ -136,9 +137,9 @@ def _unittest_slow_cli_demo_basic_usage(
 
     try:
         # Time to let the background processes finish initialization.
-        # The usage script might take a long time to start because it may have to generate packages first.
+        # The usage demo might take a long time to start because it may have to generate packages first.
         assert demo_proc.alive
-        time.sleep(10.0)
+        time.sleep(30.0)
         assert demo_proc.alive
 
         run_cli_tool(
@@ -156,11 +157,13 @@ def _unittest_slow_cli_demo_basic_usage(
         out_sub_temperature = proc_sub_temperature.wait(1.0, interrupt=True)[1].splitlines()
         out_sub_diagnostic = proc_sub_diagnostic.wait(1.0, interrupt=True)[1].splitlines()
 
+        assert demo_proc.alive
         # Run service tests while the demo process is still running.
         node_info_text = run_cli_tool('-v', 'call', '42', 'uavcan.node.GetInfo.1.0', '{}', '--format', 'json',
                                       '--with-metadata', '--priority', 'slow', '--timeout', '3.0',
                                       *iface_option.make_cli_args(123),  # type: ignore
                                       timeout=5.0)
+        assert demo_proc.alive
         print('node_info_text:', node_info_text)
         node_info = json.loads(node_info_text)
         assert node_info['430']['_metadata_']['source_node_id'] == 42
@@ -170,6 +173,7 @@ def _unittest_slow_cli_demo_basic_usage(
         assert node_info['430']['protocol_version']['major'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
         assert node_info['430']['protocol_version']['minor'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[1]
 
+        assert demo_proc.alive
         command_response = json.loads(run_cli_tool(
             '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.1',
             f'{{command: {uavcan.node.ExecuteCommand_1_1.Request.COMMAND_STORE_PERSISTENT_STATES} }}',
@@ -184,6 +188,7 @@ def _unittest_slow_cli_demo_basic_usage(
         ))
         assert command_response['435']['status'] == uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS
 
+        assert demo_proc.alive
         least_squares_response = json.loads(run_cli_tool(
             '-vv', 'call', '42', '123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0',
             '{points: [{x: 1, y: 2}, {x: 10, y: 20}]}', '--timeout=5',
@@ -192,6 +197,7 @@ def _unittest_slow_cli_demo_basic_usage(
         assert least_squares_response['123']['slope'] == pytest.approx(2.0)
         assert least_squares_response['123']['y_intercept'] == pytest.approx(0.0)
 
+        assert demo_proc.alive
         # Next request - this fails if the OUTPUT TRANSFER-ID MAP save/restore logic is not working.
         command_response = json.loads(run_cli_tool(
             '-v', 'call', '42', 'uavcan.node.ExecuteCommand.1.1',

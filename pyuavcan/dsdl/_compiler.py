@@ -190,7 +190,7 @@ def generate_package(root_namespace_directory:        _AnyPath,
     filters = {
         'pickle':             _pickle_object,
         'numpy_scalar_type':  _numpy_scalar_type,
-        'unwrap_delimited':   _unwrap_delimited,
+        'unwrap_delimited':   _unwrap_delimited,  # TODO: Use https://github.com/UAVCAN/pydsdl/pull/55
     }
 
     # Generate code
