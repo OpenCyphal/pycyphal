@@ -19,9 +19,6 @@ from uavcan.node import Heartbeat_1_0 as Heartbeat
 import pyuavcan
 
 
-DEFAULT_PRIORITY = pyuavcan.transport.Priority.SLOW
-
-
 class Health(enum.IntEnum):
     """
     Mirrors the health enumeration defined in ``uavcan.node.Heartbeat``.
@@ -65,7 +62,7 @@ class HeartbeatPublisher:
     - Mode is OPERATIONAL.
     - Vendor-specific status code is zero.
     - Period is MAX_PUBLICATION_PERIOD (see the DSDL definition).
-    - Priority is :data:`DEFAULT_PRIORITY`.
+    - Priority is default as defined by the presentation layer (i.e., NOMINAL).
     """
 
     def __init__(self, presentation: pyuavcan.presentation.Presentation):
