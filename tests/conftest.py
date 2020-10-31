@@ -21,7 +21,7 @@ should a test go crazy and eat all memory.
 _logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope='session', autouse=True)  # type: ignore
 def _configure_memory_limit() -> None:
     import resource
     _logger.info('Limiting process memory usage to %.1f GiB', MEMORY_LIMIT / GIBIBYTE)

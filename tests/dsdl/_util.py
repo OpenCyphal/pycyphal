@@ -32,17 +32,6 @@ def expand_service_types(models: typing.Iterable[pydsdl.CompositeType], keep_ser
             yield m
 
 
-def unwrap_delimited(model: pydsdl.CompositeType) -> pydsdl.CompositeType:
-    """
-    If the model is a delimited type, returns its inner type, otherwise returns the model as-is.
-    """
-    if not isinstance(model, pydsdl.CompositeType):
-        raise TypeError
-    if isinstance(model, pydsdl.DelimitedType):
-        return model.inner_type
-    return model
-
-
 def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
     """
     Returns an object of the specified DSDL type populated with random data.

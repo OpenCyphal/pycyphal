@@ -220,7 +220,7 @@ def _unittest_slow_cli_demo_basic_usage(
         # We receive three heartbeats in order to eliminate possible edge cases due to timing jitter.
         # Sort by source node ID and eliminate the middle; thus we eliminate the uncertainty.
         heartbeats_ordered_by_nid = list(sorted((json.loads(s) for s in out_sub_heartbeat),
-                                                key=lambda x: x['7509']['_metadata_']['source_node_id']))
+                                                key=lambda x: int(x['7509']['_metadata_']['source_node_id'])))
         heartbeat_pub, heartbeat_demo = heartbeats_ordered_by_nid[0], heartbeats_ordered_by_nid[-1]
         print('heartbeat_pub :', heartbeat_pub)
         print('heartbeat_demo:', heartbeat_demo)

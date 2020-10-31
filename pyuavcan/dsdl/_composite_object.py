@@ -208,15 +208,13 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
         out = getattr(mod, f'{model.short_name}_{model.version.major}_{model.version.minor}')
 
     out_model = get_model(out)
-    if out_model != model:
-        if isinstance(out_model, pydsdl.DelimitedType) and not isinstance(model, pydsdl.DelimitedType):
-            out_model = out_model.inner_type
-        if out_model != model:
-            raise TypeError(f'The class has been generated using an incompatible DSDL definition. '
-                            f'Requested model: {model} defined in {model.source_file_path}. '
-                            f'Model found in the class: {out_model} defined in {out_model.source_file_path}.')
+    if out_model.inner_type != model.inner_type:
+        raise TypeError(f'The class has been generated using an incompatible DSDL definition. '
+                        f'Requested model: {model} defined in {model.source_file_path}. '
+                        f'Model found in the class: {out_model} defined in {out_model.source_file_path}.')
 
     assert str(get_model(out)) == str(model)
+    assert isinstance(out, type)
     assert issubclass(out, CompositeObject)
     return out
 

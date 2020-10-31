@@ -7,11 +7,10 @@
 {% macro serialize(t) -%}
     assert _ser_.current_bit_length % 8 == 0, 'Serializer is not aligned'
     _base_offset_ = _ser_.current_bit_length
-    {% set inner = t | unwrap_delimited %}
-    {{ _serialize_composite(inner, 'self', 0|bit_length_set) | remove_blank_lines }}
+    {{ _serialize_composite(inner.inner_type, 'self', 0|bit_length_set) | remove_blank_lines }}
     _ser_.pad_to_alignment({{ t.alignment_requirement }})
-    assert {{ inner.bit_length_set|min }} <= (_ser_.current_bit_length - _base_offset_) {# -#}
-                                          <= {{ inner.bit_length_set|max }}, \
+    assert {{ inner.inner_type.bit_length_set|min }} <= (_ser_.current_bit_length - _base_offset_) {# -#}
+                                                     <= {{ inner.inner_type.bit_length_set|max }}, \
         'Bad serialization of {{ t }}'
 {%- endmacro %}
 

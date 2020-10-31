@@ -190,7 +190,6 @@ def generate_package(root_namespace_directory:        _AnyPath,
     filters = {
         'pickle':             _pickle_object,
         'numpy_scalar_type':  _numpy_scalar_type,
-        'unwrap_delimited':   _unwrap_delimited,  # TODO: Use https://github.com/UAVCAN/pydsdl/pull/55
     }
 
     # Generate code
@@ -241,11 +240,3 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
     else:
         assert not isinstance(t, pydsdl.PrimitiveType), 'Forgot to handle some primitive types'
         return f'_np_.object_'
-
-
-def _unwrap_delimited(t: pydsdl.Any) -> pydsdl.Any:
-    if not isinstance(t, pydsdl.Any):
-        raise TypeError(f'Expected pydsdl.Any, got {type(t)}')
-    if isinstance(t, pydsdl.DelimitedType):
-        return _unwrap_delimited(t.inner_type)
-    return t

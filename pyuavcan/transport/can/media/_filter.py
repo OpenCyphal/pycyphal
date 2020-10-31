@@ -107,7 +107,7 @@ def optimize_filter_configurations(configurations: typing.Iterable[FilterConfigu
     while len(configurations) > target_number_of_configurations:
         options = itertools.starmap(lambda ia, ib: (ia[0], ib[0], ia[1].merge(ib[1])),
                                     itertools.permutations(enumerate(configurations), 2))
-        index_replace, index_remove, merged = max(options, key=lambda x: x[2].rank)
+        index_replace, index_remove, merged = max(options, key=lambda x: int(x[2].rank))
         configurations[index_replace] = merged
         del configurations[index_remove]  # Invalidates indexes
 
