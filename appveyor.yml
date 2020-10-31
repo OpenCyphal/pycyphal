@@ -5,11 +5,14 @@ environment:
       PYTHON_ARCH: '64'
 
     - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
-      PYTHON: '3.7'
+      PYTHON: '3.9'
+      coverage: 1    # The coverage information shall be published from exactly one job.
 
     - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.8'
-      coverage: 1    # The coverage information shall be published from exactly one job.
+
+    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      PYTHON: '3.7'
 
 stack: python %PYTHON%
 
