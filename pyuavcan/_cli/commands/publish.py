@@ -75,7 +75,7 @@ Examples:
 Message publication period. All messages are published synchronously, so the period setting applies to all specified
 subjects. Besides, the period of heartbeat is defined as min((--period), MAX_PUBLICATION_PERIOD); i.e., unless this
 value exceeds the maximum period defined for heartbeat by the specification, it is used for heartbeat as well. Note
-that anonymous nodes do not publish heartbeat, see the local node-ID argument for more info.
+that anonymous nodes do not publish heartbeat.
 
 The send timeout for all publishers will equal the publication period.
 
@@ -112,8 +112,10 @@ Default: %(default)s
 
             raw_ss = args.subject_spec
             if len(raw_ss) % 2 != 0:
-                raise argparse.ArgumentError('Mismatching arguments: '
-                                             'each subject specifier must be matched with its field specifier.')
+                raise ValueError(
+                    'Mismatching arguments: each subject specifier must be matched with its field specifier, like: '
+                    'subject-a field-a [subject-b field-b] [...]'
+                )
             publications: typing.List[Publication] = []
             for subject_spec, field_spec in (raw_ss[i:i + 2] for i in range(0, len(raw_ss), 2)):
                 publications.append(Publication(subject_spec=subject_spec,

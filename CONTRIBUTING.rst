@@ -245,6 +245,14 @@ The cache can be invalidated manually by removing the output directories.
 It is also invalidated automatically when ``clean.sh`` or ``test.sh`` are executed.
 
 
+Debugging
+---------
+
+When debugging argument parsing issues in the CLI,
+you won't see any stacktrace unless verbose logging is enabled before the argument parser is constructed.
+To work around that, use the environment variable `PYUAVCAN_LOGLEVEL` (see the user docs for details).
+
+
 Releasing
 ---------
 

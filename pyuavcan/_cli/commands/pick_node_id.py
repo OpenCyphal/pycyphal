@@ -101,7 +101,7 @@ async def _run(transport: pyuavcan.transport.Transport) -> int:
                     else:
                         # If at least one node is in the Initialization state, the network might be starting,
                         # so we need to listen longer to minimize the chance of collision.
-                        multiplier = 3.0 if msg.mode == uavcan.node.Mode_1_0.INITIALIZATION else 1.0
+                        multiplier = 3.0 if msg.mode.value == uavcan.node.Mode_1_0.INITIALIZATION else 1.0
                         advancement = uavcan.node.Heartbeat_1_0.MAX_PUBLICATION_PERIOD * multiplier
                         _logger.info('Deadline advanced by %.1f s; %d candidates left of %d possible',
                                      advancement, len(candidates), node_id_set_cardinality)

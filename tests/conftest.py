@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope='session', autouse=True)
-def _configure_memory_limit():
+def _configure_memory_limit() -> None:
     import resource
     _logger.info('Limiting process memory usage to %.1f GiB', MEMORY_LIMIT / GIBIBYTE)
     resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT, MEMORY_LIMIT))
