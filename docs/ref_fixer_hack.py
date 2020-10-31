@@ -40,9 +40,13 @@ def missing_reference(app:      sphinx.application.Sphinx,
         if new_reftarget != old_reftarget:
             _replacements_made.append((old_reftarget, new_reftarget))
             attrs = contnode.attributes if isinstance(contnode, docutils.nodes.Element) else {}
-            new_refdoc = node['refdoc'].rsplit(os.path.sep, 1)[0] + os.path.sep + new_reftarget.rsplit('.', 1)[0]
+            try:
+                old_refdoc = node['refdoc']
+            except KeyError:
+                return None
+            new_refdoc = old_refdoc.rsplit(os.path.sep, 1)[0] + os.path.sep + new_reftarget.rsplit('.', 1)[0]
             return sphinx.util.nodes.make_refnode(app.builder,
-                                                  node['refdoc'],
+                                                  old_refdoc,
                                                   new_refdoc,
                                                   node.get('refid', new_reftarget),
                                                   docutils.nodes.literal(new_reftarget, new_reftarget, **attrs),

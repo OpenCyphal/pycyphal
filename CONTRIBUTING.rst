@@ -246,7 +246,7 @@ It is also invalidated automatically when ``clean.sh`` or ``test.sh`` are execut
 
 On GNU/Linux, the amount of memory available for the test process is artificially limited to a few gibibytes
 to catch possible memory hogs (like https://github.com/UAVCAN/pydsdl/issues/23 ).
-See ``conftest.py` for details.
+See ``conftest.py`` for details.
 
 
 Debugging
