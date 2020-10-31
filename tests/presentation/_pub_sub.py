@@ -21,7 +21,6 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
                                                    transport_factory:  TransportFactory) -> None:
     assert generated_packages
     import uavcan.node
-    import uavcan.diagnostic
     from pyuavcan.transport import Priority
 
     asyncio.get_running_loop().slow_callback_duration = 1.0
@@ -121,8 +120,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
                                               transport_factory:  TransportFactory) -> None:
     assert generated_packages
     import uavcan.node
-    import uavcan.time
-    import uavcan.diagnostic
+    from test_dsdl_namespace.numpy import Complex_254_255
     from pyuavcan.transport import Priority
 
     asyncio.get_running_loop().slow_callback_duration = 1.0
@@ -139,9 +137,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
     sub_heart = pres_b.make_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
 
-    pub_record = pres_b.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
-    sub_record = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
-    sub_record2 = pres_a.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
+    pub_record = pres_b.make_publisher(Complex_254_255, 2222)
+    sub_record = pres_a.make_subscriber(Complex_254_255, 2222)
+    sub_record2 = pres_a.make_subscriber(Complex_254_255, 2222)
 
     heart = uavcan.node.Heartbeat_1_0(uptime=123456,
                                       health=uavcan.node.Health_1_0(uavcan.node.Health_1_0.CAUTION),
@@ -176,18 +174,15 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     sub_heart.close()
     sub_heart.close()       # Shall not raise.
 
-    record_handler_output: typing.List[typing.Tuple[uavcan.diagnostic.Record_1_1, pyuavcan.transport.TransferFrom]] = []
+    handler_output: typing.List[typing.Tuple[Complex_254_255, pyuavcan.transport.TransferFrom]] = []
 
-    async def record_handler(message: uavcan.diagnostic.Record_1_1,
-                             cb_transfer: pyuavcan.transport.TransferFrom) -> None:
-        print('RECORD HANDLER:', message, cb_transfer)
-        record_handler_output.append((message, cb_transfer))
+    async def handler(message: Complex_254_255, cb_transfer: pyuavcan.transport.TransferFrom) -> None:
+        print('HANDLER:', message, cb_transfer)
+        handler_output.append((message, cb_transfer))
 
-    sub_record2.receive_in_background(record_handler)
+    sub_record2.receive_in_background(handler)
 
-    record = uavcan.diagnostic.Record_1_1(timestamp=uavcan.time.SynchronizedTimestamp_1_0(1234567890),
-                                          severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.ALERT),
-                                          text='Hello world!')
+    record = Complex_254_255(bytes_=[1, 2, 3, 1])
     assert pub_record.priority == pyuavcan.presentation.DEFAULT_PRIORITY
     pub_record.priority = Priority.NOMINAL
     assert pub_record.priority == Priority.NOMINAL
@@ -196,7 +191,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
         await pub_heart.publish(record)  # type: ignore
 
     pub_record.publish_soon(record)
-    await asyncio.sleep(0.1)                # Need to make the deferred publication get the message out
+    await asyncio.sleep(0.1)                # Needed to make the deferred publication get the message out
     rx, transfer = await sub_record.receive()
     assert repr(rx) == repr(record)
     assert transfer.source_node_id == 42
@@ -215,7 +210,7 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=Priority.NOMINAL,
         transfer_id=12,
-        fragmented_payload=[memoryview(b'\xFF' * 15)],  # Array length prefix is too long
+        fragmented_payload=[memoryview(b'\xFF' * 15)],  # Invalid union tag.
     ), tran_a.loop.time() + 1.0)
     assert (await sub_record.receive_until(asyncio.get_event_loop().time() + _RX_TIMEOUT)) is None
 
@@ -245,10 +240,10 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert list(pres_a.transport.output_sessions) == []
     assert list(pres_b.transport.output_sessions) == []
 
-    assert len(record_handler_output) == 1
-    assert repr(record_handler_output[0][0]) == repr(record)
-    assert record_handler_output[0][1].source_node_id == 42
-    assert record_handler_output[0][1].transfer_id == 0
-    assert record_handler_output[0][1].priority == Priority.NOMINAL
+    assert len(handler_output) == 1
+    assert repr(handler_output[0][0]) == repr(record)
+    assert handler_output[0][1].source_node_id == 42
+    assert handler_output[0][1].transfer_id == 0
+    assert handler_output[0][1].priority == Priority.NOMINAL
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
