@@ -151,11 +151,11 @@ def _unittest_slow_cli_demo_basic_usage(
             timeout=5.0
         )
 
-        time.sleep(1.0)     # Time to sync up
+        time.sleep(2.0)     # Time to sync up
 
-        out_sub_heartbeat = proc_sub_heartbeat.wait(1.0, interrupt=True)[1].splitlines()
-        out_sub_temperature = proc_sub_temperature.wait(1.0, interrupt=True)[1].splitlines()
-        out_sub_diagnostic = proc_sub_diagnostic.wait(1.0, interrupt=True)[1].splitlines()
+        out_sub_heartbeat = proc_sub_heartbeat.wait(2.0, interrupt=True)[1].splitlines()
+        out_sub_temperature = proc_sub_temperature.wait(2.0, interrupt=True)[1].splitlines()
+        out_sub_diagnostic = proc_sub_diagnostic.wait(2.0, interrupt=True)[1].splitlines()
 
         assert demo_proc.alive
         # Run service tests while the demo process is still running.
