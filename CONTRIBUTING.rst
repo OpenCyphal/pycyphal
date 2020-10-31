@@ -244,6 +244,10 @@ After the packages are generated, the output is cached on disk to permit fast re
 The cache can be invalidated manually by removing the output directories.
 It is also invalidated automatically when ``clean.sh`` or ``test.sh`` are executed.
 
+On GNU/Linux, the amount of memory available for the test process is artificially limited to a few gibibytes
+to catch possible memory hogs (like https://github.com/UAVCAN/pydsdl/issues/23 ).
+See ``conftest.py` for details.
+
 
 Debugging
 ---------
