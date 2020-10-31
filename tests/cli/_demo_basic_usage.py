@@ -139,7 +139,7 @@ def _unittest_slow_cli_demo_basic_usage(
         # Time to let the background processes finish initialization.
         # The usage demo might take a long time to start because it may have to generate packages first.
         assert demo_proc.alive
-        time.sleep(50.0)
+        time.sleep(60)
         assert demo_proc.alive
 
         run_cli_tool(

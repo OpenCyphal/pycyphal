@@ -4,7 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-import re
+import time
 import gzip
 import typing
 import pickle
@@ -176,6 +176,8 @@ def generate_package(root_namespace_directory:        _AnyPath,
     ...     import sirius_cyber_corp
     ...     import uavcan.si.sample.volumetric_flow_rate
     """
+    started_at = time.monotonic()
+
     # Read the DSDL definitions
     if isinstance(lookup_directories, (str, bytes)):
         # https://forum.uavcan.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
@@ -211,6 +213,8 @@ def generate_package(root_namespace_directory:        _AnyPath,
                                                 ])
     generator.generate_all()
 
+    _logger.info('Generated %d types from the root namespace %r in %f.1 seconds',
+                 len(composite_types), root_namespace_name, time.monotonic() - started_at)
     return GeneratedPackageInfo(path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),
                                 models=composite_types,
                                 name=root_namespace_name)
