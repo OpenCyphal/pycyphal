@@ -8,10 +8,8 @@
     assert _des_.consumed_bit_length % 8 == 0, 'Deserializer is not aligned'
     _base_offset_ = _des_.consumed_bit_length
     {% set inner = t | unwrap_delimited %}
-    {{
-        _deserialize_composite(inner, 'self', 0|bit_length_set, self_type_name) | remove_blank_lines | fold_idempotent
-    }}
-    _des_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent-align-{{ t.alignment_requirement }}]
+    {{ _deserialize_composite(inner, 'self', 0|bit_length_set, self_type_name) | remove_blank_lines }}
+    _des_.pad_to_alignment({{ t.alignment_requirement }})
     assert {{ inner.bit_length_set|min }} <= (_des_.consumed_bit_length - _base_offset_) {# -#}
                                           <= {{ inner.bit_length_set|max }}, \
         'Bad deserialization of {{ t }}'
@@ -126,7 +124,7 @@
 
 {% macro _deserialize_any(t, ref, offset) %}
     {% if t.alignment_requirement > 1 %}
-    _des_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent-align-{{ t.alignment_requirement }}]
+    _des_.pad_to_alignment({{ t.alignment_requirement }})
     {% endif %}
 
     {%- if t is VoidType -%}                 _des_.skip_bits({{ t.bit_length }})
@@ -143,9 +141,8 @@
 
     {% if t is CompositeType %}
     assert _des_.consumed_bit_length % {{ t.alignment_requirement }} == 0, 'Nested object alignment error'
-                                                   {#- #}  # [fold-idempotent-align-{{ t.alignment_requirement }}]
     {% endif %}
-    {% if t.alignment_requirement > 1 %}
-    _des_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent-align-{{ t.alignment_requirement }}]
+    {% if t is not CompositeType and t.alignment_requirement > 1 %}
+    _des_.pad_to_alignment({{ t.alignment_requirement }})
     {% endif %}
 {% endmacro %}

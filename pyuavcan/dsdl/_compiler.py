@@ -190,7 +190,6 @@ def generate_package(root_namespace_directory:        _AnyPath,
     filters = {
         'pickle':             _pickle_object,
         'numpy_scalar_type':  _numpy_scalar_type,
-        'fold_idempotent':    _fold_idempotent,
         'unwrap_delimited':   _unwrap_delimited,
     }
 
@@ -242,21 +241,6 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
     else:
         assert not isinstance(t, pydsdl.PrimitiveType), 'Forgot to handle some primitive types'
         return f'_np_.object_'
-
-
-def _fold_idempotent(text: str) -> str:
-    """
-    This is a hacky way of folding redundant operations for optimization purposes.
-    Having found two lines that are (adjacent or separated by commented-out lines) and end with the marker comment
-    ``[fold-idempotent-MARKER]``, where the ``MARKER`` stands for an identical arbitrary alphanumeric sequence,
-    comment out the second line.
-    This operation can be removed without affecting the observable behaviors of the generated code
-    other than its execution speed.
-    """
-    return re.sub(r'^([ \t]*)([^\n]+# \[fold-idempotent\]\n)([ \t]*#[^\n]*\n)*\1\2',
-                  r'\1\2\3\1# \2',
-                  text,
-                  flags=re.MULTILINE)
 
 
 def _unwrap_delimited(t: pydsdl.Any) -> pydsdl.Any:
