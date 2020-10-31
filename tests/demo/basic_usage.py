@@ -165,11 +165,8 @@ class DemoApplication:
 
         # Published heartbeat fields can be configured trivially by assigning them on the heartbeat publisher instance.
         self._node.heartbeat_publisher.mode = uavcan.node.Mode_1_0.OPERATIONAL
-        # In this example here we assign the local process' PID to the vendor-specific status code (VSSC) and make
-        # sure that the valid range is not exceeded.
-        self._node.heartbeat_publisher.vendor_specific_status_code = \
-            os.getpid() & (2 ** min(pyuavcan.dsdl.get_model(uavcan.node.Heartbeat_1_0)[
-                'vendor_specific_status_code'].data_type.bit_length_set) - 1)
+        # The vendor-specific status code is the two least significant decimal digits of the local process' PID.
+        self._node.heartbeat_publisher.vendor_specific_status_code = os.getpid() % 100
 
         # Now we can create our session objects as necessary. They can be created or destroyed later at any point
         # after initialization. It's not necessary to set everything up during the initialization.

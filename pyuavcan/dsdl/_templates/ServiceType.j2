@@ -7,7 +7,7 @@
 {% extends "base.j2" -%}
 {%- block contents -%}
 
-# noinspection PyPep8Naming, SpellCheckingInspection
+# noinspection PyPep8Naming, SpellCheckingInspection, DuplicatedCode
 class {{ T|short_reference_name }}(_dsdl_.{%- if T.has_fixed_port_id -%}FixedPort{%- endif -%}ServiceObject):
     {{ data_schema('Request',  T.request_type, T|short_reference_name)|indent }}
 

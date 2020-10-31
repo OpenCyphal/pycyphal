@@ -227,7 +227,7 @@ def _unittest_slow_cli_demo_basic_usage(
 
         assert 'nominal' in heartbeat_demo['7509']['_metadata_']['priority'].lower()
         assert heartbeat_demo['7509']['_metadata_']['source_node_id'] == 42
-        assert heartbeat_demo['7509']['vendor_specific_status_code'] == demo_proc.pid
+        assert heartbeat_demo['7509']['vendor_specific_status_code'] == demo_proc.pid % 100
 
         for parsed in (json.loads(s) for s in out_sub_temperature):
             assert 'slow' in parsed['2345']['_metadata_']['priority'].lower()

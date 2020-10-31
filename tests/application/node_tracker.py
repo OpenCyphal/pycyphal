@@ -137,21 +137,21 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
                     assert old is not None
                     assert new is not None
                     assert old.heartbeat.vendor_specific_status_code == 0xde
-                    assert new.heartbeat.vendor_specific_status_code == 0xc0fe
+                    assert new.heartbeat.vendor_specific_status_code == 0xfe
                     assert old.info is not None
                     assert new.info is None
                 elif num_events_a == 3:  # Get info after restart received
                     assert old is not None
                     assert new is not None
-                    assert old.heartbeat.vendor_specific_status_code == 0xc0fe
-                    assert new.heartbeat.vendor_specific_status_code == 0xc0fe
+                    assert old.heartbeat.vendor_specific_status_code == 0xfe
+                    assert new.heartbeat.vendor_specific_status_code == 0xfe
                     assert old.info is None
                     assert new.info is not None
                     assert new.info.name.tobytes().decode() == 'node-A'
                 elif num_events_a == 4:  # Offline
                     assert old is not None
                     assert new is None
-                    assert old.heartbeat.vendor_specific_status_code == 0xc0fe
+                    assert old.heartbeat.vendor_specific_status_code == 0xfe
                     assert old.info is not None
                 else:
                     assert False

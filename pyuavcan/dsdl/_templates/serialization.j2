@@ -9,7 +9,7 @@
     _base_offset_ = _ser_.current_bit_length
     {% set inner = t | unwrap_delimited %}
     {{ _serialize_composite(inner, 'self', 0|bit_length_set) | remove_blank_lines | fold_idempotent }}
-    _ser_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent]
+    _ser_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent-align-{{ t.alignment_requirement }}]
     assert {{ inner.bit_length_set|min }} <= (_ser_.current_bit_length - _base_offset_) {# -#}
                                           <= {{ inner.bit_length_set|max }}, \
         'Bad serialization of {{ t }}'
@@ -76,7 +76,7 @@
 
 
 {% macro _serialize_variable_length_array(t, ref, offset) %}
-    # Length field byte-aligned: {{ offset.is_aligned_at_byte() }}; {# -#}
+    # Variable-length array: length field byte-aligned: {{ offset.is_aligned_at_byte() }}; {# -#}
       all elements byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}.
     assert len({{ ref }}) <= {{ t.capacity }}, '{{ ref }}: {{ t }}'
     {{ _serialize_integer(t.length_field_type, 'len(%s)'|format(ref), offset) }}
@@ -107,12 +107,10 @@
     {% endfor %}
 
 {% elif t is UnionType %}
-    # Tag field byte-aligned: {{ base_offset.is_aligned_at_byte() }}; {# -#}
-      values byte-aligned: {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
     {% for f, offset in t.iterate_fields_with_offsets(base_offset) %}
         {% set field_ref = ref + '.' + (f|id) %}
-    {{ 'if' if loop.first else 'elif' }} {{ field_ref }} is not None:
-        {{ _serialize_integer(t.tag_field_type, loop.index0|string, base_offset)|indent }}  # Tag {{ loop.index0 }}
+    {{ 'if' if loop.first else 'elif' }} {{ field_ref }} is not None:  # Union tag {{ loop.index0 }}
+        {{ _serialize_integer(t.tag_field_type, loop.index0|string, base_offset)|indent }}
         {{ _serialize_any(f.data_type, field_ref, offset)|indent }}
     {% endfor %}
     else:
@@ -128,7 +126,7 @@
 
 {% macro _serialize_any(t, ref, offset) %}
     {% if t.alignment_requirement > 1 %}
-    _ser_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent]
+    _ser_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent-align-{{ t.alignment_requirement }}]
     {% endif %}
 
     {%- if t is VoidType -%}                    _ser_.skip_bits({{ t.bit_length }})
@@ -143,11 +141,11 @@
     {%- else %}{% assert False %}
     {%- endif %}
 
-    {# No point enforcing the alignment if t is a composite because the invoked serialization method will do it. #}
     {% if t is CompositeType %}
     assert _ser_.current_bit_length % {{ t.alignment_requirement }} == 0, 'Nested object alignment error'
+                                                   {#- #}  # [fold-idempotent-align-{{ t.alignment_requirement }}]
     {% endif %}
-    {% if t is not CompositeType and t.alignment_requirement > 1 %}
-    _ser_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent]
+    {% if t.alignment_requirement > 1 %}
+    _ser_.pad_to_alignment({{ t.alignment_requirement }})  # [fold-idempotent-align-{{ t.alignment_requirement }}]
     {% endif %}
 {% endmacro %}

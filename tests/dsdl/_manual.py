@@ -91,16 +91,16 @@ def _unittest_slow_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsd
         uavcan.node.Heartbeat_1_0,
         _compile_serialized_representation(
             _bin(0xefbe_adde, 32),      # uptime dead beef in little-endian byte order
-            '00000010',                 # mode maintenance
-            '00000011',                 # health warning
-            '11111111'                  # vendor-specific
+            '00000010',                 # health caution
+            '00000001',                 # mode initialization
+            '10101111'                  # vendor-specific
         )
     )
     assert obj is not None
     assert obj.uptime == 0xdeadbeef
-    assert obj.health == uavcan.node.Health_1_0.WARNING
-    assert obj.mode == uavcan.node.Mode_1_0.MAINTENANCE
-    assert obj.vendor_specific_status_code == 0x7FFFF
+    assert obj.health.value == uavcan.node.Health_1_0.CAUTION
+    assert obj.mode.value == uavcan.node.Mode_1_0.INITIALIZATION
+    assert obj.vendor_specific_status_code == 0b10101111
 
     with pytest.raises(AttributeError, match='nonexistent'):
         pyuavcan.dsdl.get_attribute(obj, 'nonexistent')

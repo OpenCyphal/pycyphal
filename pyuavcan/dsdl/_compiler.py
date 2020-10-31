@@ -247,8 +247,9 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
 def _fold_idempotent(text: str) -> str:
     """
     This is a hacky way of folding redundant operations for optimization purposes.
-    Having found two identical lines ending with the marker comment ``[fold-idempotent]``,
-    possibly separated by a commented-out line, comment out the second line.
+    Having found two lines that are (adjacent or separated by commented-out lines) and end with the marker comment
+    ``[fold-idempotent-MARKER]``, where the ``MARKER`` stands for an identical arbitrary alphanumeric sequence,
+    comment out the second line.
     This operation can be removed without affecting the observable behaviors of the generated code
     other than its execution speed.
     """

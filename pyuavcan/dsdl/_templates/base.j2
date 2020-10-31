@@ -134,7 +134,7 @@ import {{ n }}
 -#}
 {%- macro data_schema(name, type, parent_class_name=None) -%}
 {%- set full_class_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
-# noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection
+# noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection, DuplicatedCode
 class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}CompositeObject):
     """
     Generated property settings use relaxed type signatures, accepting a large variety of
@@ -169,7 +169,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     {{- '\n' if loop.last else '' -}}
 {%- endfor %}
     def __init__(self
-                 {%- if type is UnionType -%}, *{%- endif -%}
+                 {%- if (type|unwrap_delimited) is UnionType -%}, *{%- endif -%}
                  {%- for f in type.fields_except_padding -%}
                  ,
                  {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
@@ -179,7 +179,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
         """
         {{ type.full_name }}.{{ type.version.major }}.{{ type.version.minor }}
         Raises ValueError if any of the primitive values are outside the permitted range, regardless of the cast mode.
-        {%- if type is UnionType %}
+        {%- if (type|unwrap_delimited) is UnionType %}
         If no parameters are provided, the first field will be default-initialized and selected.
         If one parameter is provided, it will be used to initialize and select the field under the same name.
         If more than one parameter is provided, a ValueError will be raised.
@@ -195,7 +195,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 {#-
  # FIELD INITIALIZATION
 -#}
-{%- if type is not UnionType -%}
+{%- if (type|unwrap_delimited) is not UnionType -%}
     {%- for f in type.fields_except_padding %}
         self._{{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
                           {{- strict_type_annotation(f.data_type) }}
@@ -297,11 +297,11 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 {%- for f in type.fields_except_padding %}
     @property
     def {{ f|id }}(self) -> {# #}
-    {%- if type is UnionType -%}
+    {%- if (type|unwrap_delimited) is UnionType -%}
         _ty_.Optional[
     {%- endif -%}
         {{ strict_type_annotation(f.data_type) }}
-    {%- if type is UnionType -%}
+    {%- if (type|unwrap_delimited) is UnionType -%}
         ]
     {%- endif -%}:
         """
@@ -356,7 +356,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 
     {%- else -%}{%- assert False -%}
     {%- endif %}
-    {%- if type is UnionType %}
+    {%- if (type|unwrap_delimited) is UnionType %}
         {%- for z in type.fields if z.name != f.name %}
         self._{{ z|id }} = None
         {%- endfor %}
@@ -379,7 +379,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
  # PYTHON DATA MODEL
  #}
     def __repr__(self) -> str:
-{%- if type is not UnionType %}
+{%- if (type|unwrap_delimited) is not UnionType %}
         _o_0_ = ', '.join([
     {%- for f in type.fields_except_padding %}
             '{{ f.name }}=%s' % {{ printable_field_representation(f) }},
