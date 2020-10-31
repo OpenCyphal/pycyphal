@@ -781,7 +781,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
         priority=Priority.NOMINAL,
         transfer_id=7,                  # Same transfer ID, will be accepted only by the instance with low TID timeout
         fragmented_payload=[]
-    ), tr.loop.time() + 1.0)
+    ), tr.loop.time() + 5.0)
 
     assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=16,
                                                                 in_frames=5,
@@ -795,7 +795,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
                                                                  in_frames_uavcan=16,
                                                                  in_frames_uavcan_accepted=15)
 
-    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 10.0)
+    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 20.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123

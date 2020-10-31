@@ -145,13 +145,13 @@ def _unittest_slow_cli_demo_basic_usage(
         run_cli_tool(
             '-v',
             'pub', '2345.uavcan.si.sample.temperature.Scalar.1.0', '{kelvin: 321.5}',
-            '--count=3', '--period=0.1', '--priority=slow',
+            '--count=5', '--period=0.5', '--priority=slow',
             '--heartbeat-fields={vendor_specific_status_code: 123}',
             *iface_option.make_cli_args(1),  # type: ignore
-            timeout=5.0
+            timeout=10.0
         )
 
-        time.sleep(2.0)     # Time to sync up
+        time.sleep(5.0)     # Time to sync up
 
         out_sub_heartbeat = proc_sub_heartbeat.wait(2.0, interrupt=True)[1].splitlines()
         out_sub_temperature = proc_sub_temperature.wait(2.0, interrupt=True)[1].splitlines()
@@ -221,6 +221,7 @@ def _unittest_slow_cli_demo_basic_usage(
         # Sort by source node ID and eliminate the middle; thus we eliminate the uncertainty.
         heartbeats_ordered_by_nid = list(sorted((json.loads(s) for s in out_sub_heartbeat),
                                                 key=lambda x: int(x['7509']['_metadata_']['source_node_id'])))
+        print('heartbeats_ordered_by_nid:', heartbeats_ordered_by_nid)
         heartbeat_pub, heartbeat_demo = heartbeats_ordered_by_nid[0], heartbeats_ordered_by_nid[-1]
         print('heartbeat_pub :', heartbeat_pub)
         print('heartbeat_demo:', heartbeat_demo)
