@@ -27,20 +27,17 @@ class FormatterFactory(SubsystemFactory):
             default=next(iter(_Format)),
             action=make_enum_action(_Format),
             help='''
-The format of the data printed into stdout. The final representation is
-constructed from an intermediate "builtin-based" representation, which is
-a simplified form that is stripped of the detailed DSDL type information,
-like JSON. For the background info please read the PyUAVCAN documentation
-on builtin-based representations.
+The format of the data printed into stdout. The final representation is constructed from an intermediate
+"builtin-based" representation, which is a simplified form that is stripped of the detailed DSDL type information,
+like JSON. For the background info please read the PyUAVCAN documentation on builtin-based representations.
 
-YAML is the default option as it is easy to process for humans and other
-machines alike. Each YAML-formatted object is separated from its siblings
-by an explicit document start marker: "---".
+YAML is the default option as it is easy to process for humans and other machines alike. Each YAML-formatted object
+is separated from its siblings by an explicit document start marker: "---".
 
 JSON output is optimized for machine parsing, strictly one object per line.
 
-TSV (tab separated values) output is intended for use with third-party
-software such as computer algebra systems or spreadsheet processors.
+TSV (tab separated values) output is intended for use with third-party software such as computer algebra systems or
+spreadsheet processors.
 
 Default: %(default)s
 '''.strip())
@@ -65,6 +62,9 @@ def _make_yaml_formatter() -> Formatter:
 
 
 def _make_json_formatter() -> Formatter:
+    # We prefer simplejson over the standard json because the native json lacks important capabilities:
+    #  - simplejson preserves dict ordering, which is very important for UX.
+    #  - simplejson supports Decimal.
     import simplejson as json
     return lambda data: json.dumps(data, ensure_ascii=False, separators=(',', ':'))
 
@@ -82,7 +82,7 @@ def _make_tsv_formatter() -> Formatter:
 
 def _unittest_formatter() -> None:
     obj = {
-        12345: {
+        2345: {
             'abc': {
                 'def': [123, 456, ],
             },
@@ -90,7 +90,7 @@ def _unittest_formatter() -> None:
         }
     }
     assert FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.YAML))(obj) == """---
-12345:
+2345:
   abc:
     def:
     - 123
@@ -98,4 +98,4 @@ def _unittest_formatter() -> None:
   ghi: 789
 """
     assert FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.JSON))(obj) == \
-        '{"12345":{"abc":{"def":[123,456]},"ghi":789}}'
+        '{"2345":{"abc":{"def":[123,456]},"ghi":789}}'

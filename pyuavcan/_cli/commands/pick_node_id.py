@@ -24,18 +24,14 @@ class PickNodeIDCommand(Command):
     @property
     def help(self) -> str:
         return '''
-Automatically find a node-ID value that is not used by any other node that
-is currently online. This is a simpler alternative to plug-and-play node-ID
-allocation logic defined in Specification. Unlike the solution presented
-there, this alternative is non-deterministic and collision-prone; it is
-fundamentally unsafe and it should not be used in production. Instead, it is
-intended for use in R&D and testing applications, either directly by humans
-or from automation scripts. The operating principle is extremely simple and
-can be viewed as a simplification of the node-ID claiming procedure defined
-in J1939: listen to Heartbeat messages for a short while, build the list of
-node-ID values that are currently in use, and then randomly pick a node-ID
-from the unused ones. The listening duration is determined heuristically
-at run time; for most use cases it is unlikely to exceed three seconds.
+Automatically find a node-ID value that is not used by any other node that is currently online. This is a simpler
+alternative to plug-and-play node-ID allocation logic defined in Specification. Unlike the solution presented there,
+this alternative is non-deterministic and collision-prone; it is fundamentally unsafe and it should not be used in
+production. Instead, it is intended for use in R&D and testing applications, either directly by humans or from
+automation scripts. The operating principle is extremely simple and can be viewed as a simplification of the node-ID
+claiming procedure defined in J1939: listen to Heartbeat messages for a short while, build the list of node-ID values
+that are currently in use, and then randomly pick a node-ID from the unused ones. The listening duration is determined
+heuristically at run time; for most use cases it is unlikely to exceed three seconds.
 '''.strip()
 
     @property
@@ -105,7 +101,7 @@ async def _run(transport: pyuavcan.transport.Transport) -> int:
                     else:
                         # If at least one node is in the Initialization state, the network might be starting,
                         # so we need to listen longer to minimize the chance of collision.
-                        multiplier = 3.0 if msg.mode == msg.MODE_INITIALIZATION else 1.0
+                        multiplier = 3.0 if msg.mode.value == uavcan.node.Mode_1_0.INITIALIZATION else 1.0
                         advancement = uavcan.node.Heartbeat_1_0.MAX_PUBLICATION_PERIOD * multiplier
                         _logger.info('Deadline advanced by %.1f s; %d candidates left of %d possible',
                                      advancement, len(candidates), node_id_set_cardinality)

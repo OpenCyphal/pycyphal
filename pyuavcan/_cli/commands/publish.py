@@ -28,15 +28,14 @@ class PublishCommand(Command):
     @property
     def help(self) -> str:
         return '''
-Publish messages of the specified subject with the fixed contents.
-The local node will also publish heartbeat and respond to GetInfo,
-unless it is configured to be anonymous.
+Publish messages of the specified subject with the fixed contents. The local node will also publish heartbeat and
+respond to GetInfo, unless it is configured to be anonymous.
 '''.strip()
 
     @property
     def examples(self) -> typing.Optional[str]:
         return '''
-pyuavcan pub uavcan.diagnostic.Record.1.0 '{text: "Hello world!"}'
+pyuavcan pub uavcan.diagnostic.Record.1.1 '{text: "Hello world!"}'
 '''.strip()
 
     @property
@@ -51,24 +50,21 @@ pyuavcan pub uavcan.diagnostic.Record.1.0 '{text: "Hello world!"}'
             metavar='[SUBJECT_ID.]FULL_MESSAGE_TYPE_NAME.MAJOR.MINOR YAML_FIELDS',
             nargs='*',
             help='''
-The full message type name with version and optional subject-ID, followed
-by the YAML (or JSON, which is a subset of YAML)-formatted contents of the
-message (separated by whitespace). Missing fields will be left at their
-default values. Use empty dict as "{}" to construct a default-initialized
-message. For more info about the YAML representation, read the PyUAVCAN
-documentation on builtin-based representations.
+The full message type name with version and optional subject-ID, followed by the YAML (or JSON, which is a subset of
+YAML)-formatted contents of the message (separated by whitespace). Missing fields will be left at their default values.
+Use empty dict as "{}" to construct a default-initialized message. For more info about the YAML representation, read
+the PyUAVCAN documentation on builtin-based representations.
 
 The subject-ID can be omitted if a fixed one is defined for the data type.
 
-The number of such pairs can be arbitrary; all defined messages will be
-published synchronously. If no such pairs are specified, nothing will be
-published, unless the local node is not anonymous. Per the specification,
-a non-anonymous node must publish heartbeat; this requirement is respected.
-Additionally, the recommended standard service uavcan.node.GetInfo is served.
+The number of such pairs can be arbitrary; all defined messages will be published synchronously. If no such pairs are
+specified, nothing will be published, unless the local node is not anonymous. Per the specification, a non-anonymous
+node must publish heartbeat; this requirement is respected. Additionally, the recommended standard service
+uavcan.node.GetInfo is served.
 
 Examples:
-    1234.uavcan.diagnostic.Record.1.0 '{"text": "Hello world!"}'
-    uavcan.diagnostic.Record.1.0 '{"text": "Hello world!"}'
+    1234.uavcan.diagnostic.Record.1.1 '{"text": "Hello world!"}'
+    uavcan.diagnostic.Record.1.1 '{"text": "Hello world!"}'
 '''.strip())
         parser.add_argument(
             '--period', '-P',
@@ -76,12 +72,10 @@ Examples:
             default=1.0,
             metavar='SECONDS',
             help='''
-Message publication period. All messages are published synchronously, so
-the period setting applies to all specified subjects. Besides, the period
-of heartbeat is defined as min((--period), MAX_PUBLICATION_PERIOD); i.e.,
-unless this value exceeds the maximum period defined for heartbeat by the
-specification, it is used for heartbeat as well. Note that anonymous nodes
-do not publish heartbeat, see the local node-ID argument for more info.
+Message publication period. All messages are published synchronously, so the period setting applies to all specified
+subjects. Besides, the period of heartbeat is defined as min((--period), MAX_PUBLICATION_PERIOD); i.e., unless this
+value exceeds the maximum period defined for heartbeat by the specification, it is used for heartbeat as well. Note
+that anonymous nodes do not publish heartbeat.
 
 The send timeout for all publishers will equal the publication period.
 
@@ -93,8 +87,7 @@ Default: %(default)s
             default=1,
             metavar='NATURAL',
             help='''
-Number of synchronous publication cycles before exiting normally.
-The duration therefore equals (--period) * (--count).
+Number of synchronous publication cycles before exiting normally. The duration therefore equals (--period) * (--count).
 Default: %(default)s
 '''.strip())
         parser.add_argument(
@@ -119,8 +112,10 @@ Default: %(default)s
 
             raw_ss = args.subject_spec
             if len(raw_ss) % 2 != 0:
-                raise argparse.ArgumentError('Mismatching arguments: '
-                                             'each subject specifier must be matched with its field specifier.')
+                raise ValueError(
+                    'Mismatching arguments: each subject specifier must be matched with its field specifier, like: '
+                    'subject-a field-a [subject-b field-b] [...]'
+                )
             publications: typing.List[Publication] = []
             for subject_spec, field_spec in (raw_ss[i:i + 2] for i in range(0, len(raw_ss), 2)):
                 publications.append(Publication(subject_spec=subject_spec,

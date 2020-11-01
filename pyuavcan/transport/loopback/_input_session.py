@@ -85,7 +85,7 @@ def _unittest_session() -> None:
     closed = False
 
     specifier = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
-    payload_metadata = pyuavcan.transport.PayloadMetadata(0xdeadbeef0ddf00d, 1234)
+    payload_metadata = pyuavcan.transport.PayloadMetadata(1234)
 
     def do_close() -> None:
         nonlocal closed

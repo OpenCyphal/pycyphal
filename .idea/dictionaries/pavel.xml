@@ -4,8 +4,10 @@
       <w>aabbccddeeff</w>
       <w>abcd</w>
       <w>abcde</w>
+      <w>abcdef</w>
       <w>abcdefghi</w>
       <w>abstractmethods</w>
+      <w>addopts</w>
       <w>aega</w>
       <w>afdx</w>
       <w>allocatee</w>
@@ -13,6 +15,7 @@
       <w>apidoc</w>
       <w>appveyor</w>
       <w>argparse</w>
+      <w>asctime</w>
       <w>asyncio</w>
       <w>atexit</w>
       <w>autoclass</w>
@@ -27,10 +30,12 @@
       <w>bysource</w>
       <w>candump</w>
       <w>canfd</w>
+      <w>canid</w>
       <w>caplog</w>
       <w>ccitt</w>
       <w>coloredlogs</w>
       <w>computron</w>
+      <w>conftest</w>
       <w>constraindness</w>
       <w>constructible</w>
       <w>contnode</w>
@@ -59,9 +64,13 @@
       <w>dsdl</w>
       <w>dsdlgen</w>
       <w>dsdlgp</w>
+      <w>dsonar</w>
+      <w>dtype</w>
       <w>edgeitems</w>
       <w>elif</w>
       <w>emptor</w>
+      <w>endfor</w>
+      <w>endmacro</w>
       <w>facto</w>
       <w>ffee</w>
       <w>ffff</w>
@@ -74,7 +83,10 @@
       <w>genericity</w>
       <w>getpeername</w>
       <w>getsockopt</w>
+      <w>gibibyte</w>
+      <w>gibibytes</w>
       <w>graphviz</w>
+      <w>hacky</w>
       <w>hardbass</w>
       <w>hdlc</w>
       <w>hitl</w>
@@ -91,6 +103,7 @@
       <w>kibibyte</w>
       <w>kirienko</w>
       <w>koopman</w>
+      <w>levelname</w>
       <w>libcanard</w>
       <w>linkcode</w>
       <w>lnid</w>
@@ -137,6 +150,8 @@
       <w>pydsdl</w>
       <w>pydsdlgen</w>
       <w>pylint</w>
+      <w>pyserial</w>
+      <w>pytest</w>
       <w>pythonasynciodebug</w>
       <w>pythoncan</w>
       <w>pythonpath</w>
@@ -159,6 +174,7 @@
       <w>rechunk</w>
       <w>recvfrom</w>
       <w>refdoc</w>
+      <w>refid</w>
       <w>refragment</w>
       <w>refragmented</w>
       <w>reftarget</w>
@@ -180,6 +196,7 @@
       <w>serv</w>
       <w>setcap</w>
       <w>sheremet</w>
+      <w>signedness</w>
       <w>sitecustomize</w>
       <w>sitl</w>
       <w>socketcan</w>
@@ -202,6 +219,7 @@
       <w>templatedir</w>
       <w>testpaths</w>
       <w>thumby</w>
+      <w>timestamping</w>
       <w>tobytes</w>
       <w>tocfile</w>
       <w>toctree</w>
@@ -209,11 +227,13 @@
       <w>tradeoff</w>
       <w>typecheck</w>
       <w>uavcan</w>
+      <w>uber</w>
       <w>udpros</w>
       <w>uname</w>
       <w>undisable</w>
       <w>undoc</w>
       <w>unhashable</w>
+      <w>unicast</w>
       <w>unseparate</w>
       <w>unstropped</w>
       <w>upvote</w>
@@ -231,6 +251,7 @@
       <w>xxxx</w>
       <w>xxxxx</w>
       <w>xxxxxxx</w>
+      <w>zubax</w>
     </words>
   </dictionary>
 </component>

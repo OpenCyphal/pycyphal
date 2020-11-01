@@ -24,14 +24,12 @@ class TransferReassemblyErrorID(enum.Enum):
 
 
 class TransferReassembler:
-    def __init__(self,
-                 source_node_id:         int,
-                 max_payload_size_bytes: int):
+    def __init__(self, source_node_id: int, extent_bytes: int):
         self._source_node_id = int(source_node_id)
         self._timestamp = pyuavcan.transport.Timestamp(0, 0)
         self._transfer_id = 0
         self._toggle_bit = False
-        self._max_payload_size_bytes_with_crc = int(max_payload_size_bytes) + _frame.TRANSFER_CRC_LENGTH_BYTES
+        self._max_payload_size_bytes_with_crc = int(extent_bytes) + _frame.TRANSFER_CRC_LENGTH_BYTES
         self._crc = pyuavcan.transport.commons.crc.CRC16CCITT()
         self._payload_truncated = False
         self._fragmented_payload: typing.List[memoryview] = []

@@ -100,7 +100,7 @@ source_suffix = ['.rst']
 master_doc = 'index'
 
 # Autodoc
-autoclass_content = 'bysource'
+autoclass_content = 'class'
 autodoc_member_order = 'bysource'
 autodoc_inherit_docstrings = False
 autodoc_default_options = {

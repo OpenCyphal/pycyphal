@@ -59,14 +59,14 @@ Having prepared a presentation layer controller, we can create *ports*.
 They are the main points of network access for the application.
 Let's start with a publisher and a subscriber:
 
->>> pub_record = presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
->>> sub_record = presentation.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+>>> pub_record = presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
+>>> sub_record = presentation.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
 
 Publish a message and receive it also (the loopback transport just returns all outgoing transfers back):
 
 >>> import asyncio
 >>> run_until_complete = asyncio.get_event_loop().run_until_complete
->>> record = uavcan.diagnostic.Record_1_0(
+>>> record = uavcan.diagnostic.Record_1_1(
 ...     severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
 ...     text='Neither man nor animal can be influenced by anything but suggestion.')
 >>> run_until_complete(pub_record.publish(record))  # publish() returns False on timeout.
@@ -81,7 +81,7 @@ We can use custom subject-ID with any data type, even if there is a fixed subjec
 (the background is explained in Specification, please read it).
 Here is an example; we also show here that when a receive call times out, it returns None:
 
->>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_0, subject_id=12345)
+>>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_1, subject_id=2345)
 >>> run_until_complete(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
 
 You can see above that the node-ID of the received transfer metadata is None,
@@ -113,27 +113,27 @@ Generally, anonymous nodes are useful in two cases:
 
 Having configured the node-ID, let's set up a service and invoke it:
 
->>> async def on_request(request: uavcan.node.ExecuteCommand_1_0.Request,
+>>> async def on_request(request: uavcan.node.ExecuteCommand_1_1.Request,
 ...                      metadata: pyuavcan.presentation.ServiceRequestMetadata) \
-...         -> uavcan.node.ExecuteCommand_1_0.Response:
+...         -> uavcan.node.ExecuteCommand_1_1.Response:
 ...     print(f'Received command {request.command} from node {metadata.client_node_id}')
-...     return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND)
->>> srv_exec_command = presentation.get_server_with_fixed_service_id(uavcan.node.ExecuteCommand_1_0)
+...     return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND)
+>>> srv_exec_command = presentation.get_server_with_fixed_service_id(uavcan.node.ExecuteCommand_1_1)
 >>> srv_exec_command.serve_in_background(on_request)
->>> client_exec_command = presentation.make_client_with_fixed_service_id(uavcan.node.ExecuteCommand_1_0,
+>>> client_exec_command = presentation.make_client_with_fixed_service_id(uavcan.node.ExecuteCommand_1_1,
 ...                                                                      server_node_id=1234)
->>> request_object = uavcan.node.ExecuteCommand_1_0.Request(
-...     uavcan.node.ExecuteCommand_1_0.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
+>>> request_object = uavcan.node.ExecuteCommand_1_1.Request(
+...     uavcan.node.ExecuteCommand_1_1.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
 ...     '/path/to/the/firmware/image.bin')
 >>> received_response, response_transfer = run_until_complete(client_exec_command.call(request_object))
 Received command 65533 from node 1234
 >>> received_response
-uavcan.node.ExecuteCommand.Response.1.0(status=3)
+uavcan.node.ExecuteCommand.Response.1.1(status=3)
 
 Methods that receive data from the network return None on timeout.
 For example, here we create a client for a nonexistent service; the call times out and returns None:
 
->>> bad_client = presentation.make_client(uavcan.node.ExecuteCommand_1_0,
+>>> bad_client = presentation.make_client(uavcan.node.ExecuteCommand_1_1,
 ...                                       service_id=234,       # There is no such service.
 ...                                       server_node_id=321)   # There is no such server.
 >>> bad_client.response_timeout = 0.1                           # Override the default.

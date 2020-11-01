@@ -134,7 +134,7 @@ import {{ n }}
 -#}
 {%- macro data_schema(name, type, parent_class_name=None) -%}
 {%- set full_class_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
-# noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection
+# noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection, DuplicatedCode
 class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}CompositeObject):
     """
     Generated property settings use relaxed type signatures, accepting a large variety of
@@ -169,7 +169,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     {{- '\n' if loop.last else '' -}}
 {%- endfor %}
     def __init__(self
-                 {%- if type is UnionType -%}, *{%- endif -%}
+                 {%- if type.inner_type is UnionType -%}, *{%- endif -%}
                  {%- for f in type.fields_except_padding -%}
                  ,
                  {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
@@ -179,7 +179,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
         """
         {{ type.full_name }}.{{ type.version.major }}.{{ type.version.minor }}
         Raises ValueError if any of the primitive values are outside the permitted range, regardless of the cast mode.
-        {%- if type is UnionType %}
+        {%- if type.inner_type is UnionType %}
         If no parameters are provided, the first field will be default-initialized and selected.
         If one parameter is provided, it will be used to initialize and select the field under the same name.
         If more than one parameter is provided, a ValueError will be raised.
@@ -195,7 +195,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 {#-
  # FIELD INITIALIZATION
 -#}
-{%- if type is not UnionType -%}
+{%- if type.inner_type is not UnionType -%}
     {%- for f in type.fields_except_padding %}
         self._{{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
                           {{- strict_type_annotation(f.data_type) }}
@@ -297,11 +297,11 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 {%- for f in type.fields_except_padding %}
     @property
     def {{ f|id }}(self) -> {# #}
-    {%- if type is UnionType -%}
+    {%- if type.inner_type is UnionType -%}
         _ty_.Optional[
     {%- endif -%}
         {{ strict_type_annotation(f.data_type) }}
-    {%- if type is UnionType -%}
+    {%- if type.inner_type is UnionType -%}
         ]
     {%- endif -%}:
         """
@@ -356,7 +356,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 
     {%- else -%}{%- assert False -%}
     {%- endif %}
-    {%- if type is UnionType %}
+    {%- if type.inner_type is UnionType %}
         {%- for z in type.fields if z.name != f.name %}
         self._{{ z|id }} = None
         {%- endfor %}
@@ -366,30 +366,20 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
  # SERIALIZATION METHODS
  #}
     # noinspection PyProtectedMember
-    def _serialize_aligned_(self, _ser_: {{ full_class_name }}._SerializerTypeVar_) -> None:
-        assert _ser_.current_bit_length % 8 == 0, 'Serializer is not byte-aligned'
-        _orig_bit_length_ = _ser_.current_bit_length
-        {{ serialize(type)|indent }}
-        assert {{ type.bit_length_set|min }} <= (_ser_.current_bit_length - _orig_bit_length_) {# -#}
-                                             <= {{ type.bit_length_set|max }}, \
-            'Bad serialization of {{ type }}'
+    def _serialize_(self, _ser_: {{ full_class_name }}._SerializerTypeVar_) -> None:
+        {{ serialize(type) | remove_blank_lines | indent }}
 
     # noinspection PyProtectedMember
     @staticmethod
-    def _deserialize_aligned_(_des_: {{ full_class_name }}._DeserializerTypeVar_) -> {{ full_class_name }}:
-        assert _des_.consumed_bit_length % 8 == 0, 'Deserializer is not byte-aligned'
-        _bit_length_base_ = _des_.consumed_bit_length
-        {{ deserialize(type, full_class_name)|indent }}
-        assert {{ type.bit_length_set|min }} <= (_des_.consumed_bit_length - _bit_length_base_) {# -#}
-                                             <= {{ type.bit_length_set|max }}, \
-            'Bad deserialization of {{ type }}'
+    def _deserialize_(_des_: {{ full_class_name }}._DeserializerTypeVar_) -> {{ full_class_name }}:
+        {{ deserialize(type, full_class_name) | remove_blank_lines | indent }}
         assert isinstance(self, {{ full_class_name }})
         return self
 {#
  # PYTHON DATA MODEL
  #}
     def __repr__(self) -> str:
-{%- if type is not UnionType %}
+{%- if type.inner_type is not UnionType %}
         _o_0_ = ', '.join([
     {%- for f in type.fields_except_padding %}
             '{{ f.name }}=%s' % {{ printable_field_representation(f) }},
@@ -409,10 +399,10 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     {%- if T.has_fixed_port_id %}
     _FIXED_PORT_ID_ = {{ T.fixed_port_id|int }}
     {%- endif %}
-    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_ = {{ ((type.bit_length_set|max|int) + 7) // 8 }}  {# -#}
-                                                 # {{ type.bit_length_set|max }} bits
+    {%- assert type.extent % 8 == 0 %}
+    _EXTENT_BYTES_ = {{ type.extent // 8 }}
 
-    {% set meta_type = 'UnionType' if type is UnionType else 'StructureType' -%}
+    {% set meta_type = type.__class__.__name__ -%}
     _MODEL_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
         {{ type | pickle | indent(8) }}
     )

@@ -25,14 +25,14 @@ def _unittest_slow_builtin_form_manual(generated_packages: typing.List[pyuavcan.
     import uavcan.time
 
     bi = pyuavcan.dsdl.to_builtin(uavcan.node.Heartbeat_1_0(uptime=123456,
-                                                            health=2,
-                                                            mode=6,
-                                                            vendor_specific_status_code=0xbad))
+                                                            health=uavcan.node.Health_1_0(2),
+                                                            mode=uavcan.node.Mode_1_0(3),
+                                                            vendor_specific_status_code=0xba))
     assert bi == {
         'uptime': 123456,
-        'health': 2,
-        'mode': 6,
-        'vendor_specific_status_code': 2989,
+        'health': {'value': 2},
+        'mode': {'value': 3},
+        'vendor_specific_status_code': 186,
     }
 
     bi = pyuavcan.dsdl.to_builtin(uavcan.node.GetInfo_1_0.Response(

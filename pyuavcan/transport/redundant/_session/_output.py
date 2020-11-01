@@ -320,7 +320,7 @@ def _unittest_redundant_output() -> None:
 
     spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
     spec_rx = pyuavcan.transport.InputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(0x_deadbeef_deadbeef, 30 * 1024 * 1024)
+    meta = pyuavcan.transport.PayloadMetadata(30 * 1024 * 1024)
 
     ts = Timestamp.now()
 
@@ -611,7 +611,7 @@ def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
 
     spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
     spec_rx = pyuavcan.transport.InputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(0x_deadbeef_deadbeef, 30 * 1024 * 1024)
+    meta = pyuavcan.transport.PayloadMetadata(30 * 1024 * 1024)
 
     ts = Timestamp.now()
 

@@ -27,30 +27,28 @@ class CompositeObject(abc.ABC):  # Members are surrounded with underscores to av
     It does not have any public members.
     """
 
-    # Type definition as provided by PyDSDL.
     _MODEL_: pydsdl.CompositeType
+    """Type definition as provided by PyDSDL."""
 
-    # Defined in generated classes.
-    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_: int
+    _EXTENT_BYTES_: int
+    """Defined in generated classes."""
 
     @abc.abstractmethod
-    def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
+    def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
         """
         Auto-generated serialization method.
         Appends the serialized representation of its object to the supplied Serializer instance.
-        The current bit offset of the Serializer instance MUST be byte-aligned.
         This is not a part of the API.
         """
         raise NotImplementedError
 
     @staticmethod
     @abc.abstractmethod
-    def _deserialize_aligned_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
+    def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
         """
         Auto-generated deserialization method. Consumes (some) data from the supplied Deserializer instance.
         Raises a Deserializer.FormatError if the supplied serialized representation is invalid.
         Always returns a valid object unless an exception is raised.
-        The current bit offset of the Deserializer instance MUST be byte-aligned.
         This is not a part of the API.
         """
         raise NotImplementedError
@@ -84,13 +82,13 @@ class ServiceObject(CompositeObject):
     The base class provides a stub which is overridden in generated classes.
     """
 
-    _MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_ = 0
+    _EXTENT_BYTES_ = 0
 
-    def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
+    def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
         raise TypeError(f'Service type {type(self).__name__} cannot be serialized')
 
     @staticmethod
-    def _deserialize_aligned_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
+    def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
         raise TypeError('Service types cannot be deserialized')
 
 
@@ -103,12 +101,12 @@ class FixedPortObject(abc.ABC):
 
 class FixedPortCompositeObject(CompositeObject, FixedPortObject):
     @abc.abstractmethod
-    def _serialize_aligned_(self, _ser_: _serialized_representation.Serializer) -> None:
+    def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
         raise NotImplementedError
 
     @staticmethod
     @abc.abstractmethod
-    def _deserialize_aligned_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
+    def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
         raise NotImplementedError
 
 
@@ -131,8 +129,8 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     It is guaranteed that at least one fragment is always returned (which may be empty).
     """
     # TODO: update the Serializer class to emit an iterable of fragments.
-    ser = _serialized_representation.Serializer.new(obj._MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_)
-    obj._serialize_aligned_(ser)
+    ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)
+    obj._serialize_(ser)
     yield ser.buffer.data
 
 
@@ -156,7 +154,7 @@ def deserialize(dtype: typing.Type[CompositeObjectTypeVar],
     """
     deserializer = _serialized_representation.Deserializer.new(fragmented_serialized_representation)
     try:
-        return dtype._deserialize_aligned_(deserializer)  # type: ignore
+        return dtype._deserialize_(deserializer)  # type: ignore
     except _serialized_representation.Deserializer.FormatError:
         _logger.info('Invalid serialized representation of %s: %s', get_model(dtype), deserializer, exc_info=True)
         return None
@@ -176,6 +174,7 @@ def get_model(class_or_instance: typing.Union[typing.Type[CompositeObject], Comp
 def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
     """
     Returns a generated native class implementing the specified DSDL type represented by its PyDSDL model object.
+    Promotes the model to delimited type automatically if necessary.
     This is the inverse of :func:`get_model`.
 
     :raises:
@@ -188,36 +187,41 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
           To fix this, regenerate the package and make sure that all components of the application use identical
           or compatible DSDL source files.
     """
-    if model.parent_service is not None:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
-        out = get_class(model.parent_service)
-        assert issubclass(out, ServiceObject)
-        out = getattr(out, model.short_name)
-    else:
+    def do_import(name_components: typing.List[str]) -> typing.Any:
         mod = None
-        for comp in model.name_components[:-1]:
+        for comp in name_components:
             name = (mod.__name__ + '.' + comp) if mod else comp  # type: ignore
             try:
                 mod = importlib.import_module(name)
             except ImportError:                         # We seem to have hit a reserved word; try with an underscore.
                 mod = importlib.import_module(name + '_')
-        ref = f'{model.short_name}_{model.version.major}_{model.version.minor}'
-        out = getattr(mod, ref)
+        return mod
+
+    if model.has_parent_service:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
+        parent_name, child_name = model.name_components[-2:]
+        mod = do_import(model.name_components[:-2])
+        out = getattr(mod, f'{parent_name}_{model.version.major}_{model.version.minor}')
+        assert issubclass(out, ServiceObject)
+        out = getattr(out, child_name)
+    else:
+        mod = do_import(model.name_components[:-1])
+        out = getattr(mod, f'{model.short_name}_{model.version.major}_{model.version.minor}')
 
     out_model = get_model(out)
-    if out_model != model:
+    if out_model.inner_type != model.inner_type:
         raise TypeError(f'The class has been generated using an incompatible DSDL definition. '
                         f'Requested model: {model} defined in {model.source_file_path}. '
                         f'Model found in the class: {out_model} defined in {out_model.source_file_path}.')
 
-    assert get_model(out) == model
+    assert str(get_model(out)) == str(model)
+    assert isinstance(out, type)
     assert issubclass(out, CompositeObject)
     return out
 
 
-def get_max_serialized_representation_size_bytes(class_or_instance: typing.Union[typing.Type[CompositeObject],
-                                                                                 CompositeObject]) -> int:
+def get_extent_bytes(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> int:
     # noinspection PyProtectedMember
-    return int(class_or_instance._MAX_SERIALIZED_REPRESENTATION_SIZE_BYTES_)
+    return int(class_or_instance._EXTENT_BYTES_)
 
 
 def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[FixedPortObject],

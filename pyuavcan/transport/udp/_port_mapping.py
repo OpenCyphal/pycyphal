@@ -25,8 +25,8 @@ def udp_port_from_data_specifier(ds: DataSpecifier) -> int:
 
     >>> udp_port_from_data_specifier(MessageDataSpecifier(0))
     16384
-    >>> udp_port_from_data_specifier(MessageDataSpecifier(32767))
-    49151
+    >>> udp_port_from_data_specifier(MessageDataSpecifier(8191))
+    24575
     >>> udp_port_from_data_specifier(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.REQUEST))
     16382
     >>> udp_port_from_data_specifier(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE))

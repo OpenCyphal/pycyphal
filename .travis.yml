@@ -4,6 +4,7 @@ dist: focal
 python:
   - '3.7'
   - '3.8'
+  - '3.9-dev'
 
 before_script:
   # Extra module package is needed for vcan (virtual SocketCAN iface).

@@ -32,12 +32,11 @@ class CallCommand(Command):
     @property
     def help(self) -> str:
         return '''
-Invoke a service using a specified request object and print the response.
-The local node will also publish heartbeat and respond to GetInfo.
+Invoke a service using a specified request object and print the response. The local node will also publish heartbeat
+and respond to GetInfo.
 
-Each emitted output unit is a key-value mapping of one element where the
-key is the service-ID and the value is the received response object.
-The output format is configurable.
+Each emitted output unit is a key-value mapping of one element where the key is the service-ID and the value is the
+received response object. The output format is configurable.
 '''.strip()
 
     @property
@@ -59,29 +58,27 @@ pyuavcan call 42 uavcan.node.GetInfo.1.0 '{}'
             metavar='SERVER_NODE_ID',
             type=int,
             help=f'''
-The node ID of the server that the request will be sent to.
-Valid values range from zero (inclusive) to a transport-specific upper limit.
+The node ID of the server that the request will be sent to. Valid values range from zero (inclusive) to a
+transport-specific upper limit.
 '''.strip())
         parser.add_argument(
             'service_spec',
             metavar='[SERVICE_ID.]FULL_SERVICE_TYPE_NAME.MAJOR.MINOR',
             help='''
-The full service type name with version and optional service-ID.
-The service-ID can be omitted if a fixed one is defined for the data type.
+The full service type name with version and optional service-ID. The service-ID can be omitted if a fixed one is
+defined for the data type.
 Examples:
-    123.uavcan.node.ExecuteCommand.1.0 (using service-ID 123)
-    uavcan.node.ExecuteCommand.1.0 (using the fixed service-ID 435)
+    123.uavcan.node.ExecuteCommand.1.1 (using service-ID 123)
+    uavcan.node.ExecuteCommand.1.1 (using the fixed service-ID 435)
 '''.strip())
         parser.add_argument(
             'field_spec',
             metavar='YAML_FIELDS',
             type=YAMLLoader().load,
             help='''
-The YAML (or JSON, which is a subset of YAML)-formatted contents of the
-request object. Missing fields will be left at their default values.
-Use empty dict as "{}" to construct a default-initialized request object.
-For more info about the YAML representation, read the PyUAVCAN documentation
-on builtin-based representations.
+The YAML (or JSON, which is a subset of YAML)-formatted contents of the request object. Missing fields will be left
+at their default values. Use empty dict as "{}" to construct a default-initialized request object. For more info about
+the YAML representation, read the PyUAVCAN documentation on builtin-based representations.
 '''.strip())
         parser.add_argument(
             '--timeout', '-T',
@@ -104,8 +101,7 @@ Default: %(default)s
             '--with-metadata', '-M',
             action='store_true',
             help='''
-Emit metadata together with the response.
-The metadata fields will be contained under the key "_metadata_".
+Emit metadata together with the response. The metadata fields will be contained under the key "_metadata_".
 '''.strip())
 
     def execute(self, args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:

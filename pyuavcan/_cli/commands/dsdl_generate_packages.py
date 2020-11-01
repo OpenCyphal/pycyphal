@@ -32,9 +32,8 @@ class DSDLGeneratePackagesCommand(Command):
     @property
     def help(self) -> str:
         return '''
-Generate PyUAVCAN Python packages from the specified DSDL root namespaces
-and/or from URLs pointing to an archive containing a set of DSDL root
-namespaces.
+Generate PyUAVCAN Python packages from the specified DSDL root namespaces and/or from URLs pointing to an archive
+containing a set of DSDL root namespaces.
 '''.strip()
 
     @property
@@ -54,15 +53,13 @@ pyuavcan -v dsdl-gen-pkg --lookup {DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_U
             metavar='INPUT_PATH_OR_URI',
             nargs='+',
             help=f'''
-Either a local path or an URI pointing to the source DSDL root namespace(s).
-Can be specified more than once to process multiple namespaces at once.
+Either a local path or an URI pointing to the source DSDL root namespace(s). Can be specified more than once to
+process multiple namespaces at once.
 
-If the value is a local path, it must point to a local DSDL root namespace
-directory or to a local archive containing DSDL root namespace directories
-at the top level. If the value is an URI, it must point to an archive
-containing DSDL root namespace directories at the top level (this is
-convenient for generating packages from namespaces hosted in public
-repositories, e.g., on GitHub).
+If the value is a local path, it must point to a local DSDL root namespace directory or to a local archive containing
+DSDL root namespace directories at the top level. If the value is an URI, it must point to an archive containing DSDL
+root namespace directories at the top level (this is convenient for generating packages from namespaces hosted in
+public repositories, e.g., on GitHub).
 
 Example path:
     ~/uavcan/public_regulated_data_types/uavcan/
@@ -75,9 +72,8 @@ Example URI:
             action='append',
             metavar='LOOKUP_PATH_OR_URI',
             help=f'''
-This is like --input, except that the specified DSDL root namespace(s) will
-be used only for looking up dependent data types; nothing will be generated
-from these. If a DSDL root namespace is specified as an input, it is
+This is like --input, except that the specified DSDL root namespace(s) will be used only for looking up dependent
+data types; nothing will be generated from these. If a DSDL root namespace is specified as an input, it is
 automatically added to the look-up list.
 
 This option can be specified more than once.
@@ -85,20 +81,17 @@ This option can be specified more than once.
         parser.add_argument(
             '--output', '-O',
             help='''
-Path to the directory where the generated packages will be stored.
-If not specified, defaults to the current working directory.
-Existing packages will be overwritten entirely.
+Path to the directory where the generated packages will be stored. If not specified, defaults to the current working
+directory. Existing packages will be overwritten entirely.
 
-The destination directory should be in PYTHONPATH to use the generated
-packages.
+The destination directory should be in PYTHONPATH to use the generated packages.
 '''.strip())
         parser.add_argument(
             '--allow-unregulated-fixed-port-id',
             action='store_true',
             help='''
-Instruct the DSDL front-end to accept unregulated data types with fixed port
-identifiers. Make sure you understand the implications before using this
-option. If not sure, ask for advice at https://forum.uavcan.org.
+Instruct the DSDL front-end to accept unregulated data types with fixed port identifiers. Make sure you understand the
+implications before using this option. If not sure, ask for advice at https://forum.uavcan.org.
 '''.strip())
 
     def execute(self, args: argparse.Namespace, _subsystems: typing.Sequence[object]) -> int:

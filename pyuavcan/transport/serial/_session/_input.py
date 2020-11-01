@@ -68,8 +68,6 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         assert frame.data_specifier == self._specifier.data_specifier, 'Internal protocol violation'
         self._statistics.frames += 1
 
-        # TODO: implement data type hash validation. https://github.com/UAVCAN/specification/issues/60
-
         transfer: typing.Optional[pyuavcan.transport.TransferFrom]
         if frame.source_node_id is None:
             transfer = TransferReassembler.construct_anonymous_transfer(frame)
@@ -141,7 +139,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
             self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id, {})
             reasm = TransferReassembler(source_node_id=source_node_id,
-                                        max_payload_size_bytes=self._payload_metadata.max_size_bytes,
+                                        extent_bytes=self._payload_metadata.extent_bytes,
                                         on_error_callback=on_reassembly_error)
             self._reassemblers[source_node_id] = reasm
             _logger.debug('%s: New %s (%d total)', self, reasm, len(self._reassemblers))
@@ -171,8 +169,8 @@ def _unittest_input_session() -> None:
         nonlocal finalized
         finalized = True
 
-    session_spec = InputSessionSpecifier(MessageDataSpecifier(12345), None)
-    payload_meta = PayloadMetadata(0xdead_beef_bad_c0ffe, 100)
+    session_spec = InputSessionSpecifier(MessageDataSpecifier(2345), None)
+    payload_meta = PayloadMetadata(100)
 
     sis = SerialInputSession(specifier=session_spec,
                              payload_metadata=payload_meta,
@@ -204,8 +202,7 @@ def _unittest_input_session() -> None:
                            payload=memoryview(payload),
                            source_node_id=source_node_id,
                            destination_node_id=dst_nid,
-                           data_specifier=session_spec.data_specifier,
-                           data_type_hash=payload_meta.data_type_hash)
+                           data_specifier=session_spec.data_specifier)
 
     # ANONYMOUS TRANSFERS.
     sis._process_frame(mk_frame(transfer_id=0,

@@ -12,8 +12,16 @@ import struct
 
 import numpy
 
-# We must use uint8 instead of ubyte because uint8 is platform-invariant whereas (u)byte is platform-dependent.
 _Byte = numpy.uint8
+"""
+We must use uint8 instead of ubyte because uint8 is platform-invariant whereas (u)byte is platform-dependent.
+"""
+
+_EXTRA_BUFFER_CAPACITY_BYTES = 1
+"""
+We extend the requested buffer size by one because some of the non-byte-aligned write operations
+require us to temporarily use one extra byte after the current byte.
+"""
 
 
 class Serializer(abc.ABC):
@@ -24,19 +32,18 @@ class Serializer(abc.ABC):
     Methods that expect an unsigned integer will raise ValueError if the supplied integer is negative.
     """
 
-    def __init__(self, buffer_size_in_bytes: int):
+    def __init__(self, buffer: numpy.ndarray):
         """
         Do not call this directly. Use :meth:`new` to instantiate.
         """
-        # We extend the requested buffer size by one because some of the non-byte-aligned write operations
-        # require us to temporarily use one extra byte after the current byte.
-        buffer_size_in_bytes = int(buffer_size_in_bytes) + 1
-        self._buf: numpy.ndarray = numpy.zeros(buffer_size_in_bytes, dtype=_Byte)
+        self._buf = buffer
         self._bit_offset = 0
 
     @staticmethod
     def new(buffer_size_in_bytes: int) -> Serializer:
-        return _PlatformSpecificSerializer(buffer_size_in_bytes)
+        buffer_size_in_bytes = int(buffer_size_in_bytes) + _EXTRA_BUFFER_CAPACITY_BYTES
+        buf: numpy.ndarray = numpy.zeros(buffer_size_in_bytes, dtype=_Byte)
+        return _PlatformSpecificSerializer(buf)
 
     @property
     def current_bit_length(self) -> int:
@@ -47,12 +54,49 @@ class Serializer(abc.ABC):
         """Returns a properly sized read-only slice of the destination buffer zero-bit-padded to byte."""
         out = self._buf[:(self._bit_offset + 7) // 8]
         out.flags.writeable = False
-        assert out.base is self._buf    # Making sure we're not creating a copy, that might be costly
+        # Here we used to check if out.base is self._buf to make sure we're not creating a copy because that might
+        # be costly. We no longer do that because it doesn't work with forked serializers: forks don't own their
+        # buffers so this check would be failing; also, with MyPy v1.19 this expression used to segfault the
+        # interpreter. Very dangerous.
         return out
 
     def skip_bits(self, bit_length: int) -> None:
-        """This is used for padding bits."""
+        """This is used for padding bits and for skipping fragments written by forked serializers."""
         self._bit_offset += bit_length
+
+    def pad_to_alignment(self, bit_length: int) -> None:
+        while self._bit_offset % bit_length != 0:
+            self.add_unaligned_bit(False)
+
+    def fork_bytes(self, forked_buffer_size_in_bytes: int) -> Serializer:
+        """
+        Creates another serializer that uses the same underlying serialization destination buffer
+        but offset by :prop:`current_bit_length`. This is intended for delimited serialization.
+        The algorithm is simple:
+
+        - Fork the main serializer (M) at the point where the delimited nested instance needs to be serialized.
+        - Having obtained the forked serializer (F), skip the size of the delimited header and serialize the object.
+        - Take the offset of F (in bytes) sans the size of the delimiter header and serialize the value using M.
+        - Skip M by the above number of bytes to avoid overwriting the fragment written by F.
+        - Discard F. The job is done.
+
+        This may be unnecessary if the nested object is of a fixed size. In this case, since its length is known,
+        the delimiter header can be serialized as a constant, and then the nested object can be serialized trivially
+        as if it was sealed.
+
+        This method raises a :class:`ValueError` if the forked instance is not byte-aligned or if the requested buffer
+        size is too large.
+        """
+        if self._bit_offset % 8 != 0:
+            raise ValueError('Cannot fork unaligned serializer')
+        forked_buffer = self._buf[self._bit_offset // 8:]
+        forked_buffer_size_in_bytes += _EXTRA_BUFFER_CAPACITY_BYTES
+        if len(forked_buffer) < forked_buffer_size_in_bytes:
+            raise ValueError(f'The required forked buffer size of {forked_buffer_size_in_bytes} bytes is less '
+                             f'than the available remaining buffer space of {len(forked_buffer)} bytes')
+        forked_buffer = forked_buffer[:forked_buffer_size_in_bytes]
+        assert len(forked_buffer) == forked_buffer_size_in_bytes
+        return _PlatformSpecificSerializer(forked_buffer)
 
     #
     # Fast methods optimized for aligned primitive fields.
@@ -456,3 +500,42 @@ def _unittest_serializer_unaligned() -> None:                   # Tricky cases w
                        '00000101'
 
     print('repr(serializer):', repr(ser))
+
+
+def _unittest_serializer_fork_bytes() -> None:
+    import pytest
+
+    r = Serializer.new(16)
+    m = Serializer.new(16)
+    assert str(r) == str(m)
+
+    r.add_aligned_u8(123)
+    m.add_aligned_u8(123)
+    assert str(r) == str(m)
+
+    with pytest.raises(ValueError):
+        m.fork_bytes(16)  # Out of range
+
+    f = m.fork_bytes(15)
+    assert str(f) == ''
+    r.add_aligned_u8(42)
+    f.add_aligned_u8(42)
+    assert str(r) != str(m)
+    m.skip_bits(8)
+    assert str(r) == str(m)  # M updated even though we didn't write in it!
+
+    r.add_aligned_u8(11)
+    m.add_aligned_u8(11)
+    assert str(r) == str(m)
+
+    f.skip_bits(8)
+    ff = f.fork_bytes(1)
+    r.add_aligned_u8(22)
+    ff.add_aligned_u8(22)
+    assert str(r) != str(m)
+    m.skip_bits(8)
+    assert str(r) == str(m)  # M updated even though we didn't write in it! Double indirection.
+
+    ff.add_unaligned_bit(True)  # Break alignment
+    with pytest.raises(ValueError):
+        ff.fork_bytes(1)  # Bad alignment

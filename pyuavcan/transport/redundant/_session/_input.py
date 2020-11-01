@@ -266,7 +266,7 @@ def _unittest_redundant_input_cyclic() -> None:
 
     spec = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
     spec_tx = pyuavcan.transport.OutputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(0x_deadbeef_deadbeef, 30)
+    meta = pyuavcan.transport.PayloadMetadata(30)
 
     ts = Timestamp.now()
 
@@ -440,7 +440,7 @@ def _unittest_redundant_input_monotonic() -> None:
 
     spec = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
     spec_tx = pyuavcan.transport.OutputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(0x_deadbeef_deadbeef, 30)
+    meta = pyuavcan.transport.PayloadMetadata(30)
 
     ts = Timestamp.now()
 

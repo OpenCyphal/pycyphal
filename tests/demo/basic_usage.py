@@ -164,12 +164,9 @@ class DemoApplication:
         self._node = pyuavcan.application.Node(presentation, node_info)
 
         # Published heartbeat fields can be configured trivially by assigning them on the heartbeat publisher instance.
-        self._node.heartbeat_publisher.mode = uavcan.node.Heartbeat_1_0.MODE_OPERATIONAL
-        # In this example here we assign the local process' PID to the vendor-specific status code (VSSC) and make
-        # sure that the valid range is not exceeded.
-        self._node.heartbeat_publisher.vendor_specific_status_code = \
-            os.getpid() & (2 ** min(pyuavcan.dsdl.get_model(uavcan.node.Heartbeat_1_0)[
-                'vendor_specific_status_code'].data_type.bit_length_set) - 1)
+        self._node.heartbeat_publisher.mode = uavcan.node.Mode_1_0.OPERATIONAL
+        # The vendor-specific status code is the two least significant decimal digits of the local process' PID.
+        self._node.heartbeat_publisher.vendor_specific_status_code = os.getpid() % 100
 
         # Now we can create our session objects as necessary. They can be created or destroyed later at any point
         # after initialization. It's not necessary to set everything up during the initialization.
@@ -179,22 +176,22 @@ class DemoApplication:
 
         # Create another server using shorthand for fixed port ID. We could also use it with an application-specific
         # service-ID as well, of course:
-        #   get_server(uavcan.node.ExecuteCommand_1_0, 42).serve_in_background(self._serve_execute_command)
+        #   get_server(uavcan.node.ExecuteCommand_1_1, 42).serve_in_background(self._serve_execute_command)
         # If the transport does not yet have a node-ID, the server will stay idle until a node-ID is assigned
         # because the node won't be able to receive unicast transfers carrying service requests.
         self._node.presentation.get_server_with_fixed_service_id(
-            uavcan.node.ExecuteCommand_1_0
+            uavcan.node.ExecuteCommand_1_1
         ).serve_in_background(self._serve_execute_command)
 
         # We'll be publishing diagnostic messages using this publisher instance. The method we use is a shortcut for:
-        #   make_publisher(uavcan.diagnostic.Record_1_0, pyuavcan.dsdl.get_fixed_port_id(uavcan.diagnostic.Record_1_0))
+        #   make_publisher(uavcan.diagnostic.Record_1_1, pyuavcan.dsdl.get_fixed_port_id(uavcan.diagnostic.Record_1_1))
         self._pub_diagnostic_record = \
-            self._node.presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_0)
+            self._node.presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
         self._pub_diagnostic_record.priority = pyuavcan.transport.Priority.OPTIONAL
         self._pub_diagnostic_record.send_timeout = 2.0
 
         # A message subscription.
-        self._sub_temperature = self._node.presentation.make_subscriber(uavcan.si.sample.temperature.Scalar_1_0, 12345)
+        self._sub_temperature = self._node.presentation.make_subscriber(uavcan.si.sample.temperature.Scalar_1_0, 2345)
         self._sub_temperature.receive_in_background(self._handle_temperature)
 
         # When all is initialized, don't forget to start the node!
@@ -212,7 +209,7 @@ class DemoApplication:
         Notice that this is an async function.
         """
         # Publish the message asynchronously using publish_soon() because we don't want to block the service handler.
-        diagnostic_msg = uavcan.diagnostic.Record_1_0(
+        diagnostic_msg = uavcan.diagnostic.Record_1_1(
             severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.DEBUG),
             text=f'Least squares request from {metadata.client_node_id} time={metadata.timestamp.system} '
                  f'tid={metadata.transfer_id} prio={metadata.priority}',
@@ -230,7 +227,7 @@ class DemoApplication:
             y_intercept = (sum_y - slope * sum_x) / len(request.points)
         except ZeroDivisionError:
             # The method "publish_soon()" launches a background task instead of waiting for the operation to complete.
-            self._pub_diagnostic_record.publish_soon(uavcan.diagnostic.Record_1_0(
+            self._pub_diagnostic_record.publish_soon(uavcan.diagnostic.Record_1_1(
                 severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.WARNING),
                 text=f'There is no solution for input set: {request.points}',
             ))
@@ -238,22 +235,22 @@ class DemoApplication:
             # only to demonstrate the library capabilities.
             return None
         else:
-            self._pub_diagnostic_record.publish_soon(uavcan.diagnostic.Record_1_0(
+            self._pub_diagnostic_record.publish_soon(uavcan.diagnostic.Record_1_1(
                 severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
                 text=f'Solution for {",".join(f"({p.x},{p.y})" for p in request.points)}: {slope}, {y_intercept}',
             ))
             return sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response(slope=slope, y_intercept=y_intercept)
 
     async def _serve_execute_command(self,
-                                     request:  uavcan.node.ExecuteCommand_1_0.Request,
+                                     request:  uavcan.node.ExecuteCommand_1_1.Request,
                                      metadata: pyuavcan.presentation.ServiceRequestMetadata) \
-            -> uavcan.node.ExecuteCommand_1_0.Response:
+            -> uavcan.node.ExecuteCommand_1_1.Response:
         """
         This is another service handler, like the other one.
         """
         print(f'EXECUTE COMMAND REQUEST {request} (with metadata {metadata})')
 
-        if request.command == uavcan.node.ExecuteCommand_1_0.Request.COMMAND_POWER_OFF:
+        if request.command == uavcan.node.ExecuteCommand_1_1.Request.COMMAND_POWER_OFF:
             async def do_delayed_shutdown() -> None:
                 await asyncio.sleep(1.0)
                 # This will close the underlying presentation, transport, and media layer resources.
@@ -262,17 +259,17 @@ class DemoApplication:
                 self._node.close()
 
             asyncio.ensure_future(do_delayed_shutdown())  # Delay shutdown to let the transport emit the response.
-            return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS)
+            return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS)
 
         elif request.command == 23456:
             # This is a custom application-specific command. Just print the string parameter and do nothing.
             parameter_text = request.parameter.tobytes().decode(errors='replace')
             print('CUSTOM COMMAND PARAMETER:', parameter_text)
-            return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_SUCCESS)
+            return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS)
 
         else:
             # Command not supported.
-            return uavcan.node.ExecuteCommand_1_0.Response(uavcan.node.ExecuteCommand_1_0.Response.STATUS_BAD_COMMAND)
+            return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND)
 
     async def _handle_temperature(self,
                                   msg:      uavcan.si.sample.temperature.Scalar_1_0,
@@ -285,7 +282,7 @@ class DemoApplication:
 
         # Publish the message synchronously, using await, blocking this task until the message is pushed down to
         # the media layer.
-        if not await self._pub_diagnostic_record.publish(uavcan.diagnostic.Record_1_0(
+        if not await self._pub_diagnostic_record.publish(uavcan.diagnostic.Record_1_1(
             severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.TRACE),
             text=f'Temperature {msg.kelvin:0.3f} K from {metadata.source_node_id} '
                  f'time={metadata.timestamp.system} tid={metadata.transfer_id} prio={metadata.priority}',
@@ -296,24 +293,17 @@ class DemoApplication:
 
 if __name__ == '__main__':
     app = DemoApplication()
-    app_tasks = asyncio.Task.all_tasks()
+    app_tasks = asyncio.all_tasks(loop=asyncio.get_event_loop())
 
     async def list_tasks_periodically() -> None:
         """Print active tasks periodically for demo purposes."""
-        import re
-
-        def repr_task(t: asyncio.Task) -> str:
-            try:
-                out, = re.findall(r'^<([^<]+<[^>]+>)', str(t))
-            except ValueError:
-                out = str(t)
-            return out
-
         while True:
-            print('\nActive tasks:\n' + '\n'.join(map(repr_task, asyncio.Task.all_tasks())), file=sys.stderr)
+            print('\nRunning tasks:\n' + '\n'.join(f'{i:4}: {t.get_coro()}' for i, t in enumerate(asyncio.all_tasks())),
+                  file=sys.stderr)
             await asyncio.sleep(10)
 
-    asyncio.get_event_loop().create_task(list_tasks_periodically())
+    if sys.version_info >= (3, 8):  # The task introspection API we use is not available before Python 3.8
+        asyncio.get_event_loop().create_task(list_tasks_periodically())
 
     # The node and PyUAVCAN objects have created internal tasks, which we need to run now.
     # In this case we want to automatically stop and exit when no tasks are left to run.

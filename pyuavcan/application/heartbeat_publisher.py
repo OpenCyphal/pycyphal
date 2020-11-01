@@ -14,11 +14,9 @@ import time
 import typing
 import logging
 import asyncio
+import uavcan.node
 from uavcan.node import Heartbeat_1_0 as Heartbeat
 import pyuavcan
-
-
-DEFAULT_PRIORITY = pyuavcan.transport.Priority.SLOW
 
 
 class Health(enum.IntEnum):
@@ -26,10 +24,10 @@ class Health(enum.IntEnum):
     Mirrors the health enumeration defined in ``uavcan.node.Heartbeat``.
     When enumerations are natively supported in DSDL, this will be replaced with an alias.
     """
-    NOMINAL  = Heartbeat.HEALTH_NOMINAL
-    ADVISORY = Heartbeat.HEALTH_ADVISORY
-    CAUTION  = Heartbeat.HEALTH_CAUTION
-    WARNING  = Heartbeat.HEALTH_WARNING
+    NOMINAL  = uavcan.node.Health_1_0.NOMINAL
+    ADVISORY = uavcan.node.Health_1_0.ADVISORY
+    CAUTION  = uavcan.node.Health_1_0.CAUTION
+    WARNING  = uavcan.node.Health_1_0.WARNING
 
 
 class Mode(enum.IntEnum):
@@ -37,11 +35,10 @@ class Mode(enum.IntEnum):
     Mirrors the mode enumeration defined in ``uavcan.node.Heartbeat``.
     When enumerations are natively supported in DSDL, this will be replaced with an alias.
     """
-    OPERATIONAL     = Heartbeat.MODE_OPERATIONAL
-    INITIALIZATION  = Heartbeat.MODE_INITIALIZATION
-    MAINTENANCE     = Heartbeat.MODE_MAINTENANCE
-    SOFTWARE_UPDATE = Heartbeat.MODE_SOFTWARE_UPDATE
-    OFFLINE         = Heartbeat.MODE_OFFLINE
+    OPERATIONAL     = uavcan.node.Mode_1_0.OPERATIONAL
+    INITIALIZATION  = uavcan.node.Mode_1_0.INITIALIZATION
+    MAINTENANCE     = uavcan.node.Mode_1_0.MAINTENANCE
+    SOFTWARE_UPDATE = uavcan.node.Mode_1_0.SOFTWARE_UPDATE
 
 
 VENDOR_SPECIFIC_STATUS_CODE_MASK = \
@@ -65,7 +62,7 @@ class HeartbeatPublisher:
     - Mode is OPERATIONAL.
     - Vendor-specific status code is zero.
     - Period is MAX_PUBLICATION_PERIOD (see the DSDL definition).
-    - Priority is :data:`DEFAULT_PRIORITY`.
+    - Priority is default as defined by the presentation layer (i.e., NOMINAL).
     """
 
     def __init__(self, presentation: pyuavcan.presentation.Presentation):
@@ -184,8 +181,8 @@ class HeartbeatPublisher:
     def make_message(self) -> Heartbeat:
         """Constructs a new heartbeat message from the object's state."""
         return Heartbeat(uptime=int(self.uptime),  # must floor
-                         health=self.health,
-                         mode=self.mode,
+                         health=uavcan.node.Health_1_0(self.health),
+                         mode=uavcan.node.Mode_1_0(self.mode),
                          vendor_specific_status_code=self.vendor_specific_status_code)
 
     def close(self) -> None:

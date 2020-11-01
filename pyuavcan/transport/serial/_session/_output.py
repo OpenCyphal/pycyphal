@@ -89,8 +89,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
                                payload=payload,
                                source_node_id=self._local_node_id,
                                destination_node_id=self._specifier.remote_node_id,
-                               data_specifier=self._specifier.data_specifier,
-                               data_type_hash=self._payload_metadata.data_type_hash)
+                               data_specifier=self._specifier.data_specifier)
 
         frames = list(pyuavcan.transport.commons.high_overhead_transport.serialize_transfer(
             transfer.fragmented_payload,
@@ -171,7 +170,7 @@ def _unittest_output_session() -> None:
 
     sos = SerialOutputSession(
         specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
-        payload_metadata=PayloadMetadata(0xdeadbeefbadc0ffe, 1024),
+        payload_metadata=PayloadMetadata(1024),
         mtu=10,
         local_node_id=None,  # pragma: no cover
         send_handler=do_send,
@@ -189,7 +188,7 @@ def _unittest_output_session() -> None:
 
     sos = SerialOutputSession(
         specifier=OutputSessionSpecifier(MessageDataSpecifier(3210), None),
-        payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
+        payload_metadata=PayloadMetadata(1024),
         mtu=11,
         local_node_id=None,
         send_handler=do_send,
@@ -198,7 +197,7 @@ def _unittest_output_session() -> None:
 
     assert sos.specifier == OutputSessionSpecifier(MessageDataSpecifier(3210), None)
     assert sos.destination_node_id is None
-    assert sos.payload_metadata == PayloadMetadata(0xdead_beef_badc0ffe, 1024)
+    assert sos.payload_metadata == PayloadMetadata(1024)
     assert sos.sample_statistics() == SessionStatistics()
 
     assert run_until_complete(sos.send_until(
@@ -260,7 +259,7 @@ def _unittest_output_session() -> None:
 
     sos = SerialOutputSession(
         specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
-        payload_metadata=PayloadMetadata(0xdead_beef_badc0ffe, 1024),
+        payload_metadata=PayloadMetadata(1024),
         mtu=10,
         local_node_id=1234,
         send_handler=do_send,

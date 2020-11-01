@@ -47,7 +47,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         self._loop = loop
         self._transfer_id_timeout_ns = int(CANInputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
-        self._receivers = [_transfer_reassembler.TransferReassembler(nid, payload_metadata.max_size_bytes)
+        self._receivers = [_transfer_reassembler.TransferReassembler(nid, payload_metadata.extent_bytes)
                            for nid in _node_id_range()]
 
         self._statistics = CANInputSessionStatistics()   # We could easily support per-source-node statistics if needed

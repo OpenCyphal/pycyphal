@@ -162,10 +162,6 @@ are evident from the code::
     def get_thing(self) -> typing.Optional[Thing]:  # Good.
         return self._maybe_thing
 
-When writing the built-in help docs for the CLI tool,
-ensure that the line width does not exceed 80 characters unless it's absolutely unavoidable (e.g., long URIs),
-otherwise the text may fail to render properly on some terminals.
-
 
 Testing
 -------
@@ -224,6 +220,12 @@ source directories.
 The scattered coverage files are then located automatically and combined into one file,
 which is then analyzed by report generators and other tools like SonarQube.
 
+When tests that spawn new processes fail, they may leave their children running in the background,
+which may adversely influence other tests that are executed later,
+so an error in one test may crash a dozen of unrelated ones invoked afterwards.
+You need to be prepared for that and always start analyzing the test report starting with the first failure.
+Ideally, though, this should be fixed by adding robust cleanup logic for each test.
+
 Some of the components of the library and of the test suite require DSDL packages to be generated.
 Those must be dealt with carefully as it needs to be ensured that the code that requires generated
 packages to be available is not executed until they are generated.
@@ -241,6 +243,18 @@ The DSDL package generation is implemented in ``tests/dsdl``.
 After the packages are generated, the output is cached on disk to permit fast re-testing during development.
 The cache can be invalidated manually by removing the output directories.
 It is also invalidated automatically when ``clean.sh`` or ``test.sh`` are executed.
+
+On GNU/Linux, the amount of memory available for the test process is artificially limited to a few gibibytes
+to catch possible memory hogs (like https://github.com/UAVCAN/pydsdl/issues/23 ).
+See ``conftest.py`` for details.
+
+
+Debugging
+---------
+
+When debugging argument parsing issues in the CLI,
+you won't see any stacktrace unless verbose logging is enabled before the argument parser is constructed.
+To work around that, use the environment variable `PYUAVCAN_LOGLEVEL` (see the user docs for details).
 
 
 Releasing

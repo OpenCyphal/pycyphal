@@ -45,18 +45,16 @@ class NodeFactory(SubsystemFactory):
             metavar='YAML_FIELDS',
             type=YAMLLoader().load,
             help='''
-Value of the heartbeat message uavcan.node.Heartbeat published by the node.
-The uptime will be overridden so specifying it here will have no effect.
-Has no effect if the node is anonymous (i.e., without a local node-ID)
-because anonymous nodes do not publish their heartbeat.
+Value of the heartbeat message uavcan.node.Heartbeat published by the node. The uptime will be overridden so
+specifying it here will have no effect. Has no effect if the node is anonymous (i.e., without a local node-ID) because
+anonymous nodes do not publish their heartbeat.
 
-For more info about the YAML representation, read the PyUAVCAN documentation
-on builtin-based representations.
+For more info about the YAML representation, read the PyUAVCAN documentation on builtin-based representations.
 
 Unless overridden, the following defaults are used:
 - Mode operational.
 - Health nominal.
-- Vendor-specific status code equals the process ID (PID) of the command.
+- Vendor-specific status code equals (PID %% 100) of the command, where PID is its process-ID.
 Default: %(default)s
 '''.strip())
         node_info_fields = {
@@ -82,13 +80,12 @@ Default: %(default)s
             type=construct_node_info_fields,
             metavar='YAML_FIELDS',
             help=f'''
-Value of the node info response uavcan.node.GetInfo returned by the node.
-This argument overrides the following defaults per-field:
+Value of the node info response uavcan.node.GetInfo returned by the node. This argument overrides the following
+defaults per-field:
 
 {YAMLDumper().dumps(node_info_fields).strip()}
 
-For more info about the YAML representation, read the PyUAVCAN documentation
-on builtin-based representations.
+For more info about the YAML representation, read the PyUAVCAN documentation on builtin-based representations.
 Default: %(default)s
 '''.strip())
 
@@ -114,9 +111,7 @@ Default: %(default)s
             node.heartbeat_publisher.mode = \
                 args.heartbeat_fields.pop('mode', heartbeat_publisher.Mode.OPERATIONAL)
             node.heartbeat_publisher.vendor_specific_status_code = args.heartbeat_fields.pop(
-                'vendor_specific_status_code',
-                os.getpid() & (2 ** min(pyuavcan.dsdl.get_model(heartbeat_publisher.Heartbeat)
-                                        ['vendor_specific_status_code'].data_type.bit_length_set) - 1)
+                'vendor_specific_status_code', os.getpid() % 100
             )
             _logger.debug('Node heartbeat: %r', node.heartbeat_publisher.make_message())
             if args.heartbeat_fields:
@@ -192,7 +187,7 @@ Default: %(default)s
                 # We use replace for compatibility reasons. On POSIX, a call to rename() will be made, which is
                 # guaranteed to be atomic. On Windows this may fall back to non-atomic copy, which is still
                 # acceptable for us here. If the file ends up being damaged, we'll simply ignore it at next startup.
-                os.replace(tmp_path, file_path)
+                os.replace(tmp_path, str(file_path))
                 try:
                     os.unlink(tmp_path)
                 except OSError:

@@ -28,7 +28,7 @@ TEST_DATA_TYPES_DIR = pathlib.Path(__file__).parent / 'namespaces'
 _CACHE_FILE_NAME = 'pydsdl_cache.pickle.tmp'
 
 
-@pytest.fixture('session')  # type: ignore
+@pytest.fixture(scope='session')  # type: ignore
 def generated_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
     """
     https://docs.pytest.org/en/latest/fixture.html#conftest-py-sharing-fixture-functions

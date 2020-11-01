@@ -2,3 +2,4 @@
 @deprecated
 uint8 x
 int8 y
+@sealed

@@ -68,17 +68,17 @@ async def _unittest_udp_transport() -> None:
     #
     # Instantiate session objects.
     #
-    meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
+    meta = PayloadMetadata(10000)
 
-    broadcaster = tr2.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert broadcaster is tr2.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    broadcaster = tr2.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    assert broadcaster is tr2.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None),
+    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None),
                                                           meta)
 
-    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 123), meta)
-    assert subscriber_selective is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 123), meta)
+    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 123), meta)
+    assert subscriber_selective is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 123), meta)
 
     server_listener = tr.get_input_session(
         InputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST), None), meta)
@@ -109,7 +109,7 @@ async def _unittest_udp_transport() -> None:
     assert set(tr2.output_sessions) == {broadcaster, client_requester}
 
     assert tr.sample_statistics().demultiplexer[
-        MessageDataSpecifier(12345)
+        MessageDataSpecifier(2345)
     ].accepted_datagrams == {}
     assert tr.sample_statistics().demultiplexer[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
@@ -139,7 +139,7 @@ async def _unittest_udp_transport() -> None:
 
     print('tr :', tr.sample_statistics())
     assert tr.sample_statistics().demultiplexer[
-        MessageDataSpecifier(12345)
+        MessageDataSpecifier(2345)
     ].accepted_datagrams == {222: 1}
     assert tr.sample_statistics().demultiplexer[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
@@ -180,7 +180,7 @@ async def _unittest_udp_transport() -> None:
 
     print('tr :', tr.sample_statistics())
     assert tr.sample_statistics().demultiplexer[
-        MessageDataSpecifier(12345)
+        MessageDataSpecifier(2345)
     ].accepted_datagrams == {222: 1}
     assert tr.sample_statistics().demultiplexer[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
@@ -225,10 +225,10 @@ async def _unittest_udp_transport() -> None:
     assert not set(tr2.output_sessions)
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        _ = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+        _ = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        _ = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+        _ = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 

@@ -4,12 +4,18 @@ environment:
       PYTHON: 'C:\\Python38-x64'
       PYTHON_ARCH: '64'
 
-    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
-      PYTHON: '3.7'
+# Python 3.9 is temporarily disabled because NumPy fails to import with this error:
+# ImportError: /home/appveyor/venv3.9.0/lib/python3.9/site-packages/numpy/random/mtrand.cpython-39-x86_64-linux-gnu.so:
+#              undefined symbol: PyCMethod_New
+#    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+#      PYTHON: '3.9'
 
     - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.8'
       coverage: 1    # The coverage information shall be published from exactly one job.
+
+    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      PYTHON: '3.7'
 
 stack: python %PYTHON%
 

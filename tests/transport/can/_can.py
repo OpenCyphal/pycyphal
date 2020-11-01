@@ -62,7 +62,7 @@ async def _unittest_can_transport_anon() -> None:
     #
     # Instantiate session objects
     #
-    meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
+    meta = PayloadMetadata(10000)
 
     with pytest.raises(Exception):                                                      # Can't broadcast service calls
         tr.get_output_session(OutputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
@@ -72,8 +72,8 @@ async def _unittest_can_transport_anon() -> None:
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't unicast messages
         tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(1234), 123), meta)
 
-    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), None), meta)
     assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), None), meta)
@@ -150,7 +150,7 @@ async def _unittest_can_transport_anon() -> None:
     assert tr2.sample_statistics().lost_loopback_frames == 0
 
     assert collector.pop().is_same_manifestation(UAVCANFrame(
-        identifier=MessageCANID(Priority.IMMEDIATE, None, 12345).compile([_mem('abcdef')]),  # payload fragments joined
+        identifier=MessageCANID(Priority.IMMEDIATE, None, 2345).compile([_mem('abcdef')]),  # payload fragments joined
         padded_payload=_mem('abcdef'),
         transfer_id=11,
         start_of_transfer=True,
@@ -180,9 +180,9 @@ async def _unittest_can_transport_anon() -> None:
     #
     # Broadcast exchange with input dispatch test
     #
-    selective_m12345_5 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 5), meta)
-    selective_m12345_9 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 9), meta)
-    promiscuous_m12345 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    selective_m2345_5 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 5), meta)
+    selective_m2345_9 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 9), meta)
+    promiscuous_m2345 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     assert await broadcaster.send_until(Transfer(
         timestamp=ts,
@@ -196,7 +196,7 @@ async def _unittest_can_transport_anon() -> None:
     assert tr2.sample_statistics() == can.CANTransportStatistics(
         in_frames=2, in_frames_uavcan=2, in_frames_uavcan_accepted=1)
 
-    received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
+    received = await promiscuous_m2345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 11
@@ -205,9 +205,9 @@ async def _unittest_can_transport_anon() -> None:
     validate_timestamp(received.timestamp)
     assert received.fragmented_payload == [_mem('abcdef')]
 
-    assert selective_m12345_5.sample_statistics() == SessionStatistics()       # Nothing
-    assert selective_m12345_9.sample_statistics() == SessionStatistics()       # Nothing
-    assert promiscuous_m12345.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
+    assert selective_m2345_5.sample_statistics() == SessionStatistics()       # Nothing
+    assert selective_m2345_9.sample_statistics() == SessionStatistics()       # Nothing
+    assert promiscuous_m2345.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
 
     assert not media.automatic_retransmission_enabled
     assert not media2.automatic_retransmission_enabled
@@ -268,7 +268,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     #
     # Instantiate session objects
     #
-    meta = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 10000)
+    meta = PayloadMetadata(10000)
 
     with pytest.raises(Exception):                                                      # Can't broadcast service calls
         tr.get_output_session(OutputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
@@ -278,8 +278,8 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     with pytest.raises(UnsupportedSessionConfigurationError):                           # Can't unicast messages
         tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(1234), 123), meta)
 
-    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
-    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), None), meta)
     assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2222), None), meta)
@@ -335,7 +335,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert tr2.sample_statistics().lost_loopback_frames == 0
 
     assert collector.pop().is_same_manifestation(UAVCANFrame(
-        identifier=MessageCANID(Priority.IMMEDIATE, 5, 12345).compile([_mem('abcdef')]),  # payload fragments joined
+        identifier=MessageCANID(Priority.IMMEDIATE, 5, 2345).compile([_mem('abcdef')]),  # payload fragments joined
         padded_payload=_mem('abcdef'),
         transfer_id=11,
         start_of_transfer=True,
@@ -348,9 +348,9 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     #
     # Broadcast exchange with input dispatch test
     #
-    selective_m12345_5 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 5), meta)
-    selective_m12345_9 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), 9), meta)
-    promiscuous_m12345 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), meta)
+    selective_m2345_5 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 5), meta)
+    selective_m2345_9 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 9), meta)
+    promiscuous_m2345 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     assert await broadcaster.send_until(Transfer(
         timestamp=ts,
@@ -364,7 +364,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert tr2.sample_statistics() == can.CANTransportStatistics(
         in_frames=2, in_frames_uavcan=2, in_frames_uavcan_accepted=1)
 
-    received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
+    received = await promiscuous_m2345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 11
@@ -373,9 +373,9 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     validate_timestamp(received.timestamp)
     assert received.fragmented_payload == [_mem('abcdef')]
 
-    assert selective_m12345_5.sample_statistics() == SessionStatistics()       # Nothing
-    assert selective_m12345_9.sample_statistics() == SessionStatistics()       # Nothing
-    assert promiscuous_m12345.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
+    assert selective_m2345_5.sample_statistics() == SessionStatistics()       # Nothing
+    assert selective_m2345_9.sample_statistics() == SessionStatistics()       # Nothing
+    assert promiscuous_m2345.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
 
     assert media.automatic_retransmission_enabled
     assert media2.automatic_retransmission_enabled
@@ -402,7 +402,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert fb.original_transfer_timestamp == ts
     validate_timestamp(fb.first_frame_transmission_timestamp)
 
-    received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
+    received = await promiscuous_m2345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 2
@@ -419,7 +419,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     ), tr.loop.time() + 1.0)
     assert broadcaster.sample_statistics() == SessionStatistics(transfers=4, frames=8, payload_bytes=318)
 
-    received = await promiscuous_m12345.receive_until(tr.loop.time() + 1.0)
+    received = await promiscuous_m2345.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 3
@@ -428,7 +428,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     validate_timestamp(received.timestamp)
     assert list(received.fragmented_payload) == [_mem('qwerty')]
 
-    assert promiscuous_m12345.sample_statistics() == SessionStatistics(transfers=3, frames=7, payload_bytes=325)
+    assert promiscuous_m2345.sample_statistics() == SessionStatistics(transfers=3, frames=7, payload_bytes=325)
 
     assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=8,
                                                                 out_frames_loopback=1,
@@ -444,15 +444,15 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     broadcaster.close()   # Does nothing
 
     # Final checks for the broadcaster - make sure nothing is left in the queue
-    assert (await promiscuous_m12345.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_m2345.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
 
     # The selective listener was not supposed to pick up anything because it's selective for node 9, not 5
-    assert (await selective_m12345_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_m2345_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
 
     # Now, there are a bunch of items awaiting in the selective input for node 5, collect them and check the stats
-    assert selective_m12345_5.source_node_id == 5
+    assert selective_m2345_5.source_node_id == 5
 
-    received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
+    received = await selective_m2345_5.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 11
@@ -461,7 +461,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     validate_timestamp(received.timestamp)
     assert received.fragmented_payload == [_mem('abcdef')]
 
-    received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
+    received = await selective_m2345_5.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 2
@@ -470,7 +470,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     validate_timestamp(received.timestamp)
     assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x00' * 13  # The 0x00 at the end is padding
 
-    received = await selective_m12345_5.receive_until(tr.loop.time() + 1.0)
+    received = await selective_m2345_5.receive_until(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 3
@@ -479,7 +479,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     validate_timestamp(received.timestamp)
     assert list(received.fragmented_payload) == [_mem('qwerty')]
 
-    assert selective_m12345_5.sample_statistics() == promiscuous_m12345.sample_statistics()
+    assert selective_m2345_5.sample_statistics() == promiscuous_m2345.sample_statistics()
 
     #
     # Unicast exchange test
@@ -781,7 +781,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
         priority=Priority.NOMINAL,
         transfer_id=7,                  # Same transfer ID, will be accepted only by the instance with low TID timeout
         fragmented_payload=[]
-    ), tr.loop.time() + 1.0)
+    ), tr.loop.time() + 5.0)
 
     assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=16,
                                                                 in_frames=5,
@@ -795,7 +795,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
                                                                  in_frames_uavcan=16,
                                                                  in_frames_uavcan_accepted=15)
 
-    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 10.0)
+    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 20.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123

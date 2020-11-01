@@ -126,8 +126,6 @@ class UDPInputSession(pyuavcan.transport.InputSession):
             return
         self._statistics.frames += 1
 
-        # TODO: implement data type hash validation. https://github.com/UAVCAN/specification/issues/60
-
         transfer = self._get_reassembler(source_node_id).process_frame(frame, self._transfer_id_timeout)
         if transfer is not None:
             self._statistics.transfers += 1
@@ -237,7 +235,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
 
             self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id, {})
             reasm = TransferReassembler(source_node_id=source_node_id,
-                                        max_payload_size_bytes=self._payload_metadata.max_size_bytes,
+                                        extent_bytes=self._payload_metadata.extent_bytes,
                                         on_error_callback=on_reassembly_error)
             self._reassemblers[source_node_id] = reasm
             _logger.debug('%s: New %s (%d total)', self, reasm, len(self._reassemblers))
@@ -274,7 +272,7 @@ class SelectiveUDPInputSession(UDPInputSession):
                 self._statistics.reassembly_errors[error] = 1
 
         self._reassembler = TransferReassembler(source_node_id=source_node_id,
-                                                max_payload_size_bytes=payload_metadata.max_size_bytes,
+                                                extent_bytes=payload_metadata.extent_bytes,
                                                 on_error_callback=on_reassembly_error)
 
         super(SelectiveUDPInputSession, self).__init__(specifier=specifier,

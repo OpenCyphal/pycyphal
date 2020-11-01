@@ -20,7 +20,7 @@ class DataSpecifier:
 
 @dataclasses.dataclass(frozen=True)
 class MessageDataSpecifier(DataSpecifier):
-    SUBJECT_ID_MASK = 32767
+    SUBJECT_ID_MASK = 2 ** 13 - 1
 
     subject_id: int
 
@@ -43,7 +43,7 @@ class ServiceDataSpecifier(DataSpecifier):
         Response input role is for clients.
         """
 
-    SERVICE_ID_MASK = 511
+    SERVICE_ID_MASK = 2 ** 9 - 1
 
     service_id: int
     role:       Role

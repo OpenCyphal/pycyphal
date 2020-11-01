@@ -221,8 +221,8 @@ def _unittest_network_map_ipv4() -> None:
     with raises(ValueError):
         assert nm.make_output_socket(4095, 65535)  # The node-ID cannot be mapped.
 
-    out = nm.make_output_socket(nm.local_node_id, 12345)
-    inp = nm.make_input_socket(12345, True)
+    out = nm.make_output_socket(nm.local_node_id, 2345)
+    inp = nm.make_input_socket(2345, True)
 
     # Ensure the source IP address is specified correctly in outgoing UDP frames.
     out.send(b'Well, I got here the same way the coin did.')
