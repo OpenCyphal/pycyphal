@@ -109,6 +109,30 @@ def _unittest_slow_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsd
         pyuavcan.dsdl.set_attribute(obj, 'nonexistent', 123)
 
 
+# noinspection PyUnusedLocal
+def _unittest_slow_delimited(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+    del generated_packages
+
+    from test_dsdl_namespace.delimited import A_1_0, A_1_1, BDelimited_1_0, BDelimited_1_1, BSealed_1_0
+    from test_dsdl_namespace.delimited import CFixed_1_0, CFixed_1_1, CVariable_1_0, CVariable_1_1
+
+    def to_bytes(x: int, bit_length: int) -> bytes:
+        assert bit_length in (8, 16, 32, 64)
+        return int(x).to_bytes(bit_length // 8, 'little')
+
+    o = A_1_0(
+        del_=BDelimited_1_0(
+            var=[CVariable_1_0([1, 2]), CVariable_1_0([3], 4)],
+            fix=[CFixed_1_0([5, 6]), CFixed_1_0(), CFixed_1_0([7])],
+        ),
+    )
+    print('object:', o)
+    ref = b''.join(pyuavcan.dsdl.serialize(o))
+    sr = (
+        to_bytes(1, 8)
+    )
+
+
 def _compile_serialized_representation(*binary_chunks: str) -> typing.Sequence[memoryview]:
     s = ''.join(binary_chunks)
     s = s.ljust(len(s) + 8 - len(s) % 8, '0')

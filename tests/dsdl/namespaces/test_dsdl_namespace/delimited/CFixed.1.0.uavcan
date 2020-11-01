@@ -1,0 +1,2 @@
+uint8[3] a
+@extent 4 * 8

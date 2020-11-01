@@ -1,0 +1,2 @@
+uint8[<=2] a
+@extent 4 * 8
