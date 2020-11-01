@@ -16,7 +16,6 @@ function die()
 [[ -z "$(git diff)" ]]                                 || die "Please commit all changes, then try again."
 [[ -z "$(git log '@{u}..')" ]]                         || die "Please push all commits, then try again."
 
-./test.sh  || die "Test failed."
 ./clean.sh ||\
     die "Clean failed. Cleaning is required to prevent unnecessary files from being included in the release package."
 
