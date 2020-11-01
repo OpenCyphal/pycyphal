@@ -113,10 +113,7 @@
     else:
         raise _des_.FormatError(f'{{ t }}: Union tag value { {{- tag_ref -}} } is invalid')
 
-{% elif t is DelimitedType %}
-    {{ _deserialize_composite(t.inner_type, ref, base_offset, ref_type_name) }}
-
-{% else %}{% assert False %}
+{% else %}{% assert False %}{# Delimited type is not expected in this context. #}
 {% endif %}
 {% endmacro %}
 
