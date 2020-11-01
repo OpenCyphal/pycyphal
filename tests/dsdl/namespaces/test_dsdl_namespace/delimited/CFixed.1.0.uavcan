@@ -1,2 +1,2 @@
-uint8[3] a
+uint8[2] a
 @extent 4 * 8

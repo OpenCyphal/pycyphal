@@ -116,21 +116,70 @@ def _unittest_slow_delimited(generated_packages: typing.List[pyuavcan.dsdl.Gener
     from test_dsdl_namespace.delimited import A_1_0, A_1_1, BDelimited_1_0, BDelimited_1_1, BSealed_1_0
     from test_dsdl_namespace.delimited import CFixed_1_0, CFixed_1_1, CVariable_1_0, CVariable_1_1
 
-    def to_bytes(x: int, bit_length: int) -> bytes:
-        assert bit_length in (8, 16, 32, 64)
-        return int(x).to_bytes(bit_length // 8, 'little')
+    def u8(x: int) -> bytes:
+        return int(x).to_bytes(1, 'little')
 
+    def u32(x: int) -> bytes:
+        return int(x).to_bytes(4, 'little')
+
+    # Serialize first and check against the reference.
     o = A_1_0(
         del_=BDelimited_1_0(
             var=[CVariable_1_0([1, 2]), CVariable_1_0([3], 4)],
-            fix=[CFixed_1_0([5, 6]), CFixed_1_0(), CFixed_1_0([7])],
+            fix=[CFixed_1_0([5, 6])],
         ),
     )
-    print('object:', o)
-    ref = b''.join(pyuavcan.dsdl.serialize(o))
-    sr = (
-        to_bytes(1, 8)
+    print('object below:\n', o)
+    sr = b''.join(pyuavcan.dsdl.serialize(o))
+    ref = (
+        u8(1)  +                    # | Union tag of del
+        u32(23) +                   # |     Delimiter header of BDelimited.1.0 del
+        u8(2) +                     # |         Array var contains two elements
+        u32(4) +                    # |             Delimiter header of the first array element
+        u8(2) +                     # |                 Array a contains 2 elements
+        u8(1) + u8(2) +             # |                     This is the array a
+        u8(0) +                     # |                 Field b left uninitialized
+        u32(3) +                    # |             Delimiter header of the second array element
+        u8(1) +                     # |                 Array a contains 1 element
+        u8(3) +                     # |                     This is the array a
+        u8(4) +                     # |                     Field b
+        u8(1) +                     # |         Array fix contains one element
+        u32(2) +                    # |             Delimiter header of the only array element
+        u8(5) + u8(6)               # |                 This is the array a
     )
+    print(' '.join(f'{b:02x}' for b in sr))
+    assert sr == ref
+
+    # Deserialize using a DIFFERENT MINOR VERSION which requires the implicit zero extension/truncation rules to work.
+    o = pyuavcan.dsdl.deserialize(A_1_1, [memoryview(sr)])
+    assert o.del_ is not None
+    assert len(o.del_.var) == 2
+    assert len(o.del_.fix) == 1
+    assert list(o.del_.var[0].a) == [1, 2]
+    assert list(o.del_.var[1].a) == [3]             # b is implicitly truncated
+    assert list(o.del_.fix[0].a) == [5, 6, 0]       # 3rd is implicitly zero-extended
+    assert o.del_.fix[0].b == 0                     # b is implicitly zero-extended
+
+    # Reverse version switch.
+    o = A_1_1(
+        del_=BDelimited_1_1(
+            var=[CVariable_1_1([11, 22])],
+            fix=[CFixed_1_1([5, 6, 7], 8), CFixed_1_1([100, 200, 123], 99)],
+        ),
+    )
+    sr = b''.join(pyuavcan.dsdl.serialize(o))
+    print(' '.join(f'{b:02x}' for b in sr))
+    o = pyuavcan.dsdl.deserialize(A_1_0, [memoryview(sr)])
+    assert o.del_ is not None
+    assert len(o.del_.var) == 1
+    assert len(o.del_.fix) == 2
+    assert list(o.del_.var[0].a) == [11, 22]
+    assert o.del_.var[0].b == 0                     # b is implicitly zero-extended
+    assert list(o.del_.fix[0].a) == [5, 6]          # 3rd is implicitly truncated, b is implicitly truncated
+    assert list(o.del_.fix[1].a) == [100, 200]      # 3rd is implicitly truncated, b is implicitly truncated
+
+    # Delimiter header too large.
+    assert None is pyuavcan.dsdl.deserialize(A_1_1, [memoryview(b'\x01' + b'\xFF' * 4)])
 
 
 def _compile_serialized_representation(*binary_chunks: str) -> typing.Sequence[memoryview]:
