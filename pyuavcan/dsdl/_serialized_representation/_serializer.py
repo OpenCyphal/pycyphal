@@ -68,7 +68,7 @@ class Serializer(abc.ABC):
         while self._bit_offset % bit_length != 0:
             self.add_unaligned_bit(False)
 
-    def fork(self, forked_buffer_size_in_bytes: int) -> Serializer:
+    def fork_bytes(self, forked_buffer_size_in_bytes: int) -> Serializer:
         """
         Creates another serializer that uses the same underlying serialization destination buffer
         but offset by :prop:`current_bit_length`. This is intended for delimited serialization.
@@ -502,7 +502,7 @@ def _unittest_serializer_unaligned() -> None:                   # Tricky cases w
     print('repr(serializer):', repr(ser))
 
 
-def _unittest_serializer_fork() -> None:
+def _unittest_serializer_fork_bytes() -> None:
     import pytest
 
     r = Serializer.new(16)
@@ -514,9 +514,9 @@ def _unittest_serializer_fork() -> None:
     assert str(r) == str(m)
 
     with pytest.raises(ValueError):
-        m.fork(16)  # Out of range
+        m.fork_bytes(16)  # Out of range
 
-    f = m.fork(15)
+    f = m.fork_bytes(15)
     assert str(f) == ''
     r.add_aligned_u8(42)
     f.add_aligned_u8(42)
@@ -529,7 +529,7 @@ def _unittest_serializer_fork() -> None:
     assert str(r) == str(m)
 
     f.skip_bits(8)
-    ff = f.fork(1)
+    ff = f.fork_bytes(1)
     r.add_aligned_u8(22)
     ff.add_aligned_u8(22)
     assert str(r) != str(m)
@@ -538,4 +538,4 @@ def _unittest_serializer_fork() -> None:
 
     ff.add_unaligned_bit(True)  # Break alignment
     with pytest.raises(ValueError):
-        ff.fork(1)  # Bad alignment
+        ff.fork_bytes(1)  # Bad alignment

@@ -75,9 +75,9 @@ class Deserializer(abc.ABC):
         while self._bit_offset % bit_length != 0:
             self._bit_offset += 1
 
-    def fork(self, forked_buffer_size_in_bytes: int) -> Deserializer:
+    def fork_bytes(self, forked_buffer_size_in_bytes: int) -> Deserializer:
         """
-        This is the counterpart of fork() defined in the serializer intended for deserializing delimited types.
+        This is the counterpart of fork_bytes() defined in the serializer intended for deserializing delimited types.
         Forking is necessary to support implicit truncation and implicit zero extension of nested objects.
         The algorithm is as follows:
 
@@ -104,7 +104,7 @@ class Deserializer(abc.ABC):
                 f'Invalid usage: the required forked buffer size of {forked_buffer_size_in_bytes} bytes '
                 f'is less than the available remaining buffer space of {remaining_byte_length} bytes'
             )
-        out = _PlatformSpecificDeserializer(self._buf.fork(self._byte_offset, forked_buffer_size_in_bytes))
+        out = _PlatformSpecificDeserializer(self._buf.fork_bytes(self._byte_offset, forked_buffer_size_in_bytes))
         assert out.remaining_bit_length == forked_buffer_size_in_bytes * 8
         return out
 
@@ -417,9 +417,9 @@ class ZeroExtendingBuffer:
         assert len(out) == count
         return out
 
-    def fork(self, offset_bytes: int, length_bytes: int) -> typing.Sequence[memoryview]:
+    def fork_bytes(self, offset_bytes: int, length_bytes: int) -> typing.Sequence[memoryview]:
         """
-        This is intended for use with :meth:`Deserializer.fork`.
+        This is intended for use with :meth:`Deserializer.fork_bytes`.
         Given an offset from the beginning and length (both in bytes), yields a list of compliant memory fragments
         that can be fed into the forked deserializer instance.
         The requested (offset + length) shall not exceeded the buffer length; this is because per the Specification,
@@ -592,16 +592,16 @@ def _unittest_deserializer_unaligned() -> None:
     print('repr(deserializer):', repr(des))
 
 
-def _unittest_deserializer_fork() -> None:
+def _unittest_deserializer_fork_bytes() -> None:
     import pytest
 
     m = Deserializer.new([memoryview(bytes([
         0b10100111, 0b11101111, 0b11001101, 0b10101011, 0b10010000, 0b01111000, 0b01010110, 0b00110100
     ]))])
     with pytest.raises(ValueError):
-        m.fork(9)
+        m.fork_bytes(9)
 
-    f = m.fork(8)
+    f = m.fork_bytes(8)
     assert f.consumed_bit_length == 0
     assert f.remaining_bit_length == 8 * 8
     assert f.fetch_aligned_u8() == 0b10100111
@@ -622,7 +622,7 @@ def _unittest_deserializer_fork() -> None:
     assert m.fetch_aligned_u64() == 0
 
     assert f.remaining_bit_length == 6 * 8
-    ff = f.fork(2)
+    ff = f.fork_bytes(2)
     assert ff.consumed_bit_length == 0
     assert ff.remaining_bit_length == 16
     assert ff.fetch_aligned_u8() == 0b11001101

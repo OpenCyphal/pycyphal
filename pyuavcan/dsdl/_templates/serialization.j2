@@ -135,8 +135,42 @@
     {%- elif t is FixedLengthArrayType -%}      {{ _serialize_fixed_length_array(t, ref, offset) }}
     {%- elif t is VariableLengthArrayType -%}   {{ _serialize_variable_length_array(t, ref, offset) }}
     {%- elif t is CompositeType -%}
-    # TODO: serialize the delimiter header.
+        {% if t is DelimitedType %}
+            {% if (t.inner_type.bit_length_set | length) > 1 %}
+                {# Instead of the outer extent, we use the inner extent, which equals the max bit length and is a
+                 # tighter bound than the user-defined extent.
+                 # This is safe because when serializing we always know the concrete type.
+                 # This would be unsafe when deserializing, of course.
+                 # See the Specification for details. #}
+                {% set nested_capacity_bits = t.inner_type.extent + t.delimiter_header_type.bit_length %}
+                {% assert nested_capacity_bits % 8 == 0 %}
+                {% set nested_capacity_bytes = nested_capacity_bits // 8 %}
+    # Delimited serialization of {{ t }}, extent {{ t.extent }}, max bit length {{ t.inner_type.extent }}
+    _nested_ = _ser_.fork_bytes({{ nested_capacity_bytes }})  # Also includes the length of the delimiter header.
+    _nested_.skip_bits({{ t.delimiter_header_type.bit_length }})  # Leave space for the delimiter header.
+    assert _nested_.current_bit_length == {{ t.delimiter_header_type.bit_length }}
+    {{ ref }}._serialize_(_nested_)
+    _nested_length_ = _nested_.current_bit_length - {{ t.delimiter_header_type.bit_length }}
+    del _nested_
+    assert {{ t.inner_type.bit_length_set|min }} <= _nested_length_ <= {{ t.inner_type.bit_length_set|max }}
+    assert _nested_length_ % 8 == 0
+    _ser_.add_aligned_u32(_nested_length_ // 8)  # Jump back and serialize the delimiter header.
+    _ser_.skip_bits(_nested_length_)             # Return to the current offset.
+            {% else %}
+                {# Optional optimization: if the nested object is fixed-length, no need to fork the serializer. #}
+                {% set length_bits = t.inner_type.bit_length_set | first %}
+                {% assert [length_bits] == t.inner_type.bit_length_set | list %}
+                {% assert length_bits % 8 == 0 %}
+                {% set length_bytes = length_bits // 8 %}
+    # Delimited serialization of {{ t }}, fixed bit length {{ length_bits }} ({{ length_bytes }} bytes)
+    _ser_.add_aligned_u32({{ length_bytes }})  # Delimiter header is constant in this case.
+    _ser_base_offset_ = _ser_.current_bit_length
     {{ ref }}._serialize_(_ser_)
+    assert _ser_.current_bit_length - _ser_base_offset_ == {{ length_bits }}
+            {% endif %}
+        {% else %}
+    {{ ref }}._serialize_(_ser_)
+        {% endif %}
     {%- else %}{% assert False %}
     {%- endif %}
 

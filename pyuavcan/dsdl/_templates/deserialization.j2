@@ -133,8 +133,19 @@
     {%- elif t is FixedLengthArrayType -%}   {{ _deserialize_fixed_length_array(t, ref, offset) }}
     {%- elif t is VariableLengthArrayType -%}{{ _deserialize_variable_length_array(t, ref, offset) }}
     {%- elif t is CompositeType -%}
-    # TODO: deserialize the delimiter header and limit the size of the nested deserializer.
+        {% if t is DelimitedType %}
+    # Delimited deserialization of {{ t }}, extent {{ t.extent }}
+    _dh_ = _des_.fetch_aligned_u32()  # Read the delimiter header.
+    if _dh_ * 8 > _des_.remaining_bit_length:
+        raise _des_.FormatError(f'Delimiter header specifies {_dh_ * 8} bits, '
+                                f'but the remaining length is only {_des_.remaining_bit_length} bits')
+    _nested_ = _des_.fork_bytes(_dh_)
+    _des_.skip_bits(_dh_ * 8)
+    {{ ref }} = {{ t|full_reference_name }}._deserialize_(_nested_)
+    del _nested_
+        {% else %}
     {{ ref }} = {{ t|full_reference_name }}._deserialize_(_des_)
+        {% endif %}
     {%- else %}{% assert False %}
     {%- endif %}
 
