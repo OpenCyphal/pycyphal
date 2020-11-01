@@ -120,6 +120,10 @@ def _unittest_slow_cli_demo_basic_usage(
     if not pathlib.Path('uavcan').exists():
         run_cli_tool('dsdl-gen-pkg', str(PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'))
 
+    # Time to let the background processes finish initialization.
+    # The usage demo might take a long time to start because it may have to generate packages first.
+    time.sleep(90)
+
     proc_sub_heartbeat = BackgroundChildProcess.cli(
         'sub', 'uavcan.node.Heartbeat.1.0', '--format=json',  # Count unlimited
         '--with-metadata', *iface_option.make_cli_args(None)  # type: ignore
@@ -136,10 +140,6 @@ def _unittest_slow_cli_demo_basic_usage(
     )
 
     try:
-        # Time to let the background processes finish initialization.
-        # The usage demo might take a long time to start because it may have to generate packages first.
-        assert demo_proc.alive
-        time.sleep(100)
         assert demo_proc.alive
 
         run_cli_tool(
