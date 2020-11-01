@@ -74,10 +74,11 @@ are more than {OUTPUT_TRANSFER_ID_MAP_MAX_AGE} seconds old are no longer used.
         _logger.debug('Expression evaluation context: %r', list(context.keys()))
 
         trs: typing.List[pyuavcan.transport.Transport] = []
-        for expression in args.transport:
-            t = _evaluate_transport_expr(expression, context)
-            _logger.info('Expression %r yields %r', expression, t)
-            trs.append(t)
+        if args.transport is not None:
+            for expression in args.transport:
+                t = _evaluate_transport_expr(expression, context)
+                _logger.info('Expression %r yields %r', expression, t)
+                trs.append(t)
 
         if len(trs) < 1:
             raise ValueError('No transports specified')
