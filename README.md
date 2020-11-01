@@ -28,6 +28,6 @@ communication in aerospace and robotic applications via
 CAN bus, Ethernet, RS-485, IEEE 802.15.4, and other robust transports.
 The acronym *UAVCAN* stands for ***Uncomplicated Application-level Vehicular Computing And Networking***.
 
-<big>**READ THE DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**</big>
+**READ THE DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**
 
 **Ask questions: [forum.uavcan.org](https://forum.uavcan.org/)**
