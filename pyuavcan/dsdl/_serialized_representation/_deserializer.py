@@ -75,6 +75,39 @@ class Deserializer(abc.ABC):
         while self._bit_offset % bit_length != 0:
             self._bit_offset += 1
 
+    def fork(self, forked_buffer_size_in_bytes: int) -> Deserializer:
+        """
+        This is the counterpart of fork() defined in the serializer intended for deserializing delimited types.
+        Forking is necessary to support implicit truncation and implicit zero extension of nested objects.
+        The algorithm is as follows:
+
+        - Before forking, using the main deserializer (M), read the delimiter header.
+        - If the value of the delimiter header exceeds the number of bytes remaining in the deserialization buffer,
+          raise :class:`FormatError`, thereby declaring the serialized representation invalid, as prescribed by the
+          Specification.
+        - Fork M.
+        - Skip M by the size reported by the delimiter header.
+        - Using the forked deserializer (F), deserialize the nested object. F will apply implicit truncation
+          and the implicit zero extension rules as necessary regardless of the amount of data remaining in M.
+        - Discard F.
+
+        This method raises a :class:`ValueError` if the forked instance is not byte-aligned or if the requested buffer
+        size is too large. The latter is because it is a class usage error, not a deserialization error.
+        """
+        if self._bit_offset % 8 != 0:
+            raise ValueError('Cannot fork unaligned deserializer')
+        remaining_bit_length = self.remaining_bit_length
+        assert remaining_bit_length % 8 == 0
+        remaining_byte_length = remaining_bit_length // 8
+        if remaining_byte_length < forked_buffer_size_in_bytes:
+            raise ValueError(
+                f'Invalid usage: the required forked buffer size of {forked_buffer_size_in_bytes} bytes '
+                f'is less than the available remaining buffer space of {remaining_byte_length} bytes'
+            )
+        out = _PlatformSpecificDeserializer(self._buf.fork(self._byte_offset, forked_buffer_size_in_bytes))
+        assert out.remaining_bit_length == forked_buffer_size_in_bytes * 8
+        return out
+
     #
     # Fast methods optimized for aligned primitive fields.
     # The most specialized methods must be used whenever possible for best performance.
@@ -384,6 +417,22 @@ class ZeroExtendingBuffer:
         assert len(out) == count
         return out
 
+    def fork(self, offset_bytes: int, length_bytes: int) -> typing.Sequence[memoryview]:
+        """
+        This is intended for use with :meth:`Deserializer.fork`.
+        Given an offset from the beginning and length (both in bytes), yields a list of compliant memory fragments
+        that can be fed into the forked deserializer instance.
+        The requested (offset + length) shall not exceeded the buffer length; this is because per the Specification,
+        a delimiter header cannot exceed the amount of remaining space in the deserialization buffer.
+        """
+        # Currently, we use a contiguous buffer, but when scattered buffers are supported, this method will need
+        # to discard the fragments before the requested offset and then return the following subset of fragments.
+        if offset_bytes + length_bytes > len(self._buf):
+            raise ValueError(f'Invalid fork: offset ({offset_bytes}) + length ({length_bytes}) > {len(self._buf)}')
+        out = memoryview(self._buf[offset_bytes:offset_bytes + length_bytes])
+        assert len(out) == length_bytes
+        return [out]
+
     def to_base64(self) -> str:
         return base64.b64encode(self._buf.tobytes()).decode()
 
@@ -541,3 +590,52 @@ def _unittest_deserializer_unaligned() -> None:
     assert des.remaining_bit_length == 0
 
     print('repr(deserializer):', repr(des))
+
+
+def _unittest_deserializer_fork() -> None:
+    import pytest
+
+    m = Deserializer.new([memoryview(bytes([
+        0b10100111, 0b11101111, 0b11001101, 0b10101011, 0b10010000, 0b01111000, 0b01010110, 0b00110100
+    ]))])
+    with pytest.raises(ValueError):
+        m.fork(9)
+
+    f = m.fork(8)
+    assert f.consumed_bit_length == 0
+    assert f.remaining_bit_length == 8 * 8
+    assert f.fetch_aligned_u8() == 0b10100111
+    assert f.remaining_bit_length == 7 * 8
+    assert f.fetch_aligned_u8() == 0b11101111
+    assert f.remaining_bit_length == 6 * 8
+    assert f.consumed_bit_length == 16
+
+    assert m.remaining_bit_length == 8 * 8
+    m.skip_bits(6 * 8)
+    assert m.remaining_bit_length == 2 * 8
+    assert m.fetch_aligned_u8() == 0b01010110
+    assert m.fetch_aligned_u8() == 0b00110100
+    assert m.remaining_bit_length == 0
+    assert m.fetch_aligned_u8() == 0
+    assert m.fetch_aligned_u16() == 0
+    assert m.fetch_aligned_u32() == 0
+    assert m.fetch_aligned_u64() == 0
+
+    assert f.remaining_bit_length == 6 * 8
+    ff = f.fork(2)
+    assert ff.consumed_bit_length == 0
+    assert ff.remaining_bit_length == 16
+    assert ff.fetch_aligned_u8() == 0b11001101
+    assert ff.fetch_aligned_u8() == 0b10101011
+    assert ff.remaining_bit_length == 0
+    assert ff.consumed_bit_length == 16
+    assert ff.fetch_aligned_u8() == 0
+    assert ff.fetch_aligned_u16() == 0
+    assert ff.fetch_aligned_u32() == 0
+    assert ff.fetch_aligned_u64() == 0
+
+    f.skip_bits(40)
+    assert f.consumed_bit_length == 56
+    assert f.remaining_bit_length == 8
+    assert f.fetch_aligned_u8() == 0b00110100
+    assert f.remaining_bit_length == 0

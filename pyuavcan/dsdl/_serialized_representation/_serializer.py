@@ -83,6 +83,9 @@ class Serializer(abc.ABC):
         This may be unnecessary if the nested object is of a fixed size. In this case, since its length is known,
         the delimiter header can be serialized as a constant, and then the nested object can be serialized trivially
         as if it was sealed.
+
+        This method raises a :class:`ValueError` if the forked instance is not byte-aligned or if the requested buffer
+        size is too large.
         """
         if self._bit_offset % 8 != 0:
             raise ValueError('Cannot fork unaligned serializer')
