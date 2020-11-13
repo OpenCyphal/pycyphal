@@ -149,6 +149,7 @@
       <w>pydev</w>
       <w>pydsdl</w>
       <w>pydsdlgen</w>
+      <w>pygments</w>
       <w>pylint</w>
       <w>pyserial</w>
       <w>pytest</w>

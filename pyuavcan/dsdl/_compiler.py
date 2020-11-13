@@ -133,8 +133,8 @@ def generate_package(root_namespace_directory:        _AnyPath,
     :return: An instance of :class:`GeneratedPackageInfo` describing the generated package.
 
     :raises: :class:`OSError` if required operations on the file system could not be performed;
-        ``pydsdl.InvalidDefinitionError`` if the source DSDL definitions are invalid;
-        ``pydsdl.InternalError`` if there is a bug in the DSDL processing front-end;
+        :class:`pydsdl.InvalidDefinitionError` if the source DSDL definitions are invalid;
+        :class:`pydsdl.InternalError` if there is a bug in the DSDL processing front-end;
         :class:`ValueError` if any of the arguments are otherwise invalid.
 
     The following table is an excerpt from the UAVCAN specification. Observe that *unregulated fixed port identifiers*
