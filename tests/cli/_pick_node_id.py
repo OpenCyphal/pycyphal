@@ -21,8 +21,8 @@ def _unittest_slow_cli_pick_nid(transport_factory: TransportFactory) -> None:
             # Construct an environment variable to ensure syntax equivalency with the `--transport=...` CLI args.
             environment_variables={
                 'PYUAVCAN_CLI_TRANSPORT': (
-                        '[%s]' % ','.join(x.replace('--tr=', '')
-                                          for x in transport_factory(idx).cli_args)
+                    '[%s]' % ','.join(x.replace('--tr=', '')
+                                      for x in transport_factory(idx).cli_args)
                 )
             }
         )

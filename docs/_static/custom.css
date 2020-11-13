@@ -26,7 +26,7 @@ p {
     .rst-content pre.literal-block,
     .rst-content div[class^="highlight"] pre,
     .rst-content .linenodiv pre {
-        font-size: inherit !important;
+        font-size: 14px;
     }
 }
 
