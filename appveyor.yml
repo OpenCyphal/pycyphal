@@ -3,20 +3,21 @@
 # https://www.appveyor.com/docs/how-to/git-push/
 environment:
   matrix:
-    - job_group: tests
+    -
+      job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
       PYTHON: 'C:\\Python39-x64'
-
-    - job_group: tests
+    -
+      job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.8'
-      analysis: 1    # Always perform analysis on the latest Python version.
-
-    - job_group: tests
+      analysis: 1    # Always perform analysis on the latest Python version on a GNU/Linux worker.
+    -
+      job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.7'
-
-    - job_name: deploy
+    -
+      job_name: deploy
       job_depends_on: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.9'
@@ -42,6 +43,7 @@ for:
       only:
         - job_group: tests
     install:
+      - git submodule update --init --recursive
       # GNU/Linux build config
       - sh: 'lsb_release -a'
       - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
@@ -50,9 +52,6 @@ for:
       # MS Windows build config
       - cmd: 'systeminfo'
       - cmd: 'set PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%'
-      # Shared
-      - git submodule update --init --recursive
-      - python -V                                                 # Check configuration
     test_script:
       # TODO: restore
       - sh: export PYTHONPATH=.
@@ -86,6 +85,7 @@ for:
       - git submodule update --init --recursive
       - pip install -r requirements.txt
     deploy_script:
+      - '[[ "$APPVEYOR_REPO_BRANCH" == "master" ]] || exit 1'
       - echo "https://${GIT_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
       - git config --global credential.helper store
       - git config --global user.email "devnull@uavcan.org"
