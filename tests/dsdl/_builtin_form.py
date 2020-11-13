@@ -111,3 +111,15 @@ def _unittest_slow_builtin_form_automatic(generated_packages: typing.List[pyuavc
                     _logger.info('Built-in representation: %r', bi)
                 else:
                     assert False, f'{obj} != {reconstructed}'
+
+
+# noinspection PyUnusedLocal
+def _unittest_issue_116(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+    from uavcan.register import Access_1_0
+    valid = pyuavcan.dsdl.update_from_builtin(Access_1_0.Request(), {'name': {'name': 'uavcan.pub.measurement'}})
+    assert valid.name.name.tobytes().decode() == 'uavcan.pub.measurement'
+    with pytest.raises(TypeError) as ex:
+        pyuavcan.dsdl.update_from_builtin(Access_1_0.Request(), {'name': 'uavcan.pub.measurement'})
+    print('Exception message:', ex)
+    assert 'str' in str(ex)
+    assert 'Name_1_' in str(ex)

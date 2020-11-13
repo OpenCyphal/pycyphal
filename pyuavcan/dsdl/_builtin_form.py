@@ -126,6 +126,13 @@ def update_from_builtin(destination: CompositeObjectTypeVar,
     ... })  # doctest: +NORMALIZE_WHITESPACE
     uavcan.register.Access.Request...name='my.register'...value=[ 1, 2, 42,-10000]...
     """
+    # UX improvement; see https://github.com/UAVCAN/pyuavcan/issues/116
+    if not isinstance(source, dict):
+        raise TypeError(
+            f'Invalid format: cannot update an instance of type {type(destination).__name__!r} '
+            f'from value of type {type(source).__name__!r}'
+        )
+
     source = dict(source)   # Create copy to prevent mutation of the original
 
     if not isinstance(destination, CompositeObject):  # pragma: no cover
