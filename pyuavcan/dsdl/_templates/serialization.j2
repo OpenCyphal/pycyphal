@@ -4,14 +4,28 @@
  # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 -#}
 
-{% macro serialize(t) -%}
+{% macro serialize(self) -%}
     assert _ser_.current_bit_length % 8 == 0, 'Serializer is not aligned'
     _base_offset_ = _ser_.current_bit_length
-    {{ _serialize_composite(t.inner_type, 'self', 0|bit_length_set) | remove_blank_lines }}
-    _ser_.pad_to_alignment({{ t.alignment_requirement }})
-    assert {{ t.inner_type.bit_length_set|min }} <= (_ser_.current_bit_length - _base_offset_) {# -#}
-                                                 <= {{ t.inner_type.bit_length_set|max }}, \
-        'Bad serialization of {{ t }}'
+    {% set t = self.inner_type %}
+{% if t is StructureType %}
+    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+    {{ _serialize_any(f.data_type, 'self.' + (f|id), offset) }}
+    {% endfor %}
+{% elif t is UnionType %}
+    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+        {% set field_ref = 'self.' + (f|id) %}
+    {{ 'if' if loop.first else 'elif' }} {{ field_ref }} is not None:  # Union tag {{ loop.index0 }}
+        {{ _serialize_integer(t.tag_field_type, loop.index0|string, 0|bit_length_set)|indent }}
+        {{ _serialize_any(f.data_type, field_ref, offset)|indent }}
+    {% endfor %}
+    else:
+        raise RuntimeError('Malformed union {{ t }}')
+{% else %}{% assert False %}{# Delimited type is not expected in this context. #}
+{% endif %}
+    _ser_.pad_to_alignment({{ self.alignment_requirement }})
+    assert {{ t.bit_length_set|min }} <= (_ser_.current_bit_length - _base_offset_) <= {{ t.bit_length_set|max }}, \
+        'Bad serialization of {{ self }}'
 {%- endmacro %}
 
 
@@ -57,7 +71,6 @@
 
 {% macro _serialize_fixed_length_array(t, ref, offset) %}
     assert len({{ ref }}) == {{ t.capacity }}, '{{ ref }}: {{ t }}'
-
 {# Saturation of bool[] or standard-bit-length primitive arrays is not needed because the range of native
  # representations matches that of the final serialized value. Saturation is only needed in the case of elementwise
  # serialization, which is implemented in the corresponding type serialization macros. #}
@@ -79,43 +92,18 @@
       all elements byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}.
     assert len({{ ref }}) <= {{ t.capacity }}, '{{ ref }}: {{ t }}'
     {{ _serialize_integer(t.length_field_type, 'len(%s)'|format(ref), offset) }}
-
 {# Saturation of bool[] or standard-bit-length primitive arrays is not needed because the range of native
  # representations matches that of the final serialized value. Saturation is only needed in the case of elementwise
  # serialization, which is implemented in the corresponding type serialization macros. #}
 {% if t.element_type is BooleanType %}
     _ser_.add_{{ (offset + t.length_field_type.bit_length)|alignment_prefix }}_array_of_bits({{ ref }})
-
 {% elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
     _ser_.add_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
           _array_of_standard_bit_length_primitives({{ ref }})
-
 {% else %}
     {% set element_ref = 'elem'|to_template_unique_name %}
     for {{ element_ref }} in {{ ref }}:
         {{ _serialize_any(t.element_type, element_ref, offset + t.bit_length_set)|indent }}
-
-{% endif %}
-{% endmacro %}
-
-
-{% macro _serialize_composite(t, ref, base_offset) %}
-{% if t is StructureType %}
-    {% for f, offset in t.iterate_fields_with_offsets(base_offset) %}
-    {{ _serialize_any(f.data_type, ref + '.' + (f|id), offset) }}
-    {% endfor %}
-
-{% elif t is UnionType %}
-    {% for f, offset in t.iterate_fields_with_offsets(base_offset) %}
-        {% set field_ref = ref + '.' + (f|id) %}
-    {{ 'if' if loop.first else 'elif' }} {{ field_ref }} is not None:  # Union tag {{ loop.index0 }}
-        {{ _serialize_integer(t.tag_field_type, loop.index0|string, base_offset)|indent }}
-        {{ _serialize_any(f.data_type, field_ref, offset)|indent }}
-    {% endfor %}
-    else:
-        raise RuntimeError('Malformed union {{ t }}')
-
-{% else %}{% assert False %}{# Delimited type is not expected in this context. #}
 {% endif %}
 {% endmacro %}
 
@@ -124,7 +112,6 @@
     {% if t.alignment_requirement > 1 %}
     _ser_.pad_to_alignment({{ t.alignment_requirement }})
     {% endif %}
-
     {%- if t is VoidType -%}                    _ser_.skip_bits({{ t.bit_length }})
     {%- elif t is BooleanType -%}               _ser_.add_unaligned_bit({{ ref }})
     {%- elif t is IntegerType -%}               {{ _serialize_integer(t, ref, offset) }}
@@ -170,7 +157,6 @@
         {% endif %}
     {%- else %}{% assert False %}
     {%- endif %}
-
     {% if t is CompositeType %}
     assert _ser_.current_bit_length % {{ t.alignment_requirement }} == 0, 'Nested object alignment error'
     {% endif %}
