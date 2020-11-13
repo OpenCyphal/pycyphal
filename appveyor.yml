@@ -38,8 +38,8 @@ build: off
 skip_tags: true
 
 for:
-  # TEST PIPELINE
-  - matrix:
+  -
+    matrix:
       only:
         - job_group: tests
     install:
@@ -53,12 +53,8 @@ for:
       - cmd: 'systeminfo'
       - cmd: 'set PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%'
     test_script:
-      # TODO: restore
-      - sh: export PYTHONPATH=.
-      - sh: pip install -r requirements.txt
-      - sh: python -m pyuavcan --help
-      #- sh:  './test.sh'
-      #- cmd: 'powershell .\test.ps1'
+      - sh:  './test.sh'
+      - cmd: 'powershell .\test.ps1'
     on_success:
       - sh: |
           if ((analysis))
@@ -74,8 +70,8 @@ for:
             export PATH="$(echo sonar-scanner*/bin):$PATH"
             sonar-scanner -Dsonar.login=$SONARCLOUD_TOKEN
           fi
-  # DEPLOY PIPELINE
-  - matrix:
+  -
+    matrix:
       only:
         - job_name: deploy
     branches:
