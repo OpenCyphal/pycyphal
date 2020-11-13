@@ -220,6 +220,10 @@ class CANTransport(pyuavcan.transport.Transport):
                                               finalizer=finalizer)
 
         self._output_registry[specifier] = session
+        if not self._last_filter_configuration_set:
+            # It is necessary to reconfigure the filters at least once to ensure that we are able to receive
+            # loopback frames even if there are no input sessions in use.
+            self._reconfigure_acceptance_filters()
         return session
 
     async def _do_send_until(self, frames: typing.Iterable[UAVCANFrame], monotonic_deadline: float) -> bool:
