@@ -97,27 +97,23 @@ class LoopbackTransport(pyuavcan.transport.Transport):
 
         async def do_route(tr: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
             del monotonic_deadline      # Unused, all operations always successful and instantaneous.
-            if specifier.remote_node_id not in {self.local_node_id, None}:
-                return True  # Drop the transfer.
-
-            tr_from = pyuavcan.transport.TransferFrom(
-                timestamp=tr.timestamp,
-                priority=tr.priority,
-                transfer_id=tr.transfer_id % self.protocol_parameters.transfer_id_modulo,
-                fragmented_payload=tr.fragmented_payload,
-                source_node_id=self.local_node_id,
-            )
-
-            for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
-                try:
-                    destination_session = self._input_sessions[
-                        pyuavcan.transport.InputSessionSpecifier(specifier.data_specifier, remote_node_id)
-                    ]
-                except LookupError:
-                    pass
-                else:
-                    await destination_session.push(tr_from)
-
+            if specifier.remote_node_id in {self.local_node_id, None}:  # Otherwise drop the transfer.
+                tr_from = pyuavcan.transport.TransferFrom(
+                    timestamp=tr.timestamp,
+                    priority=tr.priority,
+                    transfer_id=tr.transfer_id % self.protocol_parameters.transfer_id_modulo,
+                    fragmented_payload=tr.fragmented_payload,
+                    source_node_id=self.local_node_id,
+                )
+                for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
+                    try:
+                        destination_session = self._input_sessions[
+                            pyuavcan.transport.InputSessionSpecifier(specifier.data_specifier, remote_node_id)
+                        ]
+                    except LookupError:
+                        pass
+                    else:
+                        await destination_session.push(tr_from)
             return True
 
         try:
