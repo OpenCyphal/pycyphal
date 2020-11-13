@@ -73,36 +73,55 @@ Configuring the transport
 +++++++++++++++++++++++++
 
 The commands shown later have to be instructed to use the same transport interface as the demo.
-Please use one of the following options depending on your demo configuration:
+In this example we configure the transport using the environment variable ``PYUAVCAN_CLI_TRANSPORT``,
+but it is also possible to use the ``--tr`` command line argument if found more convenient
+(the syntax is identical).
 
-- ``--tr="UDP('127.0.0.111/8')"`` --
+Please use one of the following transport configuration expressions depending on your demo configuration:
+
+- ``"UDP('127.0.0.111/8')"`` --
   UDP/IP transport on localhost. Local node-ID 111.
 
-- ``--tr="Serial('socket://loopback:50905',111)"`` --
+- ``"Serial('socket://loopback:50905',111)"`` --
   serial transport emulated over a TCP/IP tunnel instead of a real serial port (use Ncat for TCP connection brokering).
   Local node-ID 111.
 
-- ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"`` --
+- ``"CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"`` --
   virtual CAN bus via SocketCAN (GNU/Linux systems only).
   Local node-ID 111.
 
-Redundant transports can be configured by specifying the ``--tr`` option more than once:
+Redundant transports can be configured using the Python list notation like ``[a, b, c]``
+(or by specifying the ``--tr`` option more than once if the command line arguments are used instead
+of the environment variable):
 
-- ``--tr="UDP('127.0.0.111/8')" --tr="Serial('socket://loopback:50905',111)"`` --
+- ``"[UDP('127.0.0.111/8'), Serial('socket://loopback:50905',111)]"`` --
   dissimilar double redundancy, UDP plus serial.
 
-- ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"``
-  ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan1',32),111)"``
-  ``--tr="CAN(can.media.socketcan.SocketCANMedia('vcan2',64),111)"`` --
+- ``"[CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111), CAN(can.media.socketcan.SocketCANMedia('vcan1',32),111), CAN(can.media.socketcan.SocketCANMedia('vcan2',64),111)]"`` --
   triple redundant CAN bus, classic CAN with CAN FD.
+
+Specifying a single transport using the list notation is also acceptable --
+this case is handled as if there was no list notation used: ``[a] == a``.
+For more info on command line arguments, see chapter :ref:`cli`.
+
+If you are using bash/sh/zsh or similar, the syntax to set the variable is:
+
+.. code-block:: sh
+
+    export PYUAVCAN_CLI_TRANSPORT="[Loopback(None)]"  # Using LoopbackTransport as an example
+
+If you are using PowerShell:
+
+.. code-block:: ps1
+
+    $env:PYUAVCAN_CLI_TRANSPORT="[Loopback(None), Loopback(None)]"
 
 
 Running the application
 +++++++++++++++++++++++
 
 Start the demo application shown above and leave it running.
-In a new terminal, run the following commands to listen to the demo's heartbeat or its diagnostics
-(don't forget to specify transport):
+To listen to the demo's heartbeat or its diagnostics, run the following commands in a new terminal:
 
 .. code-block:: sh
 

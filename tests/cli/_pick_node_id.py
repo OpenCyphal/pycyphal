@@ -16,7 +16,16 @@ def _unittest_slow_cli_pick_nid(transport_factory: TransportFactory) -> None:
     # unable to maintain sufficiently real-time operation for the test to pass. Hm.
     used_node_ids = list(range(10))
     pubs = [
-        BackgroundChildProcess.cli('pub', '--period=0.4', '--count=200', *transport_factory(idx).cli_args)
+        BackgroundChildProcess.cli(
+            'pub', '--period=0.4', '--count=200',
+            # Construct an environment variable to ensure syntax equivalency with the `--transport=...` CLI args.
+            environment_variables={
+                'PYUAVCAN_CLI_TRANSPORT': (
+                        '[%s]' % ','.join(x.replace('--tr=', '')
+                                          for x in transport_factory(idx).cli_args)
+                )
+            }
+        )
         for idx in used_node_ids
     ]
     result = run_cli_tool('-v', 'pick-nid', *transport_factory(None).cli_args, timeout=100.0)
@@ -27,14 +36,26 @@ def _unittest_slow_cli_pick_nid(transport_factory: TransportFactory) -> None:
 
 
 def _unittest_slow_cli_pick_nid_loopback() -> None:
-    result = run_cli_tool('-v', 'pick-nid', '--tr=Loopback(None)', timeout=30.0)
+    result = run_cli_tool(
+        '-v', 'pick-nid',
+        timeout=30.0,
+        environment_variables={
+            'PYUAVCAN_CLI_TRANSPORT': '[Loopback(None), Loopback(None)]'
+        }
+    )
     print('pick-nid result:', result)
     assert 0 <= int(result) < 2 ** 64
 
 
 def _unittest_slow_cli_pick_nid_udp_localhost() -> None:
     from pyuavcan.transport.udp import UDPTransport
-    result = run_cli_tool('-v', 'pick-nid', '--tr=UDP("127.255.255.255/8")', timeout=30.0)
+    result = run_cli_tool(
+        '-v', 'pick-nid',
+        timeout=30.0,
+        environment_variables={
+            'PYUAVCAN_CLI_TRANSPORT': 'UDP("127.255.255.255/8")'
+        }
+    )
     print('pick-nid result:', result)
     # Exclude zero from the set because an IP address with the host address of zero may cause complications.
     assert 1 <= int(result) < 2 ** UDPTransport.NODE_ID_BIT_LENGTH
