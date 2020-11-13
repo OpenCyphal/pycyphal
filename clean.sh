@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rm -rf dist build ./*.egg-info .coverage* htmlcov .*_generated *.log *.tmp &> /dev/null
+rm -rf dist build ./*.egg-info .coverage* htmlcov .*cache .*_generated *.log *.tmp &> /dev/null
 
 # DSDL-generated packages
 rm -rf uavcan sirius_cyber_corp test_dsdl_namespace &> /dev/null

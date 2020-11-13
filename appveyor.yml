@@ -1,53 +1,93 @@
+# https://www.appveyor.com/blog/2018/04/25/specialized-build-matrix-configuration-in-appveyor/
+# https://www.appveyor.com/docs/job-workflows/
+# https://www.appveyor.com/docs/how-to/git-push/
 environment:
   matrix:
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-      PYTHON: 'C:\\Python38-x64'
-      PYTHON_ARCH: '64'
+    - job_group: tests
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      PYTHON: 'C:\\Python39-x64'
 
-# Python 3.9 is temporarily disabled because NumPy fails to import with this error:
-# ImportError: /home/appveyor/venv3.9.0/lib/python3.9/site-packages/numpy/random/mtrand.cpython-39-x86_64-linux-gnu.so:
-#              undefined symbol: PyCMethod_New
-#    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
-#      PYTHON: '3.9'
-
-    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+    - job_group: tests
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.8'
-      coverage: 1    # The coverage information shall be published from exactly one job.
+      analysis: 1    # Always perform analysis on the latest Python version.
 
-    - APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+    - job_group: tests
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.7'
 
+    - job_name: deploy
+      job_depends_on: tests
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      PYTHON: '3.9'
+
+  # Access credentials for continuous deployment: a new tag is pushed upstream and the package is uploaded to PyPI.
+  GIT_TOKEN:
+    secure: +jQhxLpePj6hdDryfET/XpLo7VL9fhDXVHlwLOPp/nRDYe97TJAfd0XCTuPz1qkT
+  TWINE_USERNAME: __token__
+  TWINE_PASSWORD:
+    secure: +ZVhECKV0ESBrvUGXVd9wmqekK49PnIKW+rkN7Wb3cvSK1jAuiuOKH4Hx5u+aQsagyf72qhnVs+m0yHejMsU2uNgoGxQAawpsyAr3Yj3eCpEy0Mk75cnT/REa9i9WOMwIDDsdPcKrJIKeQdMsKHCn1CWg0COksQbECcm1wbTIamFflJ+MORMYrURwdaDqX5mJyFaER2+IrRQx0A0ZaU3hL4UhpTESvXdExz3/iwoVFnkN0liT//Uo0TTWEVMW5aOlpQ2eosM/jVubo90Ys/MGg==
+
+  # Access credentials for static analysis tools.
+  SONARCLOUD_TOKEN:
+    secure: WhIOqdzyx8VkpAsNjwy4O+OiAQ4FzUu8d1sFcQ7xz8DlFABiNajhPv0lhc1Dpz7G
+
 stack: python %PYTHON%
-
 build: off
+skip_tags: true
 
-install:
-  - git submodule update --init --recursive
-
-  # GNU/Linux build config
-  - sh: 'lsb_release -a'
-  - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
-  - sh: 'echo $extras_pkg'
-  - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'
-
-  # MS Windows build config
-  - cmd: 'systeminfo'
-  - cmd: 'set PATH=%PYTHON%;%PATH%'
-  - cmd: 'set PATH=C:\\Python38-x64\\Scripts;%PATH%'
-
-  # Config check
-  - 'python -V'
-
-test_script:
-  # GNU/Linux test
-  - sh: './test.sh'
-
-  # MS Windows test
-  - cmd: 'powershell .\test.ps1'
-
-after_test:
-  # Publish the coverage. The deps are not listed in the requirements file because they are only useful in the CI.
-  - sh: "if ((coverage)); then
-             pip install pyyaml coveralls;
-             coveralls;
-         fi"
+for:
+  # TEST PIPELINE
+  - matrix:
+      only:
+        - job_group: tests
+    install:
+      # GNU/Linux build config
+      - sh: 'lsb_release -a'
+      - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
+      - sh: 'echo $extras_pkg'
+      - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'   # This is needed for the doc build
+      # MS Windows build config
+      - cmd: 'systeminfo'
+      - cmd: 'set PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%'
+      # Shared
+      - git submodule update --init --recursive
+      - python -V                                                 # Check configuration
+    test_script:
+      # TODO: restore
+      - sh: export PYTHONPATH=.
+      - sh: pip install -r requirements.txt
+      - sh: python -m pyuavcan --help
+      #- sh:  './test.sh'
+      #- cmd: 'powershell .\test.ps1'
+    on_success:
+      - sh: |
+          if ((analysis))
+          then
+            pip install pyyaml coveralls  # Not listed in requirements.txt because they are only useful in the CI
+            coveralls
+          fi
+      - sh: |
+          if ((analysis))
+          then
+            wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.5.0.2216-linux.zip -O sonar.zip
+            unzip sonar.zip
+            export PATH="$(echo sonar-scanner*/bin):$PATH"
+            sonar-scanner -Dsonar.login=$SONARCLOUD_TOKEN
+          fi
+  # DEPLOY PIPELINE
+  - matrix:
+      only:
+        - job_name: deploy
+    branches:
+      only:
+        - master
+    install:
+      - git submodule update --init --recursive
+      - pip install -r requirements.txt
+    deploy_script:
+      - echo "https://${GIT_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
+      - git config --global credential.helper store
+      - git config --global user.email "devnull@uavcan.org"
+      - git config --global user.name  "Release Automation"
+      - ./release.sh

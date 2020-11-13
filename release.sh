@@ -1,8 +1,6 @@
 #!/bin/bash
-#
-# PyPI release automation.
+# PyPI release automation. This script can be invoked manually or from a CI pipeline.
 # https://gist.github.com/boppreh/ac7522b3a4ac46b4f6010eecddc57f21
-#
 
 set -o nounset
 
@@ -12,16 +10,18 @@ function die()
     exit 1
 }
 
-[[ "$(git rev-parse --abbrev-ref HEAD)" = 'master' ]]  || die "Can only release from the master branch."
-[[ -z "$(git diff)" ]]                                 || die "Please commit all changes, then try again."
-[[ -z "$(git log '@{u}..')" ]]                         || die "Please push all commits, then try again."
+python3 -m pip uninstall pyuavcan -y &> /dev/null  # Avoid conflicts
 
-./clean.sh ||\
-    die "Clean failed. Cleaning is required to prevent unnecessary files from being included in the release package."
+version=$(cat pyuavcan/VERSION)
+
+[[ -z "$(git diff)" ]]              || die "Commit all changes, then try again"
+[[ -z "$(git log '@{u}..')" ]]      || die "Push all commits, then try again"
+git tag -a "$version" -m "$version" || die "Could not tag the release. Did you forget to bump the version number?"
+
+./clean.sh || die "Clean failed. It is required to prevent unnecessary files from being included in the package."
 
 ./setup.py sdist bdist_wheel   || die "Execution of setup.py has failed."
 python3 -m twine upload dist/* || die "Twine upload has failed."
 ./clean.sh  # May fail, we don't care.
 
-version=$(cat pyuavcan/VERSION)
-(git tag -a "$version" -m "$version" && git push --tags) || die "Could not tag the release. Please do it manually."
+git push --tags || die "Could not push the new tag upstream. Please tag the release manually."
