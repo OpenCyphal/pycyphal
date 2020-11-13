@@ -57,7 +57,7 @@ class GeneratedPackageInfo:
 def generate_package(root_namespace_directory:        _AnyPath,
                      lookup_directories:              typing.Optional[typing.List[_AnyPath]] = None,
                      output_directory:                typing.Optional[_AnyPath] = None,
-                     allow_unregulated_fixed_port_id: bool = False) -> GeneratedPackageInfo:
+                     allow_unregulated_fixed_port_id: bool = False) -> typing.Optional[GeneratedPackageInfo]:
     """
     This function runs the DSDL compiler, converting a specified DSDL root namespace into a Python package.
     In the generated package, nested DSDL namespaces are represented as Python subpackages,
@@ -130,7 +130,8 @@ def generate_package(root_namespace_directory:        _AnyPath,
         data types with fixed port-ID. If you are not sure what it means, do not use it, and read the UAVCAN
         specification first. The default is False.
 
-    :return: An instance of :class:`GeneratedPackageInfo` describing the generated package.
+    :return: An instance of :class:`GeneratedPackageInfo` describing the generated package,
+        unless the root namespace is empty, in which case it's None.
 
     :raises: :class:`OSError` if required operations on the file system could not be performed;
         :class:`pydsdl.InvalidDefinitionError` if the source DSDL definitions are invalid;
@@ -185,6 +186,9 @@ def generate_package(root_namespace_directory:        _AnyPath,
     composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
                                             lookup_directories=list(map(str, lookup_directories or [])),
                                             allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
+    if not composite_types:
+        _logger.info('Root namespace directory %r does not contain DSDL definitions', root_namespace_directory)
+        return None
     root_namespace_name, = set(map(lambda x: x.root_namespace, composite_types))  # type: str,
     _logger.info('Read %d definitions from root namespace %r', len(composite_types), root_namespace_name)
 

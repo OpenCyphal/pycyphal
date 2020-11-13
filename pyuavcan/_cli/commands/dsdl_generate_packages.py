@@ -180,5 +180,6 @@ implications before using this option. If not sure, ask for advice at https://fo
                                                  lookup_directories=list(lookup_root_namespace_dirs),
                                                  output_directory=generated_packages_dir,
                                                  allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
-            out.append(gpi)
+            if gpi is not None:
+                out.append(gpi)
         return out
