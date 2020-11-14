@@ -148,6 +148,46 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def enable_monitoring(self, handler: MonitoringHandler) -> None:
+        """
+        If the user desires to perform low-level monitoring of the transport interface at the transport frame level
+        (e.g., UDP packets, CAN frames, etc.), this method is used to activate this feature.
+
+        This method puts the transport instance into the "monitoring mode" which does not interfere with its normal
+        operation but may dramatically increase the computing load due to the need to process every frame exchanged
+        over the network (not just frames that originate or terminate at the local node).
+        This usually involves reconfiguration of the local networking hardware (e.g., the network card may be put
+        into promiscuous mode, the CAN adapter will have its acceptance filters reconfigured to accept everything,
+        etc.).
+
+        The monitoring handler is invoked for every transmitted or received transport frame and, possibly, some
+        additional transport-implementation-specific events (e.g., hardware errors or state changes)
+        which are described in the specific transport implementation docs.
+        The temporal order of the events delivered to the user may be distorted, depending on the guarantees
+        provided by the hardware and its driver.
+        This means that if the network hardware sees TX frame A and then RX frame B separated by a very short time
+        interval, the user may occasionally see the sequence inverted as (B, A).
+
+        There may be an arbitrary number of monitoring handlers installed; when a new handler is installed, it is
+        added to the existing ones, if any.
+
+        If the transport does not support monitoring, this method will have no effect other than flipping the state
+        of :attr:`monitoring_enabled` from False to True. Technically, the monitoring protocol, as you can see,
+        does not have any requirements to the emitted events, so an implementation that pretends to enter
+        the monitoring mode while not actually doing anything other than updating that property is compliant.
+
+        Currently, it is not possible to disable monitoring. Once enabled, it will go on until the transport instance
+        is destroyed. This restriction may be lifted in a future release.
+
+        :param handler: A one-argument callable invoked to inform the user about transport-level events.
+            The type of the argument is :class:`object`, see transport-specific docs for the list of the possible
+            concrete types and what events they represent.
+            The callable may be invoked from a different thread so the user should ensure synchronization.
+            If the callable raises an exception, it is suppressed and logged.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def sample_statistics(self) -> TransportStatistics:
         """
         Samples the low-level transport stats.
@@ -169,6 +209,15 @@ class Transport(abc.ABC):
     def output_sessions(self) -> typing.Sequence[OutputSession]:
         """
         Immutable view of all output sessions that are currently open.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def monitoring_enabled(self) -> bool:
+        """
+        Whether this transport instance is currently operating in the monitoring mode with at least one monitor
+        handler installed. See :meth:`enable_monitoring` for details.
         """
         raise NotImplementedError
 
@@ -214,3 +263,6 @@ class Transport(abc.ABC):
         """
         return pyuavcan.util.repr_attributes(self, self.descriptor, self.protocol_parameters,
                                              local_node_id=self.local_node_id)
+
+
+MonitoringHandler = typing.Callable[[object], None]
