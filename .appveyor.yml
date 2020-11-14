@@ -57,18 +57,26 @@ for:
       - cmd: 'powershell .\test.ps1'
     on_success:
       - sh: |
+          echo "APPVEYOR_REPO_BRANCH:                   $APPVEYOR_REPO_BRANCH"
+          echo "APPVEYOR_PULL_REQUEST_NUMBER:           $APPVEYOR_PULL_REQUEST_NUMBER"
+          echo "APPVEYOR_PULL_REQUEST_HEAD_REPO_BRANCH: $APPVEYOR_PULL_REQUEST_HEAD_REPO_BRANCH"
+          echo "APPVEYOR_PULL_REQUEST_HEAD_COMMIT:      $APPVEYOR_PULL_REQUEST_HEAD_COMMIT"
+      - sh: |
           if ((analysis))
           then
             pip install pyyaml coveralls  # Not listed in requirements.txt because they are only useful in the CI
             coveralls
           fi
+      # Sonar cannot be executed both on a branch commit and on a PR commit because this results in a conflict.
       - sh: |
-          if ((analysis))
+          if ((analysis)) && [[ -n "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]]
           then
             wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.5.0.2216-linux.zip -O sonar.zip
             unzip sonar.zip
             export PATH="$(echo sonar-scanner*/bin):$PATH"
             sonar-scanner -Dsonar.login=$SONARCLOUD_TOKEN
+          else
+            echo "Sonar scan skipped -- not a pull request build."
           fi
   -
     matrix:
