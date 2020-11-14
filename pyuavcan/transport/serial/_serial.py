@@ -274,7 +274,8 @@ class SerialTransport(pyuavcan.transport.Transport):
         | was sent (the other frames are not timestamped).              |                                           |
         | The second tuple element is the list of frames of this        |                                           |
         | transfer, where each frame bears the timestamp of the         |                                           |
-        | outgoing transfer object.                                     |                                           |
+        | outgoing transfer object. If no frames could be sent due to   |                                           |
+        | an error, the timestamp may be None and the list is empty.    |                                           |
         +---------------------------------------------------------------+-------------------------------------------+
         | Any other event should be ignored for future compatibility.                                               |
         +---------------------------------------------------------------+-------------------------------------------+
@@ -336,6 +337,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         tx_ts: typing.Optional[pyuavcan.transport.Timestamp] = None
         self._ensure_not_closed()
         try:  # Jeez this is getting complex
+            num_sent = 0
             for fr in frames:
                 async with self._port_lock:       # TODO: the lock acquisition should be prioritized by frame priority!
                     min_buffer_size = len(fr.payload) * 3
@@ -364,10 +366,10 @@ class SerialTransport(pyuavcan.transport.Transport):
                 if num_written < len(compiled):
                     tx_ts = None  # Write failed
                     break
+                num_sent += 1
 
-                self._statistics.out_frames += 1
-
-                pyuavcan.util.broadcast(self._monitoring_handlers)((tx_ts, frames))
+            self._statistics.out_frames += num_sent
+            pyuavcan.util.broadcast(self._monitoring_handlers)((tx_ts, frames[:num_sent]))
         except Exception as ex:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(f'{self} is closed, transmission aborted.') from ex

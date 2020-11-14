@@ -288,7 +288,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 
         grownups = b"Aren't there any grownups at all? - No grownups!"
 
-        # The frame delimiter is needed to force new frame in the state machine.
+        # The frame delimiter is needed to force new frame into the state machine.
         tr.serial_port.write(grownups + bytes([SerialFrame.FRAME_DELIMITER_BYTE]))
         stats_reference.in_bytes += len(grownups) + 1
         stats_reference.in_out_of_band_bytes += len(grownups)
@@ -302,7 +302,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         print(tr.sample_statistics())
         assert tr.sample_statistics() == stats_reference
 
-        # The frame delimiter is needed to force new frame in the state machine.
+        # The frame delimiter is needed to force new frame into the state machine.
         tr.serial_port.write(bytes([0xFF, 0xFF, SerialFrame.FRAME_DELIMITER_BYTE]))
         stats_reference.in_bytes += 3
         stats_reference.in_out_of_band_bytes += 2
@@ -347,6 +347,164 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         _ = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
+
+
+@pytest.mark.asyncio    # type: ignore
+async def _unittest_serial_transport_monitoring(caplog: typing.Any) -> None:
+    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
+    from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
+    from pyuavcan.transport.serial import SerialFrame
+
+    get_monotonic = asyncio.get_event_loop().time
+
+    tr = SerialTransport(serial_port='loop://', local_node_id=42, mtu=1024, service_transfer_multiplier=2)
+    sft_capacity = 1024
+    payload_single = [_mem('qwertyui'), _mem('01234567')] * (sft_capacity // 16)
+    assert sum(map(len, payload_single)) == sft_capacity
+    payload_x3 = (payload_single * 3)[:-1]
+    payload_x3_size_bytes = sft_capacity * 3 - 8
+    assert sum(map(len, payload_x3)) == payload_x3_size_bytes
+
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None),
+                                        PayloadMetadata(10000))
+    client_requester = tr.get_output_session(
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210),
+        PayloadMetadata(10000)
+    )
+
+    events: typing.List[object] = []
+    events2: typing.List[object] = []
+    assert not tr.monitoring_enabled
+    tr.enable_monitoring(events.append)
+    tr.enable_monitoring(events2.append)
+    assert tr.monitoring_enabled
+    assert events == []
+    assert events2 == []
+
+    #
+    # Multi-frame message.
+    #
+    ts = Timestamp.now()
+    assert await broadcaster.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.LOW,
+                 transfer_id=777,
+                 fragmented_payload=payload_x3),
+        monotonic_deadline=get_monotonic() + 5.0
+    )
+    await asyncio.sleep(0.1)
+    assert events == events2
+    a, b, c, d = events                 # Send three -- one event, receive three -- three events.
+    assert isinstance(a, SerialFrame)
+    assert isinstance(b, SerialFrame)
+    assert isinstance(c, SerialFrame)
+    assert isinstance(d, tuple)
+    tx_ts, (tx_a, tx_b, tx_c) = d
+    assert isinstance(tx_ts, Timestamp)
+    assert isinstance(tx_a, SerialFrame)
+    assert isinstance(tx_b, SerialFrame)
+    assert isinstance(tx_c, SerialFrame)
+
+    assert a.transfer_id == 777
+    assert b.transfer_id == 777
+    assert c.transfer_id == 777
+    assert a.timestamp.monotonic >= ts.monotonic
+    assert b.timestamp.monotonic >= ts.monotonic
+    assert c.timestamp.monotonic >= ts.monotonic
+    assert a.index == 0
+    assert b.index == 1
+    assert c.index == 2
+    assert not a.end_of_transfer
+    assert not b.end_of_transfer
+    assert c.end_of_transfer
+
+    assert tx_ts.monotonic >= ts.monotonic
+    assert tx_a.timestamp == ts
+    assert tx_b.timestamp == ts
+    assert tx_c.timestamp == ts
+    assert tx_a.transfer_id == 777
+    assert tx_b.transfer_id == 777
+    assert tx_c.transfer_id == 777
+    assert tx_a.timestamp.monotonic >= ts.monotonic
+    assert tx_c.timestamp.monotonic >= ts.monotonic
+    assert tx_b.timestamp.monotonic >= ts.monotonic
+    assert tx_a.index == 0
+    assert tx_b.index == 1
+    assert tx_c.index == 2
+    assert not tx_a.end_of_transfer
+    assert not tx_b.end_of_transfer
+    assert tx_c.end_of_transfer
+
+    events.clear()
+    events2.clear()
+
+    #
+    # Single-frame service request with dual frame duplication.
+    #
+    ts = Timestamp.now()
+    assert await client_requester.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.HIGH,
+                 transfer_id=888,
+                 fragmented_payload=payload_single),
+        monotonic_deadline=get_monotonic() + 5.0
+    )
+    await asyncio.sleep(0.1)
+    assert events == events2
+    # Send two -- two events, receive two -- two events.
+    # Sorting is required because the order of the two events in the middle is not defined: the arrival event
+    # may or may not be registered before the emission event depending on how the serial loopback is operating.
+    a, b, d, d2 = sorted(events, key=lambda x: not isinstance(x, SerialFrame))
+    assert isinstance(a, SerialFrame)
+    assert isinstance(b, SerialFrame)
+    assert isinstance(d, tuple)
+    tx_ts, (tx_x,) = d
+    assert isinstance(tx_ts, Timestamp)
+    assert isinstance(tx_x, SerialFrame)
+    tx_ts2, (tx_y,) = d2
+    assert isinstance(tx_ts2, Timestamp)
+    assert isinstance(tx_y, SerialFrame)
+
+    assert a.transfer_id == 888
+    assert b.transfer_id == 888
+    assert a.timestamp.monotonic >= ts.monotonic
+    assert b.timestamp.monotonic >= ts.monotonic
+    assert a.index == 0
+    assert b.index == 0
+    assert a.end_of_transfer
+    assert b.end_of_transfer
+
+    assert tx_ts.monotonic >= ts.monotonic
+    assert tx_ts.monotonic >= ts.monotonic
+    assert tx_x.timestamp == ts
+    assert tx_y.timestamp == ts
+    assert tx_x.transfer_id == 888
+    assert tx_y.transfer_id == 888
+    assert tx_x.timestamp.monotonic >= ts.monotonic
+    assert tx_y.timestamp.monotonic >= ts.monotonic
+    assert tx_x.index == 0
+    assert tx_y.index == 0
+    assert tx_x.end_of_transfer
+    assert tx_y.end_of_transfer
+
+    events.clear()
+    events2.clear()
+
+    #
+    # Out-of-band data.
+    #
+    grownups = b"Aren't there any grownups at all? - No grownups!"
+    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.serial.__name__):
+        # The frame delimiter is needed to force new frame into the state machine.
+        tr.serial_port.write(grownups + bytes([SerialFrame.FRAME_DELIMITER_BYTE]))
+        await asyncio.sleep(1)
+    assert events == events2
+    oob, = events
+    assert isinstance(oob, memoryview)
+    assert bytes(oob) == grownups  # The delimiter is (responsibly) consumed by the parser. Bye bye delimiter.
+
+    events.clear()
+    events2.clear()
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
