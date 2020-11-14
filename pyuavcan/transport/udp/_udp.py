@@ -166,6 +166,8 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
+        self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
+
         self._closed = False
         self._statistics = UDPTransportStatistics()
 
@@ -234,6 +236,16 @@ class UDPTransport(pyuavcan.transport.Transport):
         assert isinstance(out, UDPOutputSession)
         assert out.specifier == specifier
         return out
+
+    def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
+        """
+        Monitoring is not implemented yet -- the handlers are never invoked.
+        """
+        self._monitoring_handlers.append(handler)
+
+    @property
+    def monitoring_enabled(self) -> bool:
+        return len(self._monitoring_handlers) > 0
 
     def sample_statistics(self) -> UDPTransportStatistics:
         return copy.copy(self._statistics)

@@ -92,6 +92,8 @@ class CANTransport(pyuavcan.transport.Transport):
 
         self._last_filter_configuration_set: typing.Optional[typing.Sequence[FilterConfiguration]] = None
 
+        self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
+
         self._frame_stats = CANTransportStatistics()
 
         if self._local_node_id is not None and not (0 <= self._local_node_id <= CANID.NODE_ID_MASK):
@@ -225,6 +227,16 @@ class CANTransport(pyuavcan.transport.Transport):
             # loopback frames even if there are no input sessions in use.
             self._reconfigure_acceptance_filters()
         return session
+
+    def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
+        """
+        Monitoring is not implemented yet -- the handlers are never invoked.
+        """
+        self._monitoring_handlers.append(handler)
+
+    @property
+    def monitoring_enabled(self) -> bool:
+        return len(self._monitoring_handlers) > 0
 
     async def _do_send_until(self, frames: typing.Iterable[UAVCANFrame], monotonic_deadline: float) -> bool:
         """
