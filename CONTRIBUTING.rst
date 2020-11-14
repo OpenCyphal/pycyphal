@@ -248,6 +248,18 @@ On GNU/Linux, the amount of memory available for the test process is artificiall
 to catch possible memory hogs (like https://github.com/UAVCAN/pydsdl/issues/23 ).
 See ``conftest.py`` for details.
 
+Supporting newer versions of Python
+...................................
+
+Normally, this should be done a few months after a new version of CPython is released:
+
+1. Add a new job in the CI/CD pipeline for the new Python version.
+2. Update the CD configuration to make sure that the wheels are built using the newest version of Python.
+3. Update the classifiers in ``setup.cfg``.
+4. Bump the version number using the ``.dev`` suffix to indicate that it is not release-ready until tested.
+
+If the CI/CD pipelines pass, you are all set.
+
 
 Debugging
 ---------
