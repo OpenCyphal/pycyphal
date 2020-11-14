@@ -281,12 +281,26 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert rx.transfer_id == 6
 
     #
+    # Test monitoring.
+    #
+    tr_a.enable_monitoring(lambda _x: None)
+    assert all(x.monitoring_enabled for x in tr_a.inferiors)
+    assert tr_a.monitoring_enabled
+
+    assert not tr_b.monitoring_enabled                      # Initial state.
+    tr_b.inferiors[0].enable_monitoring(lambda _x: None)    # Enable manually on an inferior
+    assert tr_b.monitoring_enabled                          # Yup, the state is reflected here.
+
+    #
     # Termination.
     #
     tr_a.close()
     tr_a.close()  # Idempotency
     tr_b.close()
     tr_b.close()  # Idempotency
+
+    assert not tr_a.monitoring_enabled  # Default state when no inferiors.
+    assert not tr_b.monitoring_enabled
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):  # Make sure the inferiors are closed.
         udp_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)

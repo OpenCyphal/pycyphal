@@ -136,6 +136,16 @@ class RedundantTransport(pyuavcan.transport.Transport):
         self._check_matrix_consistency()
         return out
 
+    def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
+        """
+        Invokes :class:`pyuavcan.transport.Transport.enable_monitoring` on each inferior with the provided handler.
+        If at least one inferior raises an exception, it is propagated immediately and the remaining inferiors
+        will remain in an inconsistent state.
+        If a different error handling policy is desired, configure the inferiors manually instead of using this method.
+        """
+        for c in self._cols:
+            c.enable_monitoring(handler)
+
     def sample_statistics(self) -> RedundantTransportStatistics:
         return RedundantTransportStatistics(
             inferiors=[t.sample_statistics() for t in self._cols]
@@ -148,6 +158,15 @@ class RedundantTransport(pyuavcan.transport.Transport):
     @property
     def output_sessions(self) -> typing.Sequence[RedundantOutputSession]:
         return [s for s in self._rows.values() if isinstance(s, RedundantOutputSession)]
+
+    @property
+    def monitoring_enabled(self) -> bool:
+        """
+        The value is True iff there is at least one inferior and monitoring is enabled for at least one inferior.
+        """
+        if len(self._cols) > 0:
+            return any(c.monitoring_enabled for c in self._cols)
+        return False  # Default state.
 
     @property
     def descriptor(self) -> str:
