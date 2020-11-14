@@ -14,7 +14,7 @@ from ._base import SerialSession
 
 
 #: Returns the transmission timestamp.
-SendHandler = typing.Callable[[typing.Iterable[SerialFrame], float],
+SendHandler = typing.Callable[[typing.Sequence[SerialFrame], float],
                               typing.Awaitable[typing.Optional[pyuavcan.transport.Timestamp]]]
 
 _logger = logging.getLogger(__name__)
@@ -155,7 +155,7 @@ def _unittest_output_session() -> None:
     last_monotonic_deadline = 0.0
     finalized = False
 
-    async def do_send(frames: typing.Iterable[SerialFrame], monotonic_deadline: float) -> typing.Optional[Timestamp]:
+    async def do_send(frames: typing.Sequence[SerialFrame], monotonic_deadline: float) -> typing.Optional[Timestamp]:
         nonlocal last_sent_frames
         nonlocal last_monotonic_deadline
         last_sent_frames = list(frames)

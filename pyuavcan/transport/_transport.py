@@ -161,7 +161,7 @@ class Transport(abc.ABC):
         etc.).
 
         The monitoring handler is invoked for every transmitted or received transport frame and, possibly, some
-        additional transport-implementation-specific events (e.g., hardware errors or state changes)
+        additional transport-implementation-specific events (e.g., network errors or hardware state changes)
         which are described in the specific transport implementation docs.
         The temporal order of the events delivered to the user may be distorted, depending on the guarantees
         provided by the hardware and its driver.
@@ -175,6 +175,10 @@ class Transport(abc.ABC):
         of :attr:`monitoring_enabled` from False to True. Technically, the monitoring protocol, as you can see,
         does not have any requirements to the emitted events, so an implementation that pretends to enter
         the monitoring mode while not actually doing anything other than updating that property is compliant.
+
+        Since monitoring reflects actual network events, deterministic data loss mitigation enabled on the
+        local node will make the monitor emit duplicate frames for outgoing transfers (although this is probably
+        obvious enough without this elaboration).
 
         Currently, it is not possible to disable monitoring. Once enabled, it will go on until the transport instance
         is destroyed. This restriction may be lifted in a future release.

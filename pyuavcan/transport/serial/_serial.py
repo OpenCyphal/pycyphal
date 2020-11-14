@@ -135,6 +135,8 @@ class SerialTransport(pyuavcan.transport.Transport):
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, SerialInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, SerialOutputSession] = {}
 
+        self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
+
         self._statistics = SerialTransportStatistics()
 
         if not isinstance(serial_port, serial.SerialBase):
@@ -210,7 +212,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
             if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) \
                     and self._service_transfer_multiplier > 1:
-                async def send_transfer(frames: typing.Iterable[SerialFrame],
+                async def send_transfer(frames: typing.Sequence[SerialFrame],
                                         monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.Timestamp]:
                     frames = list(frames)
                     first_tx_ts: typing.Optional[pyuavcan.transport.Timestamp] = None
@@ -254,6 +256,35 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
 
+    def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
+        """
+        The monitoring handler(s) will receive the following events, possibly from a different thread (use locks):
+
+        +---------------------------------------------------------------+-------------------------------------------+
+        | Event                                                         | Argument type                             |
+        +===============================================================+===========================================+
+        | Frame received. Timestamp reflects the                        | :class:`SerialFrame`                      |
+        | time when the first byte was received.                        |                                           |
+        +---------------------------------------------------------------+-------------------------------------------+
+        | Out-of-band data or a malformed frame                         | :class:`memoryview`                       |
+        | received. See :class:`StreamParser`.                          |                                           |
+        +---------------------------------------------------------------+-------------------------------------------+
+        | Outgoing transfer sent by the local node.                     | (:class:`pyuavcan.transport.Timestamp`,   |
+        | The first tuple element is the timestamp when the first frame | [:class:`SerialFrame`])                   |
+        | was sent (the other frames are not timestamped).              |                                           |
+        | The second tuple element is the list of frames of this        |                                           |
+        | transfer, where each frame bears the timestamp of the         |                                           |
+        | outgoing transfer object.                                     |                                           |
+        +---------------------------------------------------------------+-------------------------------------------+
+        | Any other event should be ignored for future compatibility.                                               |
+        +---------------------------------------------------------------+-------------------------------------------+
+        """
+        self._monitoring_handlers.append(handler)
+
+    @property
+    def monitoring_enabled(self) -> bool:
+        return len(self._monitoring_handlers) > 0
+
     def sample_statistics(self) -> SerialTransportStatistics:
         return copy.copy(self._statistics)
 
@@ -293,7 +324,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert self._statistics.in_bytes <= in_bytes_count
         self._statistics.in_bytes = int(in_bytes_count)
 
-    async def _send_transfer(self, frames: typing.Iterable[SerialFrame], monotonic_deadline: float) \
+    async def _send_transfer(self, frames: typing.Sequence[SerialFrame], monotonic_deadline: float) \
             -> typing.Optional[pyuavcan.transport.Timestamp]:
         """
         Emits the frames belonging to the same transfer, returns the first frame transmission timestamp.
@@ -335,6 +366,8 @@ class SerialTransport(pyuavcan.transport.Transport):
                     break
 
                 self._statistics.out_frames += 1
+
+                pyuavcan.util.broadcast(self._monitoring_handlers)((tx_ts, frames))
         except Exception as ex:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(f'{self} is closed, transmission aborted.') from ex
@@ -352,6 +385,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         def callback(item: typing.Union[SerialFrame, memoryview]) -> None:
             self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, item, in_bytes_count)
+            pyuavcan.util.broadcast(self._monitoring_handlers)(item)
 
         try:
             parser = StreamParser(callback, max(self.VALID_MTU_RANGE))
