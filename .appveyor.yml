@@ -67,9 +67,9 @@ for:
             pip install pyyaml coveralls  # Not listed in requirements.txt because they are only useful in the CI
             coveralls
           fi
-      # Sonar cannot be executed both on a branch commit and on a PR commit because this results in a conflict.
+      # Sonar scanner unconditionally fails on PR builds with a NullPointerException, so don't run it there.
       - sh: |
-          if ((analysis)) && [[ -n "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]]
+          if ((analysis)) && [[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]]
           then
             wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.5.0.2216-linux.zip -O sonar.zip
             unzip sonar.zip
