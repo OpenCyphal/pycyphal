@@ -285,8 +285,4 @@ class NodeTracker:
     def _notify(self, node_id: int, old_entry: typing.Optional[Entry], new_entry: typing.Optional[Entry]) -> None:
         assert isinstance(old_entry, Entry) or old_entry is None
         assert isinstance(new_entry, Entry) or new_entry is None
-        for eh in self._update_handlers:
-            try:
-                eh(node_id, old_entry, new_entry)
-            except Exception as ex:
-                _logger.exception(f'Unhandled exception suppressed in handler {eh}: {ex}')
+        pyuavcan.util.broadcast(self._update_handlers)(node_id, old_entry, new_entry)

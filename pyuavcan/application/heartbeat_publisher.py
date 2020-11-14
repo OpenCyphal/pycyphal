@@ -221,11 +221,7 @@ class HeartbeatPublisher:
             pass
 
     def _call_pre_heartbeat_handlers(self) -> None:
-        for fun in self._pre_heartbeat_handlers:
-            try:
-                fun()
-            except Exception as ex:
-                _logger.exception('%s got an unhandled exception from the pre-heartbeat handler: %s', self, ex)
+        pyuavcan.util.broadcast(self._pre_heartbeat_handlers)()
 
     async def _handle_received_heartbeat(self, msg: Heartbeat, metadata: pyuavcan.transport.TransferFrom) -> None:
         local_node_id = self._presentation.transport.local_node_id
