@@ -7,11 +7,11 @@ environment:
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
       PYTHON: 'C:\\Python39-x64'
-    -
-      job_group: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
-      PYTHON: '3.9'
-      analysis: 1    # Always perform analysis on the latest Python version on a GNU/Linux worker.
+#    -                        TODO FIXME PUT v3.9 BACK WHEN THIS IS FIXED: https://github.com/appveyor/ci/issues/3570
+#      job_group: tests
+#      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+#      PYTHON: '3.9'
+#      analysis: 1    # Always perform analysis on the latest Python version on a GNU/Linux worker.
     -
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
