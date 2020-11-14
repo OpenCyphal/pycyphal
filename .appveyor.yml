@@ -89,7 +89,8 @@ for:
       - git submodule update --init --recursive
       - pip install -r requirements.txt
     deploy_script:
-      - '[[ "$APPVEYOR_REPO_BRANCH" == "master" ]] || exit 1'
+      # Ensure we deploy only from master, not from PR builds.
+      - '[[ "$APPVEYOR_REPO_BRANCH" == "master" ]] && [[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]] || exit 1'
       - echo "https://${GIT_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
       - git config --global credential.helper store
       - git config --global user.email "devnull@uavcan.org"
