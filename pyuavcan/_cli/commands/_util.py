@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import re
 import typing
 import logging
 import decimal
@@ -12,33 +13,22 @@ import pyuavcan.dsdl
 from .dsdl_generate_packages import DSDLGeneratePackagesCommand
 
 
+_NAME_COMPONENT_SEPARATOR = '.'
+
+
 _logger = logging.getLogger(__name__)
 
 
 def construct_port_id_and_type(spec: str) -> typing.Tuple[int, typing.Type[pyuavcan.dsdl.CompositeObject]]:
-    """
+    r"""
     Parses a data specifier string of the form ``[port_id.]full_data_type_name.major_version.minor_version``.
+    Name separators may be replaced with ``/`` or ``\`` for compatibility with file system paths;
+    the version number separators may also be underscores for convenience.
     Raises ValueError, possibly with suggestions, if such type is non-reachable.
     """
-    components = spec.strip().split('.')
-
-    # If the first component is an integer, it's the port ID.
-    try:
-        port_id: typing.Optional[int] = int(components[0], 0)
-        components = components[1:]
-    except ValueError:
-        port_id = None
-
-    # Segment the rest of the string.
-    try:
-        major, minor = int(components[-2]), int(components[-1])
-        name_components = components[:-2]
-        if len(name_components) < 2:
-            raise ValueError
-        namespace_components, short_name = name_components[:-1], name_components[-1]
-    except Exception:
-        raise ValueError(f'Malformed data spec: {spec!r}') from None
-
+    port_id, full_name, major, minor = _parse_data_spec(spec)
+    name_components = full_name.split(_NAME_COMPONENT_SEPARATOR)
+    namespace_components, short_name = name_components[:-1], name_components[-1]
     _logger.debug('Parsed data spec %r: port_id=%r, namespace_components=%r, short_name=%r, major=%r, minor=%r',
                   spec, port_id, namespace_components, short_name, major, minor)
 
@@ -89,3 +79,53 @@ def convert_transfer_metadata_to_builtin(transfer: pyuavcan.transport.TransferFr
 
 
 _MICRO = decimal.Decimal('0.000001')
+
+_RE_SPLIT = re.compile(
+    r'^(?:(\d+)\.)?((?:[a-zA-Z_][a-zA-Z0-9_]*)(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)[_.](\d+)[_.](\d+)$'
+)
+"""
+Splits ``123.ns.Type.123.45`` into ``('123', 'ns.Type', '123', '45')``.
+Splits     ``ns.Type.123.45`` into ``(None, 'ns.Type', '123', '45')``.
+The version separators (the last two) may be underscores.
+"""
+
+
+def _parse_data_spec(spec: str) -> typing.Tuple[typing.Optional[int], str, int, int]:
+    r"""
+    Transform the provided data spec into: [port-ID], full name, major version, minor version.
+    Component separators may be ``/`` or ``\``. Version number separators (the last two) may also be underscores.
+    Raises ValueError if non-compliant.
+    """
+    spec = spec.strip().replace('/', _NAME_COMPONENT_SEPARATOR).replace('\\', _NAME_COMPONENT_SEPARATOR)
+    match = _RE_SPLIT.match(spec)
+    if match is None:
+        raise ValueError(f'Malformed data spec: {spec!r}')
+    frag_port_id, frag_full_name, frag_major, frag_minor = match.groups()
+    return (int(frag_port_id) if frag_port_id is not None else None), frag_full_name, int(frag_major), int(frag_minor)
+
+
+def _unittest_parse_data_spec() -> None:
+    import pytest
+
+    assert (123, 'ns.Type', 12, 34) == _parse_data_spec(' 123.ns.Type.12.34 ')
+    assert (123, 'ns.Type', 12, 34) == _parse_data_spec('123.ns.Type_12.34')
+    assert (123, 'ns.Type', 12, 34) == _parse_data_spec('123.ns/Type.12_34')
+    assert (123, 'ns.Type', 12, 34) == _parse_data_spec('123.ns.Type_12_34')
+    assert (123, 'ns.Type', 12, 34) == _parse_data_spec(r'123\ns\Type_12_34 ')
+
+    assert (None, 'ns.Type', 12, 34) == _parse_data_spec('ns.Type.12.34 ')
+    assert (123, 'Type', 12, 34) == _parse_data_spec('123.Type.12.34')
+    assert (None, 'Type', 12, 34) == _parse_data_spec('Type.12.34')
+    assert (123, 'ns0.sub.Type0', 0, 1) == _parse_data_spec('123.ns0.sub.Type0.0.1')
+    assert (None, 'ns0.sub.Type0', 255, 255) == _parse_data_spec(r'ns0/sub\Type0.255.255')
+
+    with pytest.raises(ValueError):
+        _parse_data_spec('123.ns.Type.12')
+    with pytest.raises(ValueError):
+        _parse_data_spec('123.ns.Type.12.43.56')
+    with pytest.raises(ValueError):
+        _parse_data_spec('ns.Type.12')
+    with pytest.raises(ValueError):
+        _parse_data_spec('ns.Type.12.43.56')
+    with pytest.raises(ValueError):
+        _parse_data_spec('123.ns.0Type.12.43')
