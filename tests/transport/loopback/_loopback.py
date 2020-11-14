@@ -147,6 +147,22 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
 
     assert None is await inp_42.receive_until(0)
 
+    mon_events: typing.List[object] = []
+    mon_events2: typing.List[object] = []
+    tr.enable_monitoring(mon_events.append)
+    tr.enable_monitoring(mon_events2.append)
+    assert await out_bc.send_until(pyuavcan.transport.Transfer(
+        timestamp=pyuavcan.transport.Timestamp.now(),
+        priority=pyuavcan.transport.Priority.IMMEDIATE,
+        transfer_id=200,
+        fragmented_payload=[memoryview(b'Hello world!')],
+    ), tr.loop.time() + 1.0)
+    rx = await inp_42.receive_until(0)
+    assert rx is not None
+    assert rx.transfer_id == 200 % 32
+    assert mon_events == [rx]
+    assert mon_events2 == [rx]
+
     assert len(tr.input_sessions) == 2
     assert len(tr.output_sessions) == 2
     tr.close()

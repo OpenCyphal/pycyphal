@@ -8,7 +8,7 @@
 The util package contains various entities that are commonly useful in PyUAVCAN-based applications.
 """
 
-from ._broadcast import broadcast
+from ._broadcast import broadcast as broadcast
 
 from ._introspect import import_submodules as import_submodules
 from ._introspect import iter_descendants as iter_descendants

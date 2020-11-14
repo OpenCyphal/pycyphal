@@ -33,7 +33,7 @@ def broadcast(functions: typing.Iterable[typing.Callable[..., R]]) \
     >>> broadcast([])()
     []
     """
-    def delegate(*args, **kwargs) -> typing.List[typing.Union[R, Exception]]:
+    def delegate(*args: typing.Any, **kwargs: typing.Any) -> typing.List[typing.Union[R, Exception]]:
         out: typing.List[typing.Union[R, Exception]] = []
         for fn in functions:
             try:

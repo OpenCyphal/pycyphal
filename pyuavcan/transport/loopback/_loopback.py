@@ -9,6 +9,7 @@ import asyncio
 import dataclasses
 
 import pyuavcan.transport
+import pyuavcan.util
 from ._input_session import LoopbackInputSession
 from ._output_session import LoopbackOutputSession
 
@@ -34,6 +35,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         self._local_node_id = int(local_node_id) if local_node_id is not None else None
         self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
         self._output_sessions: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, LoopbackOutputSession] = {}
+        self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
         # Unlimited protocol capabilities by default.
         self._protocol_parameters = pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=2 ** 64,
@@ -105,6 +107,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                     fragmented_payload=tr.fragmented_payload,
                     source_node_id=self.local_node_id,
                 )
+                pyuavcan.util.broadcast(self._monitoring_handlers)(tr_from)
                 for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                     try:
                         destination_session = self._input_sessions[
@@ -127,6 +130,12 @@ class LoopbackTransport(pyuavcan.transport.Transport):
             self._output_sessions[specifier] = sess
         return sess
 
+    def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
+        """
+        The monitoring handler(s) will receive :class:`pyuavcan.transport.TransferFrom` for each exchanged transfer.
+        """
+        self._monitoring_handlers.append(handler)
+
     def sample_statistics(self) -> LoopbackTransportStatistics:
         return LoopbackTransportStatistics()
 
@@ -137,6 +146,10 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     @property
     def output_sessions(self) -> typing.Sequence[LoopbackOutputSession]:
         return list(self._output_sessions.values())
+
+    @property
+    def monitoring_enabled(self) -> bool:
+        return len(self._monitoring_handlers) > 0
 
     @property
     def descriptor(self) -> str:
