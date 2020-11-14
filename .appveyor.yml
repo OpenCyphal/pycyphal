@@ -76,7 +76,7 @@ for:
             export PATH="$(echo sonar-scanner*/bin):$PATH"
             sonar-scanner -Dsonar.login=$SONARCLOUD_TOKEN
           else
-            echo "Sonar scan skipped -- not a pull request build."
+            echo "Sonar scan skipped."
           fi
   -
     matrix:
