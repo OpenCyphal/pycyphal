@@ -59,9 +59,12 @@ pyuavcan sub uavcan.node.Heartbeat.1.0
 A set of full message type names with version and optional subject-ID for each. The subject-ID can be omitted if a
 fixed one is defined for the data type. If multiple subjects are selected, a synchronizing subscription will be used,
 reporting received messages in synchronous groups.
+
+Forward or backward slashes can be used instead of "."; version numbers can be also separated using underscores.
+
 Examples:
     1234.uavcan.node.Heartbeat.1.0 (using subject-ID 1234)
-    uavcan.node.Heartbeat.1.0 (using the fixed subject-ID 7509)
+    uavcan/node/Heartbeat_1_0 (using the fixed subject-ID 7509, non-canonical notation)
 '''.strip())
         parser.add_argument(
             '--with-metadata', '-M',

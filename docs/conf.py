@@ -135,9 +135,10 @@ inheritance_edge_attrs = {
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
+    'pydsdl': ('https://pydsdl.readthedocs.io/en/stable/', None),
 }
 
-pygments_style = 'friendly'
+pygments_style = 'monokai'
 
 # -- Options for HTML output -------------------------------------------------
 

@@ -62,9 +62,11 @@ specified, nothing will be published, unless the local node is not anonymous. Pe
 node must publish heartbeat; this requirement is respected. Additionally, the recommended standard service
 uavcan.node.GetInfo is served.
 
+Forward or backward slashes can be used instead of "."; version numbers can be also separated using underscores.
+
 Examples:
     1234.uavcan.diagnostic.Record.1.1 '{"text": "Hello world!"}'
-    uavcan.diagnostic.Record.1.1 '{"text": "Hello world!"}'
+    uavcan/diagnostic/Record_1_1 '{"text": "Hello world!"}'
 '''.strip())
         parser.add_argument(
             '--period', '-P',

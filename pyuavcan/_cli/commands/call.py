@@ -67,9 +67,12 @@ transport-specific upper limit.
             help='''
 The full service type name with version and optional service-ID. The service-ID can be omitted if a fixed one is
 defined for the data type.
+
+Forward or backward slashes can be used instead of "."; version numbers can be also separated using underscores.
+
 Examples:
     123.uavcan.node.ExecuteCommand.1.1 (using service-ID 123)
-    uavcan.node.ExecuteCommand.1.1 (using the fixed service-ID 435)
+    uavcan/node/ExecuteCommand_1_1 (using the fixed service-ID 435, non-canonical notation)
 '''.strip())
         parser.add_argument(
             'field_spec',

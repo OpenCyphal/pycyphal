@@ -27,6 +27,7 @@
       <w>blin</w>
       <w>bools</w>
       <w>bufferless</w>
+      <w>byref</w>
       <w>bysource</w>
       <w>candump</w>
       <w>canfd</w>
@@ -131,6 +132,7 @@
       <w>noqa</w>
       <w>norecursedirs</w>
       <w>nosignatures</w>
+      <w>ntdll</w>
       <w>octothorp</w>
       <w>onboard</w>
       <w>packbits</w>
@@ -149,6 +151,7 @@
       <w>pydev</w>
       <w>pydsdl</w>
       <w>pydsdlgen</w>
+      <w>pygments</w>
       <w>pylint</w>
       <w>pyserial</w>
       <w>pytest</w>
@@ -229,6 +232,7 @@
       <w>uavcan</w>
       <w>uber</w>
       <w>udpros</w>
+      <w>ulong</w>
       <w>uname</w>
       <w>undisable</w>
       <w>undoc</w>

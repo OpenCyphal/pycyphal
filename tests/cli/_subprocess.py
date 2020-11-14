@@ -21,7 +21,9 @@ DEMO_DIR = pathlib.Path(__file__).absolute().parent.parent / 'demo'
 _logger = logging.getLogger(__name__)
 
 
-def run_process(*args: str, timeout: typing.Optional[float] = None) -> str:
+def run_process(*args: str,
+                timeout: typing.Optional[float] = None,
+                environment_variables: typing.Optional[typing.Dict[str, str]] = None) -> str:
     r"""
     This is a wrapper over :func:`subprocess.check_output`.
     It adds all directories containing runnable scripts (the CLI tool and the demos) to PATH to make them invokable.
@@ -30,6 +32,8 @@ def run_process(*args: str, timeout: typing.Optional[float] = None) -> str:
 
     :param timeout: Give up waiting if the command could not be completed in this much time and raise TimeoutExpired.
         No limit by default.
+
+    :param environment_variables: appends or overrides environment variables for the process.
 
     :return: stdout of the command.
 
@@ -40,22 +44,27 @@ def run_process(*args: str, timeout: typing.Optional[float] = None) -> str:
     """
     cmd = _make_process_args(*args)
     _logger.info('Running process with timeout=%s: %s', timeout if timeout is not None else 'inf', ' '.join(cmd))
+    env = _get_env()
+    if environment_variables:
+        env.update(environment_variables)
     # Can't use shell=True with timeout; see https://stackoverflow.com/questions/36952245/subprocess-timeout-failure
     stdout = subprocess.check_output(cmd,
                                      stderr=sys.stderr,
                                      timeout=timeout,
                                      encoding='utf8',
-                                     env=_get_env())
+                                     env=env)
     assert isinstance(stdout, str)
     return stdout
 
 
-def run_cli_tool(*args: str, timeout: typing.Optional[float] = None) -> str:
+def run_cli_tool(*args: str,
+                 timeout: typing.Optional[float] = None,
+                 environment_variables: typing.Optional[typing.Dict[str, str]] = None) -> str:
     """
     A wrapper over :func:`run_process` that runs the CLI tool with the specified arguments.
     """
     return run_process('python', '-m', 'pyuavcan', *args,
-                       timeout=timeout)
+                       timeout=timeout, environment_variables=environment_variables)
 
 
 class BackgroundChildProcess:

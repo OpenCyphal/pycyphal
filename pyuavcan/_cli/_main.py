@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import os
 import sys
 import time
 import typing
@@ -43,6 +44,11 @@ def _main_impl() -> int:
 
     _logger.debug('Available commands: %s', command_instances)
     _logger.debug('Parsed args: %s', args)
+
+    # It is a common use case when the user generates DSDL packages in the current directory and then runs the CLI
+    # tool in it. Do not require the user to manually export PYTHONPATH=. by extending it with the CWD automatically.
+    sys.path.append(os.getcwd())
+    _logger.debug('sys.path: %r', sys.path)
 
     if hasattr(args, 'func'):
         started_at = time.monotonic()

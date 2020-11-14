@@ -118,9 +118,10 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
         self._raise_if_closed()
 
         # Decompose the outgoing transfer into individual CAN frames
+        tid_mod = transfer.transfer_id % _frame.TRANSFER_ID_MODULO  # https://github.com/UAVCAN/pyuavcan/issues/120
         frames, auxiliary_iter = itertools.tee(_transfer_sender.serialize_transfer(
             compiled_identifier=can_id.compile(transfer.fragmented_payload),
-            transfer_id=transfer.transfer_id,
+            transfer_id=tid_mod,
             fragmented_payload=transfer.fragmented_payload,
             max_frame_payload_bytes=self._transport.protocol_parameters.mtu,
             loopback_first_frame=self._feedback_handler is not None
@@ -137,6 +138,7 @@ class CANOutputSession(_base.CANSession, pyuavcan.transport.OutputSession):
 
         # If a loopback was requested, register it in the pending loopback registry
         if first_frame.loopback:
+            assert tid_mod == first_frame.transfer_id
             key = _PendingFeedbackKey(compiled_identifier=first_frame.identifier,
                                       transfer_id_modulus=first_frame.transfer_id)
             try:

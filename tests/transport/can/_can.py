@@ -874,6 +874,45 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
+@pytest.mark.asyncio    # type: ignore
+async def _unittest_issue_120() -> None:
+    from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
+    from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
+    from .media.mock import MockMedia
+
+    asyncio.get_running_loop().slow_callback_duration = 1.0
+
+    peers: typing.Set[MockMedia] = set()
+    media = MockMedia(peers, 8, 10)
+    tr = can.CANTransport(media, 42)
+    assert tr.protocol_parameters.transfer_id_modulo == 32
+
+    feedback_collector = _FeedbackCollector()
+
+    ses = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), PayloadMetadata(1024))
+    ses.enable_feedback(feedback_collector.give)
+    for i in range(70):
+        ts = Timestamp.now()
+        assert await ses.send_until(Transfer(
+            timestamp=ts,
+            priority=Priority.SLOW,
+            transfer_id=i,
+            fragmented_payload=[_mem(str(i))] * 7  # Ensure both single- and multiframe
+        ), tr.loop.time() + 1.0)
+        await asyncio.sleep(0.1)
+        fb = feedback_collector.take()
+        assert fb.original_transfer_timestamp == ts
+
+    num_frames = (10 * 1) + (60 * 3)                                    # 10 single-frame, 60 multi-frame
+    assert 70 == ses.sample_statistics().transfers
+    assert num_frames == ses.sample_statistics().frames
+    assert 0 == tr.sample_statistics().in_frames                        # loopback not included here
+    assert 70 == tr.sample_statistics().in_frames_loopback              # only first frame of each transfer
+    assert num_frames == tr.sample_statistics().out_frames
+    assert 70 == tr.sample_statistics().out_frames_loopback             # only first frame of each transfer
+    assert 0 == tr.sample_statistics().lost_loopback_frames
+
+
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
     return memoryview(data.encode() if isinstance(data, str) else data)
 

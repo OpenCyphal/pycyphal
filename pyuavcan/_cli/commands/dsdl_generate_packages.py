@@ -84,7 +84,9 @@ This option can be specified more than once.
 Path to the directory where the generated packages will be stored. If not specified, defaults to the current working
 directory. Existing packages will be overwritten entirely.
 
-The destination directory should be in PYTHONPATH to use the generated packages.
+The destination directory should be in the Python module search path list (sys.path or PYTHONPATH) to use the
+generated packages. The CLI tool always appends the current working directory to the module search path list
+automatically, so in this case the user does not have to do anything manually.
 '''.strip())
         parser.add_argument(
             '--allow-unregulated-fixed-port-id',
@@ -172,6 +174,9 @@ implications before using this option. If not sure, ask for advice at https://fo
 
         out: typing.List[pyuavcan.dsdl.GeneratedPackageInfo] = []
         for ns in source_root_namespace_dirs:
+            if ns.name.startswith('.'):
+                _logger.debug('Skipping hidden directory %r', ns)
+                continue
             dest_dir = generated_packages_dir / ns.name
             _logger.info('Generating DSDL package %r from root namespace %r with lookup dirs: %r',
                          dest_dir, ns, list(map(str, lookup_root_namespace_dirs)))
@@ -180,5 +185,6 @@ implications before using this option. If not sure, ask for advice at https://fo
                                                  lookup_directories=list(lookup_root_namespace_dirs),
                                                  output_directory=generated_packages_dir,
                                                  allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
-            out.append(gpi)
+            if gpi is not None:
+                out.append(gpi)
         return out

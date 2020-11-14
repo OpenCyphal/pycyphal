@@ -185,7 +185,7 @@ def _unittest_can_transfer_reassembler_manual() -> None:
     assert proc(frm(2001, b'\x07\x08\x09\x0a\x0b\x0c\x0d', 1, False, False, False)) is None
     assert proc(frm(2002, b'\x0e\x0f\x10\x11\x12\x13\x14', 1, False, False, True)) is None
     assert proc(frm(2003, b'\x15\x16\x17\x18\x19\x1a\x1b', 1, False, False, False)) is None
-    assert proc(frm(2004, b'\x1c\x1d' b'\x35\x54', 1, False, True, True)) == trn(2000, 1, [
+    assert proc(frm(2004, b'\x1c\x1d\x35\x54',             1, False, True, True)) == trn(2000, 1, [
         b'\x00\x01\x02\x03\x04\x05\x06',
         b'\x07\x08\x09\x0a\x0b\x0c\x0d',
         b'\x0e\x0f\x10\x11\x12\x13\x14',
@@ -198,7 +198,7 @@ def _unittest_can_transfer_reassembler_manual() -> None:
     assert proc(frm(2011, b'\x07\x08\x09\x0a\x0b\x0c\x0d', 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
     assert proc(frm(2012, b'\x0e\x0f\x10\x11\x12\x13\x14', 1, False, False, True)) == err.UNEXPECTED_TRANSFER_ID
     assert proc(frm(2013, b'\x15\x16\x17\x18\x19\x1a\x1b', 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
-    assert proc(frm(2014, b'\x1c\x1d' b'\x35\x54', 1, False, True, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(frm(2014, b'\x1c\x1d\x35\x54',             1, False, True, True)) == err.UNEXPECTED_TRANSFER_ID
 
     # Correct reassembly where the CRC spills over into the next frame.
     assert proc(frm(2100, b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 9, True, False, True)) \
@@ -229,21 +229,21 @@ def _unittest_can_transfer_reassembler_manual() -> None:
     assert proc(frm(4002, b'\x0e\x0f\x10\x11\x12\x13\x14', 8, False, False, True)) == err.UNEXPECTED_TOGGLE_BIT
     assert proc(frm(4013, b'\x15\x16\x17\x18\x19\x1a\x1b', 8, False, False, False)) is None
     assert proc(frm(4003, b'\x15\x16\x17\x18\x19\x1a\x1b' * 2, 8, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT
-    assert proc(frm(4004, b'\x1c\x1d' b'\x35\x54', 8, False, True, True)) == trn(3500, 8, [
+    assert proc(frm(4004, b'\x1c\x1d\x35\x54',             8, False, True, True)) == trn(3500, 8, [
         b'\x00\x01\x02\x03\x04\x05\x06',
         b'\x07\x08\x09\x0a\x0b\x0c\x0d',
         b'\x0e\x0f\x10\x11\x12\x13\x14',
         b'\x15\x16\x17\x18\x19\x1a\x1b',
         b'\x1c\x1d',
     ])
-    assert proc(frm(4004, b'\x1c\x1d' b'\x35\x54', 8, False, True, True)) == err.UNEXPECTED_TRANSFER_ID  # Not toggle!
+    assert proc(frm(4004, b'\x1c\x1d\x35\x54', 8, False, True, True)) == err.UNEXPECTED_TRANSFER_ID  # Not toggle!
 
     # Transfer that is too large (above the configured limit) is implicitly truncated. Time goes back but it's fine.
     assert proc(frm(1000, b'0123456789abcdefghi', 0, True, False, True)) is None       # 19
     assert proc(frm(1001, b'0123456789abcdefghi', 0, False, False, False)) is None     # 38
     assert proc(frm(1001, b'0123456789abcdefghi', 0, False, False, True)) is None      # 57
     assert proc(frm(1001, b'0123456789abcdefghi', 0, False, False, False)) is None     # 76
-    assert proc(frm(1001, b':B', 0, False, True, True)) == trn(1000, 0, [
+    assert proc(frm(1001, b':B',                  0, False, True, True)) == trn(1000, 0, [
         b'0123456789abcdefghi',
         b'0123456789abcdefghi',
         b'0123456789abcdefghi',
@@ -251,9 +251,9 @@ def _unittest_can_transfer_reassembler_manual() -> None:
     ])
 
     # Transfer above the limit but accepted nevertheless because the overflow induced by the last frame is not checked.
-    assert proc(frm(1000, b'0123456789abcdefghi', 31, True, False, True)) is None       # 19
-    assert proc(frm(1001, b'0123456789abcdefghi', 31, False, False, False)) is None     # 38
-    assert proc(frm(1001, b'0123456789abcdefghi' b'\xa9\x72', 31, False, True, True)) == trn(1000, 31, [
+    assert proc(frm(1000, b'0123456789abcdefghi',         31, True, False, True)) is None       # 19
+    assert proc(frm(1001, b'0123456789abcdefghi',         31, False, False, False)) is None     # 38
+    assert proc(frm(1001, b'0123456789abcdefghi\xa9\x72', 31, False, True, True)) == trn(1000, 31, [
         b'0123456789abcdefghi',
         b'0123456789abcdefghi',
         b'0123456789abcdefghi',

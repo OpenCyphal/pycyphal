@@ -4,6 +4,8 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import os
+import sys
 import time
 import gzip
 import typing
@@ -57,7 +59,7 @@ class GeneratedPackageInfo:
 def generate_package(root_namespace_directory:        _AnyPath,
                      lookup_directories:              typing.Optional[typing.List[_AnyPath]] = None,
                      output_directory:                typing.Optional[_AnyPath] = None,
-                     allow_unregulated_fixed_port_id: bool = False) -> GeneratedPackageInfo:
+                     allow_unregulated_fixed_port_id: bool = False) -> typing.Optional[GeneratedPackageInfo]:
     """
     This function runs the DSDL compiler, converting a specified DSDL root namespace into a Python package.
     In the generated package, nested DSDL namespaces are represented as Python subpackages,
@@ -130,11 +132,12 @@ def generate_package(root_namespace_directory:        _AnyPath,
         data types with fixed port-ID. If you are not sure what it means, do not use it, and read the UAVCAN
         specification first. The default is False.
 
-    :return: An instance of :class:`GeneratedPackageInfo` describing the generated package.
+    :return: An instance of :class:`GeneratedPackageInfo` describing the generated package,
+        unless the root namespace is empty, in which case it's None.
 
     :raises: :class:`OSError` if required operations on the file system could not be performed;
-        ``pydsdl.InvalidDefinitionError`` if the source DSDL definitions are invalid;
-        ``pydsdl.InternalError`` if there is a bug in the DSDL processing front-end;
+        :class:`pydsdl.InvalidDefinitionError` if the source DSDL definitions are invalid;
+        :class:`pydsdl.InternalError` if there is a bug in the DSDL processing front-end;
         :class:`ValueError` if any of the arguments are otherwise invalid.
 
     The following table is an excerpt from the UAVCAN specification. Observe that *unregulated fixed port identifiers*
@@ -185,6 +188,9 @@ def generate_package(root_namespace_directory:        _AnyPath,
     composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
                                             lookup_directories=list(map(str, lookup_directories or [])),
                                             allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
+    if not composite_types:
+        _logger.info('Root namespace directory %r does not contain DSDL definitions', root_namespace_directory)
+        return None
     root_namespace_name, = set(map(lambda x: x.root_namespace, composite_types))  # type: str,
     _logger.info('Read %d definitions from root namespace %r', len(composite_types), root_namespace_name)
 
@@ -195,7 +201,7 @@ def generate_package(root_namespace_directory:        _AnyPath,
     }
 
     # Generate code
-    output_directory = pathlib.Path.cwd() if output_directory is None else output_directory
+    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory)
     language_context = nunavut.lang.LanguageContext('py', namespace_output_stem='__init__')
     root_ns = nunavut.build_namespace_tree(types=composite_types,
                                            root_namespace_dir=root_namespace_directory,
@@ -212,9 +218,26 @@ def generate_package(root_namespace_directory:        _AnyPath,
                                                     nunavut.postprocessors.TrimTrailingWhitespace(),
                                                 ])
     generator.generate_all()
-
     _logger.info('Generated %d types from the root namespace %r in %f.1 seconds',
                  len(composite_types), root_namespace_name, time.monotonic() - started_at)
+
+    # A minor UX improvement; see https://github.com/UAVCAN/pyuavcan/issues/115
+    for p in sys.path:
+        if pathlib.Path(p).resolve() == pathlib.Path(output_directory):
+            break
+    else:
+        if os.name == 'nt':
+            quick_fix = f'Quick fix: `$env:PYTHONPATH += ";{output_directory.resolve()}"`'
+        elif os.name == 'posix':
+            quick_fix = f'Quick fix: `export PYTHONPATH="{output_directory.resolve()}"`'
+        else:
+            quick_fix = 'Quick fix is not available for this OS.'
+        _logger.warning(
+            'Generated package is stored in %r, which is not in Python module search path list. '
+            'The package will fail to import unless you add the destination directory to sys.path or PYTHONPATH. %s',
+            str(output_directory), quick_fix,
+        )
+
     return GeneratedPackageInfo(path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),
                                 models=composite_types,
                                 name=root_namespace_name)

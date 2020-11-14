@@ -244,7 +244,7 @@ def _unittest_output_session() -> None:
     assert endpoint[0] == '127.100.0.2'
     assert rx_data == (
         b'\x00\x04\x00\x00\x00\x00\x00\x8040\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-        + b'one' b'two' b'three'
+        + b'one' + b'two' + b'three'
     )
     with raises(socket_.timeout):
         sock_rx.recvfrom(1000)
@@ -329,7 +329,7 @@ def _unittest_output_session() -> None:
     assert data_main_b == data_redundant_b
     assert data_main_a == (
         b'\x00\x07\x00\x00\x00\x00\x00\x001\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-        + b'one' b'two' b'three'[:-1]
+        + b'one' + b'two' + b'three'[:-1]
     )
     assert data_main_b == (
         b'\x00\x07\x00\x00\x01\x00\x00\x801\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
