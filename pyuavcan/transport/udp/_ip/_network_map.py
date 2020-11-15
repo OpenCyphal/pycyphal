@@ -10,6 +10,7 @@ import typing
 import socket
 import logging
 import pyuavcan.util
+from ._monitor import Packet, Monitor
 
 
 _logger = logging.getLogger(__name__)
@@ -43,11 +44,11 @@ class NetworkMap(abc.ABC):
         Use this factory to create new instances.
         """
         if ':' in ip_address:
-            from ._ipv6 import NetworkMapIPv6
-            return NetworkMapIPv6(ip_address)
+            from ._ipv6 import IPv6NetworkMap
+            return IPv6NetworkMap(ip_address)
         else:
-            from ._ipv4 import NetworkMapIPv4
-            return NetworkMapIPv4(ip_address)
+            from ._ipv4 import IPv4NetworkMap
+            return IPv4NetworkMap(ip_address)
 
     @property
     @abc.abstractmethod
@@ -134,6 +135,15 @@ class NetworkMap(abc.ABC):
         :param expect_broadcast: If True, the socket shall be able to accept broadcast datagrams.
             If False, acceptance of broadcast datagrams is possible but not guaranteed.
             This option enables certain optimizations depending on the underlying OS.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def make_monitor(self, handler: typing.Callable[[Packet], None]) -> Monitor:
+        """
+        Launch a new network monitor based on a raw socket (usually this requires special permissions).
+        The monitor will run in a separate thread, invoking the handler *directly from the worker thread*
+        whenever a UDP packet is received (regardless of whether it is related to UAVCAN/UDP).
         """
         raise NotImplementedError
 

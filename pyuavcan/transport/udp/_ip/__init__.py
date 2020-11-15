@@ -6,6 +6,6 @@
 
 from ._network_map import NetworkMap as NetworkMap
 
-from ._ipv4 import NetworkMapIPv4 as NetworkMapIPv4
-
-from ._ipv6 import NetworkMapIPv6 as NetworkMapIPv6
+from ._monitor import Packet as Packet
+from ._monitor import Endpoint as Endpoint
+from ._monitor import Monitor as Monitor

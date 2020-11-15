@@ -13,7 +13,7 @@ import pyuavcan
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
-from ._network_map import NetworkMap
+from ._ip import NetworkMap, Monitor, Packet
 from ._port_mapping import udp_port_from_data_specifier
 from ._demultiplexer import UDPDemultiplexer, UDPDemultiplexerStatistics
 
@@ -166,6 +166,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
+        self._monitor: typing.Optional[Monitor] = None
         self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
 
         self._closed = False
@@ -194,6 +195,9 @@ class UDPTransport(pyuavcan.transport.Transport):
                 s.close()
             except Exception as ex:  # pragma: no cover
                 _logger.exception('%s: Failed to close %r: %s', self, s, ex)
+        if self._monitor is not None:
+            self._monitor.close()
+            self._monitor = None
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.InputSessionSpecifier,
@@ -240,9 +244,14 @@ class UDPTransport(pyuavcan.transport.Transport):
     def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
         """
         Monitoring is not implemented yet -- the handlers are never invoked.
+
+        On GNU/Linux, network monitoring requires that either the process is executed by root,
+        or the raw packet capture capability ``CAP_NET_RAW`` is enabled.
+        For more info read ``man 7 capabilities`` and consider checking the docs for Wireshark/libpcap.
         """
-        if not self._monitoring_handlers:  # Enabling the monitoring is a one-time operation. Events are then broadcast.
-            pass
+        self._ensure_not_closed()
+        if self._monitor is None:
+            self._monitor = self._network_map.make_monitor(self._process_monitoring_packet)
         self._monitoring_handlers.append(handler)
 
     def sample_statistics(self) -> UDPTransportStatistics:
@@ -340,6 +349,10 @@ class UDPTransport(pyuavcan.transport.Transport):
                     demux.close()
                 finally:
                     del self._demultiplexer_registry[specifier.data_specifier]
+
+    def _process_monitoring_packet(self, packet: Packet) -> None:
+        """This handler may be invoked from a different thread (the monitor thread)."""
+        raise NotImplementedError
 
     def _ensure_not_closed(self) -> None:
         if self._closed:

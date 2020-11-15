@@ -6,18 +6,23 @@
 
 from __future__ import annotations
 import re
+import sys
+import time
 import errno
 import typing
 import socket
+import struct
 import logging
+import threading
 import pyuavcan
 from ._network_map import NetworkMap
+from ._monitor import Endpoint, Packet, Monitor
 
 
 _logger = logging.getLogger(__name__)
 
 
-class NetworkMapIPv4(NetworkMap):
+class IPv4NetworkMap(NetworkMap):
     """
     In IPv4 networks, the node-ID of zero cannot be used because it represents the subnet address;
     the maximum node-ID can only be used if it is not the same as the broadcast address for the subnet.
@@ -167,71 +172,103 @@ class NetworkMapIPv4(NetworkMap):
                       self, s, local_port, expect_broadcast)
         return s
 
+    def make_monitor(self, handler: typing.Callable[[Packet], None]) -> IPv4Monitor:
+        # http://www.enderunix.org/docs/en/rawipspoof/
+        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+        s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)       # Include raw IP headers with received data.
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)     # Receive broadcast IP packets, too.
+
+        if sys.platform.startswith('win32'):
+            s.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)            # Enable promiscuous mode on the interface.
+
+        return IPv4Monitor(s, handler)
+
     def __str__(self) -> str:
         return str(self._local)
 
 
-def _unittest_network_map_ipv4() -> None:
-    from pytest import raises
+class IPv4Monitor(Monitor):
+    """
+    A very basic background worker continuously reading IP packets from the raw socket, filtering the UDP ones,
+    and emitting them via the callback (yup, right from the worker thread).
+    """
 
-    with raises(ValueError):
-        NetworkMap.new('127.0.0.1/32')          # Bad network mask.
+    _MTU = 2 ** 16
 
-    with raises(ValueError):
-        NetworkMap.new('127.0.0.1/0')           # Bad network mask.
+    _IP_V4_FORMAT = struct.Struct('!BB HHH BB H II')
+    _UDP_V4_FORMAT = struct.Struct('!HH HH')
 
-    with raises(ValueError):
-        NetworkMap.new('127.0.0.1')             # No network mask.
+    _PROTO_UDP = 0x11
 
-    with raises(pyuavcan.transport.InvalidMediaConfigurationError):
-        NetworkMap.new('10.0.254.254/24')       # Suppose that the test machine does not have such interface.
+    def __init__(self, s: socket.socket, handler: typing.Callable[[Packet], None]) -> None:
+        self._sock = s
+        self._handler = handler
+        self._keep_going = True
+        self._ip_cache: typing.Dict[int, str] = {}
+        self._thread = threading.Thread(target=self._thread_function, name='udp_ipv4_monitor', daemon=True)
+        self._thread.start()
 
-    nm = NetworkMap.new('127.254.254.254/8')    # Maps to an invalid local node-ID which means anonymous.
-    assert nm.local_node_id is None
+    def close(self) -> None:
+        self._keep_going = False
+        self._sock.close()
 
-    nm = NetworkMap.new('192.168.0.255/24')    # Maps to an invalid local node-ID which means anonymous.
-    assert nm.local_node_id is None
+    def _transform_address(self, input: int) -> str:
+        try:
+            return self._ip_cache[input]
+        except LookupError:
+            self._ip_cache[input] = str(IPv4Address(input))
+        return self._ip_cache[input]
 
-    nm = NetworkMap.new(' 127.123.1.0/16\t')
-    assert str(nm) == '127.123.1.0/16'
-    assert nm.max_nodes == 2 ** NetworkMap.NODE_ID_BIT_LENGTH  # Full capacity available.
-    assert nm.local_node_id == 256
-    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1
-    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1  # From cache
-    assert nm.map_ip_address_to_node_id('127.123.254.254') is None
-    assert nm.map_ip_address_to_node_id('127.254.254.254') is None
+    def _try_parse(self, data: memoryview) -> typing.Optional[typing.Tuple[Endpoint, Endpoint, memoryview]]:
+        ver_ihl, dscp_ecn, ip_length, ident, flags_frag_off, ttl, proto, hdr_chk, src_adr, dst_adr = \
+            IPv4Monitor._IP_V4_FORMAT.unpack_from(data)
+        ver, ihl = ver_ihl >> 4, ver_ihl & 0xF
+        ip_header_size = ihl * 4
+        udp_ip_header_size = ip_header_size + 8
+        if ver != 4 or proto != IPv4Monitor._PROTO_UDP or len(data) < udp_ip_header_size:
+            return None
+        src_port, dst_port, udp_length, udp_chk = IPv4Monitor._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
+        return (
+            Endpoint(address=self._transform_address(src_adr), port=src_port),
+            Endpoint(address=self._transform_address(dst_adr), port=dst_port),
+            data[udp_ip_header_size:],
+        )
 
-    nm = NetworkMap.new(' 127.123.2.0/16')
-    assert str(nm) == '127.123.2.0/16'
-    assert nm.max_nodes == 2 ** NetworkMap.NODE_ID_BIT_LENGTH  # Full capacity available.
-    assert nm.local_node_id == 512
-    assert nm.map_ip_address_to_node_id('127.123.2.1') == 513
-    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1
-    assert nm.map_ip_address_to_node_id('127.122.0.1') is None
-    assert nm.map_ip_address_to_node_id('127.123.254.254') is None
-    assert nm.map_ip_address_to_node_id('127.124.0.1') is None
+    def _process(self,
+                 timestamp:   pyuavcan.transport.Timestamp,
+                 source:      Endpoint,
+                 destination: Endpoint,
+                 payload:     memoryview) -> None:
+        packet = Packet(
+            timestamp=timestamp,
+            source=source,
+            destination=destination,
+            payload=payload,
+        )
+        try:
+            self._handler(packet)
+        except Exception as ex:
+            _logger.exception('%s: Unhandled exception in the UDP packet monitor handler: %s', self, ex)
 
-    nm = NetworkMap.new('127.123.0.123/24')
-    assert str(nm) == '127.123.0.123/24'
-    assert nm.max_nodes == 255  # Capacity limited because 255 would be the broadcast IP address.
-    assert nm.local_node_id == 123
-    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1
-    assert nm.map_ip_address_to_node_id('127.254.254.254') is None
-
-    with raises(ValueError):
-        assert nm.make_output_socket(4095, 65535)  # The node-ID cannot be mapped.
-
-    out = nm.make_output_socket(nm.local_node_id, 2345)
-    inp = nm.make_input_socket(2345, True)
-
-    # Ensure the source IP address is specified correctly in outgoing UDP frames.
-    out.send(b'Well, I got here the same way the coin did.')
-    data, sockaddr = inp.recvfrom(1024)
-    assert data == b'Well, I got here the same way the coin did.'
-    assert sockaddr[0] == '127.123.0.123'
-
-    out.close()
-    inp.close()
+    def _thread_function(self) -> None:
+        _logger.debug('%s: monitor thread started', self)
+        while self._keep_going:
+            try:
+                while self._keep_going:
+                    data, _addr = self._sock.recvfrom(self._MTU)
+                    ts = pyuavcan.transport.Timestamp.now()         # TODO: use accurate timestamping.
+                    parsed = self._try_parse(memoryview(data))
+                    if parsed:
+                        self._process(ts, *parsed)
+            except Exception as ex:
+                if (self._sock.fileno() < 0) or (isinstance(ex, OSError) and ex.errno == errno.EBADF) or \
+                        not self._keep_going:
+                    _logger.debug('%s: stopping because the socket is closed', self)
+                    self._keep_going = False
+                    break
+                # This is probably inadequate, reconsider later.
+                _logger.exception('%s: exception in the monitor thread: %s', self, ex)
+                time.sleep(1)
 
 
 class IPv4Address:
@@ -334,6 +371,69 @@ class IPv4Address:
             netmask_width = default_netmask_width
 
         return IPv4Address(address, netmask_width)
+
+
+def _unittest_network_map_ipv4() -> None:
+    from pytest import raises
+
+    with raises(ValueError):
+        NetworkMap.new('127.0.0.1/32')          # Bad network mask.
+
+    with raises(ValueError):
+        NetworkMap.new('127.0.0.1/0')           # Bad network mask.
+
+    with raises(ValueError):
+        NetworkMap.new('127.0.0.1')             # No network mask.
+
+    with raises(pyuavcan.transport.InvalidMediaConfigurationError):
+        NetworkMap.new('10.0.254.254/24')       # Suppose that the test machine does not have such interface.
+
+    nm = NetworkMap.new('127.254.254.254/8')    # Maps to an invalid local node-ID which means anonymous.
+    assert nm.local_node_id is None
+
+    nm = NetworkMap.new('192.168.0.255/24')    # Maps to an invalid local node-ID which means anonymous.
+    assert nm.local_node_id is None
+
+    nm = NetworkMap.new(' 127.123.1.0/16\t')
+    assert str(nm) == '127.123.1.0/16'
+    assert nm.max_nodes == 2 ** NetworkMap.NODE_ID_BIT_LENGTH  # Full capacity available.
+    assert nm.local_node_id == 256
+    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1
+    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1  # From cache
+    assert nm.map_ip_address_to_node_id('127.123.254.254') is None
+    assert nm.map_ip_address_to_node_id('127.254.254.254') is None
+
+    nm = NetworkMap.new(' 127.123.2.0/16')
+    assert str(nm) == '127.123.2.0/16'
+    assert nm.max_nodes == 2 ** NetworkMap.NODE_ID_BIT_LENGTH  # Full capacity available.
+    assert nm.local_node_id == 512
+    assert nm.map_ip_address_to_node_id('127.123.2.1') == 513
+    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1
+    assert nm.map_ip_address_to_node_id('127.122.0.1') is None
+    assert nm.map_ip_address_to_node_id('127.123.254.254') is None
+    assert nm.map_ip_address_to_node_id('127.124.0.1') is None
+
+    nm = NetworkMap.new('127.123.0.123/24')
+    assert str(nm) == '127.123.0.123/24'
+    assert nm.max_nodes == 255  # Capacity limited because 255 would be the broadcast IP address.
+    assert nm.local_node_id == 123
+    assert nm.map_ip_address_to_node_id('127.123.0.1') == 1
+    assert nm.map_ip_address_to_node_id('127.254.254.254') is None
+
+    with raises(ValueError):
+        assert nm.make_output_socket(4095, 65535)  # The node-ID cannot be mapped.
+
+    out = nm.make_output_socket(nm.local_node_id, 2345)
+    inp = nm.make_input_socket(2345, True)
+
+    # Ensure the source IP address is specified correctly in outgoing UDP frames.
+    out.send(b'Well, I got here the same way the coin did.')
+    data, sockaddr = inp.recvfrom(1024)
+    assert data == b'Well, I got here the same way the coin did.'
+    assert sockaddr[0] == '127.123.0.123'
+
+    out.close()
+    inp.close()
 
 
 def _unittest_ipv4() -> None:
