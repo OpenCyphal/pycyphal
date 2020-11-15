@@ -72,15 +72,14 @@ class StreamParser:
 
     def _finalize(self, known_invalid: bool) -> None:
         try:
-            mv = memoryview(self._frame_buffer)
             parsed: typing.Optional[SerialFrame] = None
-            if (not known_invalid) and len(mv) <= self._max_frame_size_bytes:
+            if (not known_invalid) and len(self._frame_buffer) <= self._max_frame_size_bytes:
                 assert self._current_frame_timestamp is not None
-                parsed = SerialFrame.parse_from_cobs_image(mv, self._current_frame_timestamp)
+                parsed = SerialFrame.parse_from_cobs_image(self._frame_buffer, self._current_frame_timestamp)
             if parsed:
                 self._callback(parsed)
-            elif mv:
-                self._callback(mv)
+            elif self._frame_buffer:
+                self._callback(memoryview(self._frame_buffer))
             else:
                 pass    # Empty - nothing to report.
         finally:

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019-2020 UAVCAN Development Team
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
@@ -361,6 +361,9 @@ class IPv4Address:
             netmask_width = default_netmask_width
 
         return IPv4Address(address, netmask_width)
+
+
+# ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
 
 
 def _unittest_network_map_ipv4() -> None:

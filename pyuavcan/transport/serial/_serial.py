@@ -263,8 +263,9 @@ class SerialTransport(pyuavcan.transport.Transport):
         +---------------------------------------------------------------+-------------------------------------------+
         | Event                                                         | Argument type                             |
         +===============================================================+===========================================+
-        | Frame received. Timestamp reflects the                        | :class:`SerialFrame`                      |
-        | time when the first byte was received.                        |                                           |
+        | Frame received. Timestamp reflects the time when the first    | :class:`SerialFrame`                      |
+        | byte was received. If necessary, obtain the original encoded  |                                           |
+        | byte representation using :func:`SerialFrame.compile_into`.   |                                           |
         +---------------------------------------------------------------+-------------------------------------------+
         | Out-of-band data or a malformed frame                         | :class:`memoryview`                       |
         | received. See :class:`StreamParser`.                          |                                           |
@@ -276,6 +277,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         | transfer, where each frame bears the timestamp of the         |                                           |
         | outgoing transfer object. If no frames could be sent due to   |                                           |
         | an error, the timestamp may be None and the list is empty.    |                                           |
+        | Obtain bytes using :func:`SerialFrame.compile_into`.          |                                           |
         +---------------------------------------------------------------+-------------------------------------------+
         | Any other event should be ignored for future compatibility.                                               |
         +---------------------------------------------------------------+-------------------------------------------+

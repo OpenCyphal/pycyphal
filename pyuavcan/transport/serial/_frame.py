@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019-2020 UAVCAN Development Team
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
@@ -44,9 +44,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     data_specifier:      pyuavcan.transport.DataSpecifier
 
     def __post_init__(self) -> None:
-        if not isinstance(self.priority, pyuavcan.transport.Priority):
-            raise TypeError(f'Invalid priority: {self.priority}')  # pragma: no cover
-
         if self.source_node_id is not None and not (0 <= self.source_node_id <= self.NODE_ID_MASK):
             raise ValueError(f'Invalid source node ID: {self.source_node_id}')
 
@@ -64,9 +61,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
         if not (0 <= self.index <= self.INDEX_MASK):
             raise ValueError(f'Invalid frame index: {self.index}')
-
-        if not isinstance(self.payload, memoryview):
-            raise TypeError(f'Bad payload type: {type(self.payload).__name__}')  # pragma: no cover
 
     def compile_into(self, out_buffer: bytearray) -> memoryview:
         """
@@ -103,6 +97,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         out_buffer[0] = self.FRAME_DELIMITER_BYTE
         next_byte_index = 1
 
+        # noinspection PyTypeChecker
         packet_bytes = header + self.payload + payload_crc_bytes
         encoded_image = cobs.encode(packet_bytes)
         # place in the buffer and update next_byte_index:
@@ -124,13 +119,15 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         return (payload_size_bytes * 255 + 253) // 254
 
     @staticmethod
-    def parse_from_cobs_image(header_payload_crc_image: memoryview,
+    def parse_from_cobs_image(header_payload_crc_image: typing.Union[memoryview, bytearray],
                               timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[SerialFrame]:
         """
         :returns: Frame or None if the image is invalid.
         """
+        if not isinstance(header_payload_crc_image, bytearray):
+            header_payload_crc_image = bytearray(header_payload_crc_image)
         try:
-            unescaped_image = cobs.decode(bytearray(header_payload_crc_image))
+            unescaped_image = cobs.decode(header_payload_crc_image)
         except cobs.DecodeError:
             return None
         return SerialFrame.parse_from_unescaped_image(memoryview(unescaped_image), timestamp)
@@ -174,6 +171,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
             data_specifier = pyuavcan.transport.ServiceDataSpecifier(service_id, role)
 
         try:
+            # noinspection PyArgumentList
             return SerialFrame(timestamp=timestamp,
                                priority=pyuavcan.transport.Priority(int_priority),
                                source_node_id=src_nid,
