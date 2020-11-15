@@ -350,7 +350,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_serial_transport_monitoring(caplog: typing.Any) -> None:
+async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
     from pyuavcan.transport.serial import SerialFrame
@@ -374,8 +374,8 @@ async def _unittest_serial_transport_monitoring(caplog: typing.Any) -> None:
 
     events: typing.List[object] = []
     events2: typing.List[object] = []
-    tr.enable_monitoring(events.append)
-    tr.enable_monitoring(events2.append)
+    tr.enable_sniffing(events.append)
+    tr.enable_sniffing(events2.append)
     assert events == []
     assert events2 == []
 

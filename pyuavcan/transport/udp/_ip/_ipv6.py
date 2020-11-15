@@ -8,7 +8,7 @@ import typing
 import socket
 import logging
 from ._network_map import NetworkMap
-from ._monitor import Packet, Monitor
+from ._sniffer import Packet, Sniffer
 
 
 _logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class IPv6NetworkMap(NetworkMap):
     def make_input_socket(self, local_port: int, expect_broadcast: bool) -> socket.socket:
         raise NotImplementedError
 
-    def make_monitor(self, handler: typing.Callable[[Packet], None]) -> Monitor:
+    def make_sniffer(self, handler: typing.Callable[[Packet], None]) -> Sniffer:
         raise NotImplementedError
 
     def __str__(self) -> str:

@@ -306,19 +306,19 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-def _unittest_redundant_transport_monitoring() -> None:
+def _unittest_redundant_transport_sniffing() -> None:
     def mon(_x: object) -> None:
         return None
 
     tr = RedundantTransport()
     inf_a = LoopbackTransport(1234)
     inf_b = LoopbackTransport(1234)
-    tr.enable_monitoring(mon)
-    assert inf_a.monitoring_handlers == []
-    assert inf_b.monitoring_handlers == []
+    tr.enable_sniffing(mon)
+    assert inf_a.sniffer_handlers == []
+    assert inf_b.sniffer_handlers == []
     tr.attach_inferior(inf_a)
-    assert inf_a.monitoring_handlers == [mon]
-    assert inf_b.monitoring_handlers == []
+    assert inf_a.sniffer_handlers == [mon]
+    assert inf_b.sniffer_handlers == []
     tr.attach_inferior(inf_b)
-    assert inf_a.monitoring_handlers == [mon]
-    assert inf_b.monitoring_handlers == [mon]
+    assert inf_a.sniffer_handlers == [mon]
+    assert inf_b.sniffer_handlers == [mon]

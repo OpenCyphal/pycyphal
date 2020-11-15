@@ -10,7 +10,7 @@ import typing
 import socket
 import logging
 import pyuavcan.util
-from ._monitor import Packet, Monitor
+from ._sniffer import Packet, Sniffer
 
 
 _logger = logging.getLogger(__name__)
@@ -139,10 +139,10 @@ class NetworkMap(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def make_monitor(self, handler: typing.Callable[[Packet], None]) -> Monitor:
+    def make_sniffer(self, handler: typing.Callable[[Packet], None]) -> Sniffer:
         """
-        Launch a new network monitor based on a raw socket (usually this requires special permissions).
-        The monitor will run in a separate thread, invoking the handler *directly from the worker thread*
+        Launch a new network sniffer based on a raw socket (usually this requires special permissions).
+        The sniffer will run in a separate thread, invoking the handler *directly from the worker thread*
         whenever a UDP packet is received (regardless of whether it is related to UAVCAN/UDP).
         """
         raise NotImplementedError

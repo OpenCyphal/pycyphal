@@ -16,7 +16,7 @@ import logging
 import threading
 import pyuavcan
 from ._network_map import NetworkMap
-from ._monitor import Endpoint, Packet, Monitor
+from ._sniffer import Endpoint, Packet, Sniffer
 
 
 _logger = logging.getLogger(__name__)
@@ -172,7 +172,7 @@ class IPv4NetworkMap(NetworkMap):
                       self, s, local_port, expect_broadcast)
         return s
 
-    def make_monitor(self, handler: typing.Callable[[Packet], None]) -> IPv4Monitor:
+    def make_sniffer(self, handler: typing.Callable[[Packet], None]) -> IPv4Sniffer:
         # http://www.enderunix.org/docs/en/rawipspoof/
         s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
         s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)       # Include raw IP headers with received data.
@@ -181,13 +181,13 @@ class IPv4NetworkMap(NetworkMap):
         if sys.platform.startswith('win32'):
             s.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)            # Enable promiscuous mode on the interface.
 
-        return IPv4Monitor(s, handler)
+        return IPv4Sniffer(s, handler)
 
     def __str__(self) -> str:
         return str(self._local)
 
 
-class IPv4Monitor(Monitor):
+class IPv4Sniffer(Sniffer):
     """
     A very basic background worker continuously reading IP packets from the raw socket, filtering the UDP ones,
     and emitting them via the callback (yup, right from the worker thread).
@@ -205,7 +205,7 @@ class IPv4Monitor(Monitor):
         self._handler = handler
         self._keep_going = True
         self._ip_cache: typing.Dict[int, str] = {}
-        self._thread = threading.Thread(target=self._thread_function, name='udp_ipv4_monitor', daemon=True)
+        self._thread = threading.Thread(target=self._thread_function, name='udp_ipv4_sniffer', daemon=True)
         self._thread.start()
 
     def close(self) -> None:
@@ -221,13 +221,13 @@ class IPv4Monitor(Monitor):
 
     def _try_parse(self, data: memoryview) -> typing.Optional[typing.Tuple[Endpoint, Endpoint, memoryview]]:
         ver_ihl, dscp_ecn, ip_length, ident, flags_frag_off, ttl, proto, hdr_chk, src_adr, dst_adr = \
-            IPv4Monitor._IP_V4_FORMAT.unpack_from(data)
+            IPv4Sniffer._IP_V4_FORMAT.unpack_from(data)
         ver, ihl = ver_ihl >> 4, ver_ihl & 0xF
         ip_header_size = ihl * 4
         udp_ip_header_size = ip_header_size + 8
-        if ver != 4 or proto != IPv4Monitor._PROTO_UDP or len(data) < udp_ip_header_size:
+        if ver != 4 or proto != IPv4Sniffer._PROTO_UDP or len(data) < udp_ip_header_size:
             return None
-        src_port, dst_port, udp_length, udp_chk = IPv4Monitor._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
+        src_port, dst_port, udp_length, udp_chk = IPv4Sniffer._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
         return (
             Endpoint(address=self._transform_address(src_adr), port=src_port),
             Endpoint(address=self._transform_address(dst_adr), port=dst_port),
@@ -248,10 +248,10 @@ class IPv4Monitor(Monitor):
         try:
             self._handler(packet)
         except Exception as ex:
-            _logger.exception('%s: Unhandled exception in the UDP packet monitor handler: %s', self, ex)
+            _logger.exception('%s: Exception in the sniffer handler: %s', self, ex)
 
     def _thread_function(self) -> None:
-        _logger.debug('%s: monitor thread started', self)
+        _logger.debug('%s: worker thread started', self)
         while self._keep_going:
             try:
                 while self._keep_going:
@@ -267,7 +267,7 @@ class IPv4Monitor(Monitor):
                     self._keep_going = False
                     break
                 # This is probably inadequate, reconsider later.
-                _logger.exception('%s: exception in the monitor thread: %s', self, ex)
+                _logger.exception('%s: exception in the worker thread: %s', self, ex)
                 time.sleep(1)
 
 

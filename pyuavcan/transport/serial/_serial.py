@@ -135,7 +135,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, SerialInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, SerialOutputSession] = {}
 
-        self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
+        self._sniffer_handlers: typing.List[pyuavcan.transport.SnifferCallback] = []
 
         self._statistics = SerialTransportStatistics()
 
@@ -256,9 +256,9 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
 
-    def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
+    def enable_sniffing(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
-        The monitoring handler(s) will receive the following events, possibly from a different thread (use locks):
+        The handler will receive the following events, possibly from a different thread (use locks):
 
         +---------------------------------------------------------------+-------------------------------------------+
         | Event                                                         | Argument type                             |
@@ -280,7 +280,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         | Any other event should be ignored for future compatibility.                                               |
         +---------------------------------------------------------------+-------------------------------------------+
         """
-        self._monitoring_handlers.append(handler)
+        self._sniffer_handlers.append(handler)
 
     def sample_statistics(self) -> SerialTransportStatistics:
         return copy.copy(self._statistics)
@@ -365,7 +365,7 @@ class SerialTransport(pyuavcan.transport.Transport):
                 num_sent += 1
 
             self._statistics.out_frames += num_sent
-            pyuavcan.util.broadcast(self._monitoring_handlers)((tx_ts, frames[:num_sent]))
+            pyuavcan.util.broadcast(self._sniffer_handlers)((tx_ts, frames[:num_sent]))
         except Exception as ex:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(f'{self} is closed, transmission aborted.') from ex
@@ -383,7 +383,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         def callback(item: typing.Union[SerialFrame, memoryview]) -> None:
             self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, item, in_bytes_count)
-            pyuavcan.util.broadcast(self._monitoring_handlers)(item)
+            pyuavcan.util.broadcast(self._sniffer_handlers)(item)
 
         try:
             parser = StreamParser(callback, max(self.VALID_MTU_RANGE))

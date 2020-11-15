@@ -148,19 +148,19 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def enable_monitoring(self, handler: MonitoringHandler) -> None:
+    def enable_sniffing(self, handler: SnifferCallback) -> None:
         """
         If the user desires to perform low-level monitoring of the transport interface at the transport frame level
         (e.g., UDP packets, CAN frames, etc.), this method is used to activate this feature.
 
-        This method puts the transport instance into the "monitoring mode" which does not interfere with its normal
+        This method puts the transport instance into the "sniffing mode" which does not interfere with its normal
         operation but may dramatically increase the computing load due to the need to process every frame exchanged
         over the network (not just frames that originate or terminate at the local node).
         This usually involves reconfiguration of the local networking hardware (e.g., the network card may be put
         into promiscuous mode, the CAN adapter will have its acceptance filters reconfigured to accept everything,
         etc.).
 
-        The monitoring handler is invoked for every transmitted or received transport frame and, possibly, some
+        The sniffing handler is invoked for every transmitted or received transport frame and, possibly, some
         additional transport-implementation-specific events (e.g., network errors or hardware state changes)
         which are described in the specific transport implementation docs.
         The temporal order of the events delivered to the user may be distorted, depending on the guarantees
@@ -168,18 +168,18 @@ class Transport(abc.ABC):
         This means that if the network hardware sees TX frame A and then RX frame B separated by a very short time
         interval, the user may occasionally see the sequence inverted as (B, A).
 
-        There may be an arbitrary number of monitoring handlers installed; when a new handler is installed, it is
+        There may be an arbitrary number of sniffing handlers installed; when a new handler is installed, it is
         added to the existing ones, if any.
 
-        If the transport does not support monitoring, this method may have no observable effect.
-        Technically, the monitoring protocol, as you can see, does not present any requirements to the emitted events,
-        so an implementation that pretends to enter the monitoring mode while not actually doing anything is compliant.
+        If the transport does not support sniffing, this method may have no observable effect.
+        Technically, the sniffing protocol, as you can see, does not present any requirements to the emitted events,
+        so an implementation that pretends to enter the sniffing mode while not actually doing anything is compliant.
 
-        Since monitoring reflects actual network events, deterministic data loss mitigation enabled on the
-        local node will make the monitor emit duplicate frames for outgoing transfers (although this is probably
+        Since sniffing reflects actual network events, deterministic data loss mitigation enabled on the
+        local node will make the sniffer emit duplicate frames for outgoing transfers (although this is probably
         obvious enough without this elaboration).
 
-        Currently, it is not possible to disable monitoring. Once enabled, it will go on until the transport instance
+        Currently, it is not possible to disable sniffing. Once enabled, it will go on until the transport instance
         is destroyed. This restriction may be lifted in a future release.
 
         :param handler: A one-argument callable invoked to inform the user about transport-level events.
@@ -259,4 +259,4 @@ class Transport(abc.ABC):
                                              local_node_id=self.local_node_id)
 
 
-MonitoringHandler = typing.Callable[[object], None]
+SnifferCallback = typing.Callable[[object], None]

@@ -149,11 +149,11 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
 
     mon_events: typing.List[object] = []
     mon_events2: typing.List[object] = []
-    assert tr.monitoring_handlers == []
-    tr.enable_monitoring(mon_events.append)
-    assert len(tr.monitoring_handlers) == 1
-    tr.enable_monitoring(mon_events2.append)
-    assert len(tr.monitoring_handlers) == 2
+    assert tr.sniffer_handlers == []
+    tr.enable_sniffing(mon_events.append)
+    assert len(tr.sniffer_handlers) == 1
+    tr.enable_sniffing(mon_events2.append)
+    assert len(tr.sniffer_handlers) == 2
     assert await out_bc.send_until(pyuavcan.transport.Transfer(
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=pyuavcan.transport.Priority.IMMEDIATE,

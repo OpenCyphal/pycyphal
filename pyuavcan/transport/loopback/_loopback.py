@@ -35,7 +35,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         self._local_node_id = int(local_node_id) if local_node_id is not None else None
         self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
         self._output_sessions: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, LoopbackOutputSession] = {}
-        self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
+        self._sniffer_handlers: typing.List[pyuavcan.transport.SnifferCallback] = []
         # Unlimited protocol capabilities by default.
         self._protocol_parameters = pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=2 ** 64,
@@ -107,7 +107,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                     fragmented_payload=tr.fragmented_payload,
                     source_node_id=self.local_node_id,
                 )
-                pyuavcan.util.broadcast(self._monitoring_handlers)(tr_from)
+                pyuavcan.util.broadcast(self._sniffer_handlers)(tr_from)
                 for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                     try:
                         destination_session = self._input_sessions[
@@ -130,11 +130,11 @@ class LoopbackTransport(pyuavcan.transport.Transport):
             self._output_sessions[specifier] = sess
         return sess
 
-    def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
+    def enable_sniffing(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
-        The monitoring handler(s) will receive :class:`pyuavcan.transport.TransferFrom` for each exchanged transfer.
+        The handler(s) will receive :class:`pyuavcan.transport.TransferFrom` for each exchanged transfer.
         """
-        self._monitoring_handlers.append(handler)
+        self._sniffer_handlers.append(handler)
 
     def sample_statistics(self) -> LoopbackTransportStatistics:
         return LoopbackTransportStatistics()
@@ -148,8 +148,8 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         return list(self._output_sessions.values())
 
     @property
-    def monitoring_handlers(self) -> typing.Sequence[pyuavcan.transport.MonitoringHandler]:
-        return self._monitoring_handlers[:]
+    def sniffer_handlers(self) -> typing.Sequence[pyuavcan.transport.SnifferCallback]:
+        return self._sniffer_handlers[:]
 
     @property
     def descriptor(self) -> str:

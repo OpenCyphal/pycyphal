@@ -92,7 +92,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
         self._last_filter_configuration_set: typing.Optional[typing.Sequence[FilterConfiguration]] = None
 
-        self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
+        self._sniffer_handlers: typing.List[pyuavcan.transport.SnifferCallback] = []
 
         self._frame_stats = CANTransportStatistics()
 
@@ -228,11 +228,11 @@ class CANTransport(pyuavcan.transport.Transport):
             self._reconfigure_acceptance_filters()
         return session
 
-    def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
+    def enable_sniffing(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
         Monitoring is not implemented yet -- the handlers are never invoked.
         """
-        self._monitoring_handlers.append(handler)
+        self._sniffer_handlers.append(handler)
 
     async def _do_send_until(self, frames: typing.Iterable[UAVCANFrame], monotonic_deadline: float) -> bool:
         """

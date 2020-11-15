@@ -31,9 +31,9 @@ class Packet:
     payload:     memoryview
 
 
-class Monitor(abc.ABC):
+class Sniffer(abc.ABC):
     """
-    Network monitor is responsible for managing the raw socket and parsing and filtering the raw IP packets.
+    Network sniffer is responsible for managing the raw socket and parsing and filtering the raw IP packets.
     """
     @abc.abstractmethod
     def close(self) -> None:

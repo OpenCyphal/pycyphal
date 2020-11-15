@@ -6,6 +6,6 @@
 
 from ._network_map import NetworkMap as NetworkMap
 
-from ._monitor import Packet as Packet
-from ._monitor import Endpoint as Endpoint
-from ._monitor import Monitor as Monitor
+from ._sniffer import Packet as Packet
+from ._sniffer import Endpoint as Endpoint
+from ._sniffer import Sniffer as Sniffer

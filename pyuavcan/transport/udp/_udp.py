@@ -13,7 +13,7 @@ import pyuavcan
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
-from ._ip import NetworkMap, Monitor, Packet
+from ._ip import NetworkMap, Sniffer, Packet
 from ._port_mapping import udp_port_from_data_specifier, udp_port_to_data_specifier
 from ._demultiplexer import UDPDemultiplexer, UDPDemultiplexerStatistics
 
@@ -166,8 +166,8 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
-        self._monitor: typing.Optional[Monitor] = None
-        self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
+        self._sniffer: typing.Optional[Sniffer] = None
+        self._sniffer_handlers: typing.List[pyuavcan.transport.SnifferCallback] = []
 
         self._closed = False
         self._statistics = UDPTransportStatistics()
@@ -195,9 +195,9 @@ class UDPTransport(pyuavcan.transport.Transport):
                 s.close()
             except Exception as ex:  # pragma: no cover
                 _logger.exception('%s: Failed to close %r: %s', self, s, ex)
-        if self._monitor is not None:
-            self._monitor.close()
-            self._monitor = None
+        if self._sniffer is not None:
+            self._sniffer.close()
+            self._sniffer = None
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.InputSessionSpecifier,
@@ -241,18 +241,18 @@ class UDPTransport(pyuavcan.transport.Transport):
         assert out.specifier == specifier
         return out
 
-    def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
+    def enable_sniffing(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
-        Monitoring is not implemented yet -- the handlers are never invoked.
+        Sniffing is not implemented yet -- the handlers are never invoked.
 
-        On GNU/Linux, network monitoring requires that either the process is executed by root,
+        On GNU/Linux, network sniffing requires that either the process is executed by root,
         or the raw packet capture capability ``CAP_NET_RAW`` is enabled.
         For more info read ``man 7 capabilities`` and consider checking the docs for Wireshark/libpcap.
         """
         self._ensure_not_closed()
-        if self._monitor is None:
-            self._monitor = self._network_map.make_monitor(self._process_monitoring_packet)
-        self._monitoring_handlers.append(handler)
+        if self._sniffer is None:
+            self._sniffer = self._network_map.make_sniffer(self._process_sniffed_packet)
+        self._sniffer_handlers.append(handler)
 
     def sample_statistics(self) -> UDPTransportStatistics:
         return copy.copy(self._statistics)
@@ -350,25 +350,18 @@ class UDPTransport(pyuavcan.transport.Transport):
                 finally:
                     del self._demultiplexer_registry[specifier.data_specifier]
 
-    def _process_monitoring_packet(self, packet: Packet) -> None:
-        """This handler may be invoked from a different thread (the monitor thread)."""
+    def _process_sniffed_packet(self, packet: Packet) -> None:
+        """This handler may be invoked from a different thread (the sniffer thread)."""
         frame = UDPFrame.parse(packet.payload, packet.timestamp)
-        if frame is not None:
-            ds = udp_port_to_data_specifier(packet.destination.port)
-            src = self._network_map.map_ip_address_to_node_id(packet.source.address)
-            dst = self._network_map.map_ip_address_to_node_id(packet.destination.address)
-            # TODO: handle broadcast destination properly.
-            if ds is not None and src is not None:
-                event = SniffedFrame(
-                    udp_ip_level=packet,
-                    uavcan_level=frame,
-                    data_specifier=ds,
-                    source_node_id=src,
-                    destination_node_id=dst,
-                )
-                pyuavcan.util.broadcast(self._monitoring_handlers)(event)
-                return
-        pyuavcan.util.broadcast(self._monitoring_handlers)(packet)
+        src = self._network_map.map_ip_address_to_node_id(packet.source.address)
+        dst = self._network_map.map_ip_address_to_node_id(packet.destination.address)
+        event = UDPSniff(
+            udp_ip_level=packet,
+            uavcan_level=frame,
+            source_node_id=src,
+            destination_node_id=dst,
+        )
+        pyuavcan.util.broadcast(self._sniffer_handlers)(event)
 
     def _ensure_not_closed(self) -> None:
         if self._closed:
@@ -376,29 +369,36 @@ class UDPTransport(pyuavcan.transport.Transport):
 
 
 @dataclasses.dataclass(frozen=True)
-class SniffedFrame:
+class UDPSniff:
     """
-    Instances of this class are reported via the transport monitoring API.
+    Instances of this class are reported via the transport sniffing API.
     """
     udp_ip_level: Packet
     """
     Raw UDP/IP packet: timestamp, source/destination IP addresses and ports, and the raw UDP payload.
     """
 
-    uavcan_level: UDPFrame
+    uavcan_level: typing.Optional[UDPFrame]
     """
     UAVCAN/UDP packet metadata and its presentation-layer payload; the payload contains the serialized DSDL object.
     The timestamp is the same as in the raw UDP/IP packet, and the payload is a memory view to the same
     underlying buffer.
+    None here means that this UDP/IP packet is not a UAVCAN/UDP transport frame.
     """
 
-    data_specifier: pyuavcan.transport.DataSpecifier
-    """
-    Describes the semantics of the payload data. See :class:`pyuavcan.transport.DataSpecifier`.
-    """
-
-    source_node_id:      int
+    source_node_id:      typing.Optional[int]
     destination_node_id: typing.Optional[int]
     """
-    The route specifier. None in the destination represents a broadcast frame.
+    The route specifier.
+    None in the source represents a foreign node (not from the local UAVCAN network).
+    None in the destination represents a broadcast frame or a foreign destination (not in the local UAVCAN network).
     """
+
+    @property
+    def data_specifier(self) -> typing.Optional[pyuavcan.transport.DataSpecifier]:
+        """
+        Describes the semantics of the payload data. See :class:`pyuavcan.transport.DataSpecifier`.
+        """
+        if self.udp_ip_level is not None:
+            return udp_port_to_data_specifier(self.udp_ip_level.destination.port)
+        return None
