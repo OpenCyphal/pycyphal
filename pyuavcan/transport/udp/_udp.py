@@ -14,7 +14,7 @@ from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPI
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
 from ._ip import NetworkMap, Monitor, Packet
-from ._port_mapping import udp_port_from_data_specifier
+from ._port_mapping import udp_port_from_data_specifier, udp_port_to_data_specifier
 from ._demultiplexer import UDPDemultiplexer, UDPDemultiplexerStatistics
 
 
@@ -352,8 +352,53 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     def _process_monitoring_packet(self, packet: Packet) -> None:
         """This handler may be invoked from a different thread (the monitor thread)."""
-        raise NotImplementedError
+        frame = UDPFrame.parse(packet.payload, packet.timestamp)
+        if frame is not None:
+            ds = udp_port_to_data_specifier(packet.destination.port)
+            src = self._network_map.map_ip_address_to_node_id(packet.source.address)
+            dst = self._network_map.map_ip_address_to_node_id(packet.destination.address)
+            # TODO: handle broadcast destination properly.
+            if ds is not None and src is not None:
+                event = SniffedFrame(
+                    udp_ip_level=packet,
+                    uavcan_level=frame,
+                    data_specifier=ds,
+                    source_node_id=src,
+                    destination_node_id=dst,
+                )
+                pyuavcan.util.broadcast(self._monitoring_handlers)(event)
+                return
+        pyuavcan.util.broadcast(self._monitoring_handlers)(packet)
 
     def _ensure_not_closed(self) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+
+
+@dataclasses.dataclass(frozen=True)
+class SniffedFrame:
+    """
+    Instances of this class are reported via the transport monitoring API.
+    """
+    udp_ip_level: Packet
+    """
+    Raw UDP/IP packet: timestamp, source/destination IP addresses and ports, and the raw UDP payload.
+    """
+
+    uavcan_level: UDPFrame
+    """
+    UAVCAN/UDP packet metadata and its presentation-layer payload; the payload contains the serialized DSDL object.
+    The timestamp is the same as in the raw UDP/IP packet, and the payload is a memory view to the same
+    underlying buffer.
+    """
+
+    data_specifier: pyuavcan.transport.DataSpecifier
+    """
+    Describes the semantics of the payload data. See :class:`pyuavcan.transport.DataSpecifier`.
+    """
+
+    source_node_id:      int
+    destination_node_id: typing.Optional[int]
+    """
+    The route specifier. None in the destination represents a broadcast frame.
+    """

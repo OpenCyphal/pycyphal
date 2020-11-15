@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import typing
 from pyuavcan.transport import DataSpecifier, MessageDataSpecifier, ServiceDataSpecifier
 
 
@@ -47,3 +48,32 @@ def udp_port_from_data_specifier(ds: DataSpecifier) -> int:
             return request + 1
 
     raise ValueError(f'Unsupported data specifier: {ds}')  # pragma: no cover
+
+
+def udp_port_to_data_specifier(port: int) -> typing.Optional[DataSpecifier]:
+    """
+    The inverse of :func:`udp_port_from_data_specifier`. Returns None for invalid ports.
+
+    >>> udp_port_to_data_specifier(16384)
+    MessageDataSpecifier(subject_id=0)
+    >>> udp_port_to_data_specifier(24575)
+    MessageDataSpecifier(subject_id=8191)
+    >>> udp_port_to_data_specifier(16382)
+    ServiceDataSpecifier(service_id=0, role=...REQUEST...)
+    >>> udp_port_to_data_specifier(16383)
+    ServiceDataSpecifier(service_id=0, role=...RESPONSE...)
+    >>> udp_port_to_data_specifier(15360)
+    ServiceDataSpecifier(service_id=511, role=...REQUEST...)
+    >>> udp_port_to_data_specifier(15361)
+    ServiceDataSpecifier(service_id=511, role=...RESPONSE...)
+    """
+    out: DataSpecifier
+    try:
+        if port >= SUBJECT_ID_OFFSET:
+            out = MessageDataSpecifier(port - SUBJECT_ID_OFFSET)
+        else:
+            role = ServiceDataSpecifier.Role.REQUEST if port % 2 == 0 else ServiceDataSpecifier.Role.RESPONSE
+            out = ServiceDataSpecifier((SUBJECT_ID_OFFSET - 1 - port) // 2, role)
+    except ValueError:
+        return None
+    return out

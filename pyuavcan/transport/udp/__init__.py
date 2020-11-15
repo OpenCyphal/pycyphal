@@ -274,6 +274,4 @@ from ._session import UDPFeedback as UDPFeedback
 
 from ._frame import UDPFrame as UDPFrame
 
-from ._port_mapping import udp_port_from_data_specifier as udp_port_from_data_specifier
-
 from ._demultiplexer import UDPDemultiplexerStatistics as UDPDemultiplexerStatistics
