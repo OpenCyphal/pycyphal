@@ -458,6 +458,7 @@ async def _unittest_serial_transport_monitoring(caplog: typing.Any) -> None:
     assert isinstance(a, SerialFrame)
     assert isinstance(b, SerialFrame)
     assert isinstance(d, tuple)
+    assert isinstance(d2, tuple)
     tx_ts, (tx_x,) = d
     assert isinstance(tx_ts, Timestamp)
     assert isinstance(tx_x, SerialFrame)
