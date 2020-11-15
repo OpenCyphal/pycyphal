@@ -1,5 +1,4 @@
 #!/bin/bash
-#
 # This global test script is designed to be invokable on a completely clean environment (e.g., on a CI server).
 # It configures the environment and then runs unit tests, static code analysis, and builds the docs.
 # Success is reported only if all of the steps are executed successfully.
@@ -7,10 +6,6 @@
 # Observe that additional static analysis tools may be invoked separately afterwards; e.g., the SonarQube scanner.
 # Such tools shall not be invoked before the script because they may be dependent on its side effects, such as
 # generation of the coverage data.
-#
-# Running the script may take several minutes or more. To speed things up, switch off slow unit tests by configuring
-# appropriate environment variables. Please see the unit test sources for details, or grep them for 'PYUAVCAN_'.
-#
 
 set -o nounset
 

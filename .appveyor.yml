@@ -52,7 +52,7 @@ for:
       - sh: 'lsb_release -a'
       - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
       - sh: 'echo $extras_pkg'
-      - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'   # This is needed for the doc build
+      - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'  # graphviz is needed for the docs
       # MS Windows build config
       - cmd: 'systeminfo'
       - cmd: 'set PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%'

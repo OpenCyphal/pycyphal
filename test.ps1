@@ -1,8 +1,6 @@
-#
 # Auto-test for MS Windows PowerShell.
 # You may need this:
 #     Set-ExecutionPolicy unrestricted -scope CurrentUser
-#
 
 $root = Resolve-Path .
 
