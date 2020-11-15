@@ -6,6 +6,7 @@
 
 from ._network_map import NetworkMap as NetworkMap
 
-from ._sniffer import Packet as Packet
-from ._sniffer import Endpoint as Endpoint
-from ._sniffer import Sniffer as Sniffer
+from ._packet import IPHeader as IPHeader
+from ._packet import UDPHeader as UDPHeader
+from ._packet import UDPIPPacket as UDPIPPacket
+from ._packet import Sniffer as Sniffer

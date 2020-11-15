@@ -10,7 +10,7 @@ import typing
 import socket
 import logging
 import pyuavcan.util
-from ._sniffer import Packet, Sniffer
+from ._packet import Sniffer, UDPIPPacket
 
 
 _logger = logging.getLogger(__name__)
@@ -139,7 +139,7 @@ class NetworkMap(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def make_sniffer(self, handler: typing.Callable[[Packet], None]) -> Sniffer:
+    def make_sniffer(self, handler: typing.Callable[[pyuavcan.transport.Timestamp, UDPIPPacket], None]) -> Sniffer:
         """
         Launch a new network sniffer based on a raw socket (usually this requires special permissions).
         The sniffer will run in a separate thread, invoking the handler *directly from the worker thread*

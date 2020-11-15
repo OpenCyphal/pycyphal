@@ -16,7 +16,7 @@ import logging
 import threading
 import pyuavcan
 from ._network_map import NetworkMap
-from ._sniffer import Endpoint, Packet, Sniffer
+from ._packet import Sniffer, UDPIPPacket, IPHeader, UDPHeader
 
 
 _logger = logging.getLogger(__name__)
@@ -172,7 +172,7 @@ class IPv4NetworkMap(NetworkMap):
                       self, s, local_port, expect_broadcast)
         return s
 
-    def make_sniffer(self, handler: typing.Callable[[Packet], None]) -> IPv4Sniffer:
+    def make_sniffer(self, handler: typing.Callable[[pyuavcan.transport.Timestamp, UDPIPPacket], None]) -> IPv4Sniffer:
         # http://www.enderunix.org/docs/en/rawipspoof/
         s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
         s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)       # Include raw IP headers with received data.
@@ -200,7 +200,9 @@ class IPv4Sniffer(Sniffer):
 
     _PROTO_UDP = 0x11
 
-    def __init__(self, s: socket.socket, handler: typing.Callable[[Packet], None]) -> None:
+    def __init__(self,
+                 s: socket.socket,
+                 handler: typing.Callable[[pyuavcan.transport.Timestamp, UDPIPPacket], None]) -> None:
         self._sock = s
         self._handler = handler
         self._keep_going = True
@@ -219,36 +221,21 @@ class IPv4Sniffer(Sniffer):
             self._ip_cache[input] = str(IPv4Address(input))
         return self._ip_cache[input]
 
-    def _try_parse(self, data: memoryview) -> typing.Optional[typing.Tuple[Endpoint, Endpoint, memoryview]]:
+    def _try_parse(self, data: memoryview) -> typing.Optional[UDPIPPacket]:
         ver_ihl, dscp_ecn, ip_length, ident, flags_frag_off, ttl, proto, hdr_chk, src_adr, dst_adr = \
             IPv4Sniffer._IP_V4_FORMAT.unpack_from(data)
         ver, ihl = ver_ihl >> 4, ver_ihl & 0xF
         ip_header_size = ihl * 4
-        udp_ip_header_size = ip_header_size + 8
+        udp_ip_header_size = ip_header_size + IPv4Sniffer._UDP_V4_FORMAT.size
         if ver != 4 or proto != IPv4Sniffer._PROTO_UDP or len(data) < udp_ip_header_size:
             return None
         src_port, dst_port, udp_length, udp_chk = IPv4Sniffer._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
-        return (
-            Endpoint(address=self._transform_address(src_adr), port=src_port),
-            Endpoint(address=self._transform_address(dst_adr), port=dst_port),
-            data[udp_ip_header_size:],
+        return UDPIPPacket(
+            ip_header=IPHeader(source_address=self._transform_address(src_adr),
+                               destination_address=self._transform_address(dst_adr)),
+            udp_header=UDPHeader(source_port=src_port, destination_port=dst_port),
+            udp_payload=data[udp_ip_header_size:],
         )
-
-    def _process(self,
-                 timestamp:   pyuavcan.transport.Timestamp,
-                 source:      Endpoint,
-                 destination: Endpoint,
-                 payload:     memoryview) -> None:
-        packet = Packet(
-            timestamp=timestamp,
-            source=source,
-            destination=destination,
-            payload=payload,
-        )
-        try:
-            self._handler(packet)
-        except Exception as ex:
-            _logger.exception('%s: Exception in the sniffer handler: %s', self, ex)
 
     def _thread_function(self) -> None:
         _logger.debug('%s: worker thread started', self)
@@ -257,9 +244,12 @@ class IPv4Sniffer(Sniffer):
                 while self._keep_going:
                     data, _addr = self._sock.recvfrom(self._MTU)
                     ts = pyuavcan.transport.Timestamp.now()         # TODO: use accurate timestamping.
-                    parsed = self._try_parse(memoryview(data))
-                    if parsed:
-                        self._process(ts, *parsed)
+                    packet = self._try_parse(memoryview(data))
+                    if packet is not None:
+                        try:
+                            self._handler(ts, packet)
+                        except Exception as ex:
+                            _logger.exception('%s: Exception in the sniffer handler: %s', self, ex)
             except Exception as ex:
                 if (self._sock.fileno() < 0) or (isinstance(ex, OSError) and ex.errno == errno.EBADF) or \
                         not self._keep_going:

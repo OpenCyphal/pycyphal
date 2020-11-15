@@ -84,9 +84,6 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
             return None
 
 
-_BYTE_ORDER = 'little'
-
-
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
 
 def _unittest_udp_frame_compile() -> None:

@@ -260,7 +260,6 @@ Inheritance diagram
 
 from ._udp import UDPTransport as UDPTransport
 from ._udp import UDPTransportStatistics as UDPTransportStatistics
-from ._udp import UDPSniff as UDPSniff
 
 from ._session import UDPInputSession as UDPInputSession
 from ._session import PromiscuousUDPInputSession as PromiscuousUDPInputSession
@@ -276,3 +275,7 @@ from ._session import UDPFeedback as UDPFeedback
 from ._frame import UDPFrame as UDPFrame
 
 from ._demultiplexer import UDPDemultiplexerStatistics as UDPDemultiplexerStatistics
+
+from ._ip import IPHeader as IPHeader
+from ._ip import UDPHeader as UDPHeader
+from ._ip import UDPIPPacket as UDPIPPacket
