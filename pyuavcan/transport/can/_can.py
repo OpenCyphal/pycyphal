@@ -234,10 +234,6 @@ class CANTransport(pyuavcan.transport.Transport):
         """
         self._monitoring_handlers.append(handler)
 
-    @property
-    def monitoring_enabled(self) -> bool:
-        return len(self._monitoring_handlers) > 0
-
     async def _do_send_until(self, frames: typing.Iterable[UAVCANFrame], monotonic_deadline: float) -> bool:
         """
         All frames shall share the same CAN ID value.

@@ -374,10 +374,8 @@ async def _unittest_serial_transport_monitoring(caplog: typing.Any) -> None:
 
     events: typing.List[object] = []
     events2: typing.List[object] = []
-    assert not tr.monitoring_enabled
     tr.enable_monitoring(events.append)
     tr.enable_monitoring(events2.append)
-    assert tr.monitoring_enabled
     assert events == []
     assert events2 == []
 

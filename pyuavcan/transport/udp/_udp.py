@@ -241,11 +241,9 @@ class UDPTransport(pyuavcan.transport.Transport):
         """
         Monitoring is not implemented yet -- the handlers are never invoked.
         """
+        if not self._monitoring_handlers:  # Enabling the monitoring is a one-time operation. Events are then broadcast.
+            pass
         self._monitoring_handlers.append(handler)
-
-    @property
-    def monitoring_enabled(self) -> bool:
-        return len(self._monitoring_handlers) > 0
 
     def sample_statistics(self) -> UDPTransportStatistics:
         return copy.copy(self._statistics)

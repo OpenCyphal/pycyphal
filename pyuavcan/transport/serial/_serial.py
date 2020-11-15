@@ -282,10 +282,6 @@ class SerialTransport(pyuavcan.transport.Transport):
         """
         self._monitoring_handlers.append(handler)
 
-    @property
-    def monitoring_enabled(self) -> bool:
-        return len(self._monitoring_handlers) > 0
-
     def sample_statistics(self) -> SerialTransportStatistics:
         return copy.copy(self._statistics)
 

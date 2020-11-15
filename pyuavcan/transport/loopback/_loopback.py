@@ -148,8 +148,8 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         return list(self._output_sessions.values())
 
     @property
-    def monitoring_enabled(self) -> bool:
-        return len(self._monitoring_handlers) > 0
+    def monitoring_handlers(self) -> typing.Sequence[pyuavcan.transport.MonitoringHandler]:
+        return self._monitoring_handlers[:]
 
     @property
     def descriptor(self) -> str:

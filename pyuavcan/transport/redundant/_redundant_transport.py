@@ -51,6 +51,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         """
         self._cols: typing.List[pyuavcan.transport.Transport] = []
         self._rows: typing.Dict[pyuavcan.transport.SessionSpecifier, RedundantSession] = {}
+        self._monitoring_handlers: typing.List[pyuavcan.transport.MonitoringHandler] = []
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._check_matrix_consistency()
 
@@ -138,11 +139,14 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
     def enable_monitoring(self, handler: pyuavcan.transport.MonitoringHandler) -> None:
         """
+        Stores the handler in the local list of handlers.
         Invokes :class:`pyuavcan.transport.Transport.enable_monitoring` on each inferior with the provided handler.
         If at least one inferior raises an exception, it is propagated immediately and the remaining inferiors
         will remain in an inconsistent state.
-        If a different error handling policy is desired, configure the inferiors manually instead of using this method.
+        When a new inferior is added later, the stored handlers will be automatically used to enable monitoring on it.
+        If such auto-restoration behavior is undesirable, configure monitoring individually per-inferior instead.
         """
+        self._monitoring_handlers.append(handler)
         for c in self._cols:
             c.enable_monitoring(handler)
 
@@ -158,15 +162,6 @@ class RedundantTransport(pyuavcan.transport.Transport):
     @property
     def output_sessions(self) -> typing.Sequence[RedundantOutputSession]:
         return [s for s in self._rows.values() if isinstance(s, RedundantOutputSession)]
-
-    @property
-    def monitoring_enabled(self) -> bool:
-        """
-        The value is True iff there is at least one inferior and monitoring is enabled for at least one inferior.
-        """
-        if len(self._cols) > 0:
-            return any(c.monitoring_enabled for c in self._cols)
-        return False  # Default state.
 
     @property
     def descriptor(self) -> str:
@@ -216,6 +211,8 @@ class RedundantTransport(pyuavcan.transport.Transport):
         the operation will be rolled back to ensure state consistency.
         """
         self._validate_inferior(transport)
+        for mh in self._monitoring_handlers:
+            transport.enable_monitoring(mh)
         self._cols.append(transport)
         try:
             for redundant_session in self._rows.values():

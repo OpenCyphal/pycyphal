@@ -171,10 +171,9 @@ class Transport(abc.ABC):
         There may be an arbitrary number of monitoring handlers installed; when a new handler is installed, it is
         added to the existing ones, if any.
 
-        If the transport does not support monitoring, this method will have no effect other than flipping the state
-        of :attr:`monitoring_enabled` from False to True. Technically, the monitoring protocol, as you can see,
-        does not have any requirements to the emitted events, so an implementation that pretends to enter
-        the monitoring mode while not actually doing anything other than updating that property is compliant.
+        If the transport does not support monitoring, this method may have no observable effect.
+        Technically, the monitoring protocol, as you can see, does not present any requirements to the emitted events,
+        so an implementation that pretends to enter the monitoring mode while not actually doing anything is compliant.
 
         Since monitoring reflects actual network events, deterministic data loss mitigation enabled on the
         local node will make the monitor emit duplicate frames for outgoing transfers (although this is probably
@@ -213,15 +212,6 @@ class Transport(abc.ABC):
     def output_sessions(self) -> typing.Sequence[OutputSession]:
         """
         Immutable view of all output sessions that are currently open.
-        """
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def monitoring_enabled(self) -> bool:
-        """
-        Whether this transport instance is currently operating in the monitoring mode with at least one monitor
-        handler installed. See :meth:`enable_monitoring` for details.
         """
         raise NotImplementedError
 
