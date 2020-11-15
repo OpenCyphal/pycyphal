@@ -74,7 +74,7 @@ PyUAVCAN is different -- it is created for user-facing software rather than reli
 that is, PyUAVCAN can't be put onboard a vehicle, but it can be put onto the computer of an engineer or a researcher
 building said vehicle to help them implement, understand, validate, verify, and diagnose its onboard network.
 
-Hence, PyUAVCAN trades off simplicity and constraindness (desirable for embedded systems)
+Hence, PyUAVCAN trades off simplicity and constrainedness (desirable for embedded systems)
 for extensibility and repurposeability (desirable for user-facing software).
 The library consists of a transport-agnostic core which implements the higher levels of the UAVCAN protocol,
 DSDL code generation, and object serialization.
