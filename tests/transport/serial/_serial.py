@@ -392,7 +392,10 @@ async def _unittest_serial_transport_monitoring(caplog: typing.Any) -> None:
     )
     await asyncio.sleep(0.1)
     assert events == events2
-    a, b, c, d = events                 # Send three -- one event, receive three -- three events.
+    # Send three -- one event, receive three -- three events.
+    # Sorting is required because the ordering of the events in the middle is not defined: arrival events
+    # may or may not be registered before the emission event depending on how the serial loopback is operating.
+    a, b, c, d = sorted(events, key=lambda x: not isinstance(x, SerialFrame))
     assert isinstance(a, SerialFrame)
     assert isinstance(b, SerialFrame)
     assert isinstance(c, SerialFrame)
