@@ -154,7 +154,7 @@ class Transport(abc.ABC):
         (e.g., UDP packets, CAN frames, etc.), this method is used to activate this feature.
 
         This method puts the transport instance into the "sniffing mode" which does not interfere with its normal
-        operation but may dramatically increase the computing load due to the need to process every frame exchanged
+        operation but may significantly increase the computing load due to the need to process every frame exchanged
         over the network (not just frames that originate or terminate at the local node).
         This usually involves reconfiguration of the local networking hardware (e.g., the network card may be put
         into promiscuous mode, the CAN adapter will have its acceptance filters reconfigured to accept everything,
@@ -180,10 +180,10 @@ class Transport(abc.ABC):
         obvious enough without this elaboration).
 
         Currently, it is not possible to disable sniffing. Once enabled, it will go on until the transport instance
-        is destroyed. This restriction may be lifted in a future release.
+        is destroyed.
 
         :param handler: A one-argument callable invoked to inform the user about transport-level events.
-            The type of the argument is :class:`object`, see transport-specific docs for the list of the possible
+            The type of the argument is :class:`Sniff`, see transport-specific docs for the list of the possible
             concrete types and what events they represent.
             The callable may be invoked from a different thread so the user should ensure synchronization.
             If the callable raises an exception, it is suppressed and logged.
@@ -259,4 +259,16 @@ class Transport(abc.ABC):
                                              local_node_id=self.local_node_id)
 
 
-SnifferCallback = typing.Callable[[object], None]
+@dataclasses.dataclass(frozen=True)
+class Sniff:
+    """
+    This is the abstract data class for all events reported via the sniffing API.
+
+    If a transport implementation defines multiple event types, it is recommended to define a common superclass
+    for them such that it is always possible to determine which transport an event has arrived from using a single
+    instance check.
+    """
+    pass
+
+
+SnifferCallback = typing.Callable[[Sniff], None]

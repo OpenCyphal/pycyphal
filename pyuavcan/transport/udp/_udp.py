@@ -247,6 +247,8 @@ class UDPTransport(pyuavcan.transport.Transport):
         The API is not documented because it is not ready for production use and may change significantly.
         If you want to use it, read the code and be prepared for it to break soon.
 
+        See :class:`UDPSniff`.
+
         On GNU/Linux, network sniffing requires that either the process is executed by root,
         or the raw packet capture capability ``CAP_NET_RAW`` is enabled.
         For more info read ``man 7 capabilities`` and consider checking the docs for Wireshark/libpcap.
@@ -360,8 +362,17 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     def _process_sniffed_packet(self, timestamp: pyuavcan.transport.Timestamp, packet: UDPIPPacket) -> None:
         """This handler may be invoked from a different thread (the sniffer thread)."""
-        pyuavcan.util.broadcast(self._sniffer_handlers)((timestamp, packet))
+        pyuavcan.util.broadcast(self._sniffer_handlers)(UDPSniff(timestamp, packet))
 
     def _ensure_not_closed(self) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+
+
+@dataclasses.dataclass(frozen=True)
+class UDPSniff(pyuavcan.transport.Sniff):
+    """
+    See :meth:`UDPTransport.sniff` for details.
+    """
+    timestamp: pyuavcan.transport.Timestamp = dataclasses.field(repr=False)
+    packet: UDPIPPacket

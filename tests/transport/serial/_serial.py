@@ -13,6 +13,7 @@ import logging
 import pyuavcan.transport
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pyuavcan.transport.serial import SerialTransport, SerialTransportStatistics, SerialFrame
+from pyuavcan.transport.serial import SerialSniff, SerialTxSniff, SerialRxFrameSniff, SerialRxOutOfBandSniff
 
 
 @pytest.mark.asyncio    # type: ignore
@@ -372,8 +373,8 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
         PayloadMetadata(10000)
     )
 
-    events: typing.List[object] = []
-    events2: typing.List[object] = []
+    events: typing.List[pyuavcan.transport.Sniff] = []
+    events2: typing.List[pyuavcan.transport.Sniff] = []
     tr.sniff(events.append)
     tr.sniff(events2.append)
     assert events == []
@@ -395,46 +396,42 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
     # Send three -- one event, receive three -- three events.
     # Sorting is required because the ordering of the events in the middle is not defined: arrival events
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, c, d = sorted(events, key=lambda x: not isinstance(x, SerialFrame))
-    assert isinstance(a, SerialFrame)
-    assert isinstance(b, SerialFrame)
-    assert isinstance(c, SerialFrame)
-    assert isinstance(d, tuple)
-    tx_ts, (tx_a, tx_b, tx_c) = d
-    assert isinstance(tx_ts, Timestamp)
-    assert isinstance(tx_a, SerialFrame)
-    assert isinstance(tx_b, SerialFrame)
-    assert isinstance(tx_c, SerialFrame)
+    a, b, c, d = sorted(events, key=lambda x: not isinstance(x, SerialRxFrameSniff))
+    assert isinstance(a, SerialRxFrameSniff)
+    assert isinstance(b, SerialRxFrameSniff)
+    assert isinstance(c, SerialRxFrameSniff)
+    assert isinstance(d, SerialTxSniff)
+    assert len(d.frames) == 3
 
-    assert a.transfer_id == 777
-    assert b.transfer_id == 777
-    assert c.transfer_id == 777
-    assert a.timestamp.monotonic >= ts.monotonic
-    assert b.timestamp.monotonic >= ts.monotonic
-    assert c.timestamp.monotonic >= ts.monotonic
-    assert a.index == 0
-    assert b.index == 1
-    assert c.index == 2
-    assert not a.end_of_transfer
-    assert not b.end_of_transfer
-    assert c.end_of_transfer
+    assert a.frame.transfer_id == 777
+    assert b.frame.transfer_id == 777
+    assert c.frame.transfer_id == 777
+    assert a.frame.timestamp.monotonic >= ts.monotonic
+    assert b.frame.timestamp.monotonic >= ts.monotonic
+    assert c.frame.timestamp.monotonic >= ts.monotonic
+    assert a.frame.index == 0
+    assert b.frame.index == 1
+    assert c.frame.index == 2
+    assert not a.frame.end_of_transfer
+    assert not b.frame.end_of_transfer
+    assert c.frame.end_of_transfer
 
-    assert tx_ts.monotonic >= ts.monotonic
-    assert tx_a.timestamp == ts
-    assert tx_b.timestamp == ts
-    assert tx_c.timestamp == ts
-    assert tx_a.transfer_id == 777
-    assert tx_b.transfer_id == 777
-    assert tx_c.transfer_id == 777
-    assert tx_a.timestamp.monotonic >= ts.monotonic
-    assert tx_c.timestamp.monotonic >= ts.monotonic
-    assert tx_b.timestamp.monotonic >= ts.monotonic
-    assert tx_a.index == 0
-    assert tx_b.index == 1
-    assert tx_c.index == 2
-    assert not tx_a.end_of_transfer
-    assert not tx_b.end_of_transfer
-    assert tx_c.end_of_transfer
+    assert d.timestamp.monotonic >= ts.monotonic
+    assert d.frames[0].timestamp == ts
+    assert d.frames[1].timestamp == ts
+    assert d.frames[2].timestamp == ts
+    assert d.frames[0].transfer_id == 777
+    assert d.frames[1].transfer_id == 777
+    assert d.frames[2].transfer_id == 777
+    assert d.frames[0].timestamp.monotonic >= ts.monotonic
+    assert d.frames[1].timestamp.monotonic >= ts.monotonic
+    assert d.frames[2].timestamp.monotonic >= ts.monotonic
+    assert d.frames[0].index == 0
+    assert d.frames[1].index == 1
+    assert d.frames[2].index == 2
+    assert not d.frames[0].end_of_transfer
+    assert not d.frames[1].end_of_transfer
+    assert d.frames[2].end_of_transfer
 
     events.clear()
     events2.clear()
@@ -455,39 +452,35 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
     # Send two -- two events, receive two -- two events.
     # Sorting is required because the order of the two events in the middle is not defined: the arrival event
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, d, d2 = sorted(events, key=lambda x: not isinstance(x, SerialFrame))
-    assert isinstance(a, SerialFrame)
-    assert isinstance(b, SerialFrame)
-    assert isinstance(d, tuple)
-    assert isinstance(d2, tuple)
-    tx_ts, (tx_x,) = d
-    assert isinstance(tx_ts, Timestamp)
-    assert isinstance(tx_x, SerialFrame)
-    tx_ts2, (tx_y,) = d2
-    assert isinstance(tx_ts2, Timestamp)
-    assert isinstance(tx_y, SerialFrame)
+    a, b, d, d2 = sorted(events, key=lambda x: not isinstance(x, SerialRxFrameSniff))
+    assert isinstance(a, SerialRxFrameSniff)
+    assert isinstance(b, SerialRxFrameSniff)
+    assert isinstance(d, SerialTxSniff)
+    assert isinstance(d2, SerialTxSniff)
+    assert len(d.frames) == 1
+    assert len(d2.frames) == 1
 
-    assert a.transfer_id == 888
-    assert b.transfer_id == 888
-    assert a.timestamp.monotonic >= ts.monotonic
-    assert b.timestamp.monotonic >= ts.monotonic
-    assert a.index == 0
-    assert b.index == 0
-    assert a.end_of_transfer
-    assert b.end_of_transfer
+    assert a.frame.transfer_id == 888
+    assert b.frame.transfer_id == 888
+    assert a.frame.timestamp.monotonic >= ts.monotonic
+    assert b.frame.timestamp.monotonic >= ts.monotonic
+    assert a.frame.index == 0
+    assert b.frame.index == 0
+    assert a.frame.end_of_transfer
+    assert b.frame.end_of_transfer
 
-    assert tx_ts.monotonic >= ts.monotonic
-    assert tx_ts.monotonic >= ts.monotonic
-    assert tx_x.timestamp == ts
-    assert tx_y.timestamp == ts
-    assert tx_x.transfer_id == 888
-    assert tx_y.transfer_id == 888
-    assert tx_x.timestamp.monotonic >= ts.monotonic
-    assert tx_y.timestamp.monotonic >= ts.monotonic
-    assert tx_x.index == 0
-    assert tx_y.index == 0
-    assert tx_x.end_of_transfer
-    assert tx_y.end_of_transfer
+    assert d.timestamp.monotonic >= ts.monotonic
+    assert d2.timestamp.monotonic >= ts.monotonic
+    assert d.frames[0].timestamp == ts
+    assert d2.frames[0].timestamp == ts
+    assert d.frames[0].transfer_id == 888
+    assert d2.frames[0].transfer_id == 888
+    assert d.frames[0].timestamp.monotonic >= ts.monotonic
+    assert d2.frames[0].timestamp.monotonic >= ts.monotonic
+    assert d.frames[0].index == 0
+    assert d2.frames[0].index == 0
+    assert d.frames[0].end_of_transfer
+    assert d2.frames[0].end_of_transfer
 
     events.clear()
     events2.clear()
@@ -502,8 +495,8 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
         await asyncio.sleep(1)
     assert events == events2
     oob, = events
-    assert isinstance(oob, memoryview)
-    assert bytes(oob) == grownups  # The delimiter is (responsibly) consumed by the parser. Bye bye delimiter.
+    assert isinstance(oob, SerialRxOutOfBandSniff)
+    assert bytes(oob.data) == grownups  # The delimiter is (responsibly) consumed by the parser. Bye bye delimiter.
 
     events.clear()
     events2.clear()

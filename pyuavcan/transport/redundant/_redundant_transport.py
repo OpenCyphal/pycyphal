@@ -145,6 +145,9 @@ class RedundantTransport(pyuavcan.transport.Transport):
         will remain in an inconsistent state.
         When a new inferior is added later, the stored handlers will be automatically used to enable sniffing on it.
         If such auto-restoration behavior is undesirable, configure sniffing individually per-inferior instead.
+
+        The redundant transport does not define its own sniffing events and does not wrap sniffing events reported
+        by its inferiors.
         """
         self._sniffer_handlers.append(handler)
         for c in self._cols:

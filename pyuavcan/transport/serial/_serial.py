@@ -212,7 +212,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
             if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) \
                     and self._service_transfer_multiplier > 1:
-                async def send_transfer(frames: typing.Sequence[SerialFrame],
+                async def send_transfer(frames: typing.List[SerialFrame],
                                         monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.Timestamp]:
                     frames = list(frames)
                     first_tx_ts: typing.Optional[pyuavcan.transport.Timestamp] = None
@@ -258,29 +258,8 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
-        The handler will receive the following events, possibly from a different thread (use locks):
-
-        +---------------------------------------------------------------+-------------------------------------------+
-        | Event                                                         | Argument type                             |
-        +===============================================================+===========================================+
-        | Frame received. Timestamp reflects the time when the first    | :class:`SerialFrame`                      |
-        | byte was received. If necessary, obtain the original encoded  |                                           |
-        | byte representation using :func:`SerialFrame.compile_into`.   |                                           |
-        +---------------------------------------------------------------+-------------------------------------------+
-        | Out-of-band data or a malformed frame                         | :class:`memoryview`                       |
-        | received. See :class:`StreamParser`.                          |                                           |
-        +---------------------------------------------------------------+-------------------------------------------+
-        | Outgoing transfer sent by the local node.                     | (:class:`pyuavcan.transport.Timestamp`,   |
-        | The first tuple element is the timestamp when the first frame | [:class:`SerialFrame`])                   |
-        | was sent (the other frames are not timestamped).              |                                           |
-        | The second tuple element is the list of frames of this        |                                           |
-        | transfer, where each frame bears the timestamp of the         |                                           |
-        | outgoing transfer object. If no frames could be sent due to   |                                           |
-        | an error, the timestamp may be None and the list is empty.    |                                           |
-        | Obtain bytes using :func:`SerialFrame.compile_into`.          |                                           |
-        +---------------------------------------------------------------+-------------------------------------------+
-        | Any other event should be ignored for future compatibility.                                               |
-        +---------------------------------------------------------------+-------------------------------------------+
+        The reported events are all subtypes of :class:`SerialSniff`, please read its documentation for details.
+        The events may be reported from a different thread (use locks).
         """
         self._sniffer_handlers.append(handler)
 
@@ -323,7 +302,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert self._statistics.in_bytes <= in_bytes_count
         self._statistics.in_bytes = int(in_bytes_count)
 
-    async def _send_transfer(self, frames: typing.Sequence[SerialFrame], monotonic_deadline: float) \
+    async def _send_transfer(self, frames: typing.List[SerialFrame], monotonic_deadline: float) \
             -> typing.Optional[pyuavcan.transport.Timestamp]:
         """
         Emits the frames belonging to the same transfer, returns the first frame transmission timestamp.
@@ -367,7 +346,10 @@ class SerialTransport(pyuavcan.transport.Transport):
                 num_sent += 1
 
             self._statistics.out_frames += num_sent
-            pyuavcan.util.broadcast(self._sniffer_handlers)((tx_ts, frames[:num_sent]))
+            if self._sniffer_handlers:
+                pyuavcan.util.broadcast(self._sniffer_handlers)(
+                    SerialTxSniff(tx_ts or pyuavcan.transport.Timestamp.now(), frames[:num_sent])
+                )
         except Exception as ex:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(f'{self} is closed, transmission aborted.') from ex
@@ -385,7 +367,15 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         def callback(item: typing.Union[SerialFrame, memoryview]) -> None:
             self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, item, in_bytes_count)
-            pyuavcan.util.broadcast(self._sniffer_handlers)(item)
+            if self._sniffer_handlers:
+                event: SerialSniff
+                if isinstance(item, SerialFrame):
+                    event = SerialRxFrameSniff(item)
+                elif isinstance(item, memoryview):
+                    event = SerialRxOutOfBandSniff(item)
+                else:
+                    assert False
+                pyuavcan.util.broadcast(self._sniffer_handlers)(event)
 
         try:
             parser = StreamParser(callback, max(self.VALID_MTU_RANGE))
@@ -412,3 +402,43 @@ class SerialTransport(pyuavcan.transport.Transport):
     def _ensure_not_closed(self) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+
+
+@dataclasses.dataclass(frozen=True)
+class SerialSniff(pyuavcan.transport.Sniff):
+    """
+    The set of subclasses may be extended in future versions.
+    """
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class SerialTxSniff(SerialSniff):
+    """
+    Outgoing transfer emission event from the local node.
+
+    The timestamp specifies the time when the first frame was sent (the other frames are not timestamped).
+    Each frame in the list bears the timestamp of the outgoing transfer object.
+    If no frames could be sent due to an error, the list will be empty.
+    Obtain bytes using :func:`SerialFrame.compile_into`.
+    """
+    timestamp: pyuavcan.transport.Timestamp
+    frames: typing.List[SerialFrame]
+
+
+@dataclasses.dataclass(frozen=True)
+class SerialRxFrameSniff(SerialSniff):
+    """
+    Frame reception event.
+    The timestamp reflects the time when the first byte was received.
+    If necessary, obtain the original encoded byte representation using :func:`SerialFrame.compile_into`.
+    """
+    frame: SerialFrame
+
+
+@dataclasses.dataclass(frozen=True)
+class SerialRxOutOfBandSniff(SerialSniff):
+    """
+    Out-of-band data or a malformed frame received. See :class:`StreamParser`.
+    """
+    data: memoryview

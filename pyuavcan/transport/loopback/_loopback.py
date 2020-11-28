@@ -19,6 +19,14 @@ class LoopbackTransportStatistics(pyuavcan.transport.TransportStatistics):
     pass
 
 
+@dataclasses.dataclass(frozen=True)
+class LoopbackSniff(pyuavcan.transport.Sniff):
+    """
+    The sniffing handlers will receive :class:`pyuavcan.transport.TransferFrom` for each exchanged transfer.
+    """
+    transfer: pyuavcan.transport.TransferFrom
+
+
 class LoopbackTransport(pyuavcan.transport.Transport):
     """
     The loopback transport is intended for basic testing and API usage demonstrations.
@@ -107,7 +115,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                     fragmented_payload=tr.fragmented_payload,
                     source_node_id=self.local_node_id,
                 )
-                pyuavcan.util.broadcast(self._sniffer_handlers)(tr_from)
+                pyuavcan.util.broadcast(self._sniffer_handlers)(LoopbackSniff(tr_from))
                 for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                     try:
                         destination_session = self._input_sessions[
@@ -131,9 +139,6 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         return sess
 
     def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
-        """
-        The handler(s) will receive :class:`pyuavcan.transport.TransferFrom` for each exchanged transfer.
-        """
         self._sniffer_handlers.append(handler)
 
     def sample_statistics(self) -> LoopbackTransportStatistics:

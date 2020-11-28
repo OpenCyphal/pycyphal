@@ -14,7 +14,7 @@ from ._base import SerialSession
 
 
 #: Returns the transmission timestamp.
-SendHandler = typing.Callable[[typing.Sequence[SerialFrame], float],
+SendHandler = typing.Callable[[typing.List[SerialFrame], float],
                               typing.Awaitable[typing.Optional[pyuavcan.transport.Timestamp]]]
 
 _logger = logging.getLogger(__name__)

@@ -206,6 +206,10 @@ Inheritance diagram
 
 from ._serial import SerialTransport as SerialTransport
 from ._serial import SerialTransportStatistics as SerialTransportStatistics
+from ._serial import SerialSniff as SerialSniff
+from ._serial import SerialTxSniff as SerialTxSniff
+from ._serial import SerialRxFrameSniff as SerialRxFrameSniff
+from ._serial import SerialRxOutOfBandSniff as SerialRxOutOfBandSniff
 
 from ._session import SerialSession as SerialSession
 from ._session import SerialInputSession as SerialInputSession
