@@ -6,6 +6,7 @@
 
 from ._network_map import NetworkMap as NetworkMap
 
+from ._packet import IPAddress as IPAddress  # Should we also export the derived specializations for IPv4/v6?
 from ._packet import IPHeader as IPHeader
 from ._packet import UDPHeader as UDPHeader
 from ._packet import UDPIPPacket as UDPIPPacket

@@ -228,7 +228,7 @@ class CANTransport(pyuavcan.transport.Transport):
             self._reconfigure_acceptance_filters()
         return session
 
-    def enable_sniffing(self, handler: pyuavcan.transport.SnifferCallback) -> None:
+    def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
         Monitoring is not implemented yet -- the handlers are never invoked.
         """

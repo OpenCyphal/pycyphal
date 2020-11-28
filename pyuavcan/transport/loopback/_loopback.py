@@ -130,7 +130,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
             self._output_sessions[specifier] = sess
         return sess
 
-    def enable_sniffing(self, handler: pyuavcan.transport.SnifferCallback) -> None:
+    def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
         The handler(s) will receive :class:`pyuavcan.transport.TransferFrom` for each exchanged transfer.
         """

@@ -16,7 +16,7 @@ import logging
 import threading
 import pyuavcan
 from ._network_map import NetworkMap
-from ._packet import Sniffer, UDPIPPacket, IPHeader, UDPHeader
+from ._packet import Sniffer, UDPIPPacket, IPHeader, UDPHeader, IPAddress
 
 
 _logger = logging.getLogger(__name__)
@@ -74,15 +74,13 @@ class IPv4NetworkMap(NetworkMap):
         return self._local_node_id
 
     def map_ip_address_to_node_id(self, ip: str) -> typing.Optional[int]:
-        # Unclean strings will decrease the cache performance. Do we want to strip() them beforehand?
         try:
             return self._ip_to_nid_cache[ip]
         except LookupError:
-            a = IPv4Address.parse(ip)
+            a = IPv4Address.parse(ip, self._local.netmask_width)
             node_id: typing.Optional[int] = None
             if a in self._local:
-                candidate = int(a) - int(self._local.subnet_address)
-                assert candidate >= 0
+                candidate = a.node_id
                 if candidate < self._max_nodes:
                     node_id = candidate
 
@@ -115,7 +113,7 @@ class IPv4NetworkMap(NetworkMap):
         # Specify the fixed remote end. The port is always fixed; the host is unicast or broadcast.
         if remote_node_id is None:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            s.connect((str(self._local.broadcast_address), remote_port))
+            s.connect((str(self._local.broadcast_address.host_address), remote_port))
         elif 0 <= remote_node_id < self._max_nodes:
             ip = IPv4Address(int(self._local.subnet_address) + remote_node_id)
             assert ip in self._local
@@ -181,7 +179,7 @@ class IPv4NetworkMap(NetworkMap):
         if sys.platform.startswith('win32'):
             s.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)            # Enable promiscuous mode on the interface.
 
-        return IPv4Sniffer(s, handler)
+        return IPv4Sniffer(s, self._local, handler)
 
     def __str__(self) -> str:
         return str(self._local)
@@ -190,6 +188,7 @@ class IPv4NetworkMap(NetworkMap):
 class IPv4Sniffer(Sniffer):
     """
     A very basic background worker continuously reading IP packets from the raw socket, filtering the UDP ones,
+    dropping those that neither originate nor terminate in the specified subnet,
     and emitting them via the callback (yup, right from the worker thread).
     """
 
@@ -201,12 +200,14 @@ class IPv4Sniffer(Sniffer):
     _PROTO_UDP = 0x11
 
     def __init__(self,
-                 s: socket.socket,
+                 sock:    socket.socket,
+                 subnet:  IPv4Address,
                  handler: typing.Callable[[pyuavcan.transport.Timestamp, UDPIPPacket], None]) -> None:
-        self._sock = s
+        self._sock = sock
+        self._subnet = subnet
         self._handler = handler
         self._keep_going = True
-        self._ip_cache: typing.Dict[int, str] = {}
+        self._ip_cache: typing.Dict[int, IPv4Address] = {}
         self._thread = threading.Thread(target=self._thread_function, name='udp_ipv4_sniffer', daemon=True)
         self._thread.start()
 
@@ -214,12 +215,12 @@ class IPv4Sniffer(Sniffer):
         self._keep_going = False
         self._sock.close()
 
-    def _transform_address(self, input: int) -> str:
+    def _transform_address(self, raw: int) -> IPv4Address:
         try:
-            return self._ip_cache[input]
+            return self._ip_cache[raw]
         except LookupError:
-            self._ip_cache[input] = str(IPv4Address(input))
-        return self._ip_cache[input]
+            self._ip_cache[raw] = IPv4Address(raw)
+        return self._ip_cache[raw]
 
     def _try_parse(self, data: memoryview) -> typing.Optional[UDPIPPacket]:
         ver_ihl, dscp_ecn, ip_length, ident, flags_frag_off, ttl, proto, hdr_chk, src_adr, dst_adr = \
@@ -231,8 +232,8 @@ class IPv4Sniffer(Sniffer):
             return None
         src_port, dst_port, udp_length, udp_chk = IPv4Sniffer._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
         return UDPIPPacket(
-            ip_header=IPHeader(source_address=self._transform_address(src_adr),
-                               destination_address=self._transform_address(dst_adr)),
+            ip_header=IPHeader(source=self._transform_address(src_adr),
+                               destination=self._transform_address(dst_adr)),
             udp_header=UDPHeader(source_port=src_port, destination_port=dst_port),
             udp_payload=data[udp_ip_header_size:],
         )
@@ -244,12 +245,15 @@ class IPv4Sniffer(Sniffer):
                 while self._keep_going:
                     data, _addr = self._sock.recvfrom(self._MTU)
                     ts = pyuavcan.transport.Timestamp.now()         # TODO: use accurate timestamping.
-                    packet = self._try_parse(memoryview(data))
-                    if packet is not None:
-                        try:
-                            self._handler(ts, packet)
-                        except Exception as ex:
-                            _logger.exception('%s: Exception in the sniffer handler: %s', self, ex)
+                    pkt = self._try_parse(memoryview(data))
+                    if pkt is not None:
+                        if pkt.ip_header.source in self._subnet and pkt.ip_header.destination in self._subnet:
+                            try:
+                                self._handler(ts, pkt)
+                            except Exception as ex:
+                                _logger.exception('%s: exception in the sniffer handler: %s', self, ex)
+                        else:
+                            _logger.debug('%s: out-of-network packet dropped: %r', self, pkt)
             except Exception as ex:
                 if (self._sock.fileno() < 0) or (isinstance(ex, OSError) and ex.errno == errno.EBADF) or \
                         not self._keep_going:
@@ -261,18 +265,7 @@ class IPv4Sniffer(Sniffer):
                 time.sleep(1)
 
 
-class IPv4Address:
-    """
-    This class models the IPv4 address of a particular host along with the subnet it is contained in.
-    For example:
-
-    - 192.168.1.200/24:
-        - Host:      192.168.1.200
-        - Network:   192.168.1.0
-        - Broadcast: 192.168.1.255
-
-    All properties are stored, so the class is suitable for frequent querying.
-    """
+class IPv4Address(IPAddress):
     _REGEXP = re.compile(r'^(\d+)\.(\d+)\.(\d+)\.(\d+)(?:/(\d+))?$')
 
     BIT_LENGTH = 32
@@ -292,8 +285,18 @@ class IPv4Address:
             raise ValueError(f'Invalid netmask width: {self._netmask_width}')
 
     @property
+    def node_id(self) -> int:
+        out = int(self) - int(self.subnet_address)
+        assert 0 <= out < 2 ** self.BIT_LENGTH
+        return out
+
+    @property
+    def netmask_width(self) -> int:
+        return self._netmask_width
+
+    @property
     def netmask(self) -> int:
-        netmask = (2 ** self._netmask_width - 1) << (self.BIT_LENGTH - self._netmask_width)
+        netmask = (2 ** self.netmask_width - 1) << (self.BIT_LENGTH - self.netmask_width)
         assert 0 <= netmask < 2 ** self.BIT_LENGTH
         assert isinstance(netmask, int)
         return netmask
@@ -306,17 +309,18 @@ class IPv4Address:
 
     @property
     def host_address(self) -> IPv4Address:
+        """Strips out the mask by making it equal to the address bit length."""
         return IPv4Address(self._address)
 
     @property
     def subnet_address(self) -> IPv4Address:
-        return IPv4Address(self._address & self.netmask)
+        return IPv4Address(self._address & self.netmask, self.netmask_width)
 
     @property
     def broadcast_address(self) -> IPv4Address:
-        return IPv4Address(self._address | self.hostmask)
+        return IPv4Address(self._address | self.hostmask, self.netmask_width)
 
-    def __contains__(self, item: typing.Union[int, IPv4Address]) -> bool:
+    def __contains__(self, item: typing.Union[int, IPAddress]) -> bool:
         if isinstance(item, (int, IPv4Address)):
             return int(self.subnet_address) <= int(item) <= int(self.broadcast_address)
         else:
@@ -326,7 +330,7 @@ class IPv4Address:
         if isinstance(other, int):
             return other == self._address
         elif isinstance(other, IPv4Address):
-            return other._address == self._address and other._netmask_width == self._netmask_width
+            return other._address == self._address and other.netmask_width == self.netmask_width
         else:
             return NotImplemented  # pragma: no cover
 
@@ -335,7 +339,7 @@ class IPv4Address:
 
     def __str__(self) -> str:
         return '.'.join(map(str, self._address.to_bytes(4, 'big'))) + \
-            (f'/{self._netmask_width}' if self._netmask_width < self.BIT_LENGTH else '')
+            (f'/{self.netmask_width}' if self.netmask_width < self.BIT_LENGTH else '')
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, str(self))
@@ -472,8 +476,8 @@ def _unittest_ipv4() -> None:
     assert ip.netmask == 0xFFFFFF00
     assert ip.hostmask == 0x000000FF
     assert ip.host_address == IPv4Address.parse('192.168.1.200')
-    assert ip.subnet_address == IPv4Address.parse('192.168.1.0')
-    assert ip.broadcast_address == IPv4Address.parse('192.168.1.255')
+    assert ip.subnet_address == IPv4Address.parse('192.168.1.0/24')
+    assert ip.broadcast_address == IPv4Address.parse('192.168.1.255/24')
 
     assert IPv4Address.parse('192.168.1.0') in ip
     assert IPv4Address.parse('192.168.1.1') in ip
@@ -485,12 +489,12 @@ def _unittest_ipv4() -> None:
     assert 0xC0A801C8 in ip
 
     assert ip.host_address.netmask == 0x_FFFF_FFFF
-    assert ip.subnet_address.netmask == 0x_FFFF_FFFF
-    assert ip.broadcast_address.netmask == 0x_FFFF_FFFF
+    assert ip.subnet_address.netmask == 0x_FFFF_FF00
+    assert ip.broadcast_address.netmask == 0x_FFFF_FF00
 
     assert ip.host_address.hostmask == 0
-    assert ip.subnet_address.hostmask == 0
-    assert ip.broadcast_address.hostmask == 0
+    assert ip.subnet_address.hostmask == 0x_0000_00FF
+    assert ip.broadcast_address.hostmask == 0x_0000_00FF
 
     print(ip)
     print(ip.host_address)

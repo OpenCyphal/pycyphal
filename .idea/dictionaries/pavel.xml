@@ -62,6 +62,7 @@
       <w>docname</w>
       <w>doctree</w>
       <w>doesn</w>
+      <w>dscp</w>
       <w>dsdl</w>
       <w>dsdlgen</w>
       <w>dsdlgp</w>
@@ -106,6 +107,7 @@
       <w>koopman</w>
       <w>levelname</w>
       <w>libcanard</w>
+      <w>libpcap</w>
       <w>linkcode</w>
       <w>lnid</w>
       <w>lsmod</w>
@@ -202,6 +204,7 @@
       <w>signedness</w>
       <w>sitecustomize</w>
       <w>sitl</w>
+      <w>sockaddr</w>
       <w>socketcan</w>
       <w>socketcanfd</w>
       <w>sphinxarg</w>

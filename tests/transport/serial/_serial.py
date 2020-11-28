@@ -374,8 +374,8 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
 
     events: typing.List[object] = []
     events2: typing.List[object] = []
-    tr.enable_sniffing(events.append)
-    tr.enable_sniffing(events2.append)
+    tr.sniff(events.append)
+    tr.sniff(events2.append)
     assert events == []
     assert events2 == []
 

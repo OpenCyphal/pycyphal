@@ -148,7 +148,7 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def enable_sniffing(self, handler: SnifferCallback) -> None:
+    def sniff(self, handler: SnifferCallback) -> None:
         """
         If the user desires to perform low-level monitoring of the transport interface at the transport frame level
         (e.g., UDP packets, CAN frames, etc.), this method is used to activate this feature.

@@ -241,7 +241,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         assert out.specifier == specifier
         return out
 
-    def enable_sniffing(self, handler: pyuavcan.transport.SnifferCallback) -> None:
+    def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
         UDP/IP packet sniffing support is highly experimental and should not be relied on.
         The API is not documented because it is not ready for production use and may change significantly.
@@ -250,6 +250,11 @@ class UDPTransport(pyuavcan.transport.Transport):
         On GNU/Linux, network sniffing requires that either the process is executed by root,
         or the raw packet capture capability ``CAP_NET_RAW`` is enabled.
         For more info read ``man 7 capabilities`` and consider checking the docs for Wireshark/libpcap.
+
+        Packets that neither originate nor terminate in the specified subnet are not reported via this interface.
+        This restriction is critical because there may be other UAVCAN/UDP networks running on the same physical
+        L2 network segregated by different subnets, so that if foreign packets were not dropped,
+        conflicts would occur.
         """
         self._ensure_not_closed()
         if self._sniffer is None:

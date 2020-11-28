@@ -137,10 +137,10 @@ class RedundantTransport(pyuavcan.transport.Transport):
         self._check_matrix_consistency()
         return out
 
-    def enable_sniffing(self, handler: pyuavcan.transport.SnifferCallback) -> None:
+    def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
         Stores the handler in the local list of handlers.
-        Invokes :class:`pyuavcan.transport.Transport.enable_sniffing` on each inferior with the provided handler.
+        Invokes :class:`pyuavcan.transport.Transport.sniff` on each inferior with the provided handler.
         If at least one inferior raises an exception, it is propagated immediately and the remaining inferiors
         will remain in an inconsistent state.
         When a new inferior is added later, the stored handlers will be automatically used to enable sniffing on it.
@@ -148,7 +148,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         """
         self._sniffer_handlers.append(handler)
         for c in self._cols:
-            c.enable_sniffing(handler)
+            c.sniff(handler)
 
     def sample_statistics(self) -> RedundantTransportStatistics:
         return RedundantTransportStatistics(
@@ -212,7 +212,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         """
         self._validate_inferior(transport)
         for mh in self._sniffer_handlers:
-            transport.enable_sniffing(mh)
+            transport.sniff(mh)
         self._cols.append(transport)
         try:
             for redundant_session in self._rows.values():

@@ -276,6 +276,7 @@ from ._frame import UDPFrame as UDPFrame
 
 from ._demultiplexer import UDPDemultiplexerStatistics as UDPDemultiplexerStatistics
 
+from ._ip import IPAddress as IPAddress
 from ._ip import IPHeader as IPHeader
 from ._ip import UDPHeader as UDPHeader
 from ._ip import UDPIPPacket as UDPIPPacket

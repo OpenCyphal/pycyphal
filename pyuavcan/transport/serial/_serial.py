@@ -256,7 +256,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
 
-    def enable_sniffing(self, handler: pyuavcan.transport.SnifferCallback) -> None:
+    def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
         The handler will receive the following events, possibly from a different thread (use locks):
 

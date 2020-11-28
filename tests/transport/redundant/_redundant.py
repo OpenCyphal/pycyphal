@@ -313,7 +313,7 @@ def _unittest_redundant_transport_sniffing() -> None:
     tr = RedundantTransport()
     inf_a = LoopbackTransport(1234)
     inf_b = LoopbackTransport(1234)
-    tr.enable_sniffing(mon)
+    tr.sniff(mon)
     assert inf_a.sniffer_handlers == []
     assert inf_b.sniffer_handlers == []
     tr.attach_inferior(inf_a)

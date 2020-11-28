@@ -143,7 +143,11 @@ class NetworkMap(abc.ABC):
         """
         Launch a new network sniffer based on a raw socket (usually this requires special permissions).
         The sniffer will run in a separate thread, invoking the handler *directly from the worker thread*
-        whenever a UDP packet is received (regardless of whether it is related to UAVCAN/UDP).
+        whenever a UDP packet from the specified subnet is received (regardless of whether it is related to UAVCAN/UDP).
+
+        Packets whose origin OR destination (except broadcast) are outside of the configured subnet will be dropped.
+        This is critical because there may be multiple UAVCAN/UDP transport networks running on the same
+        physical IP network segregated by IP subnets.
         """
         raise NotImplementedError
 
