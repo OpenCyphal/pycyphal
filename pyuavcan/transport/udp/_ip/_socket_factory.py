@@ -52,12 +52,15 @@ class SocketFactory(abc.ABC):
         elif isinstance(local_ip_address, ipaddress.IPv6Address):
             from ._v6 import SocketFactoryIPv6
             return SocketFactoryIPv6(local_ip_address)
-        else:
+        else:  # pragma: no cover
             raise TypeError(f'Invalid local IP address: {local_ip_address!r}')
 
     @property
     @abc.abstractmethod
     def max_nodes(self) -> int:
+        """
+        The maximum number of nodes per subnet may be a function of the protocol version.
+        """
         raise NotImplementedError
 
     @property

@@ -7,12 +7,10 @@
 from ._socket_factory import SocketFactory as SocketFactory
 from ._socket_factory import Sniffer as Sniffer
 
-from ._packet import IPAddress as IPAddress  # Should we also export the derived specializations for IPv4/v6?
 from ._packet import IPHeader as IPHeader
 from ._packet import UDPHeader as UDPHeader
 from ._packet import UDPIPPacket as UDPIPPacket
 
-from ._endpoint_mapping import IPAddress as IPAddress
 from ._endpoint_mapping import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
 from ._endpoint_mapping import MULTICAST_GROUP_SUBJECT_ID_MASK as MULTICAST_GROUP_SUBJECT_ID_MASK
 from ._endpoint_mapping import SUBJECT_PORT as SUBJECT_PORT

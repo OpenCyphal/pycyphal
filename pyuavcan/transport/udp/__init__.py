@@ -331,7 +331,8 @@ Inheritance diagram
                          pyuavcan.transport.udp._frame
                          pyuavcan.transport.udp._session._input
                          pyuavcan.transport.udp._session._output
-                         pyuavcan.transport.udp._demultiplexer
+                         pyuavcan.transport.udp._socket_reader
+                         pyuavcan.transport.udp._ip._packet
    :parts: 1
 """
 
@@ -357,3 +358,11 @@ from ._socket_reader import SocketReaderStatistics as SocketReaderStatistics
 from ._ip import IPHeader as IPHeader
 from ._ip import UDPHeader as UDPHeader
 from ._ip import UDPIPPacket as UDPIPPacket
+from ._ip import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
+from ._ip import SUBJECT_PORT as SUBJECT_PORT
+from ._ip import node_id_to_unicast_ip as node_id_to_unicast_ip
+from ._ip import unicast_ip_to_node_id as unicast_ip_to_node_id
+from ._ip import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group
+from ._ip import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
+from ._ip import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
+from ._ip import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier

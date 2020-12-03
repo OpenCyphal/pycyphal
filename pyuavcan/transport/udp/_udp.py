@@ -44,34 +44,23 @@ class UDPTransport(pyuavcan.transport.Transport):
     Please read the module documentation for details.
     """
 
-    DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 1
+    VALID_MTU_RANGE = 1200, 9000
     """
-    By default, service transfer multiplication is disabled for UDP.
-    This option may be justified for extremely unreliable experimental networks.
+    The minimum is based on the IPv6 specification, which guarantees that the path MTU is at least 1280 bytes large.
+    This value is also acceptable for virtually all IPv4 local or real-time networks.
+    Lower MTU values shall not be used because they may lead to multi-frame transfer fragmentation where this is
+    not expected by the designer, possibly violating the real-time constraints.
+
+    A conventional Ethernet jumbo frame can carry up to 9 KiB (9216 bytes).
+    These are the application-level MTU values, so we take overheads into account.
     """
 
     VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
 
-    DEFAULT_MTU = 1024
-    """
-    The recommended application-level MTU is one kibibyte. Lower values should not be used.
-    This is compatible with the IPv6 minimum MTU requirement, which is 1280 bytes.
-    The IPv4 has a lower MTU requirement of 576 bytes, but for local networks the MTU is normally much higher.
-    The transport can always accept any MTU regardless of its configuration.
-    """
-
-    VALID_MTU_RANGE = (1024, 9000)
-    """
-    A conventional Ethernet jumbo frame can carry up to 9 KiB (9216 bytes).
-    These are the application-level MTU values, so we take overheads into account.
-    An attempt to transmit a larger frame than supported by L2 may lead to IP fragmentation,
-    which is undesirable for time-deterministic networks.
-    """
-
     def __init__(self,
                  local_ip_address:            typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
-                 mtu:                         int = DEFAULT_MTU,
-                 service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
+                 mtu:                         int = min(VALID_MTU_RANGE),
+                 service_transfer_multiplier: int = 1,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
         """
         :param local_ip_address: Specifies which local IP address to use for this transport.
@@ -90,11 +79,13 @@ class UDPTransport(pyuavcan.transport.Transport):
             interface configuration in the underlying operating system itself.
 
         :param mtu: The application-level MTU for outgoing packets.
-            In other words, this is the maximum number of payload bytes per UDP frame.
+            In other words, this is the maximum number of serialized bytes per UAVCAN/UDP frame.
             Transfers where the number of payload bytes does not exceed this value will be single-frame transfers,
             otherwise, multi-frame transfers will be used.
             This setting affects only outgoing frames;
             the MTU of incoming frames is fixed at a sufficiently large value to accept any meaningful UDP frame.
+
+            The default value is the smallest valid value for reasons of compatibility.
 
         :param service_transfer_multiplier: Deterministic data loss mitigation is disabled by default.
             This parameter specifies the number of times each outgoing service transfer will be repeated.
@@ -104,7 +95,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         """
         if not isinstance(local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
             local_ip_address = ipaddress.ip_address(local_ip_address)
-        self._network_map = SocketFactory.new(local_ip_address)
+        self._sock_factory = SocketFactory.new(local_ip_address)
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
@@ -117,9 +108,9 @@ class UDPTransport(pyuavcan.transport.Transport):
         if not (low <= self._mtu <= high):
             raise ValueError(f'Invalid MTU: {self._mtu} bytes')
 
-        _logger.debug(f'IP: {self._network_map}; local node-ID: {self.local_node_id}')
+        _logger.debug(f'IP: {self._sock_factory}; local node-ID: {self.local_node_id}')
 
-        self._demultiplexer_registry: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReader] = {}
+        self._socket_reader_registry: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReader] = {}
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
@@ -137,13 +128,13 @@ class UDPTransport(pyuavcan.transport.Transport):
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=UDPFrame.TRANSFER_ID_MASK + 1,
-            max_nodes=self._network_map.max_nodes,
+            max_nodes=self._sock_factory.max_nodes,
             mtu=self._mtu,
         )
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
-        return unicast_ip_to_node_id(self._network_map.local_ip_address)
+        return unicast_ip_to_node_id(self._sock_factory.local_ip_address)
 
     def close(self) -> None:
         self._closed = True
@@ -162,7 +153,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._ensure_not_closed()
         if specifier not in self._input_registry:
             self._setup_input_session(specifier, payload_metadata)
-        assert specifier.data_specifier in self._demultiplexer_registry
+        assert specifier.data_specifier in self._socket_reader_registry
         out = self._input_registry[specifier]
         assert isinstance(out, UDPInputSession)
         assert out.specifier == specifier
@@ -179,10 +170,7 @@ class UDPTransport(pyuavcan.transport.Transport):
             multiplier = \
                 self._srv_multiplier if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) \
                 else 1
-            sock = self._network_map.make_output_socket(
-                specifier.remote_node_id,
-                udp_port_from_data_specifier(specifier.data_specifier)
-            )
+            sock = self._sock_factory.make_output_socket(specifier.remote_node_id, specifier.data_specifier)
             self._output_registry[specifier] = UDPOutputSession(
                 specifier=specifier,
                 payload_metadata=payload_metadata,
@@ -218,7 +206,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._ensure_not_closed()
         if self._sniffer is None:
             _logger.info('%s: Starting UDP/IP packet sniffer (hope you have permissions)', self)
-            self._sniffer = self._network_map.make_sniffer(self._process_sniffed_packet)
+            self._sniffer = self._sock_factory.make_sniffer(self._process_sniffed_packet)
         self._sniffer_handlers.append(handler)
 
     def sample_statistics(self) -> UDPTransportStatistics:
@@ -234,15 +222,11 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     @property
     def descriptor(self) -> str:
-        return f'<udp srv_mult="{self._srv_multiplier}">{self._network_map}</udp>'
+        return f'<udp srv_mult="{self._srv_multiplier}">{self.local_ip_address}</udp>'
 
     @property
-    def local_ip_address_with_netmask(self) -> str:
-        """
-        The configured IP address of the local node with network mask.
-        For example: ``192.168.1.200/24``.
-        """
-        return str(self._network_map)
+    def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+        return self._sock_factory.local_ip_address
 
     def _setup_input_session(self,
                              specifier:        pyuavcan.transport.InputSessionSpecifier,
@@ -253,15 +237,12 @@ class UDPTransport(pyuavcan.transport.Transport):
         """
         assert specifier not in self._input_registry
         try:
-            if specifier.data_specifier not in self._demultiplexer_registry:
-                _logger.debug('%r: Setting up new demultiplexer for %s', self, specifier.data_specifier)
-                # Service transfers cannot be broadcast.
-                expect_broadcast = not isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
-                udp_port = udp_port_from_data_specifier(specifier.data_specifier)
-                self._demultiplexer_registry[specifier.data_specifier] = SocketReader(
-                    sock=self._network_map.make_input_socket(udp_port, expect_broadcast),
+            if specifier.data_specifier not in self._socket_reader_registry:
+                _logger.debug('%r: Setting up new socket reader for %s', self, specifier.data_specifier)
+                self._socket_reader_registry[specifier.data_specifier] = SocketReader(
+                    sock=self._sock_factory.make_input_socket(specifier.data_specifier),
                     udp_mtu=_MAX_UDP_MTU,
-                    node_id_mapper=self._network_map.map_ip_address_to_node_id,
+                    node_id_mapper=unicast_ip_to_node_id,
                     local_node_id=self.local_node_id,
                     statistics=self._statistics.received_datagrams.setdefault(specifier.data_specifier,
                                                                               SocketReaderStatistics()),
@@ -277,7 +258,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                           finalizer=lambda: self._teardown_input_session(specifier))
 
             # noinspection PyProtectedMember
-            self._demultiplexer_registry[specifier.data_specifier].add_listener(specifier.remote_node_id,
+            self._socket_reader_registry[specifier.data_specifier].add_listener(specifier.remote_node_id,
                                                                                 session._process_frame)
         except Exception:
             self._teardown_input_session(specifier)  # Rollback to ensure atomicity.
@@ -296,23 +277,23 @@ class UDPTransport(pyuavcan.transport.Transport):
             del self._input_registry[specifier]
         except LookupError:
             pass
-        # Remove the session from the list of demultiplexer listeners.
+        # Remove the session from the list of socker reader listeners.
         try:
-            demux = self._demultiplexer_registry[specifier.data_specifier]
+            demux = self._socket_reader_registry[specifier.data_specifier]
         except LookupError:
-            pass    # The demultiplexer has not been set up yet, nothing to do.
+            pass    # The reader has not been set up yet, nothing to do.
         else:
             try:
                 demux.remove_listener(specifier.remote_node_id)
             except LookupError:
                 pass
-            # Destroy the demultiplexer if there are no listeners left.
+            # Destroy the reader if there are no listeners left.
             if not demux.has_listeners:
                 try:
                     _logger.debug('%r: Destroying %r for %s', self, demux, specifier.data_specifier)
                     demux.close()
                 finally:
-                    del self._demultiplexer_registry[specifier.data_specifier]
+                    del self._socket_reader_registry[specifier.data_specifier]
 
     def _process_sniffed_packet(self, timestamp: pyuavcan.transport.Timestamp, packet: UDPIPPacket) -> None:
         """This handler may be invoked from a different thread (the sniffer thread)."""
@@ -343,12 +324,11 @@ class UDPSniff(pyuavcan.transport.Sniff):
         from ._ip import SUBJECT_PORT, udp_port_to_service_data_specifier
 
         ip_header = self.packet.ip_header
-        udp_header = self.packet.udp_header
 
         dst_nid: typing.Optional[int]
         data_spec: pyuavcan.transport.DataSpecifier
         if ip_header.destination.is_multicast:
-            if udp_header.destination_port != SUBJECT_PORT:
+            if self.packet.udp_header.destination_port != SUBJECT_PORT:
                 return None
             dst_nid = None  # Broadcast
             data_spec = multicast_group_to_message_data_specifier(ip_header.source, ip_header.destination)
@@ -358,7 +338,7 @@ class UDPSniff(pyuavcan.transport.Sniff):
             if src_prefix != dst_prefix:
                 return None
             dst_nid = unicast_ip_to_node_id(ip_header.destination)
-            data_spec = udp_port_to_service_data_specifier(udp_header.destination_port)
+            data_spec = udp_port_to_service_data_specifier(self.packet.udp_header.destination_port)
 
         frame = UDPFrame.parse(self.packet.payload, self.timestamp)
         if frame is None:

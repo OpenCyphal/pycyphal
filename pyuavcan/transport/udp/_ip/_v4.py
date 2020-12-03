@@ -56,6 +56,7 @@ class SocketFactoryIPv4(SocketFactory):
             # there emits all packets from 127.0.0.1 which is certainly not what we need.
             s.bind((str(self._local), 0))  # Bind to an ephemeral port.
         except OSError as ex:
+            s.close()
             if ex.errno == errno.EADDRNOTAVAIL:
                 raise InvalidMediaConfigurationError(
                     f'Bad IP configuration: cannot bind output socket to {self._local} [{errno.errorcode[ex.errno]}]'
@@ -64,6 +65,7 @@ class SocketFactoryIPv4(SocketFactory):
 
         if isinstance(data_specifier, MessageDataSpecifier):
             if remote_node_id is not None:
+                s.close()
                 raise UnsupportedSessionConfigurationError('Unicast message transfers are not defined.')
             # Merely binding is not enough for multicast sockets. We also have to configure IP_MULTICAST_IF.
             # https://tldp.org/HOWTO/Multicast-HOWTO-6.html
@@ -72,13 +74,12 @@ class SocketFactoryIPv4(SocketFactory):
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, SocketFactoryIPv4.MULTICAST_TTL)
             remote_ip = message_data_specifier_to_multicast_group(self._local, data_specifier)
             remote_port = SUBJECT_PORT
-
         elif isinstance(data_specifier, ServiceDataSpecifier):
             if remote_node_id is None:
+                s.close()
                 raise UnsupportedSessionConfigurationError('Broadcast service transfers are not defined.')
             remote_ip = node_id_to_unicast_ip(self._local, remote_node_id)
             remote_port = service_data_specifier_to_udp_port(data_specifier)
-
         else:
             assert False
 
@@ -93,7 +94,7 @@ class SocketFactoryIPv4(SocketFactory):
         # These options shall be set before the socket is bound.
         # https://stackoverflow.com/questions/14388706/how-do-so-reuseaddr-and-so-reuseport-differ/14388707#14388707
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if sys.platform.startswith('linux'):
+        if sys.platform.startswith('linux'):  # pragma: no branch
             # This is expected to be useful for unicast inputs only.
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         try:
@@ -112,7 +113,8 @@ class SocketFactoryIPv4(SocketFactory):
             else:
                 assert False
         except OSError as ex:
-            if ex.errno == errno.EADDRNOTAVAIL:
+            s.close()
+            if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
                 raise InvalidMediaConfigurationError(
                     f'Bad IP configuration: cannot bind input socket to {self._local} [{errno.errorcode[ex.errno]}]'
                 ) from None
@@ -131,9 +133,8 @@ class SocketFactoryIPv4(SocketFactory):
 
 class SnifferIPv4(Sniffer):
     """
-    A very basic background worker continuously reading IP packets from the raw socket, filtering the UDP ones,
-    dropping those that do not originate from the specified subnet,
-    and emitting them via the callback (yup, right from the worker thread).
+    A very basic background worker thread continuously reading IP packets from the raw socket, filtering them,
+    and then emitting them via the callback (yup, right from the worker thread).
     """
 
     _MTU = 2 ** 16
@@ -197,3 +198,84 @@ class SnifferIPv4(Sniffer):
                 # This is probably inadequate, reconsider later.
                 _logger.exception('%s: exception in the worker thread: %s', self, ex)
                 time.sleep(1)
+
+
+# ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
+
+
+def _unittest_socket_factory() -> None:
+    from pytest import raises
+    from ipaddress import ip_address
+
+    fac = SocketFactory.new(ip_address('127.42.1.200'))
+    assert fac.max_nodes == 0xFFFF
+    assert str(fac.local_ip_address) == '127.42.1.200'
+
+    # SERVICE SOCKET TEST (unicast)
+    ds = ServiceDataSpecifier(100, ServiceDataSpecifier.Role.REQUEST)
+    test = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test.bind(('127.42.0.123', service_data_specifier_to_udp_port(ds)))
+
+    srv_o = fac.make_output_socket(123, ds)
+    srv_o.send(b'Goose')
+    rx = test.recvfrom(1024)
+    assert rx[0] == b'Goose'
+    assert rx[1][0] == '127.42.1.200'
+
+    srv_i = fac.make_input_socket(ds)
+    test.sendto(b'Duck', ('127.42.1.200', service_data_specifier_to_udp_port(ds)))
+    rx = srv_i.recvfrom(1024)
+    assert rx[0] == b'Duck'
+    assert rx[1][0] == '127.42.0.123'
+
+    # MESSAGE SOCKET TEST (multicast)
+    test.close()
+    # Set up a multicast socket for testing; this is rather tedious.
+    test = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    test.bind(('239.42.2.100', SUBJECT_PORT))
+    test.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
+                    socket.inet_aton('239.42.2.100') + socket.inet_aton('127.42.0.123'))
+    test.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.42.0.123'))
+
+    msg_o = fac.make_output_socket(None, MessageDataSpecifier(612))  # 612 = (2 << 8) + 100
+    msg_o.send(b'Eagle')
+    rx = test.recvfrom(1024)
+    assert rx[0] == b'Eagle'
+    assert rx[1][0] == '127.42.1.200'
+
+    msg_i = fac.make_input_socket(MessageDataSpecifier(612))
+    test.sendto(b'Seagull', ('239.42.2.100', SUBJECT_PORT))
+    rx = msg_i.recvfrom(1024)
+    assert rx[0] == b'Seagull'
+    assert rx[1][0] == '127.42.0.123'
+
+    # ERRORS
+    with raises(InvalidMediaConfigurationError):
+        SocketFactoryIPv4(ip_address('1.2.3.4')).make_input_socket(
+            ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
+        )
+    with raises(InvalidMediaConfigurationError):
+        SocketFactoryIPv4(ip_address('1.2.3.4')).make_input_socket(MessageDataSpecifier(0))
+    with raises(InvalidMediaConfigurationError):
+        SocketFactoryIPv4(ip_address('1.2.3.4')).make_output_socket(
+            1, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
+        )
+    with raises(InvalidMediaConfigurationError):
+        SocketFactoryIPv4(ip_address('1.2.3.4')).make_output_socket(1, MessageDataSpecifier(0))
+
+    with raises(UnsupportedSessionConfigurationError):
+        fac.make_output_socket(1, MessageDataSpecifier(0))
+    with raises(UnsupportedSessionConfigurationError):
+        fac.make_output_socket(None, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE))
+
+    # DISPOSE OF THE RESOURCES
+    test.close()
+    srv_o.close()
+    srv_i.close()
+    msg_o.close()
+    msg_i.close()
+
+
+def _unittest_sniffer() -> None:
+    pass

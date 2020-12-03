@@ -28,7 +28,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
     As you already know, the UDP port number is a function of the data specifier.
     Hence, the input flow demultiplexing is mostly done by the UDP/IP stack implemented in the operating system
     itself, we just need to put a few basic abstractions on top.
-    One of those abstractions is the internal Demultiplexer class, which is not a part of the API
+    One of those abstractions is the internal socket reader class, which is not part of the API
     but its function is important if one needs to understand how the data flow is organized inside the library::
 
         [Socket] 1   --->   1 [Demultiplexer] 1   --->   * [Input session] 1   --->   1 [API]
@@ -40,13 +40,13 @@ class UDPInputSession(pyuavcan.transport.InputSession):
     CRC checking for us (thank you), so we get our stuff sorted up to the OSI layer 4 inclusive.
     The processing pipeline per datagram is as follows:
 
-    - The demultiplexer reads the datagram from the socket using ``recvfrom()``.
+    - The socket reader obtains the datagram from the socket using ``recvfrom()``.
       The source IP address is mapped to a node-ID and the contents are parsed into a UAVCAN UDP frame instance.
       If anything goes wrong here (like if the source IP address belongs to a wrong subnet or the datagram
       does not contain a valid UAVCAN frame or whatever), the datagram is dropped and the appropriate statistical
       counters are updated.
 
-    - The demultiplexer looks up the input session instances that have subscribed for the datagram from the
+    - The socket reader looks up the input session instances that have subscribed for the datagram from the
       current source node-ID (derived from the IP address) and passes the frame to them.
       By the way, remember that this is a zero-copy stack, so every subscribed input session gets a reference
       to the same instance of the frame, although it is beside the point right now.
@@ -61,7 +61,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
         But look! If there is more than one input session instance per source node-ID,
         we'd be running multiple transfer reassemblers with the same input data,
         which is inefficient!
-        Why can't we extract the task of transfer reassembly into the demultiplexer,
+        Why can't we extract the task of transfer reassembly into the socket reader,
         before the pipeline is forked, to avoid the extra workload?
 
     That is a good question, and here's why:
