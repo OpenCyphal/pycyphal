@@ -61,6 +61,9 @@ UAVCAN-specific UDP datagram header.
 |                   |                   | For service transfers: UDP destination port number.                       |
 +-------------------+-------------------+---------------------------------------------------------------------------+
 
+There are two data types that model UAVCAN/UDP protocol data: :class:`UDPFrame` and :class:`UDPIPPacket`.
+The latter is never used during normal operation but only for reporting sniffed packets (see :class:`UDPSniff`).
+
 
 IP address mapping
 ~~~~~~~~~~~~~~~~~~
@@ -121,8 +124,8 @@ From the most significant bit to the least significant bit, the IPv4 multicast g
     is confined to the 23 least significant bits of the address only,
     which is desirable because the IPv4 Ethernet MAC layer does not differentiate beyond the
     23 least significant bits of the multicast group address
-    (i.e., addresses that differ in the 9 MSb collide at the MAC layer, which is unacceptable in a real-time system)
-    (see RFC 1112 section 6.4).
+    (i.e., addresses that differ only in the 9 MSb collide at the MAC layer,
+    which is unacceptable in a real-time system; see RFC 1112 section 6.4).
     Without this limitation, an engineer deploying a network might inadvertently create a configuration that
     causes MAC-layer collisions which may be difficult to detect.
 
@@ -142,6 +145,9 @@ From the most significant bit to the least significant bit, the IPv4 multicast g
 Per RFC 1112, the default TTL is 1, which is unacceptable.
 Therefore, publishers should use the TTL value of 16 by default,
 which is chosen as a sensible default suitable for any intravehicular network.
+
+Per RFC 1112, in order to emit a multicast packet, a limited level-1 implementation without the full support of
+IGMP and multicast-specific packet handling policies is sufficient.
 
 Example::
 
@@ -346,9 +352,8 @@ from ._session import UDPFeedback as UDPFeedback
 
 from ._frame import UDPFrame as UDPFrame
 
-from ._demultiplexer import UDPDemultiplexerStatistics as UDPDemultiplexerStatistics
+from ._socket_reader import SocketReaderStatistics as SocketReaderStatistics
 
-from ._ip import IPAddress as IPAddress
 from ._ip import IPHeader as IPHeader
 from ._ip import UDPHeader as UDPHeader
 from ._ip import UDPIPPacket as UDPIPPacket

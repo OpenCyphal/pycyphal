@@ -45,6 +45,7 @@
       <w>cyber</w>
       <w>datagrams</w>
       <w>dcabf</w>
+      <w>ddddddd</w>
       <w>deadbeefdeadbeefdeadbeefdeadbeef</w>
       <w>deallocated</w>
       <w>debian</w>
@@ -131,6 +132,7 @@
       <w>nfrag</w>
       <w>nihil</w>
       <w>nmap</w>
+      <w>nnnnnnnn</w>
       <w>noqa</w>
       <w>norecursedirs</w>
       <w>nosignatures</w>
@@ -190,6 +192,7 @@
       <w>representer</w>
       <w>representers</w>
       <w>repurposeability</w>
+      <w>reuseport</w>
       <w>roundtrip</w>
       <w>rtfd</w>
       <w>rtps</w>
@@ -208,6 +211,8 @@
       <w>socketcan</w>
       <w>socketcanfd</w>
       <w>sphinxarg</w>
+      <w>sssss</w>
+      <w>ssssssss</w>
       <w>stdint</w>
       <w>strictification</w>
       <w>subcommand</w>
@@ -255,9 +260,11 @@
       <w>wireshark</w>
       <w>worl</w>
       <w>xbee</w>
+      <w>xddddddd</w>
       <w>xxxx</w>
       <w>xxxxx</w>
       <w>xxxxxxx</w>
+      <w>xxxxxxxx</w>
       <w>zubax</w>
     </words>
   </dictionary>

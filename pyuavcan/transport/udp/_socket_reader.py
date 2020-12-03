@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass
-class UDPDemultiplexerStatistics:
+class SocketReaderStatistics:
     """
     Incoming UDP datagram statistics for an input socket.
     """
@@ -41,16 +41,17 @@ class UDPDemultiplexerStatistics:
     """
 
 
-class UDPDemultiplexer:
+class SocketReader:
     """
-    This class is the solution to the UDP demultiplexing problem, as you can probably figure out from reading its name.
-    The objective is to read data from the supplied socket and then forward it to interested listeners.
+    This class is the solution to the UDP demultiplexing problem.
+    The objective is to read data from the supplied socket, parse it, and then forward it to interested listeners.
 
-    Why can't we ask the operating system to do this for us? Because there is no portable way of doing this.
+    Why can't we ask the operating system to do this for us? Because there is no portable way of doing this
+    (except for multicast sockets).
     Even on GNU/Linux, there is a risk of race conditions, but I'll spare you the details.
     Those who care may read this: https://stackoverflow.com/a/54156768/1007777.
 
-    The UDP transport is unable to detect a node-ID conflict because it has to discard broadcast traffic generated
+    The UDP transport is unable to detect a node-ID conflict because it has to discard traffic generated
     by itself in user space. To this transport, its own traffic and a node-ID conflict would look identical.
     """
     Listener = typing.Callable[[int, typing.Optional[UDPFrame]], None]
@@ -66,7 +67,7 @@ class UDPDemultiplexer:
                  udp_mtu:        int,
                  node_id_mapper: typing.Callable[[str], typing.Optional[int]],
                  local_node_id:  typing.Optional[int],
-                 statistics:     UDPDemultiplexerStatistics,
+                 statistics:     SocketReaderStatistics,
                  loop:           asyncio.AbstractEventLoop):
         """
         :param sock: The instance takes ownership of the socket; it will be closed when the instance is closed.
@@ -87,14 +88,14 @@ class UDPDemultiplexer:
 
         assert callable(self._node_id_mapper)
         assert isinstance(self._local_node_id, int) or self._local_node_id is None
-        assert isinstance(self._statistics, UDPDemultiplexerStatistics)
+        assert isinstance(self._statistics, SocketReaderStatistics)
         assert isinstance(self._loop, asyncio.AbstractEventLoop)
 
         self._closed = False
-        self._listeners: typing.Dict[typing.Optional[int], UDPDemultiplexer.Listener] = {}
+        self._listeners: typing.Dict[typing.Optional[int], SocketReader.Listener] = {}
 
         self._thread = threading.Thread(target=self._thread_entry_point,
-                                        name='demultiplexer_socket_reader',
+                                        name='socket_reader',
                                         daemon=True)
         self._thread.start()
 
@@ -129,7 +130,7 @@ class UDPDemultiplexer:
     @property
     def has_listeners(self) -> bool:
         """
-        If there are no listeners, the demultiplexer instance can be safely closed and destroyed.
+        If there are no listeners, the reader instance can be safely closed and destroyed.
         """
         return len(self._listeners) > 0
 
@@ -140,7 +141,7 @@ class UDPDemultiplexer:
         Raises :class:`RuntimeError` instead of closing if there is at least one active listener.
         """
         if self.has_listeners:
-            raise RuntimeError('Do not close the demultiplexer with active listeners, suka!')
+            raise RuntimeError('Do not close a socket reader with active listeners, suka!')
         self._closed = True
         self._sock.close()
         # We don't wait for the thread to join because who cares?
@@ -234,7 +235,7 @@ class UDPDemultiplexer:
         return pyuavcan.util.repr_attributes_noexcept(self, self._sock, remote_node_ids=list(self._listeners.keys()))
 
 
-def _unittest_demultiplexer(caplog: typing.Any) -> None:
+def _unittest_socket_reader(caplog: typing.Any) -> None:
     from pytest import raises
     from pyuavcan.transport import Priority, Timestamp
 
@@ -266,26 +267,26 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
         sock.connect(destination_endpoint)
         return sock
 
-    stats = UDPDemultiplexerStatistics()
-    demux = UDPDemultiplexer(sock=sock_rx,
-                             udp_mtu=10240,
-                             node_id_mapper=node_id_map.get,
-                             local_node_id=1234,
-                             statistics=stats,
-                             loop=loop)
-    assert not demux.has_listeners
+    stats = SocketReaderStatistics()
+    srd = SocketReader(sock=sock_rx,
+                       udp_mtu=10240,
+                       node_id_mapper=node_id_map.get,
+                       local_node_id=1234,
+                       statistics=stats,
+                       loop=loop)
+    assert not srd.has_listeners
     with raises(LookupError):
-        demux.remove_listener(123)
+        srd.remove_listener(123)
 
     received_frames_promiscuous: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
     received_frames_3: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
 
-    demux.add_listener(None, lambda i, f: received_frames_promiscuous.append((i, f)))
-    assert demux.has_listeners
-    demux.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
+    srd.add_listener(None, lambda i, f: received_frames_promiscuous.append((i, f)))
+    assert srd.has_listeners
+    srd.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
     with raises(Exception):
-        demux.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
-    assert demux.has_listeners
+        srd.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
+    assert srd.has_listeners
 
     sock_tx_1 = make_sock_tx('127.100.0.1')
     sock_tx_3 = make_sock_tx('127.100.0.3')
@@ -301,7 +302,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
                  payload=memoryview(b'HARDBASS')).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == UDPDemultiplexerStatistics(
+    assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1},
         dropped_datagrams={},
     )
@@ -328,7 +329,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
     ))
 
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == UDPDemultiplexerStatistics(
+    assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 1},
         dropped_datagrams={},
     )
@@ -347,10 +348,10 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
     assert not received_frames_3
 
     # DROP THE PROMISCUOUS LISTENER, ENSURE THE REMAINING SELECTIVE LISTENER WORKS
-    demux.remove_listener(None)
+    srd.remove_listener(None)
     with raises(LookupError):
-        demux.remove_listener(None)
-    assert demux.has_listeners
+        srd.remove_listener(None)
+    assert srd.has_listeners
 
     sock_tx_3.send(b''.join(
         UDPFrame(timestamp=Timestamp.now(),
@@ -361,7 +362,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
                  payload=memoryview(b'HARDBASS')).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == UDPDemultiplexerStatistics(
+    assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
         dropped_datagrams={},
     )
@@ -387,7 +388,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
                  payload=memoryview(b'Oy blin!')).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == UDPDemultiplexerStatistics(
+    assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
         dropped_datagrams={1: 1},
     )
@@ -404,7 +405,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
                  payload=memoryview(b'Oy blin!')).compile_header_and_payload()
     ))
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == UDPDemultiplexerStatistics(
+    assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
         dropped_datagrams={1: 1, '127.100.0.9': 1},
     )
@@ -414,7 +415,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
     # INVALID FRAME FROM NODE
     sock_tx_3.send(b'abc')
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == UDPDemultiplexerStatistics(
+    assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 3},
         dropped_datagrams={1: 1, '127.100.0.9': 1},
     )
@@ -425,7 +426,7 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
     # INVALID FRAME FROM UNMAPPED IP ADDRESS
     sock_tx_9.send(b'abc')
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == UDPDemultiplexerStatistics(
+    assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 3},
         dropped_datagrams={1: 1, '127.100.0.9': 2},
     )
@@ -433,30 +434,30 @@ def _unittest_demultiplexer(caplog: typing.Any) -> None:
     assert not received_frames_3
 
     # CLOSURE
-    assert demux.has_listeners
+    assert srd.has_listeners
     with raises(Exception):
-        demux.close()
-    demux.remove_listener(3)
-    assert not demux.has_listeners
-    demux.close()
-    demux.close()   # Idempotency
+        srd.close()
+    srd.remove_listener(3)
+    assert not srd.has_listeners
+    srd.close()
+    srd.close()   # Idempotency
     with raises(pyuavcan.transport.ResourceClosedError):
-        demux.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
+        srd.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
     assert sock_rx.fileno() < 0, 'The socket has not been closed'
 
     # SOCKET FAILURE
     with caplog.at_level(logging.CRITICAL, logger=__name__):
         sock_rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock_rx.bind(('127.100.0.100', 0))
-        stats = UDPDemultiplexerStatistics()
-        demux = UDPDemultiplexer(sock=sock_rx,
-                                 udp_mtu=10240,
-                                 node_id_mapper=node_id_map.get,
-                                 local_node_id=1234,
-                                 statistics=stats,
-                                 loop=loop)
+        stats = SocketReaderStatistics()
+        srd = SocketReader(sock=sock_rx,
+                           udp_mtu=10240,
+                           node_id_mapper=node_id_map.get,
+                           local_node_id=1234,
+                           statistics=stats,
+                           loop=loop)
         # noinspection PyProtectedMember
-        demux._sock.close()
+        srd._sock.close()
         run_until_complete(asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
         # noinspection PyProtectedMember
-        assert demux._closed
+        assert srd._closed

@@ -4,10 +4,21 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-from ._network_map import NetworkMap as NetworkMap
+from ._socket_factory import SocketFactory as SocketFactory
+from ._socket_factory import Sniffer as Sniffer
 
 from ._packet import IPAddress as IPAddress  # Should we also export the derived specializations for IPv4/v6?
 from ._packet import IPHeader as IPHeader
 from ._packet import UDPHeader as UDPHeader
 from ._packet import UDPIPPacket as UDPIPPacket
-from ._packet import Sniffer as Sniffer
+
+from ._endpoint_mapping import IPAddress as IPAddress
+from ._endpoint_mapping import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
+from ._endpoint_mapping import MULTICAST_GROUP_SUBJECT_ID_MASK as MULTICAST_GROUP_SUBJECT_ID_MASK
+from ._endpoint_mapping import SUBJECT_PORT as SUBJECT_PORT
+from ._endpoint_mapping import node_id_to_unicast_ip as node_id_to_unicast_ip
+from ._endpoint_mapping import unicast_ip_to_node_id as unicast_ip_to_node_id
+from ._endpoint_mapping import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group
+from ._endpoint_mapping import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
+from ._endpoint_mapping import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
+from ._endpoint_mapping import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier

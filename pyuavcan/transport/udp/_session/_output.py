@@ -70,6 +70,9 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         if self._multiplier < 1:  # pragma: no cover
             raise ValueError(f'Invalid transfer multiplier: {self._multiplier}')
 
+        assert specifier.remote_node_id is None \
+            if isinstance(specifier.data_specifier, pyuavcan.transport.MessageDataSpecifier) else True, \
+            'Internal protocol violation: cannot unicast a message transfer'
         assert specifier.remote_node_id is not None \
             if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) else True, \
             'Internal protocol violation: cannot broadcast a service transfer'

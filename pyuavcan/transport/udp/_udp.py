@@ -8,14 +8,15 @@ import copy
 import typing
 import asyncio
 import logging
+import ipaddress
 import dataclasses
 import pyuavcan
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
-from ._ip import NetworkMap, Sniffer, UDPIPPacket
-from ._port_mapping import udp_port_from_data_specifier
-from ._demultiplexer import UDPDemultiplexer, UDPDemultiplexerStatistics
+from ._ip import SocketFactory, Sniffer, UDPIPPacket
+from ._ip import unicast_ip_to_node_id
+from ._socket_reader import SocketReader, SocketReaderStatistics
 
 
 # This is for internal use only: the maximum possible payload per UDP frame.
@@ -29,10 +30,10 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
-    demultiplexer: typing.Dict[pyuavcan.transport.DataSpecifier, UDPDemultiplexerStatistics] = \
+    received_datagrams: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReaderStatistics] = \
         dataclasses.field(default_factory=dict)
     """
-    Basic input session statistics: instances of :class:`UDPDemultiplexerStatistics` keyed by data specifier.
+    Basic input session statistics: instances of :class:`SocketReaderStatistics` keyed by data specifier.
     """
 
 
@@ -67,35 +68,19 @@ class UDPTransport(pyuavcan.transport.Transport):
     which is undesirable for time-deterministic networks.
     """
 
-    NODE_ID_BIT_LENGTH = NetworkMap.NODE_ID_BIT_LENGTH
-    """
-    The maximum theoretical number of nodes on the network is determined by raising 2 into this power.
-    A node-ID is the set of this many least significant bits of the IP address of the node.
-    """
-
     def __init__(self,
-                 ip_address:                  str,
+                 local_ip_address:            typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
                  mtu:                         int = DEFAULT_MTU,
                  service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
         """
-        :param ip_address: Specifies which local IP address to use for this transport.
+        :param local_ip_address: Specifies which local IP address to use for this transport.
             This setting also implicitly specifies the network interface to use.
             All output sockets will be bound (see ``bind()``) to the specified local address.
-            If the specified address is not available locally, initialization will fail with
+            If the specified address is not available locally, the transport will fail with
             :class:`pyuavcan.transport.InvalidMediaConfigurationError`.
 
-            If the specified IP address cannot be mapped to a valid node-ID, the local node will be anonymous.
-            An IP address will be impossible to map to a valid node-ID if the address happens to be
-            the broadcast address for the subnet (e.g., ``192.168.0.255/24``),
-            or if the value of the host address exceeds the valid node-ID range (e.g.,
-            given IP address ``127.123.123.123/8``, the host address is 8092539,
-            which exceeds the range of valid node-ID values).
-
-            If the local node is anonymous, any attempt to create an output session will fail with
-            :class:`pyuavcan.transport.OperationNotDefinedForAnonymousNodeError`.
-
-            For use on localhost, any IP address from the localhost range can be used;
+            For use on the loopback interface, any IP address from the loopback range can be used;
             for example, ``127.0.0.123``.
             This generally does not work with physical interfaces;
             for example, if a host has one physical interface at ``192.168.1.200``,
@@ -103,35 +88,6 @@ class UDPTransport(pyuavcan.transport.Transport):
             because ``bind()`` will fail with ``EADDRNOTAVAIL``.
             One can change the node-ID of a physical transport by altering the network
             interface configuration in the underlying operating system itself.
-
-            IPv4 addresses shall have the network mask specified, this is necessary for the transport to
-            determine the subnet's broadcast address (for broadcast UAVCAN transfers).
-            The mask will also be used to derive the range of node-ID values for the subnet,
-            capped by two raised to the power of the node-ID bit length.
-            For example:
-
-            - ``192.168.1.200/24`` -- a subnet with up to 255 UAVCAN nodes; for example:
-
-                - ``192.168.1.0`` -- node-ID of zero (may be unusable depending on the network configuration).
-                - ``192.168.1.254`` -- the maximum available node-ID in this subnet is 254.
-                - ``192.168.1.255`` -- the broadcast address, not a valid node. If you specify this address,
-                  the local node will be anonymous.
-
-            - ``127.0.0.42/8`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
-              The local loopback subnet is useful for testing.
-
-                - ``127.0.0.1`` -- node-ID 1.
-                - ``127.0.0.255`` -- node-ID 255.
-                - ``127.0.15.255`` -- node-ID 4095.
-                - ``127.123.123.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
-                  All traffic from this address will be rejected as non-UAVCAN.
-                  If used for local node, the local node will be anonymous.
-                - ``127.255.255.255`` -- the broadcast address; notice that this address lies outside of the
-                  node-ID-mapped space, no conflicts. If used for local node, the local node will be anonymous.
-
-            IPv6 addresses may be specified without the mask, in which case it will be assumed to be
-            equal ``128 - NODE_ID_BIT_LENGTH``.
-            Don't forget to specify the scope-ID for link-local IPv6 addresses.
 
         :param mtu: The application-level MTU for outgoing packets.
             In other words, this is the maximum number of payload bytes per UDP frame.
@@ -146,7 +102,9 @@ class UDPTransport(pyuavcan.transport.Transport):
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
-        self._network_map = NetworkMap.new(ip_address)
+        if not isinstance(local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+            local_ip_address = ipaddress.ip_address(local_ip_address)
+        self._network_map = SocketFactory.new(local_ip_address)
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
@@ -159,10 +117,9 @@ class UDPTransport(pyuavcan.transport.Transport):
         if not (low <= self._mtu <= high):
             raise ValueError(f'Invalid MTU: {self._mtu} bytes')
 
-        _logger.debug(f'IP: {self._network_map}; max nodes: {self._network_map.max_nodes}; '
-                      f'local node-ID: {self.local_node_id}')
+        _logger.debug(f'IP: {self._network_map}; local node-ID: {self.local_node_id}')
 
-        self._demultiplexer_registry: typing.Dict[pyuavcan.transport.DataSpecifier, UDPDemultiplexer] = {}
+        self._demultiplexer_registry: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReader] = {}
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
@@ -186,7 +143,7 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
-        return self._network_map.local_node_id
+        return unicast_ip_to_node_id(self._network_map.local_ip_address)
 
     def close(self) -> None:
         self._closed = True
@@ -243,17 +200,17 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
         """
-        UDP/IP packet sniffing support is highly experimental and should not be relied on.
-        The API is not documented because it is not ready for production use and may change significantly.
-        If you want to use it, read the code and be prepared for it to break soon.
+        Reported events are of type :class:`UDPSniff`.
 
-        See :class:`UDPSniff`.
+        In order for the network sniffing to work, the local machine should be connected to a SPAN port of the switch.
+        See https://en.wikipedia.org/wiki/Port_mirroring and read the documentation for your networking hardware.
 
         On GNU/Linux, network sniffing requires that either the process is executed by root,
         or the raw packet capture capability ``CAP_NET_RAW`` is enabled.
         For more info read ``man 7 capabilities`` and consider checking the docs for Wireshark/libpcap.
 
-        Packets that neither originate nor terminate in the specified subnet are not reported via this interface.
+        Packets that do not originate from the current subnet (configured on this transport instance)
+        are not reported via this interface.
         This restriction is critical because there may be other UAVCAN/UDP networks running on the same physical
         L2 network segregated by different subnets, so that if foreign packets were not dropped,
         conflicts would occur.
@@ -295,20 +252,19 @@ class UDPTransport(pyuavcan.transport.Transport):
         Also, the setup and teardown actions shall be atomic. Hence the separate method.
         """
         assert specifier not in self._input_registry
-
         try:
             if specifier.data_specifier not in self._demultiplexer_registry:
                 _logger.debug('%r: Setting up new demultiplexer for %s', self, specifier.data_specifier)
                 # Service transfers cannot be broadcast.
                 expect_broadcast = not isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
                 udp_port = udp_port_from_data_specifier(specifier.data_specifier)
-                self._demultiplexer_registry[specifier.data_specifier] = UDPDemultiplexer(
+                self._demultiplexer_registry[specifier.data_specifier] = SocketReader(
                     sock=self._network_map.make_input_socket(udp_port, expect_broadcast),
                     udp_mtu=_MAX_UDP_MTU,
                     node_id_mapper=self._network_map.map_ip_address_to_node_id,
                     local_node_id=self.local_node_id,
-                    statistics=self._statistics.demultiplexer.setdefault(specifier.data_specifier,
-                                                                         UDPDemultiplexerStatistics()),
+                    statistics=self._statistics.received_datagrams.setdefault(specifier.data_specifier,
+                                                                              SocketReaderStatistics()),
                     loop=self.loop,
                 )
 
@@ -340,7 +296,6 @@ class UDPTransport(pyuavcan.transport.Transport):
             del self._input_registry[specifier]
         except LookupError:
             pass
-
         # Remove the session from the list of demultiplexer listeners.
         try:
             demux = self._demultiplexer_registry[specifier.data_specifier]
@@ -351,7 +306,6 @@ class UDPTransport(pyuavcan.transport.Transport):
                 demux.remove_listener(specifier.remote_node_id)
             except LookupError:
                 pass
-
             # Destroy the demultiplexer if there are no listeners left.
             if not demux.has_listeners:
                 try:
@@ -374,5 +328,41 @@ class UDPSniff(pyuavcan.transport.Sniff):
     """
     See :meth:`UDPTransport.sniff` for details.
     """
-    timestamp: pyuavcan.transport.Timestamp = dataclasses.field(repr=False)
+    timestamp: pyuavcan.transport.Timestamp
     packet: UDPIPPacket
+
+    def parse(self) -> typing.Optional[typing.Tuple[int,
+                                                    typing.Optional[int],
+                                                    pyuavcan.transport.DataSpecifier,
+                                                    UDPFrame]]:
+        """
+        A tuple of (source node-ID, destination node-ID (None if broadcast), data specifier, UAVCAN/UDP frame)
+        is only defined if the packet is a valid UAVCAN/UDP frame.
+        """
+        from ._ip import IP_ADDRESS_NODE_ID_MASK, multicast_group_to_message_data_specifier
+        from ._ip import SUBJECT_PORT, udp_port_to_service_data_specifier
+
+        ip_header = self.packet.ip_header
+        udp_header = self.packet.udp_header
+
+        dst_nid: typing.Optional[int]
+        data_spec: pyuavcan.transport.DataSpecifier
+        if ip_header.destination.is_multicast:
+            if udp_header.destination_port != SUBJECT_PORT:
+                return None
+            dst_nid = None  # Broadcast
+            data_spec = multicast_group_to_message_data_specifier(ip_header.source, ip_header.destination)
+        else:
+            src_prefix = IP_ADDRESS_NODE_ID_MASK | int(ip_header.source)
+            dst_prefix = IP_ADDRESS_NODE_ID_MASK | int(ip_header.destination)
+            if src_prefix != dst_prefix:
+                return None
+            dst_nid = unicast_ip_to_node_id(ip_header.destination)
+            data_spec = udp_port_to_service_data_specifier(udp_header.destination_port)
+
+        frame = UDPFrame.parse(self.packet.payload, self.timestamp)
+        if frame is None:
+            return None
+
+        src_nid = unicast_ip_to_node_id(ip_header.source)
+        return src_nid, dst_nid, data_spec, frame

@@ -34,6 +34,12 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
     If you have any feedback concerning the frame format, please bring it to
     https://forum.uavcan.org/t/alternative-transport-protocols/324.
+
+    +---------------+---------------+---------------+-----------------+------------------+
+    |**MAC header** | **IP header** |**UDP header** |**UAVCAN header**|**UAVCAN payload**|
+    +---------------+---------------+---------------+-----------------+------------------+
+    |                                               |    Layers modeled by this type     |
+    +-----------------------------------------------+------------------------------------+
     """
     _HEADER_FORMAT = struct.Struct('<BB2xIQ8x')
     _VERSION = 0
