@@ -33,6 +33,7 @@ class SocketFactory(abc.ABC):
     - https://habr.com/ru/company/cbs/blog/309486/
     - https://stackoverflow.com/a/58118503/1007777
     - http://www.enderunix.org/docs/en/rawipspoof/
+    - https://docs.oracle.com/cd/E19683-01/816-5042/sockets-5/index.html
     """
 
     MULTICAST_TTL = 16
@@ -108,7 +109,7 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, local_ip_address=self.local_ip_address)
+        return pyuavcan.util.repr_attributes(self, local_ip_address=str(self.local_ip_address))
 
 
 class Sniffer(abc.ABC):

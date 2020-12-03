@@ -96,6 +96,7 @@ class SocketFactoryIPv4(SocketFactory):
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if sys.platform.startswith('linux'):  # pragma: no branch
             # This is expected to be useful for unicast inputs only.
+            # https://stackoverflow.com/a/14388707/1007777
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         try:
             if isinstance(data_specifier, MessageDataSpecifier):
@@ -189,6 +190,9 @@ class SnifferIPv4(Sniffer):
                             self._handler(ts, pkt)
                         except Exception as ex:
                             _logger.exception('%s: exception in the sniffer handler: %s', self, ex)
+                    else:
+                        if _logger.isEnabledFor(logging.DEBUG):
+                            _logger.debug('%s: dropped packet: %s', self, data.hex())
             except Exception as ex:
                 if (self._sock.fileno() < 0) or (isinstance(ex, OSError) and ex.errno == errno.EBADF) or \
                         not self._keep_going:
@@ -198,6 +202,9 @@ class SnifferIPv4(Sniffer):
                 # This is probably inadequate, reconsider later.
                 _logger.exception('%s: exception in the worker thread: %s', self, ex)
                 time.sleep(1)
+
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(self, local_ip_address=str(self._local))
 
 
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
@@ -278,4 +285,81 @@ def _unittest_socket_factory() -> None:
 
 
 def _unittest_sniffer() -> None:
-    pass
+    from ipaddress import ip_address
+
+    # The sniffer is expected to drop all traffic except from 127.66.0.0/16
+    fac = SocketFactory.new(ip_address('127.66.1.200'))
+
+    ts_last = pyuavcan.transport.Timestamp.now()
+    sniffs: typing.List[UDPIPPacket] = []
+
+    def sniff_sniff(ts: pyuavcan.transport.Timestamp, pack: UDPIPPacket) -> None:
+        nonlocal ts_last
+        now = pyuavcan.transport.Timestamp.now()
+        assert ts_last.monotonic_ns <= ts.monotonic_ns <= now.monotonic_ns
+        assert ts_last.system_ns <= ts.system_ns <= now.system_ns
+        ts_last = ts
+        # Make sure that all traffic from foreign networks is filtered out by the sniffer.
+        assert (int(pack.ip_header.source) & 0x_FFFF_0000) == (int(fac.local_ip_address) & 0x_FFFF_0000)
+        sniffs.append(pack)
+
+    sniffer = fac.make_sniffer(sniff_sniff)
+
+    outside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    outside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.42.0.123'))
+    outside.bind(('127.42.0.123', 0))  # Some random noise on an adjacent subnet.
+    for i in range(10):
+        outside.sendto(f'{i:04x}'.encode(), ('127.66.1.200', 3333))  # Ignored unicast
+        outside.sendto(f'{i:04x}'.encode(), ('239.66.1.200', 4444))  # Ignored multicast
+        time.sleep(0.1)
+
+    time.sleep(1)
+    assert sniffs == []  # Make sure we are not picking up any noise.
+
+    inside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    inside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.66.33.44'))
+    inside.bind(('127.66.33.44', 0))  # This one is on our local subnet, it should be heard.
+    inside.sendto(b'\xAA\xAA\xAA\xAA', ('127.66.1.200', 1234))  # Accepted unicast inside subnet
+    inside.sendto(b'\xBB\xBB\xBB\xBB', ('127.33.1.200', 5678))  # Accepted unicast outside subnet
+    inside.sendto(b'\xCC\xCC\xCC\xCC', ('239.66.1.200', 9012))  # Accepted multicast
+
+    outside.sendto(b'x', ('127.66.1.200', 5555))  # Ignored unicast
+    outside.sendto(b'y', ('239.66.1.200', 6666))  # Ignored multicast
+
+    time.sleep(3)
+
+    # Validate the received callbacks.
+    print(sniffs[0])
+    print(sniffs[1])
+    print(sniffs[2])
+    assert len(sniffs) == 3
+
+    assert sniffs[0].ip_header.source == ip_address('127.66.33.44')
+    assert sniffs[1].ip_header.source == ip_address('127.66.33.44')
+    assert sniffs[2].ip_header.source == ip_address('127.66.33.44')
+
+    assert sniffs[0].ip_header.destination == ip_address('127.66.33.44')
+    assert sniffs[1].ip_header.destination == ip_address('127.66.33.44')
+    assert sniffs[2].ip_header.destination == ip_address('127.66.33.44')
+
+    assert sniffs[0].udp_header.destination_port == 1234
+    assert sniffs[1].udp_header.destination_port == 5678
+    assert sniffs[2].udp_header.destination_port == 9012
+
+    assert bytes(sniffs[0].payload) == b'\xAA\xAA\xAA\xAA'
+    assert bytes(sniffs[1].payload) == b'\xBB\xBB\xBB\xBB'
+    assert bytes(sniffs[2].payload) == b'\xCC\xCC\xCC\xCC'
+
+    sniffs.clear()
+
+    # CLOSE and make sure we don't get any additional callbacks.
+    sniffer.close()
+    time.sleep(2)
+    inside.sendto(b'd', ('127.66.1.100', SUBJECT_PORT))
+    time.sleep(1)
+    assert sniffs == []  # Should be terminated.
+
+    # DISPOSE OF THE RESOURCES
+    sniffer.close()
+    outside.close()
+    inside.close()
