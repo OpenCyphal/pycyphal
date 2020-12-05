@@ -33,6 +33,7 @@
       <w>canfd</w>
       <w>canid</w>
       <w>caplog</w>
+      <w>capturable</w>
       <w>ccitt</w>
       <w>coloredlogs</w>
       <w>computron</w>
@@ -98,6 +99,7 @@
       <w>iana</w>
       <w>icmp</w>
       <w>iface</w>
+      <w>ifaces</w>
       <w>inaddr</w>
       <w>intersphinx</w>
       <w>intravehicular</w>
@@ -142,6 +144,8 @@
       <w>packbits</w>
       <w>parseltongue</w>
       <w>pathlib</w>
+      <w>pcap</w>
+      <w>pcapy</w>
       <w>pfft</w>
       <w>pizdec</w>
       <w>pizdets</w>

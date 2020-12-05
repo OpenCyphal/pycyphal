@@ -13,7 +13,7 @@ import ipaddress
 import pyuavcan.util
 import pyuavcan.transport
 from ._endpoint_mapping import IPAddress
-from ._packet import UDPIPPacket
+from ._packet import RawPacket
 
 
 _logger = logging.getLogger(__name__)
@@ -48,11 +48,10 @@ class SocketFactory(abc.ABC):
         Use this factory factory to create new instances.
         """
         if isinstance(local_ip_address, ipaddress.IPv4Address):
-            from ._v4 import SocketFactoryIPv4
-            return SocketFactoryIPv4(local_ip_address)
+            from ._v4 import IPv4SocketFactory
+            return IPv4SocketFactory(local_ip_address)
         elif isinstance(local_ip_address, ipaddress.IPv6Address):
-            from ._v6 import SocketFactoryIPv6
-            return SocketFactoryIPv6(local_ip_address)
+            raise NotImplementedError('Sorry, IPv6 is not yet supported by this implementation.')
         else:  # pragma: no cover
             raise TypeError(f'Invalid local IP address: {local_ip_address!r}')
 
@@ -96,7 +95,7 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def make_sniffer(self, handler: typing.Callable[[pyuavcan.transport.Timestamp, UDPIPPacket], None]) -> Sniffer:
+    def make_sniffer(self, handler: typing.Callable[[pyuavcan.transport.Timestamp, RawPacket], None]) -> Sniffer:
         """
         Launch a new network sniffer based on a raw socket (usually this requires special permissions).
         The sniffer will run in a separate thread, invoking the handler *directly from the worker thread*

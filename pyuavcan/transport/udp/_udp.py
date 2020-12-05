@@ -14,7 +14,7 @@ import pyuavcan
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
-from ._ip import SocketFactory, Sniffer, UDPIPPacket
+from ._ip import SocketFactory, Sniffer, RawPacket
 from ._ip import unicast_ip_to_node_id
 from ._socket_reader import SocketReader, SocketReaderStatistics
 
@@ -95,6 +95,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         """
         if not isinstance(local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
             local_ip_address = ipaddress.ip_address(local_ip_address)
+        assert not isinstance(local_ip_address, str)
         self._sock_factory = SocketFactory.new(local_ip_address)
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
@@ -295,7 +296,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                 finally:
                     del self._socket_reader_registry[specifier.data_specifier]
 
-    def _process_sniffed_packet(self, timestamp: pyuavcan.transport.Timestamp, packet: UDPIPPacket) -> None:
+    def _process_sniffed_packet(self, timestamp: pyuavcan.transport.Timestamp, packet: RawPacket) -> None:
         """This handler may be invoked from a different thread (the sniffer thread)."""
         pyuavcan.util.broadcast(self._sniffer_handlers)(UDPSniff(timestamp, packet))
 
@@ -310,7 +311,7 @@ class UDPSniff(pyuavcan.transport.Sniff):
     See :meth:`UDPTransport.sniff` for details.
     """
     timestamp: pyuavcan.transport.Timestamp
-    packet: UDPIPPacket
+    packet: RawPacket
 
     def parse(self) -> typing.Optional[typing.Tuple[int,
                                                     typing.Optional[int],
@@ -326,7 +327,7 @@ class UDPSniff(pyuavcan.transport.Sniff):
         ip_header = self.packet.ip_header
 
         dst_nid: typing.Optional[int]
-        data_spec: pyuavcan.transport.DataSpecifier
+        data_spec: typing.Optional[pyuavcan.transport.DataSpecifier]
         if ip_header.destination.is_multicast:
             if self.packet.udp_header.destination_port != SUBJECT_PORT:
                 return None
@@ -340,7 +341,10 @@ class UDPSniff(pyuavcan.transport.Sniff):
             dst_nid = unicast_ip_to_node_id(ip_header.destination)
             data_spec = udp_port_to_service_data_specifier(self.packet.udp_header.destination_port)
 
-        frame = UDPFrame.parse(self.packet.payload, self.timestamp)
+        if data_spec is None:
+            return None
+
+        frame = UDPFrame.parse(self.packet.udp_payload, self.timestamp)
         if frame is None:
             return None
 

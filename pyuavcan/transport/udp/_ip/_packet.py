@@ -6,7 +6,24 @@
 
 from __future__ import annotations
 import dataclasses
+import pyuavcan.util
 from ._endpoint_mapping import IPAddress
+
+
+@dataclasses.dataclass(frozen=True)
+class MACHeader:
+    """
+    The link-layer header model.
+    The source and the destination addresses are represented in the original, network byte order.
+    Usually these are EUI-48 MAC addresses.
+    """
+    source:      memoryview
+    destination: memoryview
+
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(self,
+                                             source=bytes(self.source).hex(),
+                                             destination=bytes(self.destination).hex())
 
 
 @dataclasses.dataclass(frozen=True)
@@ -21,6 +38,9 @@ class IPHeader:  # The IPv6 implementation may subclass this to add flow info an
     def __post_init__(self) -> None:
         if self.source.is_multicast:
             raise ValueError(f'Source IP address cannot be a multicast group address')
+
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(self, source=str(self.source), destination=str(self.destination))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -39,17 +59,18 @@ class UDPHeader:
 
 
 @dataclasses.dataclass(frozen=True)
-class UDPIPPacket:
+class RawPacket:
     """
     Raw UDP/IP sniffed packet picked up from the network.
     This may or may not be a valid UAVCAN/UDP transport frame.
+    This type models the entire protocol stack up to UDP (L4), inclusive:
 
     +---------------+---------------+---------------+---------------+
     |**MAC header** | **IP header** |**UDP header** |**UDP payload**|
     +---------------+---------------+---------------+---------------+
-    |               |          Layers modeled by this type          |
-    +---------------+-----------------------------------------------+
     """
+    mac_header: MACHeader
     ip_header:  IPHeader
     udp_header: UDPHeader
-    payload:    memoryview
+
+    udp_payload: memoryview

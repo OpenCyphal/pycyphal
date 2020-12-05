@@ -61,7 +61,7 @@ UAVCAN-specific UDP datagram header.
 |                   |                   | For service transfers: UDP destination port number.                       |
 +-------------------+-------------------+---------------------------------------------------------------------------+
 
-There are two data types that model UAVCAN/UDP protocol data: :class:`UDPFrame` and :class:`UDPIPPacket`.
+There are two data types that model UAVCAN/UDP protocol data: :class:`UDPFrame` and :class:`RawPacket`.
 The latter is never used during normal operation but only for reporting sniffed packets (see :class:`UDPSniff`).
 
 
@@ -357,7 +357,7 @@ from ._socket_reader import SocketReaderStatistics as SocketReaderStatistics
 
 from ._ip import IPHeader as IPHeader
 from ._ip import UDPHeader as UDPHeader
-from ._ip import UDPIPPacket as UDPIPPacket
+from ._ip import RawPacket as RawPacket
 from ._ip import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
 from ._ip import SUBJECT_PORT as SUBJECT_PORT
 from ._ip import node_id_to_unicast_ip as node_id_to_unicast_ip

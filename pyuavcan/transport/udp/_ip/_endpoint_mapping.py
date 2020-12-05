@@ -63,6 +63,7 @@ def node_id_to_unicast_ip(local_ip_address: _Address, node_id: int) -> _Address:
     """
     if node_id > IP_ADDRESS_NODE_ID_MASK:
         raise ValueError(f'Invalid node-ID: {node_id} is larger than {IP_ADDRESS_NODE_ID_MASK}')
+    ty: type
     if isinstance(local_ip_address, ipaddress.IPv4Address):
         mask = 2 ** ipaddress.IPV4LENGTH - 1
         ty = ipaddress.IPv4Address
@@ -73,7 +74,7 @@ def node_id_to_unicast_ip(local_ip_address: _Address, node_id: int) -> _Address:
         assert False
     if local_ip_address.is_multicast:
         raise ValueError(f'The local address shall be a unicast address, not multicast: {local_ip_address}')
-    return ty((int(local_ip_address) & (mask ^ IP_ADDRESS_NODE_ID_MASK)) | node_id)
+    return ty((int(local_ip_address) & (mask ^ IP_ADDRESS_NODE_ID_MASK)) | node_id)  # type: ignore
 
 
 @functools.lru_cache(None)
@@ -90,8 +91,9 @@ def unicast_ip_to_node_id(ip_address: typing.Union[IPAddress, str]) -> int:
       ...
     ValueError: Multicast group address cannot be mapped to a node-ID...
     """
-    if not isinstance(ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+    if isinstance(ip_address, str):
         ip_address = ipaddress.ip_address(ip_address)
+    assert not isinstance(ip_address, str)
     if ip_address.is_multicast:
         raise ValueError(f'Multicast group address cannot be mapped to a node-ID: {ip_address}')
     return int(ip_address) & IP_ADDRESS_NODE_ID_MASK
@@ -125,6 +127,7 @@ def message_data_specifier_to_multicast_group(local_ip_address: _Address,
     ValueError: The local address shall be a unicast address, not multicast: 239.168.11.22
     """
     assert data_specifier.subject_id <= MULTICAST_GROUP_SUBJECT_ID_MASK, 'Protocol design error'
+    ty: type
     if isinstance(local_ip_address, ipaddress.IPv4Address):
         ty = ipaddress.IPv4Address
         fix = 0b_11101111_00000000_00000000_00000000
@@ -136,7 +139,7 @@ def message_data_specifier_to_multicast_group(local_ip_address: _Address,
         assert False
     if local_ip_address.is_multicast:
         raise ValueError(f'The local address shall be a unicast address, not multicast: {local_ip_address}')
-    return ty(msb | data_specifier.subject_id)
+    return ty(msb | data_specifier.subject_id)  # type: ignore
 
 
 @functools.lru_cache(None)

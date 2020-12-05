@@ -16,9 +16,9 @@ import threading
 import pyuavcan
 from ipaddress import IPv4Address
 from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
-from pyuavcan.transport import InvalidMediaConfigurationError
+from pyuavcan.transport import InvalidMediaConfigurationError, Timestamp
 from ._socket_factory import SocketFactory, Sniffer
-from ._packet import UDPIPPacket, IPHeader, UDPHeader
+from ._packet import RawPacket, IPHeader, UDPHeader
 from ._endpoint_mapping import SUBJECT_PORT, IP_ADDRESS_NODE_ID_MASK, service_data_specifier_to_udp_port
 from ._endpoint_mapping import node_id_to_unicast_ip, message_data_specifier_to_multicast_group
 
@@ -26,7 +26,7 @@ from ._endpoint_mapping import node_id_to_unicast_ip, message_data_specifier_to_
 _logger = logging.getLogger(__name__)
 
 
-class SocketFactoryIPv4(SocketFactory):
+class IPv4SocketFactory(SocketFactory):
     """
     In IPv4 networks, the node-ID of zero may not be usable because it represents the subnet address;
     a node-ID that maps to the broadcast address for the subnet is unavailable.
@@ -71,7 +71,7 @@ class SocketFactoryIPv4(SocketFactory):
             # https://tldp.org/HOWTO/Multicast-HOWTO-6.html
             # https://stackoverflow.com/a/26988214/1007777
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local.packed)
-            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, SocketFactoryIPv4.MULTICAST_TTL)
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
             remote_ip = message_data_specifier_to_multicast_group(self._local, data_specifier)
             remote_port = SUBJECT_PORT
         elif isinstance(data_specifier, ServiceDataSpecifier):
@@ -123,19 +123,35 @@ class SocketFactoryIPv4(SocketFactory):
         _logger.debug('%r: New input %r', self, s)
         return s
 
-    def make_sniffer(self, handler: typing.Callable[[pyuavcan.transport.Timestamp, UDPIPPacket], None]) -> SnifferIPv4:
-        # http://www.enderunix.org/docs/en/rawipspoof/
-        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-        s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)       # Include raw IP headers with received data.
-        if sys.platform.startswith('win32'):
-            s.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)            # Enable promiscuous mode on the interface.
-        return SnifferIPv4(s, self._local, handler)
+    def make_sniffer(self, handler: typing.Callable[[Timestamp, RawPacket], None]) -> SnifferIPv4Linux:
+        if sys.platform.startswith('linux'):
+            try:
+                return SnifferIPv4Linux(self._local, handler)
+            except PermissionError:
+                raise PermissionError(
+                    f'You need special privileges to perform low-level network packet capture (sniffing). Run this:\n'
+                    f'sudo setcap cap_net_raw+eip "$(readlink -f {sys.executable})"'
+                ) from None
+        elif sys.platform.startswith('win'):
+            raise NotImplementedError(
+                'UAVCAN/UDP sniffer is not yet implemented for Windows hosts. '
+                'A pull request integrating this capability would be accepted. '
+                'It may be possible to do using either a high-level solution like WinPcapy or using native raw sockets.'
+            )
+        else:
+            raise NotImplementedError(
+                'UAVCAN/UDP sniffer is not available on this platform. Consider using GNU/Linux instead.'
+            )
 
 
-class SnifferIPv4(Sniffer):
+class SnifferIPv4Linux(Sniffer):
     """
+    Implementation specific to IPv4 on Linux.
+
     A very basic background worker thread continuously reading IP packets from the raw socket, filtering them,
     and then emitting them via the callback (yup, right from the worker thread).
+
+    - http://www.enderunix.org/docs/en/rawipspoof/
     """
 
     _MTU = 2 ** 16
@@ -145,11 +161,13 @@ class SnifferIPv4(Sniffer):
 
     _PROTO_UDP = 0x11
 
-    def __init__(self,
-                 sock:             socket.socket,
-                 local_ip_address: IPv4Address,
-                 handler:          typing.Callable[[pyuavcan.transport.Timestamp, UDPIPPacket], None]) -> None:
-        self._sock = sock
+    _ETH_P_IP = 0x0800
+    """
+    From ``linux/if_ether.h``.
+    """
+
+    def __init__(self, local_ip_address: IPv4Address, handler: typing.Callable[[Timestamp, RawPacket], None]) -> None:
+        self._sock = SnifferIPv4Linux._make_socket(local_ip_address)
         self._local = local_ip_address
         self._handler = handler
         self._keep_going = True
@@ -161,19 +179,20 @@ class SnifferIPv4(Sniffer):
         self._sock.close()
 
     @staticmethod
-    def _try_parse(data: memoryview) -> typing.Optional[UDPIPPacket]:
+    def _try_parse(data: memoryview) -> typing.Optional[RawPacket]:
         ver_ihl, dscp_ecn, ip_length, ident, flags_frag_off, ttl, proto, hdr_chk, src_adr, dst_adr = \
-            SnifferIPv4._IP_V4_FORMAT.unpack_from(data)
+            SnifferIPv4Linux._IP_V4_FORMAT.unpack_from(data)
         ver, ihl = ver_ihl >> 4, ver_ihl & 0xF
         ip_header_size = ihl * 4
-        udp_ip_header_size = ip_header_size + SnifferIPv4._UDP_V4_FORMAT.size
-        if ver != 4 or proto != SnifferIPv4._PROTO_UDP or len(data) < udp_ip_header_size:
+        udp_ip_header_size = ip_header_size + SnifferIPv4Linux._UDP_V4_FORMAT.size
+        if ver != 4 or proto != SnifferIPv4Linux._PROTO_UDP or len(data) < udp_ip_header_size:
             return None
-        src_port, dst_port, udp_length, udp_chk = SnifferIPv4._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
-        return UDPIPPacket(
+        src_port, dst_port, udp_length, udp_chk = \
+            SnifferIPv4Linux._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
+        return RawPacket(
             ip_header=IPHeader(source=IPv4Address(src_adr), destination=IPv4Address(dst_adr)),
             udp_header=UDPHeader(source_port=src_port, destination_port=dst_port),
-            payload=data[udp_ip_header_size:],
+            udp_payload=data[udp_ip_header_size:],
         )
 
     def _thread_function(self) -> None:
@@ -183,7 +202,7 @@ class SnifferIPv4(Sniffer):
             try:
                 while self._keep_going:
                     data, _addr = self._sock.recvfrom(self._MTU)
-                    ts = pyuavcan.transport.Timestamp.now()         # TODO: use accurate timestamping.
+                    ts = Timestamp.now()         # TODO: use accurate timestamping.
                     pkt = self._try_parse(memoryview(data))
                     if pkt is not None and local_prefix == (IP_ADDRESS_NODE_ID_MASK | int(pkt.ip_header.source)):
                         try:
@@ -203,8 +222,14 @@ class SnifferIPv4(Sniffer):
                 _logger.exception('%s: exception in the worker thread: %s', self, ex)
                 time.sleep(1)
 
+    @staticmethod
+    def _make_socket(local_ip_address: IPv4Address) -> socket.socket:
+        s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(SnifferIPv4Linux._ETH_P_IP))
+        # TODO: determine the interface index
+        return s
+
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, local_ip_address=str(self._local))
+        return pyuavcan.util.repr_attributes(self, local_ip_address=str(self._local), socket=self._sock)
 
 
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
@@ -259,17 +284,17 @@ def _unittest_socket_factory() -> None:
 
     # ERRORS
     with raises(InvalidMediaConfigurationError):
-        SocketFactoryIPv4(ip_address('1.2.3.4')).make_input_socket(
+        IPv4SocketFactory(ip_address('1.2.3.4')).make_input_socket(
             ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
-        SocketFactoryIPv4(ip_address('1.2.3.4')).make_input_socket(MessageDataSpecifier(0))
+        IPv4SocketFactory(ip_address('1.2.3.4')).make_input_socket(MessageDataSpecifier(0))
     with raises(InvalidMediaConfigurationError):
-        SocketFactoryIPv4(ip_address('1.2.3.4')).make_output_socket(
+        IPv4SocketFactory(ip_address('1.2.3.4')).make_output_socket(
             1, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
-        SocketFactoryIPv4(ip_address('1.2.3.4')).make_output_socket(1, MessageDataSpecifier(0))
+        IPv4SocketFactory(ip_address('1.2.3.4')).make_output_socket(1, MessageDataSpecifier(0))
 
     with raises(UnsupportedSessionConfigurationError):
         fac.make_output_socket(1, MessageDataSpecifier(0))
@@ -290,12 +315,12 @@ def _unittest_sniffer() -> None:
     # The sniffer is expected to drop all traffic except from 127.66.0.0/16
     fac = SocketFactory.new(ip_address('127.66.1.200'))
 
-    ts_last = pyuavcan.transport.Timestamp.now()
-    sniffs: typing.List[UDPIPPacket] = []
+    ts_last = Timestamp.now()
+    sniffs: typing.List[RawPacket] = []
 
-    def sniff_sniff(ts: pyuavcan.transport.Timestamp, pack: UDPIPPacket) -> None:
+    def sniff_sniff(ts: Timestamp, pack: RawPacket) -> None:
         nonlocal ts_last
-        now = pyuavcan.transport.Timestamp.now()
+        now = Timestamp.now()
         assert ts_last.monotonic_ns <= ts.monotonic_ns <= now.monotonic_ns
         assert ts_last.system_ns <= ts.system_ns <= now.system_ns
         ts_last = ts
@@ -346,9 +371,9 @@ def _unittest_sniffer() -> None:
     assert sniffs[1].udp_header.destination_port == 5678
     assert sniffs[2].udp_header.destination_port == 9012
 
-    assert bytes(sniffs[0].payload) == b'\xAA\xAA\xAA\xAA'
-    assert bytes(sniffs[1].payload) == b'\xBB\xBB\xBB\xBB'
-    assert bytes(sniffs[2].payload) == b'\xCC\xCC\xCC\xCC'
+    assert bytes(sniffs[0].udp_payload) == b'\xAA\xAA\xAA\xAA'
+    assert bytes(sniffs[1].udp_payload) == b'\xBB\xBB\xBB\xBB'
+    assert bytes(sniffs[2].udp_payload) == b'\xCC\xCC\xCC\xCC'
 
     sniffs.clear()
 

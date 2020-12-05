@@ -9,7 +9,7 @@ from ._socket_factory import Sniffer as Sniffer
 
 from ._packet import IPHeader as IPHeader
 from ._packet import UDPHeader as UDPHeader
-from ._packet import UDPIPPacket as UDPIPPacket
+from ._packet import RawPacket as RawPacket
 
 from ._endpoint_mapping import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
 from ._endpoint_mapping import MULTICAST_GROUP_SUBJECT_ID_MASK as MULTICAST_GROUP_SUBJECT_ID_MASK
