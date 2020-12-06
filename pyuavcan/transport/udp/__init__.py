@@ -281,23 +281,23 @@ Create two transport instances -- one with a node-ID, one anonymous:
 
 >>> import pyuavcan
 >>> import pyuavcan.transport.udp
->>> tr_0 = pyuavcan.transport.udp.UDPTransport('127.0.1.42/8')
->>> tr_0.local_node_id                                               # Derived from the IP address: (1 << 8) + 42 = 298.
+>>> tr_0 = pyuavcan.transport.udp.UDPTransport('127.9.1.42')
+>>> tr_0.local_node_id                                             # Derived from the IP address: (1 << 8) + 42 = 298.
 298
->>> tr_1 = pyuavcan.transport.udp.UDPTransport('127.255.255.255/8')  # Anonymous, for listening purposes only.
->>> tr_1.local_node_id is None
-True
+>>> tr_1 = pyuavcan.transport.udp.UDPTransport('127.9.15.254')
+>>> tr_1.local_node_id
+4094
 
 Create an output and an input session:
 
 >>> pm = pyuavcan.transport.PayloadMetadata(1024)
->>> ds = pyuavcan.transport.MessageDataSpecifier(2345)
+>>> ds = pyuavcan.transport.MessageDataSpecifier(111)
 >>> pub = tr_0.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
->>> pub.socket.getpeername()   # UDP port number derived from the subject ID: 2345 + 16384 = 18729
-('127.255.255.255', 18729)
+>>> pub.socket.getpeername()   # UDP port is fixed, and the multicast group address is computed as shown above.
+('239.9.0.111', 16383)
 >>> sub = tr_1.get_input_session(pyuavcan.transport.InputSessionSpecifier(ds, None), pm)
 
-Send a transfer from one instance to another:
+Send a transfer from one instance to the other:
 
 >>> await_ = tr_1.loop.run_until_complete
 >>> await_(pub.send_until(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
@@ -353,8 +353,7 @@ from ._session import UDPFeedback as UDPFeedback
 
 from ._frame import UDPFrame as UDPFrame
 
-from ._socket_reader import SocketReaderStatistics as SocketReaderStatistics
-
+from ._ip import MACHeader as MACHeader
 from ._ip import IPHeader as IPHeader
 from ._ip import UDPHeader as UDPHeader
 from ._ip import RawPacket as RawPacket

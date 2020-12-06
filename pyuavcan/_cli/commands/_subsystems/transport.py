@@ -44,7 +44,7 @@ Examples:
     pyuavcan.transport.can.CANTransport(pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', 64), 42)
     pyuavcan.transport.loopback.LoopbackTransport(None)
     pyuavcan.transport.serial.SerialTransport("/dev/ttyUSB0", None, baudrate=115200)
-    pyuavcan.transport.udp.UDPTransport('127.255.255.255/8')
+    pyuavcan.transport.udp.UDPTransport('127.42.0.123')
 
 Such long expressions are hard to type, so the following entities are also pre-imported into the global namespace
 for convenience:
@@ -59,7 +59,7 @@ The following examples yield configurations that are equivalent to the above:
     CAN(can.media.socketcan.SocketCANMedia('vcan0',64),42)
     Loopback(None)
     Serial("/dev/ttyUSB0",None,baudrate=115200)
-    UDP('127.255.255.255/8')
+    UDP('127.42.0.123')
 
 It is often more convenient to use the environment variable instead of typing the arguments because they tend to be
 complex and are usually reused without modification. The variable may contain either a single transport expression,
@@ -67,7 +67,7 @@ in which case a non-redundant transport instance would be constructed:
     {_ENV_VAR_NAME}='Loopback(None)'
 ...or it may be a Python list, in which case a redundant transport will be constructed, unless the list contains only
 one element:
-    {_ENV_VAR_NAME}="[UDP('127.255.255.255/8'), Serial('/dev/ttyUSB0',None,baudrate=115200)]"
+    {_ENV_VAR_NAME}="[UDP('127.42.0.123'), Serial('/dev/ttyUSB0',None,baudrate=115200)]"
 
 Observe that the node-ID for the local node is to be configured here as well, because per the UAVCAN architecture,
 this is a transport-layer property. If desired, a usable node-ID value can be automatically found using the command

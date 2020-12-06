@@ -59,6 +59,7 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     def __init__(self,
                  local_ip_address:            typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
+                 *,
                  mtu:                         int = min(VALID_MTU_RANGE),
                  service_transfer_multiplier: int = 1,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
@@ -198,7 +199,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         or the raw packet capture capability ``CAP_NET_RAW`` is enabled.
         For more info read ``man 7 capabilities`` and consider checking the docs for Wireshark/libpcap.
 
-        Packets that do not originate from the current subnet (configured on this transport instance)
+        Packets that do not originate from the current UAVCAN/UDP subnet (configured on this transport instance)
         are not reported via this interface.
         This restriction is critical because there may be other UAVCAN/UDP networks running on the same physical
         L2 network segregated by different subnets, so that if foreign packets were not dropped,
@@ -278,7 +279,7 @@ class UDPTransport(pyuavcan.transport.Transport):
             del self._input_registry[specifier]
         except LookupError:
             pass
-        # Remove the session from the list of socker reader listeners.
+        # Remove the session from the list of socket reader listeners.
         try:
             demux = self._socket_reader_registry[specifier.data_specifier]
         except LookupError:

@@ -28,7 +28,6 @@ class LinkLayerPacket:
     protocol: AddressFamily
     """
     The protocol encapsulated inside the link-layer packet; e.g., IPv6.
-    For some link-layer protocols this parameter is fixed (e.g., CAN).
     """
 
     source:      memoryview
@@ -80,7 +79,7 @@ class LinkLayerPacket:
             }
             ethertype_to_af = {v: k for k, v in af_to_ethertype.items()}
 
-            def enc(p: LinkLayerPacket) -> typing.Optional[memoryview]:
+            def encode(p: LinkLayerPacket) -> typing.Optional[memoryview]:
                 try:
                     return memoryview(b''.join((
                         bytes(p.source).rjust(6, b'\x00')[:6],
@@ -91,7 +90,7 @@ class LinkLayerPacket:
                 except LookupError:
                     return None
 
-            def dec(p: memoryview) -> typing.Optional[LinkLayerPacket]:
+            def decode(p: memoryview) -> typing.Optional[LinkLayerPacket]:
                 if len(p) < 14:
                     return None
                 src = p[0:6]
@@ -103,7 +102,7 @@ class LinkLayerPacket:
                     return None
                 return LinkLayerPacket(protocol=protocol, source=src, destination=dst, payload=p[14:])
 
-            return enc, dec
+            return encode, decode
         return None
 
 
@@ -327,9 +326,7 @@ def _filter_devices(address_families: typing.Sequence[AddressFamily]) -> typing.
     return dev_names
 
 
-def _try_begin_capture(device:            str,
-                       filter_expression: str,
-                       data_link_hint:    int) -> typing.Optional[object]:
+def _try_begin_capture(device: str, filter_expression: str, data_link_hint: int) -> typing.Optional[object]:
     """
     Returns None if the interface managed by this device is not up.
 
@@ -338,6 +335,7 @@ def _try_begin_capture(device:            str,
     """
     import libpcap as pcap
 
+    # This is helpful: https://github.com/karpierz/libpcap/blob/master/tests/capturetest.py
     err_buf = ctypes.create_string_buffer(pcap.PCAP_ERRBUF_SIZE)
     pd = pcap.create(device.encode(), err_buf)
     if pd is None:

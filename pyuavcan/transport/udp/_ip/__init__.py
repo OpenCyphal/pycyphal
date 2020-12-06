@@ -7,6 +7,7 @@
 from ._socket_factory import SocketFactory as SocketFactory
 from ._socket_factory import Sniffer as Sniffer
 
+from ._packet import MACHeader as MACHeader
 from ._packet import IPHeader as IPHeader
 from ._packet import UDPHeader as UDPHeader
 from ._packet import RawPacket as RawPacket

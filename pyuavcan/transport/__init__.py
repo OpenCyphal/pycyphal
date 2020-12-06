@@ -143,7 +143,6 @@ from ._transport import SnifferCallback as SnifferCallback
 # Transport model auxiliaries.
 from ._transfer import Transfer as Transfer
 from ._transfer import TransferFrom as TransferFrom
-
 from ._transfer import Priority as Priority
 
 from ._data_specifier import DataSpecifier as DataSpecifier

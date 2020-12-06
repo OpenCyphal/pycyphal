@@ -461,3 +461,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         run_until_complete(asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
         # noinspection PyProtectedMember
         assert srd._closed
+
+    sock_tx_1.close()
+    sock_tx_3.close()
+    sock_tx_9.close()

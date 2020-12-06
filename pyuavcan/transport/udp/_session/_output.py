@@ -339,6 +339,7 @@ def _unittest_output_session() -> None:
         + b'e' + pyuavcan.transport.commons.crc.CRC32C.new(b'one', b'two', b'three').value_as_bytes
     )
 
+    sos.socket.close()  # This is to prevent resource warning
     sos = UDPOutputSession(
         specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
         payload_metadata=PayloadMetadata(1024),
