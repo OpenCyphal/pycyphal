@@ -33,8 +33,8 @@ def repr_attributes_noexcept(obj: object, *anonymous_elements: object, **named_e
     >>> repr_attributes_noexcept(Aa(), foo=Bb())
     "<REPR FAILED: Exception('Ford, you are turning into a penguin')>"
     >>> class Cc(Exception):
-    ...     def __repr__(self) -> str:
-    ...         raise Cc()  # Infinite recursion
+    ...     def __str__(self) -> str:  raise Cc()  # Infinite recursion
+    ...     def __repr__(self) -> str: raise Cc()  # Infinite recursion
     >>> repr_attributes_noexcept(Aa(), foo=Cc())
     '<REPR FAILED: UNKNOWN ERROR>'
     """
