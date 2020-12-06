@@ -182,7 +182,10 @@ class UDPTransport(pyuavcan.transport.Transport):
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPOutputSession:
         self._ensure_not_closed()
         if specifier not in self._output_registry:
-            if self._anonymous:
+            if self.local_node_id is None:
+                # In UAVCAN/UDP, the anonymous mode is somewhat bolted-on.
+                # The underlying protocol (IP) does not have the concept of anonymous packet.
+                # We add it artificially as an implementation detail of this library.
                 raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                     'Cannot create an output session instance because this UAVCAN/UDP transport instance is '
                     'configured in the anonymous mode. '

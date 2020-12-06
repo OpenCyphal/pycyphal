@@ -48,6 +48,8 @@ class IPv4SocketFactory(SocketFactory):
     def make_output_socket(self,
                            remote_node_id: typing.Optional[int],
                            data_specifier: pyuavcan.transport.DataSpecifier) -> socket.socket:
+        _logger.debug('%r: Constructing new output socket for remote node %s and %s',
+                      self, data_specifier, remote_node_id)
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.setblocking(False)
         try:
@@ -88,6 +90,7 @@ class IPv4SocketFactory(SocketFactory):
         return s
 
     def make_input_socket(self, data_specifier: pyuavcan.transport.DataSpecifier) -> socket.socket:
+        _logger.debug('%r: Constructing new input socket for %s', self, data_specifier)
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.setblocking(False)
         # Allow other applications to use the same UAVCAN port as well.
@@ -98,28 +101,39 @@ class IPv4SocketFactory(SocketFactory):
             # This is expected to be useful for unicast inputs only.
             # https://stackoverflow.com/a/14388707/1007777
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        try:
-            if isinstance(data_specifier, MessageDataSpecifier):
-                multicast_ip = message_data_specifier_to_multicast_group(self._local, data_specifier)
-                multicast_port = SUBJECT_PORT
-                # Binding to the multicast group address is necessary on GNU/Linux: https://habr.com/ru/post/141021/
-                s.bind((str(multicast_ip), multicast_port))
+
+        if isinstance(data_specifier, MessageDataSpecifier):
+            multicast_ip = message_data_specifier_to_multicast_group(self._local, data_specifier)
+            multicast_port = SUBJECT_PORT
+            # Binding to the multicast group address is necessary on GNU/Linux: https://habr.com/ru/post/141021/
+            s.bind((str(multicast_ip), multicast_port))
+            try:
                 # Note that using INADDR_ANY in IP_ADD_MEMBERSHIP doesn't actually mean "any",
                 # it means "choose one automatically"; see https://tldp.org/HOWTO/Multicast-HOWTO-6.html
                 # This is why we have to specify the interface explicitly here.
                 s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local.packed)
-            elif isinstance(data_specifier, ServiceDataSpecifier):
-                local_port = service_data_specifier_to_udp_port(data_specifier)
+            except OSError as ex:
+                s.close()
+                if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
+                    raise InvalidMediaConfigurationError(
+                        f'Could not register multicast group membership {multicast_ip} via {self._local} using {s} '
+                        f'[{errno.errorcode[ex.errno]}]'
+                    ) from None
+                raise  # pragma: no cover
+        elif isinstance(data_specifier, ServiceDataSpecifier):
+            local_port = service_data_specifier_to_udp_port(data_specifier)
+            try:
                 s.bind((str(self._local), local_port))
-            else:
-                assert False
-        except OSError as ex:
-            s.close()
-            if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
-                raise InvalidMediaConfigurationError(
-                    f'Bad IP configuration: cannot bind input socket to {self._local} [{errno.errorcode[ex.errno]}]'
-                ) from None
-            raise  # pragma: no cover
+            except OSError as ex:
+                s.close()
+                if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
+                    raise InvalidMediaConfigurationError(
+                        f'Could not bind input service socket to {self._local}:{local_port} '
+                        f'[{errno.errorcode[ex.errno]}]'
+                    ) from None
+                raise  # pragma: no cover
+        else:
+            assert False
         _logger.debug('%r: New input %r', self, s)
         return s
 

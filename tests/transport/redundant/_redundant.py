@@ -264,9 +264,10 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     # Construct new session with the transports configured.
     #
-    pub_a_new = tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), 222), meta)
-    assert pub_a_new is tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), 222), meta)
+    pub_a_new = tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(255), None), meta)
+    assert pub_a_new is tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(255), None), meta)
     assert set(tr_a.output_sessions) == {pub_a, pub_a_new}
+    sub_b_new = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(255), None), meta)
 
     assert await pub_a_new.send_until(
         Transfer(timestamp=Timestamp.now(),
@@ -275,10 +276,11 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
                  fragmented_payload=[memoryview(b'asd')]),
         monotonic_deadline=loop.time() + 1.0
     )
-    rx = await sub_any_b.receive_until(loop.time() + 1.0)
+    rx = await sub_b_new.receive_until(loop.time() + 1.0)
     assert rx is not None
     assert rx.fragmented_payload == [memoryview(b'asd')]
     assert rx.transfer_id == 6
+    assert None is await sub_any_b.receive_until(loop.time() + 1.0)
 
     #
     # Termination.
