@@ -528,7 +528,7 @@ def _unittest_sniff_errors() -> None:
     from pytest import raises
 
     with raises(TransportError, match=r'.*no devices.*'):
-        LinkLayerSniffer([AddressFamily.AF_SECURITY], '', lambda x: None)
+        LinkLayerSniffer([9999], '', lambda x: None)  # type: ignore
 
     with raises(TransportError, match=r'.*filter expression.*'):
         LinkLayerSniffer([AddressFamily.AF_INET6], 'invalid filter expression', lambda x: None)

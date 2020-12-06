@@ -217,6 +217,8 @@ def _unittest_socket_factory() -> None:
     from pytest import raises
     from ipaddress import ip_address
 
+    is_linux = sys.platform.startswith('linux')
+
     fac = SocketFactory.new(ip_address('127.42.1.200'))
     assert fac.max_nodes == 0xFFFF
     assert str(fac.local_ip_address) == '127.42.1.200'
@@ -243,7 +245,7 @@ def _unittest_socket_factory() -> None:
     # Set up a multicast socket for testing; this is rather tedious.
     test = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     test.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    test.bind(('239.42.2.100', SUBJECT_PORT))
+    test.bind(('239.42.2.100' * is_linux, SUBJECT_PORT))
     test.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
                     socket.inet_aton('239.42.2.100') + socket.inet_aton('127.42.0.123'))
     test.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.42.0.123'))
