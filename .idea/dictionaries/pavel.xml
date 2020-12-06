@@ -213,6 +213,7 @@
       <w>signedness</w>
       <w>sitecustomize</w>
       <w>sitl</w>
+      <w>slcan</w>
       <w>sockaddr</w>
       <w>socketcan</w>
       <w>socketcanfd</w>

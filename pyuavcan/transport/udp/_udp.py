@@ -80,6 +80,15 @@ class UDPTransport(pyuavcan.transport.Transport):
             One can change the node-ID of a physical transport by altering the network
             interface configuration in the underlying operating system itself.
 
+            Using ``INADDR_ANY`` here (i.e., ``0.0.0.0`` for IPv4) is not expected to work reliably or be portable
+            because this configuration is, generally, incompatible with multicast sockets (even in the anonymous mode).
+            In order to set up even a listening multicast socket, it is necessary to specify the correct local
+            address such that the underlying IP stack is aware of which interface to receive multicast packets from.
+
+            When the anonymous mode is enabled, it is quite possible to snoop on the network even if there is
+            another node running locally on the same interface
+            (because sockets are initialized with ``SO_REUSEADDR`` and ``SO_REUSEPORT``, when available).
+
         :param anonymous: If True, the transport will reject any attempt to create an output session.
             Additionally, it will report its own local node-ID as None, which is a convention in PyUAVCAN
             to represent anonymous instances.

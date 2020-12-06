@@ -28,7 +28,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     loop.slow_callback_duration = 1.0
 
     tr_a = RedundantTransport()
-    tr_b = RedundantTransport(loop)
+    tr_b = RedundantTransport(loop=loop)
     assert tr_a.sample_statistics() == RedundantTransportStatistics([])
     assert tr_a.inferiors == []
     assert tr_a.local_node_id is None

@@ -48,18 +48,17 @@ def _unittest_slow_cli_pick_nid_loopback() -> None:
 
 
 def _unittest_slow_cli_pick_nid_udp_localhost() -> None:
-    from pyuavcan.transport.udp import UDPTransport
     result = run_cli_tool(
         '-v', 'pick-nid',
         timeout=30.0,
         environment_variables={
-            'PYUAVCAN_CLI_TRANSPORT': 'UDP("127.255.255.255/8")'
+            'PYUAVCAN_CLI_TRANSPORT': 'UDP("127.0.0.1",anonymous=True)'
         }
     )
     print('pick-nid result:', result)
     # Exclude zero from the set because an IP address with the host address of zero may cause complications.
-    assert 1 <= int(result) < 2 ** UDPTransport.NODE_ID_BIT_LENGTH
+    assert 1 <= int(result) <= 65534
 
     with pytest.raises(CalledProcessError):
         # Fails because the transport is not anonymous!
-        run_cli_tool('-v', 'pick-nid', '--tr=UDP("127.0.0.123/8")', timeout=30.0)
+        run_cli_tool('-v', 'pick-nid', '--tr=UDP("127.0.0.123")', timeout=30.0)
