@@ -72,6 +72,7 @@ class CANTransport(pyuavcan.transport.Transport):
     def __init__(self,
                  media:         Media,
                  local_node_id: typing.Optional[int],
+                 *,
                  loop:          typing.Optional[asyncio.AbstractEventLoop] = None):
         """
         :param media:         The media implementation.

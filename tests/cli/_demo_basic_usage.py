@@ -62,9 +62,9 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
     yield _IfaceOption(
         demo_env_vars={'DEMO_INTERFACE_KIND': 'udp'},
         make_cli_args=lambda nid: (
-            (f'--tr=UDP("127.0.0.{nid}/8")', )      # Regular node
+            (f'--tr=UDP("127.0.0.{nid}")', )      # Regular node
             if nid is not None else
-            (f'--tr=UDP("127.255.255.255/8")', )    # Anonymous node
+            (f'--tr=UDP("127.0.0.1",anonymous=True)', )    # Anonymous node
         ),
     )
 
@@ -73,9 +73,9 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
         demo_env_vars={'DEMO_INTERFACE_KIND': 'udp_serial'},
         make_cli_args=lambda nid: (
             (
-                f'--tr=UDP("127.0.0.{nid}/8")'          # Regular node
+                f'--tr=UDP("127.0.0.{nid}")'          # Regular node
                 if nid is not None else
-                f'--tr=UDP("127.255.255.255/8")'        # Anonymous node
+                f'--tr=UDP("127.0.0.1",anonymous=True)'        # Anonymous node
             ),
             f'--tr=Serial("socket://localhost:50905",local_node_id={nid})',
         ),

@@ -44,7 +44,7 @@ Examples:
     pyuavcan.transport.can.CANTransport(pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', 64), 42)
     pyuavcan.transport.loopback.LoopbackTransport(None)
     pyuavcan.transport.serial.SerialTransport("/dev/ttyUSB0", None, baudrate=115200)
-    pyuavcan.transport.udp.UDPTransport('127.42.0.123')
+    pyuavcan.transport.udp.UDPTransport('127.42.0.123', anonymous=True)
 
 Such long expressions are hard to type, so the following entities are also pre-imported into the global namespace
 for convenience:
@@ -59,7 +59,7 @@ The following examples yield configurations that are equivalent to the above:
     CAN(can.media.socketcan.SocketCANMedia('vcan0',64),42)
     Loopback(None)
     Serial("/dev/ttyUSB0",None,baudrate=115200)
-    UDP('127.42.0.123')
+    UDP('127.42.0.123',anonymous=True)
 
 It is often more convenient to use the environment variable instead of typing the arguments because they tend to be
 complex and are usually reused without modification. The variable may contain either a single transport expression,

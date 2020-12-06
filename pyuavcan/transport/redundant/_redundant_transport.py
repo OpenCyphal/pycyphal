@@ -43,7 +43,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
     Read https://forum.uavcan.org/t/alternative-transport-protocols/324.
     """
 
-    def __init__(self, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
+    def __init__(self, *, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
         """
         :param loop: All inferiors shall run on the same event loop,
             which is configured once here and cannot be changed after the instance is constructed.

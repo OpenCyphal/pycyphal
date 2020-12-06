@@ -53,10 +53,10 @@ def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:
 
     # UDP/IP on localhost (cannot transmit if anonymous)
     yield lambda nid: TransportConfig(
-        cli_args=(f'--tr=UDP("127.0.0.{nid}/8")', ),
+        cli_args=(f'--tr=UDP("127.0.0.{nid}")', ),
         can_transmit=True,
     ) if nid is not None else TransportConfig(
-        cli_args=('--tr=UDP("127.255.255.255/8")', ),
+        cli_args=('--tr=UDP("127.0.0.1",anonymous=True)', ),
         can_transmit=False,
     )
 
@@ -64,7 +64,7 @@ def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:
     yield lambda nid: TransportConfig(
         cli_args=(
             f'--tr=Serial("{VIRTUAL_BUS_URI}",local_node_id={nid})',
-            (f'--tr=UDP("127.0.0.{nid}/8")' if nid is not None else '--tr=UDP("127.255.255.255/8")'),
+            (f'--tr=UDP("127.0.0.{nid}")' if nid is not None else '--tr=UDP("127.0.0.1",anonymous=True)'),
         ),
         can_transmit=nid is not None,
     )

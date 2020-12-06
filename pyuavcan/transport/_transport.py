@@ -243,7 +243,7 @@ class Transport(abc.ABC):
         - ``<can><socketcan mtu="64">vcan0</socketcan></can>``
         - ``<serial baudrate="115200">/dev/ttyACM0</serial>``
         - ``<ieee802154><xbee>/dev/ttyACM0</xbee></ieee802154>``
-        - ``<redundant><udp srv_mult="1">127.0.0.42/8</udp><serial baudrate="115200">COM9</serial></redundant>``
+        - ``<redundant><udp srv_mult="1">127.0.0.42</udp><serial baudrate="115200">COM9</serial></redundant>``
 
         We should consider defining a reverse static factory method that attempts to locate the necessary transport
         implementation class and instantiate it from a supplied descriptor. This would benefit transport-agnostic

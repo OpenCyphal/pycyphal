@@ -58,6 +58,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     def __init__(self,
                  serial_port:                 typing.Union[str, serial.SerialBase],
                  local_node_id:               typing.Optional[int],
+                 *,
                  mtu:                         int = max(VALID_MTU_RANGE),
                  service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
                  baudrate:                    typing.Optional[int] = None,

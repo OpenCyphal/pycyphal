@@ -60,6 +60,7 @@ class UDPTransport(pyuavcan.transport.Transport):
     def __init__(self,
                  local_ip_address:            typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
                  *,
+                 anonymous:                   bool = False,
                  mtu:                         int = min(VALID_MTU_RANGE),
                  service_transfer_multiplier: int = 1,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
@@ -78,6 +79,11 @@ class UDPTransport(pyuavcan.transport.Transport):
             because ``bind()`` will fail with ``EADDRNOTAVAIL``.
             One can change the node-ID of a physical transport by altering the network
             interface configuration in the underlying operating system itself.
+
+        :param anonymous: If True, the transport will reject any attempt to create an output session.
+            Additionally, it will report its own local node-ID as None, which is a convention in PyUAVCAN
+            to represent anonymous instances.
+            The UAVCAN/UDP transport does not support anonymous transfers.
 
         :param mtu: The application-level MTU for outgoing packets.
             In other words, this is the maximum number of serialized bytes per UAVCAN/UDP frame.
@@ -98,6 +104,7 @@ class UDPTransport(pyuavcan.transport.Transport):
             local_ip_address = ipaddress.ip_address(local_ip_address)
         assert not isinstance(local_ip_address, str)
         self._sock_factory = SocketFactory.new(local_ip_address)
+        self._anonymous = bool(anonymous)
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
@@ -136,7 +143,7 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
-        return unicast_ip_to_node_id(self._sock_factory.local_ip_address)
+        return None if self._anonymous else unicast_ip_to_node_id(self._sock_factory.local_ip_address)
 
     def close(self) -> None:
         self._closed = True
@@ -166,6 +173,13 @@ class UDPTransport(pyuavcan.transport.Transport):
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPOutputSession:
         self._ensure_not_closed()
         if specifier not in self._output_registry:
+            if self._anonymous:
+                raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                    'Cannot create an output session instance because this UAVCAN/UDP transport instance is '
+                    'configured in the anonymous mode. '
+                    'If you need to emit a transfer, create a new instance with anonymous=False.'
+                )
+
             def finalizer() -> None:
                 del self._output_registry[specifier]
 
@@ -224,7 +238,10 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     @property
     def descriptor(self) -> str:
-        return f'<udp srv_mult="{self._srv_multiplier}">{self.local_ip_address}</udp>'
+        anon = 'true' if self._anonymous else 'false'
+        return (
+            f'<udp anonymous="{anon}" srv_mult="{self._srv_multiplier}" mtu="{self._mtu}">{self.local_ip_address}</udp>'
+        )
 
     @property
     def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:

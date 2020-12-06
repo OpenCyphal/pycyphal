@@ -37,7 +37,7 @@ def _make_transport_udp(node_id_a: typing.Optional[int], node_id_b: typing.Optio
     from pyuavcan.transport.udp import UDPTransport
 
     def one(nid: typing.Optional[int]) -> UDPTransport:
-        return UDPTransport(f'127.0.0.{nid}/8') if nid is not None else UDPTransport('127.255.255.255/8')
+        return UDPTransport(f'127.0.0.{nid}') if nid is not None else UDPTransport('127.0.0.1', anonymous=True)
 
     return one(node_id_a), one(node_id_b), False
 
@@ -51,7 +51,10 @@ def _make_transport_redundant_udp_serial(node_id_a: typing.Optional[int],
 
     def one(nid: typing.Optional[int]) -> RedundantTransport:
         red = RedundantTransport()
-        red.attach_inferior(UDPTransport(f'127.0.0.{nid}/8') if nid is not None else UDPTransport('127.255.255.255/8'))
+        if nid is not None:
+            red.attach_inferior(UDPTransport(f'127.0.0.{nid}'))
+        else:
+            red.attach_inferior(UDPTransport('127.0.0.1', anonymous=True))
         red.attach_inferior(SerialTransport(VIRTUAL_BUS_URI, nid))
         print('REDUNDANT TRANSPORT UDP+SERIAL:', red)
         return red

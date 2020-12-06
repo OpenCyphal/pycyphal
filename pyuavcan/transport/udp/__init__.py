@@ -284,9 +284,9 @@ Create two transport instances -- one with a node-ID, one anonymous:
 >>> tr_0 = pyuavcan.transport.udp.UDPTransport('127.9.1.42')
 >>> tr_0.local_node_id                                             # Derived from the IP address: (1 << 8) + 42 = 298.
 298
->>> tr_1 = pyuavcan.transport.udp.UDPTransport('127.9.15.254')
->>> tr_1.local_node_id
-4094
+>>> tr_1 = pyuavcan.transport.udp.UDPTransport('127.9.15.254', anonymous=True)  # Anonymous is only for listening.
+>>> tr_1.local_node_id is None
+True
 
 Create an output and an input session:
 
