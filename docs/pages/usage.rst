@@ -79,7 +79,7 @@ but it is also possible to use the ``--tr`` command line argument if found more 
 
 Please use one of the following transport configuration expressions depending on your demo configuration:
 
-- ``"UDP('127.0.0.111/8')"`` --
+- ``"UDP('127.0.0.111')"`` --
   UDP/IP transport on localhost. Local node-ID 111.
 
 - ``"Serial('socket://loopback:50905',111)"`` --
@@ -94,7 +94,7 @@ Redundant transports can be configured using the Python list notation like ``[a,
 (or by specifying the ``--tr`` option more than once if the command line arguments are used instead
 of the environment variable):
 
-- ``"[UDP('127.0.0.111/8'), Serial('socket://loopback:50905',111)]"`` --
+- ``"[UDP('127.0.0.111'), Serial('socket://loopback:50905',111)]"`` --
   dissimilar double redundancy, UDP plus serial.
 
 - ``"[CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111), CAN(can.media.socketcan.SocketCANMedia('vcan1',32),111), CAN(can.media.socketcan.SocketCANMedia('vcan2',64),111)]"`` --

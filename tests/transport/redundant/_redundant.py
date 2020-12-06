@@ -215,8 +215,8 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     del lo_cyc_0  # Prevent accidental reuse.
     del lo_cyc_1
 
-    udp_a = UDPTransport('127.0.0.111/8')
-    udp_b = UDPTransport('127.0.0.222/8')
+    udp_a = UDPTransport('127.0.0.111')
+    udp_b = UDPTransport('127.0.0.222')
 
     serial_a = SerialTransport(SERIAL_URI, 111)
     serial_b = SerialTransport(SERIAL_URI, 222, mtu=2048)  # Heterogeneous.

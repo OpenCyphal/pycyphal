@@ -7,6 +7,7 @@
 import typing
 import asyncio
 import xml.etree.ElementTree
+import ipaddress
 import pytest
 import pyuavcan.transport
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
@@ -14,7 +15,7 @@ from pyuavcan.transport.udp import UDPTransport, UDPTransportStatistics
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_udp_transport() -> None:
+async def _unittest_udp_transport_ipv4() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
     from pyuavcan.transport import ProtocolParameters
@@ -22,18 +23,16 @@ async def _unittest_udp_transport() -> None:
     get_monotonic = asyncio.get_event_loop().time
 
     with pytest.raises(ValueError):
-        _ = UDPTransport(ip_address='127.0.0.111/8',
-                         mtu=10)
+        _ = UDPTransport('127.0.0.111', mtu=10)
 
     with pytest.raises(ValueError):
-        _ = UDPTransport(ip_address='127.0.0.111/8',
-                         service_transfer_multiplier=100)
+        _ = UDPTransport('127.0.0.111', service_transfer_multiplier=100)
 
-    tr = UDPTransport('127.0.0.111/8', mtu=9000)
-    tr2 = UDPTransport('127.0.0.222/8', service_transfer_multiplier=2)
+    tr = UDPTransport('127.0.0.111', mtu=9000)
+    tr2 = UDPTransport('127.0.0.222', service_transfer_multiplier=2)
 
-    assert tr.local_ip_address_with_netmask == '127.0.0.111/8'
-    assert tr2.local_ip_address_with_netmask == '127.0.0.222/8'
+    assert tr.local_ip_address == ipaddress.ip_address('127.0.0.111')
+    assert tr2.local_ip_address == ipaddress.ip_address('127.0.0.222')
 
     assert tr.loop is asyncio.get_event_loop()
     assert tr.local_node_id == 111
@@ -42,27 +41,28 @@ async def _unittest_udp_transport() -> None:
     assert tr.input_sessions == []
     assert tr.output_sessions == []
 
-    assert list(xml.etree.ElementTree.fromstring(tr.descriptor).itertext()) == ['127.0.0.111/8']
+    assert list(xml.etree.ElementTree.fromstring(tr.descriptor).itertext()) == ['127.0.0.111']
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
-        max_nodes=2 ** UDPTransport.NODE_ID_BIT_LENGTH,
+        max_nodes=65535,
         mtu=9000,
     )
 
-    assert list(xml.etree.ElementTree.fromstring(tr2.descriptor).itertext()) == ['127.0.0.222/8']
+    default_mtu = min(UDPTransport.VALID_MTU_RANGE)
+    assert list(xml.etree.ElementTree.fromstring(tr2.descriptor).itertext()) == ['127.0.0.222']
     assert tr2.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
-        max_nodes=2 ** UDPTransport.NODE_ID_BIT_LENGTH,
-        mtu=UDPTransport.DEFAULT_MTU,
+        max_nodes=65535,
+        mtu=default_mtu,
     )
 
     assert tr.sample_statistics() == tr2.sample_statistics() == UDPTransportStatistics()
 
-    payload_single = [_mem('qwertyui'), _mem('01234567')] * (UDPTransport.DEFAULT_MTU // 16)
-    assert sum(map(len, payload_single)) == UDPTransport.DEFAULT_MTU
+    payload_single = [_mem('qwertyui'), _mem('01234567')] * (default_mtu // 16)
+    assert sum(map(len, payload_single)) == default_mtu
 
     payload_x3 = (payload_single * 3)[:-1]
-    payload_x3_size_bytes = UDPTransport.DEFAULT_MTU * 3 - 8
+    payload_x3_size_bytes = default_mtu * 3 - 8
     assert sum(map(len, payload_x3)) == payload_x3_size_bytes
 
     #
@@ -108,14 +108,14 @@ async def _unittest_udp_transport() -> None:
     assert set(tr2.input_sessions) == {client_listener}
     assert set(tr2.output_sessions) == {broadcaster, client_requester}
 
-    assert tr.sample_statistics().demultiplexer[
+    assert tr.sample_statistics().received_datagrams[
         MessageDataSpecifier(2345)
     ].accepted_datagrams == {}
-    assert tr.sample_statistics().demultiplexer[
+    assert tr.sample_statistics().received_datagrams[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
     ].accepted_datagrams == {}
 
-    assert tr2.sample_statistics().demultiplexer[
+    assert tr2.sample_statistics().received_datagrams[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)
     ].accepted_datagrams == {}
 
@@ -138,14 +138,14 @@ async def _unittest_udp_transport() -> None:
     assert rx_transfer.fragmented_payload == [b''.join(payload_single)]
 
     print('tr :', tr.sample_statistics())
-    assert tr.sample_statistics().demultiplexer[
+    assert tr.sample_statistics().received_datagrams[
         MessageDataSpecifier(2345)
     ].accepted_datagrams == {222: 1}
-    assert tr.sample_statistics().demultiplexer[
+    assert tr.sample_statistics().received_datagrams[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
     ].accepted_datagrams == {}
     print('tr2:', tr2.sample_statistics())
-    assert tr2.sample_statistics().demultiplexer[
+    assert tr2.sample_statistics().received_datagrams[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)
     ].accepted_datagrams == {}
 
@@ -179,14 +179,14 @@ async def _unittest_udp_transport() -> None:
     assert None is await client_listener.receive_until(get_monotonic() + 0.1)
 
     print('tr :', tr.sample_statistics())
-    assert tr.sample_statistics().demultiplexer[
+    assert tr.sample_statistics().received_datagrams[
         MessageDataSpecifier(2345)
     ].accepted_datagrams == {222: 1}
-    assert tr.sample_statistics().demultiplexer[
+    assert tr.sample_statistics().received_datagrams[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
     ].accepted_datagrams == {222: 3 * 2}  # Deterministic data loss mitigation is enabled, multiplication factor 2
     print('tr2:', tr2.sample_statistics())
-    assert tr2.sample_statistics().demultiplexer[
+    assert tr2.sample_statistics().received_datagrams[
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)
     ].accepted_datagrams == {}
 
