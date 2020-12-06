@@ -263,22 +263,17 @@ class LinkLayerSniffer:
                 else:
                     self._callback(LinkLayerSniff(timestamp=ts, packet=llp, device_name=name))
 
-            seen_warnings: typing.Set[int] = set()
             packets_per_batch = 100
             while self._keep_going:
                 err = pcap.dispatch(pd, packets_per_batch, proxy, ctypes.POINTER(ctypes.c_ubyte)())
-                if err < 0:
+                if err < 0:  # Negative values represent errors, otherwise it's the number of packets processed.
                     if self._keep_going:
                         _logger.critical(f'Worker thread for %r has failed with error %s; %s',
                                          name, pcap.statustostr(err), pcap.geterr(pd).decode())
                     else:
-                        _logger.debug('Failure in worker thread for %r ignored because it is commanded to stop: %s',
+                        _logger.debug('Error in worker thread for %r ignored because it is commanded to stop: %s',
                                       name, pcap.statustostr(err))
                     break
-                if err > 0 and err not in seen_warnings:
-                    seen_warnings.add(err)
-                    _logger.info('New warning from libpcap in the worker thread of %r (reported only once): %s',
-                                 name, pcap.statustostr(err))
         except Exception as ex:
             _logger.exception('Unhandled exception in worker thread for %r; stopping: %r', name, ex)
         finally:

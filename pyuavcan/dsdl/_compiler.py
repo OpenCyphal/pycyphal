@@ -218,7 +218,7 @@ def generate_package(root_namespace_directory:        _AnyPath,
                                                     nunavut.postprocessors.TrimTrailingWhitespace(),
                                                 ])
     generator.generate_all()
-    _logger.info('Generated %d types from the root namespace %r in %f.1 seconds',
+    _logger.info('Generated %d types from the root namespace %r in %.1f seconds',
                  len(composite_types), root_namespace_name, time.monotonic() - started_at)
 
     # A minor UX improvement; see https://github.com/UAVCAN/pyuavcan/issues/115
