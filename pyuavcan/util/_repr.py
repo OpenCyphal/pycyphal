@@ -8,6 +8,7 @@
 def repr_attributes(obj: object, *anonymous_elements: object, **named_elements: object) -> str:
     """
     A simple helper function that constructs a :func:`repr` form of an object. Used widely across the library.
+    String representations will be obtained by invoking :func:`str` on each value.
 
     >>> class Aa: pass
     >>> assert repr_attributes(Aa()) == 'Aa()'
@@ -15,7 +16,7 @@ def repr_attributes(obj: object, *anonymous_elements: object, **named_elements: 
     >>> assert repr_attributes(Aa(), foo=123) == 'Aa(foo=123)'
     >>> assert repr_attributes(Aa(), 456, foo=123, bar='abc') == "Aa(456, foo=123, bar='abc')"
     """
-    fld = list(map(repr, anonymous_elements)) + list(f'{name}={value!r}' for name, value in named_elements.items())
+    fld = list(map(str, anonymous_elements)) + list(f'{name}={value}' for name, value in named_elements.items())
     return f'{type(obj).__name__}(' + ', '.join(fld) + ')'
 
 

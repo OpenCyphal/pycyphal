@@ -12,15 +12,15 @@ import typing
 import socket
 import struct
 import logging
-import threading
 import pyuavcan
 from ipaddress import IPv4Address
 from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
 from pyuavcan.transport import InvalidMediaConfigurationError, Timestamp
 from ._socket_factory import SocketFactory, Sniffer
-from ._packet import RawPacket, IPHeader, UDPHeader
+from ._packet import RawPacket, MACHeader, IPHeader, UDPHeader
 from ._endpoint_mapping import SUBJECT_PORT, IP_ADDRESS_NODE_ID_MASK, service_data_specifier_to_udp_port
 from ._endpoint_mapping import node_id_to_unicast_ip, message_data_specifier_to_multicast_group
+from ._link_layer import LinkLayerSniff, LinkLayerSniffer, LinkLayerPacket
 
 
 _logger = logging.getLogger(__name__)
@@ -123,28 +123,19 @@ class IPv4SocketFactory(SocketFactory):
         _logger.debug('%r: New input %r', self, s)
         return s
 
-    def make_sniffer(self, handler: typing.Callable[[Timestamp, RawPacket], None]) -> SnifferIPv4Linux:
-        if sys.platform.startswith('linux'):
-            try:
-                return SnifferIPv4Linux(self._local, handler)
-            except PermissionError:
-                raise PermissionError(
-                    f'You need special privileges to perform low-level network packet capture (sniffing). Run this:\n'
-                    f'sudo setcap cap_net_raw+eip "$(readlink -f {sys.executable})"'
-                ) from None
-        elif sys.platform.startswith('win'):
-            raise NotImplementedError(
-                'UAVCAN/UDP sniffer is not yet implemented for Windows hosts. '
-                'A pull request integrating this capability would be accepted. '
-                'It may be possible to do using either a high-level solution like WinPcapy or using native raw sockets.'
-            )
-        else:
-            raise NotImplementedError(
-                'UAVCAN/UDP sniffer is not available on this platform. Consider using GNU/Linux instead.'
+    def make_sniffer(self, handler: typing.Callable[[Timestamp, RawPacket], None]) -> SnifferIPv4:
+        try:
+            return SnifferIPv4(self._local, handler)
+        except PermissionError:
+            suggestion = ''
+            if sys.platform.startswith('linux'):
+                suggestion = 'Run this:\nsudo setcap cap_net_raw+eip "$(readlink -f {sys.executable})"'
+            raise PermissionError(
+                f'You need special privileges to perform low-level network packet capture (sniffing). {suggestion}'
             )
 
 
-class SnifferIPv4Linux(Sniffer):
+class SnifferIPv4(Sniffer):
     """
     Implementation specific to IPv4 on Linux.
 
@@ -154,82 +145,50 @@ class SnifferIPv4Linux(Sniffer):
     - http://www.enderunix.org/docs/en/rawipspoof/
     """
 
-    _MTU = 2 ** 16
-
     _IP_V4_FORMAT = struct.Struct('!BB HHH BB H II')
     _UDP_V4_FORMAT = struct.Struct('!HH HH')
-
     _PROTO_UDP = 0x11
 
-    _ETH_P_IP = 0x0800
-    """
-    From ``linux/if_ether.h``.
-    """
-
     def __init__(self, local_ip_address: IPv4Address, handler: typing.Callable[[Timestamp, RawPacket], None]) -> None:
-        self._sock = SnifferIPv4Linux._make_socket(local_ip_address)
+        from ipaddress import IPV4LENGTH, ip_network
+        netmask_width = IPV4LENGTH - IP_ADDRESS_NODE_ID_MASK.bit_length()
+        subnet = ip_network(f'{local_ip_address}/{netmask_width}', strict=False)
+        filter_expression = f'udp and src net {subnet}'
+        _logger.debug('Constructed BPF filter expression: %r', filter_expression)
+        self._link_layer = LinkLayerSniffer([socket.AF_INET], filter_expression, self._callback)
         self._local = local_ip_address
         self._handler = handler
-        self._keep_going = True
-        self._thread = threading.Thread(target=self._thread_function, name='udp_ipv4_sniffer', daemon=True)
-        self._thread.start()
 
     def close(self) -> None:
-        self._keep_going = False
-        self._sock.close()
+        self._link_layer.close()
+
+    def _callback(self, lls: LinkLayerSniff) -> None:
+        rp = self._try_parse(lls.packet)
+        if rp is not None:
+            self._handler(lls.timestamp, rp)
 
     @staticmethod
-    def _try_parse(data: memoryview) -> typing.Optional[RawPacket]:
+    def _try_parse(llp: LinkLayerPacket) -> typing.Optional[RawPacket]:
+        if llp.protocol != socket.AddressFamily.AF_INET:
+            return None
+        data = llp.payload
         ver_ihl, dscp_ecn, ip_length, ident, flags_frag_off, ttl, proto, hdr_chk, src_adr, dst_adr = \
-            SnifferIPv4Linux._IP_V4_FORMAT.unpack_from(data)
+            SnifferIPv4._IP_V4_FORMAT.unpack_from(data)
         ver, ihl = ver_ihl >> 4, ver_ihl & 0xF
         ip_header_size = ihl * 4
-        udp_ip_header_size = ip_header_size + SnifferIPv4Linux._UDP_V4_FORMAT.size
-        if ver != 4 or proto != SnifferIPv4Linux._PROTO_UDP or len(data) < udp_ip_header_size:
+        udp_ip_header_size = ip_header_size + SnifferIPv4._UDP_V4_FORMAT.size
+        if ver != 4 or proto != SnifferIPv4._PROTO_UDP or len(data) < udp_ip_header_size:
             return None
-        src_port, dst_port, udp_length, udp_chk = \
-            SnifferIPv4Linux._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
+        src_port, dst_port, udp_length, udp_chk = SnifferIPv4._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
         return RawPacket(
+            mac_header=MACHeader(source=llp.source, destination=llp.destination),
             ip_header=IPHeader(source=IPv4Address(src_adr), destination=IPv4Address(dst_adr)),
             udp_header=UDPHeader(source_port=src_port, destination_port=dst_port),
             udp_payload=data[udp_ip_header_size:],
         )
 
-    def _thread_function(self) -> None:
-        _logger.debug('%s: worker thread started', self)
-        local_prefix = IP_ADDRESS_NODE_ID_MASK | int(self._local)
-        while self._keep_going:
-            try:
-                while self._keep_going:
-                    data, _addr = self._sock.recvfrom(self._MTU)
-                    ts = Timestamp.now()         # TODO: use accurate timestamping.
-                    pkt = self._try_parse(memoryview(data))
-                    if pkt is not None and local_prefix == (IP_ADDRESS_NODE_ID_MASK | int(pkt.ip_header.source)):
-                        try:
-                            self._handler(ts, pkt)
-                        except Exception as ex:
-                            _logger.exception('%s: exception in the sniffer handler: %s', self, ex)
-                    else:
-                        if _logger.isEnabledFor(logging.DEBUG):
-                            _logger.debug('%s: dropped packet: %s', self, data.hex())
-            except Exception as ex:
-                if (self._sock.fileno() < 0) or (isinstance(ex, OSError) and ex.errno == errno.EBADF) or \
-                        not self._keep_going:
-                    _logger.debug('%s: stopping because the socket is closed', self)
-                    self._keep_going = False
-                    break
-                # This is probably inadequate, reconsider later.
-                _logger.exception('%s: exception in the worker thread: %s', self, ex)
-                time.sleep(1)
-
-    @staticmethod
-    def _make_socket(local_ip_address: IPv4Address) -> socket.socket:
-        s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(SnifferIPv4Linux._ETH_P_IP))
-        # TODO: determine the interface index
-        return s
-
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, local_ip_address=str(self._local), socket=self._sock)
+        return pyuavcan.util.repr_attributes(self, local_ip_address=str(self._local), link_layer=self._link_layer)
 
 
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
@@ -329,6 +288,9 @@ def _unittest_sniffer() -> None:
         sniffs.append(pack)
 
     sniffer = fac.make_sniffer(sniff_sniff)
+    assert isinstance(sniffer, SnifferIPv4)
+    # noinspection PyProtectedMember
+    assert sniffer._link_layer._filter_expr == 'udp and src net 127.66.0.0/16'
 
     outside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     outside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.42.0.123'))
@@ -359,13 +321,17 @@ def _unittest_sniffer() -> None:
     print(sniffs[2])
     assert len(sniffs) == 3
 
+    assert 6 == len(sniffs[0].mac_header.source) == len(sniffs[0].mac_header.destination)
+    assert 6 == len(sniffs[1].mac_header.source) == len(sniffs[1].mac_header.destination)
+    assert 6 == len(sniffs[2].mac_header.source) == len(sniffs[2].mac_header.destination)
+
     assert sniffs[0].ip_header.source == ip_address('127.66.33.44')
     assert sniffs[1].ip_header.source == ip_address('127.66.33.44')
     assert sniffs[2].ip_header.source == ip_address('127.66.33.44')
 
-    assert sniffs[0].ip_header.destination == ip_address('127.66.33.44')
-    assert sniffs[1].ip_header.destination == ip_address('127.66.33.44')
-    assert sniffs[2].ip_header.destination == ip_address('127.66.33.44')
+    assert sniffs[0].ip_header.destination == ip_address('127.66.1.200')
+    assert sniffs[1].ip_header.destination == ip_address('127.33.1.200')
+    assert sniffs[2].ip_header.destination == ip_address('239.66.1.200')
 
     assert sniffs[0].udp_header.destination_port == 1234
     assert sniffs[1].udp_header.destination_port == 5678

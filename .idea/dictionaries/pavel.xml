@@ -75,6 +75,7 @@
       <w>emptor</w>
       <w>endfor</w>
       <w>endmacro</w>
+      <w>ethertype</w>
       <w>facto</w>
       <w>ffee</w>
       <w>ffff</w>
@@ -101,6 +102,7 @@
       <w>iface</w>
       <w>ifaces</w>
       <w>inaddr</w>
+      <w>inet</w>
       <w>intersphinx</w>
       <w>intravehicular</w>
       <w>iscsi</w>

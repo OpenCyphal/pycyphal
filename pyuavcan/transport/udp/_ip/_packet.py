@@ -22,8 +22,8 @@ class MACHeader:
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self,
-                                             source=bytes(self.source).hex(),
-                                             destination=bytes(self.destination).hex())
+                                             source=bytes(self.source).hex(':'),
+                                             destination=bytes(self.destination).hex(':'))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -69,8 +69,23 @@ class RawPacket:
     |**MAC header** | **IP header** |**UDP header** |**UDP payload**|
     +---------------+---------------+---------------+---------------+
     """
-    mac_header: MACHeader
-    ip_header:  IPHeader
-    udp_header: UDPHeader
-
+    mac_header:  MACHeader
+    ip_header:   IPHeader
+    udp_header:  UDPHeader
     udp_payload: memoryview
+
+    def __repr__(self) -> str:
+        """
+        If the payload is large (ca. a hundred bytes), it may be truncated,
+        in which case an ellipsis will be added at the end.
+        """
+        limit = 100
+        if len(self.udp_payload) <= limit:
+            pld = bytes(self.udp_payload).hex()
+        else:
+            pld = bytes(self.udp_payload[:limit]).hex() + '...'
+        return pyuavcan.util.repr_attributes(self,
+                                             mac_header=self.mac_header,
+                                             ip_header=self.ip_header,
+                                             udp_header=self.udp_header,
+                                             udp_payload=pld)
