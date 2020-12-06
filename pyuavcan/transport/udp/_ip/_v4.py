@@ -105,8 +105,13 @@ class IPv4SocketFactory(SocketFactory):
         if isinstance(data_specifier, MessageDataSpecifier):
             multicast_ip = message_data_specifier_to_multicast_group(self._local, data_specifier)
             multicast_port = SUBJECT_PORT
-            # Binding to the multicast group address is necessary on GNU/Linux: https://habr.com/ru/post/141021/
-            s.bind((str(multicast_ip), multicast_port))
+            if sys.platform.startswith('linux'):
+                # Binding to the multicast group address is necessary on GNU/Linux: https://habr.com/ru/post/141021/
+                s.bind((str(multicast_ip), multicast_port))
+            else:
+                # Binding to a multicast address is not allowed on Windows, and it is not necessary there. Error is:
+                #   OSError: [WinError 10049] The requested address is not valid in its context
+                s.bind(('', multicast_port))
             try:
                 # Note that using INADDR_ANY in IP_ADD_MEMBERSHIP doesn't actually mean "any",
                 # it means "choose one automatically"; see https://tldp.org/HOWTO/Multicast-HOWTO-6.html
