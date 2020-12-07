@@ -22,8 +22,8 @@ class MACHeader:
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self,
-                                             source=bytes(self.source).hex(':'),
-                                             destination=bytes(self.destination).hex(':'))
+                                             source=bytes(self.source).hex(),
+                                             destination=bytes(self.destination).hex())
 
 
 @dataclasses.dataclass(frozen=True)

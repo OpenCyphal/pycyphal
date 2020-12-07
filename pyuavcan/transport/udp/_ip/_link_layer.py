@@ -53,8 +53,8 @@ class LinkLayerPacket:
             pld = bytes(self.payload[:limit]).hex() + '...'
         return pyuavcan.util.repr_attributes(self,
                                              protocol=str(self.protocol),
-                                             source=bytes(self.source).hex(':'),
-                                             destination=bytes(self.destination).hex(':'),
+                                             source=bytes(self.source).hex(),
+                                             destination=bytes(self.destination).hex(),
                                              payload=pld)
 
     Encoder = typing.Callable[['LinkLayerPacket'], typing.Optional[memoryview]]
@@ -420,7 +420,7 @@ def _unittest_encode_decode_ethernet() -> None:
     assert llp.payload == b'abcd'
     assert str(llp) == (
         "LinkLayerPacket(protocol=AddressFamily.AF_INET, "
-        + "source=11:22:33:44:55:66, destination=aa:bb:cc:dd:ee:ff, payload=61626364)"
+        + "source=112233445566, destination=aabbccddeeff, payload=61626364)"
     )
 
     llp = dec(mv(b'\x11\x22\x33\x44\x55\x66' + b'\xAA\xBB\xCC\xDD\xEE\xFF' + b'\x08\x00'))
