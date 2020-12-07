@@ -268,6 +268,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                 self._socket_reader_registry[specifier.data_specifier] = SocketReader(
                     sock=self._sock_factory.make_input_socket(specifier.data_specifier),
                     local_ip_address=self._sock_factory.local_ip_address,
+                    anonymous=self._anonymous,
                     statistics=self._statistics.received_datagrams.setdefault(specifier.data_specifier,
                                                                               SocketReaderStatistics()),
                     loop=self.loop,

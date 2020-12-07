@@ -74,11 +74,13 @@ class SocketReader:
     def __init__(self,
                  sock:             socket.socket,
                  local_ip_address: _IPAddress,
+                 anonymous:        bool,
                  statistics:       SocketReaderStatistics,
                  loop:             asyncio.AbstractEventLoop):
         """
         :param sock: The instance takes ownership of the socket; it will be closed when the instance is closed.
-        :param local_ip_address: Needed for discarding own-generated broadcast traffic and node-ID mapping.
+        :param local_ip_address: Needed for node-ID mapping.
+        :param anonymous: If True, then packets originating from the local IP address will not be discarded.
         :param statistics: A reference to the external statistics object that will be updated by the instance.
         :param loop: The event loop. You know the drill.
         """
@@ -86,10 +88,12 @@ class SocketReader:
         self._sock.settimeout(_READ_TIMEOUT)
 
         self._local_ip_address = local_ip_address
+        self._anonymous = anonymous
         self._statistics = statistics
         self._loop = loop
 
         assert isinstance(self._local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address))
+        assert isinstance(self._anonymous, bool)
         assert isinstance(self._statistics, SocketReaderStatistics)
         assert isinstance(self._loop, asyncio.AbstractEventLoop)
 
@@ -156,11 +160,16 @@ class SocketReader:
             # infrastructure (such as the IP address mapper) may become unusable.
             return  # pragma: no cover
 
+        # Do not accept datagrams emitted by the local node itself. Do not update the statistics either.
+        external = self._anonymous or (source_ip_address != self._local_ip_address)
+        if not external:
+            return
+
         # Process the datagram. This is where the actual demultiplexing takes place.
         # The node-ID mapper will return None for datagrams coming from outside of our UAVCAN subnet.
         handled = False
         source_node_id = unicast_ip_to_node_id(self._local_ip_address, source_ip_address)
-        if source_node_id is not None and source_ip_address != self._local_ip_address:
+        if source_node_id is not None:
             # Each frame is sent to the promiscuous listener and to the selective listener.
             # We parse the frame before invoking the listener in order to avoid the double parsing workload.
             for key in (None, source_node_id):
@@ -259,6 +268,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     stats = SocketReaderStatistics()
     srd = SocketReader(sock=sock_rx,
                        local_ip_address=ip_address('127.100.4.210'),  # 1234
+                       anonymous=False,
                        statistics=stats,
                        loop=loop)
     assert not srd.has_listeners
@@ -439,6 +449,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         stats = SocketReaderStatistics()
         srd = SocketReader(sock=sock_rx,
                            local_ip_address=ip_address('127.100.4.210'),  # 1234
+                           anonymous=False,
                            statistics=stats,
                            loop=loop)
         # noinspection PyProtectedMember
