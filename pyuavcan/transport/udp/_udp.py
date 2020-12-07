@@ -19,12 +19,6 @@ from ._ip import unicast_ip_to_node_id
 from ._socket_reader import SocketReader, SocketReaderStatistics
 
 
-# This is for internal use only: the maximum possible payload per UDP frame.
-# We assume that it equals the maximum size of an Ethernet jumbo frame.
-# We subtract the size of the L2/L3/L4 overhead here, and add one byte to enable packet truncation detection.
-_MAX_UDP_MTU = 9 * 1024 - 20 - 8 + 1
-
-
 _logger = logging.getLogger(__name__)
 
 
@@ -152,7 +146,8 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
-        return None if self._anonymous else unicast_ip_to_node_id(self._sock_factory.local_ip_address)
+        addr = self._sock_factory.local_ip_address
+        return None if self._anonymous else unicast_ip_to_node_id(addr, addr)
 
     def close(self) -> None:
         self._closed = True
@@ -272,9 +267,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                 _logger.debug('%r: Setting up new socket reader for %s', self, specifier.data_specifier)
                 self._socket_reader_registry[specifier.data_specifier] = SocketReader(
                     sock=self._sock_factory.make_input_socket(specifier.data_specifier),
-                    udp_mtu=_MAX_UDP_MTU,
-                    node_id_mapper=unicast_ip_to_node_id,
-                    local_node_id=self.local_node_id,
+                    local_ip_address=self._sock_factory.local_ip_address,
                     statistics=self._statistics.received_datagrams.setdefault(specifier.data_specifier,
                                                                               SocketReaderStatistics()),
                     loop=self.loop,
@@ -351,8 +344,7 @@ class UDPSniff(pyuavcan.transport.Sniff):
         A tuple of (source node-ID, destination node-ID (None if broadcast), data specifier, UAVCAN/UDP frame)
         is only defined if the packet is a valid UAVCAN/UDP frame.
         """
-        from ._ip import IP_ADDRESS_NODE_ID_MASK, multicast_group_to_message_data_specifier
-        from ._ip import SUBJECT_PORT, udp_port_to_service_data_specifier
+        from ._ip import SUBJECT_PORT, udp_port_to_service_data_specifier, multicast_group_to_message_data_specifier
 
         ip_header = self.packet.ip_header
 
@@ -364,11 +356,9 @@ class UDPSniff(pyuavcan.transport.Sniff):
             dst_nid = None  # Broadcast
             data_spec = multicast_group_to_message_data_specifier(ip_header.source, ip_header.destination)
         else:
-            src_prefix = IP_ADDRESS_NODE_ID_MASK | int(ip_header.source)
-            dst_prefix = IP_ADDRESS_NODE_ID_MASK | int(ip_header.destination)
-            if src_prefix != dst_prefix:
+            dst_nid = unicast_ip_to_node_id(ip_header.source, ip_header.destination)
+            if dst_nid is None:  # The packet crosses the UAVCAN/UDP subnet boundary, invalid.
                 return None
-            dst_nid = unicast_ip_to_node_id(ip_header.destination)
             data_spec = udp_port_to_service_data_specifier(self.packet.udp_header.destination_port)
 
         if data_spec is None:
@@ -378,5 +368,6 @@ class UDPSniff(pyuavcan.transport.Sniff):
         if frame is None:
             return None
 
-        src_nid = unicast_ip_to_node_id(ip_header.source)
+        src_nid = unicast_ip_to_node_id(ip_header.source, ip_header.source)
+        assert src_nid is not None
         return src_nid, dst_nid, data_spec, frame

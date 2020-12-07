@@ -6,7 +6,6 @@
 
 import typing
 import ipaddress
-import functools
 from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier
 
 IPAddress = typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
@@ -77,26 +76,34 @@ def node_id_to_unicast_ip(local_ip_address: _Address, node_id: int) -> _Address:
     return ty((int(local_ip_address) & (mask ^ IP_ADDRESS_NODE_ID_MASK)) | node_id)  # type: ignore
 
 
-@functools.lru_cache(None)
-def unicast_ip_to_node_id(ip_address: typing.Union[IPAddress, str]) -> int:
+def unicast_ip_to_node_id(local_ip_address: _Address, node_ip_address: _Address) -> typing.Optional[int]:
     """
-    Raises a value error if the address is a multicast group address.
-    The outputs are cached permanently.
+    Returns the node-ID if the node IP address and the local IP address belong to the same subnet.
+    Returns None if the node is not a member of the local subnet.
+    Raises a value error if either address is a multicast group address.
 
     >>> from ipaddress import ip_address
-    >>> unicast_ip_to_node_id(ip_address('127.42.1.200'))
+    >>> unicast_ip_to_node_id(ip_address('127.42.1.1'), ip_address('127.42.1.200'))
     456
-    >>> unicast_ip_to_node_id(ip_address('239.42.1.200'))
+    >>> unicast_ip_to_node_id(ip_address('127.0.0.99'), ip_address('127.0.0.99'))
+    99
+    >>> unicast_ip_to_node_id(ip_address('127.99.1.1'), ip_address('127.42.1.200'))  # Returns None
+    >>> unicast_ip_to_node_id(ip_address('239.42.1.1'), ip_address('127.42.1.200'))
+    Traceback (most recent call last):
+      ...
+    ValueError: Multicast group address cannot be a local IP address...
+    >>> unicast_ip_to_node_id(ip_address('127.42.1.1'), ip_address('239.42.1.200'))
     Traceback (most recent call last):
       ...
     ValueError: Multicast group address cannot be mapped to a node-ID...
     """
-    if isinstance(ip_address, str):
-        ip_address = ipaddress.ip_address(ip_address)
-    assert not isinstance(ip_address, str)
-    if ip_address.is_multicast:
-        raise ValueError(f'Multicast group address cannot be mapped to a node-ID: {ip_address}')
-    return int(ip_address) & IP_ADDRESS_NODE_ID_MASK
+    if local_ip_address.is_multicast:
+        raise ValueError(f'Multicast group address cannot be a local IP address: {local_ip_address}')
+    if node_ip_address.is_multicast:
+        raise ValueError(f'Multicast group address cannot be mapped to a node-ID: {node_ip_address}')
+    if (int(local_ip_address) | IP_ADDRESS_NODE_ID_MASK) == (int(node_ip_address) | IP_ADDRESS_NODE_ID_MASK):
+        return int(node_ip_address) & IP_ADDRESS_NODE_ID_MASK
+    return None
 
 
 def message_data_specifier_to_multicast_group(local_ip_address: _Address,
@@ -142,7 +149,6 @@ def message_data_specifier_to_multicast_group(local_ip_address: _Address,
     return ty(msb | data_specifier.subject_id)  # type: ignore
 
 
-@functools.lru_cache(None)
 def multicast_group_to_message_data_specifier(local_ip_address: _Address,
                                               multicast_group:  _Address) -> typing.Optional[MessageDataSpecifier]:
     """
