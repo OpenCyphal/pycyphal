@@ -225,42 +225,46 @@ def _unittest_socket_factory() -> None:
 
     # SERVICE SOCKET TEST (unicast)
     ds = ServiceDataSpecifier(100, ServiceDataSpecifier.Role.REQUEST)
-    test = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    test.bind(('127.42.0.123', service_data_specifier_to_udp_port(ds)))
+    test_u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_u.bind(('127.42.0.123', service_data_specifier_to_udp_port(ds)))
 
     srv_o = fac.make_output_socket(123, ds)
     srv_o.send(b'Goose')
-    rx = test.recvfrom(1024)
+    rx = test_u.recvfrom(1024)
     assert rx[0] == b'Goose'
     assert rx[1][0] == '127.42.1.200'
 
     srv_i = fac.make_input_socket(ds)
-    test.sendto(b'Duck', ('127.42.1.200', service_data_specifier_to_udp_port(ds)))
+    test_u.sendto(b'Duck', ('127.42.1.200', service_data_specifier_to_udp_port(ds)))
     rx = srv_i.recvfrom(1024)
     assert rx[0] == b'Duck'
     assert rx[1][0] == '127.42.0.123'
+    test_u.close()
 
     # MESSAGE SOCKET TEST (multicast)
-    test.close()
-    # Set up a multicast socket for testing; this is rather tedious.
-    test = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    test.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    test.bind(('239.42.2.100' * is_linux, SUBJECT_PORT))
-    test.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
-                    socket.inet_aton('239.42.2.100') + socket.inet_aton('127.42.0.123'))
-    test.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.42.0.123'))
+    # Note that Windows does not permit using the same socket for both sending to and receiving from a unicast group
+    # because in order to specify a particular output interface the socket must be bound to a unicast address.
+    # So we set up separate sockets for input and output.
+    test_i = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_i.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    test_i.bind(('239.42.2.100' * is_linux, SUBJECT_PORT))
+    test_i.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
+                      socket.inet_aton('239.42.2.100') + socket.inet_aton('127.42.0.123'))
 
     msg_o = fac.make_output_socket(None, MessageDataSpecifier(612))  # 612 = (2 << 8) + 100
     msg_o.send(b'Eagle')
-    rx = test.recvfrom(1024)
+    rx = test_i.recvfrom(1024)
     assert rx[0] == b'Eagle'
     assert rx[1][0] == '127.42.1.200'
 
+    test_o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_o.bind(('127.42.0.123', 0))
+    test_o.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.42.0.123'))
     msg_i = fac.make_input_socket(MessageDataSpecifier(612))
-    test.sendto(b'Seagull', ('239.42.2.100', SUBJECT_PORT))
+    test_o.sendto(b'Seagull', ('239.42.2.100', SUBJECT_PORT))
     rx = msg_i.recvfrom(1024)
     assert rx[0] == b'Seagull'
-    assert rx[1][0] == '127.42.0.123'
+    assert rx[1][0] == '127.42.0.123'  # Same address we just bound to.
 
     # ERRORS
     with raises(InvalidMediaConfigurationError):
@@ -281,8 +285,10 @@ def _unittest_socket_factory() -> None:
     with raises(UnsupportedSessionConfigurationError):
         fac.make_output_socket(None, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE))
 
-    # DISPOSE OF THE RESOURCES
-    test.close()
+    # CLEAN UP
+    test_u.close()
+    test_i.close()
+    test_o.close()
     srv_o.close()
     srv_i.close()
     msg_o.close()
