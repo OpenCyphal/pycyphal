@@ -6,7 +6,7 @@ environment:
     -
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-      PYTHON: 'C:\\Python39-x64'
+      PYTHON: 'C:\Python39-x64'  # YAML treats '\\' and "\\" differently.
     -
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
@@ -55,7 +55,8 @@ for:
       - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'  # graphviz is needed for the docs
       # MS Windows build config
       - cmd: 'systeminfo'
-      - cmd: 'set PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%'
+      - cmd: 'set PATH=%PYTHON%;%PYTHON%\Scripts;%PATH%'
+      - cmd: 'echo %PATH%'
     test_script:
       - sh:  './test.sh'
       - cmd: 'powershell .\test.ps1'
