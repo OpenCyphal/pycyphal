@@ -38,10 +38,7 @@ See :func:`get_service_udp_port`.
 """
 
 
-_Address = typing.TypeVar('_Address', ipaddress.IPv4Address, ipaddress.IPv6Address)
-
-
-def node_id_to_unicast_ip(local_ip_address: _Address, node_id: int) -> _Address:
+def node_id_to_unicast_ip(local_ip_address: IPAddress, node_id: int) -> IPAddress:
     """
     The local IP address is needed to deduce the subnet that the UAVCAN/UDP transport is operating on.
     The function simply combines the most significant bits from the first argument with the second argument.
@@ -76,7 +73,7 @@ def node_id_to_unicast_ip(local_ip_address: _Address, node_id: int) -> _Address:
     return ty((int(local_ip_address) & (mask ^ IP_ADDRESS_NODE_ID_MASK)) | node_id)  # type: ignore
 
 
-def unicast_ip_to_node_id(local_ip_address: _Address, node_ip_address: _Address) -> typing.Optional[int]:
+def unicast_ip_to_node_id(local_ip_address: IPAddress, node_ip_address: IPAddress) -> typing.Optional[int]:
     """
     Returns the node-ID if the node IP address and the local IP address belong to the same subnet.
     Returns None if the node is not a member of the local subnet.
@@ -106,8 +103,8 @@ def unicast_ip_to_node_id(local_ip_address: _Address, node_ip_address: _Address)
     return None
 
 
-def message_data_specifier_to_multicast_group(local_ip_address: _Address,
-                                              data_specifier:   MessageDataSpecifier) -> _Address:
+def message_data_specifier_to_multicast_group(local_ip_address: IPAddress,
+                                              data_specifier:   MessageDataSpecifier) -> IPAddress:
     r"""
     The local IP address is needed to deduce the subnet that the UAVCAN/UDP transport is operating on.
     For IPv4, the resulting address is constructed as follows::
@@ -149,8 +146,8 @@ def message_data_specifier_to_multicast_group(local_ip_address: _Address,
     return ty(msb | data_specifier.subject_id)  # type: ignore
 
 
-def multicast_group_to_message_data_specifier(local_ip_address: _Address,
-                                              multicast_group:  _Address) -> typing.Optional[MessageDataSpecifier]:
+def multicast_group_to_message_data_specifier(local_ip_address: IPAddress,
+                                              multicast_group:  IPAddress) -> typing.Optional[MessageDataSpecifier]:
     """
     The inverse of :func:`message_data_specifier_to_multicast_group`.
     The local IP address is needed to ensure that the multicast group belongs to the correct UAVCAN/UDP subnet.
