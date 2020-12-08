@@ -80,6 +80,7 @@
       <w>ffee</w>
       <w>ffff</w>
       <w>fgsfds</w>
+      <w>findalldevs</w>
       <w>fontname</w>
       <w>frombuffer</w>
       <w>fyodor</w>
@@ -140,6 +141,7 @@
       <w>noqa</w>
       <w>norecursedirs</w>
       <w>nosignatures</w>
+      <w>npcap</w>
       <w>ntdll</w>
       <w>octothorp</w>
       <w>onboard</w>
@@ -203,6 +205,7 @@
       <w>rtfd</w>
       <w>rtps</w>
       <w>ruamel</w>
+      <w>runas</w>
       <w>searchbox</w>
       <w>sendable</w>
       <w>sendmsg</w>

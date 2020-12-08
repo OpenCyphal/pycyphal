@@ -146,9 +146,12 @@ class IPv4SocketFactory(SocketFactory):
         try:
             return SnifferIPv4(self._local, handler)
         except PermissionError:
-            suggestion = ''
             if sys.platform.startswith('linux'):
-                suggestion = 'Run this:\nsudo setcap cap_net_raw+eip "$(readlink -f {sys.executable})"'
+                suggestion = f'Run this:\nsudo setcap cap_net_raw+eip "$(readlink -f {sys.executable})"'
+            elif sys.platform.startswith('win'):
+                suggestion = 'Make sure you have either WinPCap or Npcap installed and configured.'
+            else:
+                suggestion = ''
             raise PermissionError(
                 f'You need special privileges to perform low-level network packet capture (sniffing). {suggestion}'
             )
