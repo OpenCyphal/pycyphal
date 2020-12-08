@@ -270,10 +270,10 @@ class LinkLayerSniffer:
                 if err < 0:  # Negative values represent errors, otherwise it's the number of packets processed.
                     if self._keep_going:
                         _logger.critical(f'Worker thread for %r has failed with error %s; %s',
-                                         name, pcap.statustostr(err), pcap.geterr(pd).decode())
+                                         name, err, pcap.geterr(pd).decode())
                     else:
-                        _logger.debug('Error in worker thread for %r ignored because it is commanded to stop: %s',
-                                      name, pcap.statustostr(err))
+                        _logger.debug('Error %r in worker thread for %r ignored because it is commanded to stop',
+                                      err, name)
                     break
         except Exception as ex:
             _logger.exception('Unhandled exception in worker thread for %r; stopping: %r', name, ex)
@@ -337,6 +337,13 @@ def _try_begin_capture(device: str, filter_expression: str, data_link_hint: int)
     The available link types are listed in https://www.tcpdump.org/linktypes.html.
     """
     import libpcap as pcap
+    # Some libpcap-compatible libraries (e.g., WinPCap) do not have this function, so we have to define a fallback.
+    try:
+        def status_to_str(error_code: int) -> str:
+            return str(pcap.statustostr(error_code).decode())
+    except AttributeError:  # pragma: no cover
+        def status_to_str(error_code: int) -> str:
+            return f'[error {error_code}]'
 
     # This is helpful: https://github.com/karpierz/libpcap/blob/master/tests/capturetest.py
     err_buf = ctypes.create_string_buffer(pcap.PCAP_ERRBUF_SIZE)
@@ -346,30 +353,30 @@ def _try_begin_capture(device: str, filter_expression: str, data_link_hint: int)
     try:
         err = pcap.set_snaplen(pd, _SNAPSHOT_LENGTH)
         if err != 0:
-            raise TransportError(f"Could not set snapshot length for {device!r}: {pcap.statustostr(err).decode()}")
+            raise TransportError(f"Could not set snapshot length for {device!r}: {status_to_str(err)}")
 
         err = pcap.set_timeout(pd, int(_BUFFER_TIMEOUT * 1e3))
         if err != 0:
-            raise TransportError(f"Could not set timeout for {device!r}: {pcap.statustostr(err).decode()}")
+            raise TransportError(f"Could not set timeout for {device!r}: {status_to_str(err)}")
 
         err = pcap.set_promisc(pd, 1)
         if err != 0:
-            raise TransportError(f"Could not enable promiscuous mode for {device!r}: {pcap.statustostr(err).decode()}")
+            raise TransportError(f"Could not enable promiscuous mode for {device!r}: {status_to_str(err)}")
 
         err = pcap.activate(pd)
         if err == pcap.PCAP_ERROR_IFACE_NOT_UP:
             _logger.info('Skipping device %r because the iface is not up. %s',
-                         device, pcap.statustostr(err).decode())
+                         device, status_to_str(err))
             pcap.close(pd)
             return None
         if err in (pcap.PCAP_ERROR_PERM_DENIED, pcap.PCAP_ERROR_PROMISC_PERM_DENIED):
-            raise PermissionError(f"Capture is not permitted on {device!r}: {pcap.statustostr(err).decode()}")
+            raise PermissionError(f"Capture is not permitted on {device!r}: {status_to_str(err)}")
         if err < 0:
-            raise TransportError(f"Could not activate capture on {device!r}: {pcap.statustostr(err).decode()}; "
+            raise TransportError(f"Could not activate capture on {device!r}: {status_to_str(err)}; "
                                  f"{pcap.geterr(pd).decode()}")
         if err > 0:
             _logger.warning("Capture on %r started successfully, but libpcap reported a warning: %s",
-                            device, pcap.statustostr(err).decode())
+                            device, status_to_str(err))
 
         # https://www.tcpdump.org/manpages/pcap_set_datalink.3pcap.html
         err = pcap.set_datalink(pd, data_link_hint)
@@ -382,14 +389,13 @@ def _try_begin_capture(device: str, filter_expression: str, data_link_hint: int)
         err = pcap.compile(pd, ctypes.byref(code), filter_expression.encode(), 1, pcap.PCAP_NETMASK_UNKNOWN)
         if err != 0:
             raise TransportError(
-                f"Could not compile filter expression {filter_expression!r}: {pcap.statustostr(err).decode()}; "
+                f"Could not compile filter expression {filter_expression!r}: {status_to_str(err)}; "
                 f"{pcap.geterr(pd).decode()}"
             )
 
         err = pcap.setfilter(pd, ctypes.byref(code))
         if err != 0:
-            raise TransportError(f"Could not install filter: {pcap.statustostr(err).decode()}; "
-                                 f"{pcap.geterr(pd).decode()}")
+            raise TransportError(f"Could not install filter: {status_to_str(err)}; {pcap.geterr(pd).decode()}")
     except Exception:
         pcap.close(pd)
         raise
@@ -418,7 +424,7 @@ def _apply_windows_workarounds() -> None:  # pragma: no cover
     # DLL search path is specified manually via PATH. The workaround is valid per libpcap==1.10.0b15.
     # Later versions of libpcap may not require it, so please consider removing it in the future.
     spec = importlib.util.find_spec('libpcap')
-    if spec:
+    if spec and spec.origin:
         is_64_bit = sys.maxsize.bit_length() > 32
         libpcap_dir = pathlib.Path(spec.origin).parent
         dll_path = libpcap_dir / '_platform' / '_windows' / ('x64' if is_64_bit else 'x86') / 'wpcap'
