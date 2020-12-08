@@ -55,6 +55,8 @@ for:
       - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'  # graphviz is needed for the docs
       # MS Windows build config
       - cmd: 'systeminfo'
+      - cmd: 'route print'
+      - cmd: 'ipconfig /all'
       - cmd: 'set PATH=%PYTHON%;%PYTHON%\Scripts;%PATH%'
       - cmd: 'echo %PATH%'
     test_script:

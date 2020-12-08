@@ -571,12 +571,10 @@ def _unittest_encode_decode_ethernet() -> None:
 
 def _unittest_filter_devices() -> None:
     import sys
-
     assert not _filter_devices([])  # No address families -- no devices.
-
     devices = _filter_devices([socket.AF_INET, socket.AF_INET6])
     print('IPv4/6:', devices)
-    assert len(devices) >= 2  # One loopback, at least one external
+    assert len(devices) >= 1
     if sys.platform.startswith('linux'):
         assert 'lo' in devices
 
