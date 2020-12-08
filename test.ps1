@@ -60,6 +60,7 @@ $ncat_proc = Start-Process ncat -Args '-vv --broker --listen localhost 50905' -P
 #
 
 # The DSDL gen directory shall exist before coverage is invoked, otherwise its coverage won't be tracked.
+Remove-Item ".test_dsdl_generated" -ErrorAction SilentlyContinue
 New-Item -Path . -Name ".test_dsdl_generated" -ItemType Directory
 
 # Due to the fact that the real-time performance of Windows is bad, our tests may fail spuriously.
@@ -70,8 +71,7 @@ $test_ok = False
 For ($i=1; ($i -le $test_attempts) -and -not $test_ok; $i++)
 {
     Write-Host "Running the tests, attempt $i of $test_attempts..."
-    # Too much logging may break real-time tests because console output is extremely slow on Windows.
-    python -m pytest --override-ini log_cli=0 --capture=fd
+    python -m pytest
     $test_ok = $?
     Write-Host "Attempt $i of $test_attempts completed; success: $test_ok"
 }

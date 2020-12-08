@@ -337,12 +337,14 @@ def _try_begin_capture(device: str, filter_expression: str, data_link_hint: int)
     The available link types are listed in https://www.tcpdump.org/linktypes.html.
     """
     import libpcap as pcap
-    # Some libpcap-compatible libraries (e.g., WinPCap) do not have this function, so we have to define a fallback.
-    try:
-        def status_to_str(error_code: int) -> str:
+
+    def status_to_str(error_code: int) -> str:
+        """
+        Some libpcap-compatible libraries (e.g., WinPCap) do not have this function, so we have to define a fallback.
+        """
+        try:
             return str(pcap.statustostr(error_code).decode())
-    except AttributeError:  # pragma: no cover
-        def status_to_str(error_code: int) -> str:
+        except AttributeError:  # pragma: no cover
             return f'[error {error_code}]'
 
     # This is helpful: https://github.com/karpierz/libpcap/blob/master/tests/capturetest.py
