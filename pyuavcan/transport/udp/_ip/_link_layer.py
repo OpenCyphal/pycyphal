@@ -72,7 +72,29 @@ class LinkLayerPacket:
         The decoder returns None if the packet is not valid or the encapsulated protocol is not supported.
         """
         import libpcap as pcap  # type: ignore
-        if data_link_type == pcap.DLT_EN10MB:
+
+        if data_link_type in (pcap.DLT_NULL, pcap.DLT_LOOP):
+            # DLT_NULL is used by the Windows loopback interface. Info: https://wiki.wireshark.org/NullLoopback
+            # The source and destination addresses are not representable in this data link layer.
+            endianness = {
+                pcap.DLT_NULL: sys.byteorder,
+                pcap.DLT_LOOP: 'big',
+            }[data_link_type]
+
+            def encode(p: LinkLayerPacket) -> typing.Optional[memoryview]:
+                return memoryview(b''.join((p.protocol.to_bytes(4, endianness), p.payload)))
+
+            def decode(p: memoryview) -> typing.Optional[LinkLayerPacket]:
+                if len(p) < 4:
+                    return None
+                try:
+                    protocol = AddressFamily(int.from_bytes(p[0:4], endianness))
+                except ValueError:
+                    return None
+                empty = memoryview(b'')
+                return LinkLayerPacket(protocol=protocol, source=empty, destination=empty, payload=p[4:])
+
+        elif data_link_type == pcap.DLT_EN10MB:   # The entire Ethernet family; also wireless.
             # https://en.wikipedia.org/wiki/EtherType
             af_to_ethertype = {
                 AddressFamily.AF_INET: 0x0800,
@@ -103,8 +125,9 @@ class LinkLayerPacket:
                     return None
                 return LinkLayerPacket(protocol=protocol, source=src, destination=dst, payload=p[14:])
 
-            return encode, decode
-        return None
+        else:
+            return None
+        return encode, decode
 
 
 @dataclasses.dataclass(frozen=True)
@@ -440,9 +463,70 @@ if sys.platform.startswith('win'):  # pragma: no cover
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
 
 
+def _unittest_encode_decode_null() -> None:
+    import libpcap as pcap
+    mv = memoryview
+
+    enc_dec = LinkLayerPacket.get_encoder_decoder(pcap.DLT_NULL)
+    assert enc_dec
+    enc, dec = enc_dec
+    llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, sys.byteorder) + b'abcd'))
+    assert isinstance(llp, LinkLayerPacket)
+    assert llp.protocol == AddressFamily.AF_INET
+    assert llp.source == b''
+    assert llp.destination == b''
+    assert llp.payload == b'abcd'
+    assert str(llp) == "LinkLayerPacket(protocol=AddressFamily.AF_INET, source=, destination=, payload=61626364)"
+
+    llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, sys.byteorder)))
+    assert isinstance(llp, LinkLayerPacket)
+    assert llp.source == b''
+    assert llp.destination == b''
+    assert llp.payload == b''
+
+    assert enc(LinkLayerPacket(
+        protocol=AddressFamily.AF_INET6,
+        source=mv(b'\x11\x22'),
+        destination=mv(b'\xAA\xBB\xCC'),
+        payload=mv(b'abcd'),
+    )) == AddressFamily.AF_INET6.to_bytes(4, sys.byteorder) + b'abcd'
+
+    assert dec(mv(b'')) is None
+
+
+def _unittest_encode_decode_loop() -> None:
+    import libpcap as pcap
+    mv = memoryview
+
+    enc_dec = LinkLayerPacket.get_encoder_decoder(pcap.DLT_LOOP)
+    assert enc_dec
+    enc, dec = enc_dec
+    llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, 'big') + b'abcd'))
+    assert isinstance(llp, LinkLayerPacket)
+    assert llp.protocol == AddressFamily.AF_INET
+    assert llp.source == b''
+    assert llp.destination == b''
+    assert llp.payload == b'abcd'
+    assert str(llp) == "LinkLayerPacket(protocol=AddressFamily.AF_INET, source=, destination=, payload=61626364)"
+
+    llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, 'big')))
+    assert isinstance(llp, LinkLayerPacket)
+    assert llp.source == b''
+    assert llp.destination == b''
+    assert llp.payload == b''
+
+    assert enc(LinkLayerPacket(
+        protocol=AddressFamily.AF_INET6,
+        source=mv(b'\x11\x22'),
+        destination=mv(b'\xAA\xBB\xCC'),
+        payload=mv(b'abcd'),
+    )) == AddressFamily.AF_INET6.to_bytes(4, 'big') + b'abcd'
+
+    assert dec(mv(b'')) is None
+
+
 def _unittest_encode_decode_ethernet() -> None:
     import libpcap as pcap
-
     mv = memoryview
 
     enc_dec = LinkLayerPacket.get_encoder_decoder(pcap.DLT_EN10MB)
