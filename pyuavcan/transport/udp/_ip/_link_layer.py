@@ -5,19 +5,36 @@
 #
 
 from __future__ import annotations
+import os
+import sys
 import time
 import typing
 import ctypes
 import socket
 from socket import AddressFamily
+import pathlib
 import logging
 import threading
+import importlib.util
 import dataclasses
 import pyuavcan
 from pyuavcan.transport import TransportError, Timestamp
 
 
 _logger = logging.getLogger(__name__)
+
+
+# This is a Windows Server-specific workaround for this libpcap issue: https://github.com/karpierz/libpcap/issues/7
+# tl;dr: It works on desktop Windows 8/10, but Windows Server 2019 is unable to find "wpcap.dll" unless the DLL search
+# path is specified manually via PATH. The workaround is valid per libpcap==1.10.0b15. Later versions of libpcap may
+# not require it, so please consider removing it in the future.
+if sys.platform.startswith('win'):
+    spec = importlib.util.find_spec('libpcap')
+    if spec:
+        is_64_bit = sys.maxsize.bit_length() > 32
+        libpcap_dir = pathlib.Path(spec.origin).parent
+        dll_path = libpcap_dir / '_platform' / '_windows' / ('x64' if is_64_bit else 'x86') / 'wpcap'
+        os.environ['PATH'] += os.pathsep + str(dll_path)
 
 
 @dataclasses.dataclass(frozen=True)
