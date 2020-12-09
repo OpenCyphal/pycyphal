@@ -197,7 +197,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
                 self._statistics.drops += len(header_payload_pairs) - index
                 return None
             except Exception as ex:
-                if _IGNORE_OS_ERROR_ON_SEND and isinstance(ex, OSError):
+                if _IGNORE_OS_ERROR_ON_SEND and isinstance(ex, OSError) and self._sock.fileno() >= 0:
                     # Windows compatibility workaround -- if there are no registered multicast receivers on the
                     # loopback interface, send() may raise WinError 1231 or 10051. This error shall be suppressed.
                     _logger.debug(
