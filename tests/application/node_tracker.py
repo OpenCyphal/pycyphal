@@ -206,7 +206,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         assert pytest.approx(trk.get_info_timeout) == 1.0
         assert trk.get_info_attempts == 2
 
-        await asyncio.sleep(2.5)
+        await asyncio.sleep(9)
         assert num_events_a == 2
         assert num_events_b == 2
         assert num_events_c == 0
@@ -222,7 +222,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
 
         # Node B goes offline.
         hb_b.cancel()
-        await asyncio.sleep(6)
+        await asyncio.sleep(9)
         assert num_events_a == 2
         assert num_events_b == 3
         assert num_events_c == 0
@@ -234,7 +234,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
 
         # Node C appears online. It does not respond to GetInfo.
         hb_c = asyncio.create_task(_publish_heartbeat(p_c, 0xf0))
-        await asyncio.sleep(6)
+        await asyncio.sleep(9)
         assert num_events_a == 2
         assert num_events_b == 3
         assert num_events_c == 1
@@ -251,7 +251,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
         hb_c.cancel()
         hb_a.cancel()
         hb_a = asyncio.create_task(_publish_heartbeat(p_a, 0xfe))
-        await asyncio.sleep(6)
+        await asyncio.sleep(9)
         assert num_events_a == 4  # Two extra events: node restart detection, then get info reception.
         assert num_events_b == 3
         assert num_events_c == 2
@@ -263,7 +263,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
 
         # Node A goes offline. No online nodes are left standing.
         hb_a.cancel()
-        await asyncio.sleep(6)
+        await asyncio.sleep(9)
         assert num_events_a == 5
         assert num_events_b == 3
         assert num_events_c == 2
