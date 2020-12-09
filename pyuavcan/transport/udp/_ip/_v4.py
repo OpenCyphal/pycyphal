@@ -49,7 +49,7 @@ class IPv4SocketFactory(SocketFactory):
                            remote_node_id: typing.Optional[int],
                            data_specifier: pyuavcan.transport.DataSpecifier) -> socket.socket:
         _logger.debug('%r: Constructing new output socket for remote node %s and %s',
-                      self, data_specifier, remote_node_id)
+                      self, remote_node_id, data_specifier)
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.setblocking(False)
         try:

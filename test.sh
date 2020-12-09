@@ -94,8 +94,9 @@ mkdir .test_dsdl_generated 2> /dev/null       # The directory must exist before 
 # Note that we do not invoke coverage.py explicitly here; this is handled by usercustomize.py. Relevant docs:
 #   - https://coverage.readthedocs.io/en/coverage-4.2/subprocess.html
 #   - https://docs.python.org/3/library/site.html
-pytest                  || die "Core PyTest returned $?"
-pytest pyuavcan/_cli    || die "CLI PyTest returned $?"
+log_format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s'
+pytest --log-format="$log_format"               || die "Core PyTest returned $?"
+pytest --log-format="$log_format" pyuavcan/_cli || die "CLI PyTest returned $?"
 
 # Every time we launch a Python process, a new coverage file is created, so there may be a lot of those,
 # possibly nested in sub-directories.

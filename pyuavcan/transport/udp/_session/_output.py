@@ -117,7 +117,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
                 construct_frame
             )
         ]
-
+        _logger.debug('%s: Sending transfer: %s; current stats: %s', self, transfer, self._statistics)
         tx_timestamp = await self._emit(frames, monotonic_deadline)
         if tx_timestamp is None:
             return False

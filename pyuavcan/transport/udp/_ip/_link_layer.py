@@ -200,7 +200,7 @@ class LinkLayerSniffer:
             if sys.platform.startswith('linux'):
                 suggestion = f'Run this:\nsudo setcap cap_net_raw+eip "$(readlink -f {sys.executable})"'
             elif sys.platform.startswith('win'):
-                suggestion = 'Make sure you have either WinPCap or Npcap installed and configured.'
+                suggestion = 'Make sure you have either Npcap or WinPCap installed and configured.'
             else:
                 suggestion = ''
             raise PermissionError(

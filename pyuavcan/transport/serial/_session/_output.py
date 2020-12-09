@@ -96,7 +96,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
             self._mtu,
             construct_frame
         ))
-
+        _logger.debug('%s: Sending transfer: %s; current stats: %s', self, transfer, self._statistics)
         try:
             tx_timestamp = await self._send_handler(frames, monotonic_deadline)
         except Exception:
