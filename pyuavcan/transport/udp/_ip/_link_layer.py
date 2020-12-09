@@ -597,11 +597,22 @@ def _unittest_sniff() -> None:
 
     a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback
+    # multicast group for which there are no receivers may fail with the following errors:
+    #   OSError: [WinError 10051]   A socket operation was attempted to an unreachable network
+    #   OSError: [WinError 1231]    The network location cannot be reached. For information about network
+    #                               troubleshooting, see Windows Help
+    sink = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     try:
+        sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sink.bind(('', 4444))
+        sink.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
+                        socket.inet_aton('239.66.1.200') + socket.inet_aton('127.42.0.123'))
+
         b.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.42.0.123'))
         b.bind(('127.42.0.123', 0))  # Some random noise on an adjacent subnet.
         for i in range(10):
-            b.sendto(f'{i:04x}'.encode(), ('127.66.1.200', 3333))  # Ignored unicast
+            b.sendto(f'{i:04x}'.encode(), ('127.66.1.200', 4444))  # Ignored unicast
             b.sendto(f'{i:04x}'.encode(), ('239.66.1.200', 4444))  # Ignored multicast
             time.sleep(0.1)
 
@@ -610,12 +621,12 @@ def _unittest_sniff() -> None:
 
         a.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.66.33.44'))
         a.bind(('127.66.33.44', 0))  # This one is on our local subnet, it should be heard.
-        a.sendto(b'\xAA\xAA\xAA\xAA', ('127.66.1.200', 1234))  # Accepted unicast inside subnet
-        a.sendto(b'\xBB\xBB\xBB\xBB', ('127.33.1.200', 5678))  # Accepted unicast outside subnet
-        a.sendto(b'\xCC\xCC\xCC\xCC', ('239.66.1.200', 9012))  # Accepted multicast
+        a.sendto(b'\xAA\xAA\xAA\xAA', ('127.66.1.200', 4444))  # Accepted unicast inside subnet
+        a.sendto(b'\xBB\xBB\xBB\xBB', ('127.33.1.200', 4444))  # Accepted unicast outside subnet
+        a.sendto(b'\xCC\xCC\xCC\xCC', ('239.66.1.200', 4444))  # Accepted multicast
 
-        b.sendto(b'x', ('127.66.1.200', 5555))  # Ignored unicast
-        b.sendto(b'y', ('239.66.1.200', 6666))  # Ignored multicast
+        b.sendto(b'x', ('127.66.1.200', 4444))  # Ignored unicast
+        b.sendto(b'y', ('239.66.1.200', 4444))  # Ignored multicast
 
         time.sleep(3)
 
@@ -640,6 +651,7 @@ def _unittest_sniff() -> None:
         sn.close()
         a.close()
         b.close()
+        sink.close()
 
 
 def _unittest_sniff_errors() -> None:

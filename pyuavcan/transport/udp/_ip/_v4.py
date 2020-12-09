@@ -322,6 +322,17 @@ def _unittest_sniffer() -> None:
     # noinspection PyProtectedMember
     assert sniffer._link_layer._filter_expr == 'udp and src net 127.66.0.0/16'
 
+    # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback
+    # multicast group for which there are no receivers may fail with the following errors:
+    #   OSError: [WinError 10051]   A socket operation was attempted to an unreachable network
+    #   OSError: [WinError 1231]    The network location cannot be reached. For information about network
+    #                               troubleshooting, see Windows Help
+    sink = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sink.bind(('', 4444))
+    sink.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
+                    socket.inet_aton('239.66.1.200') + socket.inet_aton('127.42.0.123'))
+
     outside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     outside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.42.0.123'))
     outside.bind(('127.42.0.123', 0))  # Some random noise on an adjacent subnet.
@@ -338,10 +349,10 @@ def _unittest_sniffer() -> None:
     inside.bind(('127.66.33.44', 0))  # This one is on our local subnet, it should be heard.
     inside.sendto(b'\xAA\xAA\xAA\xAA', ('127.66.1.200', 1234))  # Accepted unicast inside subnet
     inside.sendto(b'\xBB\xBB\xBB\xBB', ('127.33.1.200', 5678))  # Accepted unicast outside subnet
-    inside.sendto(b'\xCC\xCC\xCC\xCC', ('239.66.1.200', 9012))  # Accepted multicast
+    inside.sendto(b'\xCC\xCC\xCC\xCC', ('239.66.1.200', 4444))  # Accepted multicast
 
     outside.sendto(b'x', ('127.66.1.200', 5555))  # Ignored unicast
-    outside.sendto(b'y', ('239.66.1.200', 6666))  # Ignored multicast
+    outside.sendto(b'y', ('239.66.1.200', 4444))  # Ignored multicast
 
     time.sleep(3)
 
@@ -351,9 +362,10 @@ def _unittest_sniffer() -> None:
     print(sniffs[2])
     assert len(sniffs) == 3
 
-    assert 6 == len(sniffs[0].mac_header.source) == len(sniffs[0].mac_header.destination)
-    assert 6 == len(sniffs[1].mac_header.source) == len(sniffs[1].mac_header.destination)
-    assert 6 == len(sniffs[2].mac_header.source) == len(sniffs[2].mac_header.destination)
+    # The MAC address length may be either 6 bytes (Ethernet encapsulation) or 0 bytes (null/loopback encapsulation)
+    assert len(sniffs[0].mac_header.source) == len(sniffs[0].mac_header.destination)
+    assert len(sniffs[1].mac_header.source) == len(sniffs[1].mac_header.destination)
+    assert len(sniffs[2].mac_header.source) == len(sniffs[2].mac_header.destination)
 
     assert sniffs[0].ip_header.source == ip_address('127.66.33.44')
     assert sniffs[1].ip_header.source == ip_address('127.66.33.44')
@@ -365,7 +377,7 @@ def _unittest_sniffer() -> None:
 
     assert sniffs[0].udp_header.destination_port == 1234
     assert sniffs[1].udp_header.destination_port == 5678
-    assert sniffs[2].udp_header.destination_port == 9012
+    assert sniffs[2].udp_header.destination_port == 4444
 
     assert bytes(sniffs[0].udp_payload) == b'\xAA\xAA\xAA\xAA'
     assert bytes(sniffs[1].udp_payload) == b'\xBB\xBB\xBB\xBB'
@@ -384,3 +396,4 @@ def _unittest_sniffer() -> None:
     sniffer.close()
     outside.close()
     inside.close()
+    sink.close()
