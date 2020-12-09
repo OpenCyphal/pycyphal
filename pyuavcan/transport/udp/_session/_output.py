@@ -4,31 +4,50 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
+import sys
 import copy
 import socket as socket_
 import typing
 import asyncio
 import logging
 import pyuavcan
+from pyuavcan.transport import Timestamp
 from .._frame import UDPFrame
 
+
+_IGNORE_OS_ERROR_ON_SEND = sys.platform.startswith('win')
+r"""
+On Windows, multicast output sockets have a weird corner case.
+If the output interface is set to the loopback adapter and there are no registered listeners for the specified
+multicast group, an attempt to send data to that group will fail with a "network unreachable" error.
+Here is an example::
+
+    import socket, asyncio
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.bind(('127.1.2.3', 0))
+    s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.1.2.3'))
+    s.sendto(b'\xaa\xbb\xcc', ('127.5.5.5', 1234))          # Success
+    s.sendto(b'\xaa\xbb\xcc', ('239.1.2.3', 1234))          # OSError
+    # OSError: [WinError 10051] A socket operation was attempted to an unreachable network
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(loop.sock_sendall(s, b'abc'))   # OSError
+    # OSError: [WinError 1231] The network location cannot be reached
+"""
 
 _logger = logging.getLogger(__name__)
 
 
 class UDPFeedback(pyuavcan.transport.Feedback):
-    def __init__(self,
-                 original_transfer_timestamp:        pyuavcan.transport.Timestamp,
-                 first_frame_transmission_timestamp: pyuavcan.transport.Timestamp):
+    def __init__(self, original_transfer_timestamp: Timestamp, first_frame_transmission_timestamp: Timestamp):
         self._original_transfer_timestamp = original_transfer_timestamp
         self._first_frame_transmission_timestamp = first_frame_transmission_timestamp
 
     @property
-    def original_transfer_timestamp(self) -> pyuavcan.transport.Timestamp:
+    def original_transfer_timestamp(self) -> Timestamp:
         return self._original_transfer_timestamp
 
     @property
-    def first_frame_transmission_timestamp(self) -> pyuavcan.transport.Timestamp:
+    def first_frame_transmission_timestamp(self) -> Timestamp:
         return self._first_frame_transmission_timestamp
 
 
@@ -155,12 +174,12 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
 
     async def _emit(self,
                     header_payload_pairs: typing.Sequence[typing.Tuple[memoryview, memoryview]],
-                    monotonic_deadline:   float) -> typing.Optional[pyuavcan.transport.Timestamp]:
+                    monotonic_deadline:   float) -> typing.Optional[Timestamp]:
         """
         Returns the transmission timestamp of the first frame (which is the transfer timestamp) on success.
         Returns None if at least one frame could not be transmitted.
         """
-        ts: typing.Optional[pyuavcan.transport.Timestamp] = None
+        ts: typing.Optional[Timestamp] = None
         for index, (header, payload) in enumerate(header_payload_pairs):
             try:
                 # TODO: concatenation is inefficient. Use vectorized IO via sendmsg() instead!
@@ -172,17 +191,29 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
                 # Depending on the chosen approach, timestamping on Linux may require us to launch a new thread
                 # reading from the socket's error message queue and then matching the returned frames with a
                 # pending loopback registry, kind of like it's done with CAN.
-                ts = ts or pyuavcan.transport.Timestamp.now()
+                ts = ts or Timestamp.now()
 
             except (asyncio.TimeoutError, asyncio.CancelledError):
                 self._statistics.drops += len(header_payload_pairs) - index
                 return None
-            except Exception:
-                self._statistics.errors += 1
-                raise
-            else:
-                self._statistics.frames += 1
-                self._statistics.payload_bytes += len(payload)
+            except Exception as ex:
+                if _IGNORE_OS_ERROR_ON_SEND and isinstance(ex, OSError):
+                    # Windows compatibility workaround -- if there are no registered multicast receivers on the
+                    # loopback interface, send() may raise WinError 1231 or 10051. This error shall be suppressed.
+                    _logger.debug(
+                        '%r: Socket send error ignored (the likely cause is that there are no known receivers '
+                        + 'on the other end of the link): %r',
+                        self, ex,
+                    )
+                    # To suppress the error properly, we have to pretend that the data was actually transmitted,
+                    # so we populate the timestamp with a phony value anyway.
+                    ts = ts or Timestamp.now()
+                else:
+                    self._statistics.errors += 1
+                    raise
+
+            self._statistics.frames += 1
+            self._statistics.payload_bytes += len(payload)
 
         return ts
 
@@ -201,8 +232,8 @@ def _unittest_output_session() -> None:
         nonlocal finalized
         finalized = True
 
-    def check_timestamp(t: pyuavcan.transport.Timestamp) -> bool:
-        now = pyuavcan.transport.Timestamp.now()
+    def check_timestamp(t: Timestamp) -> bool:
+        now = Timestamp.now()
         s = ts.system_ns <= t.system_ns <= now.system_ns
         m = ts.monotonic_ns <= t.monotonic_ns <= now.system_ns
         return s and m
@@ -401,3 +432,76 @@ def _unittest_output_session() -> None:
         ))
 
     sock_rx.close()
+
+
+def _unittest_output_session_no_listener() -> None:
+    """
+    Test the Windows-specific corner case. Should be handled identically on all platforms.
+    """
+    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority
+    from pyuavcan.transport import PayloadMetadata, Timestamp, Feedback, Transfer
+
+    ts = Timestamp.now()
+    loop = asyncio.get_event_loop()
+    run_until_complete = loop.run_until_complete
+
+    def make_sock() -> socket_.socket:
+        sock = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
+        sock.bind(('127.100.0.2', 0))
+        sock.connect(('239.0.1.2', 33333))  # There is no listener on this endpoint.
+        sock.setsockopt(socket_.IPPROTO_IP, socket_.IP_MULTICAST_IF, socket_.inet_aton('127.100.0.2'))
+        sock.setblocking(False)
+        return sock
+
+    sos = UDPOutputSession(
+        specifier=OutputSessionSpecifier(MessageDataSpecifier(3210), None),
+        payload_metadata=PayloadMetadata(1024),
+        mtu=11,
+        multiplier=1,
+        sock=make_sock(),
+        loop=asyncio.get_event_loop(),
+        finalizer=lambda: None,
+    )
+    assert run_until_complete(sos.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.NOMINAL,
+                 transfer_id=12340,
+                 fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
+        loop.time() + 10.0
+    ))
+    sos.close()
+
+    # Multi-frame with multiplication and feedback
+    last_feedback: typing.Optional[Feedback] = None
+
+    def feedback_handler(feedback: Feedback) -> None:
+        nonlocal last_feedback
+        assert last_feedback is None, 'Unexpected feedback'
+        last_feedback = feedback
+
+    sos = UDPOutputSession(
+        specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
+        payload_metadata=PayloadMetadata(1024),
+        mtu=10,
+        multiplier=2,
+        sock=make_sock(),
+        loop=asyncio.get_event_loop(),
+        finalizer=lambda: None,
+    )
+    sos.enable_feedback(feedback_handler)
+    assert last_feedback is None
+    assert run_until_complete(sos.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.OPTIONAL,
+                 transfer_id=54321,
+                 fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
+        loop.time() + 10.0
+    ))
+    print('last_feedback:', last_feedback)
+    assert isinstance(last_feedback, UDPFeedback)
+    # Ensure that the timestamp is populated even if the error suppression logic is activated.
+    assert last_feedback.original_transfer_timestamp == ts
+    assert Timestamp.now().monotonic >= last_feedback.first_frame_transmission_timestamp.monotonic >= ts.monotonic
+    assert Timestamp.now().system >= last_feedback.first_frame_transmission_timestamp.system >= ts.system
+
+    sos.close()

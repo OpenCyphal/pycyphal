@@ -57,6 +57,11 @@ class Feedback(abc.ABC):
         """
         raise NotImplementedError
 
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(self,
+                                             original_transfer_timestamp=self.original_transfer_timestamp,
+                                             first_frame_transmission_timestamp=self.first_frame_transmission_timestamp)
+
 
 @dataclasses.dataclass(frozen=True)
 class SessionSpecifier:

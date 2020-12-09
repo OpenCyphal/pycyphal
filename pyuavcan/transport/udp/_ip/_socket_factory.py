@@ -79,6 +79,22 @@ class SocketFactory(abc.ABC):
 
         The required options will be set up as needed automatically.
         Timestamping will need to be enabled separately if needed.
+
+        WARNING: on Windows, multicast output sockets have a weird corner case.
+        If the output interface is set to the loopback adapter and there are no registered listeners for the specified
+        multicast group, an attempt to send data to that group will fail with a "network unreachable" error.
+        Here is an example::
+
+            import socket, asyncio
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.bind(('127.1.2.3', 0))
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton('127.1.2.3'))
+            s.sendto(b'\xaa\xbb\xcc', ('127.5.5.5', 1234))          # Success
+            s.sendto(b'\xaa\xbb\xcc', ('239.1.2.3', 1234))          # OSError
+            # OSError: [WinError 10051] A socket operation was attempted to an unreachable network
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(loop.sock_sendall(s, b'abc'))   # OSError
+            # OSError: [WinError 1231] The network location cannot be reached
         """
         raise NotImplementedError
 

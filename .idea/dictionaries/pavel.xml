@@ -18,6 +18,7 @@
       <w>asctime</w>
       <w>asyncio</w>
       <w>atexit</w>
+      <w>aton</w>
       <w>autoclass</w>
       <w>autoconfiguration</w>
       <w>autodoc</w>
@@ -106,6 +107,7 @@
       <w>inet</w>
       <w>intersphinx</w>
       <w>intravehicular</w>
+      <w>ipproto</w>
       <w>iscsi</w>
       <w>isfinite</w>
       <w>kibibyte</w>
@@ -212,6 +214,7 @@
       <w>sert</w>
       <w>serv</w>
       <w>setcap</w>
+      <w>setsockopt</w>
       <w>sheremet</w>
       <w>signedness</w>
       <w>sitecustomize</w>
