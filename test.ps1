@@ -60,7 +60,7 @@ $ncat_proc = Start-Process ncat -Args '-vv --broker --listen localhost 50905' -P
 #
 
 # The DSDL gen directory shall exist before coverage is invoked, otherwise its coverage won't be tracked.
-Remove-Item ".test_dsdl_generated" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force ".test_dsdl_generated" -ErrorAction SilentlyContinue
 New-Item -Path . -Name ".test_dsdl_generated" -ItemType Directory
 
 # Due to the fact that the real-time performance of Windows is bad, our tests may fail spuriously.

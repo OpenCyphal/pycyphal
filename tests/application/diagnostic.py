@@ -16,8 +16,8 @@ from pyuavcan.presentation import Presentation
 
 # noinspection PyProtectedMember
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
-                                      caplog: typing.Any) -> None:
+async def _unittest_slow_diagnostic(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
+                                    caplog: typing.Any) -> None:
     from pyuavcan.application import diagnostic
     from uavcan.time import SynchronizedTimestamp_1_0
 
