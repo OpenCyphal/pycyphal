@@ -137,8 +137,8 @@ class LinkLayerPacket:
         # The output is ORDERED, best option first.
         return {
             pcap.DLT_EN10MB: get_ethernet(),
-            pcap.DLT_NULL: get_loopback(sys.byteorder),
             pcap.DLT_LOOP: get_loopback('big'),
+            pcap.DLT_NULL: get_loopback(sys.byteorder),
         }
 
 
