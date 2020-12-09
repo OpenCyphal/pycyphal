@@ -143,30 +143,10 @@ class IPv4SocketFactory(SocketFactory):
         return s
 
     def make_sniffer(self, handler: typing.Callable[[Timestamp, RawPacket], None]) -> SnifferIPv4:
-        try:
-            return SnifferIPv4(self._local, handler)
-        except PermissionError:
-            if sys.platform.startswith('linux'):
-                suggestion = f'Run this:\nsudo setcap cap_net_raw+eip "$(readlink -f {sys.executable})"'
-            elif sys.platform.startswith('win'):
-                suggestion = 'Make sure you have either WinPCap or Npcap installed and configured.'
-            else:
-                suggestion = ''
-            raise PermissionError(
-                f'You need special privileges to perform low-level network packet capture (sniffing). {suggestion}'
-            )
+        return SnifferIPv4(self._local, handler)
 
 
 class SnifferIPv4(Sniffer):
-    """
-    Implementation specific to IPv4 on Linux.
-
-    A very basic background worker thread continuously reading IP packets from the raw socket, filtering them,
-    and then emitting them via the callback (yup, right from the worker thread).
-
-    - http://www.enderunix.org/docs/en/rawipspoof/
-    """
-
     _IP_V4_FORMAT = struct.Struct('!BB HHH BB H II')
     _UDP_V4_FORMAT = struct.Struct('!HH HH')
     _PROTO_UDP = 0x11

@@ -192,10 +192,20 @@ class LinkLayerSniffer:
         self._callback = callback
         self._keep_going = True
         self._workers: typing.List[threading.Thread] = []
-
-        dev_names = _find_devices()
-        _logger.debug('Capturable network devices: %s', dev_names)
-        caps = _capture_all(dev_names, filter_expression)
+        try:
+            dev_names = _find_devices()
+            _logger.debug('Capturable network devices: %s', dev_names)
+            caps = _capture_all(dev_names, filter_expression)
+        except PermissionError as ex:
+            if sys.platform.startswith('linux'):
+                suggestion = f'Run this:\nsudo setcap cap_net_raw+eip "$(readlink -f {sys.executable})"'
+            elif sys.platform.startswith('win'):
+                suggestion = 'Make sure you have either WinPCap or Npcap installed and configured.'
+            else:
+                suggestion = ''
+            raise PermissionError(
+                f'You need special privileges to perform low-level network packet capture (sniffing). {suggestion}'
+            )
         if not caps:
             raise LinkLayerCaptureError(
                 f'There are no devices available for packet capture at the moment. Evaluated candidates: {dev_names}'

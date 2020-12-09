@@ -149,6 +149,14 @@ which is chosen as a sensible default suitable for any intravehicular network.
 Per RFC 1112, in order to emit a multicast packet, a limited level-1 implementation without the full support of
 IGMP and multicast-specific packet handling policies is sufficient.
 
+Due to the dependency on the dynamic IGMP configuration,
+a newly configured subscriber may not immediately receive data from the subject --
+a brief *subscription initialization latency* may occur (typically it is well under one second).
+This is because the underlying IP stack needs to inform the network switch/router about its interest in a particular
+multicast group by sending an IGMP membership report first.
+A high-integrity application may choose to rely on a static switch configuration,
+in which case no initialization delay will take place.
+
 Example::
 
     Node IP address:    01111111 00000010 00000000 00001000
