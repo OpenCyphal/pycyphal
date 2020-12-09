@@ -177,7 +177,7 @@ class SnifferIPv4(Sniffer):
         subnet = ip_network(f'{local_ip_address}/{netmask_width}', strict=False)
         filter_expression = f'udp and src net {subnet}'
         _logger.debug('Constructed BPF filter expression: %r', filter_expression)
-        self._link_layer = LinkLayerSniffer([socket.AF_INET], filter_expression, self._callback)
+        self._link_layer = LinkLayerSniffer(filter_expression, self._callback)
         self._local = local_ip_address
         self._handler = handler
 

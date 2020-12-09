@@ -10,15 +10,22 @@ import time
 import typing
 import ctypes
 import socket
-from socket import AddressFamily
 import logging
 import threading
 import dataclasses
 import pyuavcan
-from pyuavcan.transport import TransportError, Timestamp
+from pyuavcan.transport import Timestamp
 
 
 _logger = logging.getLogger(__name__)
+
+
+class LinkLayerError(pyuavcan.transport.TransportError):
+    pass
+
+
+class LinkLayerCaptureError(LinkLayerError):
+    pass
 
 
 @dataclasses.dataclass(frozen=True)
@@ -26,7 +33,7 @@ class LinkLayerPacket:
     """
     The addresses are represented here in the link-native byte order.
     """
-    protocol: AddressFamily
+    protocol: socket.AddressFamily
     """
     The protocol encapsulated inside the link-layer packet; e.g., IPv6.
     """
@@ -62,39 +69,21 @@ class LinkLayerPacket:
     Decoder = typing.Callable[[memoryview], typing.Optional['LinkLayerPacket']]
 
     @staticmethod
-    def get_encoder_decoder(data_link_type: int) -> typing.Optional[typing.Tuple[Encoder, Decoder]]:
+    def get_codecs() -> typing.Dict[int, typing.Tuple[Encoder, Decoder]]:
         """
         A factory of paired encode/decode functions that are used for building and parsing link-layer packets.
-        If the supplied link layer type code (from libpcap ``DLT_*``) is not supported, returns None.
-        See https://www.tcpdump.org/linktypes.html.
+        The pairs are organized into a dict where the key is the data link type code from libpcap;
+        see https://www.tcpdump.org/linktypes.html.
+        The dict is ordered such that the recommended data link types come first.
+        This is useful when setting up packet capture if the adapter supports multiple link layer formats.
 
         The encoder returns None if the encapsulated protocol is not supported by the selected link layer.
         The decoder returns None if the packet is not valid or the encapsulated protocol is not supported.
         """
         import libpcap as pcap  # type: ignore
+        from socket import AddressFamily
 
-        if data_link_type in (pcap.DLT_NULL, pcap.DLT_LOOP):
-            # DLT_NULL is used by the Windows loopback interface. Info: https://wiki.wireshark.org/NullLoopback
-            # The source and destination addresses are not representable in this data link layer.
-            endianness = {
-                pcap.DLT_NULL: sys.byteorder,
-                pcap.DLT_LOOP: 'big',
-            }[data_link_type]
-
-            def encode(p: LinkLayerPacket) -> typing.Optional[memoryview]:
-                return memoryview(b''.join((p.protocol.to_bytes(4, endianness), p.payload)))
-
-            def decode(p: memoryview) -> typing.Optional[LinkLayerPacket]:
-                if len(p) < 4:
-                    return None
-                try:
-                    protocol = AddressFamily(int.from_bytes(p[0:4], endianness))
-                except ValueError:
-                    return None
-                empty = memoryview(b'')
-                return LinkLayerPacket(protocol=protocol, source=empty, destination=empty, payload=p[4:])
-
-        elif data_link_type == pcap.DLT_EN10MB:   # The entire Ethernet family; also wireless.
+        def get_ethernet() -> typing.Tuple[LinkLayerPacket.Encoder, LinkLayerPacket.Decoder]:
             # https://en.wikipedia.org/wiki/EtherType
             af_to_ethertype = {
                 AddressFamily.AF_INET: 0x0800,
@@ -102,7 +91,7 @@ class LinkLayerPacket:
             }
             ethertype_to_af = {v: k for k, v in af_to_ethertype.items()}
 
-            def encode(p: LinkLayerPacket) -> typing.Optional[memoryview]:
+            def enc(p: LinkLayerPacket) -> typing.Optional[memoryview]:
                 try:
                     return memoryview(b''.join((
                         bytes(p.source).rjust(6, b'\x00')[:6],
@@ -113,7 +102,7 @@ class LinkLayerPacket:
                 except LookupError:
                     return None
 
-            def decode(p: memoryview) -> typing.Optional[LinkLayerPacket]:
+            def dec(p: memoryview) -> typing.Optional[LinkLayerPacket]:
                 if len(p) < 14:
                     return None
                 src = p[0:6]
@@ -125,9 +114,32 @@ class LinkLayerPacket:
                     return None
                 return LinkLayerPacket(protocol=protocol, source=src, destination=dst, payload=p[14:])
 
-        else:
-            return None
-        return encode, decode
+            return enc, dec
+
+        def get_loopback(byte_order: str) -> typing.Tuple[LinkLayerPacket.Encoder, LinkLayerPacket.Decoder]:
+            # DLT_NULL is used by the Windows loopback interface. Info: https://wiki.wireshark.org/NullLoopback
+            # The source and destination addresses are not representable in this data link layer.
+            def enc(p: LinkLayerPacket) -> typing.Optional[memoryview]:
+                return memoryview(b''.join((p.protocol.to_bytes(4, byte_order), p.payload)))
+
+            def dec(p: memoryview) -> typing.Optional[LinkLayerPacket]:
+                if len(p) < 4:
+                    return None
+                try:
+                    protocol = AddressFamily(int.from_bytes(p[0:4], byte_order))
+                except ValueError:
+                    return None
+                empty = memoryview(b'')
+                return LinkLayerPacket(protocol=protocol, source=empty, destination=empty, payload=p[4:])
+
+            return enc, dec
+
+        # The output is ORDERED, best option first.
+        return {
+            pcap.DLT_EN10MB: get_ethernet(),
+            pcap.DLT_NULL: get_loopback(sys.byteorder),
+            pcap.DLT_LOOP: get_loopback('big'),
+        }
 
 
 @dataclasses.dataclass(frozen=True)
@@ -142,16 +154,17 @@ class LinkLayerSniffer:
     """
     This wrapper is intended to insulate the rest of the transport implementation from the specifics of the
     libpcap wrapper implementation (there are dozens of different wrappers out there).
-    Observe anything libpcap-related shall not be imported outside of these methods because we only require
+    Observe that anything libpcap-related shall not be imported outside of these methods because we only require
     this dependency if protocol sniffing capability is needed.
-    Regular use should be possible without libpcap installed.
+    Regular use of the library should be possible without libpcap installed.
 
     Once a new instance is constructed, it is launched immediately.
-    Execution is carried out in a background thread pool.
-    It is required to call :meth:`close` when done.
+    Execution is carried out in a background daemon thread pool.
+    It is required to call :meth:`close` when done, which will hint the worker threads to terminate soon.
 
     If a new network device is added or re-initialized while the sniffer is running, it will not be recognized.
-    Removal or a re-configuration of a device while the sniffer is running may cause it to fail.
+    Removal or a re-configuration of a device while the sniffer is running may cause it to fail,
+    which will be logged from the worker threads.
 
     Should a worker thread encounter an error (e.g., if the device becomes unavailable), its capture context
     is closed automatically and then the thread is terminated.
@@ -161,15 +174,8 @@ class LinkLayerSniffer:
     - https://github.com/karpierz/libpcap/blob/master/tests/capturetest.py
     """
 
-    def __init__(self,
-                 address_families:  typing.Iterable[AddressFamily],
-                 filter_expression: str,
-                 callback:          typing.Callable[[LinkLayerSniff], None]) -> None:
+    def __init__(self, filter_expression: str, callback: typing.Callable[[LinkLayerSniff], None]) -> None:
         """
-        :param address_families: Collection of ``socket.AF_*`` constants defining which types of network to use.
-            This duplicates the filter expression somewhat but it allows the sniffer to automatically determine
-            which network interface devices to use and which ones to ignore.
-
         :param filter_expression: The standard pcap filter expression;
             see https://www.tcpdump.org/manpages/pcap-filter.7.html.
             Use Wireshark for testing filter expressions.
@@ -182,57 +188,25 @@ class LinkLayerSniffer:
             The application always gets a high-level view of the data with the link-layer specifics abstracted away.
             This function may be invoked directly from a worker thread, so be sure to apply synchronization.
         """
-        import libpcap as pcap
-
-        self._address_families = list(address_families)
         self._filter_expr = str(filter_expression)
         self._callback = callback
         self._keep_going = True
+        self._workers: typing.List[threading.Thread] = []
 
-        # Find devices that we can work with.
-        dev_names = _filter_devices(self._address_families)
-        _logger.debug('Capturable network devices that support address families %s: %s',
-                      self._address_families, dev_names)
-
-        # Begin capture on all devices (that support the specified address family) in promiscuous mode.
-        # We can't use "any" because libpcap does not support promiscuous mode with it:
-        # https://github.com/the-tcpdump-group/libpcap/blob/bcca74d2713dc9c0a27992102c469f77bdd8dd1f/pcap-linux.c#L2522
-        # It shouldn't be a problem because we have our filter expression that is expected to be highly efficient.
-        # Devices whose ifaces are down will be filtered out here.
-        caps: typing.List[typing.Tuple[str, object, LinkLayerPacket.Decoder]] = []
-        try:
-            for name in dev_names:
-                pd = _try_begin_capture(name, self._filter_expr, pcap.DLT_EN10MB)
-                if pd is not None:
-                    data_link_type = pcap.datalink(pd)
-                    enc_dec = LinkLayerPacket.get_encoder_decoder(data_link_type)
-                    if enc_dec:
-                        caps.append((name, pd, enc_dec[1]))
-                    else:
-                        pcap.close(pd)
-                        _logger.critical(
-                            f'Device {name!r} cannot be used for packet capture because its data link layer type='
-                            f'{data_link_type} is not yet supported by this library. A pull request would be welcome!'
-                        )
-        except Exception:
-            for c in caps:
-                pcap.close(c)
-            raise
+        dev_names = _find_devices()
+        _logger.debug('Capturable network devices: %s', dev_names)
+        caps = _capture_all(dev_names, filter_expression)
         if not caps:
-            raise TransportError(
-                f'There are no devices available for capture at the moment. Evaluated candidates: {dev_names}'
+            raise LinkLayerCaptureError(
+                f'There are no devices available for packet capture at the moment. Evaluated candidates: {dev_names}'
             )
-        _logger.info('Capture sessions have been set up on: %s', list(n for n, _, _ in caps))
-
         self._workers = [
-            threading.Thread(target=self._thread_worker,
-                             name=f'pcap_worker_{name}',
-                             args=(name, pd, decoder),
-                             daemon=True)
+            threading.Thread(target=self._thread_worker, name=f'pcap_{name}', args=(name, pd, decoder), daemon=True)
             for name, pd, decoder in caps
         ]
         for w in self._workers:
             w.start()
+        assert len(self._workers) > 0
 
     @property
     def is_stable(self) -> bool:
@@ -240,6 +214,7 @@ class LinkLayerSniffer:
         True if all devices detected during the initial configuration are still being captured from.
         If at least one of them failed (e.g., due to a system reconfiguration), this value would be false.
         """
+        assert len(self._workers) > 0
         return all(x.is_alive() for x in self._workers)
 
     def close(self) -> None:
@@ -259,7 +234,7 @@ class LinkLayerSniffer:
         import libpcap as pcap
         assert isinstance(pd, ctypes.POINTER(pcap.pcap_t))
         try:
-            _logger.debug('Worker thread for %r is started: %s', name, threading.current_thread())
+            _logger.debug('%r: Worker thread for %r is started: %s', self, name, threading.current_thread())
 
             # noinspection PyTypeChecker
             @pcap.pcap_handler  # type: ignore
@@ -269,21 +244,20 @@ class LinkLayerSniffer:
                 ts_ns = (header.ts.tv_sec * 1_000_000 + header.ts.tv_usec) * 1000
                 ts = Timestamp(system_ns=ts_ns, monotonic_ns=time.monotonic_ns())
                 length, real_length = header.caplen, header.len
-                _logger.debug('CAPTURED PACKET ts=%s dev=%r len=%d bytes', ts, name, length)
+                _logger.debug('%r: CAPTURED PACKET ts=%s dev=%r len=%d bytes', self, ts, name, length)
                 if real_length != length:
                     # This should never occur because we use a huge capture buffer.
-                    _logger.critical(f'Length mismatch in a packet captured from {name!r}: '
+                    _logger.critical(f'{self}: Length mismatch in a packet captured from {name!r}: '
                                      f'real {real_length} bytes, captured {length} bytes')
                 # Create a copy of the payload. This is required per the libpcap API contract -- it says that the
                 # memory is invalidated upon return from the callback.
-                packet = memoryview(ctypes.cast(packet,
-                                                ctypes.POINTER(ctypes.c_ubyte * length))[0]).tobytes()
+                packet = memoryview(ctypes.cast(packet, ctypes.POINTER(ctypes.c_ubyte * length))[0]).tobytes()
                 llp = decoder(memoryview(packet))
                 if llp is None:
                     if _logger.isEnabledFor(logging.INFO):
-                        _logger.info('Link-layer packet of %d bytes captured from %r at %s could not be parsed. '
+                        _logger.info('%r: Link-layer packet of %d bytes captured from %r at %s could not be parsed. '
                                      'The header is: %s',
-                                     len(packet), name, ts, packet[:32].hex())
+                                     self, len(packet), name, ts, packet[:32].hex())
                 else:
                     self._callback(LinkLayerSniff(timestamp=ts, packet=llp, device_name=name))
 
@@ -292,36 +266,43 @@ class LinkLayerSniffer:
                 err = pcap.dispatch(pd, packets_per_batch, proxy, ctypes.POINTER(ctypes.c_ubyte)())
                 if err < 0:  # Negative values represent errors, otherwise it's the number of packets processed.
                     if self._keep_going:
-                        _logger.critical(f'Worker thread for %r has failed with error %s; %s',
-                                         name, err, pcap.geterr(pd).decode())
+                        _logger.critical('%r: Worker thread for %r has failed with error %s; %s',
+                                         self, name, err, pcap.geterr(pd).decode())
                     else:
-                        _logger.debug('Error %r in worker thread for %r ignored because it is commanded to stop',
-                                      err, name)
+                        _logger.debug('%r: Error %r in worker thread for %r ignored because it is commanded to stop',
+                                      self, err, name)
                     break
         except Exception as ex:
-            _logger.exception('Unhandled exception in worker thread for %r; stopping: %r', name, ex)
+            _logger.exception('%r: Unhandled exception in worker thread for %r; stopping: %r', self, name, ex)
         finally:
             # BEWARE: pcap_close() is not idempotent! Second close causes a heap corruption. *sigh*
             pcap.close(pd)
-        _logger.debug('Worker thread for %r is being terminated', name)
+        _logger.debug('%r: Worker thread for %r is being terminated', self, name)
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             address_families=self._address_families,
-                                             filter_expression=repr(self._filter_expr))
+        return pyuavcan.util.repr_attributes(
+            self,
+            filter_expression=repr(self._filter_expr),
+            num_devices=len(self._workers),
+            num_devices_active=len(list(x.is_alive() for x in self._workers)),
+        )
 
 
-def _filter_devices(address_families: typing.Sequence[AddressFamily]) -> typing.List[str]:
+def _find_devices() -> typing.List[str]:
     """
-    Returns a list of local network devices that have at least one address from the specified list of address
-    families. This is needed so that we won't attempt capturing Ethernet frames on a CAN device, for instance.
-    Such filtering automatically excludes devices whose interfaces are down, since they don't have any address.
+    Returns a list of local network devices that can be captured from.
+    Raises a PermissionError if the user is suspected to lack the privileges necessary for capture.
+
+    We used to filter the devices by address family, but it turned out to be a dysfunctional solution because
+    a device does not necessarily have to have an address in a particular family to be able to capture packets
+    of that kind. For instance, on Windows, a virtual network adapter may have no addresses while still being
+    able to capture packets.
     """
     import libpcap as pcap
     err_buf = ctypes.create_string_buffer(pcap.PCAP_ERRBUF_SIZE)
     devices = ctypes.POINTER(pcap.pcap_if_t)()
     if pcap.findalldevs(ctypes.byref(devices), err_buf) != 0:
-        raise TransportError(f"Could not list network devices: {err_buf.value.decode()}")
+        raise LinkLayerError(f"Could not list network devices: {err_buf.value.decode()}")
     if not devices:
         # This may seem odd, but libpcap returns an empty list if the user is not allowed to perform capture.
         # This is documented in the API docs as follows:
@@ -334,29 +315,65 @@ def _filter_devices(address_families: typing.Sequence[AddressFamily]) -> typing.
     while d:
         d = d.contents
         name = d.name.decode()
-        if name == 'any':
-            _logger.debug('Synthetic device %r does not support promiscuous mode, skipping', name)
+        if name != 'any':
+            dev_names.append(name)
         else:
-            a = d.addresses
-            while a:
-                a = a.contents
-                if a.addr and a.addr.contents.sa_family in address_families:
-                    dev_names.append(name)
-                    break
-                a = a.next
-            else:
-                _logger.debug('Device %r is incompatible with requested address families %s, skipping',
-                              name, address_families)
+            _logger.debug('Synthetic device %r does not support promiscuous mode, skipping', name)
         d = d.next
     pcap.freealldevs(devices)
     return dev_names
 
 
-def _try_begin_capture(device: str, filter_expression: str, data_link_hint: int) -> typing.Optional[object]:
+def _capture_all(device_names: typing.List[str], filter_expression: str) \
+        -> typing.List[typing.Tuple[str, object, LinkLayerPacket.Decoder]]:
     """
-    Returns None if the interface managed by this device is not up.
+    Begin capture on all devices in promiscuous mode.
+    We can't use "any" because libpcap does not support promiscuous mode with it, as stated in the docs and here:
+    https://github.com/the-tcpdump-group/libpcap/blob/bcca74d2713dc9c0a27992102c469f77bdd8dd1f/pcap-linux.c#L2522.
+    It shouldn't be a problem because we have our filter expression that is expected to be highly efficient.
+    Devices whose ifaces are down or that are not usable for other valid reasons will be silently filtered out here.
+    """
+    import libpcap as pcap
+    codecs = LinkLayerPacket.get_codecs()
+    caps: typing.List[typing.Tuple[str, object, LinkLayerPacket.Decoder]] = []
+    try:
+        for name in device_names:
+            pd = _capture_single_device(name, filter_expression, list(codecs.keys()))
+            if pd is None:
+                _logger.info('Could not set up capture on %r', name)
+                continue
+            data_link_type = pcap.datalink(pd)
+            try:
+                _, dec = codecs[data_link_type]
+            except LookupError:
+                # This is where we filter out devices that certainly have no relevance, like CAN adapters.
+                pcap.close(pd)
+                _logger.info(
+                    'Device %r will not be used for packet capture because its data link layer type=%r '
+                    + 'is not supported by this library. Either the device is irrelevant, '
+                    + 'or the library needs to be extended to support this link layer protocol.',
+                    name, data_link_type,
+                )
+            else:
+                caps.append((name, pd, dec))
+    except Exception:
+        for _, c, _ in caps:
+            pcap.close(c)
+        raise
+    _logger.info('Capture sessions with filter %r have been set up on: %s',
+                 filter_expression, list(n for n, _, _ in caps))
+    return caps
 
-    If the device does not support the specified data link type, a log message is emitted but no error is raised.
+
+def _capture_single_device(device:            str,
+                           filter_expression: str,
+                           data_link_hints:   typing.Sequence[int]) -> typing.Optional[object]:
+    """
+    Returns None if the interface managed by this device is not up or if it cannot be captured from for other reasons.
+    On GNU/Linux, some virtual devices (like netfilter devices) can only be accessed by a superuser.
+
+    The function will configure libpcap to use the first supported data link type from the list.
+    If none of the specified data link types are supported, a log message is emitted but no error is raised.
     The available link types are listed in https://www.tcpdump.org/linktypes.html.
     """
     import libpcap as pcap
@@ -374,53 +391,58 @@ def _try_begin_capture(device: str, filter_expression: str, data_link_hint: int)
     err_buf = ctypes.create_string_buffer(pcap.PCAP_ERRBUF_SIZE)
     pd = pcap.create(device.encode(), err_buf)
     if pd is None:
-        raise TransportError(f"Could not instantiate pcap_t for {device!r}: {err_buf.value.decode()}")
+        raise LinkLayerCaptureError(f"Could not instantiate pcap_t for {device!r}: {err_buf.value.decode()}")
     try:
+        # Non-fatal errors are intentionally logged at a low severity level to not disturb the user unnecessarily.
         err = pcap.set_snaplen(pd, _SNAPSHOT_LENGTH)
         if err != 0:
-            raise TransportError(f"Could not set snapshot length for {device!r}: {status_to_str(err)}")
+            _logger.info('Could not set snapshot length for %r: %r', device, status_to_str(err))
 
         err = pcap.set_timeout(pd, int(_BUFFER_TIMEOUT * 1e3))
         if err != 0:
-            raise TransportError(f"Could not set timeout for {device!r}: {status_to_str(err)}")
+            _logger.info('Could not set timeout for %r: %r', device, status_to_str(err))
 
         err = pcap.set_promisc(pd, 1)
         if err != 0:
-            raise TransportError(f"Could not enable promiscuous mode for {device!r}: {status_to_str(err)}")
+            _logger.info('Could not enable promiscuous mode for %r: %r', device, status_to_str(err))
 
         err = pcap.activate(pd)
-        if err == pcap.PCAP_ERROR_IFACE_NOT_UP:
-            _logger.info('Skipping device %r because the iface is not up. %s',
-                         device, status_to_str(err))
-            pcap.close(pd)
-            return None
         if err in (pcap.PCAP_ERROR_PERM_DENIED, pcap.PCAP_ERROR_PROMISC_PERM_DENIED):
             raise PermissionError(f"Capture is not permitted on {device!r}: {status_to_str(err)}")
+        if err == pcap.PCAP_ERROR_IFACE_NOT_UP:
+            _logger.debug('Device %r is not capturable because the iface is not up. %s', device, status_to_str(err))
+            pcap.close(pd)
+            return None
         if err < 0:
-            raise TransportError(f"Could not activate capture on {device!r}: {status_to_str(err)}; "
-                                 f"{pcap.geterr(pd).decode()}")
+            _logger.info("Could not activate capture on %r: %s; %s",
+                         device, status_to_str(err), pcap.geterr(pd).decode())
+            pcap.close(pd)
+            return None
         if err > 0:
-            _logger.warning("Capture on %r started successfully, but libpcap reported a warning: %s",
-                            device, status_to_str(err))
+            _logger.info("Capture on %r started successfully, but libpcap reported a warning: %s",
+                         device, status_to_str(err))
 
         # https://www.tcpdump.org/manpages/pcap_set_datalink.3pcap.html
-        err = pcap.set_datalink(pd, data_link_hint)
-        if err != 0:
-            _logger.info("Device %r does not appear to support data link type %r: %s",
-                         device, data_link_hint, pcap.geterr(pd).decode())
+        for dlt in data_link_hints:
+            err = pcap.set_datalink(pd, dlt)
+            if err == 0:
+                _logger.debug("Device %r is configured to use the data link type %r", device, dlt)
+                break
+        else:
+            _logger.debug("Device %r supports none of the following data link types: %r. Last error was: %s",
+                          device, list(data_link_hints), pcap.geterr(pd).decode())
 
         # https://www.tcpdump.org/manpages/pcap_compile.3pcap.html
         code = pcap.bpf_program()  # This memory needs to be freed when closed. Fix it later.
         err = pcap.compile(pd, ctypes.byref(code), filter_expression.encode(), 1, pcap.PCAP_NETMASK_UNKNOWN)
         if err != 0:
-            raise TransportError(
+            raise LinkLayerCaptureError(
                 f"Could not compile filter expression {filter_expression!r}: {status_to_str(err)}; "
                 f"{pcap.geterr(pd).decode()}"
             )
-
         err = pcap.setfilter(pd, ctypes.byref(code))
         if err != 0:
-            raise TransportError(f"Could not install filter: {status_to_str(err)}; {pcap.geterr(pd).decode()}")
+            raise LinkLayerCaptureError(f"Could not install filter: {status_to_str(err)}; {pcap.geterr(pd).decode()}")
     except Exception:
         pcap.close(pd)
         raise
@@ -465,11 +487,10 @@ if sys.platform.startswith('win'):  # pragma: no cover
 
 def _unittest_encode_decode_null() -> None:
     import libpcap as pcap
+    from socket import AddressFamily
     mv = memoryview
 
-    enc_dec = LinkLayerPacket.get_encoder_decoder(pcap.DLT_NULL)
-    assert enc_dec
-    enc, dec = enc_dec
+    enc, dec = LinkLayerPacket.get_codecs()[pcap.DLT_NULL]
     llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, sys.byteorder) + b'abcd'))
     assert isinstance(llp, LinkLayerPacket)
     assert llp.protocol == AddressFamily.AF_INET
@@ -496,11 +517,10 @@ def _unittest_encode_decode_null() -> None:
 
 def _unittest_encode_decode_loop() -> None:
     import libpcap as pcap
+    from socket import AddressFamily
     mv = memoryview
 
-    enc_dec = LinkLayerPacket.get_encoder_decoder(pcap.DLT_LOOP)
-    assert enc_dec
-    enc, dec = enc_dec
+    enc, dec = LinkLayerPacket.get_codecs()[pcap.DLT_LOOP]
     llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, 'big') + b'abcd'))
     assert isinstance(llp, LinkLayerPacket)
     assert llp.protocol == AddressFamily.AF_INET
@@ -527,11 +547,10 @@ def _unittest_encode_decode_loop() -> None:
 
 def _unittest_encode_decode_ethernet() -> None:
     import libpcap as pcap
+    from socket import AddressFamily
     mv = memoryview
 
-    enc_dec = LinkLayerPacket.get_encoder_decoder(pcap.DLT_EN10MB)
-    assert enc_dec
-    enc, dec = enc_dec
+    enc, dec = LinkLayerPacket.get_codecs()[pcap.DLT_EN10MB]
     llp = dec(mv(b'\x11\x22\x33\x44\x55\x66' + b'\xAA\xBB\xCC\xDD\xEE\xFF' + b'\x08\x00' + b'abcd'))
     assert isinstance(llp, LinkLayerPacket)
     assert llp.protocol == AddressFamily.AF_INET
@@ -569,11 +588,10 @@ def _unittest_encode_decode_ethernet() -> None:
     assert dec(mv(b'\x11\x22\x33\x44\x55\x66' + b'\xAA\xBB\xCC\xDD\xEE\xFF' + b'\x00\xFF' + b'abcdef')) is None
 
 
-def _unittest_filter_devices() -> None:
+def _unittest_find_devices() -> None:
     import sys
-    assert not _filter_devices([])  # No address families -- no devices.
-    devices = _filter_devices([socket.AF_INET, socket.AF_INET6])
-    print('IPv4/6:', devices)
+    devices = _find_devices()
+    print('Devices:', devices)
     assert len(devices) >= 1
     if sys.platform.startswith('linux'):
         assert 'lo' in devices
@@ -592,7 +610,7 @@ def _unittest_sniff() -> None:
         sniffs.append(lls.packet)
 
     filter_expression = 'udp and src net 127.66.0.0/16'
-    sn = LinkLayerSniffer([socket.AF_INET], filter_expression, callback)
+    sn = LinkLayerSniffer(filter_expression, callback)
     assert sn.is_stable
 
     a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -657,8 +675,5 @@ def _unittest_sniff() -> None:
 def _unittest_sniff_errors() -> None:
     from pytest import raises
 
-    with raises(TransportError, match=r'.*no devices.*'):
-        LinkLayerSniffer([9999], '', lambda x: None)  # type: ignore
-
-    with raises(TransportError, match=r'.*filter expression.*'):
-        LinkLayerSniffer([AddressFamily.AF_INET6], 'invalid filter expression', lambda x: None)
+    with raises(LinkLayerCaptureError, match=r'.*filter expression.*'):
+        LinkLayerSniffer('invalid filter expression', lambda x: None)
