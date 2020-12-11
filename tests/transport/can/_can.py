@@ -29,7 +29,7 @@ async def _unittest_can_transport_anon() -> None:
     from pyuavcan.transport.can._frame import UAVCANFrame
     from .media.mock import MockMedia, FrameCollector
 
-    asyncio.get_running_loop().slow_callback_duration = 1.0
+    asyncio.get_running_loop().slow_callback_duration = 5.0
 
     with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
         can.CANTransport(MockMedia(set(), 64, 0), None)
@@ -243,7 +243,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     from pyuavcan.transport.can._frame import UAVCANFrame
     from .media.mock import MockMedia, FrameCollector
 
-    asyncio.get_running_loop().slow_callback_duration = 1.0
+    asyncio.get_running_loop().slow_callback_duration = 5.0
 
     peers: typing.Set[MockMedia] = set()
     media = MockMedia(peers, 64, 10)
@@ -882,7 +882,7 @@ async def _unittest_issue_120() -> None:
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
     from .media.mock import MockMedia
 
-    asyncio.get_running_loop().slow_callback_duration = 1.0
+    asyncio.get_running_loop().slow_callback_duration = 5.0
 
     peers: typing.Set[MockMedia] = set()
     media = MockMedia(peers, 8, 10)

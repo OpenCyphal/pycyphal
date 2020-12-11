@@ -481,6 +481,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         assert not srd._thread.is_alive()
         # noinspection PyProtectedMember
         srd._ctl_main.close()
+        # noinspection PyProtectedMember
         srd._ctl_worker.close()
 
     sock_tx_1.close()

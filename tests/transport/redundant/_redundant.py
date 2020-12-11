@@ -25,7 +25,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     from pyuavcan.transport import ProtocolParameters
 
     loop = asyncio.get_event_loop()
-    loop.slow_callback_duration = 1.0
+    loop.slow_callback_duration = 5.0
 
     tr_a = RedundantTransport()
     tr_b = RedundantTransport(loop=loop)
