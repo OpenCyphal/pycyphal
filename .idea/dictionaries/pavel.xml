@@ -11,6 +11,7 @@
       <w>aega</w>
       <w>afdx</w>
       <w>allocatee</w>
+      <w>ancdata</w>
       <w>antipattern</w>
       <w>apidoc</w>
       <w>appveyor</w>
@@ -36,6 +37,7 @@
       <w>caplog</w>
       <w>capturable</w>
       <w>ccitt</w>
+      <w>cmsg</w>
       <w>coloredlogs</w>
       <w>computron</w>
       <w>conftest</w>
@@ -193,6 +195,7 @@
       <w>reassemblers</w>
       <w>rechunk</w>
       <w>recvfrom</w>
+      <w>recvmsg</w>
       <w>refdoc</w>
       <w>refid</w>
       <w>refragment</w>
@@ -265,6 +268,7 @@
       <w>unseparate</w>
       <w>unstropped</w>
       <w>upvote</w>
+      <w>usec</w>
       <w>usercustomize</w>
       <w>vcan</w>
       <w>versioning</w>

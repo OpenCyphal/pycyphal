@@ -59,6 +59,7 @@ class SocketCANMedia(_media.Media):
         self._native_frame_size = _FRAME_HEADER_STRUCT.size + self._native_frame_data_capacity
 
         self._sock = _make_socket(iface_name, can_fd=self._is_fd)
+        self._ctl_main, self._ctl_worker = socket.socketpair()  # This is used for controlling the worker thread.
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._loopback_enabled = False
@@ -125,8 +126,17 @@ class SocketCANMedia(_media.Media):
         return num_sent
 
     def close(self) -> None:
-        self._closed = True
-        self._sock.close()
+        try:
+            self._closed = True
+            if self._ctl_main.fileno() >= 0:  # Ignore if already closed.
+                self._ctl_main.send(b'stop')  # The actual data is irrelevant, we just need it to unblock the select().
+            if self._maybe_thread:
+                self._maybe_thread.join(timeout=_SELECT_TIMEOUT)
+                self._maybe_thread = None
+        finally:
+            self._sock.close()          # These are expected to be idempotent.
+            self._ctl_worker.close()
+            self._ctl_main.close()
 
     def _thread_function(self, handler: _media.Media.ReceivedFramesHandler) -> None:
         def handler_wrapper(frs: typing.Sequence[_media.TimestampedDataFrame]) -> None:
@@ -138,32 +148,30 @@ class SocketCANMedia(_media.Media):
 
         while not self._closed:
             try:
-                select_timeout = 1.0
-                select.select((self._sock,), (), (), select_timeout)  # We don't really care about the return values
-                # We don't check the return values because it is guaranteed by design that on a properly functioning
-                # bus we'll always be getting >=1 frame per second. If this expectation is violated, we'll simply
-                # abort the read on EAGAIN, no big deal.
+                read_ready, _, _, = select.select((self._sock, self._ctl_worker), (), (), _SELECT_TIMEOUT)
                 ts_mono_ns = time.monotonic_ns()
-                frames: typing.List[_media.TimestampedDataFrame] = []
-                try:
-                    while True:
-                        frames.append(self._read_frame(ts_mono_ns))
-                except OSError as ex:
-                    if ex.errno != errno.EAGAIN:
-                        raise
-                if len(frames) > 0:
+
+                if self._sock in read_ready:
+                    frames: typing.List[_media.TimestampedDataFrame] = []
+                    try:
+                        while True:
+                            frames.append(self._read_frame(ts_mono_ns))
+                    except OSError as ex:
+                        if ex.errno != errno.EAGAIN:
+                            raise
                     self._loop.call_soon_threadsafe(handler_wrapper, frames)
-            except OSError as ex:
-                if not self._closed:
-                    _logger.exception('%s thread input/output error; stopping: %s', self, ex)
-                break
-            except Exception as ex:
+
+                if self._ctl_worker in read_ready:
+                    if self._ctl_worker.recv(1):  # pragma: no branch
+                        break
+            except Exception as ex:  # pragma: no cover
+                if self._sock.fileno() < 0 or self._ctl_worker.fileno() < 0 or self._ctl_main.fileno() < 0:
+                    self._closed = True
                 _logger.exception('%s thread failure: %s', self, ex)
-                if not self._closed:
-                    time.sleep(1)       # Is this an adequate failure management strategy?
+                time.sleep(1)       # Is this an adequate failure management strategy?
 
         self._closed = True
-        _logger.info('%s thread is about to exit', self)
+        _logger.debug('%s thread is about to exit', self)
 
     def _read_frame(self, ts_mono_ns: int) -> _media.TimestampedDataFrame:
         while True:
@@ -229,8 +237,8 @@ class SocketCANMedia(_media.Media):
             proc = subprocess.run('ip link show', check=True, timeout=1, text=True, shell=True, capture_output=True)
             return re.findall(r'\d+?: ([a-z0-9]+?): <[^>]*UP[^>]*>.*\n *link/can', proc.stdout)
         except Exception as ex:
-            _logger.info('Could not scrape the output of ip link show, using the fallback method: %s', ex,
-                         exc_info=True)
+            _logger.debug('Could not scrape the output of `ip link show`, using the fallback method: %s', ex,
+                          exc_info=True)
             with open('/proc/net/dev') as f:
                 out = [line.split(':')[0].strip() for line in f if ':' in line and 'can' in line]
             return sorted(out, key=lambda x: 'can' in x, reverse=True)
@@ -239,6 +247,9 @@ class SocketCANMedia(_media.Media):
 class _NativeFrameDataCapacity(enum.IntEnum):
     CAN_CLASSIC = 8
     CAN_FD = 64
+
+
+_SELECT_TIMEOUT = 1.0
 
 
 # struct can_frame {
