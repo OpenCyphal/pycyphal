@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 import socket
 import typing
+import select
 import asyncio
 import logging
 import threading
@@ -19,7 +20,7 @@ from ._frame import UDPFrame
 from ._ip import unicast_ip_to_node_id
 
 
-_READ_SIZE = 2 ** 16
+_READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.
 _READ_TIMEOUT = 1.0
 
 _logger = logging.getLogger(__name__)
@@ -85,8 +86,8 @@ class SocketReader:
         :param loop: The event loop. You know the drill.
         """
         self._sock = sock
-        self._sock.settimeout(_READ_TIMEOUT)
-
+        self._sock.setblocking(False)
+        self._original_file_desc = self._sock.fileno()  # This is needed for repr() only.
         self._local_ip_address = local_ip_address
         self._anonymous = anonymous
         self._statistics = statistics
@@ -97,11 +98,10 @@ class SocketReader:
         assert isinstance(self._statistics, SocketReaderStatistics)
         assert isinstance(self._loop, asyncio.AbstractEventLoop)
 
-        self._closed = False
         self._listeners: typing.Dict[typing.Optional[int], SocketReader.Listener] = {}
-
+        self._ctl_worker, self._ctl_main = socket.socketpair()  # For communicating with the worker thread.
         self._thread = threading.Thread(target=self._thread_entry_point,
-                                        name='socket_reader',
+                                        name=f'socket_reader_fd_{self._original_file_desc}',
                                         daemon=True)
         self._thread.start()
 
@@ -117,8 +117,8 @@ class SocketReader:
             If a frame is received that cannot be parsed, the callable will be invoked with None
             in order to let it update its error statistics.
         """
-        if self._closed:
-            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+        if not self._thread.is_alive():
+            raise pyuavcan.transport.ResourceClosedError(f'{self} is no longer operational')
 
         if source_node_id in self._listeners:
             raise ValueError(f'{self}: The listener for node-ID {source_node_id} is already registered '
@@ -143,24 +143,41 @@ class SocketReader:
 
     def close(self) -> None:
         """
-        Closes the instance and its socket.
+        Closes the instance and its socket, waits for the thread to terminate (which should happen instantly).
+
+        This method is guaranteed to not return until the socket is closed and all calls that might have been
+        blocked on it have been completed (particularly, the calls made by the worker thread).
+        THIS IS EXTREMELY IMPORTANT because if the worker thread is left on a blocking read from a closed socket,
+        the next created socket is likely to receive the same file descriptor and the worker thread would then
+        inadvertently consume the data destined for another reader.
+        Worse yet, this error may occur spuriously depending on the timing of the worker thread's access to the
+        blocking read function, causing the problem to appear and disappear at random.
+        I literally spent the whole day sifting through logs and Wireshark dumps trying to understand why the test
+        (specifically, the node tracker test, which is an application-layer entity)
+        sometimes fails to see a service response that is actually present on the wire.
+        This case is now covered by a dedicated unit test.
+
+        The lesson is to never close a file descriptor while there is a system call blocked on it. Never again.
+
         Once closed, new listeners can no longer be added.
         Raises :class:`RuntimeError` instead of closing if there is at least one active listener.
         """
         if self.has_listeners:
             raise RuntimeError('Refusing to close socket reader with active listeners. Call remove_listener first.')
-        self._closed = True
-        self._sock.close()
-        # We don't wait for the thread to join because who cares?
+        if self._sock.fileno() < 0:  # Ensure idempotency.
+            return
+        started_at = time.monotonic()
+        try:
+            _logger.debug('%r: Stopping the thread before closing the socket to avoid accidental fd reuse...', self)
+            self._ctl_main.send(b'stop')  # The actual data is irrelevant, we just need it to unblock the select().
+            self._thread.join(timeout=_READ_TIMEOUT)
+        finally:
+            self._sock.close()
+            self._ctl_worker.close()
+            self._ctl_main.close()
+        _logger.debug('%r: Closed. Elapsed time: %.3f milliseconds', self, (time.monotonic() - started_at) * 1e3)
 
     def _dispatch_frame(self, source_ip_address: _IPAddress, frame: typing.Optional[UDPFrame]) -> None:
-        if self._closed:
-            # A check for closure is mandatory here because there is a period of uncertainty between the point
-            # when this method is invoked from the reader thread and the point where the event loop gets around
-            # to calling it: between these two events the instance might be closed and the surrounding
-            # infrastructure (such as the IP address mapper) may become unusable.
-            return  # pragma: no cover
-
         # Do not accept datagrams emitted by the local node itself. Do not update the statistics either.
         external = self._anonymous or (source_ip_address != self._local_ip_address)
         if not external:
@@ -200,46 +217,48 @@ class SocketReader:
                 self._statistics.accepted_datagrams[source_node_id] = 1
 
     def _thread_entry_point(self) -> None:
-        while not self._closed:
+        while self._sock.fileno() >= 0:
             try:
-                # Notice that we MUST create a new buffer for each received datagram to avoid race conditions.
-                # Buffer memory cannot be shared because the rest of the stack is completely zero-copy;
-                # meaning that the data we allocate here, at the very bottom of the protocol stack,
-                # is likely to be carried all the way up to the application layer without being copied.
-                data, endpoint = self._sock.recvfrom(_READ_SIZE)
-                assert len(data) < _READ_SIZE, 'Datagram might have been truncated'
-                source_ip = _parse_address(endpoint[0])
+                read_ready, _, _ = select.select([self._ctl_worker, self._sock], [], [], _READ_TIMEOUT)
+                if self._sock in read_ready:
+                    # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
+                    ts = pyuavcan.transport.Timestamp.now()
 
-                # TODO: use socket timestamping when running on Linux (Windows does not support timestamping).
-                ts = pyuavcan.transport.Timestamp.now()
+                    # Notice that we MUST create a new buffer for each received datagram to avoid race conditions.
+                    # Buffer memory cannot be shared because the rest of the stack is completely zero-copy;
+                    # meaning that the data we allocate here, at the very bottom of the protocol stack,
+                    # is likely to be carried all the way up to the application layer without being copied.
+                    data, endpoint = self._sock.recvfrom(_READ_SIZE)
+                    assert len(data) < _READ_SIZE, 'Datagram might have been truncated'
+                    source_ip = _parse_address(endpoint[0])
 
-                frame = UDPFrame.parse(memoryview(data), ts)
-                _logger.debug('%r: Received UDP packet of %d bytes from %s containing frame: %s',
-                              self, len(data), endpoint, frame)
-                self._loop.call_soon_threadsafe(self._dispatch_frame, source_ip, frame)
-            except socket.timeout:
-                # This is needed for checking the status of the closure flag periodically.
-                # I don't actually expect this to be necessary because when the socket is closed we'll get an
-                # exception anyway, but the socket API docs are unclear in this regard so this paranoia is justified.
-                pass
+                    frame = UDPFrame.parse(memoryview(data), ts)
+                    _logger.debug('%r: Received UDP packet of %d bytes from %s containing frame: %s',
+                                  self, len(data), endpoint, frame)
+                    self._loop.call_soon_threadsafe(self._dispatch_frame, source_ip, frame)
 
-            except Exception as ex:
-                if self._closed:  # pragma: no cover
-                    _logger.debug('%r: Ignoring exception %r because we have been commanded to stop', self, ex)
-
-                elif self._sock.fileno() < 0:
-                    self._closed = True
-                    _logger.exception('%r: The socket has been closed unexpectedly! Terminating the instance.', self)
-
-                else:  # pragma: no cover
-                    _logger.exception('%r: Reader thread failure: %s; will continue after a short nap', self, ex)
-                    time.sleep(1)
-
-        _logger.debug('%r: The reader worker thread is exiting, bye bye', self)
-        assert self._closed
+                if self._ctl_worker in read_ready:
+                    cmd = self._ctl_worker.recv(_READ_SIZE)
+                    if cmd:
+                        _logger.debug('%r: Worker thread has received the stop signal: %r', self, cmd)
+                        break
+            except Exception as ex:  # pragma: no cover
+                _logger.exception('%r: Worker thread error: %s; will continue after a short nap', self, ex)
+                time.sleep(1)
+        _logger.debug('%r: Worker thread is exiting, bye bye', self)
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes_noexcept(self, self._sock, remote_node_ids=list(self._listeners.keys()))
+        """
+        The instance remembers its original file descriptor and prints it for diagnostic purposes even if the socket
+        is already closed.
+        Also, the object ID is printed to differentiate instances sharing the same file descriptor
+        (which is NOT permitted, of course, but there have been issues related to that so it was added for debugging).
+        """
+        return pyuavcan.util.repr_attributes_noexcept(self,
+                                                      id=hex(id(self)),
+                                                      original_fd=self._original_file_desc,
+                                                      socket=self._sock,
+                                                      remote_node_ids=list(self._listeners.keys()))
 
 
 def _unittest_socket_reader(caplog: typing.Any) -> None:
@@ -459,8 +478,106 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         srd._sock.close()
         run_until_complete(asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
         # noinspection PyProtectedMember
-        assert srd._closed
+        assert not srd._thread.is_alive()
+        # noinspection PyProtectedMember
+        srd._ctl_main.close()
+        srd._ctl_worker.close()
 
     sock_tx_1.close()
     sock_tx_3.close()
     sock_tx_9.close()
+
+
+def _unittest_socket_reader_endpoint_reuse() -> None:
+    """
+    This test is designed to ensure that we can replace one socket reader with another without causing a socket FD
+    reuse conflict. Here is the background:
+
+    - https://stackoverflow.com/questions/3624365
+    - https://stackoverflow.com/questions/3589723
+    """
+    import sys
+    from ipaddress import ip_address
+    from pyuavcan.transport import Priority, Timestamp
+
+    destination_endpoint = '127.30.0.30', 9999
+
+    loop = asyncio.get_event_loop()
+    run_until_complete = loop.run_until_complete
+
+    sock_tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock_tx.bind(('127.30.0.10', 0))
+    sock_tx.connect(destination_endpoint)
+    listener_node_id = 10  # from 127.30.0.10
+
+    def send_and_wait() -> None:
+        ts = Timestamp.now()
+        sock_tx.send(b''.join(
+            UDPFrame(timestamp=ts,
+                     priority=Priority.HIGH,
+                     transfer_id=0,
+                     index=0,
+                     end_of_transfer=True,
+                     payload=memoryview(str(ts).encode())).compile_header_and_payload()
+        ))
+        run_until_complete(asyncio.sleep(0.5))  # Let the handler run in the background.
+
+    stats = SocketReaderStatistics()
+
+    def make_reader(destination: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]]) -> SocketReader:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if sys.platform.startswith('linux'):  # pragma: no branch
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        sock.bind(destination_endpoint)
+        out = SocketReader(sock=sock,
+                           local_ip_address=ip_address(destination_endpoint[0]),
+                           anonymous=False,
+                           statistics=stats,
+                           loop=loop)
+        out.add_listener(listener_node_id, lambda *args: destination.append(args))  # type: ignore
+        return out
+
+    # Test the first instance. No conflict is possible here, it is just to prepare the foundation for the actual test.
+    rxf_a: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
+    srd_a = make_reader(rxf_a)
+    assert len(rxf_a) == 0
+    send_and_wait()
+    assert len(rxf_a) == 1, rxf_a
+
+    # Destroy the old instance and QUICKLY create the next one. Make sure the old one does not piggyback on the old FD.
+    rxf_b: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
+    srd_a.remove_listener(listener_node_id)
+    srd_a.close()
+    srd_b = make_reader(rxf_b)
+    assert len(rxf_a) == 1
+    assert len(rxf_b) == 0
+    send_and_wait()
+    assert len(rxf_a) == 1, rxf_a
+    assert len(rxf_b) == 1, rxf_b
+
+    # Just in case, repeat the above exercise checking for the conflict with the second instance.
+    rxf_c: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
+    srd_b.remove_listener(listener_node_id)
+    srd_b.close()
+    srd_c = make_reader(rxf_c)
+    assert len(rxf_a) == 1
+    assert len(rxf_b) == 1
+    assert len(rxf_c) == 0
+    send_and_wait()
+    assert len(rxf_a) == 1, rxf_a
+    assert len(rxf_b) == 1, rxf_b
+    assert len(rxf_c) == 1, rxf_c
+
+    # Ensure that the statistics do not show duplicate entries processed by FD-conflicting readers.
+    assert stats == SocketReaderStatistics(
+        accepted_datagrams={
+            10: 3,
+        },
+        dropped_datagrams={},
+    )
+
+    # Clean up to avoid warnings.
+    srd_c.remove_listener(listener_node_id)
+    srd_c.close()
+    sock_tx.close()
