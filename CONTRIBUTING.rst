@@ -171,9 +171,13 @@ It is assumed that library development and code analysis is done on a GNU/Linux 
 There is support for automatic testing on other operating systems (after all, the library is cross-platform),
 but it is intended for CI use only.
 
+There is a dedicated directory ``.test_deps/`` in the project root that stores any third-party dependencies
+that cannot be easily procured from package managers.
+Naturally, these are mostly Windows-specific utilities.
+
 The script ``test.sh`` can be used to run the unit tests, static code analysis, documentation generation,
 and so on, locally or on a CI server.
-At the time of writing, the script takes some 30 minutes to run, so it may not work well for development;
+At the time of writing, the script takes some 20 minutes to run, so it may not work well for development;
 consider invoking pytest manually on a specific directory, file, or function instead (command-line option ``-k``).
 For more information refer to the PyTest documentation.
 
