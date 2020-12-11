@@ -105,7 +105,7 @@ def _unittest_can_media_frame() -> None:
         "0x12345678  48 65 6c 6c 6f 01 02 7f  'Hello...'  loopback"
 
     assert re.match(
-        r"2019-05-2\dT\d\d:\d\d:\d\d.502003/635720.258263416: "
+        r"2019-05-2\dT\d\d:\d\d:\d\d.502/635720.258263: "
         r"0x12345678 {2}48 65 6c 6c 6f 01 02 7f {2}'Hello...' {2}loopback",
         str(TimestampedDataFrame(0x12345678,
                                  bytearray(b'Hello\x01\x02\x7F'),
