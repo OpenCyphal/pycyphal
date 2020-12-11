@@ -56,7 +56,7 @@ for:
       # ------------------------------ MS Windows build config ------------------------------
       - cmd: 'systeminfo & route print & ipconfig /all'
       # Configure Npcap. This is for testing the packet capture functionality in the UAVCAN/UDP transport.
-      - cmd: '.test_deps/npcap-0.96.exe /loopback_support=yes /winpcap_mode=yes /S'
+      - cmd: '.test_deps\npcap-0.96.exe /loopback_support=yes /winpcap_mode=yes /S'
       # The previous steps may have disrupted network connectivity because installation of an NDIS filter driver does
       # that on Windows (see https://github.com/nmap/npcap/issues/215). Also, a restart appears to be necessary to
       # enable the NPF service. Therefore, we restart the VM as suggested in https://github.com/appveyor/ci/issues/3491.
