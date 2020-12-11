@@ -23,19 +23,22 @@ print('System timer resolution:', t.value / 10e3, 'ms')
 
 python -m pip install -r requirements.txt
 
-# Install Ncat. The unpacking procedure is inspired by:
+# Obtain Ncat. The unpacking procedure is inspired by:
 # https://community.idera.com/database-tools/powershell/powertips/b/tips/posts/extract-specific-files-from-zip-archive
-Invoke-WebRequest "http://nmap.org/dist/ncat-portable-5.59BETA1.zip" -OutFile ncat.zip
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::OpenRead("$root\\ncat.zip")
-$zip.Entries |
-    Where-Object { $_.FullName -like "*.exe" } |
-    ForEach-Object {
-        $FileName = $_.Name
-        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($_, "$root\\$FileName", $true)
-    }
-$zip.Dispose()
-Remove-Item ncat.zip
+if (![System.IO.File]::Exists("ncat.exe"))
+{
+    Invoke-WebRequest "http://nmap.org/dist/ncat-portable-5.59BETA1.zip" -OutFile ncat.zip
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead("$root\\ncat.zip")
+    $zip.Entries |
+            Where-Object { $_.FullName -like "*.exe" } |
+            ForEach-Object {
+                $FileName = $_.Name
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($_, "$root\\$FileName", $true)
+            }
+    $zip.Dispose()
+    Remove-Item ncat.zip
+}
 
 # Run the TCP broker for serial transport tests in background.
 $ncat_proc = Start-Process ncat -Args '-vv --broker --listen localhost 50905' -PassThru
