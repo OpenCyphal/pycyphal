@@ -84,7 +84,7 @@ across changes in the transport configuration done on-the-fly without stopping t
 Since the redundant transport itself also implements the interface :class:`pyuavcan.transport.Transport`,
 it technically could be used as an inferior of another redundant transport instance,
 although the practicality of such arrangement is questionable.
-Attaching a redundant transfer as an inferior of itself is expressly prohibited and results in an error.
+Attaching a redundant transport as an inferior of itself is expressly prohibited and results in an error.
 
 
 Inferior aggregation restrictions
@@ -303,7 +303,7 @@ True
 RedundantTransferFrom(..., transfer_id=1111, fragmented_payload=[], ...)
 
 Inject a failure into one inferior.
-The redundant transfer will continue to function with the other inferior; an error message will be logged:
+The redundant transport will continue to function with the other inferior; an error message will be logged:
 
 .. The 'doctest: +SKIP' is needed because PyTest is broken. If a failure is actually injected,
 .. the transport will be logging errors, which in turn break the PyTest's doctest plugin.
