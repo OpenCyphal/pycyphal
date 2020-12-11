@@ -113,3 +113,6 @@ for:
       - git config --global user.email "devnull@uavcan.org"
       - git config --global user.name  "Release Automation"
       - ./release.sh
+
+artifacts:
+  - path: pytest.log

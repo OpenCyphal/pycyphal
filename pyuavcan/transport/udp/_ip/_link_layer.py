@@ -257,8 +257,8 @@ class LinkLayerSniffer:
                 _logger.debug('%r: CAPTURED PACKET ts=%s dev=%r len=%d bytes', self, ts, name, length)
                 if real_length != length:
                     # This should never occur because we use a huge capture buffer.
-                    _logger.critical(f'{self}: Length mismatch in a packet captured from {name!r}: '
-                                     f'real {real_length} bytes, captured {length} bytes')
+                    _logger.info(f'{self}: Length mismatch in a packet captured from {name!r}: '
+                                 f'real {real_length} bytes, captured {length} bytes')
                 # Create a copy of the payload. This is required per the libpcap API contract -- it says that the
                 # memory is invalidated upon return from the callback.
                 packet = memoryview(ctypes.cast(packet, ctypes.POINTER(ctypes.c_ubyte * length))[0]).tobytes()
@@ -459,7 +459,7 @@ def _capture_single_device(device:            str,
     return typing.cast(object, pd)
 
 
-_SNAPSHOT_LENGTH = 2 ** 16
+_SNAPSHOT_LENGTH = 65535
 """
 The doc says: "A snapshot length of 65535 should be sufficient, on most if not all networks,
 to capture all the data available from the packet."
