@@ -135,6 +135,7 @@
       <w>ncat</w>
       <w>ndarray</w>
       <w>ndim</w>
+      <w>ndis</w>
       <w>netcat</w>
       <w>netfilter</w>
       <w>netstat</w>
@@ -272,6 +273,7 @@
       <w>vpaun</w>
       <w>vssc</w>
       <w>weakref</w>
+      <w>winpcap</w>
       <w>wireshark</w>
       <w>worl</w>
       <w>wpcap</w>

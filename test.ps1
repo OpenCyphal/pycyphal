@@ -21,21 +21,6 @@ ctypes.WinDLL('NTDLL.DLL').NtSetTimerResolution(5000, 1, ctypes.byref(t))
 print('System timer resolution:', t.value / 10e3, 'ms')
 "@
 
-# Configure the NPF service. This is part of WinPCap, and it is needed for testing the UDP transport.
-# We don't need the wpcap.dll and packet.dll because they are shipped with the libpcap dependency.
-Invoke-WebRequest `
-    "https://github.com/3gstudent/Winpcap_Install/raw/6ff3c2ee4056fa9ccba6e972ece5455628b03026/npf_x64.sys" `
-    -OutFile npf.sys
-Move-Item npf.sys "$env:SystemRoot/system32/drivers/npf.sys"
-sc.exe create npf `
-    binPath=    system32\drivers\npf.sys `
-    type=       kernel `
-    start=      demand `
-    error=      normal `
-    tag=        no `
-    DisplayName= "WinPCap NetGroup Packet Filter (NPF) Driver"
-sc.exe start npf
-
 python -m pip install -r requirements.txt
 
 # Install Ncat. The unpacking procedure is inspired by:
