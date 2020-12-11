@@ -196,11 +196,11 @@ class LinkLayerSniffer:
             dev_names = _find_devices()
             _logger.debug('Capturable network devices: %s', dev_names)
             caps = _capture_all(dev_names, filter_expression)
-        except PermissionError as ex:
+        except PermissionError:
             if sys.platform.startswith('linux'):
                 suggestion = f'Run this:\nsudo setcap cap_net_raw+eip "$(readlink -f {sys.executable})"'
             elif sys.platform.startswith('win'):
-                suggestion = 'Make sure you have either Npcap or WinPCap installed and configured.'
+                suggestion = 'Make sure you have Npcap installed and configured properly: https://nmap.org/npcap'
             else:
                 suggestion = ''
             raise PermissionError(
@@ -256,9 +256,11 @@ class LinkLayerSniffer:
                 length, real_length = header.caplen, header.len
                 _logger.debug('%r: CAPTURED PACKET ts=%s dev=%r len=%d bytes', self, ts, name, length)
                 if real_length != length:
-                    # This should never occur because we use a huge capture buffer.
-                    _logger.info(f'{self}: Length mismatch in a packet captured from {name!r}: '
-                                 f'real {real_length} bytes, captured {length} bytes')
+                    # In theory, this should never occur because we use a huge capture buffer.
+                    # On Windows, however, when using Npcap v0.96, the captured length is (always?) reported to be
+                    # 32 bytes shorter than the real length, despite the fact that the packet is not truncated.
+                    _logger.debug('%r: Length mismatch in a packet captured from %r: real %r bytes, captured %r bytes',
+                                  self, name, real_length, length)
                 # Create a copy of the payload. This is required per the libpcap API contract -- it says that the
                 # memory is invalidated upon return from the callback.
                 packet = memoryview(ctypes.cast(packet, ctypes.POINTER(ctypes.c_ubyte * length))[0]).tobytes()
