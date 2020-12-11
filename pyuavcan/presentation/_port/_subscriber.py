@@ -263,6 +263,18 @@ class _Listener(typing.Generic[MessageClass]):
         except asyncio.QueueFull:
             self.overrun_count += 1
 
+    def __repr__(self) -> str:
+        """
+        Overriding repr() is necessary to avoid the contents of the queue from being printed.
+        The queue contains DSDL objects, which may be large and the output of their repr() may be very expensive
+        to compute, especially if the queue is long.
+        """
+        return pyuavcan.util.repr_attributes_noexcept(self,
+                                                      queue_length=self.queue.qsize(),
+                                                      push_count=self.push_count,
+                                                      overrun_count=self.overrun_count,
+                                                      exception=self.exception)
+
 
 class SubscriberImpl(Closable, typing.Generic[MessageClass]):
     """
