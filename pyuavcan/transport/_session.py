@@ -152,11 +152,16 @@ class SessionStatistics:
     Transport implementations are encouraged to extend this class to add more transport-specific information.
     The statistical counters start from zero when a session is first instantiated.
     """
-    transfers:     int = 0  #: Successful transfer count.
-    frames:        int = 0  #: UAVCAN transport frame count (CAN frames, UDP packets, wireless frames, etc).
-    payload_bytes: int = 0  #: Successful transfer payload bytes (not including transport metadata or padding).
-    errors:        int = 0  #: Failures of any kind, even if they are also logged using other means, excepting drops.
-    drops:         int = 0  #: Frames lost to buffer overruns and expired deadlines.
+    transfers: int = 0
+    """Successful transfer count."""
+    frames: int = 0
+    """UAVCAN transport frame count (CAN frames, UDP packets, wireless frames, etc)."""
+    payload_bytes: int = 0
+    """Successful transfer payload bytes (not including transport metadata or padding)."""
+    errors: int = 0
+    """Failures of any kind, even if they are also logged using other means, excepting drops."""
+    drops: int = 0
+    """Frames lost to buffer overruns and expired deadlines."""
 
     def __eq__(self, other: object) -> bool:
         """

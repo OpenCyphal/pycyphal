@@ -118,8 +118,8 @@ class Timestamp:
 
     def __str__(self) -> str:
         dt = datetime.datetime.fromtimestamp(float(self.system))  # Precision loss is OK - system time is imprecise
-        iso = dt.isoformat(timespec='microseconds')
-        return f'{iso}/{self.monotonic:.9f}'
+        iso = dt.isoformat(timespec='milliseconds')
+        return f'{iso}/{self.monotonic:.6f}'
 
     def __repr__(self) -> str:
         return f'{type(self).__name__}(system_ns={self._system_ns}, monotonic_ns={self._monotonic_ns})'

@@ -20,7 +20,7 @@ async def _unittest_slow_node_tracker(generated_packages: typing.List[pyuavcan.d
                                       caplog: typing.Any) -> None:
     from . import get_transport
     from pyuavcan.presentation import Presentation
-    from pyuavcan.application.node_tracker import NodeTracker, Entry, GetInfo, Heartbeat
+    from pyuavcan.application.node_tracker import NodeTracker, Entry
 
     assert generated_packages
 

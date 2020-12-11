@@ -264,7 +264,8 @@ class UDPTransport(pyuavcan.transport.Transport):
         assert specifier not in self._input_registry
         try:
             if specifier.data_specifier not in self._socket_reader_registry:
-                _logger.debug('%r: Setting up new socket reader for %s', self, specifier.data_specifier)
+                _logger.debug('%r: Setting up new socket reader for %s. Existing entries at the moment: %s',
+                              self, specifier.data_specifier, self._socket_reader_registry)
                 self._socket_reader_registry[specifier.data_specifier] = SocketReader(
                     sock=self._sock_factory.make_input_socket(specifier.data_specifier),
                     local_ip_address=self._sock_factory.local_ip_address,

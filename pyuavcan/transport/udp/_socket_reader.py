@@ -123,14 +123,15 @@ class SocketReader:
         if source_node_id in self._listeners:
             raise ValueError(f'{self}: The listener for node-ID {source_node_id} is already registered '
                              f'with handler {self._listeners[source_node_id]}')
+        _logger.debug('%r: Adding listener %r for node-ID %r. Current stats: %s',
+                      self, handler, source_node_id, self._statistics)
         self._listeners[source_node_id] = handler
-        _logger.debug('%r: Adding listener %r for node-ID %r', self, handler, source_node_id)
 
     def remove_listener(self, node_id: typing.Optional[int]) -> None:
         """
         Raises :class:`LookupError` if there is no such listener.
         """
-        _logger.debug('%r: Removing listener for node-ID %r', self, node_id)
+        _logger.debug('%r: Removing listener for node-ID %r. Current stats: %s', self, node_id, self._statistics)
         del self._listeners[node_id]
 
     @property
@@ -147,7 +148,7 @@ class SocketReader:
         Raises :class:`RuntimeError` instead of closing if there is at least one active listener.
         """
         if self.has_listeners:
-            raise RuntimeError('Do not close a socket reader with active listeners, suka!')
+            raise RuntimeError('Refusing to close socket reader with active listeners. Call remove_listener first.')
         self._closed = True
         self._sock.close()
         # We don't wait for the thread to join because who cares?
@@ -213,6 +214,8 @@ class SocketReader:
                 ts = pyuavcan.transport.Timestamp.now()
 
                 frame = UDPFrame.parse(memoryview(data), ts)
+                _logger.debug('%r: Received UDP packet of %d bytes from %s containing frame: %s',
+                              self, len(data), endpoint, frame)
                 self._loop.call_soon_threadsafe(self._dispatch_frame, source_ip, frame)
             except socket.timeout:
                 # This is needed for checking the status of the closure flag periodically.

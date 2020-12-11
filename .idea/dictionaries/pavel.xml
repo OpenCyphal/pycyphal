@@ -116,6 +116,7 @@
       <w>levelname</w>
       <w>libcanard</w>
       <w>libpcap</w>
+      <w>libuavcan</w>
       <w>linkcode</w>
       <w>lnid</w>
       <w>lsmod</w>

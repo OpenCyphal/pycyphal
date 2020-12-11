@@ -11,6 +11,7 @@ import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
+import pyuavcan.util
 from ._base import ServiceClass, ServicePort, TypedSessionFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError
 
@@ -45,7 +46,7 @@ class ServerStatistics:
     """Problems at the transport layer."""
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class ServiceRequestMetadata:
     """
     This structure is supplied with every received request for informational purposes.
@@ -62,6 +63,14 @@ class ServiceRequestMetadata:
 
     client_node_id: int
     """The response will be sent back to this node."""
+
+    def __repr__(self) -> str:
+        kwargs = {
+            f.name: getattr(self, f.name) for f in dataclasses.fields(self)
+        }
+        kwargs['priority'] = str(self.priority).split('.')[-1]
+        del kwargs['timestamp']
+        return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
 
 ServiceRequestHandler = typing.Callable[[ServiceRequestClass, ServiceRequestMetadata],

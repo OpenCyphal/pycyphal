@@ -8,6 +8,7 @@ from __future__ import annotations
 import enum
 import typing
 import dataclasses
+import pyuavcan.util
 from ._timestamp import Timestamp
 
 
@@ -67,6 +68,16 @@ class Transfer:
     :func:`pyuavcan.util.refragment` is designed to facilitate regrouping when sending a transfer.
     """
 
+    def __repr__(self) -> str:
+        fragmented_payload = '+'.join(f'{len(x)}B' for x in self.fragmented_payload)
+        kwargs = {
+            f.name: getattr(self, f.name) for f in dataclasses.fields(self)
+        }
+        kwargs['priority'] = str(self.priority).split('.')[-1]
+        kwargs['fragmented_payload'] = f'[{fragmented_payload}]'
+        del kwargs['timestamp']
+        return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)
+
 
 @dataclasses.dataclass
 class TransferFrom(Transfer):
@@ -77,3 +88,6 @@ class TransferFrom(Transfer):
     """
     None indicates anonymous transfers.
     """
+
+    def __repr__(self) -> str:
+        return super(TransferFrom, self).__repr__()

@@ -48,7 +48,8 @@ class NodeTracker:
     If the node did not reply to ``uavcan.node.GetInfo``, the request will be retried later.
 
     If the local node is anonymous, the info request functionality will be automatically disabled;
-    it will be re-enabled automatically if the local node is assigned a node-ID later.
+    it will be re-enabled automatically if the local node is assigned a node-ID later
+    (nodes that are already known at this time may not be queried).
 
     The tracked node registry *does not include the local node*.
     If the local node-ID is N, the registry will not contain an entry at key N unless there is a node-ID conflict
@@ -251,6 +252,7 @@ class NodeTracker:
                     self._registry[node_id] = new
                     self._notify(node_id, old, new)
                     return True
+                _logger.debug('GetInfo request to %s has timed out in %.3f seconds', node_id, client.response_timeout)
                 return False
             finally:
                 client.close()
@@ -260,16 +262,16 @@ class NodeTracker:
                 _logger.debug('GetInfo task for node %s started', node_id)
                 remaining_attempts = self._get_info_attempts
                 while remaining_attempts > 0:
+                    _logger.debug('GetInfo task for node %s is making a new attempt; remaining attempts: %s',
+                                  node_id, remaining_attempts)
+                    remaining_attempts -= 1
                     try:
                         if await attempt():
                             break
                     except (pyuavcan.transport.OperationNotDefinedForAnonymousNodeError,
-                            pyuavcan.presentation.RequestTransferIDVariabilityExhaustedError):
-                        await asyncio.sleep(self._get_info_timeout)  # Keep retrying forever.
-                    else:
-                        remaining_attempts -= 1
-                    _logger.debug('GetInfo task for node %s will retry; remaining attempts: %s',
-                                  node_id, remaining_attempts)
+                            pyuavcan.presentation.RequestTransferIDVariabilityExhaustedError) as ex:
+                        _logger.debug('GetInfo task for node %s encountered a transient error: %s', node_id, ex)
+                        await asyncio.sleep(self._get_info_timeout)
                 _logger.debug('GetInfo task for node %s is exiting', node_id)
             except asyncio.CancelledError:
                 raise
