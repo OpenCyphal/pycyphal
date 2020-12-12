@@ -54,7 +54,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
         self._statistics = SerialInputSessionStatistics()
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
-        self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
+        self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue(loop=loop)
         self._reassemblers: typing.Dict[int, TransferReassembler] = {}
 
         super(SerialInputSession, self).__init__(finalizer)
