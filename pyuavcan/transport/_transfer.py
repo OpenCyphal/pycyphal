@@ -79,7 +79,7 @@ class Transfer:
         return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(repr=False)
 class TransferFrom(Transfer):
     """
     Specialization for received transfers.
@@ -88,6 +88,3 @@ class TransferFrom(Transfer):
     """
     None indicates anonymous transfers.
     """
-
-    def __repr__(self) -> str:
-        return super(TransferFrom, self).__repr__()

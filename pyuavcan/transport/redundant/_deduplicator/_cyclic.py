@@ -17,7 +17,7 @@ class CyclicDeduplicator(Deduplicator):
         self._remote_states: typing.List[typing.Optional[_RemoteState]] = []
 
     def should_accept_transfer(self,
-                               iface_index:         int,
+                               iface_id:            int,
                                transfer_id_timeout: float,
                                transfer:            pyuavcan.transport.TransferFrom) -> bool:
         if transfer.source_node_id is None:
@@ -32,7 +32,7 @@ class CyclicDeduplicator(Deduplicator):
 
         if self._remote_states[transfer.source_node_id] is None:
             # First transfer from this node, create new state and accept unconditionally.
-            self._remote_states[transfer.source_node_id] = _RemoteState(iface_index=iface_index,
+            self._remote_states[transfer.source_node_id] = _RemoteState(iface_id=iface_id,
                                                                         last_timestamp=transfer.timestamp)
             return True
 
@@ -44,19 +44,19 @@ class CyclicDeduplicator(Deduplicator):
         # Note that the time delta may be negative due to timestamping variations and inner latency variations.
         time_delta = transfer.timestamp.monotonic - state.last_timestamp.monotonic
         iface_switch_allowed = time_delta > transfer_id_timeout
-        if not iface_switch_allowed and state.iface_index != iface_index:
+        if not iface_switch_allowed and state.iface_id != iface_id:
             return False
 
         # TODO: The TID modulo setting is not currently used yet.
         # TODO: It may be utilized later to implement faster iface fallback.
 
         # Either we're on the same interface or (the interface is new and the current one seems to be down).
-        state.iface_index = iface_index
+        state.iface_id = iface_id
         state.last_timestamp = transfer.timestamp
         return True
 
 
 @dataclasses.dataclass
 class _RemoteState:
-    iface_index:    int
+    iface_id:       int
     last_timestamp: pyuavcan.transport.Timestamp
