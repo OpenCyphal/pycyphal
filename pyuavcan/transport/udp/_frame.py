@@ -11,7 +11,7 @@ import dataclasses
 import pyuavcan
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, repr=False)
 class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     """
     The header format is up to debate until it's frozen in Specification.
@@ -74,14 +74,14 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         return memoryview(header), self.payload
 
     @staticmethod
-    def parse(image: memoryview, timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[UDPFrame]:
+    def parse(image: memoryview) -> typing.Optional[UDPFrame]:
         try:
             version, int_priority, frame_index_eot, transfer_id = UDPFrame._HEADER_FORMAT.unpack_from(image)
         except struct.error:
             return None
         if version == UDPFrame._VERSION:
-            return UDPFrame(timestamp=timestamp,
-                            priority=pyuavcan.transport.Priority(int_priority),
+            # noinspection PyArgumentList
+            return UDPFrame(priority=pyuavcan.transport.Priority(int_priority),
                             transfer_id=transfer_id,
                             index=(frame_index_eot & UDPFrame.INDEX_MASK),
                             end_of_transfer=bool(frame_index_eot & (UDPFrame.INDEX_MASK + 1)),
@@ -98,24 +98,21 @@ def _unittest_udp_frame_compile() -> None:
 
     ts = Timestamp.now()
 
-    _ = UDPFrame(timestamp=ts,
-                 priority=Priority.LOW,
+    _ = UDPFrame(priority=Priority.LOW,
                  transfer_id=0,
                  index=0,
                  end_of_transfer=False,
                  payload=memoryview(b''))
 
     with raises(ValueError):
-        _ = UDPFrame(timestamp=ts,
-                     priority=Priority.LOW,
+        _ = UDPFrame(priority=Priority.LOW,
                      transfer_id=2 ** 64,
                      index=0,
                      end_of_transfer=False,
                      payload=memoryview(b''))
 
     with raises(ValueError):
-        _ = UDPFrame(timestamp=ts,
-                     priority=Priority.LOW,
+        _ = UDPFrame(priority=Priority.LOW,
                      transfer_id=0,
                      index=2 ** 31,
                      end_of_transfer=False,
@@ -129,7 +126,6 @@ def _unittest_udp_frame_compile() -> None:
                    b'\x00\x00\x00\x00\x00\x00\x00\x00'),
         memoryview(b'Well, I got here the same way the coin did.'),
     ) == UDPFrame(
-        timestamp=ts,
         priority=Priority.SLOW,
         transfer_id=0x_dead_beef_c0ffee,
         index=0x_0dd_f00d,
@@ -145,7 +141,6 @@ def _unittest_udp_frame_compile() -> None:
                    b'\x00\x00\x00\x00\x00\x00\x00\x00'),
         memoryview(b'Well, I got here the same way the coin did.'),
     ) == UDPFrame(
-        timestamp=ts,
         priority=Priority.OPTIONAL,
         transfer_id=0x_dead_beef_c0ffee,
         index=0x_0dd_f00d,
@@ -161,7 +156,6 @@ def _unittest_udp_frame_compile() -> None:
                    b'\x00\x00\x00\x00\x00\x00\x00\x00'),
         memoryview(b'Well, I got here the same way the coin did.'),
     ) == UDPFrame(
-        timestamp=ts,
         priority=Priority.EXCEPTIONAL,
         transfer_id=0x_dead_beef_c0ffee,
         index=0,
@@ -176,11 +170,10 @@ def _unittest_udp_frame_parse() -> None:
     ts = Timestamp.now()
 
     for size in range(16):
-        assert None is UDPFrame.parse(memoryview(bytes(range(size))), ts)
+        assert None is UDPFrame.parse(memoryview(bytes(range(size))))
 
     # Multi-frame, not the end of the transfer.
     assert UDPFrame(
-        timestamp=ts,
         priority=Priority.SLOW,
         transfer_id=0x_dead_beef_c0ffee,
         index=0x_0dd_f00d,
@@ -192,12 +185,10 @@ def _unittest_udp_frame_parse() -> None:
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
                    b'\x00\x00\x00\x00\x00\x00\x00\x00'
                    b'Well, I got here the same way the coin did.'),
-        ts,
     )
 
     # Multi-frame, end of the transfer.
     assert UDPFrame(
-        timestamp=ts,
         priority=Priority.OPTIONAL,
         transfer_id=0x_dead_beef_c0ffee,
         index=0x_0dd_f00d,
@@ -209,12 +200,10 @@ def _unittest_udp_frame_parse() -> None:
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
                    b'\x00\x00\x00\x00\x00\x00\x00\x00'
                    b'Well, I got here the same way the coin did.'),
-        ts,
     )
 
     # Single-frame.
     assert UDPFrame(
-        timestamp=ts,
         priority=Priority.EXCEPTIONAL,
         transfer_id=0x_dead_beef_c0ffee,
         index=0,
@@ -226,7 +215,6 @@ def _unittest_udp_frame_parse() -> None:
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
                    b'\x00\x00\x00\x00\x00\x00\x00\x00'
                    b'Well, I got here the same way the coin did.'),
-        ts,
     )
 
     # Too short.
@@ -235,7 +223,6 @@ def _unittest_udp_frame_parse() -> None:
                    b'\r\xf0\xdd\x80'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
                    b'\x00\x00\x00\x00\x00\x00\x00\x00')[:-1],
-        ts,
     )
     # Bad version.
     assert None is UDPFrame.parse(
@@ -243,5 +230,4 @@ def _unittest_udp_frame_parse() -> None:
                    b'\r\xf0\xdd\x80'
                    b'\xee\xff\xc0\xef\xbe\xad\xde\x00'
                    b'\x00\x00\x00\x00\x00\x00\x00\x00'),
-        ts,
     )

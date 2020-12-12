@@ -16,6 +16,7 @@ import ipaddress
 import functools
 import dataclasses
 import pyuavcan
+from pyuavcan.transport import Timestamp
 from ._frame import UDPFrame
 from ._ip import unicast_ip_to_node_id
 
@@ -64,9 +65,9 @@ class SocketReader:
     by itself in user space. To this transport, its own traffic and a node-ID conflict would look identical.
     """
 
-    Listener = typing.Callable[[int, typing.Optional[UDPFrame]], None]
+    Listener = typing.Callable[[Timestamp, int, typing.Optional[UDPFrame]], None]
     """
-    The callback is invoked with the source node-ID and the frame instance upon successful reception.
+    The callback is invoked with the timestamp, source node-ID, and the frame instance upon successful reception.
     Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that.
     If a UDP frame is received that does not contain a valid UAVCAN frame,
     the callback is invoked with None for error statistic collection purposes.
@@ -177,7 +178,10 @@ class SocketReader:
             self._ctl_main.close()
         _logger.debug('%r: Closed. Elapsed time: %.3f milliseconds', self, (time.monotonic() - started_at) * 1e3)
 
-    def _dispatch_frame(self, source_ip_address: _IPAddress, frame: typing.Optional[UDPFrame]) -> None:
+    def _dispatch_frame(self,
+                        timestamp:         Timestamp,
+                        source_ip_address: _IPAddress,
+                        frame:             typing.Optional[UDPFrame]) -> None:
         # Do not accept datagrams emitted by the local node itself. Do not update the statistics either.
         external = self._anonymous or (source_ip_address != self._local_ip_address)
         if not external:
@@ -198,7 +202,7 @@ class SocketReader:
                 else:
                     handled = True
                     try:
-                        callback(source_node_id, frame)
+                        callback(timestamp, source_node_id, frame)
                     except Exception as ex:  # pragma: no cover
                         _logger.exception('%r: Unhandled exception in the listener for node-ID %r: %s', self, key, ex)
 
@@ -232,10 +236,10 @@ class SocketReader:
                     assert len(data) < _READ_SIZE, 'Datagram might have been truncated'
                     source_ip = _parse_address(endpoint[0])
 
-                    frame = UDPFrame.parse(memoryview(data), ts)
+                    frame = UDPFrame.parse(memoryview(data))
                     _logger.debug('%r: Received UDP packet of %d bytes from %s containing frame: %s',
                                   self, len(data), endpoint, frame)
-                    self._loop.call_soon_threadsafe(self._dispatch_frame, source_ip, frame)
+                    self._loop.call_soon_threadsafe(self._dispatch_frame, ts, source_ip, frame)
 
                 if self._ctl_worker in read_ready:
                     cmd = self._ctl_worker.recv(_READ_SIZE)
@@ -297,14 +301,14 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     with raises(LookupError):
         srd.remove_listener(123)
 
-    received_frames_promiscuous: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
-    received_frames_3: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
+    received_frames_promiscuous: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]] = []
+    received_frames_3: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]] = []
 
-    srd.add_listener(None, lambda i, f: received_frames_promiscuous.append((i, f)))
+    srd.add_listener(None, lambda t, i, f: received_frames_promiscuous.append((t, i, f)))
     assert srd.has_listeners
-    srd.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
+    srd.add_listener(3, lambda t, i, f: received_frames_3.append((t, i, f)))
     with raises(Exception):
-        srd.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
+        srd.add_listener(3, lambda t, i, f: received_frames_3.append((t, i, f)))
     assert srd.has_listeners
 
     sock_tx_1 = make_sock_tx('127.100.0.1')
@@ -313,8 +317,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
 
     # FRAME FOR THE PROMISCUOUS LISTENER
     sock_tx_1.send(b''.join(
-        UDPFrame(timestamp=Timestamp.now(),
-                 priority=Priority.HIGH,
+        UDPFrame(priority=Priority.HIGH,
                  transfer_id=0x_dead_beef_c0ffee,
                  index=0,
                  end_of_transfer=True,
@@ -325,10 +328,10 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         accepted_datagrams={1: 1},
         dropped_datagrams={},
     )
-    nid, rxf = received_frames_promiscuous.pop()
+    t, nid, rxf = received_frames_promiscuous.pop()
     assert rxf is not None
     assert nid == 1
-    assert check_timestamp(rxf.timestamp)
+    assert check_timestamp(t)
     assert bytes(rxf.payload) == b'HARDBASS'
     assert rxf.priority == Priority.HIGH
     assert rxf.transfer_id == 0x_dead_beef_c0ffee
@@ -339,8 +342,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
 
     # FRAME FOR THE SELECTIVE AND THE PROMISCUOUS LISTENER
     sock_tx_3.send(b''.join(
-        UDPFrame(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
+        UDPFrame(priority=Priority.LOW,
                  transfer_id=0x_deadbeef_deadbe,
                  index=0,
                  end_of_transfer=False,
@@ -352,16 +354,16 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         accepted_datagrams={1: 1, 3: 1},
         dropped_datagrams={},
     )
-    nid, rxf = received_frames_promiscuous.pop()
+    t, nid, rxf = received_frames_promiscuous.pop()
     assert rxf is not None
     assert nid == 3
-    assert check_timestamp(rxf.timestamp)
+    assert check_timestamp(t)
     assert bytes(rxf.payload) == b'Oy blin!'
     assert rxf.priority == Priority.LOW
     assert rxf.transfer_id == 0x_deadbeef_deadbe
     assert not rxf.single_frame_transfer
 
-    assert (3, rxf) == received_frames_3.pop()   # Same exact frame in the other listener.
+    assert (3, rxf) == received_frames_3.pop()[1:]   # Same exact frame in the other listener.
 
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -373,8 +375,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert srd.has_listeners
 
     sock_tx_3.send(b''.join(
-        UDPFrame(timestamp=Timestamp.now(),
-                 priority=Priority.HIGH,
+        UDPFrame(priority=Priority.HIGH,
                  transfer_id=0x_dead_beef_c0ffee,
                  index=0,
                  end_of_transfer=True,
@@ -385,10 +386,10 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         accepted_datagrams={1: 1, 3: 2},
         dropped_datagrams={},
     )
-    nid, rxf = received_frames_3.pop()
+    t, nid, rxf = received_frames_3.pop()
     assert rxf is not None
     assert nid == 3
-    assert check_timestamp(rxf.timestamp)
+    assert check_timestamp(t)
     assert bytes(rxf.payload) == b'HARDBASS'
     assert rxf.priority == Priority.HIGH
     assert rxf.transfer_id == 0x_dead_beef_c0ffee
@@ -399,8 +400,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
 
     # DROPPED DATAGRAM FROM VALID NODE-ID
     sock_tx_1.send(b''.join(
-        UDPFrame(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
+        UDPFrame(priority=Priority.LOW,
                  transfer_id=0x_deadbeef_deadbe,
                  index=0,
                  end_of_transfer=False,
@@ -416,8 +416,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
 
     # DROPPED DATAGRAM FROM AN UNMAPPED IP ADDRESS
     sock_tx_9.send(b''.join(
-        UDPFrame(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
+        UDPFrame(priority=Priority.LOW,
                  transfer_id=0x_deadbeef_deadbe,
                  index=0,
                  end_of_transfer=False,
@@ -438,7 +437,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         accepted_datagrams={1: 1, 3: 3},
         dropped_datagrams={1: 1, ip_address('127.200.0.9'): 1},
     )
-    assert received_frames_3.pop() == (3, None)
+    assert received_frames_3.pop()[1:] == (3, None)
     assert not received_frames_promiscuous
     assert not received_frames_3
 
@@ -461,7 +460,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     srd.close()
     srd.close()   # Idempotency
     with raises(pyuavcan.transport.ResourceClosedError):
-        srd.add_listener(3, lambda i, f: received_frames_3.append((i, f)))
+        srd.add_listener(3, lambda t, i, f: received_frames_3.append((t, i, f)))
     assert sock_rx.fileno() < 0, 'The socket has not been closed'
 
     # SOCKET FAILURE
@@ -514,8 +513,7 @@ def _unittest_socket_reader_endpoint_reuse() -> None:
     def send_and_wait() -> None:
         ts = Timestamp.now()
         sock_tx.send(b''.join(
-            UDPFrame(timestamp=ts,
-                     priority=Priority.HIGH,
+            UDPFrame(priority=Priority.HIGH,
                      transfer_id=0,
                      index=0,
                      end_of_transfer=True,
@@ -525,7 +523,7 @@ def _unittest_socket_reader_endpoint_reuse() -> None:
 
     stats = SocketReaderStatistics()
 
-    def make_reader(destination: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]]) -> SocketReader:
+    def make_reader(destination: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]]) -> SocketReader:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if sys.platform.startswith('linux'):  # pragma: no branch
@@ -540,14 +538,14 @@ def _unittest_socket_reader_endpoint_reuse() -> None:
         return out
 
     # Test the first instance. No conflict is possible here, it is just to prepare the foundation for the actual test.
-    rxf_a: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
+    rxf_a: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]] = []
     srd_a = make_reader(rxf_a)
     assert len(rxf_a) == 0
     send_and_wait()
     assert len(rxf_a) == 1, rxf_a
 
     # Destroy the old instance and QUICKLY create the next one. Make sure the old one does not piggyback on the old FD.
-    rxf_b: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
+    rxf_b: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]] = []
     srd_a.remove_listener(listener_node_id)
     srd_a.close()
     srd_b = make_reader(rxf_b)
@@ -558,7 +556,7 @@ def _unittest_socket_reader_endpoint_reuse() -> None:
     assert len(rxf_b) == 1, rxf_b
 
     # Just in case, repeat the above exercise checking for the conflict with the second instance.
-    rxf_c: typing.List[typing.Tuple[int, typing.Optional[UDPFrame]]] = []
+    rxf_c: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]] = []
     srd_b.remove_listener(listener_node_id)
     srd_b.close()
     srd_c = make_reader(rxf_c)

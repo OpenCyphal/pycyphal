@@ -406,9 +406,9 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
     assert a.frame.transfer_id == 777
     assert b.frame.transfer_id == 777
     assert c.frame.transfer_id == 777
-    assert a.frame.timestamp.monotonic >= ts.monotonic
-    assert b.frame.timestamp.monotonic >= ts.monotonic
-    assert c.frame.timestamp.monotonic >= ts.monotonic
+    assert a.timestamp.monotonic >= ts.monotonic
+    assert b.timestamp.monotonic >= ts.monotonic
+    assert c.timestamp.monotonic >= ts.monotonic
     assert a.frame.index == 0
     assert b.frame.index == 1
     assert c.frame.index == 2
@@ -417,15 +417,9 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
     assert c.frame.end_of_transfer
 
     assert d.timestamp.monotonic >= ts.monotonic
-    assert d.frames[0].timestamp == ts
-    assert d.frames[1].timestamp == ts
-    assert d.frames[2].timestamp == ts
     assert d.frames[0].transfer_id == 777
     assert d.frames[1].transfer_id == 777
     assert d.frames[2].transfer_id == 777
-    assert d.frames[0].timestamp.monotonic >= ts.monotonic
-    assert d.frames[1].timestamp.monotonic >= ts.monotonic
-    assert d.frames[2].timestamp.monotonic >= ts.monotonic
     assert d.frames[0].index == 0
     assert d.frames[1].index == 1
     assert d.frames[2].index == 2
@@ -462,8 +456,8 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
 
     assert a.frame.transfer_id == 888
     assert b.frame.transfer_id == 888
-    assert a.frame.timestamp.monotonic >= ts.monotonic
-    assert b.frame.timestamp.monotonic >= ts.monotonic
+    assert a.timestamp.monotonic >= ts.monotonic
+    assert b.timestamp.monotonic >= ts.monotonic
     assert a.frame.index == 0
     assert b.frame.index == 0
     assert a.frame.end_of_transfer
@@ -471,12 +465,8 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
 
     assert d.timestamp.monotonic >= ts.monotonic
     assert d2.timestamp.monotonic >= ts.monotonic
-    assert d.frames[0].timestamp == ts
-    assert d2.frames[0].timestamp == ts
     assert d.frames[0].transfer_id == 888
     assert d2.frames[0].transfer_id == 888
-    assert d.frames[0].timestamp.monotonic >= ts.monotonic
-    assert d2.frames[0].timestamp.monotonic >= ts.monotonic
     assert d.frames[0].index == 0
     assert d2.frames[0].index == 0
     assert d.frames[0].end_of_transfer

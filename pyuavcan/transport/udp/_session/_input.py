@@ -12,6 +12,7 @@ import asyncio
 import logging
 import dataclasses
 import pyuavcan
+from pyuavcan.transport import Timestamp
 from pyuavcan.transport.commons.high_overhead_transport import TransferReassembler
 from .._frame import UDPFrame
 
@@ -110,7 +111,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue(loop=loop)
 
-    def _process_frame(self, source_node_id: int, frame: typing.Optional[UDPFrame]) -> None:
+    def _process_frame(self, timestamp: Timestamp, source_node_id: int, frame: typing.Optional[UDPFrame]) -> None:
         """
         The source node-ID is always valid because anonymous transfers are not defined for the UDP transport.
         The frame argument may be None to indicate that the underlying transport has received a datagram
@@ -126,7 +127,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
             return
         self._statistics.frames += 1
 
-        transfer = self._get_reassembler(source_node_id).process_frame(frame, self._transfer_id_timeout)
+        transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
         if transfer is not None:
             self._statistics.transfers += 1
             self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))

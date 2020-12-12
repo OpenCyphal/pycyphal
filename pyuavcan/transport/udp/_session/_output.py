@@ -101,8 +101,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
 
         def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> UDPFrame:
-            return UDPFrame(timestamp=transfer.timestamp,
-                            priority=transfer.priority,
+            return UDPFrame(priority=transfer.priority,
                             transfer_id=transfer.transfer_id,
                             index=index,
                             end_of_transfer=end_of_transfer,

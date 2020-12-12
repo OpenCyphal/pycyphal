@@ -228,7 +228,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         """
         self._ensure_not_closed()
         if self._sniffer is None:
-            _logger.info('%s: Starting UDP/IP packet sniffer (hope you have permissions)', self)
+            _logger.debug('%s: Starting UDP/IP packet sniffer (hope you have permissions)', self)
             self._sniffer = self._sock_factory.make_sniffer(self._process_sniffed_packet)
         self._sniffer_handlers.append(handler)
 
@@ -366,7 +366,7 @@ class UDPSniff(pyuavcan.transport.Sniff):
         if data_spec is None:
             return None
 
-        frame = UDPFrame.parse(self.packet.udp_payload, self.timestamp)
+        frame = UDPFrame.parse(self.packet.udp_payload)
         if frame is None:
             return None
 
