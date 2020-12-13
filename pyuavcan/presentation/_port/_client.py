@@ -11,7 +11,7 @@ import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import ServiceClass, ServicePort, TypedSessionFinalizer, OutgoingTransferIDCounter, Closable
+from ._base import ServiceClass, ServicePort, PortFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError, RequestTransferIDVariabilityExhaustedError
 
@@ -197,7 +197,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                  output_transport_session:   pyuavcan.transport.OutputSession,
                  transfer_id_counter:        OutgoingTransferIDCounter,
                  transfer_id_modulo_factory: typing.Callable[[], int],
-                 finalizer:                  TypedSessionFinalizer,
+                 finalizer:                  PortFinalizer,
                  loop:                       asyncio.AbstractEventLoop):
         self.dtype = dtype
         self.input_transport_session = input_transport_session
@@ -213,7 +213,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         # common use case, but it makes sense supporting it in this library since it's supposed to be usable with
         # diagnostic and inspection tools.
         self._transfer_id_modulo_factory = transfer_id_modulo_factory
-        self._maybe_finalizer: typing.Optional[TypedSessionFinalizer] = finalizer
+        self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
         self._loop = loop
 
         self._lock = asyncio.Lock(loop=loop)

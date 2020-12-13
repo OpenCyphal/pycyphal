@@ -12,7 +12,7 @@ import dataclasses
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import MessagePort, MessageClass, TypedSessionFinalizer, Closable
+from ._base import MessagePort, MessageClass, PortFinalizer, Closable
 from ._error import PortClosedError
 
 
@@ -286,12 +286,12 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
     def __init__(self,
                  dtype:             typing.Type[MessageClass],
                  transport_session: pyuavcan.transport.InputSession,
-                 finalizer:         TypedSessionFinalizer,
+                 finalizer:         PortFinalizer,
                  loop:              asyncio.AbstractEventLoop):
         self.dtype = dtype
         self.transport_session = transport_session
         self.deserialization_failure_count = 0
-        self._maybe_finalizer: typing.Optional[TypedSessionFinalizer] = finalizer
+        self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
         self._loop = loop
         self._task = loop.create_task(self._task_function())
         self._listeners: typing.List[_Listener[MessageClass]] = []

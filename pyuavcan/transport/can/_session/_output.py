@@ -8,7 +8,6 @@ from __future__ import annotations
 import copy
 import typing
 import logging
-import itertools
 import dataclasses
 import pyuavcan.transport
 from pyuavcan.transport import Timestamp

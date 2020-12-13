@@ -12,7 +12,7 @@ import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
 from ._base import MessagePort, OutgoingTransferIDCounter, MessageClass, Closable
-from ._base import DEFAULT_PRIORITY, TypedSessionFinalizer
+from ._base import DEFAULT_PRIORITY, PortFinalizer
 from ._error import PortClosedError
 
 
@@ -161,12 +161,12 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
                  dtype:               typing.Type[MessageClass],
                  transport_session:   pyuavcan.transport.OutputSession,
                  transfer_id_counter: OutgoingTransferIDCounter,
-                 finalizer:           TypedSessionFinalizer,
+                 finalizer:           PortFinalizer,
                  loop:                asyncio.AbstractEventLoop):
         self.dtype = dtype
         self.transport_session = transport_session
         self.transfer_id_counter = transfer_id_counter
-        self._maybe_finalizer: typing.Optional[TypedSessionFinalizer] = finalizer
+        self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
         self._loop = loop
         self._lock = asyncio.Lock(loop=loop)
         self._proxy_count = 0

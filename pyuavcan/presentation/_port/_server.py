@@ -12,7 +12,7 @@ import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
 import pyuavcan.util
-from ._base import ServiceClass, ServicePort, TypedSessionFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
+from ._base import ServiceClass, ServicePort, PortFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError
 
 
@@ -95,7 +95,7 @@ class Server(ServicePort[ServiceClass]):
                  dtype:                            typing.Type[ServiceClass],
                  input_transport_session:          pyuavcan.transport.InputSession,
                  output_transport_session_factory: OutputTransportSessionFactory,
-                 finalizer:                        TypedSessionFinalizer,
+                 finalizer:                        PortFinalizer,
                  loop:                             asyncio.AbstractEventLoop):
         """
         Do not call this directly! Use :meth:`Presentation.get_server`.
