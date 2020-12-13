@@ -10,7 +10,6 @@ import pytest
 import asyncio
 import logging
 import pyuavcan.transport
-# Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pyuavcan.transport import can
 
 
@@ -149,15 +148,14 @@ async def _unittest_can_transport_anon() -> None:
     assert tr.sample_statistics().lost_loopback_frames == 0
     assert tr2.sample_statistics().lost_loopback_frames == 0
 
-    assert collector.pop().is_same_manifestation(UAVCANFrame(
+    assert collector.pop()[1].frame == UAVCANFrame(
         identifier=MessageCANID(Priority.IMMEDIATE, None, 2345).compile([_mem('abcdef')]),  # payload fragments joined
         padded_payload=_mem('abcdef'),
         transfer_id=11,
         start_of_transfer=True,
         end_of_transfer=True,
         toggle_bit=True,
-        loopback=False
-    ).compile())
+    ).compile()
     assert collector.empty
 
     # Can't send anonymous service transfers
@@ -241,6 +239,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
     # noinspection PyProtectedMember
     from pyuavcan.transport.can._frame import UAVCANFrame
+    from pyuavcan.transport.can.media import Envelope
     from .media.mock import MockMedia, FrameCollector
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
@@ -334,15 +333,14 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert tr.sample_statistics().lost_loopback_frames == 0
     assert tr2.sample_statistics().lost_loopback_frames == 0
 
-    assert collector.pop().is_same_manifestation(UAVCANFrame(
+    assert collector.pop()[1].frame == UAVCANFrame(
         identifier=MessageCANID(Priority.IMMEDIATE, 5, 2345).compile([_mem('abcdef')]),  # payload fragments joined
         padded_payload=_mem('abcdef'),
         transfer_id=11,
         start_of_transfer=True,
         end_of_transfer=True,
         toggle_bit=True,
-        loopback=False
-    ).compile())
+    ).compile()
     assert collector.empty
 
     #
@@ -547,33 +545,32 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert client_requester.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=0, errors=1)
 
     # Some malformed feedback frames which will be ignored
-    media.inject_received([UAVCANFrame(
-        identifier=ServiceCANID(priority=Priority.FAST,
-                                source_node_id=5,
-                                destination_node_id=123,
-                                service_id=333,
-                                request_not_response=True).compile([_mem('Ignored')]),
-        padded_payload=_mem('Ignored'),
-        start_of_transfer=False,        # Ignored because not start-of-frame
-        end_of_transfer=False,
-        toggle_bit=True,
-        transfer_id=12,
-        loopback=True).compile()
-    ])
-
-    media.inject_received([UAVCANFrame(
-        identifier=ServiceCANID(priority=Priority.FAST,
-                                source_node_id=5,
-                                destination_node_id=123,
-                                service_id=333,
-                                request_not_response=True).compile([_mem('Ignored')]),
-        padded_payload=_mem('Ignored'),
-        start_of_transfer=True,
-        end_of_transfer=False,
-        toggle_bit=True,
-        transfer_id=9,                  # Ignored because there is no such transfer-ID in the registry
-        loopback=True).compile()
-    ])
+    media.inject_received([Envelope(
+        UAVCANFrame(identifier=ServiceCANID(priority=Priority.FAST,
+                                            source_node_id=5,
+                                            destination_node_id=123,
+                                            service_id=333,
+                                            request_not_response=True).compile([_mem('Ignored')]),
+                    padded_payload=_mem('Ignored'),
+                    start_of_transfer=False,        # Ignored because not start-of-frame
+                    end_of_transfer=False,
+                    toggle_bit=True,
+                    transfer_id=12).compile(),
+        loopback=True,
+    )])
+    media.inject_received([Envelope(
+        UAVCANFrame(identifier=ServiceCANID(priority=Priority.FAST,
+                                            source_node_id=5,
+                                            destination_node_id=123,
+                                            service_id=333,
+                                            request_not_response=True).compile([_mem('Ignored')]),
+                    padded_payload=_mem('Ignored'),
+                    start_of_transfer=True,
+                    end_of_transfer=False,
+                    toggle_bit=True,
+                    transfer_id=9).compile(),        # Ignored because there is no such transfer-ID in the registry
+        loopback=True,
+    )])
 
     # Now, this transmission will succeed, but a pending loopback registry entry will be overwritten, which will be
     # reflected in the error counter.
@@ -595,19 +592,19 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert client_requester.sample_statistics() == SessionStatistics(transfers=2, frames=8, payload_bytes=438, errors=2)
 
     # The feedback is disabled, but we will send a valid loopback frame anyway to make sure it is silently ignored
-    media.inject_received([UAVCANFrame(
-        identifier=ServiceCANID(priority=Priority.FAST,
-                                source_node_id=5,
-                                destination_node_id=123,
-                                service_id=333,
-                                request_not_response=True).compile([_mem('Ignored')]),
-        padded_payload=_mem('Ignored'),
-        start_of_transfer=True,
-        end_of_transfer=False,
-        toggle_bit=True,
-        transfer_id=12,
-        loopback=True).compile()
-    ])
+    media.inject_received([Envelope(
+        UAVCANFrame(identifier=ServiceCANID(priority=Priority.FAST,
+                                            source_node_id=5,
+                                            destination_node_id=123,
+                                            service_id=333,
+                                            request_not_response=True).compile([_mem('Ignored')]),
+                    padded_payload=_mem('Ignored'),
+                    start_of_transfer=True,
+                    end_of_transfer=False,
+                    toggle_bit=True,
+                    transfer_id=12).compile(),
+        loopback=True,
+    )])
 
     client_requester.close()
     with pytest.raises(ResourceClosedError):
@@ -670,30 +667,28 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
                                 service_id=333,
                                 request_not_response=True).compile([_mem('')]),
         data=bytearray(b''),                # The CAN ID is valid for UAVCAN, but the payload is not - no tail byte
-        format=can.media.FrameFormat.EXTENDED,
-        loopback=False)
+        format=can.media.FrameFormat.EXTENDED)
     ])
 
     media.inject_received([can.media.DataFrame(
         identifier=0,                       # The CAN ID is not valid for UAVCAN
         data=bytearray(b'123'),
-        format=can.media.FrameFormat.BASE,
-        loopback=False)
+        format=can.media.FrameFormat.BASE)
     ])
 
-    media.inject_received([UAVCANFrame(
-        identifier=ServiceCANID(priority=Priority.FAST,
-                                source_node_id=5,
-                                destination_node_id=123,
-                                service_id=444,             # No such service
-                                request_not_response=True).compile([_mem('Ignored')]),
-        padded_payload=_mem('Ignored'),
-        start_of_transfer=True,
-        end_of_transfer=False,
-        toggle_bit=True,
-        transfer_id=12,
-        loopback=True).compile()
-    ])
+    media.inject_received([Envelope(
+        UAVCANFrame(identifier=ServiceCANID(priority=Priority.FAST,
+                                            source_node_id=5,
+                                            destination_node_id=123,
+                                            service_id=444,             # No such service
+                                            request_not_response=True).compile([_mem('Ignored')]),
+                    padded_payload=_mem('Ignored'),
+                    start_of_transfer=True,
+                    end_of_transfer=False,
+                    toggle_bit=True,
+                    transfer_id=12).compile(),
+        loopback=True,
+    )])
 
     assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=16,
                                                                 in_frames=2,

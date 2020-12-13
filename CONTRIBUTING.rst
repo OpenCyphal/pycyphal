@@ -84,17 +84,16 @@ to signal static analysis tools that the name is intended to be re-exported
 (unless the aliased name starts with an underscore).
 This is partially enforced with MyPy.
 
-Excepting the above described case of package-level API re-export, do not import specific entities;
+Excepting the above described case of package-level API re-export, it is best to avoid importing specific entities;
 instead, import only the module itself and then use verbose references, as shown below.
-If you really need to import a specific entity, consider prefixing it with an underscore to prevent scope leakage.
 Exception applies to well-encapsulated submodules which are not part of the library API
 (i.e., prefixed with an underscore) -- you can import whatever you want provided that the
 visibility scope of the module is sufficiently narrow.
 
 ::
 
-    from pyuavcan.transport import Transport    # Avoid this.
-    import pyuavcan.transport                   # Good. Use like: pyuavcan.transport.Transport
+    from pyuavcan.transport import Transport    # Avoid this if you can.
+    import pyuavcan.transport                   # Prefer this.
 
 
 Semantic and behavioral conventions

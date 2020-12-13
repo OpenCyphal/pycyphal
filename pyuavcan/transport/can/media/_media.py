@@ -9,7 +9,8 @@ import abc
 import typing
 import asyncio
 import pyuavcan.util
-from ._frame import DataFrame, TimestampedDataFrame
+from pyuavcan.transport import Timestamp
+from ._frame import Envelope
 from ._filter import FilterConfiguration
 
 
@@ -22,8 +23,11 @@ class Media(abc.ABC):
     needed for SLCAN). Python packages containing such media implementations shall be always importable.
     """
 
-    ReceivedFramesHandler = typing.Callable[[typing.Iterable[TimestampedDataFrame]], None]
-    """The frames handler is non-blocking and non-yielding; returns immediately."""
+    ReceivedFramesHandler = typing.Callable[[typing.Iterable[typing.Tuple[Timestamp, Envelope]]], None]
+    """
+    The frames handler is non-blocking and non-yielding; returns immediately.
+    The timestamp is provided individually per frame.
+    """
 
     VALID_MTU_SET = {8, 12, 16, 20, 24, 32, 48, 64}
     """Valid MTU values for Classic CAN and CAN FD."""
@@ -116,7 +120,7 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def send_until(self, frames: typing.Iterable[DataFrame], monotonic_deadline: float) -> int:
+    async def send_until(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         """
         All passed frames are guaranteed to share the same CAN-ID. This guarantee may enable some optimizations.
         The frames shall be delivered to the bus in the same order. The iterable is guaranteed to be non-empty.

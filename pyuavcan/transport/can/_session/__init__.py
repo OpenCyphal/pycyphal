@@ -12,5 +12,6 @@ from ._input import CANInputSessionStatistics as CANInputSessionStatistics
 from ._output import CANOutputSession as CANOutputSession
 from ._output import BroadcastCANOutputSession as BroadcastCANOutputSession
 from ._output import UnicastCANOutputSession as UnicastCANOutputSession
+from ._output import SendTransaction as SendTransaction
 
 from ._transfer_reassembler import TransferReassemblyErrorID as TransferReassemblyErrorID

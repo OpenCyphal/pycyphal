@@ -7,7 +7,6 @@
 import sys
 import typing
 import asyncio
-
 import pytest
 
 
@@ -15,7 +14,7 @@ import pytest
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_can_socketcan() -> None:
     from pyuavcan.transport import Timestamp
-    from pyuavcan.transport.can.media import TimestampedDataFrame, DataFrame, FrameFormat, FilterConfiguration
+    from pyuavcan.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
 
     if sys.platform != 'linux':  # pragma: no cover
         pytest.skip('SocketCAN test skipped because we do not seem to be on a GNU/Linux-based system')
@@ -41,18 +40,19 @@ async def _unittest_can_socketcan() -> None:
     media_a.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
     media_b.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
 
-    rx_a: typing.List[TimestampedDataFrame] = []
+    rx_a: typing.List[typing.Tuple[Timestamp, Envelope]] = []
 
-    def on_rx_a(frames: typing.Iterable[TimestampedDataFrame]) -> None:
+    def on_rx_a(frames: typing.Iterable[typing.Tuple[Timestamp, Envelope]]) -> None:
         nonlocal rx_a
         frames = list(frames)
         print('RX A:', frames)
         rx_a += frames
 
-    def on_rx_b(frames: typing.Iterable[TimestampedDataFrame]) -> None:
+    def on_rx_b(frames: typing.Iterable[typing.Tuple[Timestamp, Envelope]]) -> None:
         frames = list(frames)
         print('RX B:', frames)
-        asyncio.ensure_future(media_b.send_until(frames, asyncio.get_event_loop().time() + 1.0))
+        asyncio.ensure_future(media_b.send_until((e for _, e in frames),
+                                                 asyncio.get_event_loop().time() + 1.0))
 
     media_a.start(on_rx_a, False)
     media_b.start(on_rx_b, True)
@@ -64,18 +64,12 @@ async def _unittest_can_socketcan() -> None:
 
     ts_begin = Timestamp.now()
     await media_a.send_until([
-        DataFrame(identifier=0xbadc0fe,
-                  data=bytearray(range(8)),
-                  format=FrameFormat.EXTENDED,
-                  loopback=True),
-        DataFrame(identifier=0x12345678,
-                  data=bytearray(range(0)),
-                  format=FrameFormat.EXTENDED,
-                  loopback=False),
-        DataFrame(identifier=0x123,
-                  data=bytearray(range(6)),
-                  format=FrameFormat.BASE,
-                  loopback=True),
+        Envelope(DataFrame(FrameFormat.EXTENDED, 0xbadc0fe, bytearray(range(8))),
+                 loopback=True),
+        Envelope(DataFrame(FrameFormat.EXTENDED, 0x12345678, bytearray(range(0))),
+                 loopback=False),
+        Envelope(DataFrame(FrameFormat.BASE, 0x123, bytearray(range(6))),
+                 loopback=True),
     ], asyncio.get_event_loop().time() + 1.0)
     await asyncio.sleep(0.1)
     ts_end = Timestamp.now()
@@ -83,12 +77,12 @@ async def _unittest_can_socketcan() -> None:
     print('rx_a:', rx_a)
     # Three sent back from the other end, two loopback
     assert len(rx_a) == 5
-    for f in rx_a:
-        assert ts_begin.monotonic_ns <= f.timestamp.monotonic_ns <= ts_end.monotonic_ns
-        assert ts_begin.system_ns <= f.timestamp.system_ns <= ts_end.system_ns
+    for t, f in rx_a:
+        assert ts_begin.monotonic_ns <= t.monotonic_ns <= ts_end.monotonic_ns
+        assert ts_begin.system_ns <= t.system_ns <= ts_end.system_ns
 
-    rx_loopback = list(filter(lambda x: x.loopback, rx_a))
-    rx_external = list(filter(lambda x: not x.loopback, rx_a))
+    rx_loopback = [e.frame for t, e in rx_a if e.loopback]
+    rx_external = [e.frame for t, e in rx_a if not e.loopback]
     assert len(rx_loopback) == 2 and len(rx_external) == 3
 
     assert rx_loopback[0].identifier == 0xbadc0fe

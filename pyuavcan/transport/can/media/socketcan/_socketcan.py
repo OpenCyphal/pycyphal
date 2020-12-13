@@ -16,13 +16,15 @@ import logging
 import threading
 import contextlib
 import pyuavcan.transport
-import pyuavcan.transport.can.media as _media
+from pyuavcan.transport import Timestamp
+from pyuavcan.transport.can.media import Media, Envelope, FilterConfiguration, FrameFormat
+from pyuavcan.transport.can.media import DataFrame
 
 
 _logger = logging.getLogger(__name__)
 
 
-class SocketCANMedia(_media.Media):
+class SocketCANMedia(Media):
     """
     This media implementation provides a simple interface for the standard Linux SocketCAN media layer.
     If you are testing with a virtual CAN bus and you need CAN FD, you may need to enable it manually
@@ -90,7 +92,7 @@ class SocketCANMedia(_media.Media):
         """
         return 512
 
-    def start(self, handler: _media.Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
+    def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._maybe_thread is None:
             self._maybe_thread = threading.Thread(target=self._thread_function,
                                                   name=str(self),
@@ -102,21 +104,21 @@ class SocketCANMedia(_media.Media):
         else:
             raise RuntimeError('The RX frame handler is already set up')
 
-    def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
+    def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(repr(self))
         _logger.info('%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! '
                      'Requested configuration: %s',
                      self, ', '.join(map(str, configuration)))
 
-    async def send_until(self, frames: typing.Iterable[_media.DataFrame], monotonic_deadline: float) -> int:
+    async def send_until(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         num_sent = 0
         for f in frames:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(repr(self))
             self._set_loopback_enabled(f.loopback)
             try:
-                await asyncio.wait_for(self._loop.sock_sendall(self._sock, self._compile_native_frame(f)),
+                await asyncio.wait_for(self._loop.sock_sendall(self._sock, self._compile_native_frame(f.frame)),
                                        timeout=monotonic_deadline - self._loop.time(),
                                        loop=self._loop)
             except asyncio.TimeoutError:
@@ -138,13 +140,13 @@ class SocketCANMedia(_media.Media):
             self._ctl_worker.close()
             self._ctl_main.close()
 
-    def _thread_function(self, handler: _media.Media.ReceivedFramesHandler) -> None:
-        def handler_wrapper(frs: typing.Sequence[_media.TimestampedDataFrame]) -> None:
+    def _thread_function(self, handler: Media.ReceivedFramesHandler) -> None:
+        def handler_wrapper(frs: typing.Sequence[typing.Tuple[Timestamp, Envelope]]) -> None:
             try:
                 if not self._closed:  # Don't call after closure to prevent race conditions and use-after-close.
                     handler(frs)
             except Exception as exc:
-                _logger.exception('%s unhandled exception in the receive handler: %s; lost frames: %s', self, exc, frs)
+                _logger.exception('%s: Unhandled exception in the receive handler: %s; lost frames: %s', self, exc, frs)
 
         while not self._closed:
             try:
@@ -152,7 +154,7 @@ class SocketCANMedia(_media.Media):
                 ts_mono_ns = time.monotonic_ns()
 
                 if self._sock in read_ready:
-                    frames: typing.List[_media.TimestampedDataFrame] = []
+                    frames: typing.List[typing.Tuple[Timestamp, Envelope]] = []
                     try:
                         while True:
                             frames.append(self._read_frame(ts_mono_ns))
@@ -173,7 +175,7 @@ class SocketCANMedia(_media.Media):
         self._closed = True
         _logger.debug('%s thread is about to exit', self)
 
-    def _read_frame(self, ts_mono_ns: int) -> _media.TimestampedDataFrame:
+    def _read_frame(self, ts_mono_ns: int) -> typing.Tuple[Timestamp, Envelope]:
         while True:
             data, ancdata, msg_flags, _addr = self._sock.recvmsg(self._native_frame_size,
                                                                  self._ancillary_data_buffer_size)
@@ -190,39 +192,31 @@ class SocketCANMedia(_media.Media):
                     assert False, f'Unexpected ancillary data: {cmsg_level}, {cmsg_type}, {cmsg_data!r}'
 
             assert ts_system_ns > 0, 'Missing the timestamp; does the driver support timestamping?'
-            timestamp = pyuavcan.transport.Timestamp(system_ns=ts_system_ns, monotonic_ns=ts_mono_ns)
-
-            out = SocketCANMedia._parse_native_frame(data, loopback=loopback, timestamp=timestamp)
+            timestamp = Timestamp(system_ns=ts_system_ns, monotonic_ns=ts_mono_ns)
+            out = SocketCANMedia._parse_native_frame(data)
             if out is not None:
-                return out
+                return timestamp, Envelope(out, loopback=loopback)
 
-    def _compile_native_frame(self, source: _media.DataFrame) -> bytes:
+    def _compile_native_frame(self, source: DataFrame) -> bytes:
         flags = _CANFD_BRS if self._is_fd else 0
-        ident = source.identifier | (_CAN_EFF_FLAG if source.format == _media.FrameFormat.EXTENDED else 0)
+        ident = source.identifier | (_CAN_EFF_FLAG if source.format == FrameFormat.EXTENDED else 0)
         header = _FRAME_HEADER_STRUCT.pack(ident, len(source.data), flags)
         out = header + source.data.ljust(self._native_frame_data_capacity, b'\x00')
         assert len(out) == self._native_frame_size
         return out
 
     @staticmethod
-    def _parse_native_frame(source: bytes,
-                            loopback: bool,
-                            timestamp: pyuavcan.transport.Timestamp) \
-            -> typing.Optional[_media.TimestampedDataFrame]:
+    def _parse_native_frame(source: bytes) -> typing.Optional[DataFrame]:
         header_size = _FRAME_HEADER_STRUCT.size
         ident_raw, data_length, _flags = _FRAME_HEADER_STRUCT.unpack(source[:header_size])
         if (ident_raw & _CAN_RTR_FLAG) or (ident_raw & _CAN_ERR_FLAG):  # Unsupported format, ignore silently
-            _logger.debug('Frame dropped: id_raw=%08x', ident_raw)
+            _logger.debug('Unsupported CAN frame dropped; raw SocketCAN ID is %08x', ident_raw)
             return None
-        frame_format = _media.FrameFormat.EXTENDED if ident_raw & _CAN_EFF_FLAG else _media.FrameFormat.BASE
+        frame_format = FrameFormat.EXTENDED if ident_raw & _CAN_EFF_FLAG else FrameFormat.BASE
         data = source[header_size:header_size + data_length]
         assert len(data) == data_length
         ident = ident_raw & _CAN_EFF_MASK
-        return _media.TimestampedDataFrame(identifier=ident,
-                                           data=bytearray(data),
-                                           format=frame_format,
-                                           loopback=loopback,
-                                           timestamp=timestamp)
+        return DataFrame(frame_format, ident, bytearray(data))
 
     def _set_loopback_enabled(self, enable: bool) -> None:
         if enable != self._loopback_enabled:
