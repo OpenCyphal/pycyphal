@@ -78,7 +78,7 @@ class Presentation:
         property and write it to the predefined storage location atomically. Make sure to shard the location by
         node-ID because nodes that use different node-ID values obviously shall not share their transfer-ID maps.
         Nodes sharing the same node-ID cannot exist on the same transport, but the local system might be running
-        nodes under the same node-ID on different transports concurrently, so this needs to be accounted for.
+        nodes under the same node-ID on independent networks concurrently, so this may need to be accounted for.
         """
         return self._output_transfer_id_map
 

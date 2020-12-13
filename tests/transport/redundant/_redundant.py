@@ -124,7 +124,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     )
     assert tr_a.local_node_id == 111
     assert repr(tr_a) == \
-        'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111)) '
+        'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))'
 
     assert await pub_a.send_until(
         Transfer(timestamp=Timestamp.now(),
@@ -193,7 +193,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert tr_a.protocol_parameters == cyc_proto_params, 'Protocol parameter mismatch'
     assert tr_a.local_node_id == 111
     assert repr(tr_a) == \
-        'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111)) '
+        'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))'
 
     # Exchange test.
     assert await pub_a.send_until(

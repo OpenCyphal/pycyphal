@@ -151,7 +151,7 @@ async def _unittest_can_mock_media() -> None:
     assert me.mtu == 64
     assert me.number_of_acceptance_filters == 3
     assert not me.automatic_retransmission_enabled
-    assert str(me) == f"MockMedia(interface_name='mock@{id(peers):08x}', mtu=64)"
+    assert str(me) == f"MockMedia('mock@{id(peers):08x}', mtu=64)"
 
     me_collector = FrameCollector()
     me.start(me_collector.give, False)

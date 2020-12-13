@@ -244,13 +244,6 @@ class UDPTransport(pyuavcan.transport.Transport):
         return list(self._output_registry.values())
 
     @property
-    def descriptor(self) -> str:
-        anon = 'true' if self._anonymous else 'false'
-        return (
-            f'<udp anonymous="{anon}" srv_mult="{self._srv_multiplier}" mtu="{self._mtu}">{self.local_ip_address}</udp>'
-        )
-
-    @property
     def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
         return self._sock_factory.local_ip_address
 
