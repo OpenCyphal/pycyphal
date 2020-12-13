@@ -93,10 +93,8 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
 
 def _unittest_udp_frame_compile() -> None:
-    from pyuavcan.transport import Priority, Timestamp
+    from pyuavcan.transport import Priority
     from pytest import raises
-
-    ts = Timestamp.now()
 
     _ = UDPFrame(priority=Priority.LOW,
                  transfer_id=0,
@@ -165,9 +163,7 @@ def _unittest_udp_frame_compile() -> None:
 
 
 def _unittest_udp_frame_parse() -> None:
-    from pyuavcan.transport import Priority, Timestamp
-
-    ts = Timestamp.now()
+    from pyuavcan.transport import Priority
 
     for size in range(16):
         assert None is UDPFrame.parse(memoryview(bytes(range(size))))
