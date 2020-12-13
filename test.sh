@@ -88,8 +88,6 @@ sudo setcap cap_net_raw+eip "$(readlink -f $(command -v python))" || die "Could 
 
 banner TEST EXECUTION
 
-mkdir .test_dsdl_generated 2> /dev/null       # The directory must exist before coverage is invoked
-
 # TODO: run the tests with the minimal dependency configuration. Set up a new environment here.
 # Note that we do not invoke coverage.py explicitly here; this is handled by usercustomize.py. Relevant docs:
 #   - https://coverage.readthedocs.io/en/coverage-4.2/subprocess.html
@@ -104,6 +102,8 @@ find ./*/ -name '.coverage*' -type f -print -exec mv {} . \;  || die "Could not 
 ls -l .coverage*
 coverage combine                                              || die "Could not combine coverage data"
 
+# Shall it be desired to measure coverage of the generated code, it is necessary to ensure that the target
+# directory where the generated code is stored exists before the coverage utility is invoked.
 coverage xml -i -o .coverage.xml || die "Could not generate coverage XML (needed for SonarQube)"
 coverage html
 coverage report
