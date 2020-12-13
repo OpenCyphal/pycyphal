@@ -232,5 +232,70 @@ async def _unittest_udp_transport_ipv4() -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
+@pytest.mark.asyncio    # type: ignore
+async def _unittest_udp_transport_ipv4_sniffer() -> None:
+    from pyuavcan.transport.udp import UDPSniff
+    from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
+    from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
+    from pyuavcan.transport import Sniff
+
+    tr_sniff = UDPTransport('127.50.0.2', anonymous=True)
+    sniffs: typing.List[UDPSniff] = []
+
+    def inhale(s: Sniff) -> None:
+        print('SNIFF:', s)
+        assert isinstance(s, UDPSniff)
+        sniffs.append(s)
+
+    tr_sniff.sniff(inhale)
+    await asyncio.sleep(1.0)
+
+    tr = UDPTransport('127.50.0.111')
+    meta = PayloadMetadata(10000)
+    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)
+    assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)
+
+    ts = Timestamp.now()
+    assert len(sniffs) == 0         # Assuming here that there are no other entities that might create noise.
+    await broadcaster.send_until(
+        Transfer(timestamp=ts,
+                 priority=Priority.NOMINAL,
+                 transfer_id=9876543210,
+                 fragmented_payload=[_mem(bytes(range(256)))] * 4),
+        monotonic_deadline=tr.loop.time() + 2.0,
+    )
+    await asyncio.sleep(1.0)        # Let the packet propagate.
+    assert len(sniffs) == 1         # Ensure the packet is captured.
+    tr_sniff.close()                # Ensure the capture is stopped after the sniffing transport is closed.
+    await broadcaster.send_until(   # This one shall be ignored.
+        Transfer(timestamp=Timestamp.now(),
+                 priority=Priority.HIGH,
+                 transfer_id=54321,
+                 fragmented_payload=[_mem(b'')]),
+        monotonic_deadline=tr.loop.time() + 2.0,
+    )
+    await asyncio.sleep(1.0)
+    assert len(sniffs) == 1         # Ignored?
+    tr.close()
+
+    pkt, = sniffs
+    assert isinstance(pkt, UDPSniff)
+    assert ts.monotonic_ns <= pkt.timestamp.monotonic_ns <= Timestamp.now().monotonic_ns
+    assert ts.system_ns <= pkt.timestamp.system_ns <= Timestamp.now().system_ns
+    assert str(pkt.packet.ip_header.source) == '127.50.0.111'
+    assert str(pkt.packet.ip_header.destination) == '239.50.0.190'
+    parsed = pkt.parse()
+    assert parsed
+    src_nid, dst_nid, ds, frame = parsed
+    assert src_nid == 111
+    assert dst_nid is None
+    assert ds == broadcaster.specifier.data_specifier
+    assert frame.end_of_transfer
+    assert frame.index == 0
+    assert frame.transfer_id == 9876543210
+    assert len(frame.payload) == 1024
+    assert frame.priority == Priority.NOMINAL
+
+
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
     return memoryview(data.encode() if isinstance(data, str) else data)
