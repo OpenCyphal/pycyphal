@@ -114,4 +114,4 @@ for:
       - ./release.sh
 
 artifacts:
-  - path: pytest.log
+  - path: '*.log'

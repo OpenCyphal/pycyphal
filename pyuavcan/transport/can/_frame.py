@@ -71,7 +71,7 @@ class UAVCANFrame:
 
     def __repr__(self) -> str:
         kwargs = {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
-        kwargs['identifier'] = f'{self.identifier:08x}'
+        kwargs['identifier'] = f'0x{self.identifier:08x}'
         kwargs['padded_payload'] = bytes(self.padded_payload).hex()
         return pyuavcan.util.repr_attributes(self, **kwargs)
 

@@ -243,15 +243,20 @@ class CANTransport(pyuavcan.transport.Transport):
         async with self._media_lock:
             if self._maybe_media is None:
                 raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
-            else:
-                num_sent = await self._maybe_media.send_until(
-                    (
-                        Envelope(frame=x.compile(),
-                                 loopback=(idx == 0 and t.loopback_first))
-                        for idx, x in enumerate(t.frames)
-                    ),
-                    t.monotonic_deadline,
-                )
+
+            if _logger.isEnabledFor(logging.DEBUG):
+                timeout = t.monotonic_deadline - self._loop.time()
+                _logger.debug('%s: Sending %d frames; 1st loopback: %s; deadline in %.3f s:\n%s',
+                              self, len(t.frames), t.loopback_first, timeout, '\n'.join(map(str, t.frames)))
+
+            num_sent = await self._maybe_media.send_until(
+                (
+                    Envelope(frame=x.compile(),
+                             loopback=(idx == 0 and t.loopback_first))
+                    for idx, x in enumerate(t.frames)
+                ),
+                t.monotonic_deadline,
+            )
             assert 0 <= num_sent <= len(t.frames), 'Media sub-layer API contract violation'
             sent_frames, unsent_frames = t.frames[:num_sent], t.frames[num_sent:]
 
@@ -269,6 +274,10 @@ class CANTransport(pyuavcan.transport.Transport):
         return not unsent_frames
 
     def _on_frames_received(self, frames: typing.Iterable[typing.Tuple[Timestamp, Envelope]]) -> None:
+        if _logger.isEnabledFor(logging.DEBUG):
+            frames = list(frames)
+            _logger.debug('%s: Parsing received CAN frames:\n%s', self, '\n'.join(f'{t} {e}' for t, e in frames))
+
         for timestamp, envelope in frames:
             try:
                 if envelope.loopback:
@@ -294,6 +303,7 @@ class CANTransport(pyuavcan.transport.Transport):
             self._handle_loopback_frame(timestamp, can_id, frame)
 
     def _handle_received_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame) -> bool:
+        _logger.debug('%s: Accepted: %s %s %s', self, timestamp, frame, can_id)
         ss = pyuavcan.transport.InputSessionSpecifier(can_id.data_specifier, can_id.source_node_id)
         accepted = False
         dest_nid = can_id.get_destination_node_id()
@@ -315,6 +325,7 @@ class CANTransport(pyuavcan.transport.Transport):
         return accepted
 
     def _handle_loopback_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame) -> None:
+        _logger.debug('%s: Loopback: %s %s %s', self, timestamp, frame, can_id)
         ss = pyuavcan.transport.OutputSessionSpecifier(can_id.data_specifier, can_id.get_destination_node_id())
         try:
             session = self._output_registry[ss]
@@ -335,12 +346,14 @@ class CANTransport(pyuavcan.transport.Transport):
         )
         fcs = generate_filter_configurations(subject_ids, self._local_node_id)
         assert len(fcs) > len(subject_ids)
-        del subject_ids
         if self._maybe_media is not None:
             num_filters = self._maybe_media.number_of_acceptance_filters
             fcs = optimize_filter_configurations(fcs, num_filters)
             assert len(fcs) <= num_filters
             if self._last_filter_configuration_set != fcs:
+                if _logger.isEnabledFor(logging.DEBUG):
+                    _logger.debug('%s: Configuring %d acceptance filters for %d subject-IDs: %s\n%s',
+                                  self, num_filters, len(subject_ids), list(subject_ids), '\n'.join(map(str, fcs)))
                 try:
                     self._maybe_media.configure_acceptance_filters(fcs)
                 except Exception:  # pragma: no cover
