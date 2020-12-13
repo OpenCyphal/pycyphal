@@ -38,6 +38,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
 
     def __init__(self,
                  local_node_id: typing.Optional[int],
+                 *,
                  loop:          typing.Optional[asyncio.AbstractEventLoop] = None):
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._local_node_id = int(local_node_id) if local_node_id is not None else None
@@ -156,6 +157,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     def sniffer_handlers(self) -> typing.Sequence[pyuavcan.transport.SnifferCallback]:
         return self._sniffer_handlers[:]
 
-    @property
-    def descriptor(self) -> str:
-        return '<loopback/>'
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        return [], {
+            'local_node_id': self.local_node_id,
+        }

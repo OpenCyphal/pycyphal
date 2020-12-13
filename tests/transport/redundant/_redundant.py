@@ -39,7 +39,6 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         max_nodes=0,
         mtu=0,
     )
-    assert tr_a.descriptor == '<redundant></redundant>'  # Empty, no inferiors.
     assert tr_a.input_sessions == []
     assert tr_a.output_sessions == []
 
@@ -124,7 +123,8 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         ]
     )
     assert tr_a.local_node_id == 111
-    assert tr_a.descriptor == '<redundant><loopback/><loopback/></redundant>'
+    assert repr(tr_a) == \
+        'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111)) '
 
     assert await pub_a.send_until(
         Transfer(timestamp=Timestamp.now(),
@@ -184,7 +184,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert pub_a.inferiors == []
     assert sub_any_a.inferiors == []
     assert tr_a.local_node_id is None                       # Back to the roots
-    assert tr_a.descriptor == '<redundant></redundant>'     # Yes yes
+    assert repr(tr_a) == 'RedundantTransport()'
 
     # Now we can add our cyclic transports safely.
     tr_a.attach_inferior(lo_cyc_0)
@@ -192,7 +192,8 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     tr_a.attach_inferior(lo_cyc_1)
     assert tr_a.protocol_parameters == cyc_proto_params, 'Protocol parameter mismatch'
     assert tr_a.local_node_id == 111
-    assert tr_a.descriptor == '<redundant><loopback/><loopback/></redundant>'
+    assert repr(tr_a) == \
+        'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111)) '
 
     # Exchange test.
     assert await pub_a.send_until(
@@ -227,16 +228,13 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     tr_b.attach_inferior(udp_b)
     tr_b.attach_inferior(serial_b)
 
-    print('tr_a.descriptor', tr_a.descriptor)
-    print('tr_b.descriptor', tr_b.descriptor)
-
     assert tr_a.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
         max_nodes=4096,
         mtu=udp_a.protocol_parameters.mtu,
     )
     assert tr_a.local_node_id == 111
-    assert tr_a.descriptor == f'<redundant>{udp_a.descriptor}{serial_a.descriptor}</redundant>'
+    assert repr(tr_a) == f'RedundantTransport({udp_a}, {serial_a})'
 
     assert tr_b.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
@@ -244,7 +242,6 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         mtu=udp_b.protocol_parameters.mtu,
     )
     assert tr_b.local_node_id == 222
-    assert tr_b.descriptor == f'<redundant>{udp_b.descriptor}{serial_b.descriptor}</redundant>'
 
     assert await pub_a.send_until(
         Transfer(timestamp=Timestamp.now(),

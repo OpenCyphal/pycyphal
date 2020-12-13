@@ -248,12 +248,6 @@ class SerialTransport(pyuavcan.transport.Transport):
         return list(self._output_registry.values())
 
     @property
-    def descriptor(self) -> str:
-        return \
-            f'<serial baudrate="{self._serial_port.baudrate}" srv_mult="{self._service_transfer_multiplier}">' \
-            f'{self._serial_port.name}</serial>'
-
-    @property
     def serial_port(self) -> serial.SerialBase:
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
@@ -405,6 +399,16 @@ class SerialTransport(pyuavcan.transport.Transport):
     def _ensure_not_closed(self) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        kwargs = {
+            'local_node_id': self.local_node_id,
+            'service_transfer_multiplier': self._service_transfer_multiplier,
+            'baudrate': self._serial_port.baudrate,
+        }
+        if self._mtu < max(SerialTransport.VALID_MTU_RANGE):
+            kwargs['mtu'] = self._mtu
+        return [repr(self._serial_port.name)], kwargs
 
 
 @dataclasses.dataclass(frozen=True)

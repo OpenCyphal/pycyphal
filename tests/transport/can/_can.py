@@ -56,8 +56,6 @@ async def _unittest_can_transport_anon() -> None:
     assert not media.automatic_retransmission_enabled
     assert not media2.automatic_retransmission_enabled
 
-    assert tr.descriptor == f'<can><mock mtu="64">mock@{id(peers):08x}</mock></can>'
-
     #
     # Instantiate session objects
     #

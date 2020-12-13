@@ -148,6 +148,31 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def sample_statistics(self) -> TransportStatistics:
+        """
+        Samples the low-level transport stats.
+        The returned object shall be new or cloned (should not refer to an internal field).
+        Implementations should annotate the return type as a derived custom type.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def input_sessions(self) -> typing.Sequence[InputSession]:
+        """
+        Immutable view of all input sessions that are currently open.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def output_sessions(self) -> typing.Sequence[OutputSession]:
+        """
+        Immutable view of all output sessions that are currently open.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def sniff(self, handler: SnifferCallback) -> None:
         """
         If the user desires to perform low-level monitoring of the transport interface at the transport frame level
@@ -191,72 +216,21 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sample_statistics(self) -> TransportStatistics:
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
         """
-        Samples the low-level transport stats.
-        The returned object shall be new or cloned (should not refer to an internal field).
-        Implementations should annotate the return type as a derived custom type.
-        """
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def input_sessions(self) -> typing.Sequence[InputSession]:
-        """
-        Immutable view of all input sessions that are currently open.
-        """
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def output_sessions(self) -> typing.Sequence[OutputSession]:
-        """
-        Immutable view of all output sessions that are currently open.
-        """
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def descriptor(self) -> str:
-        """
-        A transport-specific specification string containing sufficient information to recreate the current
-        configuration in a human-readable XML-like format.
-
-        The returned string shall contain exactly one top-level XML element. The tag name of the element shall match
-        the name of the transport class in lower case without the "transport" suffix; e.g:
-        ``CANTransport`` -- ``can``, ``SerialTransport`` -- ``serial``.
-        The element should contain the name of the OS resource associated with the interface,
-        if there is any, e.g., serial port name, network iface name, etc;
-        or another element, e.g., further specifying the media layer or similar, which in turn contains the name
-        of the associated OS resource in it.
-        If it is a pseudo-transport, the element should contain nested elements describing the contained transports,
-        if there are any.
-        The attributes of a transport element should represent the values of applicable configuration parameters,
-        excepting those that are already exposed via :attr:`protocol_parameters` to avoid redundancy.
-        The charset is ASCII.
-
-        In general, one can view this as an XML-based representation of a Python constructor invocation expression,
-        where the first argument is represented as the XML element data, and all following arguments
-        are represented as named XML attributes.
-        Examples:
-
-        - ``<can><socketcan mtu="64">vcan0</socketcan></can>``
-        - ``<serial baudrate="115200">/dev/ttyACM0</serial>``
-        - ``<ieee802154><xbee>/dev/ttyACM0</xbee></ieee802154>``
-        - ``<redundant><udp srv_mult="1">127.0.0.42</udp><serial baudrate="115200">COM9</serial></redundant>``
-
-        We should consider defining a reverse static factory method that attempts to locate the necessary transport
-        implementation class and instantiate it from a supplied descriptor. This would benefit transport-agnostic
-        applications greatly.
+        Returns a list of positional and keyword arguments to :func:`pyuavcan.util.repr_attributes_noexcept`
+        for processing the :meth:`__repr__` call.
+        The resulting string constructed by repr should resemble a valid Python expression that would yield
+        an identical transport instance upon its evaluation.
         """
         raise NotImplementedError
 
     def __repr__(self) -> str:
         """
-        Implementations are advised to avoid overriding this method.
+        Implementations should never override this method. Instead, see :meth:`_get_repr_fields`.
         """
-        return pyuavcan.util.repr_attributes(self, self.descriptor, self.protocol_parameters,
-                                             local_node_id=self.local_node_id)
+        positional, keyword = self._get_repr_fields()
+        return pyuavcan.util.repr_attributes_noexcept(self, *positional, **keyword)
 
 
 @dataclasses.dataclass(frozen=True)

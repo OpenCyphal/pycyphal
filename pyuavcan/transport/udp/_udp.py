@@ -329,6 +329,13 @@ class UDPTransport(pyuavcan.transport.Transport):
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
 
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        return [repr(str(self.local_ip_address))], {
+            'anonymous': self._anonymous,
+            'service_transfer_multiplier': self._srv_multiplier,
+            'mtu': self._mtu,
+        }
+
 
 @dataclasses.dataclass(frozen=True)
 class UDPSniff(pyuavcan.transport.Sniff):

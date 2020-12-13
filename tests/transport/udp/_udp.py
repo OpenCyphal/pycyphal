@@ -6,7 +6,6 @@
 
 import typing
 import asyncio
-import xml.etree.ElementTree
 import ipaddress
 import pytest
 import pyuavcan.transport
@@ -41,7 +40,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.input_sessions == []
     assert tr.output_sessions == []
 
-    assert list(xml.etree.ElementTree.fromstring(tr.descriptor).itertext()) == ['127.0.0.111']
+    assert '127.0.0.111' in repr(tr)
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
         max_nodes=65535,
@@ -49,7 +48,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     )
 
     default_mtu = min(UDPTransport.VALID_MTU_RANGE)
-    assert list(xml.etree.ElementTree.fromstring(tr2.descriptor).itertext()) == ['127.0.0.222']
+    assert '127.0.0.222' in repr(tr2)
     assert tr2.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
         max_nodes=65535,

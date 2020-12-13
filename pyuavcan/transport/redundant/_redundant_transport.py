@@ -64,7 +64,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
         The values are obtained from the set of inferiors by applying the following reductions:
 
-        - min transfer-ID
+        - min transfer-ID modulo
         - min max-nodes
         - min MTU
         """
@@ -165,23 +165,6 @@ class RedundantTransport(pyuavcan.transport.Transport):
     @property
     def output_sessions(self) -> typing.Sequence[RedundantOutputSession]:
         return [s for s in self._rows.values() if isinstance(s, RedundantOutputSession)]
-
-    @property
-    def descriptor(self) -> str:
-        """
-        The outer tag is ``<redundant>``;
-        the inner elements are descriptors of the inferiors (if any), ordered as in :attr:`inferiors`.
-
-        >>> tr = RedundantTransport()
-        >>> tr.descriptor
-        '<redundant></redundant>'
-        >>> from pyuavcan.transport.loopback import LoopbackTransport
-        >>> tr.attach_inferior(LoopbackTransport(None))
-        >>> tr.attach_inferior(LoopbackTransport(None))
-        >>> tr.descriptor
-        '<redundant><loopback/><loopback/></redundant>'
-        """
-        return '<redundant>' + ''.join(t.descriptor for t in self._cols) + '</redundant>'
 
     @property
     def inferiors(self) -> typing.Sequence[pyuavcan.transport.Transport]:
@@ -369,3 +352,6 @@ class RedundantTransport(pyuavcan.transport.Transport):
     def _check_matrix_consistency(self) -> None:
         for row in self._rows.values():
             assert len(row.inferiors) == len(self._cols)
+
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        return list(self.inferiors), {}

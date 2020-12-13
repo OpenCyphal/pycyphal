@@ -73,8 +73,7 @@ Observe that the node-ID for the local node is to be configured here as well, be
 this is a transport-layer property. If desired, a usable node-ID value can be automatically found using the command
 "pick-node-id"; read its help for usage information (it's useful for various automation scripts and similar tasks).
 
-The command-line tool stores the output transfer-ID map on disk, keyed by the node-ID and the OS resource associated
-with the transport; the path (specific for this system) is:
+The command-line tool stores the output transfer-ID map on disk keyed by the node-ID; the current local path is:
 {OUTPUT_TRANSFER_ID_MAP_DIR}
 The map files are managed automatically. They can be removed to reset all transfer-ID counters to zero. Files that
 are more than {OUTPUT_TRANSFER_ID_MAP_MAX_AGE} seconds old are no longer used.

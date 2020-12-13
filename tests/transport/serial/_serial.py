@@ -6,7 +6,6 @@
 
 import typing
 import asyncio
-import xml.etree.ElementTree
 import pytest
 import serial
 import logging
@@ -47,8 +46,6 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 
     assert tr.input_sessions == []
     assert tr.output_sessions == []
-
-    assert list(xml.etree.ElementTree.fromstring(tr.descriptor).itertext()) == ['loop://']
 
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,

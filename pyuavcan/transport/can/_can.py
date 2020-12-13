@@ -115,10 +115,6 @@ class CANTransport(pyuavcan.transport.Transport):
             raise pyuavcan.transport.InvalidMediaConfigurationError(
                 f'The media instance cannot use a different event loop: {media.loop} is not {self._loop}')
 
-        media_name = type(media).__name__.lower()[:-len('Media')]
-        self._descriptor = \
-            f'<can><{media_name} mtu="{media.mtu}">{media.interface_name}</{media_name}></can>'
-
         media.start(self._on_frames_received, no_automatic_retransmission=self._local_node_id is None)
 
     @property
@@ -148,10 +144,6 @@ class CANTransport(pyuavcan.transport.Transport):
     @property
     def output_sessions(self) -> typing.Sequence[CANOutputSession]:
         return list(self._output_registry.values())
-
-    @property
-    def descriptor(self) -> str:
-        return self._descriptor
 
     def close(self) -> None:
         for s in (*self.input_sessions, *self.output_sessions):
@@ -361,3 +353,8 @@ class CANTransport(pyuavcan.transport.Transport):
                     raise
                 else:
                     self._last_filter_configuration_set = fcs
+
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        return [self._maybe_media], {
+            'local_node_id': self.local_node_id,
+        }

@@ -165,6 +165,4 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             interface_name=repr(self.interface_name),
-                                             mtu=self.mtu)
+        return pyuavcan.util.repr_attributes(self, repr(self.interface_name), mtu=self.mtu)
