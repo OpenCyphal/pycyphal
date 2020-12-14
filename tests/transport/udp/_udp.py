@@ -234,6 +234,7 @@ async def _unittest_udp_transport_ipv4() -> None:
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_udp_transport_ipv4_sniffer() -> None:
+    import socket
     from pyuavcan.transport.udp import UDPSniff
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
@@ -254,6 +255,14 @@ async def _unittest_udp_transport_ipv4_sniffer() -> None:
     meta = PayloadMetadata(10000)
     broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)
     assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)
+
+    # For reasons of Windows compatibility, we have to set up a dummy listener on the target multicast group.
+    # Otherwise, we will not see any packets at all. This is Windows-specific.
+    sink = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sink.bind(('', 11111))
+    sink.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP,
+                    socket.inet_aton('239.50.0.190') + socket.inet_aton('127.0.0.1'))
 
     ts = Timestamp.now()
     assert len(sniffs) == 0         # Assuming here that there are no other entities that might create noise.
@@ -277,6 +286,7 @@ async def _unittest_udp_transport_ipv4_sniffer() -> None:
     await asyncio.sleep(1.0)
     assert len(sniffs) == 1         # Ignored?
     tr.close()
+    sink.close()
 
     pkt, = sniffs
     assert isinstance(pkt, UDPSniff)

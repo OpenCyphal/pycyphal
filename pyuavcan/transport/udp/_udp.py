@@ -120,8 +120,6 @@ class UDPTransport(pyuavcan.transport.Transport):
         if not (low <= self._mtu <= high):
             raise ValueError(f'Invalid MTU: {self._mtu} bytes')
 
-        _logger.debug(f'IP: {self._sock_factory}; local node-ID: {self.local_node_id}')
-
         self._socket_reader_registry: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReader] = {}
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
@@ -131,6 +129,8 @@ class UDPTransport(pyuavcan.transport.Transport):
 
         self._closed = False
         self._statistics = UDPTransportStatistics()
+
+        _logger.debug(f'{self}: Initialized with local node-ID {self.local_node_id}')
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
