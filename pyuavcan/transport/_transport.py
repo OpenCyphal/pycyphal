@@ -175,15 +175,18 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     def sniff(self, handler: SnifferCallback) -> None:
         """
-        If the user desires to perform low-level monitoring of the transport interface at the transport frame level
-        (e.g., UDP packets, CAN frames, etc.), this method is used to activate this feature.
+        .. warning::
+            The advanced network diagnostics API is not yet stable. Be prepared for it to break between minor revisions.
+            Suggestions and feedback are welcomed at https://forum.uavcan.org.
 
-        This method puts the transport instance into the "sniffing mode" which does not interfere with its normal
-        operation but may significantly increase the computing load due to the need to process every frame exchanged
-        over the network (not just frames that originate or terminate at the local node).
-        This usually involves reconfiguration of the local networking hardware (e.g., the network card may be put
-        into promiscuous mode, the CAN adapter will have its acceptance filters reconfigured to accept everything,
-        etc.).
+        Activates low-level monitoring of the transport interface.
+
+        This method puts the transport instance into the low-level capture mode which does not interfere with its
+        normal operation but may significantly increase the computing load due to the need to process every frame
+        exchanged over the network (not just frames that originate or terminate at the local node).
+        This usually involves reconfiguration of the local networking hardware.
+        For instance, the network card may be put into promiscuous mode,
+        the CAN adapter will have its acceptance filters disabled, etc.
 
         The sniffing handler is invoked for every transmitted or received transport frame and, possibly, some
         additional transport-implementation-specific events (e.g., network errors or hardware state changes)
@@ -200,9 +203,8 @@ class Transport(abc.ABC):
         Technically, the sniffing protocol, as you can see, does not present any requirements to the emitted events,
         so an implementation that pretends to enter the sniffing mode while not actually doing anything is compliant.
 
-        Since sniffing reflects actual network events, deterministic data loss mitigation enabled on the
-        local node will make the sniffer emit duplicate frames for outgoing transfers (although this is probably
-        obvious enough without this elaboration).
+        Since sniffing reflects actual network events, deterministic data loss mitigation will make the sniffer emit
+        duplicate frames for affected transfers (although this is probably obvious enough without this elaboration).
 
         Currently, it is not possible to disable sniffing. Once enabled, it will go on until the transport instance
         is destroyed.
@@ -242,7 +244,7 @@ class Sniff:
     for them such that it is always possible to determine which transport an event has arrived from using a single
     instance check.
     """
-    pass
+    timestamp: pyuavcan.transport.Timestamp
 
 
 SnifferCallback = typing.Callable[[Sniff], None]

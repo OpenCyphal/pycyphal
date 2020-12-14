@@ -65,9 +65,9 @@ It is often more convenient to use the environment variable instead of typing th
 complex and are usually reused without modification. The variable may contain either a single transport expression,
 in which case a non-redundant transport instance would be constructed:
     {_ENV_VAR_NAME}='Loopback(None)'
-...or it may be a Python list, in which case a redundant transport will be constructed, unless the list contains only
-one element:
-    {_ENV_VAR_NAME}="[UDP('127.42.0.123'), Serial('/dev/ttyUSB0',None,baudrate=115200)]"
+...or it may be a Python list/tuple, in which case a redundant transport will be constructed, unless the sequence
+contains only one element:
+    {_ENV_VAR_NAME}="UDP('127.42.0.123'), Serial('/dev/ttyUSB0',None,baudrate=115200)"
 
 Observe that the node-ID for the local node is to be configured here as well, because per the UAVCAN architecture,
 this is a transport-layer property. If desired, a usable node-ID value can be automatically found using the command
@@ -114,8 +114,8 @@ def _evaluate_transport_expr(expression: str,
     _logger.debug('Expression %r yields %r', expression, out)
     if isinstance(out, pyuavcan.transport.Transport):
         return [out]
-    elif isinstance(out, list) and all(isinstance(x, pyuavcan.transport.Transport) for x in out):
-        return out
+    elif isinstance(out, (list, tuple)) and all(isinstance(x, pyuavcan.transport.Transport) for x in out):
+        return list(out)
     else:
         raise ValueError(f'The expression {expression!r} yields an instance of {type(out).__name__!r}. '
                          f'Expected an instance of pyuavcan.transport.Transport or a list thereof.')

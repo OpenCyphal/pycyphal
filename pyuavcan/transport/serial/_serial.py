@@ -416,7 +416,7 @@ class SerialSniff(pyuavcan.transport.Sniff):
     """
     The set of subclasses may be extended in future versions.
     """
-    timestamp: Timestamp
+    pass
 
 
 @dataclasses.dataclass(frozen=True)

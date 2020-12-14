@@ -53,12 +53,9 @@ echo "PYTHONPATH: $PYTHONPATH"
 
 export PYTHONASYNCIODEBUG=1
 
-command -v dot  || die "Please install graphviz. On Debian-based: apt install graphviz"
-command -v ncat || die "Please install nmap. On Debian-based: apt install ncat"
+command -v ncat || die "Please install ncat. On Debian-based: apt install ncat"
 
 ./clean.sh || die "Failed to clean"
-
-pip uninstall -y uavcan &> /dev/null    # Uninstall the old library. As explained in the docs, it conflicts with DSDL.
 
 pip install -r requirements.txt || die "Could not install dependencies"
 

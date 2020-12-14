@@ -57,11 +57,11 @@ for:
       - cmd: 'systeminfo & route print & ipconfig /all'
       # Configure Npcap. This is for testing the packet capture functionality in the UAVCAN/UDP transport.
       - cmd: '.test_deps\npcap-0.96.exe /loopback_support=yes /winpcap_mode=yes /S'
-      # The previous steps may have disrupted network connectivity because installation of an NDIS filter driver does
-      # that on Windows (see https://github.com/nmap/npcap/issues/215). Also, a restart appears to be necessary to
-      # enable the NPF service. Therefore, we restart the VM as suggested in https://github.com/appveyor/ci/issues/3491.
+      # Installation of the NDIS filter driver from Npcap may have disrupted network connectivity, as explained in
+      # https://github.com/nmap/npcap/issues/215. Also, a restart appears to be necessary to enable the NPF service.
+      # Therefore, we restart the VM as suggested in https://github.com/appveyor/ci/issues/3491.
       - cmd: 'shutdown /r /f /t 5'
-      - cmd: 'timeout 30'         # Boot-up delay. This should be sufficient for the VM to get ready.
+      - cmd: 'timeout 30'         # Boot-up delay. This should be sufficient for the VM to get ready. Increase if not.
       # Due to the reboot, all volatile configuration like environment variables is lost here. We need to set it up now.
       - cmd: 'set PATH=%PYTHON%;%PYTHON%\Scripts;%PATH%'
       - cmd: 'echo %PATH%'

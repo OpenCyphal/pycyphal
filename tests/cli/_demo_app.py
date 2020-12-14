@@ -83,7 +83,7 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
 
 
 @pytest.mark.parametrize('iface_option', _get_iface_options())  # type: ignore
-def _unittest_slow_cli_demo_basic_usage(
+def _unittest_slow_cli_demo_app(
         generated_packages: typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedPackageInfo]],
         iface_option:       _IfaceOption) -> None:
     """
@@ -101,7 +101,7 @@ def _unittest_slow_cli_demo_basic_usage(
     demo_proc_env_vars = iface_option.demo_env_vars.copy()
     demo_proc_env_vars['PYUAVCAN_LOGLEVEL'] = 'DEBUG'
     demo_proc = BackgroundChildProcess(
-        'python', str(DEMO_DIR / 'basic_usage.py'),
+        'python', str(DEMO_DIR / 'demo_app.py'),
         environment_variables=demo_proc_env_vars
     )
     assert demo_proc.alive
@@ -169,7 +169,7 @@ def _unittest_slow_cli_demo_basic_usage(
         assert node_info['430']['_metadata_']['source_node_id'] == 42
         assert node_info['430']['_metadata_']['transfer_id'] >= 0
         assert 'slow' in node_info['430']['_metadata_']['priority'].lower()
-        assert node_info['430']['name'] == 'org.uavcan.pyuavcan.demo.basic_usage'
+        assert node_info['430']['name'] == 'org.uavcan.pyuavcan.demo.demo_app'
         assert node_info['430']['protocol_version']['major'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
         assert node_info['430']['protocol_version']['minor'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[1]
 

@@ -335,7 +335,6 @@ class UDPSniff(pyuavcan.transport.Sniff):
     """
     See :meth:`UDPTransport.sniff` for details.
     """
-    timestamp: pyuavcan.transport.Timestamp
     packet: RawPacket
 
     def parse(self) -> typing.Optional[typing.Tuple[int,

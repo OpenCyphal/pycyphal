@@ -290,8 +290,8 @@ async def _unittest_udp_transport_ipv4_sniffer() -> None:
 
     pkt, = sniffs
     assert isinstance(pkt, UDPSniff)
-    assert ts.monotonic_ns <= pkt.timestamp.monotonic_ns <= Timestamp.now().monotonic_ns
-    assert ts.system_ns <= pkt.timestamp.system_ns <= Timestamp.now().system_ns
+    assert (ts.monotonic - 1) <= pkt.timestamp.monotonic <= Timestamp.now().monotonic
+    assert (ts.system - 1) <= pkt.timestamp.system <= Timestamp.now().system
     assert str(pkt.packet.ip_header.source) == '127.50.0.111'
     assert str(pkt.packet.ip_header.destination) == '239.50.0.190'
     parsed = pkt.parse()

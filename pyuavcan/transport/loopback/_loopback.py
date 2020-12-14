@@ -116,7 +116,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                     fragmented_payload=tr.fragmented_payload,
                     source_node_id=self.local_node_id,
                 )
-                pyuavcan.util.broadcast(self._sniffer_handlers)(LoopbackSniff(tr_from))
+                pyuavcan.util.broadcast(self._sniffer_handlers)(LoopbackSniff(tr_from.timestamp, tr_from))
                 for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                     try:
                         destination_session = self._input_sessions[
