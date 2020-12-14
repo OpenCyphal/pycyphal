@@ -200,29 +200,29 @@ ensures that the worst case transfer latency is bounded by the latency of the be
 The following two swim lane diagrams should illustrate the difference.
 First, the case of cyclic-TID::
 
-    A   B
-    |   |
-    T0  |       <-- First transfer received from transport A.
-    T1  T0      <-- Transport B is auto-assigned as a back-up.
-    T2  T1      <-- Up to this point the transport functions normally.
-    X   T2      <-- Transport A fails here.
-        ...     <-- Valid transfers from transport B are ignored due to the mandatory fail-over delay.
-        TN      <-- After the delay, the deduplicator switches over to the back-up transport.
-        TN+1    <-- Now, the roles of the back-up transport and the main transport are swapped.
-        TN+2
-        ...
+    A   B     Deduplicated
+    |   |     |
+    T0  |     T0     <-- First transfer received from transport A.
+    T1  T0    T1     <-- Transport B is auto-assigned as a back-up.
+    T2  T1    T2     <-- Up to this point the transport functions normally.
+    X   T2    |      <-- Transport A fails here.
+        T3    |      <-- Valid transfers from transport B are ignored due to the mandatory fail-over delay.
+        ...   |
+        Tn    Tn     <-- After the delay, the deduplicator switches over to the back-up transport.
+        Tn+1  Tn+1   <-- Now, the roles of the back-up transport and the main transport are swapped.
+        Tn+2  Tn+2
 
 Monotonic-TID::
 
-    A   B
-    |   |
-    T0  |       <-- The monotonic-TID strategy always picks the first transfer to arrive.
-    T1  T0      <-- All available interfaces are always considered.
-    T2  T1      <-- The result is that the transfer latency is defined by the best-performing transport.
-    |   T2      <-- Here, the latency of transport A has increased temporarily.
-    |   T3      <-- The deduplication strategy reacts by picking the next transfer from transport B.
-    T3  X       <-- Shall one transport fail, the deduplication strategy fails over immediately.
-    T4
+    A   B     Deduplicated
+    |   |     |
+    T0  |     T0    <-- The monotonic-TID strategy always picks the first transfer to arrive.
+    T1  T0    T1    <-- All available interfaces are always considered.
+    T2  T1    T2    <-- The result is that the transfer latency is defined by the best-performing transport.
+    |   T2    |     <-- Here, the latency of transport A has increased temporarily.
+    |   T3    T3    <-- The deduplication strategy reacts by picking the next transfer from transport B.
+    T3  X     |     <-- Shall one transport fail, the deduplication strategy fails over immediately.
+    T4        T4
 
 Anonymous transfers are a special case:
 a deduplicator has to keep local state per session in order to perform its functions;
