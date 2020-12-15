@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 import abc
+import enum
 import typing
 import dataclasses
 import pyuavcan
@@ -87,6 +88,14 @@ class Trace:
 
 
 @dataclasses.dataclass(frozen=True)
+class ErrorTrace(Trace):
+    """
+    This trace is yielded when the tracer has determined that it is unable to reconstruct a transfer.
+    """
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
 class TransferTrace(Trace):
     """
     Reconstructed network data transfer along with references to all its frames.
@@ -97,6 +106,12 @@ class TransferTrace(Trace):
     """
     The order of the frames matches the order of their reception.
     The timestamp of the trace event equals that of the first frame.
+    """
+
+    sibling: typing.Optional[TransferTrace]
+    """
+    Reference to an earlier transfer event related to this one.
+    For service response transfers this is a link to the corresponding service request transfer.
     """
 
 
