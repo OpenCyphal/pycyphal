@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 import abc
-import enum
 import typing
 import dataclasses
 import pyuavcan
@@ -131,6 +130,7 @@ class Tracer(abc.ABC):
     :meth:`pyuavcan.transport.Transport.make_tracer` should be used.
     """
 
+    @abc.abstractmethod
     def update(self, event: Capture) -> typing.Optional[Trace]:
         """
         Captured low-level network event at the input, reconstructed high-level event at the output.

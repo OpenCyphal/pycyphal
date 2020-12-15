@@ -71,7 +71,7 @@ Publish a message and receive it also (the loopback transport just returns all o
 ...     text='Neither man nor animal can be influenced by anything but suggestion.')
 >>> run_until_complete(pub_record.publish(record))  # publish() returns False on timeout.
 True
->>> message, metadata = run_until_complete(sub_record.receive())
+>>> message, metadata = run_until_complete(sub_record.receive_for(timeout=0.5))
 >>> message.text.tobytes().decode()  # Calling .tobytes().decode() won't be needed when DSDL supports strings natively.
 'Neither man nor animal can be influenced by anything but suggestion.'
 >>> metadata.transfer_id, metadata.source_node_id, metadata.timestamp

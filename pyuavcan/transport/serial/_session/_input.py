@@ -244,7 +244,7 @@ def _unittest_input_session() -> None:
         errors=2,
     )
     assert run_until_complete(sis.receive(0)) == \
-           TransferFrom(timestamp=ts,
+        TransferFrom(timestamp=ts,
                      priority=prio,
                      transfer_id=0,
                      fragmented_payload=[memoryview(nihil_supernum)],
@@ -316,13 +316,13 @@ def _unittest_input_session() -> None:
     )
 
     assert run_until_complete(sis.receive(0)) == \
-           TransferFrom(timestamp=ts,
+        TransferFrom(timestamp=ts,
                      priority=prio,
                      transfer_id=0,
                      fragmented_payload=[memoryview(nihil_supernum)],
                      source_node_id=2222)
     assert run_until_complete(sis.receive(0)) == \
-           TransferFrom(timestamp=ts,
+        TransferFrom(timestamp=ts,
                      priority=prio,
                      transfer_id=0,
                      fragmented_payload=[memoryview(nihil_supernum)] * 3,

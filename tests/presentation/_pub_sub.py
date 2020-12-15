@@ -198,9 +198,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     pub_record.publish_soon(record)
     await asyncio.sleep(0.1)                # Needed to make the deferred publication get the message out
-    item = await sub_heart.receive(asyncio.get_running_loop().time() + 1)
-    assert item
-    rx, transfer = item
+    item2 = await sub_record.receive(asyncio.get_running_loop().time() + 1)
+    assert item2
+    rx, transfer = item2
     assert repr(rx) == repr(record)
     assert transfer.source_node_id == 42
     assert transfer.priority == Priority.NOMINAL
