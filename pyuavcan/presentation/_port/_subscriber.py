@@ -126,22 +126,19 @@ class Subscriber(MessagePort[MessageClass]):
 
     # ----------------------------------------  DIRECT RECEIVE  ----------------------------------------
 
-    async def receive(self) -> typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]:
-        """
-        This is like :meth:`receive_for` with an infinite timeout.
-        """
-        while True:
-            out = await self.receive_for(_RECEIVE_TIMEOUT)
-            if out is not None:
-                return out
-
-    async def receive_until(self, monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
+    async def receive(self, monotonic_deadline: typing.Optional[float] = None) \
+            -> typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]:
         """
         This is like :meth:`receive_for` with deadline instead of timeout.
         The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
         A deadline that is in the past translates into negative timeout.
+        If no deadline is provided, it is assumed to be infinite.
         """
+        if monotonic_deadline is None:
+            while True:
+                out = await self.receive_for(_RECEIVE_TIMEOUT)
+                if out is not None:
+                    return out
         return await self.receive_for(timeout=monotonic_deadline - self._loop.time())
 
     async def receive_for(self, timeout: float) \
@@ -304,7 +301,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         exception: typing.Optional[Exception] = None
         try:
             while not self.is_closed:
-                transfer = await self.transport_session.receive_until(self._loop.time() + _RECEIVE_TIMEOUT)
+                transfer = await self.transport_session.receive(self._loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is not None:
                     message = pyuavcan.dsdl.deserialize(self.dtype, transfer.fragmented_payload)
                     if message is not None:

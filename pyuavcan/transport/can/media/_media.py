@@ -120,7 +120,7 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def send_until(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
+    async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         """
         All passed frames are guaranteed to share the same CAN-ID. This guarantee may enable some optimizations.
         The frames shall be delivered to the bus in the same order. The iterable is guaranteed to be non-empty.

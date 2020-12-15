@@ -138,7 +138,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
                 # TODO: make the queue capacity configurable
                 self._statistics.drops += len(transfer.fragmented_payload)
 
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         try:
             timeout = monotonic_deadline - self._loop.time()
             if timeout > 0:

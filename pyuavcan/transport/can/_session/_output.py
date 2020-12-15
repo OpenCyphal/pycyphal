@@ -118,10 +118,7 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
     def close(self) -> None:
         super(CANOutputSession, self).close()
 
-    async def _do_send_until(self,
-                             can_id:             CANID,
-                             transfer:           pyuavcan.transport.Transfer,
-                             monotonic_deadline: float) -> bool:
+    async def _do_send(self, can_id: CANID, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         self._raise_if_closed()
 
         # Decompose the outgoing transfer into individual CAN frames.
@@ -191,13 +188,13 @@ class BroadcastCANOutputSession(CANOutputSession):
                                                         payload_metadata=payload_metadata,
                                                         finalizer=finalizer)
 
-    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
+    async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         can_id = MessageCANID(
             priority=transfer.priority,
             subject_id=self._subject_id,
             source_node_id=self._transport.local_node_id  # May be anonymous
         )
-        return await self._do_send_until(can_id, transfer, monotonic_deadline)
+        return await self._do_send(can_id, transfer, monotonic_deadline)
 
 
 class UnicastCANOutputSession(CANOutputSession):
@@ -223,7 +220,7 @@ class UnicastCANOutputSession(CANOutputSession):
                                                       payload_metadata=payload_metadata,
                                                       finalizer=finalizer)
 
-    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
+    async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         source_node_id = self._transport.local_node_id
         if source_node_id is None:
             raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
@@ -236,4 +233,4 @@ class UnicastCANOutputSession(CANOutputSession):
             source_node_id=source_node_id,
             destination_node_id=self._destination_node_id
         )
-        return await self._do_send_until(can_id, transfer, monotonic_deadline)
+        return await self._do_send(can_id, transfer, monotonic_deadline)

@@ -84,7 +84,7 @@ async def _run(transport: pyuavcan.transport.Transport) -> int:
         deadline = asyncio.get_event_loop().time() + uavcan.node.Heartbeat_1_0.MAX_PUBLICATION_PERIOD * 2.0
         sub = pres.make_subscriber_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
         while asyncio.get_event_loop().time() <= deadline:
-            result = await sub.receive_until(deadline)
+            result = await sub.receive(deadline)
             if result is not None:
                 msg, transfer = result
                 assert isinstance(transfer, pyuavcan.transport.TransferFrom)

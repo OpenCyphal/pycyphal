@@ -297,9 +297,9 @@ Add another inferior and another session:
 A simple exchange test (remember this is a loopback, so we get back whatever we send):
 
 >>> await_ = tr.loop.run_until_complete
->>> await_(s0.send_until(Transfer(Timestamp.now(), Priority.LOW, 1111, fragmented_payload=[]), tr.loop.time() + 1.0))
+>>> await_(s0.send(Transfer(Timestamp.now(), Priority.LOW, 1111, fragmented_payload=[]), tr.loop.time() + 1.0))
 True
->>> await_(s1.receive_until(tr.loop.time() + 1.0))
+>>> await_(s1.receive(tr.loop.time() + 1.0))
 RedundantTransferFrom(..., transfer_id=1111, fragmented_payload=[], ...)
 
 Inject a failure into one inferior.
@@ -311,9 +311,9 @@ The redundant transport will continue to function with the other inferior; an er
 .. When that is fixed (I suppose it should be by PyTest v6?), please, remove this comment and the 'doctest: +SKIP'.
 
 >>> lo_0.output_sessions[0].exception = RuntimeError('Injected failure')  # doctest: +SKIP
->>> await_(s0.send_until(Transfer(Timestamp.now(), Priority.LOW, 1112, fragmented_payload=[]), tr.loop.time() + 1.0))
+>>> await_(s0.send(Transfer(Timestamp.now(), Priority.LOW, 1112, fragmented_payload=[]), tr.loop.time() + 1.0))
 True
->>> await_(s1.receive_until(tr.loop.time() + 1.0))   # Still works.
+>>> await_(s1.receive(tr.loop.time() + 1.0))   # Still works.
 RedundantTransferFrom(..., transfer_id=1112, fragmented_payload=[], ...)
 
 Inferiors that are no longer needed can be detached.

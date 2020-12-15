@@ -89,7 +89,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
                 # TODO: make the queue capacity configurable
                 self._statistics.drops += len(transfer.fragmented_payload)
 
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         try:
             timeout = monotonic_deadline - self._loop.time()
             if timeout > 0:
@@ -188,8 +188,8 @@ def _unittest_input_session() -> None:
         sis.transfer_id_timeout = 0.0
     assert sis.transfer_id_timeout == approx(1.0)
 
-    assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
-    assert run_until_complete(sis.receive_until(0.0)) is None
+    assert run_until_complete(sis.receive(get_monotonic() + 0.1)) is None
+    assert run_until_complete(sis.receive(0.0)) is None
 
     def mk_frame(transfer_id:       int,
                  index:             int,
@@ -243,14 +243,14 @@ def _unittest_input_session() -> None:
         payload_bytes=len(nihil_supernum),
         errors=2,
     )
-    assert run_until_complete(sis.receive_until(0)) == \
-        TransferFrom(timestamp=ts,
+    assert run_until_complete(sis.receive(0)) == \
+           TransferFrom(timestamp=ts,
                      priority=prio,
                      transfer_id=0,
                      fragmented_payload=[memoryview(nihil_supernum)],
                      source_node_id=None)
-    assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
-    assert run_until_complete(sis.receive_until(0.0)) is None
+    assert run_until_complete(sis.receive(get_monotonic() + 0.1)) is None
+    assert run_until_complete(sis.receive(0.0)) is None
 
     # VALID TRANSFERS. Notice that they are unordered on purpose. The reassembler can deal with that.
     sis._process_frame(
@@ -315,20 +315,20 @@ def _unittest_input_session() -> None:
         },
     )
 
-    assert run_until_complete(sis.receive_until(0)) == \
-        TransferFrom(timestamp=ts,
+    assert run_until_complete(sis.receive(0)) == \
+           TransferFrom(timestamp=ts,
                      priority=prio,
                      transfer_id=0,
                      fragmented_payload=[memoryview(nihil_supernum)],
                      source_node_id=2222)
-    assert run_until_complete(sis.receive_until(0)) == \
-        TransferFrom(timestamp=ts,
+    assert run_until_complete(sis.receive(0)) == \
+           TransferFrom(timestamp=ts,
                      priority=prio,
                      transfer_id=0,
                      fragmented_payload=[memoryview(nihil_supernum)] * 3,
                      source_node_id=1111)
-    assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
-    assert run_until_complete(sis.receive_until(0.0)) is None
+    assert run_until_complete(sis.receive(get_monotonic() + 0.1)) is None
+    assert run_until_complete(sis.receive(0.0)) is None
 
     # TRANSFERS WITH REASSEMBLY ERRORS.
     sis._process_frame(

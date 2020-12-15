@@ -70,7 +70,7 @@ class MockMedia(Media):
     def automatic_retransmission_enabled(self) -> bool:
         return self._automatic_retransmission_enabled
 
-    async def send_until(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
+    async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         del monotonic_deadline      # Unused
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
@@ -158,7 +158,7 @@ async def _unittest_can_mock_media() -> None:
     assert me.automatic_retransmission_enabled
 
     # Will drop the loopback because of the acceptance filters
-    await me.send_until([
+    await me.send([
         Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc')), loopback=False),
         Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def')), loopback=True),
     ], asyncio.get_event_loop().time() + 1.0)
@@ -166,7 +166,7 @@ async def _unittest_can_mock_media() -> None:
 
     me.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
     # Now the loopback will be accepted because we have reconfigured the filters
-    await me.send_until([
+    await me.send([
         Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc')), loopback=False),
         Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def')), loopback=True),
     ], asyncio.get_event_loop().time() + 1.0)
@@ -181,20 +181,20 @@ async def _unittest_can_mock_media() -> None:
 
     me.raise_on_send_once(RuntimeError('Hello world!'))
     with pytest.raises(RuntimeError, match='Hello world!'):
-        await me.send_until([], asyncio.get_event_loop().time() + 1.0)
+        await me.send([], asyncio.get_event_loop().time() + 1.0)
 
-    await me.send_until([
+    await me.send([
         Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc')), loopback=False),
         Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def')), loopback=True),
     ], asyncio.get_event_loop().time() + 1.0)
     assert pe_collector.empty
 
     pe.configure_acceptance_filters([FilterConfiguration(123, 127, None)])
-    await me.send_until([
+    await me.send([
         Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc')), loopback=False),
         Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def')), loopback=True),
     ], asyncio.get_event_loop().time() + 1.0)
-    await me.send_until([
+    await me.send([
         Envelope(DataFrame(FrameFormat.EXTENDED, 456, bytearray(b'ghi')), loopback=False),    # Dropped by the filters
     ], asyncio.get_event_loop().time() + 1.0)
     assert pe_collector.pop()[1].frame == DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc'))
@@ -205,7 +205,7 @@ async def _unittest_can_mock_media() -> None:
     me.close()  # Idempotency.
     assert peers == {pe}
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        await me.send_until([], asyncio.get_event_loop().time() + 1.0)
+        await me.send([], asyncio.get_event_loop().time() + 1.0)
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         me.configure_acceptance_filters([])
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.

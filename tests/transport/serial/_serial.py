@@ -103,7 +103,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     #
     # Message exchange test.
     #
-    assert await broadcaster.send_until(
+    assert await broadcaster.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.LOW,
                  transfer_id=77777,
@@ -111,7 +111,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         monotonic_deadline=get_monotonic() + 5.0
     )
 
-    rx_transfer = await subscriber_promiscuous.receive_until(get_monotonic() + 5.0)
+    rx_transfer = await subscriber_promiscuous.receive(get_monotonic() + 5.0)
     print('PROMISCUOUS SUBSCRIBER TRANSFER:', rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.LOW
@@ -129,7 +129,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 
     with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
         # Anonymous nodes can't send multiframe transfers.
-        assert await broadcaster.send_until(
+        assert await broadcaster.send(
             Transfer(timestamp=Timestamp.now(),
                      priority=Priority.LOW,
                      transfer_id=77777,
@@ -137,17 +137,17 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
             monotonic_deadline=get_monotonic() + 5.0
         )
 
-    assert None is await subscriber_selective.receive_until(get_monotonic() + 0.1)
-    assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.1)
-    assert None is await server_listener.receive_until(get_monotonic() + 0.1)
-    assert None is await client_listener.receive_until(get_monotonic() + 0.1)
+    assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
+    assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.1)
+    assert None is await server_listener.receive(get_monotonic() + 0.1)
+    assert None is await client_listener.receive(get_monotonic() + 0.1)
 
     #
     # Service exchange test.
     #
     with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
         # Anonymous nodes can't emit service transfers.
-        assert await client_requester.send_until(
+        assert await client_requester.send(
             Transfer(timestamp=Timestamp.now(),
                      priority=Priority.HIGH,
                      transfer_id=88888,
@@ -193,7 +193,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert set(tr.output_sessions) == {broadcaster, server_responder, client_requester}
     assert tr.sample_statistics() == SerialTransportStatistics()
 
-    assert await client_requester.send_until(
+    assert await client_requester.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.HIGH,
                  transfer_id=88888,
@@ -201,7 +201,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         monotonic_deadline=get_monotonic() + 5.0
     )
 
-    rx_transfer = await server_listener.receive_until(get_monotonic() + 5.0)
+    rx_transfer = await server_listener.receive(get_monotonic() + 5.0)
     print('SERVER LISTENER TRANSFER:', rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.HIGH
@@ -209,10 +209,10 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert len(rx_transfer.fragmented_payload) == 3
     assert b''.join(rx_transfer.fragmented_payload) == b''.join(payload_x3)
 
-    assert None is await subscriber_selective.receive_until(get_monotonic() + 0.1)
-    assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.1)
-    assert None is await server_listener.receive_until(get_monotonic() + 0.1)
-    assert None is await client_listener.receive_until(get_monotonic() + 0.1)
+    assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
+    assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.1)
+    assert None is await server_listener.receive(get_monotonic() + 0.1)
+    assert None is await client_listener.receive(get_monotonic() + 0.1)
 
     print(tr.sample_statistics())
     assert tr.sample_statistics().in_bytes >= (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
@@ -226,7 +226,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     #
     # Write timeout test.
     #
-    assert not await broadcaster.send_until(
+    assert not await broadcaster.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.IMMEDIATE,
                  transfer_id=99999,
@@ -234,10 +234,10 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         monotonic_deadline=get_monotonic() - 5.0    # The deadline is in the past.
     )
 
-    assert None is await subscriber_selective.receive_until(get_monotonic() + 0.1)
-    assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.1)
-    assert None is await server_listener.receive_until(get_monotonic() + 0.1)
-    assert None is await client_listener.receive_until(get_monotonic() + 0.1)
+    assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
+    assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.1)
+    assert None is await server_listener.receive(get_monotonic() + 0.1)
+    assert None is await client_listener.receive(get_monotonic() + 0.1)
 
     print(tr.sample_statistics())
     assert tr.sample_statistics().in_bytes >= (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
@@ -251,7 +251,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     #
     # Selective message exchange test.
     #
-    assert await broadcaster.send_until(
+    assert await broadcaster.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.IMMEDIATE,
                  transfer_id=99999,
@@ -259,24 +259,24 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         monotonic_deadline=get_monotonic() + 5.0
     )
 
-    rx_transfer = await subscriber_promiscuous.receive_until(get_monotonic() + 5.0)
+    rx_transfer = await subscriber_promiscuous.receive(get_monotonic() + 5.0)
     print('PROMISCUOUS SUBSCRIBER TRANSFER:', rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.IMMEDIATE
     assert rx_transfer.transfer_id == 99999
     assert b''.join(rx_transfer.fragmented_payload) == b''.join(payload_x3)
 
-    rx_transfer = await subscriber_selective.receive_until(get_monotonic() + 1.0)
+    rx_transfer = await subscriber_selective.receive(get_monotonic() + 1.0)
     print('SELECTIVE SUBSCRIBER TRANSFER:', rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.IMMEDIATE
     assert rx_transfer.transfer_id == 99999
     assert b''.join(rx_transfer.fragmented_payload) == b''.join(payload_x3)
 
-    assert None is await subscriber_selective.receive_until(get_monotonic() + 0.1)
-    assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.1)
-    assert None is await server_listener.receive_until(get_monotonic() + 0.1)
-    assert None is await client_listener.receive_until(get_monotonic() + 0.1)
+    assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
+    assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.1)
+    assert None is await server_listener.receive(get_monotonic() + 0.1)
+    assert None is await client_listener.receive(get_monotonic() + 0.1)
 
     #
     # Out-of-band data test.
@@ -292,10 +292,10 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         stats_reference.in_out_of_band_bytes += len(grownups)
 
         # Wait for the reader thread to catch up.
-        assert None is await subscriber_selective.receive_until(get_monotonic() + 0.2)
-        assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.2)
-        assert None is await server_listener.receive_until(get_monotonic() + 0.2)
-        assert None is await client_listener.receive_until(get_monotonic() + 0.2)
+        assert None is await subscriber_selective.receive(get_monotonic() + 0.2)
+        assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.2)
+        assert None is await server_listener.receive(get_monotonic() + 0.2)
+        assert None is await client_listener.receive(get_monotonic() + 0.2)
 
         print(tr.sample_statistics())
         assert tr.sample_statistics() == stats_reference
@@ -306,10 +306,10 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         stats_reference.in_out_of_band_bytes += 2
 
         # Wait for the reader thread to catch up.
-        assert None is await subscriber_selective.receive_until(get_monotonic() + 0.2)
-        assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.2)
-        assert None is await server_listener.receive_until(get_monotonic() + 0.2)
-        assert None is await client_listener.receive_until(get_monotonic() + 0.2)
+        assert None is await subscriber_selective.receive(get_monotonic() + 0.2)
+        assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.2)
+        assert None is await server_listener.receive(get_monotonic() + 0.2)
+        assert None is await client_listener.receive(get_monotonic() + 0.2)
 
         print(tr.sample_statistics())
         assert tr.sample_statistics() == stats_reference
@@ -381,7 +381,7 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     # Multi-frame message.
     #
     ts = Timestamp.now()
-    assert await broadcaster.send_until(
+    assert await broadcaster.send(
         Transfer(timestamp=ts,
                  priority=Priority.LOW,
                  transfer_id=777,
@@ -431,7 +431,7 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     # Single-frame service request with dual frame duplication.
     #
     ts = Timestamp.now()
-    assert await client_requester.send_until(
+    assert await client_requester.send(
         Transfer(timestamp=ts,
                  priority=Priority.HIGH,
                  transfer_id=888,

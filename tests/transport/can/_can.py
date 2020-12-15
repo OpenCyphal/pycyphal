@@ -131,7 +131,7 @@ async def _unittest_can_transport_anon() -> None:
         assert ts.monotonic_ns <= timestamp.monotonic_ns <= time.monotonic_ns()
         assert ts.system_ns <= timestamp.system_ns <= time.time_ns()
 
-    assert await broadcaster.send_until(Transfer(
+    assert await broadcaster.send(Transfer(
         timestamp=ts,
         priority=Priority.IMMEDIATE,
         transfer_id=32 + 11,            # Modulus 11
@@ -158,7 +158,7 @@ async def _unittest_can_transport_anon() -> None:
 
     # Can't send anonymous service transfers
     with pytest.raises(OperationNotDefinedForAnonymousNodeError):
-        assert await client_requester.send_until(
+        assert await client_requester.send(
             Transfer(timestamp=ts, priority=Priority.IMMEDIATE, transfer_id=0, fragmented_payload=[]),
             tr.loop.time() + 1.0,
         )
@@ -166,7 +166,7 @@ async def _unittest_can_transport_anon() -> None:
 
     # Can't send multiframe anonymous messages
     with pytest.raises(OperationNotDefinedForAnonymousNodeError):
-        assert await broadcaster.send_until(Transfer(
+        assert await broadcaster.send(Transfer(
             timestamp=ts,
             priority=Priority.SLOW,
             transfer_id=2,
@@ -180,7 +180,7 @@ async def _unittest_can_transport_anon() -> None:
     selective_m2345_9 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 9), meta)
     promiscuous_m2345 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    assert await broadcaster.send_until(Transfer(
+    assert await broadcaster.send(Transfer(
         timestamp=ts,
         priority=Priority.IMMEDIATE,
         transfer_id=32 + 11,            # Modulus 11
@@ -192,7 +192,7 @@ async def _unittest_can_transport_anon() -> None:
     assert tr2.sample_statistics() == can.CANTransportStatistics(
         in_frames=2, in_frames_uavcan=2, in_frames_uavcan_accepted=1)
 
-    received = await promiscuous_m2345.receive_until(tr.loop.time() + 1.0)
+    received = await promiscuous_m2345.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 11
@@ -316,7 +316,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
         assert ts.monotonic_ns <= timestamp.monotonic_ns <= time.monotonic_ns()
         assert ts.system_ns <= timestamp.system_ns <= time.time_ns()
 
-    assert await broadcaster.send_until(Transfer(
+    assert await broadcaster.send(Transfer(
         timestamp=ts,
         priority=Priority.IMMEDIATE,
         transfer_id=32 + 11,            # Modulus 11
@@ -348,7 +348,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     selective_m2345_9 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 9), meta)
     promiscuous_m2345 = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    assert await broadcaster.send_until(Transfer(
+    assert await broadcaster.send(Transfer(
         timestamp=ts,
         priority=Priority.IMMEDIATE,
         transfer_id=32 + 11,            # Modulus 11
@@ -360,7 +360,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert tr2.sample_statistics() == can.CANTransportStatistics(
         in_frames=2, in_frames_uavcan=2, in_frames_uavcan_accepted=1)
 
-    received = await promiscuous_m2345.receive_until(tr.loop.time() + 1.0)
+    received = await promiscuous_m2345.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 11
@@ -379,7 +379,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     feedback_collector = _FeedbackCollector()
 
     broadcaster.enable_feedback(feedback_collector.give)
-    assert await broadcaster.send_until(Transfer(
+    assert await broadcaster.send(Transfer(
         timestamp=ts,
         priority=Priority.SLOW,
         transfer_id=2,
@@ -398,7 +398,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert fb.original_transfer_timestamp == ts
     validate_timestamp(fb.first_frame_transmission_timestamp)
 
-    received = await promiscuous_m2345.receive_until(tr.loop.time() + 1.0)
+    received = await promiscuous_m2345.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 2
@@ -407,7 +407,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     validate_timestamp(received.timestamp)
     assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x00' * 13  # The 0x00 at the end is padding
 
-    assert await broadcaster.send_until(Transfer(
+    assert await broadcaster.send(Transfer(
         timestamp=ts,
         priority=Priority.OPTIONAL,
         transfer_id=3,
@@ -415,7 +415,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     ), tr.loop.time() + 1.0)
     assert broadcaster.sample_statistics() == SessionStatistics(transfers=4, frames=8, payload_bytes=318)
 
-    received = await promiscuous_m2345.receive_until(tr.loop.time() + 1.0)
+    received = await promiscuous_m2345.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 3
@@ -434,21 +434,21 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
 
     broadcaster.close()
     with pytest.raises(ResourceClosedError):
-        assert await broadcaster.send_until(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4,
-                                                     fragmented_payload=[]),
-                                            tr.loop.time() + 1.0)
+        assert await broadcaster.send(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4,
+                                               fragmented_payload=[]),
+                                      tr.loop.time() + 1.0)
     broadcaster.close()   # Does nothing
 
     # Final checks for the broadcaster - make sure nothing is left in the queue
-    assert (await promiscuous_m2345.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_m2345.receive(tr.loop.time() + _RX_TIMEOUT)) is None
 
     # The selective listener was not supposed to pick up anything because it's selective for node 9, not 5
-    assert (await selective_m2345_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_m2345_9.receive(tr.loop.time() + _RX_TIMEOUT)) is None
 
     # Now, there are a bunch of items awaiting in the selective input for node 5, collect them and check the stats
     assert selective_m2345_5.source_node_id == 5
 
-    received = await selective_m2345_5.receive_until(tr.loop.time() + 1.0)
+    received = await selective_m2345_5.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 11
@@ -457,7 +457,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     validate_timestamp(received.timestamp)
     assert received.fragmented_payload == [_mem('abcdef')]
 
-    received = await selective_m2345_5.receive_until(tr.loop.time() + 1.0)
+    received = await selective_m2345_5.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 2
@@ -466,7 +466,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     validate_timestamp(received.timestamp)
     assert b''.join(received.fragmented_payload) == b'qwerty' * 50 + b'\x00' * 13  # The 0x00 at the end is padding
 
-    received = await selective_m2345_5.receive_until(tr.loop.time() + 1.0)
+    received = await selective_m2345_5.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.transfer_id == 3
@@ -494,7 +494,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     promiscuous_client_s333 = tr2.get_input_session(
         InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), None), meta)
 
-    assert await client_requester.send_until(Transfer(
+    assert await client_requester.send(Transfer(
         timestamp=ts,
         priority=Priority.FAST,
         transfer_id=11,
@@ -502,16 +502,16 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     ), tr.loop.time() + 1.0)
     assert client_requester.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=0)
 
-    received = await selective_server_s333_5.receive_until(tr.loop.time() + 1.0)     # Same thing here
+    received = await selective_server_s333_5.receive(tr.loop.time() + 1.0)     # Same thing here
     assert received is not None
     assert received.transfer_id == 11
     assert received.priority == Priority.FAST
     validate_timestamp(received.timestamp)
     assert list(map(bytes, received.fragmented_payload)) == [b'']
 
-    assert (await selective_server_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_server_s333_9.receive(tr.loop.time() + _RX_TIMEOUT)) is None
 
-    received = await promiscuous_server_s333.receive_until(tr.loop.time() + 1.0)     # Same thing here
+    received = await promiscuous_server_s333.receive(tr.loop.time() + 1.0)     # Same thing here
     assert received is not None
     assert received.transfer_id == 11
     assert received.priority == Priority.FAST
@@ -522,9 +522,9 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert selective_server_s333_9.sample_statistics() == SessionStatistics()
     assert promiscuous_server_s333.sample_statistics() == SessionStatistics(transfers=1, frames=1)
 
-    assert (await selective_client_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert (await selective_client_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert (await promiscuous_client_s333.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_5.receive(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_9.receive(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_client_s333.receive(tr.loop.time() + _RX_TIMEOUT)) is None
     assert selective_client_s333_5.sample_statistics() == SessionStatistics()
     assert selective_client_s333_9.sample_statistics() == SessionStatistics()
     assert promiscuous_client_s333.sample_statistics() == SessionStatistics()
@@ -534,7 +534,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     # Will fail with an error; make sure it's counted properly. The feedback registry entry will remain pending!
     media.raise_on_send_once(RuntimeError('Induced failure'))
     with pytest.raises(RuntimeError, match='Induced failure'):
-        assert await client_requester.send_until(Transfer(
+        assert await client_requester.send(Transfer(
             timestamp=ts,
             priority=Priority.FAST,
             transfer_id=12,
@@ -573,7 +573,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     # Now, this transmission will succeed, but a pending loopback registry entry will be overwritten, which will be
     # reflected in the error counter.
     with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.can.__name__):
-        assert await client_requester.send_until(Transfer(
+        assert await client_requester.send(Transfer(
             timestamp=ts,
             priority=Priority.FAST,
             transfer_id=12,
@@ -606,15 +606,15 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
 
     client_requester.close()
     with pytest.raises(ResourceClosedError):
-        assert await client_requester.send_until(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4,
-                                                          fragmented_payload=[]),
-                                                 tr.loop.time() + 1.0)
+        assert await client_requester.send(Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=4,
+                                                    fragmented_payload=[]),
+                                           tr.loop.time() + 1.0)
 
     fb = feedback_collector.take()
     assert fb.original_transfer_timestamp == ts
     validate_timestamp(fb.first_frame_transmission_timestamp)
 
-    received = await promiscuous_server_s333.receive_until(tr.loop.time() + 1.0)
+    received = await promiscuous_server_s333.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 5
@@ -626,7 +626,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert b'Until philosophers are kings' in bytes(received.fragmented_payload[0])
     assert b'behold the light of day.' in bytes(received.fragmented_payload[-1])
 
-    received = await selective_server_s333_5.receive_until(tr.loop.time() + 1.0)     # Same thing here
+    received = await selective_server_s333_5.receive(tr.loop.time() + 1.0)     # Same thing here
     assert received is not None
     assert received.transfer_id == 12
     assert received.priority == Priority.FAST
@@ -637,12 +637,12 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert b'behold the light of day.' in bytes(received.fragmented_payload[-1])
 
     # Nothing is received - non-matching node ID selector
-    assert (await selective_server_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_server_s333_9.receive(tr.loop.time() + _RX_TIMEOUT)) is None
 
     # Nothing is received - non-matching role (not server)
-    assert (await selective_client_s333_5.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert (await selective_client_s333_9.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
-    assert (await promiscuous_client_s333.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_5.receive(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await selective_client_s333_9.receive(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await promiscuous_client_s333.receive(tr.loop.time() + _RX_TIMEOUT)) is None
     assert selective_client_s333_5.sample_statistics() == SessionStatistics()
     assert selective_client_s333_9.sample_statistics() == SessionStatistics()
     assert promiscuous_client_s333.sample_statistics() == SessionStatistics()
@@ -724,7 +724,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
         subscriber_selective.frame_queue_capacity = 0
     assert subscriber_selective.frame_queue_capacity == 2
 
-    assert await pub_m2222.send_until(Transfer(
+    assert await pub_m2222.send(Transfer(
         timestamp=ts,
         priority=Priority.EXCEPTIONAL,
         transfer_id=7,
@@ -746,7 +746,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
                                                                  in_frames_uavcan=16,
                                                                  in_frames_uavcan_accepted=15)
 
-    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
+    received = await subscriber_promiscuous.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123
@@ -756,7 +756,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert bytes(received.fragmented_payload[0]).startswith(b'Finally')
     assert bytes(received.fragmented_payload[-1]).rstrip(b'\x00').endswith(b'out of his mind.')
 
-    received = await subscriber_selective.receive_until(tr.loop.time() + 1.0)
+    received = await subscriber_selective.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert received.priority == Priority.EXCEPTIONAL
     assert received.transfer_id == 7
@@ -771,7 +771,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
 
     # Small delay is needed to make the small-TID instance certainly time out on Windows, where clock resolution is low.
     await asyncio.sleep(0.1)
-    assert await pub_m2222.send_until(Transfer(
+    assert await pub_m2222.send(Transfer(
         timestamp=ts,
         priority=Priority.NOMINAL,
         transfer_id=7,                  # Same transfer ID, will be accepted only by the instance with low TID timeout
@@ -790,7 +790,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
                                                                  in_frames_uavcan=16,
                                                                  in_frames_uavcan_accepted=15)
 
-    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
+    received = await subscriber_promiscuous.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert isinstance(received, TransferFrom)
     assert received.source_node_id == 123
@@ -804,7 +804,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
                                                                            payload_bytes=124)
 
     # Discarded because of the same transfer ID
-    assert (await subscriber_selective.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await subscriber_selective.receive(tr.loop.time() + _RX_TIMEOUT)) is None
     assert subscriber_selective.sample_statistics() == SessionStatistics(
         transfers=1,
         frames=3,
@@ -812,7 +812,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
         errors=1            # Error due to the repeated transfer ID
     )
 
-    assert await pub_m2222.send_until(Transfer(
+    assert await pub_m2222.send(Transfer(
         timestamp=ts,
         priority=Priority.HIGH,
         transfer_id=8,
@@ -825,7 +825,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     ), tr.loop.time() + 1.0)
 
     # The promiscuous one is able to receive the transfer since its queue is large enough
-    received = await subscriber_promiscuous.receive_until(tr.loop.time() + 1.0)
+    received = await subscriber_promiscuous.receive(tr.loop.time() + 1.0)
     assert received is not None
     assert received.priority == Priority.HIGH
     assert received.transfer_id == 8
@@ -841,7 +841,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
                                                                            payload_bytes=375)
 
     # The selective one is unable to do so since its RX queue is too small; it is reflected in the error counter
-    assert (await subscriber_selective.receive_until(tr.loop.time() + _RX_TIMEOUT)) is None
+    assert (await subscriber_selective.receive(tr.loop.time() + _RX_TIMEOUT)) is None
     assert subscriber_selective.sample_statistics() == SessionStatistics(transfers=1,
                                                                          frames=5,
                                                                          payload_bytes=124,
@@ -888,7 +888,7 @@ async def _unittest_issue_120() -> None:
     ses.enable_feedback(feedback_collector.give)
     for i in range(70):
         ts = Timestamp.now()
-        assert await ses.send_until(Transfer(
+        assert await ses.send(Transfer(
             timestamp=ts,
             priority=Priority.SLOW,
             transfer_id=i,

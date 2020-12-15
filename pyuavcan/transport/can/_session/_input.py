@@ -118,8 +118,8 @@ class CANInputSession(CANSession, pyuavcan.transport.InputSession):
         else:
             raise ValueError(f'Invalid value for transfer-ID timeout [second]: {value}')
 
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
-        out = await self._do_receive_until(monotonic_deadline)
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+        out = await self._do_receive(monotonic_deadline)
         assert out is None or self.specifier.remote_node_id is None \
             or out.source_node_id == self.specifier.remote_node_id, 'Internal input session protocol violation'
         return out
@@ -127,7 +127,7 @@ class CANInputSession(CANSession, pyuavcan.transport.InputSession):
     def close(self) -> None:
         super(CANInputSession, self).close()
 
-    async def _do_receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    async def _do_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:
             try:
                 # Continue reading past the deadline until the queue is empty or a transfer is received.

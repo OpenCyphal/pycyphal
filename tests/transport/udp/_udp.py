@@ -121,7 +121,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     #
     # Message exchange test.
     #
-    assert await broadcaster.send_until(
+    assert await broadcaster.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.LOW,
                  transfer_id=77777,
@@ -129,7 +129,7 @@ async def _unittest_udp_transport_ipv4() -> None:
         monotonic_deadline=get_monotonic() + 5.0
     )
 
-    rx_transfer = await subscriber_promiscuous.receive_until(get_monotonic() + 5.0)
+    rx_transfer = await subscriber_promiscuous.receive(get_monotonic() + 5.0)
     print('PROMISCUOUS SUBSCRIBER TRANSFER:', rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.LOW
@@ -148,15 +148,15 @@ async def _unittest_udp_transport_ipv4() -> None:
         ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)
     ].accepted_datagrams == {}
 
-    assert None is await subscriber_selective.receive_until(get_monotonic() + 0.1)
-    assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.1)
-    assert None is await server_listener.receive_until(get_monotonic() + 0.1)
-    assert None is await client_listener.receive_until(get_monotonic() + 0.1)
+    assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
+    assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.1)
+    assert None is await server_listener.receive(get_monotonic() + 0.1)
+    assert None is await client_listener.receive(get_monotonic() + 0.1)
 
     #
     # Service exchange test.
     #
-    assert await client_requester.send_until(
+    assert await client_requester.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.HIGH,
                  transfer_id=88888,
@@ -164,7 +164,7 @@ async def _unittest_udp_transport_ipv4() -> None:
         monotonic_deadline=get_monotonic() + 5.0
     )
 
-    rx_transfer = await server_listener.receive_until(get_monotonic() + 5.0)
+    rx_transfer = await server_listener.receive(get_monotonic() + 5.0)
     print('SERVER LISTENER TRANSFER:', rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.HIGH
@@ -172,10 +172,10 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert len(rx_transfer.fragmented_payload) == 3
     assert b''.join(rx_transfer.fragmented_payload) == b''.join(payload_x3)
 
-    assert None is await subscriber_selective.receive_until(get_monotonic() + 0.1)
-    assert None is await subscriber_promiscuous.receive_until(get_monotonic() + 0.1)
-    assert None is await server_listener.receive_until(get_monotonic() + 0.1)
-    assert None is await client_listener.receive_until(get_monotonic() + 0.1)
+    assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
+    assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.1)
+    assert None is await server_listener.receive(get_monotonic() + 0.1)
+    assert None is await client_listener.receive(get_monotonic() + 0.1)
 
     print('tr :', tr.sample_statistics())
     assert tr.sample_statistics().received_datagrams[
@@ -266,7 +266,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
 
     ts = Timestamp.now()
     assert len(captures) == 0         # Assuming here that there are no other entities that might create noise.
-    await broadcaster.send_until(
+    await broadcaster.send(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
                  transfer_id=9876543210,
@@ -276,7 +276,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     await asyncio.sleep(1.0)        # Let the packet propagate.
     assert len(captures) == 1       # Ensure the packet is captured.
     tr_capture.close()              # Ensure the capture is stopped after the capturing transport is closed.
-    await broadcaster.send_until(   # This one shall be ignored.
+    await broadcaster.send(   # This one shall be ignored.
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.HIGH,
                  transfer_id=54321,

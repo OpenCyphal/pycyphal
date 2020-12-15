@@ -68,7 +68,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
 
         super(SerialOutputSession, self).__init__(finalizer)
 
-    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
+    async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         self._raise_if_closed()
 
         if self._local_node_id is None and isinstance(self._specifier.data_specifier,
@@ -177,7 +177,7 @@ def _unittest_output_session() -> None:
     )
 
     with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
-        run_until_complete(sos.send_until(
+        run_until_complete(sos.send(
             Transfer(timestamp=ts,
                      priority=Priority.NOMINAL,
                      transfer_id=12340,
@@ -199,7 +199,7 @@ def _unittest_output_session() -> None:
     assert sos.payload_metadata == PayloadMetadata(1024)
     assert sos.sample_statistics() == SessionStatistics()
 
-    assert run_until_complete(sos.send_until(
+    assert run_until_complete(sos.send(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
@@ -210,7 +210,7 @@ def _unittest_output_session() -> None:
     assert len(last_sent_frames) == 1
 
     with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
-        run_until_complete(sos.send_until(
+        run_until_complete(sos.send(
             Transfer(timestamp=ts,
                      priority=Priority.NOMINAL,
                      transfer_id=12340,
@@ -227,7 +227,7 @@ def _unittest_output_session() -> None:
     sos.enable_feedback(feedback_handler)
 
     assert last_feedback is None
-    assert run_until_complete(sos.send_until(
+    assert run_until_complete(sos.send(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
@@ -267,7 +267,7 @@ def _unittest_output_session() -> None:
 
     # Induced failure
     tx_timestamp = None
-    assert not run_until_complete(sos.send_until(
+    assert not run_until_complete(sos.send(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
@@ -287,7 +287,7 @@ def _unittest_output_session() -> None:
 
     tx_exception = RuntimeError()
     with raises(RuntimeError):
-        _ = run_until_complete(sos.send_until(
+        _ = run_until_complete(sos.send(
             Transfer(timestamp=ts,
                      priority=Priority.NOMINAL,
                      transfer_id=12340,
@@ -309,7 +309,7 @@ def _unittest_output_session() -> None:
     sos.close()  # Idempotency
 
     with raises(pyuavcan.transport.ResourceClosedError):
-        run_until_complete(sos.send_until(
+        run_until_complete(sos.send(
             Transfer(timestamp=ts,
                      priority=Priority.NOMINAL,
                      transfer_id=12340,

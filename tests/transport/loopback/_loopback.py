@@ -50,7 +50,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     out_123.enable_feedback(on_feedback)
 
     ts = pyuavcan.transport.Timestamp.now()
-    assert await out_123.send_until(pyuavcan.transport.Transfer(
+    assert await out_123.send(pyuavcan.transport.Transfer(
         timestamp=ts,
         priority=pyuavcan.transport.Priority.IMMEDIATE,
         transfer_id=123,        # mod 32 = 27
@@ -86,18 +86,18 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert old_inp is not inp_123
     del old_inp
 
-    assert None is await inp_123.receive_until(0)
-    assert None is await inp_123.receive_until(tr.loop.time() + 1.0)
+    assert None is await inp_123.receive(0)
+    assert None is await inp_123.receive(tr.loop.time() + 1.0)
 
     # This one will be dropped because wrong target node 123 != 42
-    assert await out_123.send_until(pyuavcan.transport.Transfer(
+    assert await out_123.send(pyuavcan.transport.Transfer(
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=pyuavcan.transport.Priority.IMMEDIATE,
         transfer_id=123,        # mod 32 = 27
         fragmented_payload=[memoryview(b'Hello world!')],
     ), tr.loop.time() + 1.0)
-    assert None is await inp_123.receive_until(0)
-    assert None is await inp_123.receive_until(tr.loop.time() + 1.0)
+    assert None is await inp_123.receive(0)
+    assert None is await inp_123.receive(tr.loop.time() + 1.0)
 
     out_bc = tr.get_output_session(specifier=message_spec_any_out, payload_metadata=payload_metadata)
     assert out_123 is not out_bc
@@ -105,16 +105,16 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     inp_42 = tr.get_input_session(specifier=message_spec_42_in, payload_metadata=payload_metadata)
     assert inp_123 is not inp_42
 
-    assert await out_bc.send_until(pyuavcan.transport.Transfer(
+    assert await out_bc.send(pyuavcan.transport.Transfer(
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=pyuavcan.transport.Priority.IMMEDIATE,
         transfer_id=123,        # mod 32 = 27
         fragmented_payload=[memoryview(b'Hello world!')],
     ), tr.loop.time() + 1.0)
-    assert None is await inp_123.receive_until(0)
-    assert None is await inp_123.receive_until(tr.loop.time() + 1.0)
+    assert None is await inp_123.receive(0)
+    assert None is await inp_123.receive(tr.loop.time() + 1.0)
 
-    rx = await inp_42.receive_until(0)
+    rx = await inp_42.receive(0)
     assert rx is not None
     assert rx.timestamp.monotonic <= time.monotonic()
     assert rx.timestamp.system <= time.time()
@@ -135,7 +135,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
             # noinspection PyTypeHints
             out_bc.exception = 123  # type: ignore
         with pytest.raises(RuntimeError, match='INTENDED EXCEPTION'):
-            assert await out_bc.send_until(pyuavcan.transport.Transfer(
+            assert await out_bc.send(pyuavcan.transport.Transfer(
                 timestamp=pyuavcan.transport.Timestamp.now(),
                 priority=pyuavcan.transport.Priority.IMMEDIATE,
                 transfer_id=123,        # mod 32 = 27
@@ -145,7 +145,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
         out_bc.exception = None
         assert out_bc.exception is None
 
-    assert None is await inp_42.receive_until(0)
+    assert None is await inp_42.receive(0)
 
     mon_events: typing.List[pyuavcan.transport.Capture] = []
     mon_events2: typing.List[pyuavcan.transport.Capture] = []
@@ -154,13 +154,13 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert len(tr.capture_handlers) == 1
     tr.begin_capture(mon_events2.append)
     assert len(tr.capture_handlers) == 2
-    assert await out_bc.send_until(pyuavcan.transport.Transfer(
+    assert await out_bc.send(pyuavcan.transport.Transfer(
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=pyuavcan.transport.Priority.IMMEDIATE,
         transfer_id=200,
         fragmented_payload=[memoryview(b'Hello world!')],
     ), tr.loop.time() + 1.0)
-    rx = await inp_42.receive_until(0)
+    rx = await inp_42.receive(0)
     assert rx is not None
     assert rx.transfer_id == 200 % 32
     assert mon_events == [pyuavcan.transport.loopback.LoopbackCapture(rx.timestamp, rx)]
@@ -190,11 +190,11 @@ async def _unittest_loopback_transport_service() -> None:
                                                        1234),
                                 payload_metadata)
 
-    assert await out.send_until(pyuavcan.transport.Transfer(
+    assert await out.send(pyuavcan.transport.Transfer(
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=pyuavcan.transport.Priority.IMMEDIATE,
         transfer_id=123,        # mod 32 = 27
         fragmented_payload=[memoryview(b'Hello world!')],
     ), tr.loop.time() + 1.0)
 
-    assert None is not await inp.receive_until(0)
+    assert None is not await inp.receive(0)

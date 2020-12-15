@@ -131,13 +131,13 @@ Usage
 >>> pub = tr.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
 >>> sub = tr.get_input_session(pyuavcan.transport.InputSessionSpecifier(ds, None), pm)
 >>> await_ = tr.loop.run_until_complete
->>> await_(pub.send_until(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
+>>> await_(pub.send(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
 ...                                                   pyuavcan.transport.Priority.LOW,
 ...                                                   1111,
 ...                                                   fragmented_payload=[]),
 ...                       tr.loop.time() + 1.0))
 True
->>> await_(sub.receive_until(tr.loop.time() + 1.0))
+>>> await_(sub.receive(tr.loop.time() + 1.0))
 TransferFrom(..., transfer_id=1111, ...)
 >>> tr.close()
 

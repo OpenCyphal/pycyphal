@@ -27,7 +27,7 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue(loop=loop)
         super(LoopbackInputSession, self).__init__()
 
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         timeout = monotonic_deadline - self._loop.time()
         try:
             if timeout > 0:

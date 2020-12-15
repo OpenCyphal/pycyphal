@@ -101,7 +101,7 @@ class Client(ServicePort[ServiceClass]):
         instances under the same session specifier, so that, for example, different tasks invoking the same service
         on the same server node can have different timeout settings.
         The same value is also used as send timeout for the underlying call to
-        :meth:`pyuavcan.transport.OutputSession.send_until`.
+        :meth:`pyuavcan.transport.OutputSession.send`.
         The default value is set according to the recommendations provided in the Specification,
         which is :data:`DEFAULT_SERVICE_REQUEST_TIMEOUT`.
         """
@@ -247,10 +247,10 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                 future = self._loop.create_future()
                 self._response_futures_by_transfer_id[transfer_id] = future
                 # The lock is still taken, this is intentional. Serialize access to the transport.
-                send_result = await self._do_send_until(request=request,
-                                                        transfer_id=transfer_id,
-                                                        priority=priority,
-                                                        monotonic_deadline=self._loop.time() + response_timeout)
+                send_result = await self._do_send(request=request,
+                                                  transfer_id=transfer_id,
+                                                  priority=priority,
+                                                  monotonic_deadline=self._loop.time() + response_timeout)
             except BaseException:
                 self._forget_future(transfer_id)
                 raise
@@ -300,11 +300,11 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
             _logger.debug('Could not cancel the task %r: %s', self._task, ex, exc_info=True)
         self._finalize()
 
-    async def _do_send_until(self,
-                             request:            pyuavcan.dsdl.CompositeObject,
-                             transfer_id:        int,
-                             priority:           pyuavcan.transport.Priority,
-                             monotonic_deadline: float) -> bool:
+    async def _do_send(self,
+                       request:            pyuavcan.dsdl.CompositeObject,
+                       transfer_id:        int,
+                       priority:           pyuavcan.transport.Priority,
+                       monotonic_deadline: float) -> bool:
         if not isinstance(request, self.dtype.Request):
             raise TypeError(f'Invalid request object: expected an instance of {self.dtype.Request}, '
                             f'got {type(request)} instead.')
@@ -315,13 +315,13 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                                                priority=priority,
                                                transfer_id=transfer_id,
                                                fragmented_payload=fragmented_payload)
-        return await self.output_transport_session.send_until(transfer, monotonic_deadline)
+        return await self.output_transport_session.send(transfer, monotonic_deadline)
 
     async def _task_function(self) -> None:
         exception: typing.Optional[Exception] = None
         try:
             while not self.is_closed:
-                transfer = await self.input_transport_session.receive_until(self._loop.time() + _RECEIVE_TIMEOUT)
+                transfer = await self.input_transport_session.receive(self._loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is None:
                     continue
 

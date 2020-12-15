@@ -309,13 +309,13 @@ Create an output and an input session:
 Send a transfer from one instance to the other:
 
 >>> await_ = tr_1.loop.run_until_complete
->>> await_(pub.send_until(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
+>>> await_(pub.send(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
 ...                                                   pyuavcan.transport.Priority.LOW,
 ...                                                   1111,
 ...                                                   fragmented_payload=[]),
 ...                       tr_1.loop.time() + 1.0))
 True
->>> await_(sub.receive_until(tr_1.loop.time() + 1.0))
+>>> await_(sub.receive(tr_1.loop.time() + 1.0))
 TransferFrom(..., transfer_id=1111, ...)
 >>> tr_0.close()
 >>> tr_1.close()

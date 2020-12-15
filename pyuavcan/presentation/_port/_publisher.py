@@ -94,7 +94,7 @@ class Publisher(MessagePort[MessageClass]):
         The default is :attr:`DEFAULT_SEND_TIMEOUT`.
         The publication logic is roughly as follows::
 
-            return transport_session.send_until(message_transfer, self.loop.time() + self.send_timeout)
+            return transport_session.send(message_transfer, self.loop.time() + self.send_timeout)
         """
         return self._send_timeout
 
@@ -115,9 +115,9 @@ class Publisher(MessagePort[MessageClass]):
         if self._maybe_impl is None:
             raise PortClosedError(repr(self))
         else:
-            return await self._maybe_impl.publish_until(message,
-                                                        self._priority,
-                                                        self._loop.time() + self._send_timeout)
+            return await self._maybe_impl.publish(message,
+                                                  self._priority,
+                                                  self._loop.time() + self._send_timeout)
 
     def publish_soon(self, message: MessageClass) -> None:
         """
@@ -171,10 +171,10 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         self._lock = asyncio.Lock(loop=loop)
         self._proxy_count = 0
 
-    async def publish_until(self,
-                            message:            MessageClass,
-                            priority:           pyuavcan.transport.Priority,
-                            monotonic_deadline: float) -> bool:
+    async def publish(self,
+                      message:            MessageClass,
+                      priority:           pyuavcan.transport.Priority,
+                      monotonic_deadline: float) -> bool:
         if not isinstance(message, self.dtype):
             raise TypeError(f'Expected a message object of type {self.dtype}, found this: {message}')
 
@@ -187,7 +187,7 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
                                                    priority=priority,
                                                    transfer_id=self.transfer_id_counter.get_then_increment(),
                                                    fragmented_payload=fragmented_payload)
-            return await self.transport_session.send_until(transfer, monotonic_deadline)
+            return await self.transport_session.send(transfer, monotonic_deadline)
 
     def register_proxy(self) -> None:
         self._proxy_count += 1

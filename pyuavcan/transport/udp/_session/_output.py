@@ -96,7 +96,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
             if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) else True, \
             'Internal protocol violation: cannot broadcast a service transfer'
 
-    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
+    async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
 
@@ -265,7 +265,7 @@ def _unittest_output_session() -> None:
     assert sos.payload_metadata == PayloadMetadata(1024)
     assert sos.sample_statistics() == SessionStatistics()
 
-    assert run_until_complete(sos.send_until(
+    assert run_until_complete(sos.send(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
@@ -291,7 +291,7 @@ def _unittest_output_session() -> None:
     sos.enable_feedback(feedback_handler)
 
     assert last_feedback is None
-    assert run_until_complete(sos.send_until(
+    assert run_until_complete(sos.send(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
@@ -335,7 +335,7 @@ def _unittest_output_session() -> None:
         loop=asyncio.get_event_loop(),
         finalizer=do_finalize,
     )
-    assert run_until_complete(sos.send_until(
+    assert run_until_complete(sos.send(
         Transfer(timestamp=ts,
                  priority=Priority.OPTIONAL,
                  transfer_id=54321,
@@ -381,7 +381,7 @@ def _unittest_output_session() -> None:
     )
 
     # Induced timeout
-    assert not run_until_complete(sos.send_until(
+    assert not run_until_complete(sos.send(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
@@ -400,7 +400,7 @@ def _unittest_output_session() -> None:
     # Induced failure
     sos.socket.close()
     with raises(OSError):
-        assert not run_until_complete(sos.send_until(
+        assert not run_until_complete(sos.send(
             Transfer(timestamp=ts,
                      priority=Priority.NOMINAL,
                      transfer_id=12340,
@@ -422,7 +422,7 @@ def _unittest_output_session() -> None:
     sos.close()  # Idempotency
 
     with raises(pyuavcan.transport.ResourceClosedError):
-        run_until_complete(sos.send_until(
+        run_until_complete(sos.send(
             Transfer(timestamp=ts,
                      priority=Priority.NOMINAL,
                      transfer_id=12340,
@@ -461,7 +461,7 @@ def _unittest_output_session_no_listener() -> None:
         loop=asyncio.get_event_loop(),
         finalizer=lambda: None,
     )
-    assert run_until_complete(sos.send_until(
+    assert run_until_complete(sos.send(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
                  transfer_id=12340,
@@ -489,7 +489,7 @@ def _unittest_output_session_no_listener() -> None:
     )
     sos.enable_feedback(feedback_handler)
     assert last_feedback is None
-    assert run_until_complete(sos.send_until(
+    assert run_until_complete(sos.send(
         Transfer(timestamp=ts,
                  priority=Priority.OPTIONAL,
                  transfer_id=54321,

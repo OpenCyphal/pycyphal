@@ -111,7 +111,7 @@ class SocketCANMedia(Media):
                      'Requested configuration: %s',
                      self, ', '.join(map(str, configuration)))
 
-    async def send_until(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
+    async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         num_sent = 0
         for f in frames:
             if self._closed:

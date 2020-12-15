@@ -69,15 +69,15 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     assert len(pub_a.inferiors) == 0
     assert len(sub_any_a.inferiors) == 0
-    assert not await pub_a.send_until(
+    assert not await pub_a.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.LOW,
                  transfer_id=1,
                  fragmented_payload=[memoryview(b'abc')]),
         monotonic_deadline=loop.time() + 1.0
     )
-    assert not await sub_any_a.receive_until(loop.time() + 0.1)
-    assert not await sub_any_b.receive_until(loop.time() + 0.1)
+    assert not await sub_any_a.receive(loop.time() + 0.1)
+    assert not await sub_any_b.receive(loop.time() + 0.1)
     assert tr_a.sample_statistics() == RedundantTransportStatistics()
     assert tr_b.sample_statistics() == RedundantTransportStatistics()
 
@@ -126,18 +126,18 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert repr(tr_a) == \
         'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))'
 
-    assert await pub_a.send_until(
+    assert await pub_a.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.LOW,
                  transfer_id=2,
                  fragmented_payload=[memoryview(b'def')]),
         monotonic_deadline=loop.time() + 1.0
     )
-    rx = await sub_any_a.receive_until(loop.time() + 1.0)
+    rx = await sub_any_a.receive(loop.time() + 1.0)
     assert rx is not None
     assert rx.fragmented_payload == [memoryview(b'def')]
     assert rx.transfer_id == 2
-    assert not await sub_any_b.receive_until(loop.time() + 0.1)
+    assert not await sub_any_b.receive(loop.time() + 0.1)
 
     #
     # Incapacitate one inferior, ensure things are still OK.
@@ -146,14 +146,14 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         for s in lo_mono_0.output_sessions:
             s.exception = RuntimeError('INTENDED EXCEPTION')
 
-        assert await pub_a.send_until(
+        assert await pub_a.send(
             Transfer(timestamp=Timestamp.now(),
                      priority=Priority.LOW,
                      transfer_id=3,
                      fragmented_payload=[memoryview(b'qwe')]),
             monotonic_deadline=loop.time() + 1.0
         )
-        rx = await sub_any_a.receive_until(loop.time() + 1.0)
+        rx = await sub_any_a.receive(loop.time() + 1.0)
         assert rx is not None
         assert rx.fragmented_payload == [memoryview(b'qwe')]
         assert rx.transfer_id == 3
@@ -196,14 +196,14 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))'
 
     # Exchange test.
-    assert await pub_a.send_until(
+    assert await pub_a.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.LOW,
                  transfer_id=4,
                  fragmented_payload=[memoryview(b'rty')]),
         monotonic_deadline=loop.time() + 1.0
     )
-    rx = await sub_any_a.receive_until(loop.time() + 1.0)
+    rx = await sub_any_a.receive(loop.time() + 1.0)
     assert rx is not None
     assert rx.fragmented_payload == [memoryview(b'rty')]
     assert rx.transfer_id == 4
@@ -243,20 +243,20 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     )
     assert tr_b.local_node_id == 222
 
-    assert await pub_a.send_until(
+    assert await pub_a.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.LOW,
                  transfer_id=5,
                  fragmented_payload=[memoryview(b'uio')]),
         monotonic_deadline=loop.time() + 1.0
     )
-    rx = await sub_any_b.receive_until(loop.time() + 1.0)
+    rx = await sub_any_b.receive(loop.time() + 1.0)
     assert rx is not None
     assert rx.fragmented_payload == [memoryview(b'uio')]
     assert rx.transfer_id == 5
-    assert not await sub_any_a.receive_until(loop.time() + 0.1)
-    assert not await sub_any_b.receive_until(loop.time() + 0.1)
-    assert not await sub_sel_b.receive_until(loop.time() + 0.1)
+    assert not await sub_any_a.receive(loop.time() + 0.1)
+    assert not await sub_any_b.receive(loop.time() + 0.1)
+    assert not await sub_sel_b.receive(loop.time() + 0.1)
 
     #
     # Construct new session with the transports configured.
@@ -266,18 +266,18 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert set(tr_a.output_sessions) == {pub_a, pub_a_new}
     sub_b_new = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(255), None), meta)
 
-    assert await pub_a_new.send_until(
+    assert await pub_a_new.send(
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.LOW,
                  transfer_id=6,
                  fragmented_payload=[memoryview(b'asd')]),
         monotonic_deadline=loop.time() + 1.0
     )
-    rx = await sub_b_new.receive_until(loop.time() + 1.0)
+    rx = await sub_b_new.receive(loop.time() + 1.0)
     assert rx is not None
     assert rx.fragmented_payload == [memoryview(b'asd')]
     assert rx.transfer_id == 6
-    assert None is await sub_any_b.receive_until(loop.time() + 1.0)
+    assert None is await sub_any_b.receive(loop.time() + 1.0)
 
     #
     # Termination.
@@ -294,7 +294,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         serial_b.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):  # Make sure the sessions are closed.
-        await pub_a.send_until(
+        await pub_a.send(
             Transfer(timestamp=Timestamp.now(),
                      priority=Priority.LOW,
                      transfer_id=100,

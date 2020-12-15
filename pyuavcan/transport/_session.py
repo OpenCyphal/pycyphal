@@ -234,7 +234,7 @@ class InputSession(Session):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
         """
         Attempts to receive the transfer before the deadline [second].
         Returns None if the transfer is not received before the deadline.
@@ -289,7 +289,7 @@ class OutputSession(Session):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def send_until(self, transfer: Transfer, monotonic_deadline: float) -> bool:
+    async def send(self, transfer: Transfer, monotonic_deadline: float) -> bool:
         """
         Sends the transfer; blocks if necessary until the specified deadline [second].
         The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.

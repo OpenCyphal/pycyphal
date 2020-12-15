@@ -206,13 +206,13 @@ class CANTransport(pyuavcan.transport.Transport):
                 BroadcastCANOutputSession(specifier=specifier,
                                           payload_metadata=payload_metadata,
                                           transport=self,
-                                          send_handler=self._do_send_until,
+                                          send_handler=self._do_send,
                                           finalizer=finalizer)
         else:
             session = UnicastCANOutputSession(specifier=specifier,
                                               payload_metadata=payload_metadata,
                                               transport=self,
-                                              send_handler=self._do_send_until,
+                                              send_handler=self._do_send,
                                               finalizer=finalizer)
 
         self._output_registry[specifier] = session
@@ -235,7 +235,7 @@ class CANTransport(pyuavcan.transport.Transport):
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
         raise NotImplementedError
 
-    async def _do_send_until(self, t: SendTransaction) -> bool:
+    async def _do_send(self, t: SendTransaction) -> bool:
         """
         All frames shall share the same CAN ID value.
         """
@@ -248,7 +248,7 @@ class CANTransport(pyuavcan.transport.Transport):
                 _logger.debug('%s: Sending %d frames; 1st loopback: %s; deadline in %.3f s:\n%s',
                               self, len(t.frames), t.loopback_first, timeout, '\n'.join(map(str, t.frames)))
 
-            num_sent = await self._maybe_media.send_until(
+            num_sent = await self._maybe_media.send(
                 (
                     Envelope(frame=x.compile(),
                              loopback=(idx == 0 and t.loopback_first))

@@ -46,7 +46,7 @@ class PythonCANMedia(Media):
                         'Requested configuration: %s',
                         self, ', '.join(map(str, configuration)))
 
-    async def send_until(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
+    async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         raise NotImplementedError
 
     def close(self) -> None:
