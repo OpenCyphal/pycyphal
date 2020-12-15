@@ -177,8 +177,7 @@ class Transport(abc.ABC):
     def begin_capture(self, handler: CaptureCallback) -> None:
         """
         .. warning::
-            The advanced network diagnostics API is not yet stable. Be prepared for it to break between minor revisions.
-            Suggestions and feedback are welcomed at https://forum.uavcan.org.
+            This API entity is not yet stable. Suggestions and feedback are welcomed at https://forum.uavcan.org.
 
         Activates low-level monitoring of the transport interface.
         Also see related method :meth:`make_tracer`.
@@ -222,6 +221,9 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     def make_tracer() -> Tracer:
         """
+        .. warning::
+            This API entity is not yet stable. Suggestions and feedback are welcomed at https://forum.uavcan.org.
+
         Use this factory method for constructing tracer implementations for specific transports.
         Concrete tracers may be Voldemort types themselves.
         See also: :class:`Tracer`, :meth:`begin_capture`.
@@ -231,6 +233,9 @@ class Transport(abc.ABC):
     @abc.abstractmethod
     async def spoof(self, transfer: AlienTransfer, monotonic_deadline: float) -> bool:
         """
+        .. warning::
+            This API entity is not yet stable. Suggestions and feedback are welcomed at https://forum.uavcan.org.
+
         When this method is invoked for the first time, the transport instance may need to perform one-time
         initialization such as reconfiguring the networking hardware or loading additional drivers.
         Once this one-time initialization is performed,

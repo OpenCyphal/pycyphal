@@ -41,7 +41,8 @@ class SerialTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class SerialTransport(pyuavcan.transport.Transport):
     """
-    The UAVCAN/Serial transport is designed for OSI L1 byte-level serial links, such as RS-485, UART, USB CDC ACM, etc.
+    The UAVCAN/Serial transport is designed for OSI L1 byte-level serial links and tunnels,
+    such as UART, RS-422/485/232 (duplex), USB CDC ACM, TCP/IP, etc.
     Please read the module documentation for details.
     """
 

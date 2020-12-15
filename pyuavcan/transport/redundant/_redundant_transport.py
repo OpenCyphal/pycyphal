@@ -261,6 +261,9 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
     @staticmethod
     def make_tracer() -> pyuavcan.transport.Tracer:
+        """
+        This method is not implemented for redundant transport. Access the inferiors directly instead.
+        """
         raise NotImplementedError
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:

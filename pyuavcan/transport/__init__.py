@@ -128,6 +128,7 @@ Below is the class inheritance diagram for this module (trivial classes may be o
                          pyuavcan.transport._data_specifier
                          pyuavcan.transport._transfer
                          pyuavcan.transport._payload_metadata
+                         pyuavcan.transport._analysis
    :parts: 1
 """
 

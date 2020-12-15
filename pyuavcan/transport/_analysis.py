@@ -109,6 +109,7 @@ class Tracer(abc.ABC):
 
     Instances of this class are entirely isolated from the outside world; they do not perform any IO and do not hold
     any resources, they are purely computing entities.
+    To reset the state (e.g., in order to start analyzing a new log) simply discard the old instance and use a new one.
 
     The user should never attempt to instantiate implementations manually; instead, the factory method
     :meth:`pyuavcan.transport.Transport.make_tracer` should be used.

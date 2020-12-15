@@ -156,8 +156,8 @@ The `UAVCAN Specification <https://uavcan.org/specification/>`_ adds the followi
 Per this classification, PyUAVCAN implements *per-transfer* redundancy.
 
 
-Advanced network diagnostics: sniffing/snooping, spoofing, dissection
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Advanced network diagnostics: sniffing/snooping, tracing, spoofing
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Packet capture (aka sniffing or snooping) and their further analysis (either real-time or postmortem)
 are vital for advanced network diagnostics or debugging.
