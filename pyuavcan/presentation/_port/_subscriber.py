@@ -102,18 +102,15 @@ class Subscriber(MessagePort[MessageClass]):
             # implementation class invoke the handler from its own receive task directly. Eliminates extra indirection.
             while not self._closed:
                 try:
-                    message, transfer = await self.receive()
-                    try:
-                        await handler(message, transfer)
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as ex:
-                        _logger.exception('%s got an unhandled exception in the message handler: %s', self, ex)
-                except asyncio.CancelledError:
-                    _logger.debug('%s receive task cancelled', self)
-                    break
-                except pyuavcan.transport.ResourceClosedError as ex:
-                    _logger.info('%s receive task got a resource closed error and will exit: %s', self, ex)
+                    async for message, transfer in self:
+                        try:
+                            await handler(message, transfer)
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as ex:
+                            _logger.exception('%s got an unhandled exception in the message handler: %s', self, ex)
+                except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError) as ex:
+                    _logger.debug('%s receive task is stopping because: %r', self, ex)
                     break
                 except Exception as ex:
                     _logger.exception('%s receive task failure: %s', self, ex)
@@ -126,34 +123,29 @@ class Subscriber(MessagePort[MessageClass]):
 
     # ----------------------------------------  DIRECT RECEIVE  ----------------------------------------
 
-    async def receive(self, monotonic_deadline: typing.Optional[float] = None) \
-            -> typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]:
+    async def receive(self, monotonic_deadline: float) \
+            -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
-        This is like :meth:`receive_for` with deadline instead of timeout.
+        Blocks until either a valid message is received,
+        in which case it is returned along with the transfer which delivered it;
+        or until the specified deadline is reached, in which case None is returned.
         The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
-        A deadline that is in the past translates into negative timeout.
-        If no deadline is provided, it is assumed to be infinite.
+
+        The method will never return None unless the deadline has been exceeded or the session is closed;
+        in order words, a spurious premature return cannot occur.
+
+        If the deadline is not in the future, the method will non-blockingly check if there is any data;
+        if there is, it will be returned, otherwise None will be returned immediately.
+        It is guaranteed that no context switch will occur in this case, as if the method was not async.
+
+        If an infinite deadline is desired, consider using :meth:`__aiter__`/:meth:`__anext__`.
         """
-        if monotonic_deadline is None:
-            while True:
-                out = await self.receive_for(_RECEIVE_TIMEOUT)
-                if out is not None:
-                    return out
         return await self.receive_for(timeout=monotonic_deadline - self._loop.time())
 
     async def receive_for(self, timeout: float) \
             -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
-        Blocks until either a valid message is received,
-        in which case it is returned along with the transfer which delivered it;
-        or until the timeout is expired, in which case None is returned.
-
-        The method will never return None unless the timeout has expired or its session is closed;
-        in order words, a spurious premature cancellation cannot occur.
-
-        If the timeout is non-positive, the method will non-blockingly check if there is any data;
-        if there is, it will be returned, otherwise None will be returned immediately.
-        It is guaranteed that no context switch will occur if the timeout is negative, as if the method was not async.
+        This is like :meth:`receive` but with a relative timeout instead of an absolute deadline.
         """
         self._raise_if_closed_or_failed()
         try:
@@ -180,12 +172,16 @@ class Subscriber(MessagePort[MessageClass]):
 
     async def __anext__(self) -> typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]:
         """
-        This is just a wrapper over :meth:`receive`.
+        This is like :meth:`receive` with an infinite timeout, so it cannot return None.
         """
         try:
-            return await self.receive()
+            while not self._closed:
+                out = await self.receive_for(_RECEIVE_TIMEOUT)
+                if out is not None:
+                    return out
         except pyuavcan.transport.ResourceClosedError:
-            raise StopAsyncIteration
+            pass
+        raise StopAsyncIteration
 
     # ----------------------------------------  AUXILIARY  ----------------------------------------
 

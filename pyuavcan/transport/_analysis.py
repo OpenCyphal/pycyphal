@@ -96,6 +96,7 @@ class TransferTrace(Trace):
     frames: typing.List[Capture]
     """
     The order of the frames matches the order of their reception.
+    The timestamp of the trace event equals that of the first frame.
     """
 
 

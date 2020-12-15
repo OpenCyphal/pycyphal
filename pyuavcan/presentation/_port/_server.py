@@ -117,52 +117,6 @@ class Server(ServicePort[ServiceClass]):
 
     # ----------------------------------------  MAIN API  ----------------------------------------
 
-    def serve_in_background(self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass]) -> None:
-        """
-        Start a new task and use it to run the server in the background.
-        The task will be stopped when the server is closed.
-
-        When a request is received, the supplied handler callable will be invoked with the request object
-        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
-        The handler shall return the response or None. If None is returned, the server will not send any response back
-        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
-
-        If the background task is already running, it will be cancelled and a new one will be started instead.
-        This method of serving requests shall not be used concurrently with other methods.
-        """
-        async def task_function() -> None:
-            while not self._closed:
-                try:
-                    await self.serve_for(handler, _LISTEN_FOREVER_TIMEOUT)
-                except asyncio.CancelledError:
-                    _logger.debug('%s task cancelled', self)
-                    break
-                except pyuavcan.transport.ResourceClosedError as ex:
-                    _logger.info('%s task got a resource closed error and will exit: %s', self, ex)
-                    break
-                except Exception as ex:
-                    _logger.exception('%s task failure: %s', self, ex)
-                    await asyncio.sleep(1)  # TODO is this an adequate failure management strategy?
-
-        if self._maybe_task is not None:
-            self._maybe_task.cancel()
-
-        self._raise_if_closed()
-        self._maybe_task = self._loop.create_task(task_function())
-
-    async def serve_for(self,
-                        handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
-                        timeout: float) -> None:
-        """
-        Listen for requests for the specified time or until the instance is closed, then exit.
-
-        When a request is received, the supplied handler callable will be invoked with the request object
-        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
-        The handler shall return the response or None. If None is returned, the server will not send any response back
-        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
-        """
-        return await self.serve(handler, monotonic_deadline=self._loop.time() + timeout)
-
     async def serve(self,
                     handler:            ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
                     monotonic_deadline: typing.Optional[float] = None) -> None:
@@ -211,6 +165,52 @@ class Server(ServicePort[ServiceClass]):
                                     meta,
                                     response_transport_session,
                                     self._loop.time() + self._send_timeout)
+
+    async def serve_for(self,
+                        handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
+                        timeout: float) -> None:
+        """
+        Listen for requests for the specified time or until the instance is closed, then exit.
+
+        When a request is received, the supplied handler callable will be invoked with the request object
+        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
+        The handler shall return the response or None. If None is returned, the server will not send any response back
+        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
+        """
+        return await self.serve(handler, monotonic_deadline=self._loop.time() + timeout)
+
+    def serve_in_background(self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass]) -> None:
+        """
+        Start a new task and use it to run the server in the background.
+        The task will be stopped when the server is closed.
+
+        When a request is received, the supplied handler callable will be invoked with the request object
+        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
+        The handler shall return the response or None. If None is returned, the server will not send any response back
+        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
+
+        If the background task is already running, it will be cancelled and a new one will be started instead.
+        This method of serving requests shall not be used concurrently with other methods.
+        """
+        async def task_function() -> None:
+            while not self._closed:
+                try:
+                    await self.serve_for(handler, _LISTEN_FOREVER_TIMEOUT)
+                except asyncio.CancelledError:
+                    _logger.debug('%s task cancelled', self)
+                    break
+                except pyuavcan.transport.ResourceClosedError as ex:
+                    _logger.debug('%s task got a resource closed error and will exit: %s', self, ex)
+                    break
+                except Exception as ex:
+                    _logger.exception('%s task failure: %s', self, ex)
+                    await asyncio.sleep(1)  # TODO is this an adequate failure management strategy?
+
+        if self._maybe_task is not None:
+            self._maybe_task.cancel()
+
+        self._raise_if_closed()
+        self._maybe_task = self._loop.create_task(task_function())
 
     # ----------------------------------------  AUXILIARY  ----------------------------------------
 

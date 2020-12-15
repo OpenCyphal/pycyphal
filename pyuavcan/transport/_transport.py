@@ -236,6 +236,11 @@ class Transport(abc.ABC):
         .. warning::
             This API entity is not yet stable. Suggestions and feedback are welcomed at https://forum.uavcan.org.
 
+        Send a spoofed transfer to the network.
+        The configuration of the local transport instance has no effect on spoofed transfers;
+        as such, even anonymous instances may send arbitrary spoofed transfers.
+        The only relevant property of the instance is which network interface to use for spoofing.
+
         When this method is invoked for the first time, the transport instance may need to perform one-time
         initialization such as reconfiguring the networking hardware or loading additional drivers.
         Once this one-time initialization is performed,

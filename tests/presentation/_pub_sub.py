@@ -84,7 +84,9 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     assert pub_heart.priority == Priority.SLOW
     await pub_heart.publish(heart)
 
-    rx, transfer = await sub_heart.receive()  # type: typing.Any, pyuavcan.transport.TransferFrom
+    item = await sub_heart.receive_for(1)
+    assert item
+    rx, transfer = item                 # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id is None
     assert transfer.priority == Priority.SLOW
@@ -148,7 +150,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     pub_heart.transfer_id_counter.override(23)
     await pub_heart.publish(heart)
-    rx, transfer = await sub_heart.receive()  # type: typing.Any, pyuavcan.transport.TransferFrom
+    item = await sub_heart.receive(asyncio.get_running_loop().time() + 1)
+    assert item
+    rx, transfer = item  # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id == 123
     assert transfer.priority == Priority.NOMINAL
@@ -162,7 +166,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert stat.messages == 1
 
     await pub_heart.publish(heart)
-    rx = (await sub_heart.receive())[0]
+    item = await sub_heart.receive(asyncio.get_running_loop().time() + 1)
+    assert item
+    rx, _ = item
     assert repr(rx) == repr(heart)
 
     await pub_heart.publish(heart)
@@ -192,7 +198,9 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
 
     pub_record.publish_soon(record)
     await asyncio.sleep(0.1)                # Needed to make the deferred publication get the message out
-    rx, transfer = await sub_record.receive()
+    item = await sub_heart.receive(asyncio.get_running_loop().time() + 1)
+    assert item
+    rx, transfer = item
     assert repr(rx) == repr(record)
     assert transfer.source_node_id == 42
     assert transfer.priority == Priority.NOMINAL
