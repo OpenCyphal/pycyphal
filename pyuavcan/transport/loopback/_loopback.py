@@ -20,9 +20,9 @@ class LoopbackTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 
 @dataclasses.dataclass(frozen=True)
-class LoopbackSniff(pyuavcan.transport.Sniff):
+class LoopbackCapture(pyuavcan.transport.Capture):
     """
-    The sniffing handlers will receive :class:`pyuavcan.transport.TransferFrom` for each exchanged transfer.
+    The capture handlers will receive :class:`pyuavcan.transport.TransferFrom` for each exchanged transfer.
     """
     transfer: pyuavcan.transport.TransferFrom
 
@@ -44,7 +44,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         self._local_node_id = int(local_node_id) if local_node_id is not None else None
         self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
         self._output_sessions: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, LoopbackOutputSession] = {}
-        self._sniffer_handlers: typing.List[pyuavcan.transport.SnifferCallback] = []
+        self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
         # Unlimited protocol capabilities by default.
         self._protocol_parameters = pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=2 ** 64,
@@ -116,7 +116,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                     fragmented_payload=tr.fragmented_payload,
                     source_node_id=self.local_node_id,
                 )
-                pyuavcan.util.broadcast(self._sniffer_handlers)(LoopbackSniff(tr_from.timestamp, tr_from))
+                pyuavcan.util.broadcast(self._capture_handlers)(LoopbackCapture(tr_from.timestamp, tr_from))
                 for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                     try:
                         destination_session = self._input_sessions[
@@ -139,9 +139,6 @@ class LoopbackTransport(pyuavcan.transport.Transport):
             self._output_sessions[specifier] = sess
         return sess
 
-    def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
-        self._sniffer_handlers.append(handler)
-
     def sample_statistics(self) -> LoopbackTransportStatistics:
         return LoopbackTransportStatistics()
 
@@ -153,9 +150,19 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     def output_sessions(self) -> typing.Sequence[LoopbackOutputSession]:
         return list(self._output_sessions.values())
 
+    def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
+        self._capture_handlers.append(handler)
+
+    @staticmethod
+    def make_tracer() -> pyuavcan.transport.Tracer:
+        raise NotImplementedError
+
+    async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
+        raise NotImplementedError
+
     @property
-    def sniffer_handlers(self) -> typing.Sequence[pyuavcan.transport.SnifferCallback]:
-        return self._sniffer_handlers[:]
+    def capture_handlers(self) -> typing.Sequence[pyuavcan.transport.CaptureCallback]:
+        return self._capture_handlers[:]
 
     def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
         return [], {

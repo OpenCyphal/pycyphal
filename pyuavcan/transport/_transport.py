@@ -12,6 +12,7 @@ import dataclasses
 import pyuavcan.util
 from ._session import InputSession, OutputSession, InputSessionSpecifier, OutputSessionSpecifier
 from ._payload_metadata import PayloadMetadata
+from ._analysis import CaptureCallback, Tracer, AlienTransfer
 
 
 @dataclasses.dataclass(frozen=True)
@@ -173,13 +174,14 @@ class Transport(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def sniff(self, handler: SnifferCallback) -> None:
+    def begin_capture(self, handler: CaptureCallback) -> None:
         """
         .. warning::
             The advanced network diagnostics API is not yet stable. Be prepared for it to break between minor revisions.
             Suggestions and feedback are welcomed at https://forum.uavcan.org.
 
         Activates low-level monitoring of the transport interface.
+        Also see related method :meth:`make_tracer`.
 
         This method puts the transport instance into the low-level capture mode which does not interfere with its
         normal operation but may significantly increase the computing load due to the need to process every frame
@@ -188,7 +190,7 @@ class Transport(abc.ABC):
         For instance, the network card may be put into promiscuous mode,
         the CAN adapter will have its acceptance filters disabled, etc.
 
-        The sniffing handler is invoked for every transmitted or received transport frame and, possibly, some
+        The capture handler is invoked for every transmitted or received transport frame and, possibly, some
         additional transport-implementation-specific events (e.g., network errors or hardware state changes)
         which are described in the specific transport implementation docs.
         The temporal order of the events delivered to the user may be distorted, depending on the guarantees
@@ -196,24 +198,57 @@ class Transport(abc.ABC):
         This means that if the network hardware sees TX frame A and then RX frame B separated by a very short time
         interval, the user may occasionally see the sequence inverted as (B, A).
 
-        There may be an arbitrary number of sniffing handlers installed; when a new handler is installed, it is
+        There may be an arbitrary number of capture handlers installed; when a new handler is installed, it is
         added to the existing ones, if any.
 
-        If the transport does not support sniffing, this method may have no observable effect.
-        Technically, the sniffing protocol, as you can see, does not present any requirements to the emitted events,
-        so an implementation that pretends to enter the sniffing mode while not actually doing anything is compliant.
+        If the transport does not support capture, this method may have no observable effect.
+        Technically, the capture protocol, as you can see, does not present any requirements to the emitted events,
+        so an implementation that pretends to enter the capture mode while not actually doing anything is compliant.
 
-        Since sniffing reflects actual network events, deterministic data loss mitigation will make the sniffer emit
+        Since capture reflects actual network events, deterministic data loss mitigation will make the instance emit
         duplicate frames for affected transfers (although this is probably obvious enough without this elaboration).
 
-        Currently, it is not possible to disable sniffing. Once enabled, it will go on until the transport instance
-        is destroyed.
+        It is not possible to disable capture. Once enabled, it will go on until the transport instance is destroyed.
 
-        :param handler: A one-argument callable invoked to inform the user about transport-level events.
-            The type of the argument is :class:`Sniff`, see transport-specific docs for the list of the possible
+        :param handler: A one-argument callable invoked to inform the user about low-level network events.
+            The type of the argument is :class:`Capture`, see transport-specific docs for the list of the possible
             concrete types and what events they represent.
-            The callable may be invoked from a different thread so the user should ensure synchronization.
-            If the callable raises an exception, it is suppressed and logged.
+            **The handler may be invoked from a different thread so the user should ensure synchronization.**
+            If the handler raises an exception, it is suppressed and logged.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    @abc.abstractmethod
+    def make_tracer() -> Tracer:
+        """
+        Use this factory method for constructing tracer implementations for specific transports.
+        Concrete tracers may be Voldemort types themselves.
+        See also: :class:`Tracer`, :meth:`begin_capture`.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def spoof(self, transfer: AlienTransfer, monotonic_deadline: float) -> bool:
+        """
+        When this method is invoked for the first time, the transport instance may need to perform one-time
+        initialization such as reconfiguring the networking hardware or loading additional drivers.
+        Once this one-time initialization is performed,
+        the transport instance will reside in the spoofing mode until the instance is closed;
+        it is not possible to leave the spoofing mode without closing the instance.
+        Some transports/platforms may require special permissions to perform spoofing (esp. IP-based transports).
+
+        If the source node-ID is not provided, an anonymous transfer will be emitted.
+        If anonymous transfers are not supported, :class:`pyuavcan.transport.OperationNotDefinedForAnonymousNodeError`
+        will be raised.
+
+        If the destination node-ID is not provided, a broadcast transfer will be emitted.
+        If the data specifier is that of a service, a :class:`UnsupportedSessionConfigurationError` will be raised.
+        The reverse conflict for messages is handled identically.
+
+        Transports with cyclic transfer-ID will compute the modulo automatically.
+
+        The return value is True on success, False on timeout.
         """
         raise NotImplementedError
 
@@ -233,18 +268,3 @@ class Transport(abc.ABC):
         """
         positional, keyword = self._get_repr_fields()
         return pyuavcan.util.repr_attributes_noexcept(self, *positional, **keyword)
-
-
-@dataclasses.dataclass(frozen=True)
-class Sniff:
-    """
-    This is the abstract data class for all events reported via the sniffing API.
-
-    If a transport implementation defines multiple event types, it is recommended to define a common superclass
-    for them such that it is always possible to determine which transport an event has arrived from using a single
-    instance check.
-    """
-    timestamp: pyuavcan.transport.Timestamp
-
-
-SnifferCallback = typing.Callable[[Sniff], None]

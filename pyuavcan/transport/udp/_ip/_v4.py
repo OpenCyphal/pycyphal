@@ -20,7 +20,7 @@ from ._socket_factory import SocketFactory, Sniffer
 from ._packet import RawPacket, MACHeader, IPHeader, UDPHeader
 from ._endpoint_mapping import SUBJECT_PORT, IP_ADDRESS_NODE_ID_MASK, service_data_specifier_to_udp_port
 from ._endpoint_mapping import node_id_to_unicast_ip, message_data_specifier_to_multicast_group
-from ._link_layer import LinkLayerSniff, LinkLayerSniffer, LinkLayerPacket
+from ._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket
 
 
 _logger = logging.getLogger(__name__)
@@ -164,7 +164,7 @@ class SnifferIPv4(Sniffer):
     def close(self) -> None:
         self._link_layer.close()
 
-    def _callback(self, lls: LinkLayerSniff) -> None:
+    def _callback(self, lls: LinkLayerCapture) -> None:
         rp = self._try_parse(lls.packet)
         if rp is not None:
             self._handler(lls.timestamp, rp)

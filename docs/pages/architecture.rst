@@ -161,8 +161,8 @@ Advanced network diagnostics: sniffing/snooping, spoofing, dissection
 
 Packet capture (aka sniffing or snooping) and their further analysis (either real-time or postmortem)
 are vital for advanced network diagnostics or debugging.
-While existing generalized solutions like Wireshark, libpcap, npcap, SocketCAN, etc. are adequate for
-low-level access, they are inadequate for non-trivial use cases where a higher-level view is desired.
+While existing general-purpose solutions like Wireshark, libpcap, npcap, SocketCAN, etc. are adequate for
+low-level access, they are unsuitable for non-trivial use cases where comprehensive analysis is desired.
 
 Certain scenarios require emitting spoofed traffic where some of its parameters are intentionally distorted
 (like fake source address).
@@ -171,16 +171,19 @@ running HITL/SITL simulation, or validating devices for compliance against the U
 
 These capabilities are covered by the advanced network diagnostics API exposed by the transport layer:
 
-- Transport event **capture** allows the user to monitor network packets exchanged over the network even
-  if they neither originate nor terminate at the local node.
+- :meth:`pyuavcan.transport.Transport.begin_capture` --
+  **capturing** on a transport refers to monitoring low-level network events and packets exchanged over the
+  network even if they neither originate nor terminate at the local node.
 
-- Event **dissector** allows the user to reconstruct high-level processes that transpire on the network
-  from a sequence of captured low-level events.
-  Dissection may take place in real-time (with PyUAVCAN connected to a live network) or offline
+- :meth:`pyuavcan.transport.Transport.make_tracer` --
+  **tracing** refers to reconstructing high-level processes that transpire on the network from a sequence of
+  captured low-level events.
+  Tracing may take place in real-time (with PyUAVCAN connected to a live network) or offline
   (with events read from a black box recorder or from a log file).
 
-- Transfer **spoofing** allows the user to fake network transactions as if they were coming from a different node
-  (possibly a non-existent one).
+- :meth:`pyuavcan.transport.Transport.spoof` --
+  **spoofing** refers to faking network transactions as if they were coming from a different node
+  (possibly a non-existent one) or whose parameters are significantly altered (e.g., out-of-sequence transfer-ID).
 
 These advanced capabilities exist alongside the main communication logic using a separate set of API entities
 because their semantics are incompatible with regular communication.

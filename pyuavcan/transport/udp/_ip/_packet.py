@@ -29,7 +29,7 @@ class MACHeader:
 @dataclasses.dataclass(frozen=True)
 class IPHeader:  # The IPv6 implementation may subclass this to add flow info and scope ID.
     """
-    Raw IP packet header used to represent sniffed packets.
+    Raw IP packet header used to represent captured packets.
     The addresses are specialized per protocol version.
     """
     source:      IPAddress
@@ -46,7 +46,7 @@ class IPHeader:  # The IPv6 implementation may subclass this to add flow info an
 @dataclasses.dataclass(frozen=True)
 class UDPHeader:
     """
-    Raw UDP packet header used to represent sniffed packets.
+    Raw UDP packet header used to represent captured packets.
     """
     source_port:      int
     destination_port: int
@@ -61,7 +61,7 @@ class UDPHeader:
 @dataclasses.dataclass(frozen=True)
 class RawPacket:
     """
-    Raw UDP/IP sniffed packet picked up from the network.
+    Raw UDP/IP captured packet picked up from the network.
     This may or may not be a valid UAVCAN/UDP transport frame.
     This type models the entire protocol stack up to UDP (L4), inclusive:
 

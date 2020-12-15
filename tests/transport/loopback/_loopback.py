@@ -147,13 +147,13 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
 
     assert None is await inp_42.receive_until(0)
 
-    mon_events: typing.List[pyuavcan.transport.Sniff] = []
-    mon_events2: typing.List[pyuavcan.transport.Sniff] = []
-    assert tr.sniffer_handlers == []
-    tr.sniff(mon_events.append)
-    assert len(tr.sniffer_handlers) == 1
-    tr.sniff(mon_events2.append)
-    assert len(tr.sniffer_handlers) == 2
+    mon_events: typing.List[pyuavcan.transport.Capture] = []
+    mon_events2: typing.List[pyuavcan.transport.Capture] = []
+    assert tr.capture_handlers == []
+    tr.begin_capture(mon_events.append)
+    assert len(tr.capture_handlers) == 1
+    tr.begin_capture(mon_events2.append)
+    assert len(tr.capture_handlers) == 2
     assert await out_bc.send_until(pyuavcan.transport.Transfer(
         timestamp=pyuavcan.transport.Timestamp.now(),
         priority=pyuavcan.transport.Priority.IMMEDIATE,
@@ -163,8 +163,8 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     rx = await inp_42.receive_until(0)
     assert rx is not None
     assert rx.transfer_id == 200 % 32
-    assert mon_events == [pyuavcan.transport.loopback.LoopbackSniff(rx.timestamp, rx)]
-    assert mon_events2 == [pyuavcan.transport.loopback.LoopbackSniff(rx.timestamp, rx)]
+    assert mon_events == [pyuavcan.transport.loopback.LoopbackCapture(rx.timestamp, rx)]
+    assert mon_events2 == [pyuavcan.transport.loopback.LoopbackCapture(rx.timestamp, rx)]
 
     assert len(tr.input_sessions) == 2
     assert len(tr.output_sessions) == 2

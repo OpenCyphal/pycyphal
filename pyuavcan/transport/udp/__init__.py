@@ -62,7 +62,8 @@ UAVCAN-specific UDP datagram header.
 +-------------------+-------------------+---------------------------------------------------------------------------+
 
 There are two data types that model UAVCAN/UDP protocol data: :class:`UDPFrame` and :class:`RawPacket`.
-The latter is never used during normal operation but only for reporting sniffed packets (see :class:`UDPSniff`).
+The latter is never used during normal operation but only during on-line capture sessions
+for reporting captured packets (see :class:`UDPCaptured`).
 
 
 IP address mapping
@@ -346,7 +347,7 @@ Inheritance diagram
 
 from ._udp import UDPTransport as UDPTransport
 from ._udp import UDPTransportStatistics as UDPTransportStatistics
-from ._udp import UDPSniff as UDPSniff
+from ._udp import UDPCapture as UDPCapture
 
 from ._session import UDPInputSession as UDPInputSession
 from ._session import PromiscuousUDPInputSession as PromiscuousUDPInputSession

@@ -125,7 +125,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
         self._sniffer: typing.Optional[Sniffer] = None
-        self._sniffer_handlers: typing.List[pyuavcan.transport.SnifferCallback] = []
+        self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
 
         self._closed = False
         self._statistics = UDPTransportStatistics()
@@ -209,29 +209,6 @@ class UDPTransport(pyuavcan.transport.Transport):
         assert out.specifier == specifier
         return out
 
-    def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
-        """
-        Reported events are of type :class:`UDPSniff`.
-
-        In order for the network sniffing to work, the local machine should be connected to a SPAN port of the switch.
-        See https://en.wikipedia.org/wiki/Port_mirroring and read the documentation for your networking hardware.
-
-        On GNU/Linux, network sniffing requires that either the process is executed by root,
-        or the raw packet capture capability ``CAP_NET_RAW`` is enabled.
-        For more info read ``man 7 capabilities`` and consider checking the docs for Wireshark/libpcap.
-
-        Packets that do not originate from the current UAVCAN/UDP subnet (configured on this transport instance)
-        are not reported via this interface.
-        This restriction is critical because there may be other UAVCAN/UDP networks running on the same physical
-        L2 network segregated by different subnets, so that if foreign packets were not dropped,
-        conflicts would occur.
-        """
-        self._ensure_not_closed()
-        if self._sniffer is None:
-            _logger.debug('%s: Starting UDP/IP packet sniffer (hope you have permissions)', self)
-            self._sniffer = self._sock_factory.make_sniffer(self._process_sniffed_packet)
-        self._sniffer_handlers.append(handler)
-
     def sample_statistics(self) -> UDPTransportStatistics:
         return copy.copy(self._statistics)
 
@@ -246,6 +223,39 @@ class UDPTransport(pyuavcan.transport.Transport):
     @property
     def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
         return self._sock_factory.local_ip_address
+
+    def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
+        """
+        Reported events are of type :class:`UDPCapture`.
+
+        In order for the network capture to work, the local machine should be connected to a SPAN port of the switch.
+        See https://en.wikipedia.org/wiki/Port_mirroring and read the documentation for your networking hardware.
+        Additional preconditions must be met depending on the platform:
+
+        - On GNU/Linux, network capture requires that either the process is executed by root,
+          or the raw packet capture capability ``CAP_NET_RAW`` is enabled.
+          For more info read ``man 7 capabilities`` and consider checking the docs for Wireshark/libpcap.
+
+        - On Windows, Npcap needs to be installed and configured; see https://nmap.org/npcap/.
+
+        Packets that do not originate from the current UAVCAN/UDP subnet (configured on this transport instance)
+        are not reported via this interface.
+        This restriction is critical because there may be other UAVCAN/UDP networks running on the same physical
+        L2 network segregated by different subnets, so that if foreign packets were not dropped,
+        conflicts would occur.
+        """
+        self._ensure_not_closed()
+        if self._sniffer is None:
+            _logger.debug('%s: Starting UDP/IP packet capture (hope you have permissions)', self)
+            self._sniffer = self._sock_factory.make_sniffer(self._process_captured_packet)
+        self._capture_handlers.append(handler)
+
+    @staticmethod
+    def make_tracer() -> pyuavcan.transport.Tracer:
+        raise NotImplementedError
+
+    async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
+        raise NotImplementedError
 
     def _setup_input_session(self,
                              specifier:        pyuavcan.transport.InputSessionSpecifier,
@@ -314,9 +324,9 @@ class UDPTransport(pyuavcan.transport.Transport):
                 finally:
                     del self._socket_reader_registry[specifier.data_specifier]
 
-    def _process_sniffed_packet(self, timestamp: pyuavcan.transport.Timestamp, packet: RawPacket) -> None:
-        """This handler may be invoked from a different thread (the sniffer thread)."""
-        pyuavcan.util.broadcast(self._sniffer_handlers)(UDPSniff(timestamp, packet))
+    def _process_captured_packet(self, timestamp: pyuavcan.transport.Timestamp, packet: RawPacket) -> None:
+        """This handler may be invoked from a different thread (the capture thread)."""
+        pyuavcan.util.broadcast(self._capture_handlers)(UDPCapture(timestamp, packet))
 
     def _ensure_not_closed(self) -> None:
         if self._closed:
@@ -331,9 +341,9 @@ class UDPTransport(pyuavcan.transport.Transport):
 
 
 @dataclasses.dataclass(frozen=True)
-class UDPSniff(pyuavcan.transport.Sniff):
+class UDPCapture(pyuavcan.transport.Capture):
     """
-    See :meth:`UDPTransport.sniff` for details.
+    See :meth:`UDPTransport.begin_capture` for details.
     """
     packet: RawPacket
 

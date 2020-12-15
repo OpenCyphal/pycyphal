@@ -77,7 +77,7 @@ ncat --broker --listen -p 50905 &>/dev/null &
 # shellcheck disable=SC2064
 trap "kill $! || echo 'Could not kill child $!'" SIGINT SIGTERM EXIT
 
-# Enable raw packet capture; this is necessary for testing the UAVCAN/UDP transport packet sniffer.
+# Enable raw packet capture; this is necessary for testing the UAVCAN/UDP transport packet capture implementation.
 # shellcheck disable=SC2046
 sudo setcap cap_net_raw+eip "$(readlink -f $(command -v python))" || die "Could not set CAP_NET_RAW on the interpreter"
 

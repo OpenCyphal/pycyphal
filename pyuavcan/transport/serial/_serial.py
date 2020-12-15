@@ -137,7 +137,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, SerialInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, SerialOutputSession] = {}
 
-        self._sniffer_handlers: typing.List[pyuavcan.transport.SnifferCallback] = []
+        self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
 
         self._statistics = SerialTransportStatistics()
 
@@ -252,15 +252,22 @@ class SerialTransport(pyuavcan.transport.Transport):
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
 
-    def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
-        """
-        The reported events are all subtypes of :class:`SerialSniff`, please read its documentation for details.
-        The events may be reported from a different thread (use locks).
-        """
-        self._sniffer_handlers.append(handler)
-
     def sample_statistics(self) -> SerialTransportStatistics:
         return copy.copy(self._statistics)
+
+    def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
+        """
+        The reported events are all subtypes of :class:`SerialCapture`, please read its documentation for details.
+        The events may be reported from a different thread (use locks).
+        """
+        self._capture_handlers.append(handler)
+
+    @staticmethod
+    def make_tracer() -> pyuavcan.transport.Tracer:
+        raise NotImplementedError
+
+    async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
+        raise NotImplementedError
 
     def _handle_received_frame(self, timestamp: Timestamp, frame: SerialFrame) -> None:
         self._statistics.in_frames += 1
@@ -343,9 +350,9 @@ class SerialTransport(pyuavcan.transport.Transport):
                 num_sent += 1
 
             self._statistics.out_frames += num_sent
-            if self._sniffer_handlers:
-                pyuavcan.util.broadcast(self._sniffer_handlers)(
-                    SerialTxSniff(tx_ts or Timestamp.now(), frames[:num_sent])
+            if self._capture_handlers:
+                pyuavcan.util.broadcast(self._capture_handlers)(
+                    SerialTxCapture(tx_ts or Timestamp.now(), frames[:num_sent])
                 )
         except Exception as ex:
             if self._closed:
@@ -364,15 +371,15 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         def callback(ts: Timestamp, item: typing.Union[SerialFrame, memoryview]) -> None:
             self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, ts, item, in_bytes_count)
-            if self._sniffer_handlers:
-                event: SerialSniff
+            if self._capture_handlers:
+                event: SerialCapture
                 if isinstance(item, SerialFrame):
-                    event = SerialRxFrameSniff(ts, item)
+                    event = SerialRxFrameCapture(ts, item)
                 elif isinstance(item, memoryview):
-                    event = SerialRxOutOfBandSniff(ts, item)
+                    event = SerialRxOutOfBandCapture(ts, item)
                 else:
                     assert False
-                pyuavcan.util.broadcast(self._sniffer_handlers)(event)
+                pyuavcan.util.broadcast(self._capture_handlers)(event)
 
         try:
             parser = StreamParser(callback, max(self.VALID_MTU_RANGE))
@@ -412,7 +419,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
 
 @dataclasses.dataclass(frozen=True)
-class SerialSniff(pyuavcan.transport.Sniff):
+class SerialCapture(pyuavcan.transport.Capture):
     """
     The set of subclasses may be extended in future versions.
     """
@@ -420,7 +427,7 @@ class SerialSniff(pyuavcan.transport.Sniff):
 
 
 @dataclasses.dataclass(frozen=True)
-class SerialTxSniff(SerialSniff):
+class SerialTxCapture(SerialCapture):
     """
     Outgoing transfer emission event from the local node.
 
@@ -432,7 +439,7 @@ class SerialTxSniff(SerialSniff):
 
 
 @dataclasses.dataclass(frozen=True)
-class SerialRxFrameSniff(SerialSniff):
+class SerialRxFrameCapture(SerialCapture):
     """
     Frame reception event.
     The timestamp reflects the time when the first byte was received.
@@ -442,7 +449,7 @@ class SerialRxFrameSniff(SerialSniff):
 
 
 @dataclasses.dataclass(frozen=True)
-class SerialRxOutOfBandSniff(SerialSniff):
+class SerialRxOutOfBandCapture(SerialCapture):
     """
     Out-of-band data or a malformed frame received. See :class:`StreamParser`.
     """

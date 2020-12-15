@@ -233,22 +233,22 @@ async def _unittest_udp_transport_ipv4() -> None:
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_udp_transport_ipv4_sniffer() -> None:
+async def _unittest_udp_transport_ipv4_capture() -> None:
     import socket
-    from pyuavcan.transport.udp import UDPSniff
+    from pyuavcan.transport.udp import UDPCapture
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
-    from pyuavcan.transport import Sniff
+    from pyuavcan.transport import Capture
 
-    tr_sniff = UDPTransport('127.50.0.2', anonymous=True)
-    sniffs: typing.List[UDPSniff] = []
+    tr_capture = UDPTransport('127.50.0.2', anonymous=True)
+    captures: typing.List[UDPCapture] = []
 
-    def inhale(s: Sniff) -> None:
-        print('SNIFF:', s)
-        assert isinstance(s, UDPSniff)
-        sniffs.append(s)
+    def inhale(s: Capture) -> None:
+        print('CAPTURED:', s)
+        assert isinstance(s, UDPCapture)
+        captures.append(s)
 
-    tr_sniff.sniff(inhale)
+    tr_capture.begin_capture(inhale)
     await asyncio.sleep(1.0)
 
     tr = UDPTransport('127.50.0.111')
@@ -265,7 +265,7 @@ async def _unittest_udp_transport_ipv4_sniffer() -> None:
                     socket.inet_aton('239.50.0.190') + socket.inet_aton('127.0.0.1'))
 
     ts = Timestamp.now()
-    assert len(sniffs) == 0         # Assuming here that there are no other entities that might create noise.
+    assert len(captures) == 0         # Assuming here that there are no other entities that might create noise.
     await broadcaster.send_until(
         Transfer(timestamp=ts,
                  priority=Priority.NOMINAL,
@@ -274,8 +274,8 @@ async def _unittest_udp_transport_ipv4_sniffer() -> None:
         monotonic_deadline=tr.loop.time() + 2.0,
     )
     await asyncio.sleep(1.0)        # Let the packet propagate.
-    assert len(sniffs) == 1         # Ensure the packet is captured.
-    tr_sniff.close()                # Ensure the capture is stopped after the sniffing transport is closed.
+    assert len(captures) == 1       # Ensure the packet is captured.
+    tr_capture.close()              # Ensure the capture is stopped after the capturing transport is closed.
     await broadcaster.send_until(   # This one shall be ignored.
         Transfer(timestamp=Timestamp.now(),
                  priority=Priority.HIGH,
@@ -284,12 +284,12 @@ async def _unittest_udp_transport_ipv4_sniffer() -> None:
         monotonic_deadline=tr.loop.time() + 2.0,
     )
     await asyncio.sleep(1.0)
-    assert len(sniffs) == 1         # Ignored?
+    assert len(captures) == 1         # Ignored?
     tr.close()
     sink.close()
 
-    pkt, = sniffs
-    assert isinstance(pkt, UDPSniff)
+    pkt, = captures
+    assert isinstance(pkt, UDPCapture)
     assert (ts.monotonic - 1) <= pkt.timestamp.monotonic <= Timestamp.now().monotonic
     assert (ts.system - 1) <= pkt.timestamp.system <= Timestamp.now().system
     assert str(pkt.packet.ip_header.source) == '127.50.0.111'

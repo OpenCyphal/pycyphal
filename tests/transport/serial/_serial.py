@@ -12,7 +12,7 @@ import logging
 import pyuavcan.transport
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pyuavcan.transport.serial import SerialTransport, SerialTransportStatistics, SerialFrame
-from pyuavcan.transport.serial import SerialSniff, SerialTxSniff, SerialRxFrameSniff, SerialRxOutOfBandSniff
+from pyuavcan.transport.serial import SerialCapture, SerialTxCapture, SerialRxFrameCapture, SerialRxOutOfBandCapture
 
 
 @pytest.mark.asyncio    # type: ignore
@@ -348,7 +348,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 
 
 @pytest.mark.asyncio    # type: ignore
-async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
+async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
     from pyuavcan.transport.serial import SerialFrame
@@ -370,10 +370,10 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
         PayloadMetadata(10000)
     )
 
-    events: typing.List[pyuavcan.transport.Sniff] = []
-    events2: typing.List[pyuavcan.transport.Sniff] = []
-    tr.sniff(events.append)
-    tr.sniff(events2.append)
+    events: typing.List[pyuavcan.transport.Capture] = []
+    events2: typing.List[pyuavcan.transport.Capture] = []
+    tr.begin_capture(events.append)
+    tr.begin_capture(events2.append)
     assert events == []
     assert events2 == []
 
@@ -393,11 +393,11 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
     # Send three -- one event, receive three -- three events.
     # Sorting is required because the ordering of the events in the middle is not defined: arrival events
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, c, d = sorted(events, key=lambda x: not isinstance(x, SerialRxFrameSniff))
-    assert isinstance(a, SerialRxFrameSniff)
-    assert isinstance(b, SerialRxFrameSniff)
-    assert isinstance(c, SerialRxFrameSniff)
-    assert isinstance(d, SerialTxSniff)
+    a, b, c, d = sorted(events, key=lambda x: not isinstance(x, SerialRxFrameCapture))
+    assert isinstance(a, SerialRxFrameCapture)
+    assert isinstance(b, SerialRxFrameCapture)
+    assert isinstance(c, SerialRxFrameCapture)
+    assert isinstance(d, SerialTxCapture)
     assert len(d.frames) == 3
 
     assert a.frame.transfer_id == 777
@@ -443,11 +443,11 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
     # Send two -- two events, receive two -- two events.
     # Sorting is required because the order of the two events in the middle is not defined: the arrival event
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, d, d2 = sorted(events, key=lambda x: not isinstance(x, SerialRxFrameSniff))
-    assert isinstance(a, SerialRxFrameSniff)
-    assert isinstance(b, SerialRxFrameSniff)
-    assert isinstance(d, SerialTxSniff)
-    assert isinstance(d2, SerialTxSniff)
+    a, b, d, d2 = sorted(events, key=lambda x: not isinstance(x, SerialRxFrameCapture))
+    assert isinstance(a, SerialRxFrameCapture)
+    assert isinstance(b, SerialRxFrameCapture)
+    assert isinstance(d, SerialTxCapture)
+    assert isinstance(d2, SerialTxCapture)
     assert len(d.frames) == 1
     assert len(d2.frames) == 1
 
@@ -482,7 +482,7 @@ async def _unittest_serial_transport_sniffer(caplog: typing.Any) -> None:
         await asyncio.sleep(1)
     assert events == events2
     oob, = events
-    assert isinstance(oob, SerialRxOutOfBandSniff)
+    assert isinstance(oob, SerialRxOutOfBandCapture)
     assert bytes(oob.data) == grownups  # The delimiter is (responsibly) consumed by the parser. Bye bye delimiter.
 
     events.clear()

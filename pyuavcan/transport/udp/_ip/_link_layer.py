@@ -143,7 +143,7 @@ class LinkLayerPacket:
 
 
 @dataclasses.dataclass(frozen=True)
-class LinkLayerSniff:
+class LinkLayerCapture:
     timestamp:   Timestamp
     packet:      LinkLayerPacket
     device_name: str
@@ -174,14 +174,14 @@ class LinkLayerSniffer:
     - https://github.com/karpierz/libpcap/blob/master/tests/capturetest.py
     """
 
-    def __init__(self, filter_expression: str, callback: typing.Callable[[LinkLayerSniff], None]) -> None:
+    def __init__(self, filter_expression: str, callback: typing.Callable[[LinkLayerCapture], None]) -> None:
         """
         :param filter_expression: The standard pcap filter expression;
             see https://www.tcpdump.org/manpages/pcap-filter.7.html.
             Use Wireshark for testing filter expressions.
 
         :param callback: This callback will be invoked once whenever a packet is captured with a single argument
-            of type :class:`LinkLayerSniff`.
+            of type :class:`LinkLayerCapture`.
             Notice an important detail: the sniffer takes care of managing the link layer packets.
             The user does not need to care which type of data link layer encapsulation is used:
             it could be Ethernet, IEEE 802.15.4, or whatever.
@@ -271,7 +271,7 @@ class LinkLayerSniffer:
                                      'The header is: %s',
                                      self, len(packet), name, ts, packet[:32].hex())
                 else:
-                    self._callback(LinkLayerSniff(timestamp=ts, packet=llp, device_name=name))
+                    self._callback(LinkLayerCapture(timestamp=ts, packet=llp, device_name=name))
 
             packets_per_batch = 100
             while self._keep_going:
@@ -613,7 +613,7 @@ def _unittest_sniff() -> None:
     ts_last = Timestamp.now()
     sniffs: typing.List[LinkLayerPacket] = []
 
-    def callback(lls: LinkLayerSniff) -> None:
+    def callback(lls: LinkLayerCapture) -> None:
         nonlocal ts_last
         now = Timestamp.now()
         assert ts_last.monotonic_ns <= lls.timestamp.monotonic_ns <= now.monotonic_ns

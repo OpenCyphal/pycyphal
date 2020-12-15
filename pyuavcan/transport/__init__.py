@@ -137,8 +137,6 @@ Below is the class inheritance diagram for this module (trivial classes may be o
 from ._transport import Transport as Transport
 from ._transport import ProtocolParameters as ProtocolParameters
 from ._transport import TransportStatistics as TransportStatistics
-from ._transport import Sniff as Sniff
-from ._transport import SnifferCallback as SnifferCallback
 
 # Transport model auxiliaries.
 from ._transfer import Transfer as Transfer
@@ -173,6 +171,14 @@ from ._error import OperationNotDefinedForAnonymousNodeError as OperationNotDefi
 from ._error import InvalidTransportConfigurationError as InvalidTransportConfigurationError
 from ._error import InvalidMediaConfigurationError as InvalidMediaConfigurationError
 from ._error import ResourceClosedError as ResourceClosedError
+
+# Analysis API.
+from ._analysis import Capture as Capture
+from ._analysis import CaptureCallback as CaptureCallback
+from ._analysis import AlienTransfer as AlienTransfer
+from ._analysis import Trace as Trace
+from ._analysis import TransferTrace as TransferTrace
+from ._analysis import Tracer as Tracer
 
 # Reusable components.
 from . import commons as commons

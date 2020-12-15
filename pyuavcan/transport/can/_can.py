@@ -94,7 +94,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
         self._last_filter_configuration_set: typing.Optional[typing.Sequence[FilterConfiguration]] = None
 
-        self._sniffer_handlers: typing.List[pyuavcan.transport.SnifferCallback] = []
+        self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
 
         self._frame_stats = CANTransportStatistics()
 
@@ -222,11 +222,18 @@ class CANTransport(pyuavcan.transport.Transport):
             self._reconfigure_acceptance_filters()
         return session
 
-    def sniff(self, handler: pyuavcan.transport.SnifferCallback) -> None:
+    def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
         """
-        Monitoring is not implemented yet -- the handlers are never invoked.
+        Capture is not implemented yet -- the handlers are never invoked.
         """
-        self._sniffer_handlers.append(handler)
+        self._capture_handlers.append(handler)
+
+    @staticmethod
+    def make_tracer() -> pyuavcan.transport.Tracer:
+        raise NotImplementedError
+
+    async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
+        raise NotImplementedError
 
     async def _do_send_until(self, t: SendTransaction) -> bool:
         """
