@@ -174,12 +174,12 @@ from ._error import InvalidMediaConfigurationError as InvalidMediaConfigurationE
 from ._error import ResourceClosedError as ResourceClosedError
 
 # Analysis API.
-from ._analysis import Capture as Capture
-from ._analysis import CaptureCallback as CaptureCallback
-from ._analysis import AlienTransfer as AlienTransfer
-from ._analysis import Trace as Trace
-from ._analysis import TransferTrace as TransferTrace
-from ._analysis import Tracer as Tracer
+from ._tracer import Capture as Capture
+from ._tracer import CaptureCallback as CaptureCallback
+from ._tracer import AlienTransfer as AlienTransfer
+from ._tracer import Trace as Trace
+from ._tracer import TransferTrace as TransferTrace
+from ._tracer import Tracer as Tracer
 
 # Reusable components.
 from . import commons as commons

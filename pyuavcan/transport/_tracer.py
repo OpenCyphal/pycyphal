@@ -128,14 +128,18 @@ class Tracer(abc.ABC):
 
     The user should never attempt to instantiate implementations manually; instead, the factory method
     :meth:`pyuavcan.transport.Transport.make_tracer` should be used.
+
+    Each transport implementation typically implements its own tracer.
     """
 
     @abc.abstractmethod
     def update(self, event: Capture) -> typing.Optional[Trace]:
         """
-        Captured low-level network event at the input, reconstructed high-level event at the output.
+        Takes a captured low-level network event at the input, returns a reconstructed high-level event at the output.
         If the event is considered irrelevant or did not update the internal state significantly
         (i.e., this is a non-last frame of a multi-frame transfer), the output is None.
         Reconstructed multi-frame transfers are reported as a single event when the last frame is received.
+
+        Capture instances that are not supported by the current transport are silently ignored.
         """
         raise NotImplementedError

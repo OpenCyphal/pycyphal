@@ -12,7 +12,7 @@ import dataclasses
 import pyuavcan.util
 from ._session import InputSession, OutputSession, InputSessionSpecifier, OutputSessionSpecifier
 from ._payload_metadata import PayloadMetadata
-from ._analysis import CaptureCallback, Tracer, AlienTransfer
+from ._tracer import CaptureCallback, Tracer, AlienTransfer
 
 
 @dataclasses.dataclass(frozen=True)
@@ -32,13 +32,13 @@ class ProtocolParameters:
     All high-overhead transports (UDP, Serial, etc.) use a sufficiently large value that will never overflow
     in a realistic, practical scenario.
     The background and motivation are explained at https://forum.uavcan.org/t/alternative-transport-protocols/324.
-    Example: 32 for CAN, 72057594037927936 (2**56) for UDP.
+    Example: 32 for CAN, (2**64) for UDP.
     """
 
     max_nodes: int
     """
     How many nodes can the transport accommodate in a given network.
-    Example: 128 for CAN, 4096 for Serial.
+    Example: 128 for CAN, 65535 for UDP.
     """
 
     mtu: int
