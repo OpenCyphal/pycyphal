@@ -236,6 +236,7 @@ async def _unittest_loopback_tracer() -> None:
         fragmented_payload=[],
     )
     trace_req = tr.update(LoopbackCapture(ts, req))
+    assert isinstance(trace_req, TransferTrace)
     assert trace_req == TransferTrace(
         timestamp=ts,
         transfer=req,

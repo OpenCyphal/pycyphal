@@ -24,7 +24,7 @@ class LoopbackTracer(pyuavcan.transport.Tracer):
     from the capture object (matched with its sibling in case of service response).
     """
 
-    _HISTORY_DEPTH = 1000
+    _HISTORY_DEPTH = 100
 
     def __init__(self) -> None:
         self._recent: typing.Dict[AlienSessionSpecifier, OrderedDict[int, TransferTrace]] = {}

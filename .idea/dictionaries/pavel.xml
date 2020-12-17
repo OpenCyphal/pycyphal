@@ -256,6 +256,7 @@
       <w>todos</w>
       <w>tradeoff</w>
       <w>typecheck</w>
+      <w>uart</w>
       <w>uavcan</w>
       <w>uber</w>
       <w>udpros</w>
@@ -274,6 +275,7 @@
       <w>versioning</w>
       <w>veyor</w>
       <w>virtualization</w>
+      <w>voldemort</w>
       <w>vpaun</w>
       <w>vssc</w>
       <w>weakref</w>
