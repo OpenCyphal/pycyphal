@@ -7,24 +7,16 @@
 import typing
 import asyncio
 import dataclasses
-
 import pyuavcan.transport
 import pyuavcan.util
 from ._input_session import LoopbackInputSession
 from ._output_session import LoopbackOutputSession
+from ._tracer import LoopbackCapture, LoopbackTracer
 
 
 @dataclasses.dataclass
 class LoopbackTransportStatistics(pyuavcan.transport.TransportStatistics):
     pass
-
-
-@dataclasses.dataclass(frozen=True)
-class LoopbackCapture(pyuavcan.transport.Capture):
-    """
-    The capture handlers will receive :class:`pyuavcan.transport.TransferFrom` for each exchanged transfer.
-    """
-    transfer: pyuavcan.transport.TransferFrom
 
 
 class LoopbackTransport(pyuavcan.transport.Transport):
@@ -113,10 +105,23 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                     timestamp=tr.timestamp,
                     priority=tr.priority,
                     transfer_id=tr.transfer_id % self.protocol_parameters.transfer_id_modulo,
-                    fragmented_payload=tr.fragmented_payload,
+                    fragmented_payload=list(tr.fragmented_payload),
                     source_node_id=self.local_node_id,
                 )
-                pyuavcan.util.broadcast(self._capture_handlers)(LoopbackCapture(tr_from.timestamp, tr_from))
+                del tr
+                pyuavcan.util.broadcast(self._capture_handlers)(LoopbackCapture(
+                    tr_from.timestamp,
+                    pyuavcan.transport.AlienTransfer(
+                        priority=tr_from.priority,
+                        session_specifier=pyuavcan.transport.AlienSessionSpecifier(
+                            source_node_id=self.local_node_id,
+                            destination_node_id=specifier.remote_node_id,
+                            data_specifier=specifier.data_specifier,
+                        ),
+                        transfer_id=tr_from.transfer_id,
+                        fragmented_payload=list(tr_from.fragmented_payload),
+                    ),
+                ))
                 for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                     try:
                         destination_session = self._input_sessions[
@@ -154,8 +159,11 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         self._capture_handlers.append(handler)
 
     @staticmethod
-    def make_tracer() -> pyuavcan.transport.Tracer:
-        raise NotImplementedError
+    def make_tracer() -> LoopbackTracer:
+        """
+        See :class:`LoopbackTracer`.
+        """
+        return LoopbackTracer()
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
         raise NotImplementedError

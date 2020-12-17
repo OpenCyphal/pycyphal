@@ -176,8 +176,10 @@ from ._error import ResourceClosedError as ResourceClosedError
 # Analysis API.
 from ._tracer import Capture as Capture
 from ._tracer import CaptureCallback as CaptureCallback
+from ._tracer import AlienSessionSpecifier as AlienSessionSpecifier
 from ._tracer import AlienTransfer as AlienTransfer
 from ._tracer import Trace as Trace
+from ._tracer import ErrorTrace as ErrorTrace
 from ._tracer import TransferTrace as TransferTrace
 from ._tracer import Tracer as Tracer
 

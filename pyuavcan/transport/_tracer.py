@@ -1,4 +1,4 @@
-# Copyright (c) UAVCAN Consortium
+# Copyright (c) 2020 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
@@ -25,6 +25,26 @@ CaptureCallback = typing.Callable[[Capture], None]
 
 
 @dataclasses.dataclass(frozen=True)
+class AlienSessionSpecifier:
+    """
+    See :class:`AlienTransfer` and the abstract transport model.
+    """
+    source_node_id: typing.Optional[int]
+    """None represents an anonymous transfer."""
+
+    destination_node_id: typing.Optional[int]
+    """None represents a broadcast transfer."""
+
+    data_specifier: pyuavcan.transport.DataSpecifier
+
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(self,
+                                             self.data_specifier,
+                                             source_node_id=self.source_node_id,
+                                             destination_node_id=self.destination_node_id)
+
+
+@dataclasses.dataclass(frozen=True)
 class AlienTransfer:
     """
     This type models a captured (sniffed) decoded transfer exchanged between a local node and a remote node,
@@ -35,20 +55,9 @@ class AlienTransfer:
     You may notice that the regular transfer model does not include some information such as, say, the route specifier,
     because the respective behaviors are managed by the transport configuration.
     """
-
     priority: pyuavcan.transport.Priority
 
-    source_node_id: typing.Optional[int]
-    """
-    None represents an anonymous transfer.
-    """
-
-    destination_node_id: typing.Optional[int]
-    """
-    None represents a broadcast transfer.
-    """
-
-    data_specifier: pyuavcan.transport.DataSpecifier
+    session_specifier: AlienSessionSpecifier
 
     transfer_id: int
     """
@@ -90,6 +99,7 @@ class Trace:
 class ErrorTrace(Trace):
     """
     This trace is yielded when the tracer has determined that it is unable to reconstruct a transfer.
+    It may be further specialized by transport implementations.
     """
     pass
 
@@ -133,13 +143,15 @@ class Tracer(abc.ABC):
     """
 
     @abc.abstractmethod
-    def update(self, event: Capture) -> typing.Optional[Trace]:
+    def update(self, cap: Capture) -> typing.Optional[Trace]:
         """
         Takes a captured low-level network event at the input, returns a reconstructed high-level event at the output.
         If the event is considered irrelevant or did not update the internal state significantly
         (i.e., this is a non-last frame of a multi-frame transfer), the output is None.
         Reconstructed multi-frame transfers are reported as a single event when the last frame is received.
 
-        Capture instances that are not supported by the current transport are silently ignored.
+        Capture instances that are not supported by the current transport are silently ignored and None is returned.
+        This is to simplify tracing over heterogeneous transports where there are several tracer instances used
+        concurrently, one per transport type.
         """
         raise NotImplementedError
