@@ -72,6 +72,32 @@ class AlienTransfer:
     For outgoing transfers the number of fragments may be arbitrary, the payload is always rearranged correctly.
     """
 
+    def __eq__(self, other: object) -> bool:
+        """
+        Transfers whose payload is fragmented differently but content-wise is identical compare equal.
+
+        >>> from pyuavcan.transport import MessageDataSpecifier, Priority
+        >>> a = AlienTransfer(Priority.LOW, AlienSessionSpecifier(123, None, MessageDataSpecifier(8000)), 123456,
+        ...                   fragmented_payload=[memoryview(b'abc'), memoryview(b'def')])
+        >>> a == AlienTransfer(Priority.LOW, AlienSessionSpecifier(123, None, MessageDataSpecifier(8000)), 123456,
+        ...                    fragmented_payload=[memoryview(b'abcd'), memoryview(b''), memoryview(b'ef')])
+        True
+        >>> a == AlienTransfer(Priority.LOW, AlienSessionSpecifier(123, None, MessageDataSpecifier(8000)), 123456,
+        ...                    fragmented_payload=[memoryview(b'abcdef')])
+        True
+        >>> a == AlienTransfer(Priority.LOW, AlienSessionSpecifier(123, None, MessageDataSpecifier(8000)), 123456,
+        ...                    fragmented_payload=[])
+        False
+        """
+        if isinstance(other, AlienTransfer):
+            def cat(fp: pyuavcan.transport.FragmentedPayload) -> memoryview:
+                return fp[0] if len(fp) == 1 else memoryview(b''.join(fp))
+
+            return (self.priority == other.priority and self.session_specifier == other.session_specifier
+                    and self.transfer_id == other.transfer_id
+                    and cat(self.fragmented_payload) == cat(other.fragmented_payload))
+        return NotImplemented
+
     def __repr__(self) -> str:
         fragmented_payload = '+'.join(f'{len(x)}B' for x in self.fragmented_payload)
         kwargs = {
@@ -110,6 +136,16 @@ class TransferTrace(Trace):
     Reconstructed network data transfer along with references to all its frames.
     """
     transfer: AlienTransfer
+
+    transfer_id_timeout: float
+    """
+    The tracer uses heuristics to automatically deduce the optimal transfer-ID timeout value per session
+    based on the supplied captures.
+    Whenever a new transfer is reassembled, the auto-deduced transfer-ID timeout that is currently used
+    for its session is reported for informational purposes.
+    This value may be used later to perform transfer deduplication if redundant tracers are used;
+    for that, see :mod:`pyuavcan.transport.redundant`.
+    """
 
     frames: typing.List[Capture]
     """

@@ -34,6 +34,7 @@ class LoopbackTracer(pyuavcan.transport.Tracer):
             sibling = self._get_sibling(cap.transfer)
             out = TransferTrace(timestamp=cap.timestamp,
                                 transfer=cap.transfer,
+                                transfer_id_timeout=0.0,
                                 frames=[cap],
                                 sibling=sibling)
             self._record(out)
