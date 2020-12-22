@@ -215,8 +215,8 @@ def _unittest_slow_cli_demo_app(
                 f"{{command: {uavcan.node.ExecuteCommand_1_1.Request.COMMAND_STORE_PERSISTENT_STATES} }}",
                 "--format",
                 "json",
-                *iface_option.make_cli_args(123),
-                timeout=5.0,  # type: ignore
+                *iface_option.make_cli_args(123),  # type: ignore
+                timeout=5.0,
             )
         )
         assert command_response["435"]["status"] == uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND
@@ -231,8 +231,8 @@ def _unittest_slow_cli_demo_app(
                 "{command: 23456}",
                 "--format",
                 "json",
-                *iface_option.make_cli_args(123),
-                timeout=5.0,  # type: ignore
+                *iface_option.make_cli_args(123),  # type: ignore
+                timeout=5.0,
             )
         )
         assert command_response["435"]["status"] == uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS
@@ -248,8 +248,8 @@ def _unittest_slow_cli_demo_app(
                 "--timeout=5",
                 "--format",
                 "json",
-                *iface_option.make_cli_args(123),
-                timeout=6.0,  # type: ignore
+                *iface_option.make_cli_args(123),  # type: ignore
+                timeout=6.0,
             )
         )
         assert least_squares_response["123"]["slope"] == pytest.approx(2.0)
@@ -266,8 +266,8 @@ def _unittest_slow_cli_demo_app(
                 f"{{command: {uavcan.node.ExecuteCommand_1_1.Request.COMMAND_POWER_OFF} }}",
                 "--format",
                 "json",
-                *iface_option.make_cli_args(123),
-                timeout=5.0,  # type: ignore
+                *iface_option.make_cli_args(123),  # type: ignore
+                timeout=5.0,
             )
         )
         assert command_response["435"]["status"] == uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS
