@@ -116,7 +116,8 @@ chmod 444 .mypy_cache
 mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg pyuavcan tests .test_dsdl_generated \
     || die "MyPy returned $?"
 
-pycodestyle pyuavcan tests || die "pycodestyle returned $?"
+# See configuration file for details.
+black --check . || die "black returned $?"
 
 # ---------------------------------------------------------------------------------------------------------------------
 

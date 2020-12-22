@@ -345,7 +345,7 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=True,
-                 payload=hedgehog)
+                 payload=hedgehog),
     ) == mk_transfer(timestamp=mk_ts(1000.0),
                      transfer_id=0,
                      fragmented_payload=[hedgehog])
@@ -356,7 +356,7 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=True,
-                 payload=hedgehog)
+                 payload=hedgehog),
     ) is None
 
     # Same transfer-ID, different EOT; transfer ignored, no error registered.
@@ -365,7 +365,7 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=False,
-                 payload=hedgehog)
+                 payload=hedgehog),
     ) is None
 
     # Valid multi-frame transfer.
@@ -374,14 +374,14 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=2,
                  index=0,
                  end_of_transfer=False,
-                 payload=hedgehog[:50])
+                 payload=hedgehog[:50]),
     ) is None
     assert push(
         mk_ts(1000.0),
         mk_frame(transfer_id=2,
                  index=1,
                  end_of_transfer=True,
-                 payload=hedgehog[50:] + TransferCRC.new(hedgehog).value_as_bytes)
+                 payload=hedgehog[50:] + TransferCRC.new(hedgehog).value_as_bytes),
     ) == mk_transfer(timestamp=mk_ts(1000.0),
                      transfer_id=2,
                      fragmented_payload=[hedgehog[:50], hedgehog[50:]])
@@ -392,21 +392,21 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=10,
                  index=2,
                  end_of_transfer=True,
-                 payload=TransferCRC.new(hedgehog).value_as_bytes)
+                 payload=TransferCRC.new(hedgehog).value_as_bytes),
     ) is None
     assert push(
         mk_ts(1000.0),
         mk_frame(transfer_id=10,
                  index=1,
                  end_of_transfer=False,
-                 payload=hedgehog[50:])
+                 payload=hedgehog[50:]),
     ) is None
     assert push(
         mk_ts(1000.0),  # FIRST FRAME
         mk_frame(transfer_id=10,
                  index=0,
                  end_of_transfer=False,
-                 payload=hedgehog[:50])
+                 payload=hedgehog[:50]),
     ) == mk_transfer(timestamp=mk_ts(1000.0),
                      transfer_id=10,
                      fragmented_payload=[hedgehog[:50], hedgehog[50:]])
@@ -417,49 +417,49 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=11,
                  index=1,
                  end_of_transfer=False,
-                 payload=hedgehog[50:])
+                 payload=hedgehog[50:]),
     ) is None
     assert push(
         mk_ts(1000.0),  # OLD TID
         mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=False,
-                 payload=hedgehog[50:])
+                 payload=hedgehog[50:]),
     ) is None
     assert push(
         mk_ts(1000.0),  # LAST FRAME
         mk_frame(transfer_id=11,
                  index=2,
                  end_of_transfer=True,
-                 payload=TransferCRC.new(hedgehog).value_as_bytes)
+                 payload=TransferCRC.new(hedgehog).value_as_bytes),
     ) is None
     assert push(
         mk_ts(1000.0),  # DUPLICATE OF INDEX 1
         mk_frame(transfer_id=11,
                  index=1,
                  end_of_transfer=False,
-                 payload=hedgehog[50:])
+                 payload=hedgehog[50:]),
     ) is None
     assert push(
         mk_ts(1000.0),  # OLD TID
         mk_frame(transfer_id=10,
                  index=1,
                  end_of_transfer=False,
-                 payload=hedgehog[50:])
+                 payload=hedgehog[50:]),
     ) is None
     assert push(
         mk_ts(1000.0),  # MALFORMED FRAME (no payload), ignored
         mk_frame(transfer_id=9999999999,
                  index=0,
                  end_of_transfer=False,
-                 payload=b'')
+                 payload=b''),
     ) is None
     assert push(
         mk_ts(1000.0),  # FIRST FRAME
         mk_frame(transfer_id=11,
                  index=0,
                  end_of_transfer=False,
-                 payload=hedgehog[:50])
+                 payload=hedgehog[:50]),
     ) == mk_transfer(timestamp=mk_ts(1000.0),
                      transfer_id=11,
                      fragmented_payload=[hedgehog[:50], hedgehog[50:]])
@@ -470,28 +470,28 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=102,
                  index=0,
                  end_of_transfer=False,
-                 payload=hedgehog)
+                 payload=hedgehog),
     ) is None
     assert push(
         mk_ts(1000.0),
         mk_frame(transfer_id=102,
                  index=1,
                  end_of_transfer=False,
-                 payload=hedgehog)
+                 payload=hedgehog),
     ) is None
     assert push(
         mk_ts(1000.0),
         mk_frame(transfer_id=102,
                  index=2,
                  end_of_transfer=False,
-                 payload=hedgehog)
+                 payload=hedgehog),
     ) is None
     assert push(
         mk_ts(1000.0),
         mk_frame(transfer_id=102,
                  index=3,
                  end_of_transfer=True,
-                 payload=hedgehog + TransferCRC.new(hedgehog * 4).value_as_bytes)
+                 payload=hedgehog + TransferCRC.new(hedgehog * 4).value_as_bytes),
     ) == mk_transfer(timestamp=mk_ts(1000.0),
                      transfer_id=102,
                      fragmented_payload=[hedgehog] * 2)
@@ -502,28 +502,28 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=103,
                  index=2,
                  end_of_transfer=False,
-                 payload=horse)
+                 payload=horse),
     ) is None
     assert push(
         mk_ts(1000.0),
         mk_frame(transfer_id=103,
                  index=3,
                  end_of_transfer=True,
-                 payload=horse + TransferCRC.new(horse * 4).value_as_bytes)
+                 payload=horse + TransferCRC.new(horse * 4).value_as_bytes),
     ) is None
     assert push(
         mk_ts(1000.0),
         mk_frame(transfer_id=103,
                  index=1,
                  end_of_transfer=False,
-                 payload=horse)
+                 payload=horse),
     ) is None
     assert push(
         mk_ts(1000.0),
         mk_frame(transfer_id=103,
                  index=0,
                  end_of_transfer=False,
-                 payload=horse)
+                 payload=horse),
     ) == mk_transfer(timestamp=mk_ts(1000.0),
                      transfer_id=103,
                      fragmented_payload=[horse] * 2)
@@ -534,7 +534,7 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=True,
-                 payload=hedgehog)
+                 payload=hedgehog),
     ) == mk_transfer(timestamp=mk_ts(2000.0),
                      transfer_id=0,
                      fragmented_payload=[hedgehog])
@@ -552,14 +552,14 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=2,
                  index=1,
                  end_of_transfer=False,
-                 payload=hedgehog)
+                 payload=hedgehog),
     ) is None
     assert push(
         mk_ts(3000.0),  # Another transfer! The old one is discarded.
         mk_frame(transfer_id=3,
                  index=1,
                  end_of_transfer=False,
-                 payload=horse[50:])
+                 payload=horse[50:]),
     ) is None
     assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     1,
@@ -573,14 +573,14 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=3,
                  index=2,
                  end_of_transfer=True,
-                 payload=TransferCRC.new(horse).value_as_bytes)
+                 payload=TransferCRC.new(horse).value_as_bytes),
     ) is None
     assert push(
         mk_ts(3000.0),
         mk_frame(transfer_id=3,
                  index=0,
                  end_of_transfer=False,
-                 payload=horse[:50])
+                 payload=horse[:50]),
     ) == mk_transfer(timestamp=mk_ts(3000.0),
                      transfer_id=3,
                      fragmented_payload=[horse[:50], horse[50:]])
@@ -598,14 +598,14 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=10,
                  index=1,
                  end_of_transfer=False,
-                 payload=hedgehog)
+                 payload=hedgehog),
     ) is None
     assert push(
         mk_ts(4000.0),  # Another transfer! The old one is discarded.
         mk_frame(transfer_id=3,
                  index=1,
                  end_of_transfer=False,
-                 payload=horse[50:])
+                 payload=horse[50:]),
     ) is None
     assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
@@ -619,14 +619,14 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=3,
                  index=2,
                  end_of_transfer=True,
-                 payload=TransferCRC.new(horse).value_as_bytes)
+                 payload=TransferCRC.new(horse).value_as_bytes),
     ) is None
     assert push(
         mk_ts(4000.0),
         mk_frame(transfer_id=3,
                  index=0,
                  end_of_transfer=False,
-                 payload=horse[:50])
+                 payload=horse[:50]),
     ) == mk_transfer(timestamp=mk_ts(4000.0),
                      transfer_id=3,
                      fragmented_payload=[horse[:50], horse[50:]])
@@ -644,21 +644,21 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=10,
                  index=1,
                  end_of_transfer=False,
-                 payload=hedgehog[50:])
+                 payload=hedgehog[50:]),
     ) is None
     assert push(
         mk_ts(5000.0),  # LAST FRAME
         mk_frame(transfer_id=10,
                  index=2,
                  end_of_transfer=True,
-                 payload=TransferCRC.new(hedgehog).value_as_bytes[::-1])  # Bad CRC here.
+                 payload=TransferCRC.new(hedgehog).value_as_bytes[::-1]),  # Bad CRC here.
     ) is None
     assert push(
         mk_ts(5000.0),  # FIRST FRAME
         mk_frame(transfer_id=10,
                  index=0,
                  end_of_transfer=False,
-                 payload=hedgehog[:50])
+                 payload=hedgehog[:50]),
     ) is None
     assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
@@ -674,21 +674,21 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=11,
                  index=1,
                  end_of_transfer=False,
-                 payload=hedgehog[50:])
+                 payload=hedgehog[50:]),
     ) is None
     assert push(
         mk_ts(5000.0),  # PAST THE END OF TRANSFER
         mk_frame(transfer_id=11,
                  index=3,
                  end_of_transfer=False,
-                 payload=horse)
+                 payload=horse),
     ) is None
     assert push(
         mk_ts(5000.0),  # LAST FRAME
         mk_frame(transfer_id=11,
                  index=2,
                  end_of_transfer=True,
-                 payload=TransferCRC.new(hedgehog + horse).value_as_bytes)
+                 payload=TransferCRC.new(hedgehog + horse).value_as_bytes),
     ) is None
     assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
@@ -704,21 +704,21 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=12,
                  index=0,
                  end_of_transfer=False,
-                 payload=hedgehog[:50])
+                 payload=hedgehog[:50]),
     ) is None
     assert push(
         mk_ts(5000.0),  # LAST FRAME A
         mk_frame(transfer_id=12,
                  index=2,
                  end_of_transfer=True,
-                 payload=TransferCRC.new(hedgehog + horse).value_as_bytes)
+                 payload=TransferCRC.new(hedgehog + horse).value_as_bytes),
     ) is None
     assert push(
         mk_ts(5000.0),  # LAST FRAME B
         mk_frame(transfer_id=12,
                  index=3,
                  end_of_transfer=True,
-                 payload=horse)
+                 payload=horse),
     ) is None
     assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES:     2,
@@ -734,7 +734,7 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=True,
-                 payload=b'')
+                 payload=b''),
     ) == mk_transfer(timestamp=mk_ts(6000.0),
                      transfer_id=0,
                      fragmented_payload=[b''])
@@ -756,7 +756,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
               transfer_id=123456,
               index=0,
               end_of_transfer=True,
-              payload=memoryview(b'abcdef'))
+              payload=memoryview(b'abcdef')),
     ) == TransferFrom(timestamp=ts,
                       priority=prio,
                       transfer_id=123456,
@@ -769,7 +769,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
               transfer_id=123456,
               index=1,
               end_of_transfer=True,
-              payload=memoryview(b'abcdef'))
+              payload=memoryview(b'abcdef')),
     ) is None
 
     assert TransferReassembler.construct_anonymous_transfer(
@@ -778,7 +778,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
               transfer_id=123456,
               index=0,
               end_of_transfer=False,
-              payload=memoryview(b'abcdef'))
+              payload=memoryview(b'abcdef')),
     ) is None
 
 
