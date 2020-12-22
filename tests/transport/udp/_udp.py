@@ -238,7 +238,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     from pyuavcan.transport.udp import UDPCapture
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
-    from pyuavcan.transport import Capture
+    from pyuavcan.transport import Capture, AlienSessionSpecifier
 
     tr_capture = UDPTransport('127.50.0.2', anonymous=True)
     captures: typing.List[UDPCapture] = []
@@ -296,10 +296,11 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     assert str(pkt.packet.ip_header.destination) == '239.50.0.190'
     parsed = pkt.parse()
     assert parsed
-    src_nid, dst_nid, ds, frame = parsed
-    assert src_nid == 111
-    assert dst_nid is None
-    assert ds == broadcaster.specifier.data_specifier
+    ses, frame = parsed
+    assert isinstance(ses, AlienSessionSpecifier)
+    assert ses.source_node_id == 111
+    assert ses.destination_node_id is None
+    assert ses.data_specifier == broadcaster.specifier.data_specifier
     assert frame.end_of_transfer
     assert frame.index == 0
     assert frame.transfer_id == 9876543210

@@ -347,7 +347,6 @@ Inheritance diagram
 
 from ._udp import UDPTransport as UDPTransport
 from ._udp import UDPTransportStatistics as UDPTransportStatistics
-from ._udp import UDPCapture as UDPCapture
 
 from ._session import UDPInputSession as UDPInputSession
 from ._session import PromiscuousUDPInputSession as PromiscuousUDPInputSession
@@ -374,3 +373,7 @@ from ._ip import message_data_specifier_to_multicast_group as message_data_speci
 from ._ip import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
 from ._ip import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
 from ._ip import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier
+
+from ._tracer import UDPCapture as UDPCapture
+from ._tracer import UDPTracer as UDPTracer
+from ._tracer import UDPErrorTrace as UDPErrorTrace

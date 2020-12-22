@@ -179,10 +179,10 @@ class _AlienSession:
 
 
 def _unittest_serial_tracer() -> None:
-    from pytest import raises
+    from pytest import raises, approx
     from pyuavcan.transport import Priority, MessageDataSpecifier
 
-    tr = SerialTracer()
+    tr = pyuavcan.transport.serial.SerialTransport.make_tracer()
     ts = Timestamp.now()
 
     def tx(x: typing.Union[bytes, bytearray, memoryview]) -> typing.Optional[Trace]:
@@ -211,7 +211,7 @@ def _unittest_serial_tracer() -> None:
     trace = tx(tail)
     assert isinstance(trace, TransferTrace)
     assert trace.timestamp == ts
-    assert trace.transfer_id_timeout == AlienTransferReassembler.MAX_TRANSFER_ID_TIMEOUT  # Initial value.
+    assert trace.transfer_id_timeout == approx(AlienTransferReassembler.MAX_TRANSFER_ID_TIMEOUT)  # Initial value.
     assert trace.transfer.metadata.transfer_id == 1234567890
     assert trace.transfer.metadata.priority == Priority.SLOW
     assert trace.transfer.metadata.session_specifier.source_node_id == 1111

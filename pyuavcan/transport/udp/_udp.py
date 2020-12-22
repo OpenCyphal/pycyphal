@@ -17,6 +17,7 @@ from ._frame import UDPFrame
 from ._ip import SocketFactory, Sniffer, RawPacket
 from ._ip import unicast_ip_to_node_id
 from ._socket_reader import SocketReader, SocketReaderStatistics
+from ._tracer import UDPTracer, UDPCapture
 
 
 _logger = logging.getLogger(__name__)
@@ -251,8 +252,11 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._capture_handlers.append(handler)
 
     @staticmethod
-    def make_tracer() -> pyuavcan.transport.Tracer:
-        raise NotImplementedError
+    def make_tracer() -> UDPTracer:
+        """
+        See :class:`UDPTracer`.
+        """
+        return UDPTracer()
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
         raise NotImplementedError
@@ -338,47 +342,3 @@ class UDPTransport(pyuavcan.transport.Transport):
             'service_transfer_multiplier': self._srv_multiplier,
             'mtu': self._mtu,
         }
-
-
-@dataclasses.dataclass(frozen=True)
-class UDPCapture(pyuavcan.transport.Capture):
-    """
-    See :meth:`UDPTransport.begin_capture` for details.
-    """
-    packet: RawPacket
-
-    def parse(self) -> typing.Optional[typing.Tuple[int,
-                                                    typing.Optional[int],
-                                                    pyuavcan.transport.DataSpecifier,
-                                                    UDPFrame]]:
-        """
-        A tuple of (source node-ID, destination node-ID (None if broadcast), data specifier, UAVCAN/UDP frame)
-        is only defined if the packet is a valid UAVCAN/UDP frame.
-        """
-        from ._ip import SUBJECT_PORT, udp_port_to_service_data_specifier, multicast_group_to_message_data_specifier
-
-        ip_header = self.packet.ip_header
-
-        dst_nid: typing.Optional[int]
-        data_spec: typing.Optional[pyuavcan.transport.DataSpecifier]
-        if ip_header.destination.is_multicast:
-            if self.packet.udp_header.destination_port != SUBJECT_PORT:
-                return None
-            dst_nid = None  # Broadcast
-            data_spec = multicast_group_to_message_data_specifier(ip_header.source, ip_header.destination)
-        else:
-            dst_nid = unicast_ip_to_node_id(ip_header.source, ip_header.destination)
-            if dst_nid is None:  # The packet crosses the UAVCAN/UDP subnet boundary, invalid.
-                return None
-            data_spec = udp_port_to_service_data_specifier(self.packet.udp_header.destination_port)
-
-        if data_spec is None:
-            return None
-
-        frame = UDPFrame.parse(self.packet.udp_payload)
-        if frame is None:
-            return None
-
-        src_nid = unicast_ip_to_node_id(ip_header.source, ip_header.source)
-        assert src_nid is not None
-        return src_nid, dst_nid, data_spec, frame
