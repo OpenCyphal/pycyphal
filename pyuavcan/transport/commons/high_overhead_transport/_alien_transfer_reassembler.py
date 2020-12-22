@@ -3,7 +3,7 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
-from pyuavcan.transport import AlienSessionSpecifier, AlienTransfer, Timestamp
+from pyuavcan.transport import TransferFrom, Timestamp
 from . import TransferReassembler, Frame
 
 
@@ -26,17 +26,16 @@ class AlienTransferReassembler:
     The extent is effectively unlimited -- we want to be able to process all transfers.
     """
 
-    def __init__(self, specifier: AlienSessionSpecifier) -> None:
-        self._specifier = specifier
+    def __init__(self, source_node_id: int) -> None:
         self._last_error: typing.Optional[TransferReassembler.Error] = None
-        self._reassembler = TransferReassembler(source_node_id=specifier.source_node_id,
+        self._reassembler = TransferReassembler(source_node_id=source_node_id,
                                                 extent_bytes=AlienTransferReassembler._EXTENT_BYTES,
                                                 on_error_callback=self._register_reassembly_error)
         self._last_transfer_monotonic: float = 0.0
         self._transfer_id_timeout = float(AlienTransferReassembler.MAX_TRANSFER_ID_TIMEOUT)
 
     def process_frame(self, timestamp: Timestamp, frame: Frame) \
-            -> typing.Union[AlienTransfer, TransferReassembler.Error, None]:
+            -> typing.Union[TransferFrom, TransferReassembler.Error, None]:
         trf = self._reassembler.process_frame(timestamp=timestamp,
                                               frame=frame,
                                               transfer_id_timeout=self._transfer_id_timeout)
@@ -50,10 +49,7 @@ class AlienTransferReassembler:
         self._transfer_id_timeout = (self._transfer_id_timeout + delta) * 0.5
         self._last_transfer_monotonic = float(trf.timestamp.monotonic)
 
-        return AlienTransfer(priority=trf.priority,
-                             session_specifier=self._specifier,
-                             transfer_id=trf.transfer_id,
-                             fragmented_payload=trf.fragmented_payload)
+        return trf
 
     @property
     def transfer_id_timeout(self) -> float:

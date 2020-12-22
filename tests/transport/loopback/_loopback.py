@@ -166,9 +166,9 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     ev, = mon_events
     assert isinstance(ev, pyuavcan.transport.loopback.LoopbackCapture)
     assert ev.timestamp == rx.timestamp
-    assert ev.transfer.transfer_id == rx.transfer_id
-    assert ev.transfer.session_specifier.source_node_id == tr.local_node_id
-    assert ev.transfer.session_specifier.destination_node_id is None
+    assert ev.transfer.metadata.transfer_id == rx.transfer_id
+    assert ev.transfer.metadata.session_specifier.source_node_id == tr.local_node_id
+    assert ev.transfer.metadata.session_specifier.destination_node_id is None
     assert mon_events2 == mon_events
 
     assert len(tr.input_sessions) == 2
@@ -207,7 +207,7 @@ async def _unittest_loopback_transport_service() -> None:
 
 @pytest.mark.asyncio    # type: ignore
 async def _unittest_loopback_tracer() -> None:
-    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, Timestamp, Priority
+    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Timestamp, Priority
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, TransferTrace
     from pyuavcan.transport.loopback import LoopbackCapture
 
@@ -215,65 +215,57 @@ async def _unittest_loopback_tracer() -> None:
     ts = Timestamp.now()
 
     # MESSAGE
-    msg = AlienTransfer(priority=Priority.IMMEDIATE,
-                        session_specifier=AlienSessionSpecifier(1234, None, MessageDataSpecifier(7777)),
-                        transfer_id=54321,
-                        fragmented_payload=[])
+    msg = AlienTransfer(AlienTransferMetadata(Priority.IMMEDIATE, 54321,
+                                              AlienSessionSpecifier(1234, None, MessageDataSpecifier(7777))),
+                        [])
     assert tr.update(LoopbackCapture(ts, msg)) == TransferTrace(
         timestamp=ts,
         transfer=msg,
-        frames=[LoopbackCapture(ts, msg)],
-        sibling=None,
+        transfer_id_timeout=0.0,
     )
 
-    # REQUEST (to be matched with later)
-    req = AlienTransfer(
-        priority=Priority.NOMINAL,
-        session_specifier=AlienSessionSpecifier(321,
-                                                123,
-                                                ServiceDataSpecifier(222, ServiceDataSpecifier.Role.REQUEST)),
-        transfer_id=333333333,
-        fragmented_payload=[],
-    )
+    # REQUEST
+    req = AlienTransfer(AlienTransferMetadata(Priority.NOMINAL, 333333333,
+                                              AlienSessionSpecifier(
+                                                  321,
+                                                  123,
+                                                  ServiceDataSpecifier(222, ServiceDataSpecifier.Role.REQUEST)),
+                                              ),
+                        [])
     trace_req = tr.update(LoopbackCapture(ts, req))
     assert isinstance(trace_req, TransferTrace)
     assert trace_req == TransferTrace(
         timestamp=ts,
         transfer=req,
-        frames=[LoopbackCapture(ts, req)],
-        sibling=None,
+        transfer_id_timeout=0.0,
     )
 
-    # RESPONSE (mismatching)
-    res = AlienTransfer(
-        priority=Priority.NOMINAL,
-        session_specifier=AlienSessionSpecifier(123,
-                                                444,  # Wrong node-ID
-                                                ServiceDataSpecifier(222, ServiceDataSpecifier.Role.RESPONSE)),
-        transfer_id=333333333,
-        fragmented_payload=[],
-    )
+    # RESPONSE
+    res = AlienTransfer(AlienTransferMetadata(Priority.NOMINAL, 333333333,
+                                              AlienSessionSpecifier(
+                                                  123,
+                                                  444,
+                                                  ServiceDataSpecifier(222, ServiceDataSpecifier.Role.RESPONSE)),
+                                              ),
+                        [])
     assert tr.update(LoopbackCapture(ts, res)) == TransferTrace(
         timestamp=ts,
         transfer=res,
-        frames=[LoopbackCapture(ts, res)],
-        sibling=None,
+        transfer_id_timeout=0.0,
     )
 
-    # RESPONSE (matching)
-    res = AlienTransfer(
-        priority=Priority.NOMINAL,
-        session_specifier=AlienSessionSpecifier(123,
-                                                321,
-                                                ServiceDataSpecifier(222, ServiceDataSpecifier.Role.RESPONSE)),
-        transfer_id=333333333,
-        fragmented_payload=[],
-    )
+    # RESPONSE
+    res = AlienTransfer(AlienTransferMetadata(Priority.NOMINAL, 333333333,
+                                              AlienSessionSpecifier(
+                                                  123,
+                                                  321,
+                                                  ServiceDataSpecifier(222, ServiceDataSpecifier.Role.RESPONSE)),
+                                              ),
+                        [])
     assert tr.update(LoopbackCapture(ts, res)) == TransferTrace(
         timestamp=ts,
         transfer=res,
-        frames=[LoopbackCapture(ts, res)],
-        sibling=trace_req,
+        transfer_id_timeout=0.0,
     )
 
     # Unknown capture types should yield None.

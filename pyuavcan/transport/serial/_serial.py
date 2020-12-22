@@ -11,14 +11,13 @@ import logging
 import threading
 import dataclasses
 import concurrent.futures
-
 import serial
-
 import pyuavcan.transport
 from pyuavcan.transport import Timestamp
 from ._frame import SerialFrame
 from ._stream_parser import StreamParser
 from ._session import SerialOutputSession, SerialInputSession
+from ._tracer import SerialTxCapture, SerialRxFrameCapture, SerialRxOutOfBandCapture, SerialCapture, SerialTracer
 
 
 _SERIAL_PORT_READ_TIMEOUT = 1.0
@@ -265,7 +264,10 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     @staticmethod
     def make_tracer() -> pyuavcan.transport.Tracer:
-        raise NotImplementedError
+        """
+        See :class:`SerialTracer`.
+        """
+        return SerialTracer()
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
         raise NotImplementedError
@@ -417,41 +419,3 @@ class SerialTransport(pyuavcan.transport.Transport):
         if self._mtu < max(SerialTransport.VALID_MTU_RANGE):
             kwargs['mtu'] = self._mtu
         return [repr(self._serial_port.name)], kwargs
-
-
-@dataclasses.dataclass(frozen=True)
-class SerialCapture(pyuavcan.transport.Capture):
-    """
-    The set of subclasses may be extended in future versions.
-    """
-    pass
-
-
-@dataclasses.dataclass(frozen=True)
-class SerialTxCapture(SerialCapture):
-    """
-    Outgoing transfer emission event from the local node.
-
-    The timestamp specifies the time when the first frame was sent (the other frames are not timestamped).
-    If no frames could be sent due to an error, the list will be empty.
-    Obtain bytes using :func:`SerialFrame.compile_into`.
-    """
-    frames: typing.List[SerialFrame]
-
-
-@dataclasses.dataclass(frozen=True)
-class SerialRxFrameCapture(SerialCapture):
-    """
-    Frame reception event.
-    The timestamp reflects the time when the first byte was received.
-    If necessary, obtain the original encoded byte representation using :func:`SerialFrame.compile_into`.
-    """
-    frame: SerialFrame
-
-
-@dataclasses.dataclass(frozen=True)
-class SerialRxOutOfBandCapture(SerialCapture):
-    """
-    Out-of-band data or a malformed frame received. See :class:`StreamParser`.
-    """
-    data: memoryview

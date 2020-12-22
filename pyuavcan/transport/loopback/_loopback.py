@@ -112,14 +112,14 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                 pyuavcan.util.broadcast(self._capture_handlers)(LoopbackCapture(
                     tr_from.timestamp,
                     pyuavcan.transport.AlienTransfer(
-                        priority=tr_from.priority,
-                        session_specifier=pyuavcan.transport.AlienSessionSpecifier(
-                            source_node_id=self.local_node_id,
-                            destination_node_id=specifier.remote_node_id,
-                            data_specifier=specifier.data_specifier,
+                        pyuavcan.transport.AlienTransferMetadata(
+                            tr_from.priority,
+                            tr_from.transfer_id,
+                            pyuavcan.transport.AlienSessionSpecifier(self.local_node_id,
+                                                                     specifier.remote_node_id,
+                                                                     specifier.data_specifier),
                         ),
-                        transfer_id=tr_from.transfer_id,
-                        fragmented_payload=list(tr_from.fragmented_payload),
+                        list(tr_from.fragmented_payload),
                     ),
                 ))
                 for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.

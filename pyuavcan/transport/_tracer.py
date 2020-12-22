@@ -45,6 +45,26 @@ class AlienSessionSpecifier:
 
 
 @dataclasses.dataclass(frozen=True)
+class AlienTransferMetadata:
+    priority: pyuavcan.transport.Priority
+
+    transfer_id: int
+    """
+    For outgoing transfers over transports with cyclic transfer-ID the modulo is computed automatically.
+    The user does not have to bother; although, if it is desired to match the spoofed transfer with some
+    follow-up activity (like a service response), the user needs to compute the modulo manually for obvious reasons.
+    """
+
+    session_specifier: AlienSessionSpecifier
+
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(self,
+                                             self.session_specifier,
+                                             priority=str(self.priority).split('.')[-1],
+                                             transfer_id=self.transfer_id)
+
+
+@dataclasses.dataclass(frozen=True)
 class AlienTransfer:
     """
     This type models a captured (sniffed) decoded transfer exchanged between a local node and a remote node,
@@ -55,16 +75,7 @@ class AlienTransfer:
     You may notice that the regular transfer model does not include some information such as, say, the route specifier,
     because the respective behaviors are managed by the transport configuration.
     """
-    priority: pyuavcan.transport.Priority
-
-    session_specifier: AlienSessionSpecifier
-
-    transfer_id: int
-    """
-    For outgoing transfers over transports with cyclic transfer-ID the modulo is computed automatically.
-    The user does not have to bother; although, if it is desired to match the spoofed transfer with some
-    follow-up activity (like a service response), the user needs to compute the modulo manually for obvious reasons.
-    """
+    metadata: AlienTransferMetadata
 
     fragmented_payload: pyuavcan.transport.FragmentedPayload
     """
@@ -77,35 +88,25 @@ class AlienTransfer:
         Transfers whose payload is fragmented differently but content-wise is identical compare equal.
 
         >>> from pyuavcan.transport import MessageDataSpecifier, Priority
-        >>> a = AlienTransfer(Priority.LOW, AlienSessionSpecifier(123, None, MessageDataSpecifier(8000)), 123456,
-        ...                   fragmented_payload=[memoryview(b'abc'), memoryview(b'def')])
-        >>> a == AlienTransfer(Priority.LOW, AlienSessionSpecifier(123, None, MessageDataSpecifier(8000)), 123456,
-        ...                    fragmented_payload=[memoryview(b'abcd'), memoryview(b''), memoryview(b'ef')])
+        >>> meta = AlienTransferMetadata(Priority.LOW, 999, AlienSessionSpecifier(123, None, MessageDataSpecifier(888)))
+        >>> a =  AlienTransfer(meta, fragmented_payload=[memoryview(b'abc'), memoryview(b'def')])
+        >>> a == AlienTransfer(meta, fragmented_payload=[memoryview(b'abcd'), memoryview(b''), memoryview(b'ef')])
         True
-        >>> a == AlienTransfer(Priority.LOW, AlienSessionSpecifier(123, None, MessageDataSpecifier(8000)), 123456,
-        ...                    fragmented_payload=[memoryview(b'abcdef')])
+        >>> a == AlienTransfer(meta, fragmented_payload=[memoryview(b'abcdef')])
         True
-        >>> a == AlienTransfer(Priority.LOW, AlienSessionSpecifier(123, None, MessageDataSpecifier(8000)), 123456,
-        ...                    fragmented_payload=[])
+        >>> a == AlienTransfer(meta, fragmented_payload=[])
         False
         """
         if isinstance(other, AlienTransfer):
             def cat(fp: pyuavcan.transport.FragmentedPayload) -> memoryview:
                 return fp[0] if len(fp) == 1 else memoryview(b''.join(fp))
 
-            return (self.priority == other.priority and self.session_specifier == other.session_specifier
-                    and self.transfer_id == other.transfer_id
-                    and cat(self.fragmented_payload) == cat(other.fragmented_payload))
+            return self.metadata == other.metadata and cat(self.fragmented_payload) == cat(other.fragmented_payload)
         return NotImplemented
 
     def __repr__(self) -> str:
         fragmented_payload = '+'.join(f'{len(x)}B' for x in self.fragmented_payload)
-        kwargs = {
-            f.name: getattr(self, f.name) for f in dataclasses.fields(self)
-        }
-        kwargs['priority'] = str(self.priority).split('.')[-1]
-        kwargs['fragmented_payload'] = f'[{fragmented_payload}]'
-        return pyuavcan.util.repr_attributes(self, **kwargs)
+        return pyuavcan.util.repr_attributes(self, self.metadata, fragmented_payload=f'[{fragmented_payload}]')
 
 
 @dataclasses.dataclass(frozen=True)
@@ -133,7 +134,7 @@ class ErrorTrace(Trace):
 @dataclasses.dataclass(frozen=True)
 class TransferTrace(Trace):
     """
-    Reconstructed network data transfer along with references to all its frames.
+    Reconstructed network data transfer (possibly exchanged between remote nodes) along with metadata.
     """
     transfer: AlienTransfer
 
@@ -145,18 +146,6 @@ class TransferTrace(Trace):
     for its session is reported for informational purposes.
     This value may be used later to perform transfer deduplication if redundant tracers are used;
     for that, see :mod:`pyuavcan.transport.redundant`.
-    """
-
-    frames: typing.List[Capture]
-    """
-    The order of the frames matches the order of their reception.
-    The timestamp of the trace event equals that of the first frame.
-    """
-
-    sibling: typing.Optional[TransferTrace]
-    """
-    Reference to an earlier transfer event related to this one.
-    For service response transfers this is a link to the corresponding service request transfer.
     """
 
 

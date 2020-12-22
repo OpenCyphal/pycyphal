@@ -22,4 +22,4 @@ from ._transfer_reassembler import TransferReassembler as TransferReassembler
 
 from ._common import TransferCRC as TransferCRC
 
-from ._tracer import AlienTransferReassembler as AlienTransferReassembler
+from ._alien_transfer_reassembler import AlienTransferReassembler as AlienTransferReassembler

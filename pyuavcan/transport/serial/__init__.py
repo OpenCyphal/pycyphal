@@ -196,15 +196,12 @@ Inheritance diagram
                          pyuavcan.transport.serial._session._base
                          pyuavcan.transport.serial._session._input
                          pyuavcan.transport.serial._session._output
+                         pyuavcan.transport.serial._tracer
    :parts: 1
 """
 
 from ._serial import SerialTransport as SerialTransport
 from ._serial import SerialTransportStatistics as SerialTransportStatistics
-from ._serial import SerialCapture as SerialCapture
-from ._serial import SerialTxCapture as SerialTxCapture
-from ._serial import SerialRxFrameCapture as SerialRxFrameCapture
-from ._serial import SerialRxOutOfBandCapture as SerialRxOutOfBandCapture
 
 from ._session import SerialSession as SerialSession
 from ._session import SerialInputSession as SerialInputSession
@@ -214,3 +211,11 @@ from ._session import SerialInputSessionStatistics as SerialInputSessionStatisti
 
 from ._frame import SerialFrame as SerialFrame
 from ._stream_parser import StreamParser as StreamParser
+
+from ._tracer import SerialCapture as SerialCapture
+from ._tracer import SerialTxCapture as SerialTxCapture
+from ._tracer import SerialRxFrameCapture as SerialRxFrameCapture
+from ._tracer import SerialRxOutOfBandCapture as SerialRxOutOfBandCapture
+from ._tracer import SerialTracer as SerialTracer
+from ._tracer import SerialErrorTrace as SerialErrorTrace
+from ._tracer import SerialOutOfBandTrace as SerialOutOfBandTrace
