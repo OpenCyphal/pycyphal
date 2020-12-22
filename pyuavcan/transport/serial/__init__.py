@@ -13,13 +13,13 @@ Future revisions may break wire compatibility until the transport is formally sp
 Context: https://forum.uavcan.org/t/alternative-transport-protocols/324, also see the discussion at
 https://forum.uavcan.org/t/yukon-design-megathread/390/115?u=pavel.kirienko.
 
-The UAVCAN/Serial transport is designed for OSI L1 byte-level serial links:
+The UAVCAN/Serial transport is designed for OSI L1 byte-level duplex serial links and tunnels:
 
-- UART, RS-232/485/422 (the recommended rates are: 115200 bps, 921600 bps, 3 Mbps, 10 Mbps, 100 Mbps);
-  copper or fiber optics.
+- UART, RS-422/485/232 (duplex); the recommended rates are: 115200 bps, 921600 bps, 3 Mbps, 10 Mbps, 100 Mbps.
 - USB CDC ACM.
+- TCP/IP encapsulation.
 
-It is also suitable for raw transport log storage, because one-dimensional flat binary files are structurally
+It may also be suited for raw transport log storage, because one-dimensional flat binary files are structurally
 similar to serial byte-level links.
 
 This transport module contains no media sublayers because the media abstraction
@@ -31,7 +31,7 @@ The serial transport supports all transfer categories:
 +--------------------+--------------------------+---------------------------+
 | Supported transfers| Unicast                  | Broadcast                 |
 +====================+==========================+===========================+
-|**Message**         | Yes                      | Yes                       |
+|**Message**         | Yes, non-spec extension  | Yes                       |
 +--------------------+--------------------------+---------------------------+
 |**Service**         | Yes                      | Banned by Specification   |
 +--------------------+--------------------------+---------------------------+
@@ -40,8 +40,8 @@ The serial transport supports all transfer categories:
 Protocol definition
 +++++++++++++++++++
 
-The packet header is defined as follows (byte and bit ordering in this definition follow the DSDL specification:
-least significant byte first, most significant bit first)::
+The packet header is defined as follows (byte/bit ordering in this definition follow the DSDL specification:
+least significant first)::
 
     uint8   version              # Always zero. Discard the frame if not.
     uint8   priority             # 0 = highest, 7 = lowest; the rest are unused.
@@ -84,19 +84,20 @@ encoded into its serialized form using the following packet format:
 |                         | A frame delimiter (0) is guaranteed to never occur here.      |                         |
 +-------------------------+------------------------------+--------------------------------+-------------------------+
 
-There are no magic bytes in this format because the strong CRC in the header renders the
-format sufficiently recognizable.
 The frame encoding overhead is 1 byte in every 254 bytes of the header+payload+CRC, which is about ~0.4%.
 There is a somewhat relevant discussion at
 https://forum.uavcan.org/t/uavcan-serial-issues-with-dma-friendliness-and-bandwidth-overhead/846.
-
-The format can share the same serial medium with ASCII text exchanges such as command-line interfaces or
-real-time logging.
 
 The last four bytes of a multi-frame transfer payload contain the CRC32C (Castagnoli) hash of the transfer
 payload in little-endian byte order.
 The multi-frame transfer logic (decomposition and reassembly) is implemented in a separate
 transport-agnostic module :mod:`pyuavcan.transport.commons.high_overhead_transport`.
+**Despite the fact that the support for multi-frame transfers is built into this transport,
+it should not be relied on and it may be removed later.**
+The reason is that serial links do not have native support for framing, and as such,
+it is possible to configure the MTU to be arbitrarily high to avoid multi-frame transfers completely.
+The lack of multi-frame transfers simplifies implementations drastically, which is important for
+deeply-embedded systems. As such, all serial transfers should be single-frame transfers.
 
 Note that we use CRC-32C (Castagnoli) as the header/frame CRC instead of CRC-32K2 (Koopman-2)
 which is superior at short data blocks offering the Hamming distance of 6 as opposed to 4.
@@ -105,12 +106,6 @@ to flip the balance in favor of Castagnoli rather than Koopman.
 We could use Koopman for the header/frame CRC and keep Castagnoli for the transfer CRC,
 but such diversity is harmful because it would require implementers to keep two separate CRC tables
 which may be costly in embedded applications and may deteriorate the performance of CPU caches.
-
-**Despite the fact that the support for multi-frame transfers is built into the transport layer,
-it should not be relied on and it may be removed later.** The reason is that serial links do not have native support
-for framing, and as such, it is possible to configure the MTU to be arbitrarily high to avoid multi-frame transfers
-completely. **The lack of multi-frame transfers simplifies implementations drastically, which is important for
-deeply-embedded systems. As such, all serial transfers should be single-frame transfers.**
 
 
 Unreliable links and temporal redundancy
@@ -136,13 +131,13 @@ Usage
 >>> pub = tr.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
 >>> sub = tr.get_input_session(pyuavcan.transport.InputSessionSpecifier(ds, None), pm)
 >>> await_ = tr.loop.run_until_complete
->>> await_(pub.send_until(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
+>>> await_(pub.send(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
 ...                                                   pyuavcan.transport.Priority.LOW,
 ...                                                   1111,
 ...                                                   fragmented_payload=[]),
 ...                       tr.loop.time() + 1.0))
 True
->>> await_(sub.receive_until(tr.loop.time() + 1.0))
+>>> await_(sub.receive(tr.loop.time() + 1.0))
 TransferFrom(..., transfer_id=1111, ...)
 >>> tr.close()
 
@@ -201,6 +196,7 @@ Inheritance diagram
                          pyuavcan.transport.serial._session._base
                          pyuavcan.transport.serial._session._input
                          pyuavcan.transport.serial._session._output
+                         pyuavcan.transport.serial._tracer
    :parts: 1
 """
 
@@ -214,4 +210,8 @@ from ._session import SerialFeedback as SerialFeedback
 from ._session import SerialInputSessionStatistics as SerialInputSessionStatistics
 
 from ._frame import SerialFrame as SerialFrame
-from ._stream_parser import StreamParser as StreamParser
+
+from ._tracer import SerialCapture as SerialCapture
+from ._tracer import SerialTracer as SerialTracer
+from ._tracer import SerialErrorTrace as SerialErrorTrace
+from ._tracer import SerialOutOfBandTrace as SerialOutOfBandTrace

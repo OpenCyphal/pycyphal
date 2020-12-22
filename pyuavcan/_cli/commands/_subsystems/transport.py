@@ -44,7 +44,7 @@ Examples:
     pyuavcan.transport.can.CANTransport(pyuavcan.transport.can.media.socketcan.SocketCANMedia('vcan0', 64), 42)
     pyuavcan.transport.loopback.LoopbackTransport(None)
     pyuavcan.transport.serial.SerialTransport("/dev/ttyUSB0", None, baudrate=115200)
-    pyuavcan.transport.udp.UDPTransport('127.255.255.255/8')
+    pyuavcan.transport.udp.UDPTransport('127.42.0.123', anonymous=True)
 
 Such long expressions are hard to type, so the following entities are also pre-imported into the global namespace
 for convenience:
@@ -59,22 +59,21 @@ The following examples yield configurations that are equivalent to the above:
     CAN(can.media.socketcan.SocketCANMedia('vcan0',64),42)
     Loopback(None)
     Serial("/dev/ttyUSB0",None,baudrate=115200)
-    UDP('127.255.255.255/8')
+    UDP('127.42.0.123',anonymous=True)
 
 It is often more convenient to use the environment variable instead of typing the arguments because they tend to be
 complex and are usually reused without modification. The variable may contain either a single transport expression,
 in which case a non-redundant transport instance would be constructed:
     {_ENV_VAR_NAME}='Loopback(None)'
-...or it may be a Python list, in which case a redundant transport will be constructed, unless the list contains only
-one element:
-    {_ENV_VAR_NAME}="[UDP('127.255.255.255/8'), Serial('/dev/ttyUSB0',None,baudrate=115200)]"
+...or it may be a Python list/tuple, in which case a redundant transport will be constructed, unless the sequence
+contains only one element:
+    {_ENV_VAR_NAME}="UDP('127.42.0.123'), Serial('/dev/ttyUSB0',None,baudrate=115200)"
 
 Observe that the node-ID for the local node is to be configured here as well, because per the UAVCAN architecture,
 this is a transport-layer property. If desired, a usable node-ID value can be automatically found using the command
 "pick-node-id"; read its help for usage information (it's useful for various automation scripts and similar tasks).
 
-The command-line tool stores the output transfer-ID map on disk, keyed by the node-ID and the OS resource associated
-with the transport; the path (specific for this system) is:
+The command-line tool stores the output transfer-ID map on disk keyed by the node-ID; the current local path is:
 {OUTPUT_TRANSFER_ID_MAP_DIR}
 The map files are managed automatically. They can be removed to reset all transfer-ID counters to zero. Files that
 are more than {OUTPUT_TRANSFER_ID_MAP_MAX_AGE} seconds old are no longer used.
@@ -115,8 +114,8 @@ def _evaluate_transport_expr(expression: str,
     _logger.debug('Expression %r yields %r', expression, out)
     if isinstance(out, pyuavcan.transport.Transport):
         return [out]
-    elif isinstance(out, list) and all(isinstance(x, pyuavcan.transport.Transport) for x in out):
-        return out
+    elif isinstance(out, (list, tuple)) and all(isinstance(x, pyuavcan.transport.Transport) for x in out):
+        return list(out)
     else:
         raise ValueError(f'The expression {expression!r} yields an instance of {type(out).__name__!r}. '
                          f'Expected an instance of pyuavcan.transport.Transport or a list thereof.')

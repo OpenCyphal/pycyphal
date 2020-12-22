@@ -13,6 +13,7 @@ import os
 import sys
 import pathlib
 import inspect
+import datetime
 import importlib
 import subprocess
 
@@ -57,7 +58,7 @@ EXTERNAL_LINKS = {
 
 project = 'PyUAVCAN'
 # noinspection PyShadowingBuiltins
-copyright = '2019, UAVCAN Development Team'
+copyright = f'2019\u2013{datetime.datetime.now().year}, UAVCAN Development Team'
 author = 'UAVCAN Development Team'
 
 # The short semantic version
@@ -67,9 +68,6 @@ release = pyuavcan.__version__
 
 # -- General configuration ---------------------------------------------------
 
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',

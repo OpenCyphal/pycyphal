@@ -15,10 +15,10 @@ class MonotonicDeduplicator(Deduplicator):
         self._remote_states: typing.List[typing.Optional[_RemoteState]] = []
 
     def should_accept_transfer(self,
-                               iface_index:         int,
+                               iface_id:            int,
                                transfer_id_timeout: float,
                                transfer:            pyuavcan.transport.TransferFrom) -> bool:
-        del iface_index  # Not used in monotonic deduplicator.
+        del iface_id  # Not used in monotonic deduplicator.
         if transfer.source_node_id is None:
             # Anonymous transfers are fully stateless, so always accepted.
             # This may lead to duplications and reordering but this is a design limitation.

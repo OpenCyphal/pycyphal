@@ -15,13 +15,8 @@ class Frame:
     The base class of a high-overhead-transport frame.
     It is used with the common transport algorithms defined in this module.
     Concrete transport implementations should make their transport-specific frame dataclasses inherit from this class.
+    Derived types are recommended to not override ``__repr__()``.
     """
-    timestamp: pyuavcan.transport.Timestamp
-    """
-    For outgoing frames, this is the timestamp of the transfer instance.
-    For incoming frames, this is the reception timestamp from the media implementation (hardware or software).
-    """
-
     priority: pyuavcan.transport.Priority
     """
     Transfer priority should be the same for all frames within the transfer.
@@ -49,9 +44,6 @@ class Frame:
     """
 
     def __post_init__(self) -> None:
-        if not isinstance(self.timestamp, pyuavcan.transport.Timestamp):
-            raise TypeError(f'Invalid timestamp: {self.timestamp}')
-
         if not isinstance(self.priority, pyuavcan.transport.Priority):
             raise TypeError(f'Invalid priority: {self.priority}')
 
@@ -71,62 +63,63 @@ class Frame:
     def single_frame_transfer(self) -> bool:
         return self.index == 0 and self.end_of_transfer
 
+    def __repr__(self) -> str:
+        """
+        If the payload is unreasonably long for a sensible string representation,
+        it is truncated and suffixed with an ellipsis.
+        """
+        payload_length_limit = 100
+        if len(self.payload) > payload_length_limit:
+            payload = bytes(self.payload[:payload_length_limit]).hex() + '...'
+        else:
+            payload = bytes(self.payload).hex()
+        kwargs = {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
+        kwargs['priority'] = str(self.priority).split('.')[-1]
+        kwargs['payload'] = payload
+        return pyuavcan.util.repr_attributes(self, **kwargs)
+
 
 # noinspection PyTypeChecker
 def _unittest_frame_base_ctor() -> None:
     from pytest import raises
-    from pyuavcan.transport import Priority, Timestamp
+    from pyuavcan.transport import Priority
 
-    Frame(timestamp=Timestamp.now(),
-          priority=Priority.LOW,
+    Frame(priority=Priority.LOW,
           transfer_id=1234,
           index=321,
           end_of_transfer=True,
           payload=memoryview(b''))
 
     with raises(TypeError):
-        Frame(timestamp=123456,  # type: ignore
-              priority=Priority.LOW,
+        Frame(priority=2,  # type: ignore
               transfer_id=1234,
               index=321,
               end_of_transfer=True,
               payload=memoryview(b''))
 
     with raises(TypeError):
-        Frame(timestamp=Timestamp.now(),
-              priority=2,  # type: ignore
-              transfer_id=1234,
-              index=321,
-              end_of_transfer=True,
-              payload=memoryview(b''))
-
-    with raises(TypeError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.LOW,
+        Frame(priority=Priority.LOW,
               transfer_id=1234,
               index=321,
               end_of_transfer=1,  # type: ignore
               payload=memoryview(b''))
 
     with raises(TypeError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.LOW,
+        Frame(priority=Priority.LOW,
               transfer_id=1234,
               index=321,
               end_of_transfer=False,
               payload=b'')  # type: ignore
 
     with raises(ValueError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.LOW,
+        Frame(priority=Priority.LOW,
               transfer_id=-1,
               index=321,
               end_of_transfer=True,
               payload=memoryview(b''))
 
     with raises(ValueError):
-        Frame(timestamp=Timestamp.now(),
-              priority=Priority.LOW,
+        Frame(priority=Priority.LOW,
               transfer_id=0,
               index=-1,
               end_of_transfer=True,

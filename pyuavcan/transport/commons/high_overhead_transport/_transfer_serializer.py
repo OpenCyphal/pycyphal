@@ -32,15 +32,14 @@ def serialize_transfer(fragmented_payload:      typing.Sequence[memoryview],
     :return: An iterable that yields frames.
 
     >>> import dataclasses
+    >>> from pyuavcan.transport.commons.high_overhead_transport import Frame
     >>> @dataclasses.dataclass(frozen=True)
     ... class MyFrameType(Frame):
     ...     pass    # Transport-specific definition goes here.
-    >>> timestamp = pyuavcan.transport.Timestamp.now()
     >>> priority = pyuavcan.transport.Priority.NOMINAL
     >>> transfer_id = 12345
     >>> def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> MyFrameType:
-    ...     return MyFrameType(timestamp=timestamp,
-    ...                        priority=priority,
+    ...     return MyFrameType(priority=priority,
     ...                        transfer_id=transfer_id,
     ...                        index=index,
     ...                        end_of_transfer=end_of_transfer,
@@ -78,15 +77,13 @@ def serialize_transfer(fragmented_payload:      typing.Sequence[memoryview],
 
 
 def _unittest_serialize_transfer() -> None:
-    from pyuavcan.transport import Priority, Timestamp
+    from pyuavcan.transport import Priority
 
-    timestamp = Timestamp.now()
     priority = Priority.NOMINAL
     transfer_id = 12345678901234567890
 
     def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> Frame:
-        return Frame(timestamp=timestamp,
-                     priority=priority,
+        return Frame(priority=priority,
                      transfer_id=transfer_id,
                      index=index,
                      end_of_transfer=end_of_transfer,

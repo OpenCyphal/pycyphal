@@ -11,10 +11,11 @@ import asyncio
 import logging
 import dataclasses
 import pyuavcan.transport
-from .media import Media, TimestampedDataFrame, optimize_filter_configurations, FilterConfiguration
-from ._session import CANInputSession, CANOutputSession
+from pyuavcan.transport import Timestamp
+from .media import Media, Envelope, optimize_filter_configurations, FilterConfiguration
+from ._session import CANInputSession, CANOutputSession, SendTransaction
 from ._session import BroadcastCANOutputSession, UnicastCANOutputSession
-from ._frame import UAVCANFrame, TimestampedUAVCANFrame, TRANSFER_ID_MODULO
+from ._frame import UAVCANFrame, TRANSFER_ID_MODULO
 from ._identifier import CANID, generate_filter_configurations
 from ._input_dispatch_table import InputDispatchTable
 
@@ -72,6 +73,7 @@ class CANTransport(pyuavcan.transport.Transport):
     def __init__(self,
                  media:         Media,
                  local_node_id: typing.Optional[int],
+                 *,
                  loop:          typing.Optional[asyncio.AbstractEventLoop] = None):
         """
         :param media:         The media implementation.
@@ -92,6 +94,8 @@ class CANTransport(pyuavcan.transport.Transport):
 
         self._last_filter_configuration_set: typing.Optional[typing.Sequence[FilterConfiguration]] = None
 
+        self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
+
         self._frame_stats = CANTransportStatistics()
 
         if self._local_node_id is not None and not (0 <= self._local_node_id <= CANID.NODE_ID_MASK):
@@ -110,10 +114,6 @@ class CANTransport(pyuavcan.transport.Transport):
         if media.loop is not self._loop:
             raise pyuavcan.transport.InvalidMediaConfigurationError(
                 f'The media instance cannot use a different event loop: {media.loop} is not {self._loop}')
-
-        media_name = type(media).__name__.lower()[:-len('Media')]
-        self._descriptor = \
-            f'<can><{media_name} mtu="{media.mtu}">{media.interface_name}</{media_name}></can>'
 
         media.start(self._on_frames_received, no_automatic_retransmission=self._local_node_id is None)
 
@@ -145,16 +145,12 @@ class CANTransport(pyuavcan.transport.Transport):
     def output_sessions(self) -> typing.Sequence[CANOutputSession]:
         return list(self._output_registry.values())
 
-    @property
-    def descriptor(self) -> str:
-        return self._descriptor
-
     def close(self) -> None:
         for s in (*self.input_sessions, *self.output_sessions):
             try:
                 s.close()
             except Exception as ex:
-                _logger.exception('Failed to close session %r: %s', s, ex)
+                _logger.exception('%s: Failed to close session %r: %s', self, s, ex)
 
         media, self._maybe_media = self._maybe_media, None
         if media is not None:  # Double-close is NOT an error!
@@ -210,13 +206,13 @@ class CANTransport(pyuavcan.transport.Transport):
                 BroadcastCANOutputSession(specifier=specifier,
                                           payload_metadata=payload_metadata,
                                           transport=self,
-                                          send_handler=self._do_send_until,
+                                          send_handler=self._do_send,
                                           finalizer=finalizer)
         else:
             session = UnicastCANOutputSession(specifier=specifier,
                                               payload_metadata=payload_metadata,
                                               transport=self,
-                                              send_handler=self._do_send_until,
+                                              send_handler=self._do_send,
                                               finalizer=finalizer)
 
         self._output_registry[specifier] = session
@@ -226,60 +222,87 @@ class CANTransport(pyuavcan.transport.Transport):
             self._reconfigure_acceptance_filters()
         return session
 
-    async def _do_send_until(self, frames: typing.Iterable[UAVCANFrame], monotonic_deadline: float) -> bool:
+    def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
+        """
+        Capture is not implemented yet -- the handlers are never invoked.
+        """
+        self._capture_handlers.append(handler)
+
+    @staticmethod
+    def make_tracer() -> pyuavcan.transport.Tracer:
+        raise NotImplementedError
+
+    async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
+        raise NotImplementedError
+
+    async def _do_send(self, t: SendTransaction) -> bool:
         """
         All frames shall share the same CAN ID value.
         """
-        frames_list = list(frames)
-        del frames
         async with self._media_lock:
             if self._maybe_media is None:
                 raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
-            else:
-                num_sent = await self._maybe_media.send_until((x.compile() for x in frames_list), monotonic_deadline)
-            assert 0 <= num_sent <= len(frames_list), 'Media sub-layer API contract violation'
-            sent_frames, unsent_frames = frames_list[:num_sent], frames_list[num_sent:]
+
+            if _logger.isEnabledFor(logging.DEBUG):
+                timeout = t.monotonic_deadline - self._loop.time()
+                _logger.debug('%s: Sending %d frames; 1st loopback: %s; deadline in %.3f s:\n%s',
+                              self, len(t.frames), t.loopback_first, timeout, '\n'.join(map(str, t.frames)))
+
+            num_sent = await self._maybe_media.send(
+                (
+                    Envelope(frame=x.compile(),
+                             loopback=(idx == 0 and t.loopback_first))
+                    for idx, x in enumerate(t.frames)
+                ),
+                t.monotonic_deadline,
+            )
+            assert 0 <= num_sent <= len(t.frames), 'Media sub-layer API contract violation'
+            sent_frames, unsent_frames = t.frames[:num_sent], t.frames[num_sent:]
 
             self._frame_stats.out_frames += len(sent_frames)
             self._frame_stats.out_frames_timeout += len(unsent_frames)
-            self._frame_stats.out_frames_loopback += sum(1 for f in sent_frames if f.loopback)
+            self._frame_stats.out_frames_loopback += 1 if t.loopback_first else 0
 
         if unsent_frames:
             can_id_int_set = set(f.identifier for f in unsent_frames)
             assert len(can_id_int_set) == 1, 'CAN transport layer internal contract violation'
             can_id_int, = can_id_int_set
-            _logger.info('% frames of %d total with CAN ID 0x%08x could not be sent before the deadline',
-                         len(unsent_frames), num_sent, can_id_int)
+            _logger.info('%s: %d frames of %d total with CAN ID 0x%08x could not be sent before the deadline',
+                         self, len(unsent_frames), num_sent, can_id_int)
 
         return not unsent_frames
 
-    def _on_frames_received(self, frames: typing.Iterable[TimestampedDataFrame]) -> None:
-        for raw_frame in frames:
+    def _on_frames_received(self, frames: typing.Iterable[typing.Tuple[Timestamp, Envelope]]) -> None:
+        if _logger.isEnabledFor(logging.DEBUG):
+            frames = list(frames)
+            _logger.debug('%s: Parsing received CAN frames:\n%s', self, '\n'.join(f'{t} {e}' for t, e in frames))
+
+        for timestamp, envelope in frames:
             try:
-                if raw_frame.loopback:
+                if envelope.loopback:
                     self._frame_stats.in_frames_loopback += 1
                 else:
                     self._frame_stats.in_frames += 1
 
-                cid = CANID.parse(raw_frame.identifier)
-                if cid is not None:                                             # Ignore non-UAVCAN CAN frames
-                    ufr = TimestampedUAVCANFrame.parse(raw_frame)
-                    if ufr is not None:                                         # Ignore non-UAVCAN CAN frames
-                        self._handle_any_frame(cid, ufr)
+                cid = CANID.parse(envelope.frame.identifier)
+                if cid is not None:                                             # Ignore non-UAVCAN/CAN frames
+                    ufr = UAVCANFrame.parse(envelope.frame)
+                    if ufr is not None:                                         # Ignore non-UAVCAN/CAN frames
+                        self._handle_any_frame(timestamp, cid, ufr, loopback=envelope.loopback)
             except Exception as ex:  # pragma: no cover
                 self._frame_stats.in_frames_errored += 1
-                _logger.exception(f'Unhandled exception while processing input CAN frame {raw_frame}: {ex}')
+                _logger.exception(f'{self}: Error while processing received {envelope}: {ex}')
 
-    def _handle_any_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> None:
-        if not frame.loopback:
+    def _handle_any_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame, loopback: bool) -> None:
+        if not loopback:
             self._frame_stats.in_frames_uavcan += 1
-            if self._handle_received_frame(can_id, frame):
+            if self._handle_received_frame(timestamp, can_id, frame):
                 self._frame_stats.in_frames_uavcan_accepted += 1
         else:
-            self._handle_loopback_frame(can_id, frame)
+            self._handle_loopback_frame(timestamp, can_id, frame)
 
-    def _handle_received_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> bool:
-        assert not frame.loopback
+    def _handle_received_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame) -> bool:
+        _logger.debug('%s: Accepted: %s %s %s', self, timestamp, frame, can_id)
         ss = pyuavcan.transport.InputSessionSpecifier(can_id.data_specifier, can_id.source_node_id)
         accepted = False
         dest_nid = can_id.get_destination_node_id()
@@ -287,7 +310,7 @@ class CANTransport(pyuavcan.transport.Transport):
             session = self._input_dispatch_table.get(ss)
             if session is not None:
                 # noinspection PyProtectedMember
-                session._push_frame(can_id, frame)
+                session._push_frame(timestamp, can_id, frame)
                 accepted = True
 
             if ss.remote_node_id is not None:
@@ -295,23 +318,25 @@ class CANTransport(pyuavcan.transport.Transport):
                 session = self._input_dispatch_table.get(ss)
                 if session is not None:
                     # noinspection PyProtectedMember
-                    session._push_frame(can_id, frame)
+                    session._push_frame(timestamp, can_id, frame)
                     accepted = True
 
         return accepted
 
-    def _handle_loopback_frame(self, can_id: CANID, frame: TimestampedUAVCANFrame) -> None:
-        assert frame.loopback
+    def _handle_loopback_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame) -> None:
+        _logger.debug('%s: Loopback: %s %s %s', self, timestamp, frame, can_id)
         ss = pyuavcan.transport.OutputSessionSpecifier(can_id.data_specifier, can_id.get_destination_node_id())
         try:
             session = self._output_registry[ss]
         except KeyError:
-            _logger.info('No matching output session for loopback frame: %s; parsed CAN ID: %s; session specifier: %s. '
-                         'Either the session has just been closed or the media driver is misbehaving.',
-                         frame, can_id, ss)
+            _logger.info(
+                '%s: No matching output session for loopback frame: %s; parsed CAN ID: %s; session specifier: %s. '
+                'Either the session has just been closed or the media driver is misbehaving.',
+                self, frame, can_id, ss,
+            )
         else:
             # noinspection PyProtectedMember
-            session._handle_loopback_frame(frame)
+            session._handle_loopback_frame(timestamp, frame)
 
     def _reconfigure_acceptance_filters(self) -> None:
         subject_ids = set(
@@ -320,12 +345,14 @@ class CANTransport(pyuavcan.transport.Transport):
         )
         fcs = generate_filter_configurations(subject_ids, self._local_node_id)
         assert len(fcs) > len(subject_ids)
-        del subject_ids
         if self._maybe_media is not None:
             num_filters = self._maybe_media.number_of_acceptance_filters
             fcs = optimize_filter_configurations(fcs, num_filters)
             assert len(fcs) <= num_filters
             if self._last_filter_configuration_set != fcs:
+                if _logger.isEnabledFor(logging.DEBUG):
+                    _logger.debug('%s: Configuring %d acceptance filters for %d subject-IDs: %s\n%s',
+                                  self, num_filters, len(subject_ids), list(subject_ids), '\n'.join(map(str, fcs)))
                 try:
                     self._maybe_media.configure_acceptance_filters(fcs)
                 except Exception:  # pragma: no cover
@@ -333,3 +360,8 @@ class CANTransport(pyuavcan.transport.Transport):
                     raise
                 else:
                     self._last_filter_configuration_set = fcs
+
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        return [self._maybe_media], {
+            'local_node_id': self.local_node_id,
+        }

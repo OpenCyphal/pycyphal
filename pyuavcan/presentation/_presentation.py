@@ -11,7 +11,7 @@ import asyncio
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._port import OutgoingTransferIDCounter, TypedSessionFinalizer, Closable, Port
+from ._port import OutgoingTransferIDCounter, PortFinalizer, Closable, Port
 from ._port import Publisher, PublisherImpl
 from ._port import Subscriber, SubscriberImpl
 from ._port import Client, ClientImpl
@@ -78,7 +78,7 @@ class Presentation:
         property and write it to the predefined storage location atomically. Make sure to shard the location by
         node-ID because nodes that use different node-ID values obviously shall not share their transfer-ID maps.
         Nodes sharing the same node-ID cannot exist on the same transport, but the local system might be running
-        nodes under the same node-ID on different transports concurrently, so this needs to be accounted for.
+        nodes under the same node-ID on independent networks concurrently, so this may need to be accounted for.
         """
         return self._output_transfer_id_map
 
@@ -114,6 +114,7 @@ class Presentation:
             raise TypeError(f'Not a message type: {dtype}')
 
         self._raise_if_closed()
+        _logger.debug('%s: Constructing new publisher for %r at subject-ID %d', self, dtype, subject_id)
 
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.OutputSessionSpecifier(data_specifier, None)
@@ -159,6 +160,8 @@ class Presentation:
             raise TypeError(f'Not a message type: {dtype}')
 
         self._raise_if_closed()
+        _logger.debug('%s: Constructing new subscriber for %r at subject-ID %d with queue limit %s',
+                      self, dtype, subject_id, queue_capacity)
 
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.InputSessionSpecifier(data_specifier, None)
@@ -202,6 +205,8 @@ class Presentation:
             raise TypeError(f'Not a service type: {dtype}')
 
         self._raise_if_closed()
+        _logger.debug('%s: Constructing new client for %r at service-ID %d with remote server node-ID %s',
+                      self, dtype, service_id, server_node_id)
 
         def transfer_id_modulo_factory() -> int:
             return self._transport.protocol_parameters.transfer_id_modulo
@@ -255,9 +260,10 @@ class Presentation:
             raise TypeError(f'Not a service type: {dtype}')
 
         self._raise_if_closed()
+        _logger.debug('%s: Providing server for %r at service-ID %d', self, dtype, service_id)
 
         def output_transport_session_factory(client_node_id: int) -> pyuavcan.transport.OutputSession:
-            _logger.info('%r has requested a new output session to client node %s', impl, client_node_id)
+            _logger.debug('%s: %r has requested a new output session to client node %s', self, impl, client_node_id)
             ds = pyuavcan.transport.ServiceDataSpecifier(service_id,
                                                          pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE)
             return self._transport.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, client_node_id),
@@ -341,11 +347,11 @@ class Presentation:
 
     def _make_finalizer(self,
                         session_type:      typing.Type[Port[pyuavcan.dsdl.CompositeObject]],
-                        session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
+                        session_specifier: pyuavcan.transport.SessionSpecifier) -> PortFinalizer:
         done = False
 
         def finalizer(transport_sessions: typing.Iterable[pyuavcan.transport.Session]) -> None:
-            # So this is rather messy. Observe that a typed session instance aggregates two distinct resources that
+            # So this is rather messy. Observe that a port instance aggregates two distinct resources that
             # must be allocated and deallocated atomically: the local registry entry in this class and the
             # corresponding transport session instance. I don't want to plaster our session objects with locks and
             # container references, so instead I decided to pass the associated resources into the finalizer, which
@@ -354,17 +360,19 @@ class Presentation:
             # unchanged so this should be easy to fix transparently by bumping only the patch version of the library.
             nonlocal done
             assert not done, 'Internal protocol violation: double finalization'
+            _logger.debug('%s: Finalizing %s (%s) with transport sessions %s',
+                          self, session_specifier, session_type, transport_sessions)
             done = True
             try:
                 self._registry.pop((session_type, session_specifier))
             except Exception as ex:
-                _logger.exception('Could not remove the session for the specifier %s: %s', session_specifier, ex)
+                _logger.exception('%s could not remove port for %s: %s', self, session_specifier, ex)
 
             for ts in transport_sessions:
                 try:
                     ts.close()
                 except Exception as ex:
-                    _logger.exception('%s could not close the transport session %s: %s', self, ts, ex)
+                    _logger.exception('%s could not finalize (close) %s: %s', self, ts, ex)
 
         return finalizer
 

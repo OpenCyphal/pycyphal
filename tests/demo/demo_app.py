@@ -45,18 +45,18 @@ try:
     import sirius_cyber_corp     # This is our vendor-specific root namespace. Custom data types.
     import pyuavcan.application  # The application module requires the standard types from the root namespace "uavcan".
 except (ImportError, AttributeError):
-    script_path = os.path.abspath(os.path.dirname(__file__))
+    src_dir = os.path.abspath(os.path.dirname(__file__))
     # Generate our vendor-specific namespace. It may make use of the standard data types (most namespaces do,
     # because the standard root namespace contains important basic types), so we include it in the lookup path set.
     # The paths are hard-coded here for the sake of conciseness.
     pyuavcan.dsdl.generate_package(
-        root_namespace_directory=os.path.join(script_path, '../dsdl/namespaces/sirius_cyber_corp/'),
-        lookup_directories=[os.path.join(script_path, '../public_regulated_data_types/uavcan')],
+        root_namespace_directory=os.path.join(src_dir, '../dsdl/namespaces/sirius_cyber_corp/'),
+        lookup_directories=[os.path.join(src_dir, '../public_regulated_data_types/uavcan')],
         output_directory=dsdl_generated_dir,
     )
     # Generate the standard namespace. The order actually doesn't matter.
     pyuavcan.dsdl.generate_package(
-        root_namespace_directory=os.path.join(script_path, '../public_regulated_data_types/uavcan'),
+        root_namespace_directory=os.path.join(src_dir, '../public_regulated_data_types/uavcan'),
         output_directory=dsdl_generated_dir,
     )
     # Okay, we can try importing again. We need to clear the import cache first because Python's import machinery
@@ -77,7 +77,7 @@ class DemoApplication:
         # The interface to run the demo against is selected via the environment variable with a default option provided.
         # Virtual CAN bus is supported only on GNU/Linux, but other interfaces used here should be compatible
         # with at least Windows as well.
-        # Frankly, the main reason we need this here is to simplify automatic testing of this demo script.
+        # Frankly, the main reason we need this here is to simplify automatic testing of this demo application.
         # Feel free to remove the selection logic and just hard-code whatever interface you need.
         interface_kind = os.environ.get('DEMO_INTERFACE_KIND', '').lower()
         # The node-ID is configured per transport instance.
@@ -90,11 +90,9 @@ class DemoApplication:
         # Most applications would need this to be configurable, some may support the PnP node-ID allocation protocol.
         if interface_kind == 'udp' or not interface_kind:  # This is the default.
             # The UDP/IP transport in this example runs on the local loopback interface, so no setup is needed.
-            # The UDP transport requires us to assign the IP address; the node-ID equals the value of several least
-            # significant bits of its IP address. If you want an anonymous UDP/IPv4 node, just use the subnet's
-            # broadcast address as its local IP address (e.g., 127.255.255.255/8, 192.168.0.255/24, and so on).
-            # For more info, please read the API documentation.
-            transport = pyuavcan.transport.udp.UDPTransport('127.0.0.42/8')
+            # The UDP transport requires us to specify the IP address; the node-ID equals the value of several least
+            # significant bits of its IP address. For more info, please read the API documentation.
+            transport = pyuavcan.transport.udp.UDPTransport('127.0.0.42')
 
         elif interface_kind == 'serial':
             # For demo purposes we're using not an actual serial port (which could have been specified like "COM9"
@@ -136,7 +134,7 @@ class DemoApplication:
             # may be observed with wired+wireless links used concurrently; see https://forum.uavcan.org/t/557.
             # All transports in a redundant group MUST share the same node-ID.
             transport = pyuavcan.transport.redundant.RedundantTransport()
-            transport.attach_inferior(pyuavcan.transport.udp.UDPTransport('127.0.0.42/8'))
+            transport.attach_inferior(pyuavcan.transport.udp.UDPTransport('127.0.0.42'))
             transport.attach_inferior(pyuavcan.transport.serial.SerialTransport('socket://localhost:50905',
                                                                                 local_node_id=42))
 
@@ -152,7 +150,7 @@ class DemoApplication:
             # There is a similar field for hardware version, but we don't populate it because it's a software-only node.
             software_version=uavcan.node.Version_1_0(major=1, minor=0),
             # The name of the local node. Should be a reversed Internet domain name, like a Java package.
-            name='org.uavcan.pyuavcan.demo.basic_usage',
+            name='org.uavcan.pyuavcan.demo.demo_app',
             # We've left the optional fields default-initialized here.
         )
 

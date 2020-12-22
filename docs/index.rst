@@ -21,7 +21,7 @@ Contents
    pages/architecture
    pages/installation
    pages/cli
-   pages/usage
+   pages/demo
    pages/faq
    pages/api
    pages/dev

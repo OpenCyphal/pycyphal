@@ -11,13 +11,13 @@ import logging
 import threading
 import dataclasses
 import concurrent.futures
-
 import serial
-
 import pyuavcan.transport
+from pyuavcan.transport import Timestamp
 from ._frame import SerialFrame
 from ._stream_parser import StreamParser
 from ._session import SerialOutputSession, SerialInputSession
+from ._tracer import SerialCapture, SerialTracer
 
 
 _SERIAL_PORT_READ_TIMEOUT = 1.0
@@ -40,7 +40,8 @@ class SerialTransportStatistics(pyuavcan.transport.TransportStatistics):
 
 class SerialTransport(pyuavcan.transport.Transport):
     """
-    The UAVCAN/Serial transport is designed for OSI L1 byte-level serial links, such as RS-485, UART, USB CDC ACM, etc.
+    The UAVCAN/Serial transport is designed for OSI L1 byte-level serial links and tunnels,
+    such as UART, RS-422/485/232 (duplex), USB CDC ACM, TCP/IP, etc.
     Please read the module documentation for details.
     """
 
@@ -58,6 +59,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     def __init__(self,
                  serial_port:                 typing.Union[str, serial.SerialBase],
                  local_node_id:               typing.Optional[int],
+                 *,
                  mtu:                         int = max(VALID_MTU_RANGE),
                  service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
                  baudrate:                    typing.Optional[int] = None,
@@ -130,10 +132,12 @@ class SerialTransport(pyuavcan.transport.Transport):
         # The serialization buffer is re-used for performance reasons; it is needed to store frame contents before
         # they are emitted into the serial port. It may grow as necessary at runtime; the initial size is a guess.
         # Access must be protected with the port lock!
-        self._serialization_buffer = bytearray(b'\x00' * 1024)
+        self._serialization_buffer = bytearray(b'\x00' * (1024 * 1024))
 
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, SerialInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, SerialOutputSession] = {}
+
+        self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
 
         self._statistics = SerialTransportStatistics()
 
@@ -210,10 +214,10 @@ class SerialTransport(pyuavcan.transport.Transport):
 
             if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) \
                     and self._service_transfer_multiplier > 1:
-                async def send_transfer(frames: typing.Iterable[SerialFrame],
-                                        monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.Timestamp]:
+                async def send_transfer(frames: typing.List[SerialFrame],
+                                        monotonic_deadline: float) -> typing.Optional[Timestamp]:
                     frames = list(frames)
-                    first_tx_ts: typing.Optional[pyuavcan.transport.Timestamp] = None
+                    first_tx_ts: typing.Optional[Timestamp] = None
                     for _ in range(self._service_transfer_multiplier):  # pragma: no branch
                         ts = await self._send_transfer(frames, monotonic_deadline)
                         first_tx_ts = first_tx_ts or ts
@@ -244,12 +248,6 @@ class SerialTransport(pyuavcan.transport.Transport):
         return list(self._output_registry.values())
 
     @property
-    def descriptor(self) -> str:
-        return \
-            f'<serial baudrate="{self._serial_port.baudrate}" srv_mult="{self._service_transfer_multiplier}">' \
-            f'{self._serial_port.name}</serial>'
-
-    @property
     def serial_port(self) -> serial.SerialBase:
         assert isinstance(self._serial_port, serial.SerialBase)
         return self._serial_port
@@ -257,7 +255,24 @@ class SerialTransport(pyuavcan.transport.Transport):
     def sample_statistics(self) -> SerialTransportStatistics:
         return copy.copy(self._statistics)
 
-    def _handle_received_frame(self, frame: SerialFrame) -> None:
+    def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
+        """
+        The reported events are of type :class:`SerialCapture`, please read its documentation for details.
+        The events may be reported from a different thread (use locks).
+        """
+        self._capture_handlers.append(handler)
+
+    @staticmethod
+    def make_tracer() -> SerialTracer:
+        """
+        See :class:`SerialTracer`.
+        """
+        return SerialTracer()
+
+    async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
+        raise NotImplementedError
+
+    def _handle_received_frame(self, timestamp: Timestamp, frame: SerialFrame) -> None:
         self._statistics.in_frames += 1
         if frame.destination_node_id in (self._local_node_id, None):
             for source_node_id in {None, frame.source_node_id}:
@@ -268,9 +283,9 @@ class SerialTransport(pyuavcan.transport.Transport):
                     pass
                 else:
                     # noinspection PyProtectedMember
-                    session._process_frame(frame)
+                    session._process_frame(timestamp, frame)
 
-    def _handle_received_out_of_band_data(self, data: memoryview) -> None:
+    def _handle_received_out_of_band_data(self, timestamp: Timestamp, data: memoryview) -> None:
         self._statistics.in_out_of_band_bytes += len(data)
         printable: typing.Union[str, bytes] = bytes(data)
         try:
@@ -278,23 +293,24 @@ class SerialTransport(pyuavcan.transport.Transport):
             printable = printable.decode('utf8')
         except ValueError:
             pass
-        _logger.warning('%s: Out-of-band: %s', self._serial_port.name, printable)
+        _logger.warning('%s: Out-of-band received at %s: %r', self._serial_port.name, timestamp, printable)
 
     def _handle_received_item_and_update_stats(self,
+                                               timestamp:      Timestamp,
                                                item:           typing.Union[SerialFrame, memoryview],
                                                in_bytes_count: int) -> None:
         if isinstance(item, SerialFrame):
-            self._handle_received_frame(item)
+            self._handle_received_frame(timestamp, item)
         elif isinstance(item, memoryview):
-            self._handle_received_out_of_band_data(item)
+            self._handle_received_out_of_band_data(timestamp, item)
         else:
             assert False
 
         assert self._statistics.in_bytes <= in_bytes_count
         self._statistics.in_bytes = int(in_bytes_count)
 
-    async def _send_transfer(self, frames: typing.Iterable[SerialFrame], monotonic_deadline: float) \
-            -> typing.Optional[pyuavcan.transport.Timestamp]:
+    async def _send_transfer(self, frames: typing.List[SerialFrame], monotonic_deadline: float) \
+            -> typing.Optional[Timestamp]:
         """
         Emits the frames belonging to the same transfer, returns the first frame transmission timestamp.
         The returned timestamp can be used for transfer feedback implementation.
@@ -302,9 +318,10 @@ class SerialTransport(pyuavcan.transport.Transport):
         :returns: The first frame transmission timestamp if all frames are sent successfully.
             None on timeout or on write failure.
         """
-        tx_ts: typing.Optional[pyuavcan.transport.Timestamp] = None
+        tx_ts: typing.Optional[Timestamp] = None
         self._ensure_not_closed()
         try:  # Jeez this is getting complex
+            num_sent = 0
             for fr in frames:
                 async with self._port_lock:       # TODO: the lock acquisition should be prioritized by frame priority!
                     min_buffer_size = len(fr.payload) * 3
@@ -320,10 +337,14 @@ class SerialTransport(pyuavcan.transport.Transport):
                             num_written = await self._loop.run_in_executor(self._background_executor,
                                                                            self._serial_port.write,
                                                                            compiled)
-                            tx_ts = tx_ts or pyuavcan.transport.Timestamp.now()
+                            tx_ts = tx_ts or Timestamp.now()
                         except serial.SerialTimeoutException:
                             num_written = 0
                             _logger.info('%s: Port write timed out in %.3fs on frame %r', self, timeout, fr)
+                        else:
+                            if self._capture_handlers:  # Create a copy to decouple data from the serialization buffer!
+                                cap = SerialCapture(tx_ts, SerialCapture.Direction.TX, memoryview(bytes(compiled)))
+                                pyuavcan.util.broadcast(self._capture_handlers)(cap)
                         self._statistics.out_bytes += num_written or 0
                     else:
                         tx_ts = None  # Timed out
@@ -333,8 +354,9 @@ class SerialTransport(pyuavcan.transport.Transport):
                 if num_written < len(compiled):
                     tx_ts = None  # Write failed
                     break
+                num_sent += 1
 
-                self._statistics.out_frames += 1
+            self._statistics.out_frames += num_sent
         except Exception as ex:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(f'{self} is closed, transmission aborted.') from ex
@@ -350,8 +372,11 @@ class SerialTransport(pyuavcan.transport.Transport):
     def _reader_thread_func(self) -> None:
         in_bytes_count = 0
 
-        def callback(item: typing.Union[SerialFrame, memoryview]) -> None:
-            self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, item, in_bytes_count)
+        def callback(ts: Timestamp, buf: memoryview, frame: typing.Optional[SerialFrame]) -> None:
+            item = buf if frame is None else frame
+            self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, ts, item, in_bytes_count)
+            if self._capture_handlers:
+                pyuavcan.util.broadcast(self._capture_handlers)(SerialCapture(ts, SerialCapture.Direction.RX, buf))
 
         try:
             parser = StreamParser(callback, max(self.VALID_MTU_RANGE))
@@ -359,9 +384,9 @@ class SerialTransport(pyuavcan.transport.Transport):
 
             while not self._closed and self._serial_port.is_open:
                 chunk = self._serial_port.read(max(1, self._serial_port.inWaiting()))
-                timestamp = pyuavcan.transport.Timestamp.now()
+                chunk_ts = Timestamp.now()
                 in_bytes_count += len(chunk)
-                parser.process_next_chunk(chunk, timestamp)
+                parser.process_next_chunk(chunk, chunk_ts)
 
         except Exception as ex:  # pragma: no cover
             if self._closed or not self._serial_port.is_open:
@@ -378,3 +403,13 @@ class SerialTransport(pyuavcan.transport.Transport):
     def _ensure_not_closed(self) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        kwargs = {
+            'local_node_id': self.local_node_id,
+            'service_transfer_multiplier': self._service_transfer_multiplier,
+            'baudrate': self._serial_port.baudrate,
+        }
+        if self._mtu < max(SerialTransport.VALID_MTU_RANGE):
+            kwargs['mtu'] = self._mtu
+        return [repr(self._serial_port.name)], kwargs

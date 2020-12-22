@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019-2020 UAVCAN Development Team
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
@@ -27,7 +27,7 @@ _HEADER_SIZE = _HEADER_WITHOUT_CRC_FORMAT.size + _CRC_SIZE_BYTES
 assert _HEADER_SIZE == 32
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, repr=False)
 class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     NODE_ID_MASK     = 4095
     TRANSFER_ID_MASK = 2 ** 64 - 1
@@ -44,9 +44,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
     data_specifier:      pyuavcan.transport.DataSpecifier
 
     def __post_init__(self) -> None:
-        if not isinstance(self.priority, pyuavcan.transport.Priority):
-            raise TypeError(f'Invalid priority: {self.priority}')  # pragma: no cover
-
         if self.source_node_id is not None and not (0 <= self.source_node_id <= self.NODE_ID_MASK):
             raise ValueError(f'Invalid source node ID: {self.source_node_id}')
 
@@ -64,9 +61,6 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
         if not (0 <= self.index <= self.INDEX_MASK):
             raise ValueError(f'Invalid frame index: {self.index}')
-
-        if not isinstance(self.payload, memoryview):
-            raise TypeError(f'Bad payload type: {type(self.payload).__name__}')  # pragma: no cover
 
     def compile_into(self, out_buffer: bytearray) -> memoryview:
         """
@@ -103,6 +97,7 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         out_buffer[0] = self.FRAME_DELIMITER_BYTE
         next_byte_index = 1
 
+        # noinspection PyTypeChecker
         packet_bytes = header + self.payload + payload_crc_bytes
         encoded_image = cobs.encode(packet_bytes)
         # place in the buffer and update next_byte_index:
@@ -124,20 +119,26 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         return (payload_size_bytes * 255 + 253) // 254
 
     @staticmethod
-    def parse_from_cobs_image(header_payload_crc_image: memoryview,
-                              timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[SerialFrame]:
+    def parse_from_cobs_image(image: memoryview) -> typing.Optional[SerialFrame]:
         """
+        Delimiters will be stripped if present but they are not required.
         :returns: Frame or None if the image is invalid.
         """
         try:
-            unescaped_image = cobs.decode(bytearray(header_payload_crc_image))
+            while image[0] == SerialFrame.FRAME_DELIMITER_BYTE:
+                image = image[1:]
+            while image[-1] == SerialFrame.FRAME_DELIMITER_BYTE:
+                image = image[:-1]
+        except IndexError:
+            return None
+        try:
+            unescaped_image = cobs.decode(bytearray(image))  # TODO: PERFORMANCE WARNING: AVOID THE COPY
         except cobs.DecodeError:
             return None
-        return SerialFrame.parse_from_unescaped_image(memoryview(unescaped_image), timestamp)
+        return SerialFrame.parse_from_unescaped_image(memoryview(unescaped_image))
 
     @staticmethod
-    def parse_from_unescaped_image(header_payload_crc_image: memoryview,
-                                   timestamp: pyuavcan.transport.Timestamp) -> typing.Optional[SerialFrame]:
+    def parse_from_unescaped_image(header_payload_crc_image: memoryview) -> typing.Optional[SerialFrame]:
         """
         :returns: Frame or None if the image is invalid.
         """
@@ -174,8 +175,8 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
             data_specifier = pyuavcan.transport.ServiceDataSpecifier(service_id, role)
 
         try:
-            return SerialFrame(timestamp=timestamp,
-                               priority=pyuavcan.transport.Priority(int_priority),
+            # noinspection PyArgumentList
+            return SerialFrame(priority=pyuavcan.transport.Priority(int_priority),
                                source_node_id=src_nid,
                                destination_node_id=dst_nid,
                                data_specifier=data_specifier,
@@ -191,10 +192,9 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
 
 
 def _unittest_frame_compile_message() -> None:
-    from pyuavcan.transport import Priority, MessageDataSpecifier, Timestamp
+    from pyuavcan.transport import Priority, MessageDataSpecifier
 
-    f = SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
+    f = SerialFrame(priority=Priority.HIGH,
                     source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                     destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                     data_specifier=MessageDataSpecifier(2345),
@@ -231,10 +231,9 @@ def _unittest_frame_compile_message() -> None:
 
 
 def _unittest_frame_compile_service() -> None:
-    from pyuavcan.transport import Priority, ServiceDataSpecifier, Timestamp
+    from pyuavcan.transport import Priority, ServiceDataSpecifier
 
-    f = SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.FAST,
+    f = SerialFrame(priority=Priority.FAST,
                     source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
                     destination_node_id=None,
                     data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.RESPONSE),
@@ -270,8 +269,6 @@ def _unittest_frame_compile_service() -> None:
 def _unittest_frame_parse() -> None:
     from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier
 
-    ts = pyuavcan.transport.Timestamp.now()
-
     def get_crc(*blocks: typing.Union[bytes, memoryview]) -> bytes:
         return pyuavcan.transport.commons.crc.CRC32C.new(*blocks).value_as_bytes
 
@@ -289,7 +286,7 @@ def _unittest_frame_parse() -> None:
     header += get_crc(header)
     assert len(header) == 32
     payload = b'Squeeze mayonnaise onto a hamster'
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + payload + get_crc(payload)), ts)
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + payload + get_crc(payload)))
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=123,
@@ -299,7 +296,6 @@ def _unittest_frame_parse() -> None:
         index=54321,
         end_of_transfer=True,
         payload=memoryview(payload),
-        timestamp=ts,
     )
 
     # Valid service with no payload
@@ -315,7 +311,7 @@ def _unittest_frame_parse() -> None:
     ])
     header += get_crc(header)
     assert len(header) == 32
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')), ts)
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')))
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
@@ -325,7 +321,6 @@ def _unittest_frame_parse() -> None:
         index=54321,
         end_of_transfer=False,
         payload=memoryview(b''),
-        timestamp=ts,
     )
 
     # Valid service with no payload
@@ -341,7 +336,7 @@ def _unittest_frame_parse() -> None:
     ])
     header += get_crc(header)
     assert len(header) == 32
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')), ts)
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')))
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
@@ -351,14 +346,13 @@ def _unittest_frame_parse() -> None:
         index=54321,
         end_of_transfer=False,
         payload=memoryview(b''),
-        timestamp=ts,
     )
 
     # Too short
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(payload)), ts) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(payload))) is None
 
     # Bad CRC
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + payload + b'1234'), ts) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header + payload + b'1234')) is None
 
     # Bad version
     header = bytes([
@@ -373,7 +367,7 @@ def _unittest_frame_parse() -> None:
     ])
     header += get_crc(header)
     assert len(header) == 32
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')), ts) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b''))) is None
 
     # Bad fields
     header = bytes([
@@ -388,15 +382,14 @@ def _unittest_frame_parse() -> None:
     ])
     header += get_crc(header)
     assert len(header) == 32
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b'')), ts) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b''))) is None
 
 
 def _unittest_frame_check() -> None:
     from pytest import raises
-    from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier, Timestamp
+    from pyuavcan.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier
 
-    _ = SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
+    _ = SerialFrame(priority=Priority.HIGH,
                     source_node_id=123,
                     destination_node_id=456,
                     data_specifier=MessageDataSpecifier(2345),
@@ -406,8 +399,7 @@ def _unittest_frame_check() -> None:
                     payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
+        SerialFrame(priority=Priority.HIGH,
                     source_node_id=123456,
                     destination_node_id=456,
                     data_specifier=MessageDataSpecifier(2345),
@@ -417,8 +409,7 @@ def _unittest_frame_check() -> None:
                     payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
+        SerialFrame(priority=Priority.HIGH,
                     source_node_id=123,
                     destination_node_id=123456,
                     data_specifier=MessageDataSpecifier(2345),
@@ -428,8 +419,7 @@ def _unittest_frame_check() -> None:
                     payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
+        SerialFrame(priority=Priority.HIGH,
                     source_node_id=None,
                     destination_node_id=456,
                     data_specifier=ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
@@ -439,8 +429,7 @@ def _unittest_frame_check() -> None:
                     payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
+        SerialFrame(priority=Priority.HIGH,
                     source_node_id=None,
                     destination_node_id=None,
                     data_specifier=MessageDataSpecifier(2345),
@@ -450,8 +439,7 @@ def _unittest_frame_check() -> None:
                     payload=memoryview(b'abcdef'))
 
     with raises(ValueError):
-        SerialFrame(timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
+        SerialFrame(priority=Priority.HIGH,
                     source_node_id=None,
                     destination_node_id=None,
                     data_specifier=MessageDataSpecifier(2345),

@@ -27,7 +27,7 @@ async def _unittest_slow_plug_and_play_centralized(generated_packages: typing.Li
     from pyuavcan.application.plug_and_play import CentralizedAllocator, Allocatee
     assert generated_packages
 
-    asyncio.get_running_loop().slow_callback_duration = 1.0
+    asyncio.get_running_loop().slow_callback_duration = 5.0
 
     peers: typing.Set[MockMedia] = set()
     pres_client = Presentation(CANTransport(MockMedia(peers, mtu, 1), None))
@@ -109,7 +109,7 @@ async def _unittest_slow_plug_and_play_allocatee(generated_packages: typing.List
     from pyuavcan.application.plug_and_play import Allocatee, NodeIDAllocationData_2, ID
     assert generated_packages
 
-    asyncio.get_running_loop().slow_callback_duration = 1.0
+    asyncio.get_running_loop().slow_callback_duration = 5.0
 
     peers: typing.Set[MockMedia] = set()
     pres_client = Presentation(CANTransport(MockMedia(peers, 64, 1), None))

@@ -8,6 +8,7 @@
 .[cli]
 .[transport_can_pythoncan]
 .[transport_serial]
+.[transport_udp]
 
 # Testing.
 pytest          ~= 4.6   # Update when https://github.com/UAVCAN/nunavut/issues/144 is fixed

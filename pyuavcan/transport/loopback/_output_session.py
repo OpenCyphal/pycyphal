@@ -49,7 +49,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
     def disable_feedback(self) -> None:
         self._feedback_handler = None
 
-    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
+    async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         if self._injected_exception is not None:
             raise self._injected_exception
 
@@ -84,7 +84,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
     def exception(self) -> typing.Optional[Exception]:
         """
         This is a test rigging.
-        Use this property to configure an exception object that will be raised when :func:`send_until` is invoked.
+        Use this property to configure an exception object that will be raised when :func:`send` is invoked.
         Set None to remove the injected exception (None is the default value).
         Useful for testing error handling logic.
         """

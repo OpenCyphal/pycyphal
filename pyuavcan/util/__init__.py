@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019-2020 UAVCAN Development Team
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
@@ -7,6 +7,8 @@
 """
 The util package contains various entities that are commonly useful in PyUAVCAN-based applications.
 """
+
+from ._broadcast import broadcast as broadcast
 
 from ._introspect import import_submodules as import_submodules
 from ._introspect import iter_descendants as iter_descendants

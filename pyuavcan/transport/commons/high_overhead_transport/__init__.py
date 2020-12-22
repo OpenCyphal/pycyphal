@@ -15,6 +15,11 @@ none of the entities defined in this module can be used with CAN.
 """
 
 from ._frame import Frame as Frame
+
 from ._transfer_serializer import serialize_transfer as serialize_transfer
+
 from ._transfer_reassembler import TransferReassembler as TransferReassembler
+
 from ._common import TransferCRC as TransferCRC
+
+from ._alien_transfer_reassembler import AlienTransferReassembler as AlienTransferReassembler

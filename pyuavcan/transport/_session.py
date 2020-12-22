@@ -57,6 +57,11 @@ class Feedback(abc.ABC):
         """
         raise NotImplementedError
 
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(self,
+                                             original_transfer_timestamp=self.original_transfer_timestamp,
+                                             first_frame_transmission_timestamp=self.first_frame_transmission_timestamp)
+
 
 @dataclasses.dataclass(frozen=True)
 class SessionSpecifier:
@@ -147,11 +152,16 @@ class SessionStatistics:
     Transport implementations are encouraged to extend this class to add more transport-specific information.
     The statistical counters start from zero when a session is first instantiated.
     """
-    transfers:     int = 0  #: Successful transfer count.
-    frames:        int = 0  #: UAVCAN transport frame count (CAN frames, UDP packets, wireless frames, etc).
-    payload_bytes: int = 0  #: Successful transfer payload bytes (not including transport metadata or padding).
-    errors:        int = 0  #: Failures of any kind, even if they are also logged using other means, excepting drops.
-    drops:         int = 0  #: Frames lost to buffer overruns and expired deadlines.
+    transfers: int = 0
+    """Successful transfer count."""
+    frames: int = 0
+    """UAVCAN transport frame count (CAN frames, UDP packets, wireless frames, etc)."""
+    payload_bytes: int = 0
+    """Successful transfer payload bytes (not including transport metadata or padding)."""
+    errors: int = 0
+    """Failures of any kind, even if they are also logged using other means, excepting drops."""
+    drops: int = 0
+    """Frames lost to buffer overruns and expired deadlines."""
 
     def __eq__(self, other: object) -> bool:
         """
@@ -224,7 +234,7 @@ class InputSession(Session):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
         """
         Attempts to receive the transfer before the deadline [second].
         Returns None if the transfer is not received before the deadline.
@@ -279,7 +289,7 @@ class OutputSession(Session):
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def send_until(self, transfer: Transfer, monotonic_deadline: float) -> bool:
+    async def send(self, transfer: Transfer, monotonic_deadline: float) -> bool:
         """
         Sends the transfer; blocks if necessary until the specified deadline [second].
         The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.

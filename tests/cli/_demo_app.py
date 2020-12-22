@@ -62,9 +62,9 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
     yield _IfaceOption(
         demo_env_vars={'DEMO_INTERFACE_KIND': 'udp'},
         make_cli_args=lambda nid: (
-            (f'--tr=UDP("127.0.0.{nid}/8")', )      # Regular node
+            (f'--tr=UDP("127.0.0.{nid}")', )      # Regular node
             if nid is not None else
-            (f'--tr=UDP("127.255.255.255/8")', )    # Anonymous node
+            (f'--tr=UDP("127.0.0.1",anonymous=True)', )    # Anonymous node
         ),
     )
 
@@ -73,9 +73,9 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
         demo_env_vars={'DEMO_INTERFACE_KIND': 'udp_serial'},
         make_cli_args=lambda nid: (
             (
-                f'--tr=UDP("127.0.0.{nid}/8")'          # Regular node
+                f'--tr=UDP("127.0.0.{nid}")'          # Regular node
                 if nid is not None else
-                f'--tr=UDP("127.255.255.255/8")'        # Anonymous node
+                f'--tr=UDP("127.0.0.1",anonymous=True)'        # Anonymous node
             ),
             f'--tr=Serial("socket://localhost:50905",local_node_id={nid})',
         ),
@@ -83,7 +83,7 @@ def _get_iface_options() -> typing.Iterable[_IfaceOption]:
 
 
 @pytest.mark.parametrize('iface_option', _get_iface_options())  # type: ignore
-def _unittest_slow_cli_demo_basic_usage(
+def _unittest_slow_cli_demo_app(
         generated_packages: typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedPackageInfo]],
         iface_option:       _IfaceOption) -> None:
     """
@@ -101,7 +101,7 @@ def _unittest_slow_cli_demo_basic_usage(
     demo_proc_env_vars = iface_option.demo_env_vars.copy()
     demo_proc_env_vars['PYUAVCAN_LOGLEVEL'] = 'DEBUG'
     demo_proc = BackgroundChildProcess(
-        'python', str(DEMO_DIR / 'basic_usage.py'),
+        'python', str(DEMO_DIR / 'demo_app.py'),
         environment_variables=demo_proc_env_vars
     )
     assert demo_proc.alive
@@ -169,7 +169,7 @@ def _unittest_slow_cli_demo_basic_usage(
         assert node_info['430']['_metadata_']['source_node_id'] == 42
         assert node_info['430']['_metadata_']['transfer_id'] >= 0
         assert 'slow' in node_info['430']['_metadata_']['priority'].lower()
-        assert node_info['430']['name'] == 'org.uavcan.pyuavcan.demo.basic_usage'
+        assert node_info['430']['name'] == 'org.uavcan.pyuavcan.demo.demo_app'
         assert node_info['430']['protocol_version']['major'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
         assert node_info['430']['protocol_version']['minor'] == pyuavcan.UAVCAN_SPECIFICATION_VERSION[1]
 

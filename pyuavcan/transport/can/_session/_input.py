@@ -12,8 +12,11 @@ import logging
 import dataclasses
 import pyuavcan.util
 import pyuavcan.transport
-from .. import _frame, _identifier
-from . import _base, _transfer_reassembler
+from pyuavcan.transport import Timestamp
+from .._frame import UAVCANFrame
+from .._identifier import CANID, MessageCANID, ServiceCANID
+from ._base import CANSession, SessionFinalizer
+from ._transfer_reassembler import TransferReassemblyErrorID, TransferReassembler
 
 
 _logger = logging.getLogger(__name__)
@@ -21,23 +24,23 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class CANInputSessionStatistics(pyuavcan.transport.SessionStatistics):
-    reception_error_counters: typing.Dict[_transfer_reassembler.TransferReassemblyErrorID, int] = \
-        dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_reassembler.TransferReassemblyErrorID})
+    reception_error_counters: typing.Dict[TransferReassemblyErrorID, int] = \
+        dataclasses.field(default_factory=lambda: {e: 0 for e in TransferReassemblyErrorID})
 
 
-class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
+class CANInputSession(CANSession, pyuavcan.transport.InputSession):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2
     """
     Per the UAVCAN specification. Units are seconds. Can be overridden after instantiation if needed.
     """
 
-    _QueueItem = typing.Tuple[_identifier.CANID, _frame.TimestampedUAVCANFrame]
+    _QueueItem = typing.Tuple[Timestamp, CANID, UAVCANFrame]
 
     def __init__(self,
                  specifier:        pyuavcan.transport.InputSessionSpecifier,
                  payload_metadata: pyuavcan.transport.PayloadMetadata,
                  loop:             asyncio.AbstractEventLoop,
-                 finalizer:        _base.SessionFinalizer):
+                 finalizer:        SessionFinalizer):
         """Use the factory method."""
         self._specifier = specifier
         self._payload_metadata = payload_metadata
@@ -47,25 +50,25 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         self._loop = loop
         self._transfer_id_timeout_ns = int(CANInputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
-        self._receivers = [_transfer_reassembler.TransferReassembler(nid, payload_metadata.extent_bytes)
+        self._receivers = [TransferReassembler(nid, payload_metadata.extent_bytes)
                            for nid in _node_id_range()]
 
         self._statistics = CANInputSessionStatistics()   # We could easily support per-source-node statistics if needed
 
         super(CANInputSession, self).__init__(finalizer=finalizer)
 
-    def _push_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+    def _push_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame) -> None:
         """
         This is a part of the transport-internal API. It's a public method despite the name because Python's
         visibility handling capabilities are limited. I guess we could define a private abstract base to
         handle this but it feels like too much work. Why can't we have protected visibility in Python?
         """
         try:
-            self._queue.put_nowait((can_id, frame))
+            self._queue.put_nowait((timestamp, can_id, frame))
         except asyncio.QueueFull:
             self._statistics.drops += 1
-            _logger.info('Input session %s: input queue overflow; frame %s (CAN ID fields: %s) is dropped',
-                         self, frame, can_id)
+            _logger.info('%s: Input queue overflow; frame %s (CAN ID fields: %s) received at %s is dropped',
+                         self, frame, can_id, timestamp)
 
     @property
     def frame_queue_capacity(self) -> typing.Optional[int]:
@@ -115,8 +118,8 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         else:
             raise ValueError(f'Invalid value for transfer-ID timeout [second]: {value}')
 
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
-        out = await self._do_receive_until(monotonic_deadline)
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+        out = await self._do_receive(monotonic_deadline)
         assert out is None or self.specifier.remote_node_id is None \
             or out.source_node_id == self.specifier.remote_node_id, 'Internal input session protocol violation'
         return out
@@ -124,17 +127,18 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
     def close(self) -> None:
         super(CANInputSession, self).close()
 
-    async def _do_receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    async def _do_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:
             try:
                 # Continue reading past the deadline until the queue is empty or a transfer is received.
                 timeout = monotonic_deadline - self._loop.time()
                 if timeout > 0:
-                    canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                    timestamp, canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
                 else:
-                    canid, frame = self._queue.get_nowait()
-                assert isinstance(canid, _identifier.CANID)
-                assert isinstance(frame, _frame.TimestampedUAVCANFrame)
+                    timestamp, canid, frame = self._queue.get_nowait()
+                assert isinstance(timestamp, Timestamp)
+                assert isinstance(canid, CANID)
+                assert isinstance(frame, UAVCANFrame)
             except (asyncio.TimeoutError, asyncio.QueueEmpty):
                 # If there are unprocessed messages, allow the caller to read them even if the instance is closed.
                 self._raise_if_closed()
@@ -142,7 +146,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
 
             self._statistics.frames += 1
 
-            if isinstance(canid, _identifier.MessageCANID):
+            if isinstance(canid, MessageCANID):
                 assert isinstance(self._specifier.data_specifier, pyuavcan.transport.MessageDataSpecifier)
                 assert self._specifier.data_specifier.subject_id == canid.subject_id
                 source_node_id = canid.source_node_id
@@ -150,7 +154,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                     # Anonymous transfer - no reconstruction needed
                     self._statistics.transfers += 1
                     self._statistics.payload_bytes += len(frame.padded_payload)
-                    out = pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
+                    out = pyuavcan.transport.TransferFrom(timestamp=timestamp,
                                                           priority=canid.priority,
                                                           transfer_id=frame.transfer_id,
                                                           fragmented_payload=[frame.padded_payload],
@@ -158,7 +162,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                     _logger.debug('%s: Received anonymous transfer: %s; current stats: %s', self, out, self._statistics)
                     return out
 
-            elif isinstance(canid, _identifier.ServiceCANID):
+            elif isinstance(canid, ServiceCANID):
                 assert isinstance(self._specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
                 assert self._specifier.data_specifier.service_id == canid.service_id
                 assert (self._specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST) \
@@ -169,8 +173,8 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                 assert False
 
             receiver = self._receivers[source_node_id]
-            result = receiver.process_frame(canid.priority, frame, self._transfer_id_timeout_ns)
-            if isinstance(result, _transfer_reassembler.TransferReassemblyErrorID):
+            result = receiver.process_frame(timestamp, canid.priority, frame, self._transfer_id_timeout_ns)
+            if isinstance(result, TransferReassemblyErrorID):
                 self._statistics.errors += 1
                 self._statistics.reception_error_counters[result] += 1
                 _logger.debug('%s: Rejecting CAN frame %s because %s; current stats: %s',
@@ -187,7 +191,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
 
 
 def _node_id_range() -> typing.Iterable[int]:
-    return range(_identifier.CANID.NODE_ID_MASK + 1)
+    return range(CANID.NODE_ID_MASK + 1)
 
 
 _NANO = 1e-9

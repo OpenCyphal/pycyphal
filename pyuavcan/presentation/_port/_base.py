@@ -22,7 +22,7 @@ DEFAULT_SERVICE_REQUEST_TIMEOUT = 1.0
 This value is recommended by Specification.
 """
 
-TypedSessionFinalizer = typing.Callable[[typing.Iterable[pyuavcan.transport.Session]], None]
+PortFinalizer = typing.Callable[[typing.Sequence[pyuavcan.transport.Session]], None]
 
 
 TypeClass = typing.TypeVar('TypeClass', bound=pyuavcan.dsdl.CompositeObject)

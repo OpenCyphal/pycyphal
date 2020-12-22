@@ -8,20 +8,16 @@ import copy
 import typing
 import asyncio
 import logging
+import ipaddress
 import dataclasses
 import pyuavcan
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
-from ._network_map import NetworkMap
-from ._port_mapping import udp_port_from_data_specifier
-from ._demultiplexer import UDPDemultiplexer, UDPDemultiplexerStatistics
-
-
-# This is for internal use only: the maximum possible payload per UDP frame.
-# We assume that it equals the maximum size of an Ethernet jumbo frame.
-# We subtract the size of the L2/L3/L4 overhead here, and add one byte to enable packet truncation detection.
-_MAX_UDP_MTU = 9 * 1024 - 20 - 8 + 1
+from ._ip import SocketFactory, Sniffer, RawPacket
+from ._ip import unicast_ip_to_node_id
+from ._socket_reader import SocketReader, SocketReaderStatistics
+from ._tracer import UDPTracer, UDPCapture
 
 
 _logger = logging.getLogger(__name__)
@@ -29,10 +25,10 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
-    demultiplexer: typing.Dict[pyuavcan.transport.DataSpecifier, UDPDemultiplexerStatistics] = \
+    received_datagrams: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReaderStatistics] = \
         dataclasses.field(default_factory=dict)
     """
-    Basic input session statistics: instances of :class:`UDPDemultiplexerStatistics` keyed by data specifier.
+    Basic input session statistics: instances of :class:`SocketReaderStatistics` keyed by data specifier.
     """
 
 
@@ -43,59 +39,34 @@ class UDPTransport(pyuavcan.transport.Transport):
     Please read the module documentation for details.
     """
 
-    DEFAULT_SERVICE_TRANSFER_MULTIPLIER = 1
+    VALID_MTU_RANGE = 1200, 9000
     """
-    By default, service transfer multiplication is disabled for UDP.
-    This option may be justified for extremely unreliable experimental networks.
+    The minimum is based on the IPv6 specification, which guarantees that the path MTU is at least 1280 bytes large.
+    This value is also acceptable for virtually all IPv4 local or real-time networks.
+    Lower MTU values shall not be used because they may lead to multi-frame transfer fragmentation where this is
+    not expected by the designer, possibly violating the real-time constraints.
+
+    A conventional Ethernet jumbo frame can carry up to 9 KiB (9216 bytes).
+    These are the application-level MTU values, so we take overheads into account.
     """
 
     VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
 
-    DEFAULT_MTU = 1024
-    """
-    The recommended application-level MTU is one kibibyte. Lower values should not be used.
-    This is compatible with the IPv6 minimum MTU requirement, which is 1280 bytes.
-    The IPv4 has a lower MTU requirement of 576 bytes, but for local networks the MTU is normally much higher.
-    The transport can always accept any MTU regardless of its configuration.
-    """
-
-    VALID_MTU_RANGE = (1024, 9000)
-    """
-    A conventional Ethernet jumbo frame can carry up to 9 KiB (9216 bytes).
-    These are the application-level MTU values, so we take overheads into account.
-    An attempt to transmit a larger frame than supported by L2 may lead to IP fragmentation,
-    which is undesirable for time-deterministic networks.
-    """
-
-    NODE_ID_BIT_LENGTH = NetworkMap.NODE_ID_BIT_LENGTH
-    """
-    The maximum theoretical number of nodes on the network is determined by raising 2 into this power.
-    A node-ID is the set of this many least significant bits of the IP address of the node.
-    """
-
     def __init__(self,
-                 ip_address:                  str,
-                 mtu:                         int = DEFAULT_MTU,
-                 service_transfer_multiplier: int = DEFAULT_SERVICE_TRANSFER_MULTIPLIER,
+                 local_ip_address:            typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
+                 *,
+                 anonymous:                   bool = False,
+                 mtu:                         int = min(VALID_MTU_RANGE),
+                 service_transfer_multiplier: int = 1,
                  loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
         """
-        :param ip_address: Specifies which local IP address to use for this transport.
+        :param local_ip_address: Specifies which local IP address to use for this transport.
             This setting also implicitly specifies the network interface to use.
             All output sockets will be bound (see ``bind()``) to the specified local address.
-            If the specified address is not available locally, initialization will fail with
+            If the specified address is not available locally, the transport will fail with
             :class:`pyuavcan.transport.InvalidMediaConfigurationError`.
 
-            If the specified IP address cannot be mapped to a valid node-ID, the local node will be anonymous.
-            An IP address will be impossible to map to a valid node-ID if the address happens to be
-            the broadcast address for the subnet (e.g., ``192.168.0.255/24``),
-            or if the value of the host address exceeds the valid node-ID range (e.g.,
-            given IP address ``127.123.123.123/8``, the host address is 8092539,
-            which exceeds the range of valid node-ID values).
-
-            If the local node is anonymous, any attempt to create an output session will fail with
-            :class:`pyuavcan.transport.OperationNotDefinedForAnonymousNodeError`.
-
-            For use on localhost, any IP address from the localhost range can be used;
+            For use on the loopback interface, any IP address from the loopback range can be used;
             for example, ``127.0.0.123``.
             This generally does not work with physical interfaces;
             for example, if a host has one physical interface at ``192.168.1.200``,
@@ -104,41 +75,28 @@ class UDPTransport(pyuavcan.transport.Transport):
             One can change the node-ID of a physical transport by altering the network
             interface configuration in the underlying operating system itself.
 
-            IPv4 addresses shall have the network mask specified, this is necessary for the transport to
-            determine the subnet's broadcast address (for broadcast UAVCAN transfers).
-            The mask will also be used to derive the range of node-ID values for the subnet,
-            capped by two raised to the power of the node-ID bit length.
-            For example:
+            Using ``INADDR_ANY`` here (i.e., ``0.0.0.0`` for IPv4) is not expected to work reliably or be portable
+            because this configuration is, generally, incompatible with multicast sockets (even in the anonymous mode).
+            In order to set up even a listening multicast socket, it is necessary to specify the correct local
+            address such that the underlying IP stack is aware of which interface to receive multicast packets from.
 
-            - ``192.168.1.200/24`` -- a subnet with up to 255 UAVCAN nodes; for example:
+            When the anonymous mode is enabled, it is quite possible to snoop on the network even if there is
+            another node running locally on the same interface
+            (because sockets are initialized with ``SO_REUSEADDR`` and ``SO_REUSEPORT``, when available).
 
-                - ``192.168.1.0`` -- node-ID of zero (may be unusable depending on the network configuration).
-                - ``192.168.1.254`` -- the maximum available node-ID in this subnet is 254.
-                - ``192.168.1.255`` -- the broadcast address, not a valid node. If you specify this address,
-                  the local node will be anonymous.
-
-            - ``127.0.0.42/8`` -- a subnet with the maximum possible number of nodes ``2**NODE_ID_BIT_LENGTH``.
-              The local loopback subnet is useful for testing.
-
-                - ``127.0.0.1`` -- node-ID 1.
-                - ``127.0.0.255`` -- node-ID 255.
-                - ``127.0.15.255`` -- node-ID 4095.
-                - ``127.123.123.123`` -- not a valid node-ID because it exceeds ``2**NODE_ID_BIT_LENGTH``.
-                  All traffic from this address will be rejected as non-UAVCAN.
-                  If used for local node, the local node will be anonymous.
-                - ``127.255.255.255`` -- the broadcast address; notice that this address lies outside of the
-                  node-ID-mapped space, no conflicts. If used for local node, the local node will be anonymous.
-
-            IPv6 addresses may be specified without the mask, in which case it will be assumed to be
-            equal ``128 - NODE_ID_BIT_LENGTH``.
-            Don't forget to specify the scope-ID for link-local IPv6 addresses.
+        :param anonymous: If True, the transport will reject any attempt to create an output session.
+            Additionally, it will report its own local node-ID as None, which is a convention in PyUAVCAN
+            to represent anonymous instances.
+            The UAVCAN/UDP transport does not support anonymous transfers.
 
         :param mtu: The application-level MTU for outgoing packets.
-            In other words, this is the maximum number of payload bytes per UDP frame.
+            In other words, this is the maximum number of serialized bytes per UAVCAN/UDP frame.
             Transfers where the number of payload bytes does not exceed this value will be single-frame transfers,
             otherwise, multi-frame transfers will be used.
             This setting affects only outgoing frames;
             the MTU of incoming frames is fixed at a sufficiently large value to accept any meaningful UDP frame.
+
+            The default value is the smallest valid value for reasons of compatibility.
 
         :param service_transfer_multiplier: Deterministic data loss mitigation is disabled by default.
             This parameter specifies the number of times each outgoing service transfer will be repeated.
@@ -146,7 +104,11 @@ class UDPTransport(pyuavcan.transport.Transport):
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
         """
-        self._network_map = NetworkMap.new(ip_address)
+        if not isinstance(local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+            local_ip_address = ipaddress.ip_address(local_ip_address)
+        assert not isinstance(local_ip_address, str)
+        self._sock_factory = SocketFactory.new(local_ip_address)
+        self._anonymous = bool(anonymous)
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
@@ -159,15 +121,17 @@ class UDPTransport(pyuavcan.transport.Transport):
         if not (low <= self._mtu <= high):
             raise ValueError(f'Invalid MTU: {self._mtu} bytes')
 
-        _logger.debug(f'IP: {self._network_map}; max nodes: {self._network_map.max_nodes}; '
-                      f'local node-ID: {self.local_node_id}')
-
-        self._demultiplexer_registry: typing.Dict[pyuavcan.transport.DataSpecifier, UDPDemultiplexer] = {}
+        self._socket_reader_registry: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReader] = {}
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
+        self._sniffer: typing.Optional[Sniffer] = None
+        self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
+
         self._closed = False
         self._statistics = UDPTransportStatistics()
+
+        _logger.debug(f'{self}: Initialized with local node-ID {self.local_node_id}')
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -177,13 +141,14 @@ class UDPTransport(pyuavcan.transport.Transport):
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=UDPFrame.TRANSFER_ID_MASK + 1,
-            max_nodes=self._network_map.max_nodes,
+            max_nodes=self._sock_factory.max_nodes,
             mtu=self._mtu,
         )
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
-        return self._network_map.local_node_id
+        addr = self._sock_factory.local_ip_address
+        return None if self._anonymous else unicast_ip_to_node_id(addr, addr)
 
     def close(self) -> None:
         self._closed = True
@@ -192,6 +157,9 @@ class UDPTransport(pyuavcan.transport.Transport):
                 s.close()
             except Exception as ex:  # pragma: no cover
                 _logger.exception('%s: Failed to close %r: %s', self, s, ex)
+        if self._sniffer is not None:
+            self._sniffer.close()
+            self._sniffer = None
 
     def get_input_session(self,
                           specifier:        pyuavcan.transport.InputSessionSpecifier,
@@ -199,7 +167,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._ensure_not_closed()
         if specifier not in self._input_registry:
             self._setup_input_session(specifier, payload_metadata)
-        assert specifier.data_specifier in self._demultiplexer_registry
+        assert specifier.data_specifier in self._socket_reader_registry
         out = self._input_registry[specifier]
         assert isinstance(out, UDPInputSession)
         assert out.specifier == specifier
@@ -210,16 +178,23 @@ class UDPTransport(pyuavcan.transport.Transport):
                            payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPOutputSession:
         self._ensure_not_closed()
         if specifier not in self._output_registry:
+            if self.local_node_id is None:
+                # In UAVCAN/UDP, the anonymous mode is somewhat bolted-on.
+                # The underlying protocol (IP) does not have the concept of anonymous packet.
+                # We add it artificially as an implementation detail of this library.
+                raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                    'Cannot create an output session instance because this UAVCAN/UDP transport instance is '
+                    'configured in the anonymous mode. '
+                    'If you need to emit a transfer, create a new instance with anonymous=False.'
+                )
+
             def finalizer() -> None:
                 del self._output_registry[specifier]
 
             multiplier = \
                 self._srv_multiplier if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) \
                 else 1
-            sock = self._network_map.make_output_socket(
-                specifier.remote_node_id,
-                udp_port_from_data_specifier(specifier.data_specifier)
-            )
+            sock = self._sock_factory.make_output_socket(specifier.remote_node_id, specifier.data_specifier)
             self._output_registry[specifier] = UDPOutputSession(
                 specifier=specifier,
                 payload_metadata=payload_metadata,
@@ -247,16 +222,44 @@ class UDPTransport(pyuavcan.transport.Transport):
         return list(self._output_registry.values())
 
     @property
-    def descriptor(self) -> str:
-        return f'<udp srv_mult="{self._srv_multiplier}">{self._network_map}</udp>'
+    def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+        return self._sock_factory.local_ip_address
 
-    @property
-    def local_ip_address_with_netmask(self) -> str:
+    def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
         """
-        The configured IP address of the local node with network mask.
-        For example: ``192.168.1.200/24``.
+        Reported events are of type :class:`UDPCapture`.
+
+        In order for the network capture to work, the local machine should be connected to a SPAN port of the switch.
+        See https://en.wikipedia.org/wiki/Port_mirroring and read the documentation for your networking hardware.
+        Additional preconditions must be met depending on the platform:
+
+        - On GNU/Linux, network capture requires that either the process is executed by root,
+          or the raw packet capture capability ``CAP_NET_RAW`` is enabled.
+          For more info read ``man 7 capabilities`` and consider checking the docs for Wireshark/libpcap.
+
+        - On Windows, Npcap needs to be installed and configured; see https://nmap.org/npcap/.
+
+        Packets that do not originate from the current UAVCAN/UDP subnet (configured on this transport instance)
+        are not reported via this interface.
+        This restriction is critical because there may be other UAVCAN/UDP networks running on the same physical
+        L2 network segregated by different subnets, so that if foreign packets were not dropped,
+        conflicts would occur.
         """
-        return str(self._network_map)
+        self._ensure_not_closed()
+        if self._sniffer is None:
+            _logger.debug('%s: Starting UDP/IP packet capture (hope you have permissions)', self)
+            self._sniffer = self._sock_factory.make_sniffer(self._process_captured_packet)
+        self._capture_handlers.append(handler)
+
+    @staticmethod
+    def make_tracer() -> UDPTracer:
+        """
+        See :class:`UDPTracer`.
+        """
+        return UDPTracer()
+
+    async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
+        raise NotImplementedError
 
     def _setup_input_session(self,
                              specifier:        pyuavcan.transport.InputSessionSpecifier,
@@ -266,20 +269,16 @@ class UDPTransport(pyuavcan.transport.Transport):
         Also, the setup and teardown actions shall be atomic. Hence the separate method.
         """
         assert specifier not in self._input_registry
-
         try:
-            if specifier.data_specifier not in self._demultiplexer_registry:
-                _logger.debug('%r: Setting up new demultiplexer for %s', self, specifier.data_specifier)
-                # Service transfers cannot be broadcast.
-                expect_broadcast = not isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
-                udp_port = udp_port_from_data_specifier(specifier.data_specifier)
-                self._demultiplexer_registry[specifier.data_specifier] = UDPDemultiplexer(
-                    sock=self._network_map.make_input_socket(udp_port, expect_broadcast),
-                    udp_mtu=_MAX_UDP_MTU,
-                    node_id_mapper=self._network_map.map_ip_address_to_node_id,
-                    local_node_id=self.local_node_id,
-                    statistics=self._statistics.demultiplexer.setdefault(specifier.data_specifier,
-                                                                         UDPDemultiplexerStatistics()),
+            if specifier.data_specifier not in self._socket_reader_registry:
+                _logger.debug('%r: Setting up new socket reader for %s. Existing entries at the moment: %s',
+                              self, specifier.data_specifier, self._socket_reader_registry)
+                self._socket_reader_registry[specifier.data_specifier] = SocketReader(
+                    sock=self._sock_factory.make_input_socket(specifier.data_specifier),
+                    local_ip_address=self._sock_factory.local_ip_address,
+                    anonymous=self._anonymous,
+                    statistics=self._statistics.received_datagrams.setdefault(specifier.data_specifier,
+                                                                              SocketReaderStatistics()),
                     loop=self.loop,
                 )
 
@@ -292,7 +291,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                           finalizer=lambda: self._teardown_input_session(specifier))
 
             # noinspection PyProtectedMember
-            self._demultiplexer_registry[specifier.data_specifier].add_listener(specifier.remote_node_id,
+            self._socket_reader_registry[specifier.data_specifier].add_listener(specifier.remote_node_id,
                                                                                 session._process_frame)
         except Exception:
             self._teardown_input_session(specifier)  # Rollback to ensure atomicity.
@@ -311,26 +310,35 @@ class UDPTransport(pyuavcan.transport.Transport):
             del self._input_registry[specifier]
         except LookupError:
             pass
-
-        # Remove the session from the list of demultiplexer listeners.
+        # Remove the session from the list of socket reader listeners.
         try:
-            demux = self._demultiplexer_registry[specifier.data_specifier]
+            demux = self._socket_reader_registry[specifier.data_specifier]
         except LookupError:
-            pass    # The demultiplexer has not been set up yet, nothing to do.
+            pass    # The reader has not been set up yet, nothing to do.
         else:
             try:
                 demux.remove_listener(specifier.remote_node_id)
             except LookupError:
                 pass
-
-            # Destroy the demultiplexer if there are no listeners left.
+            # Destroy the reader if there are no listeners left.
             if not demux.has_listeners:
                 try:
                     _logger.debug('%r: Destroying %r for %s', self, demux, specifier.data_specifier)
                     demux.close()
                 finally:
-                    del self._demultiplexer_registry[specifier.data_specifier]
+                    del self._socket_reader_registry[specifier.data_specifier]
+
+    def _process_captured_packet(self, timestamp: pyuavcan.transport.Timestamp, packet: RawPacket) -> None:
+        """This handler may be invoked from a different thread (the capture thread)."""
+        pyuavcan.util.broadcast(self._capture_handlers)(UDPCapture(timestamp, packet))
 
     def _ensure_not_closed(self) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        return [repr(str(self.local_ip_address))], {
+            'anonymous': self._anonymous,
+            'service_transfer_multiplier': self._srv_multiplier,
+            'mtu': self._mtu,
+        }

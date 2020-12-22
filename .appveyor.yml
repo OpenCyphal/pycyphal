@@ -6,12 +6,16 @@ environment:
     -
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-      PYTHON: 'C:\\Python39-x64'
+      PYTHON: 'C:\Python39-x64'  # YAML treats '\\' and "\\" differently.
+    -
+      job_group: tests
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      PYTHON: '3.9'
+      analysis: 1    # Always perform analysis on the latest Python version on a GNU/Linux worker.
     -
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.8'
-      analysis: 1    # Always perform analysis on the latest Python version on a GNU/Linux worker.
     -
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
@@ -43,15 +47,27 @@ for:
       only:
         - job_group: tests
     install:
-      - git submodule update --init --recursive
-      # GNU/Linux build config
+      # ------------------------------ GNU/Linux build config ------------------------------
       - sh: 'lsb_release -a'
       - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
-      - sh: 'echo $extras_pkg'
-      - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'   # This is needed for the doc build
-      # MS Windows build config
-      - cmd: 'systeminfo'
-      - cmd: 'set PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%'
+      # Graphviz is needed for the docs, ncat is needed for testing the UAVCAN/serial transport.
+      - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'
+
+      # ------------------------------ MS Windows build config ------------------------------
+      - cmd: 'systeminfo & route print & ipconfig /all'
+      # Configure Npcap. This is for testing the packet capture functionality in the UAVCAN/UDP transport.
+      - cmd: '.test_deps\npcap-0.96.exe /loopback_support=yes /winpcap_mode=yes /S'
+      # Installation of the NDIS filter driver from Npcap may have disrupted network connectivity, as explained in
+      # https://github.com/nmap/npcap/issues/215. Also, a restart appears to be necessary to enable the NPF service.
+      # Therefore, we restart the VM as suggested in https://github.com/appveyor/ci/issues/3491.
+      - cmd: 'shutdown /r /f /t 5'
+      - cmd: 'timeout 30'         # Boot-up delay. This should be sufficient for the VM to get ready. Increase if not.
+      # Due to the reboot, all volatile configuration like environment variables is lost here. We need to set it up now.
+      - cmd: 'set PATH=%PYTHON%;%PYTHON%\Scripts;%PATH%'
+      - cmd: 'echo %PATH%'
+
+      # ------------------------------ Common configuration ------------------------------
+      - git submodule update --init --recursive
     test_script:
       - sh:  './test.sh'
       - cmd: 'powershell .\test.ps1'
@@ -76,7 +92,7 @@ for:
             export PATH="$(echo sonar-scanner*/bin):$PATH"
             sonar-scanner -Dsonar.login=$SONARCLOUD_TOKEN
           else
-            echo "Sonar scan skipped -- not a pull request build."
+            echo "Sonar scan skipped."
           fi
   -
     matrix:
@@ -96,3 +112,6 @@ for:
       - git config --global user.email "devnull@uavcan.org"
       - git config --global user.name  "Release Automation"
       - ./release.sh
+
+artifacts:
+  - path: '*.log'

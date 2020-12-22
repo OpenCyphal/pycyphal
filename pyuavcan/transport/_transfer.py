@@ -8,6 +8,7 @@ from __future__ import annotations
 import enum
 import typing
 import dataclasses
+import pyuavcan.util
 from ._timestamp import Timestamp
 
 
@@ -35,7 +36,7 @@ class Priority(enum.IntEnum):
     OPTIONAL    = 7
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Transfer:
     """
     UAVCAN transfer representation.
@@ -64,11 +65,21 @@ class Transfer:
     Received transfers usually have it fragmented such that one fragment corresponds to one received frame.
     Outgoing transfers usually fragment it according to the structure of the serialized data object.
     The purpose of fragmentation is to eliminate unnecessary data copying within the protocol stack.
-    :func:`pyuavcan.util.refragment` is designed to facilitate regrouping when sending a transfer.
+    :func:`pyuavcan.transport.commons.refragment` is designed to facilitate regrouping when sending a transfer.
     """
 
+    def __repr__(self) -> str:
+        fragmented_payload = '+'.join(f'{len(x)}B' for x in self.fragmented_payload)
+        kwargs = {
+            f.name: getattr(self, f.name) for f in dataclasses.fields(self)
+        }
+        kwargs['priority'] = str(self.priority).split('.')[-1]
+        kwargs['fragmented_payload'] = f'[{fragmented_payload}]'
+        del kwargs['timestamp']
+        return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
-@dataclasses.dataclass
+
+@dataclasses.dataclass(frozen=True, repr=False)
 class TransferFrom(Transfer):
     """
     Specialization for received transfers.

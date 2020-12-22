@@ -84,17 +84,16 @@ to signal static analysis tools that the name is intended to be re-exported
 (unless the aliased name starts with an underscore).
 This is partially enforced with MyPy.
 
-Excepting the above described case of package-level API re-export, do not import specific entities;
+Excepting the above described case of package-level API re-export, it is best to avoid importing specific entities;
 instead, import only the module itself and then use verbose references, as shown below.
-If you really need to import a specific entity, consider prefixing it with an underscore to prevent scope leakage.
 Exception applies to well-encapsulated submodules which are not part of the library API
 (i.e., prefixed with an underscore) -- you can import whatever you want provided that the
 visibility scope of the module is sufficiently narrow.
 
 ::
 
-    from pyuavcan.transport import Transport    # Avoid this.
-    import pyuavcan.transport                   # Good. Use like: pyuavcan.transport.Transport
+    from pyuavcan.transport import Transport    # Avoid this if you can.
+    import pyuavcan.transport                   # Prefer this.
 
 
 Semantic and behavioral conventions
@@ -171,9 +170,13 @@ It is assumed that library development and code analysis is done on a GNU/Linux 
 There is support for automatic testing on other operating systems (after all, the library is cross-platform),
 but it is intended for CI use only.
 
+There is a dedicated directory ``.test_deps/`` in the project root that stores any third-party dependencies
+that cannot be easily procured from package managers.
+Naturally, these are mostly Windows-specific utilities.
+
 The script ``test.sh`` can be used to run the unit tests, static code analysis, documentation generation,
 and so on, locally or on a CI server.
-At the time of writing, the script takes some 30 minutes to run, so it may not work well for development;
+At the time of writing, the script takes some 20 minutes to run, so it may not work well for development;
 consider invoking pytest manually on a specific directory, file, or function instead (command-line option ``-k``).
 For more information refer to the PyTest documentation.
 
@@ -247,6 +250,18 @@ It is also invalidated automatically when ``clean.sh`` or ``test.sh`` are execut
 On GNU/Linux, the amount of memory available for the test process is artificially limited to a few gibibytes
 to catch possible memory hogs (like https://github.com/UAVCAN/pydsdl/issues/23 ).
 See ``conftest.py`` for details.
+
+Supporting newer versions of Python
+...................................
+
+Normally, this should be done a few months after a new version of CPython is released:
+
+1. Add a new job in the CI/CD pipeline for the new Python version.
+2. Update the CD configuration to make sure that the wheels are built using the newest version of Python.
+3. Update the classifiers in ``setup.cfg``.
+4. Bump the version number using the ``.dev`` suffix to indicate that it is not release-ready until tested.
+
+If the CI/CD pipelines pass, you are all set.
 
 
 Debugging

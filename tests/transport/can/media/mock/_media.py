@@ -9,17 +9,18 @@ import typing
 import pytest
 import asyncio
 import pyuavcan.transport
-import pyuavcan.transport.can.media as _media
+from pyuavcan.transport import Timestamp
+from pyuavcan.transport.can.media import Media, Envelope, FilterConfiguration, DataFrame, FrameFormat
 
 
-class MockMedia(_media.Media):
+class MockMedia(Media):
     def __init__(self, peers: typing.Set[MockMedia], mtu: int, number_of_acceptance_filters: int):
         self._peers = peers
         peers.add(self)
 
         self._mtu = int(mtu)
 
-        self._rx_handler: _media.Media.ReceivedFramesHandler = lambda _: None  # pragma: no cover
+        self._rx_handler: Media.ReceivedFramesHandler = lambda _: None  # pragma: no cover
         self._acceptance_filters = [self._make_dead_filter()  # By default drop (almost) all frames
                                     for _ in range(int(number_of_acceptance_filters))]
         self._automatic_retransmission_enabled = False      # This is the default per the media interface spec
@@ -45,7 +46,7 @@ class MockMedia(_media.Media):
     def number_of_acceptance_filters(self) -> int:
         return len(self._acceptance_filters)
 
-    def start(self, handler: _media.Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
+    def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
 
@@ -54,7 +55,7 @@ class MockMedia(_media.Media):
         assert isinstance(no_automatic_retransmission, bool)
         self._automatic_retransmission_enabled = not no_automatic_retransmission
 
-    def configure_acceptance_filters(self, configuration: typing.Sequence[_media.FilterConfiguration]) -> None:
+    def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
 
@@ -69,7 +70,7 @@ class MockMedia(_media.Media):
     def automatic_retransmission_enabled(self) -> bool:
         return self._automatic_retransmission_enabled
 
-    async def send_until(self, frames: typing.Iterable[_media.DataFrame], monotonic_deadline: float) -> int:
+    async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         del monotonic_deadline      # Unused
         if self._closed:
             raise pyuavcan.transport.ResourceClosedError
@@ -81,32 +82,21 @@ class MockMedia(_media.Media):
 
         frames = list(frames)
         assert len(frames) > 0, 'Interface constraint violation: empty transmission set'
-        assert min(map(lambda x: len(x.data), frames)) >= 1, 'CAN frames with empty payload are not valid'
+        assert min(map(lambda x: len(x.frame.data), frames)) >= 1, 'CAN frames with empty payload are not valid'
         # The media interface spec says that it is guaranteed that the CAN ID is the same across the set; enforce this.
-        assert len(set(map(lambda x: x.identifier, frames))) == 1, 'Interface constraint violation: nonuniform ID'
+        assert len(set(map(lambda x: x.frame.identifier, frames))) == 1, 'Interface constraint violation: nonuniform ID'
 
-        timestamp = pyuavcan.transport.Timestamp.now()
+        timestamp = Timestamp.now()
 
         # Broadcast across the virtual bus we're emulating here.
         for p in self._peers:
             if p is not self:
                 # Unconditionally clear the loopback flag because for the other side these are
                 # regular received frames, not loopback frames.
-                p._receive(_media.TimestampedDataFrame(identifier=f.identifier,
-                                                       data=f.data,
-                                                       format=f.format,
-                                                       loopback=False,
-                                                       timestamp=timestamp)
-                           for f in frames)
+                p._receive((timestamp, Envelope(f.frame, loopback=False)) for f in frames)
 
         # Simple loopback emulation with acceptance filtering.
-        self._receive(_media.TimestampedDataFrame(identifier=f.identifier,
-                                                  data=f.data,
-                                                  format=f.format,
-                                                  loopback=True,
-                                                  timestamp=timestamp)
-                      for f in frames if f.loopback)
-
+        self._receive((timestamp, f) for f in frames if f.loopback)
         return len(frames)
 
     def close(self) -> None:
@@ -117,34 +107,36 @@ class MockMedia(_media.Media):
     def raise_on_send_once(self, ex: Exception) -> None:
         self._raise_on_send_once = ex
 
-    def inject_received(self, frames: typing.Iterable[_media.DataFrame]) -> None:
-        timestamp = pyuavcan.transport.Timestamp.now()
-        self._receive(_media.TimestampedDataFrame(identifier=f.identifier,
-                                                  data=f.data,
-                                                  format=f.format,
-                                                  loopback=f.loopback,
-                                                  timestamp=timestamp)
-                      for f in frames)
+    def inject_received(self, frames: typing.Iterable[typing.Union[Envelope, DataFrame]]) -> None:
+        timestamp = Timestamp.now()
+        self._receive(
+            (
+                timestamp,
+                (f if isinstance(f, Envelope) else Envelope(frame=f, loopback=False)),
+            )
+            for f in frames
+        )
 
-    def _receive(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
-        frames = list(filter(self._test_acceptance, frames))
+    def _receive(self, frames: typing.Iterable[typing.Tuple[Timestamp, Envelope]]) -> None:
+        frames = list(filter(lambda item: self._test_acceptance(item[1].frame), frames))
         if frames:                                          # Where are the assignment expressions when you need them?
             self._rx_handler(frames)
 
-    def _test_acceptance(self, frame: _media.DataFrame) -> bool:
+    def _test_acceptance(self, frame: DataFrame) -> bool:
         return any(map(
             lambda f:
             frame.identifier & f.mask == f.identifier & f.mask and (f.format is None or frame.format == f.format),
-            self._acceptance_filters))
+            self._acceptance_filters,
+        ))
 
     @staticmethod
     def list_available_interface_names() -> typing.Iterable[str]:
         return []  # pragma: no cover
 
     @staticmethod
-    def _make_dead_filter() -> _media.FilterConfiguration:
-        fmt = _media.FrameFormat.BASE
-        return _media.FilterConfiguration(0, 2 ** int(fmt) - 1, fmt)
+    def _make_dead_filter() -> FilterConfiguration:
+        fmt = FrameFormat.BASE
+        return FilterConfiguration(0, 2 ** int(fmt) - 1, fmt)
 
 
 @pytest.mark.asyncio    # type: ignore
@@ -159,27 +151,26 @@ async def _unittest_can_mock_media() -> None:
     assert me.mtu == 64
     assert me.number_of_acceptance_filters == 3
     assert not me.automatic_retransmission_enabled
-    assert str(me) == f"MockMedia(interface_name='mock@{id(peers):08x}', mtu=64)"
+    assert str(me) == f"MockMedia('mock@{id(peers):08x}', mtu=64)"
 
     me_collector = FrameCollector()
     me.start(me_collector.give, False)
     assert me.automatic_retransmission_enabled
 
     # Will drop the loopback because of the acceptance filters
-    await me.send_until([
-        DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
-        DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True),
+    await me.send([
+        Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc')), loopback=False),
+        Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def')), loopback=True),
     ], asyncio.get_event_loop().time() + 1.0)
     assert me_collector.empty
 
     me.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
     # Now the loopback will be accepted because we have reconfigured the filters
-    await me.send_until([
-        DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
-        DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True),
+    await me.send([
+        Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc')), loopback=False),
+        Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def')), loopback=True),
     ], asyncio.get_event_loop().time() + 1.0)
-    assert me_collector.pop().is_same_manifestation(
-        DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True))
+    assert me_collector.pop()[1].frame == DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def'))
     assert me_collector.empty
 
     pe = MockMedia(peers, 8, 1)
@@ -190,33 +181,31 @@ async def _unittest_can_mock_media() -> None:
 
     me.raise_on_send_once(RuntimeError('Hello world!'))
     with pytest.raises(RuntimeError, match='Hello world!'):
-        await me.send_until([], asyncio.get_event_loop().time() + 1.0)
+        await me.send([], asyncio.get_event_loop().time() + 1.0)
 
-    await me.send_until([
-        DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
-        DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True),
+    await me.send([
+        Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc')), loopback=False),
+        Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def')), loopback=True),
     ], asyncio.get_event_loop().time() + 1.0)
     assert pe_collector.empty
 
     pe.configure_acceptance_filters([FilterConfiguration(123, 127, None)])
-    await me.send_until([
-        DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False),
-        DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=True),
+    await me.send([
+        Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc')), loopback=False),
+        Envelope(DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def')), loopback=True),
     ], asyncio.get_event_loop().time() + 1.0)
-    await me.send_until([
-        DataFrame(456, bytearray(b'ghi'), FrameFormat.EXTENDED, loopback=False),    # Dropped by the filters
+    await me.send([
+        Envelope(DataFrame(FrameFormat.EXTENDED, 456, bytearray(b'ghi')), loopback=False),    # Dropped by the filters
     ], asyncio.get_event_loop().time() + 1.0)
-    assert pe_collector.pop().is_same_manifestation(
-        DataFrame(123, bytearray(b'abc'), FrameFormat.EXTENDED, loopback=False))
-    assert pe_collector.pop().is_same_manifestation(
-        DataFrame(123, bytearray(b'def'), FrameFormat.EXTENDED, loopback=False))
+    assert pe_collector.pop()[1].frame == DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'abc'))
+    assert pe_collector.pop()[1].frame == DataFrame(FrameFormat.EXTENDED, 123, bytearray(b'def'))
     assert pe_collector.empty
 
     me.close()
     me.close()  # Idempotency.
     assert peers == {pe}
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
-        await me.send_until([], asyncio.get_event_loop().time() + 1.0)
+        await me.send([], asyncio.get_event_loop().time() + 1.0)
     with pytest.raises(pyuavcan.transport.ResourceClosedError):
         me.configure_acceptance_filters([])
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
@@ -224,15 +213,16 @@ async def _unittest_can_mock_media() -> None:
 
 class FrameCollector:
     def __init__(self) -> None:
-        self._collected: typing.List[_media.TimestampedDataFrame] = []
+        self._collected: typing.List[typing.Tuple[Timestamp, Envelope]] = []
 
-    def give(self, frames: typing.Iterable[_media.TimestampedDataFrame]) -> None:
+    def give(self, frames: typing.Iterable[typing.Tuple[Timestamp, Envelope]]) -> None:
         frames = list(frames)
-        assert all(map(lambda x: isinstance(x, _media.TimestampedDataFrame), frames))
+        assert all(map(lambda x: isinstance(x[0], Timestamp) and isinstance(x[1], Envelope),
+                       frames))
         self._collected += frames
 
-    def pop(self) -> _media.TimestampedDataFrame:
-        head, self._collected = self._collected[0], self._collected[1:]
+    def pop(self) -> typing.Tuple[Timestamp, Envelope]:
+        head, *self._collected = self._collected
         return head
 
     @property

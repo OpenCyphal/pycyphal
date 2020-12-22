@@ -11,7 +11,8 @@ import logging
 import dataclasses
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._base import ServiceClass, ServicePort, TypedSessionFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
+import pyuavcan.util
+from ._base import ServiceClass, ServicePort, PortFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError
 
 
@@ -45,7 +46,7 @@ class ServerStatistics:
     """Problems at the transport layer."""
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class ServiceRequestMetadata:
     """
     This structure is supplied with every received request for informational purposes.
@@ -62,6 +63,14 @@ class ServiceRequestMetadata:
 
     client_node_id: int
     """The response will be sent back to this node."""
+
+    def __repr__(self) -> str:
+        kwargs = {
+            f.name: getattr(self, f.name) for f in dataclasses.fields(self)
+        }
+        kwargs['priority'] = str(self.priority).split('.')[-1]
+        del kwargs['timestamp']
+        return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
 
 ServiceRequestHandler = typing.Callable[[ServiceRequestClass, ServiceRequestMetadata],
@@ -86,7 +95,7 @@ class Server(ServicePort[ServiceClass]):
                  dtype:                            typing.Type[ServiceClass],
                  input_transport_session:          pyuavcan.transport.InputSession,
                  output_transport_session_factory: OutputTransportSessionFactory,
-                 finalizer:                        TypedSessionFinalizer,
+                 finalizer:                        PortFinalizer,
                  loop:                             asyncio.AbstractEventLoop):
         """
         Do not call this directly! Use :meth:`Presentation.get_server`.
@@ -108,67 +117,27 @@ class Server(ServicePort[ServiceClass]):
 
     # ----------------------------------------  MAIN API  ----------------------------------------
 
-    def serve_in_background(self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass]) -> None:
-        """
-        Start a new task and use it to run the server in the background.
-        The task will be stopped when the server is closed.
-
-        When a request is received, the supplied handler callable will be invoked with the request object
-        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
-        The handler shall return the response or None. If None is returned, the server will not send any response back
-        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
-
-        If the background task is already running, it will be cancelled and a new one will be started instead.
-        This method of serving requests shall not be used concurrently with other methods.
-        """
-        async def task_function() -> None:
-            while not self._closed:
-                try:
-                    await self.serve_for(handler, _LISTEN_FOREVER_TIMEOUT)
-                except asyncio.CancelledError:
-                    _logger.debug('%s task cancelled', self)
-                    break
-                except pyuavcan.transport.ResourceClosedError as ex:
-                    _logger.info('%s task got a resource closed error and will exit: %s', self, ex)
-                    break
-                except Exception as ex:
-                    _logger.exception('%s task failure: %s', self, ex)
-                    await asyncio.sleep(1)  # TODO is this an adequate failure management strategy?
-
-        if self._maybe_task is not None:
-            self._maybe_task.cancel()
-
-        self._raise_if_closed()
-        self._maybe_task = self._loop.create_task(task_function())
-
-    async def serve_for(self,
-                        handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
-                        timeout: float) -> None:
-        """
-        Listen for requests for the specified time or until the instance is closed, then exit.
-
-        When a request is received, the supplied handler callable will be invoked with the request object
-        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
-        The handler shall return the response or None. If None is returned, the server will not send any response back
-        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
-        """
-        return await self.serve_until(handler, monotonic_deadline=self._loop.time() + timeout)
-
-    async def serve_until(self,
-                          handler:            ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
-                          monotonic_deadline: float) -> None:
+    async def serve(self,
+                    handler:            ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
+                    monotonic_deadline: typing.Optional[float] = None) -> None:
         """
         This is like :meth:`serve_for` except that it exits normally after the specified monotonic deadline is reached.
         The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
+        If no deadline is provided, it is assumed to be infinite.
         """
         # Observe that if we aggregate redundant transports with different non-monotonic transfer ID modulo values,
         # it might be that the transfer ID that we obtained from the request may be invalid for some of the transports.
         # This is why we can't reliably aggregate redundant transports with different transfer-ID overflow parameters.
         while not self._closed:
-            out: typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, ServiceRequestMetadata]] \
-                = await self._receive_until(monotonic_deadline)
-            if out is None:
-                break           # Timed out.
+            out: typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, ServiceRequestMetadata]]
+            if monotonic_deadline is None:
+                out = await self._receive(self._loop.time() + _LISTEN_FOREVER_TIMEOUT)
+                if out is None:
+                    continue
+            else:
+                out = await self._receive(monotonic_deadline)
+                if out is None:
+                    break       # Timed out.
 
             self._served_request_count += 1
             request, meta = out
@@ -192,10 +161,56 @@ class Server(ServicePort[ServiceClass]):
             # Send the response unless the application has opted out, in which case do nothing.
             if response is not None:
                 # TODO: make the send timeout configurable.
-                await self._do_send_until(response,
-                                          meta,
-                                          response_transport_session,
-                                          self._loop.time() + self._send_timeout)
+                await self._do_send(response,
+                                    meta,
+                                    response_transport_session,
+                                    self._loop.time() + self._send_timeout)
+
+    async def serve_for(self,
+                        handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
+                        timeout: float) -> None:
+        """
+        Listen for requests for the specified time or until the instance is closed, then exit.
+
+        When a request is received, the supplied handler callable will be invoked with the request object
+        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
+        The handler shall return the response or None. If None is returned, the server will not send any response back
+        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
+        """
+        return await self.serve(handler, monotonic_deadline=self._loop.time() + timeout)
+
+    def serve_in_background(self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass]) -> None:
+        """
+        Start a new task and use it to run the server in the background.
+        The task will be stopped when the server is closed.
+
+        When a request is received, the supplied handler callable will be invoked with the request object
+        and the associated metadata object (which contains auxiliary information such as the client's node-ID).
+        The handler shall return the response or None. If None is returned, the server will not send any response back
+        (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
+
+        If the background task is already running, it will be cancelled and a new one will be started instead.
+        This method of serving requests shall not be used concurrently with other methods.
+        """
+        async def task_function() -> None:
+            while not self._closed:
+                try:
+                    await self.serve_for(handler, _LISTEN_FOREVER_TIMEOUT)
+                except asyncio.CancelledError:
+                    _logger.debug('%s task cancelled', self)
+                    break
+                except pyuavcan.transport.ResourceClosedError as ex:
+                    _logger.debug('%s task got a resource closed error and will exit: %s', self, ex)
+                    break
+                except Exception as ex:
+                    _logger.exception('%s task failure: %s', self, ex)
+                    await asyncio.sleep(1)  # TODO is this an adequate failure management strategy?
+
+        if self._maybe_task is not None:
+            self._maybe_task.cancel()
+
+        self._raise_if_closed()
+        self._maybe_task = self._loop.create_task(task_function())
 
     # ----------------------------------------  AUXILIARY  ----------------------------------------
 
@@ -248,10 +263,10 @@ class Server(ServicePort[ServiceClass]):
 
             self._finalizer((self._input_transport_session, *self._output_transport_sessions.values()))
 
-    async def _receive_until(self, monotonic_deadline: float) \
+    async def _receive(self, monotonic_deadline: float) \
             -> typing.Optional[typing.Tuple[ServiceRequestClass, ServiceRequestMetadata]]:
         while True:
-            transfer = await self._input_transport_session.receive_until(monotonic_deadline)
+            transfer = await self._input_transport_session.receive(monotonic_deadline)
             if transfer is None:
                 return None
             if transfer.source_node_id is not None:
@@ -268,17 +283,17 @@ class Server(ServicePort[ServiceClass]):
                 self._malformed_request_count += 1
 
     @staticmethod
-    async def _do_send_until(response:           ServiceResponseClass,
-                             metadata:           ServiceRequestMetadata,
-                             session:            pyuavcan.transport.OutputSession,
-                             monotonic_deadline: float) -> bool:
+    async def _do_send(response:           ServiceResponseClass,
+                       metadata:           ServiceRequestMetadata,
+                       session:            pyuavcan.transport.OutputSession,
+                       monotonic_deadline: float) -> bool:
         timestamp = pyuavcan.transport.Timestamp.now()
         fragmented_payload = list(pyuavcan.dsdl.serialize(response))
         transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
                                                priority=metadata.priority,
                                                transfer_id=metadata.transfer_id,
                                                fragmented_payload=fragmented_payload)
-        return await session.send_until(transfer, monotonic_deadline)
+        return await session.send(transfer, monotonic_deadline)
 
     def _get_output_transport_session(self, client_node_id: int) -> pyuavcan.transport.OutputSession:
         try:

@@ -1,5 +1,4 @@
 #!/bin/bash
-#
 # This global test script is designed to be invokable on a completely clean environment (e.g., on a CI server).
 # It configures the environment and then runs unit tests, static code analysis, and builds the docs.
 # Success is reported only if all of the steps are executed successfully.
@@ -7,10 +6,6 @@
 # Observe that additional static analysis tools may be invoked separately afterwards; e.g., the SonarQube scanner.
 # Such tools shall not be invoked before the script because they may be dependent on its side effects, such as
 # generation of the coverage data.
-#
-# Running the script may take several minutes or more. To speed things up, switch off slow unit tests by configuring
-# appropriate environment variables. Please see the unit test sources for details, or grep them for 'PYUAVCAN_'.
-#
 
 set -o nounset
 
@@ -58,12 +53,9 @@ echo "PYTHONPATH: $PYTHONPATH"
 
 export PYTHONASYNCIODEBUG=1
 
-command -v dot  || die "Please install graphviz. On Debian-based: apt install graphviz"
-command -v ncat || die "Please install nmap. On Debian-based: apt install ncat"
+command -v ncat || die "Please install ncat. On Debian-based: apt install ncat"
 
 ./clean.sh || die "Failed to clean"
-
-pip uninstall -y uavcan &> /dev/null    # Uninstall the old library. As explained in the docs, it conflicts with DSDL.
 
 pip install -r requirements.txt || die "Could not install dependencies"
 
@@ -85,18 +77,21 @@ ncat --broker --listen -p 50905 &>/dev/null &
 # shellcheck disable=SC2064
 trap "kill $! || echo 'Could not kill child $!'" SIGINT SIGTERM EXIT
 
+# Enable raw packet capture; this is necessary for testing the UAVCAN/UDP transport packet capture implementation.
+# shellcheck disable=SC2046
+sudo setcap cap_net_raw+eip "$(readlink -f $(command -v python))" || die "Could not set CAP_NET_RAW on the interpreter"
+
 # ---------------------------------------------------------------------------------------------------------------------
 
 banner TEST EXECUTION
-
-mkdir .test_dsdl_generated 2> /dev/null       # The directory must exist before coverage is invoked
 
 # TODO: run the tests with the minimal dependency configuration. Set up a new environment here.
 # Note that we do not invoke coverage.py explicitly here; this is handled by usercustomize.py. Relevant docs:
 #   - https://coverage.readthedocs.io/en/coverage-4.2/subprocess.html
 #   - https://docs.python.org/3/library/site.html
-pytest                  || die "Core PyTest returned $?"
-pytest pyuavcan/_cli    || die "CLI PyTest returned $?"
+log_format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s'
+pytest --log-format="$log_format" --log-file='main.log'               || die "Core PyTest returned $?"
+pytest --log-format="$log_format" --log-file='cli.log'  pyuavcan/_cli || die "CLI PyTest returned $?"
 
 # Every time we launch a Python process, a new coverage file is created, so there may be a lot of those,
 # possibly nested in sub-directories.
@@ -104,6 +99,8 @@ find ./*/ -name '.coverage*' -type f -print -exec mv {} . \;  || die "Could not 
 ls -l .coverage*
 coverage combine                                              || die "Could not combine coverage data"
 
+# Shall it be desired to measure coverage of the generated code, it is necessary to ensure that the target
+# directory where the generated code is stored exists before the coverage utility is invoked.
 coverage xml -i -o .coverage.xml || die "Could not generate coverage XML (needed for SonarQube)"
 coverage html
 coverage report
@@ -113,7 +110,6 @@ coverage report
 banner STATIC ANALYSIS
 
 # We typecheck after the tests have run in order to be able to typecheck the generated Python packages as well.
-# Also, dear mypy, please stuff your caching, it's fucking broken.
 rm -rf .mypy_cache/ &> /dev/null
 echo 'YOU SHALL NOT PASS' > .mypy_cache
 chmod 444 .mypy_cache

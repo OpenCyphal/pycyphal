@@ -13,7 +13,6 @@ import typing
 import logging
 import pathlib
 import argparse
-import xml.etree.ElementTree
 import pyuavcan
 from .._yaml import YAMLLoader, YAMLDumper
 from .._paths import OUTPUT_TRANSFER_ID_MAP_DIR, OUTPUT_TRANSFER_ID_MAP_MAX_AGE
@@ -129,17 +128,17 @@ Default: %(default)s
             # Restore if we have a node-ID. If we don't, no restoration will take place even if the node-ID is
             # provided later. This behavior is acceptable for CLI; a regular UAVCAN application will not need
             # to deal with saving/restoration at all since this use case is specific to CLI only.
-            if node.presentation.transport.local_node_id is not None:
-                tid_map_path = _get_output_transfer_id_file_path(node.presentation.transport.local_node_id,
-                                                                 node.presentation.transport.descriptor)
-                _logger.debug('Output TID map file: %s', tid_map_path)
-                tid_map = self._restore_output_transfer_id_map(tid_map_path)
-                _logger.debug('Output TID map with %d records from %s', len(tid_map), tid_map_path)
-                _logger.debug('Output TID map dump: %r', tid_map)
-                # noinspection PyTypeChecker
-                presentation.output_transfer_id_map.update(tid_map)  # type: ignore
-            else:
-                _logger.debug('Output TID map not restored because the local node is anonymous.')
+            path = _get_output_transfer_id_map_path(node.presentation.transport)
+            tid_map_restored = False
+            if path is not None:
+                tid_map = self._restore_output_transfer_id_map(path)
+                if tid_map:
+                    _logger.debug('Restored output TID map from %s: %r', path, tid_map)
+                    # noinspection PyTypeChecker
+                    presentation.output_transfer_id_map.update(tid_map)  # type: ignore
+                    tid_map_restored = True
+            if not tid_map_restored:
+                _logger.debug('Could not restore output TID map from %s', path)
 
             return node
         except Exception:
@@ -173,57 +172,53 @@ Default: %(default)s
     @staticmethod
     def _register_output_transfer_id_map_save_at_exit(presentation: pyuavcan.presentation.Presentation) -> None:
         # We MUST sample the configuration early because if this is a redundant transport it may reset its
-        # reported descriptor and local node-ID back to default after close().
-        local_node_id = presentation.transport.local_node_id
-        descriptor = presentation.transport.descriptor
+        # configuration (local node-ID) back to default after close().
+        path = _get_output_transfer_id_map_path(presentation.transport)
+        _logger.debug('Output TID map file for %s: %s', presentation.transport, path)
 
         def do_save_at_exit() -> None:
-            if local_node_id is not None:
-                file_path = _get_output_transfer_id_file_path(local_node_id, descriptor)
-                tmp_path = f'{file_path}.{os.getpid()}.{time.time_ns()}.tmp'
-                _logger.debug('Output TID map save: %s --> %s', tmp_path, file_path)
-                with open(tmp_path, 'wb') as f:
+            if path is not None:
+                tmp = f'{path}.{os.getpid()}.{time.time_ns()}.tmp'
+                _logger.debug('Output TID map save: %s --> %s', tmp, path)
+                with open(tmp, 'wb') as f:
                     pickle.dump(presentation.output_transfer_id_map, f)
                 # We use replace for compatibility reasons. On POSIX, a call to rename() will be made, which is
                 # guaranteed to be atomic. On Windows this may fall back to non-atomic copy, which is still
                 # acceptable for us here. If the file ends up being damaged, we'll simply ignore it at next startup.
-                os.replace(tmp_path, str(file_path))
+                os.replace(tmp, str(path))
                 try:
-                    os.unlink(tmp_path)
+                    os.unlink(tmp)
                 except OSError:
                     pass
-            else:
-                _logger.debug('Output TID map NOT saved because the transport instance is anonymous')
 
         atexit.register(do_save_at_exit)
 
 
-def _get_output_transfer_id_file_path(local_node_id: int, transport_descriptor: str) -> pathlib.Path:
-    replacement_char = '-'
-    fname = ','.join(
-        sorted(map(lambda s: re.sub(r'[\\/*?:"<>| ]+', replacement_char, s).strip(replacement_char),
-                   xml.etree.ElementTree.fromstring(transport_descriptor).itertext()))
-    ) or 'unnamed'
-    directory = OUTPUT_TRANSFER_ID_MAP_DIR / f'node-id-{local_node_id}'
-    directory.mkdir(parents=True, exist_ok=True)
-    return directory / f'{fname}.pickle'
+def _get_output_transfer_id_map_path(transport: pyuavcan.transport.Transport) -> typing.Optional[pathlib.Path]:
+    if transport.local_node_id is not None:
+        path = OUTPUT_TRANSFER_ID_MAP_DIR / str(transport.local_node_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+    return None
 
 
 def _unittest_output_tid_file_path() -> None:
-    assert _get_output_transfer_id_file_path(
-        123,
-        '<redundant><can media="socketcan" mtu="64">can0</can><serial baudrate="115200">COM9</serial></redundant>'
-    ).stem == 'COM9,can0'
+    from pyuavcan.transport.redundant import RedundantTransport
+    from pyuavcan.transport.loopback import LoopbackTransport
 
-    # It MUST be order-invariant
-    assert _get_output_transfer_id_file_path(
-        123,
-        '<redundant>'
-        '<serial baudrate="115200">/dev/ttyACM0</serial>'
-        '<can media="socketcan" mtu="64">can0</can>'
-        '</redundant>'
-    ).stem == 'can0,dev-ttyACM0'
+    def once(tr: pyuavcan.transport.Transport) -> typing.Optional[pathlib.Path]:
+        return _get_output_transfer_id_map_path(tr)
 
-    assert _get_output_transfer_id_file_path(123, '<serial baudrate="115200">COM9</serial>').stem == 'COM9'
+    assert once(LoopbackTransport(None)) is None
+    assert once(LoopbackTransport(123)) == OUTPUT_TRANSFER_ID_MAP_DIR / '123'
 
-    assert _get_output_transfer_id_file_path(123456, '<loopback/>').stem == 'unnamed'
+    red = RedundantTransport()
+    assert once(red) is None
+    red.attach_inferior(LoopbackTransport(4000))
+    red.attach_inferior(LoopbackTransport(4000))
+    assert once(red) == OUTPUT_TRANSFER_ID_MAP_DIR / '4000'
+
+    red = RedundantTransport()
+    red.attach_inferior(LoopbackTransport(None))
+    red.attach_inferior(LoopbackTransport(None))
+    assert once(red) is None

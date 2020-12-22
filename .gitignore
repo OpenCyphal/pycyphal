@@ -48,7 +48,6 @@ coverage.xml
 .scannerwork
 
 # MS stuff
-*.exe
 *.code-workspace
 .vscode
 

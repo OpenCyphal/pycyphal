@@ -11,23 +11,22 @@ intended for non-embedded, user-facing applications such as GUI software, diagno
 automation scripts, prototypes, and various R&D cases.
 PyUAVCAN consists of a Python library (package) and a simple :abbr:`CLI (command line interface)`
 tool for basic diagnostics and shell script automation.
+It is designed to support **GNU/Linux**, **MS Windows**, and **macOS** as first-class target platforms.
 
-It is designed to support **GNU/Linux**, **MS Windows**, and **OS X** as first-class target platforms.
-
-The reader should be familiar with the `UAVCAN specification <https://uavcan.org/specification>`_
-and `asynchronous programming in Python <https://docs.python.org/3/library/asyncio-task.html>`_
+The reader should understand the basics of `UAVCAN <https://uavcan.org/>`_ and be familiar with
+`asynchronous programming in Python <https://docs.python.org/3/library/asyncio-task.html>`_
 to understand this documentation.
-The latter is quite important because **PyUAVCAN provides a coroutine-based async API**.
 
 The library consists of several loosely coupled submodules,
 each implementing a well-segregated part of the protocol.
 Each of the submodules can be used separately depending on the level of abstraction required by the application.
 
 - :mod:`pyuavcan.dsdl` -- DSDL language support: code generation and object serialization.
+  This module is a wrapper over `Nunavut <https://github.com/UAVCAN/nunavut/>`_.
 
 - :mod:`pyuavcan.transport` -- the abstract UAVCAN transport layer model and several
-  concrete transport implementations (UAVCAN/CAN, UAVCAN/UDP, UAVCAN/Serial, etc.).
-  The transport layer exposes a low-level API where data is represented as unstructured blocks of bytes.
+  concrete transport implementations (UAVCAN/CAN, UAVCAN/UDP, UAVCAN/serial, etc.).
+  This submodule exposes a relatively low-level API where data is represented as serialized blocks of bytes.
   Users may build custom concrete transports based on this module as well.
 
 - :mod:`pyuavcan.presentation` -- this layer binds the transport layer together with DSDL serialization logic,
@@ -35,8 +34,8 @@ Each of the submodules can be used separately depending on the level of abstract
   At this layer, data is represented as instances of well-structured Python classes
   auto-generated from their DSDL source definitions.
 
-- :mod:`pyuavcan.application` -- this is an entirely optional layer containing very high-level convenience
-  classes providing support for high-level protocol features such as node heartbeat broadcasting.
+- :mod:`pyuavcan.application` -- this is an optional layer containing high-level convenience
+  classes providing support for high-level protocol features such as node heartbeat broadcasting or monitoring.
   This layer can be used to look up usage examples for the presentation and transport layer API.
 
 - :mod:`pyuavcan.util` -- this is just a loosely organized collection of various utility functions and classes
@@ -48,8 +47,7 @@ The overall structure of the library and its mapping onto the UAVCAN protocol is
 .. image:: /_static/arch-non-redundant.svg
 
 Every submodule is imported automatically, excepting application layer and concrete transport implementation
-submodules -- those must be imported explicitly by the user.
-For example::
+submodules -- those must be imported explicitly by the user::
 
     >>> import pyuavcan
     >>> pyuavcan.dsdl.serialize         # OK, the DSDL submodule is auto-imported.
@@ -66,16 +64,16 @@ For example::
 Transport layer
 ---------------
 
-The UAVCAN protocol itself is designed to support multiple transports such as CAN bus (aka UAVCAN/CAN),
-UDP (aka UAVCAN//UDP), serial (aka UAVCAN/Serial), and so on.
+The UAVCAN protocol itself is designed to support different transports such as CAN bus (UAVCAN/CAN),
+UDP/IP (UAVCAN/UDP), raw serial links (UAVCAN/serial), and so on.
 Generally, a real-time safety-critical implementation of UAVCAN would support a limited subset of
 transports defined by the protocol (often just one) in order to reduce the validation & verification efforts.
 PyUAVCAN is different -- it is created for user-facing software rather than reliable deeply embedded systems;
 that is, PyUAVCAN can't be put onboard a vehicle, but it can be put onto the computer of an engineer or a researcher
 building said vehicle to help them implement, understand, validate, verify, and diagnose its onboard network.
-
-Hence, PyUAVCAN trades off simplicity and constraindness (desirable for embedded systems)
+Hence, PyUAVCAN trades off simplicity and constrainedness (desirable for embedded systems)
 for extensibility and repurposeability (desirable for user-facing software).
+
 The library consists of a transport-agnostic core which implements the higher levels of the UAVCAN protocol,
 DSDL code generation, and object serialization.
 The core defines an abstract *transport model* which decouples it from transport-specific logic.
@@ -112,8 +110,7 @@ The media interface class should be ``pyuavcan.transport.*.media.Media``;
 derived concrete implementations should be suffixed with ``*Media``, e.g., ``SocketCANMedia``.
 Users may implement their custom media drivers for use with the transport by subclassing ``Media`` as well.
 
-Take the CAN media sub-layer for example; it contains the following classes (the list may not be exhaustive,
-this is just an example):
+Take the CAN media sub-layer for example; it contains the following classes (among others):
 
 - :class:`pyuavcan.transport.can.media.socketcan.SocketCANMedia`
 - :class:`pyuavcan.transport.can.media.pythoncan.PythonCANMedia`
@@ -121,8 +118,9 @@ this is just an example):
 Media sub-layer modules should not be auto-imported. Instead, the user should import the required media sub-modules
 manually as necessary.
 This is important because sub-layers may have specific dependency requirements which are not guaranteed
-to be satisfied in all deployments; also, unnecessary submodules slow down package initialization
-and increase the memory footprint of the application, not to mention possible software reliability issues.
+to be satisfied in all deployments;
+also, unnecessary submodules slow down package initialization and increase the memory footprint of the application,
+not to mention possible software reliability issues.
 
 Generally, what's been described can be seen as the transport layer model projected
 one level further down the protocol stack.
@@ -142,7 +140,53 @@ Afterwards, the configured instance is used with the upper layers of the protoco
 
 .. image:: /_static/arch-redundant.svg
 
-For more information, please read the class API documentation.
+The `UAVCAN Specification <https://uavcan.org/specification/>`_ adds the following remark on redundant transports:
+
+    Reassembly of transfers from redundant interfaces may be implemented either on the per-transport-frame level
+    or on the per-transfer level.
+    The former amounts to receiving individual transport frames from redundant interfaces which are then
+    used for reassembly;
+    it can be seen that this method requires that all transports in the redundant group use identical
+    application-level MTU (i.e., same number of transfer pay-load bytes per frame).
+    The latter can be implemented by treating each transport in the redundant group separately,
+    so that each runs an independent transfer reassembly process, whose outputs are then deduplicated
+    on the per-transfer level;
+    this method may be more computationally complex but it provides greater flexibility.
+
+Per this classification, PyUAVCAN implements *per-transfer* redundancy.
+
+
+Advanced network diagnostics: sniffing/snooping, tracing, spoofing
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Packet capture (aka sniffing or snooping) and their further analysis (either real-time or postmortem)
+are vital for advanced network diagnostics or debugging.
+While existing general-purpose solutions like Wireshark, libpcap, npcap, SocketCAN, etc. are adequate for
+low-level access, they are unsuitable for non-trivial use cases where comprehensive analysis is desired.
+
+Certain scenarios require emitting spoofed traffic where some of its parameters are intentionally distorted
+(like fake source address).
+This may be useful for implementing complex end-to-end tests for UAVCAN-enabled equipment,
+running HITL/SITL simulation, or validating devices for compliance against the UAVCAN Specification.
+
+These capabilities are covered by the advanced network diagnostics API exposed by the transport layer:
+
+- :meth:`pyuavcan.transport.Transport.begin_capture` --
+  **capturing** on a transport refers to monitoring low-level network events and packets exchanged over the
+  network even if they neither originate nor terminate at the local node.
+
+- :meth:`pyuavcan.transport.Transport.make_tracer` --
+  **tracing** refers to reconstructing high-level processes that transpire on the network from a sequence of
+  captured low-level events.
+  Tracing may take place in real-time (with PyUAVCAN connected to a live network) or offline
+  (with events read from a black box recorder or from a log file).
+
+- :meth:`pyuavcan.transport.Transport.spoof` --
+  **spoofing** refers to faking network transactions as if they were coming from a different node
+  (possibly a non-existent one) or whose parameters are significantly altered (e.g., out-of-sequence transfer-ID).
+
+These advanced capabilities exist alongside the main communication logic using a separate set of API entities
+because their semantics are incompatible with regular communication.
 
 
 Virtualization
@@ -152,7 +196,6 @@ Some transports support virtual interfaces that can be used for testing and expe
 instead of real physical connections.
 For example, the UAVCAN/CAN transport supports virtual CAN buses via SocketCAN,
 and the serial transport supports TCP/IP tunneling and local loopback mode.
-Read the API documentation for more information about these features.
 
 
 DSDL support
@@ -171,16 +214,17 @@ either via the ``PYTHONPATH`` environment variable or via :data:`sys.path`.
 The main API entries are:
 
 - :func:`pyuavcan.dsdl.generate_package` -- generates a Python package from a DSDL namespace.
+
 - :func:`pyuavcan.dsdl.serialize` and :func:`pyuavcan.dsdl.deserialize` -- serialize and deserialize
   an instance of an autogenerated class.
+
 - :class:`pyuavcan.dsdl.CompositeObject` and :class:`pyuavcan.dsdl.ServiceObject` -- base classes for
   Python classes generated from DSDL type definitions; message types and service types, respectively.
+
 - :func:`pyuavcan.dsdl.to_builtin` and :func:`pyuavcan.dsdl.update_from_builtin` -- used to convert
   a DSDL object instance to/from a simplified representation using only built-in types such as :class:`dict`,
   :class:`list`, :class:`int`, :class:`float`, :class:`str`, and so on. These can be used as an intermediate
   representation for conversion to/from JSON, YAML, and other commonly used serialization formats.
-
-Please read the module API documentation for more info.
 
 
 Presentation layer
@@ -218,14 +262,13 @@ directly with the presentation layer (the application layer, if used, serves as 
 rather than adding any new abstraction on top).
 
 The main entity of the presentation layer is the controller class :class:`pyuavcan.presentation.Presentation`;
-specifically, the following methods form pretty much the core of the upper API:
+specifically, the following methods are the core of the upper API:
 
 - :meth:`pyuavcan.presentation.Presentation.make_publisher` -- constructs :class:`pyuavcan.presentation.Publisher`.
 - :meth:`pyuavcan.presentation.Presentation.make_subscriber` -- constructs :class:`pyuavcan.presentation.Subscriber`.
 - :meth:`pyuavcan.presentation.Presentation.make_client` -- constructs :class:`pyuavcan.presentation.Client`.
 - :meth:`pyuavcan.presentation.Presentation.get_server` (sic!) -- constructs :class:`pyuavcan.presentation.Server`.
   The name and semantics are slightly different because servers are unlike other session objects.
-  Read the docs for info.
 
 The presentation layer is the main part of the library API.
 
@@ -247,15 +290,16 @@ layer, so in that case importing this submodule at initialization time would be 
 As one might guess, if the submodule is imported before the ``uavcan`` root namespace package is generated,
 an :class:`ImportError` is raised (with ``name='uavcan'``).
 Applications may choose to catch that exception to implement lazy code generation.
-For a hands-on guide on how to do that read the :ref:`basic_usage` chapter
+For a hands-on guide on how to do that read the :ref:`demo_app` chapter
 and the API documentation for :mod:`pyuavcan.dsdl`.
+
 
 Node class
 ++++++++++
 
 The main entity of the application layer is the node class :class:`pyuavcan.application.Node`.
 This is essentially a helper class, it does not provide significant new abstractions.
-PyUAVCAN-based applications should use this class to implement UAVCAN nodes.
+
 
 High-level functions
 ++++++++++++++++++++
@@ -287,8 +331,7 @@ Command-line tool
 
 The command-line tool named ``pyuavcan`` (like the library)
 can be installed as described in the :ref:`installation` chapter.
-Run ``pyuavcan --help`` to see the usage documentation, or read the :ref:`cli` chapter.
+Run ``pyuavcan --help`` (or ``python -m pyuavcan --help``)
+to see the usage documentation, or read the :ref:`cli` chapter.
 
-The tool can be used as a library usage demo along with the application layer module;
-its entry point is located in the private submodule named ``_cli`` (it is not a part of the library API,
-hence it's not public and is never imported).
+The tool also serves as a (somewhat convoluted) library usage demo.

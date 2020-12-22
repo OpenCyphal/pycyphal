@@ -9,6 +9,7 @@ import enum
 import typing
 import logging
 import pyuavcan
+from pyuavcan.transport import Timestamp, Priority, TransferFrom
 from ._frame import Frame
 from ._common import TransferCRC
 
@@ -105,16 +106,18 @@ class TransferReassembler:
         # Internal state.
         self._payloads: typing.List[memoryview] = []            # Payload fragments from the received frames.
         self._max_index: typing.Optional[int] = None            # Max frame index in transfer, None if unknown.
-        self._timestamp = pyuavcan.transport.Timestamp(0, 0)    # First frame timestamp.
+        self._timestamp = Timestamp(0, 0)                       # First frame timestamp.
         self._transfer_id = 0                                   # Transfer-ID of the current transfer.
 
     def process_frame(self,
+                      timestamp:           Timestamp,
                       frame:               Frame,
-                      transfer_id_timeout: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+                      transfer_id_timeout: float) -> typing.Optional[TransferFrom]:
         """
         Updates the transfer reassembly state machine with the new frame.
 
-        :param frame: The new frame. Standard deviation of the reception timestamp error should be under 10 ms.
+        :param timestamp: The reception timestamp from the transport layer.
+        :param frame: The new frame.
         :param transfer_id_timeout: The current value of the transfer-ID timeout.
         :return: A new transfer if the new frame completed one. None if the new frame did not complete a transfer.
         :raises: Nothing.
@@ -126,8 +129,8 @@ class TransferReassembler:
 
         # DETECT NEW TRANSFERS. Either a newer TID or TID-timeout is reached.
         if frame.transfer_id > self._transfer_id or \
-                frame.timestamp.monotonic - self._timestamp.monotonic > transfer_id_timeout:
-            self._restart(frame.timestamp,
+                timestamp.monotonic - self._timestamp.monotonic > transfer_id_timeout:
+            self._restart(timestamp,
                           frame.transfer_id,
                           self.Error.MULTIFRAME_MISSING_FRAMES if self._payloads else None)
 
@@ -139,7 +142,7 @@ class TransferReassembler:
         # DETERMINE MAX FRAME INDEX FOR THIS TRANSFER. Frame N with EOT, then frame M with EOT, where N != M.
         if frame.end_of_transfer:
             if self._max_index is not None and self._max_index != frame.index:
-                self._restart(frame.timestamp,
+                self._restart(timestamp,
                               frame.transfer_id + 1,
                               self.Error.MULTIFRAME_EOT_INCONSISTENT)
                 return None
@@ -148,7 +151,7 @@ class TransferReassembler:
 
         # DETECT UNEXPECTED FRAMES PAST THE END OF TRANSFER. If EOT is set on index N, then indexes > N are invalid.
         if self._max_index is not None and max(frame.index, len(self._payloads) - 1) > self._max_index:
-            self._restart(frame.timestamp,
+            self._restart(timestamp,
                           frame.transfer_id + 1,
                           self.Error.MULTIFRAME_EOT_MISPLACED)
             return None
@@ -177,7 +180,7 @@ class TransferReassembler:
                                                  transfer_id=frame.transfer_id,
                                                  frame_payloads=self._payloads,
                                                  source_node_id=self._source_node_id)
-        self._restart(frame.timestamp,
+        self._restart(timestamp,
                       frame.transfer_id + 1,
                       self.Error.MULTIFRAME_INTEGRITY_ERROR if result is None else None)
         if result is not None:
@@ -185,7 +188,12 @@ class TransferReassembler:
             # above the maximum expected size, but it is hard to combine with out-of-order frame acceptance.
             while result.fragmented_payload and \
                     sum(map(len, result.fragmented_payload[:-1])) > self._extent_bytes:
-                result.fragmented_payload = result.fragmented_payload[:-1]
+                # TODO: a minor refactoring is needed to avoid re-creating the transfer instance here.
+                result = TransferFrom(timestamp=result.timestamp,
+                                      priority=result.priority,
+                                      transfer_id=result.transfer_id,
+                                      fragmented_payload=result.fragmented_payload[:-1],
+                                      source_node_id=result.source_node_id)
         return result
 
     @property
@@ -193,7 +201,7 @@ class TransferReassembler:
         return self._source_node_id
 
     def _restart(self,
-                 timestamp:   pyuavcan.transport.Timestamp,
+                 timestamp:   Timestamp,
                  transfer_id: int,
                  error:       typing.Optional[TransferReassembler.Error] = None) -> None:
         if error is not None:
@@ -227,7 +235,7 @@ class TransferReassembler:
                                                       extent_bytes=self._extent_bytes)
 
     @staticmethod
-    def construct_anonymous_transfer(frame: Frame) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    def construct_anonymous_transfer(timestamp: Timestamp, frame: Frame) -> typing.Optional[TransferFrom]:
         """
         A minor helper that validates whether the frame is a valid anonymous transfer (it is if the index
         is zero and the end-of-transfer flag is set) and constructs a transfer instance if it is.
@@ -235,29 +243,28 @@ class TransferReassembler:
         Observe that this is a static method because anonymous transfers are fundamentally stateless.
         """
         if frame.single_frame_transfer:
-            return pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
-                                                   priority=frame.priority,
-                                                   transfer_id=frame.transfer_id,
-                                                   fragmented_payload=[frame.payload],
-                                                   source_node_id=None)
-        else:
-            return None
+            return TransferFrom(timestamp=timestamp,
+                                priority=frame.priority,
+                                transfer_id=frame.transfer_id,
+                                fragmented_payload=[frame.payload],
+                                source_node_id=None)
+        return None
 
 
-def _validate_and_finalize_transfer(timestamp:      pyuavcan.transport.Timestamp,
-                                    priority:       pyuavcan.transport.Priority,
+def _validate_and_finalize_transfer(timestamp:      Timestamp,
+                                    priority:       Priority,
                                     transfer_id:    int,
                                     frame_payloads: typing.List[memoryview],
-                                    source_node_id: int) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+                                    source_node_id: int) -> typing.Optional[TransferFrom]:
     assert all(isinstance(x, memoryview) for x in frame_payloads)
     assert frame_payloads
 
-    def package(fragmented_payload: typing.Sequence[memoryview]) -> pyuavcan.transport.TransferFrom:
-        return pyuavcan.transport.TransferFrom(timestamp=timestamp,
-                                               priority=priority,
-                                               transfer_id=transfer_id,
-                                               fragmented_payload=fragmented_payload,
-                                               source_node_id=source_node_id)
+    def package(fragmented_payload: typing.Sequence[memoryview]) -> TransferFrom:
+        return TransferFrom(timestamp=timestamp,
+                            priority=priority,
+                            transfer_id=transfer_id,
+                            fragmented_payload=fragmented_payload,
+                            source_node_id=source_node_id)
 
     if len(frame_payloads) > 1:
         size_ok = sum(map(len, frame_payloads)) > _CRC_SIZE_BYTES
@@ -284,7 +291,6 @@ def _drop_crc(fragments: typing.List[memoryview]) -> typing.Sequence[memoryview]
 
 def _unittest_transfer_reassembler() -> None:
     from pytest import raises
-    from pyuavcan.transport import Priority, Timestamp, TransferFrom
 
     src_nid = 1234
     prio = Priority.SLOW
@@ -295,13 +301,11 @@ def _unittest_transfer_reassembler() -> None:
     def on_error_callback(error: TransferReassembler.Error) -> None:
         error_counters[error] += 1
 
-    def mk_frame(timestamp:       Timestamp,
-                 transfer_id:     int,
+    def mk_frame(transfer_id:     int,
                  index:           int,
                  end_of_transfer: bool,
                  payload:         typing.Union[bytes, memoryview]) -> Frame:
-        return Frame(timestamp=timestamp,
-                     priority=prio,
+        return Frame(priority=prio,
                      transfer_id=transfer_id,
                      index=index,
                      end_of_transfer=end_of_transfer,
@@ -329,16 +333,16 @@ def _unittest_transfer_reassembler() -> None:
     ta = TransferReassembler(source_node_id=src_nid, extent_bytes=100, on_error_callback=on_error_callback)
     assert ta.source_node_id == src_nid
 
-    def push(frame: Frame) -> typing.Optional[TransferFrom]:
-        return ta.process_frame(frame, transfer_id_timeout=transfer_id_timeout)
+    def push(timestamp: Timestamp, frame: Frame) -> typing.Optional[TransferFrom]:
+        return ta.process_frame(timestamp, frame, transfer_id_timeout=transfer_id_timeout)
 
     hedgehog = b'In the evenings, the little Hedgehog went to the Bear Cub to count stars.'
     horse = b'He thought about the Horse: how was she doing there, in the fog?'
 
     # Valid single-frame transfer.
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=0,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=True,
                  payload=hedgehog)
@@ -348,8 +352,8 @@ def _unittest_transfer_reassembler() -> None:
 
     # Same transfer-ID; transfer ignored, no error registered.
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=0,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=True,
                  payload=hedgehog)
@@ -357,8 +361,8 @@ def _unittest_transfer_reassembler() -> None:
 
     # Same transfer-ID, different EOT; transfer ignored, no error registered.
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=0,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=False,
                  payload=hedgehog)
@@ -366,15 +370,15 @@ def _unittest_transfer_reassembler() -> None:
 
     # Valid multi-frame transfer.
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=2,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=2,
                  index=0,
                  end_of_transfer=False,
                  payload=hedgehog[:50])
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=2,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=2,
                  index=1,
                  end_of_transfer=True,
                  payload=hedgehog[50:] + TransferCRC.new(hedgehog).value_as_bytes)
@@ -384,22 +388,22 @@ def _unittest_transfer_reassembler() -> None:
 
     # Same as above, but the frame ordering is reversed.
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),           # LAST FRAME
-                 transfer_id=10,
+        mk_ts(1000.0),  # LAST FRAME
+        mk_frame(transfer_id=10,
                  index=2,
                  end_of_transfer=True,
                  payload=TransferCRC.new(hedgehog).value_as_bytes)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=10,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=10,
                  index=1,
                  end_of_transfer=False,
                  payload=hedgehog[50:])
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),           # FIRST FRAME
-                 transfer_id=10,
+        mk_ts(1000.0),  # FIRST FRAME
+        mk_frame(transfer_id=10,
                  index=0,
                  end_of_transfer=False,
                  payload=hedgehog[:50])
@@ -409,50 +413,50 @@ def _unittest_transfer_reassembler() -> None:
 
     # Same as above, but one frame is duplicated and one is ignored with old TID, plus an empty frame in the middle.
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=11,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=11,
                  index=1,
                  end_of_transfer=False,
                  payload=hedgehog[50:])
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),           # OLD TID
-                 transfer_id=0,
+        mk_ts(1000.0),  # OLD TID
+        mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=False,
                  payload=hedgehog[50:])
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),           # LAST FRAME
-                 transfer_id=11,
+        mk_ts(1000.0),  # LAST FRAME
+        mk_frame(transfer_id=11,
                  index=2,
                  end_of_transfer=True,
                  payload=TransferCRC.new(hedgehog).value_as_bytes)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),           # DUPLICATE OF INDEX 1
-                 transfer_id=11,
+        mk_ts(1000.0),  # DUPLICATE OF INDEX 1
+        mk_frame(transfer_id=11,
                  index=1,
                  end_of_transfer=False,
                  payload=hedgehog[50:])
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),           # OLD TID
-                 transfer_id=10,
+        mk_ts(1000.0),  # OLD TID
+        mk_frame(transfer_id=10,
                  index=1,
                  end_of_transfer=False,
                  payload=hedgehog[50:])
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),           # MALFORMED FRAME (no payload), ignored
-                 transfer_id=9999999999,
+        mk_ts(1000.0),  # MALFORMED FRAME (no payload), ignored
+        mk_frame(transfer_id=9999999999,
                  index=0,
                  end_of_transfer=False,
                  payload=b'')
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),           # FIRST FRAME
-                 transfer_id=11,
+        mk_ts(1000.0),  # FIRST FRAME
+        mk_frame(transfer_id=11,
                  index=0,
                  end_of_transfer=False,
                  payload=hedgehog[:50])
@@ -462,29 +466,29 @@ def _unittest_transfer_reassembler() -> None:
 
     # Valid multi-frame transfer with payload size above the limit.
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=102,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=102,
                  index=0,
                  end_of_transfer=False,
                  payload=hedgehog)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=102,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=102,
                  index=1,
                  end_of_transfer=False,
                  payload=hedgehog)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=102,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=102,
                  index=2,
                  end_of_transfer=False,
                  payload=hedgehog)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=102,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=102,
                  index=3,
                  end_of_transfer=True,
                  payload=hedgehog + TransferCRC.new(hedgehog * 4).value_as_bytes)
@@ -494,29 +498,29 @@ def _unittest_transfer_reassembler() -> None:
 
     # Same as above, but the frames are reordered.
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=103,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=103,
                  index=2,
                  end_of_transfer=False,
                  payload=horse)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=103,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=103,
                  index=3,
                  end_of_transfer=True,
                  payload=horse + TransferCRC.new(horse * 4).value_as_bytes)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=103,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=103,
                  index=1,
                  end_of_transfer=False,
                  payload=horse)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(1000.0),
-                 transfer_id=103,
+        mk_ts(1000.0),
+        mk_frame(transfer_id=103,
                  index=0,
                  end_of_transfer=False,
                  payload=horse)
@@ -526,8 +530,8 @@ def _unittest_transfer_reassembler() -> None:
 
     # Transfer-ID timeout. No error registered.
     assert push(
-        mk_frame(timestamp=mk_ts(2000.0),
-                 transfer_id=0,
+        mk_ts(2000.0),
+        mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=True,
                  payload=hedgehog)
@@ -544,15 +548,15 @@ def _unittest_transfer_reassembler() -> None:
 
     # Start a transfer, then start a new one with higher TID.
     assert push(
-        mk_frame(timestamp=mk_ts(3000.0),   # Middle of a new transfer.
-                 transfer_id=2,
+        mk_ts(3000.0),  # Middle of a new transfer.
+        mk_frame(transfer_id=2,
                  index=1,
                  end_of_transfer=False,
                  payload=hedgehog)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(3000.0),   # Another transfer! The old one is discarded.
-                 transfer_id=3,
+        mk_ts(3000.0),  # Another transfer! The old one is discarded.
+        mk_frame(transfer_id=3,
                  index=1,
                  end_of_transfer=False,
                  payload=horse[50:])
@@ -565,15 +569,15 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
     }
     assert push(
-        mk_frame(timestamp=mk_ts(3000.0),
-                 transfer_id=3,
+        mk_ts(3000.0),
+        mk_frame(transfer_id=3,
                  index=2,
                  end_of_transfer=True,
                  payload=TransferCRC.new(horse).value_as_bytes)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(3000.0),
-                 transfer_id=3,
+        mk_ts(3000.0),
+        mk_frame(transfer_id=3,
                  index=0,
                  end_of_transfer=False,
                  payload=horse[:50])
@@ -590,15 +594,15 @@ def _unittest_transfer_reassembler() -> None:
 
     # Start a transfer, then start a new one with lower TID when a TID timeout is reached.
     assert push(
-        mk_frame(timestamp=mk_ts(3000.0),   # Middle of a new transfer.
-                 transfer_id=10,
+        mk_ts(3000.0),  # Middle of a new transfer.
+        mk_frame(transfer_id=10,
                  index=1,
                  end_of_transfer=False,
                  payload=hedgehog)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(4000.0),   # Another transfer! The old one is discarded.
-                 transfer_id=3,
+        mk_ts(4000.0),  # Another transfer! The old one is discarded.
+        mk_frame(transfer_id=3,
                  index=1,
                  end_of_transfer=False,
                  payload=horse[50:])
@@ -611,15 +615,15 @@ def _unittest_transfer_reassembler() -> None:
         ta.Error.MULTIFRAME_EOT_INCONSISTENT:   0,
     }
     assert push(
-        mk_frame(timestamp=mk_ts(4000.0),
-                 transfer_id=3,
+        mk_ts(4000.0),
+        mk_frame(transfer_id=3,
                  index=2,
                  end_of_transfer=True,
                  payload=TransferCRC.new(horse).value_as_bytes)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(4000.0),
-                 transfer_id=3,
+        mk_ts(4000.0),
+        mk_frame(transfer_id=3,
                  index=0,
                  end_of_transfer=False,
                  payload=horse[:50])
@@ -636,22 +640,22 @@ def _unittest_transfer_reassembler() -> None:
 
     # Multi-frame transfer with bad CRC.
     assert push(
-        mk_frame(timestamp=mk_ts(5000.0),
-                 transfer_id=10,
+        mk_ts(5000.0),
+        mk_frame(transfer_id=10,
                  index=1,
                  end_of_transfer=False,
                  payload=hedgehog[50:])
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(5000.0),           # LAST FRAME
-                 transfer_id=10,
+        mk_ts(5000.0),  # LAST FRAME
+        mk_frame(transfer_id=10,
                  index=2,
                  end_of_transfer=True,
                  payload=TransferCRC.new(hedgehog).value_as_bytes[::-1])  # Bad CRC here.
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(5000.0),           # FIRST FRAME
-                 transfer_id=10,
+        mk_ts(5000.0),  # FIRST FRAME
+        mk_frame(transfer_id=10,
                  index=0,
                  end_of_transfer=False,
                  payload=hedgehog[:50])
@@ -666,22 +670,22 @@ def _unittest_transfer_reassembler() -> None:
 
     # Frame past end of transfer.
     assert push(
-        mk_frame(timestamp=mk_ts(5000.0),
-                 transfer_id=11,
+        mk_ts(5000.0),
+        mk_frame(transfer_id=11,
                  index=1,
                  end_of_transfer=False,
                  payload=hedgehog[50:])
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(5000.0),           # PAST THE END OF TRANSFER
-                 transfer_id=11,
+        mk_ts(5000.0),  # PAST THE END OF TRANSFER
+        mk_frame(transfer_id=11,
                  index=3,
                  end_of_transfer=False,
                  payload=horse)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(5000.0),           # LAST FRAME
-                 transfer_id=11,
+        mk_ts(5000.0),  # LAST FRAME
+        mk_frame(transfer_id=11,
                  index=2,
                  end_of_transfer=True,
                  payload=TransferCRC.new(hedgehog + horse).value_as_bytes)
@@ -696,22 +700,22 @@ def _unittest_transfer_reassembler() -> None:
 
     # Inconsistent end-of-transfer flag.
     assert push(
-        mk_frame(timestamp=mk_ts(5000.0),
-                 transfer_id=12,
+        mk_ts(5000.0),
+        mk_frame(transfer_id=12,
                  index=0,
                  end_of_transfer=False,
                  payload=hedgehog[:50])
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(5000.0),           # LAST FRAME A
-                 transfer_id=12,
+        mk_ts(5000.0),  # LAST FRAME A
+        mk_frame(transfer_id=12,
                  index=2,
                  end_of_transfer=True,
                  payload=TransferCRC.new(hedgehog + horse).value_as_bytes)
     ) is None
     assert push(
-        mk_frame(timestamp=mk_ts(5000.0),           # LAST FRAME B
-                 transfer_id=12,
+        mk_ts(5000.0),  # LAST FRAME B
+        mk_frame(transfer_id=12,
                  index=3,
                  end_of_transfer=True,
                  payload=horse)
@@ -726,8 +730,8 @@ def _unittest_transfer_reassembler() -> None:
 
     # Valid single-frame transfer with no payload.
     assert push(
-        mk_frame(timestamp=mk_ts(6000.0),
-                 transfer_id=0,
+        mk_ts(6000.0),
+        mk_frame(transfer_id=0,
                  index=0,
                  end_of_transfer=True,
                  payload=b'')
@@ -744,13 +748,11 @@ def _unittest_transfer_reassembler() -> None:
 
 
 def _unittest_transfer_reassembler_anonymous() -> None:
-    from pyuavcan.transport import Timestamp, Priority, TransferFrom
-
     ts = Timestamp.now()
     prio = Priority.LOW
     assert TransferReassembler.construct_anonymous_transfer(
-        Frame(timestamp=ts,
-              priority=prio,
+        ts,
+        Frame(priority=prio,
               transfer_id=123456,
               index=0,
               end_of_transfer=True,
@@ -762,8 +764,8 @@ def _unittest_transfer_reassembler_anonymous() -> None:
                       source_node_id=None)
 
     assert TransferReassembler.construct_anonymous_transfer(
-        Frame(timestamp=ts,
-              priority=prio,
+        ts,
+        Frame(priority=prio,
               transfer_id=123456,
               index=1,
               end_of_transfer=True,
@@ -771,8 +773,8 @@ def _unittest_transfer_reassembler_anonymous() -> None:
     ) is None
 
     assert TransferReassembler.construct_anonymous_transfer(
-        Frame(timestamp=ts,
-              priority=prio,
+        ts,
+        Frame(priority=prio,
               transfer_id=123456,
               index=0,
               end_of_transfer=False,
@@ -781,8 +783,6 @@ def _unittest_transfer_reassembler_anonymous() -> None:
 
 
 def _unittest_validate_and_finalize_transfer() -> None:
-    from pyuavcan.transport import Timestamp, Priority, TransferFrom
-
     ts = Timestamp.now()
     prio = Priority.FAST
     tid = 888888888

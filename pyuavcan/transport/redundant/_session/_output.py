@@ -59,7 +59,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
     """
     This is a composite of a group of :class:`pyuavcan.transport.OutputSession`.
     Every outgoing transfer is simply forked into each of the inferior sessions.
-    The result aggregation policy is documented in :func:`send_until`.
+    The result aggregation policy is documented in :func:`send`.
     """
     def __init__(self,
                  specifier:        pyuavcan.transport.OutputSessionSpecifier,
@@ -144,7 +144,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             except Exception as ex:
                 _logger.exception('%s could not disable feedback on %r: %s', self, ses, ex)
 
-    async def send_until(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
+    async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         """
         Sends the transfer via all of the inferior sessions concurrently.
         Returns when all of the inferior calls return and/or raise exceptions.
@@ -204,7 +204,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
 
             results = await asyncio.gather(
                 *[
-                    ses.send_until(transfer, monotonic_deadline) for ses in inferiors
+                    ses.send(transfer, monotonic_deadline) for ses in inferiors
                 ],
                 loop=self._loop,
                 return_exceptions=True
@@ -339,7 +339,7 @@ def _unittest_redundant_output() -> None:
 
     # Transmit with an empty set of inferiors.
     time_before = loop.time()
-    assert not await_(ses.send_until(
+    assert not await_(ses.send(
         Transfer(timestamp=ts,
                  priority=Priority.IMMEDIATE,
                  transfer_id=1234567890,
@@ -370,7 +370,7 @@ def _unittest_redundant_output() -> None:
 
     assert await_(asyncio.gather(
         # Start transmission here. It would stall for up to five seconds because no inferiors.
-        ses.send_until(
+        ses.send(
             Transfer(timestamp=ts,
                      priority=Priority.IMMEDIATE,
                      transfer_id=9876543210,
@@ -395,16 +395,16 @@ def _unittest_redundant_output() -> None:
             ),
         ],
     )
-    tf_rx = await_(rx_a.receive_until(loop.time() + 1))
+    tf_rx = await_(rx_a.receive(loop.time() + 1))
     assert isinstance(tf_rx, TransferFrom)
     assert tf_rx.transfer_id == 9876543210
     assert tf_rx.fragmented_payload == [memoryview(b'def')]
-    assert None is await_(rx_b.receive_until(loop.time() + .1))
+    assert None is await_(rx_b.receive(loop.time() + .1))
 
     # Enable feedback.
     feedback: typing.List[RedundantFeedback] = []
     ses.enable_feedback(feedback.append)
-    assert await_(ses.send_until(
+    assert await_(ses.send(
         Transfer(timestamp=ts,
                  priority=Priority.LOW,
                  transfer_id=555555555555,
@@ -432,11 +432,11 @@ def _unittest_redundant_output() -> None:
     assert isinstance(feedback[0].inferior_feedback, LoopbackFeedback)
     feedback.pop()
     assert not feedback
-    tf_rx = await_(rx_a.receive_until(loop.time() + 1))
+    tf_rx = await_(rx_a.receive(loop.time() + 1))
     assert isinstance(tf_rx, TransferFrom)
     assert tf_rx.transfer_id == 555555555555
     assert tf_rx.fragmented_payload == [memoryview(b'qwerty')]
-    assert None is await_(rx_b.receive_until(loop.time() + .1))
+    assert None is await_(rx_b.receive(loop.time() + .1))
 
     # Add a new inferior and ensure that its feedback is auto-enabled!
     # noinspection PyProtectedMember
@@ -452,7 +452,7 @@ def _unittest_redundant_output() -> None:
         inf_a,
         inf_b,
     ]
-    assert await_(ses.send_until(
+    assert await_(ses.send(
         Transfer(timestamp=ts,
                  priority=Priority.FAST,
                  transfer_id=777777777777,
@@ -492,11 +492,11 @@ def _unittest_redundant_output() -> None:
     assert isinstance(feedback[0].inferior_feedback, LoopbackFeedback)
     feedback.pop()
     assert not feedback
-    tf_rx = await_(rx_a.receive_until(loop.time() + 1))
+    tf_rx = await_(rx_a.receive(loop.time() + 1))
     assert isinstance(tf_rx, TransferFrom)
     assert tf_rx.transfer_id == 777777777777
     assert tf_rx.fragmented_payload == [memoryview(b'fgsfds')]
-    tf_rx = await_(rx_b.receive_until(loop.time() + 1))
+    tf_rx = await_(rx_b.receive(loop.time() + 1))
     assert isinstance(tf_rx, TransferFrom)
     assert tf_rx.transfer_id == 777777777777
     assert tf_rx.fragmented_payload == [memoryview(b'fgsfds')]
@@ -512,7 +512,7 @@ def _unittest_redundant_output() -> None:
     assert not tr_a.output_sessions
 
     # Transmission test with the last inferior.
-    assert await_(ses.send_until(
+    assert await_(ses.send(
         Transfer(timestamp=ts,
                  priority=Priority.HIGH,
                  transfer_id=88888888888888,
@@ -538,8 +538,8 @@ def _unittest_redundant_output() -> None:
     assert isinstance(feedback[0].inferior_feedback, LoopbackFeedback)
     feedback.pop()
     assert not feedback
-    assert None is await_(rx_a.receive_until(loop.time() + 1))
-    tf_rx = await_(rx_b.receive_until(loop.time() + 1))
+    assert None is await_(rx_a.receive(loop.time() + 1))
+    tf_rx = await_(rx_b.receive(loop.time() + 1))
     assert isinstance(tf_rx, TransferFrom)
     assert tf_rx.transfer_id == 88888888888888
     assert tf_rx.fragmented_payload == [memoryview(b'hedgehog')]
@@ -549,7 +549,7 @@ def _unittest_redundant_output() -> None:
     # A diversion - enable the feedback in the inferior and make sure it's not propagated.
     # noinspection PyProtectedMember
     ses._enable_feedback_on_inferior(inf_b)
-    assert await_(ses.send_until(
+    assert await_(ses.send(
         Transfer(timestamp=ts,
                  priority=Priority.OPTIONAL,
                  transfer_id=666666666666666,
@@ -568,8 +568,8 @@ def _unittest_redundant_output() -> None:
         ),
     ]
     assert not feedback
-    assert None is await_(rx_a.receive_until(loop.time() + 1))
-    tf_rx = await_(rx_b.receive_until(loop.time() + 1))
+    assert None is await_(rx_a.receive(loop.time() + 1))
+    tf_rx = await_(rx_b.receive(loop.time() + 1))
     assert isinstance(tf_rx, TransferFrom)
     assert tf_rx.transfer_id == 666666666666666
     assert tf_rx.fragmented_payload == [memoryview(b'horse')]
@@ -588,7 +588,7 @@ def _unittest_redundant_output() -> None:
 
     # Use after close.
     with pytest.raises(ResourceClosedError):
-        await_(ses.send_until(
+        await_(ses.send(
             Transfer(timestamp=ts,
                      priority=Priority.OPTIONAL,
                      transfer_id=1111111111111,
@@ -596,8 +596,8 @@ def _unittest_redundant_output() -> None:
             loop.time() + 1.0
         ))
 
-    assert None is await_(rx_a.receive_until(loop.time() + 1))
-    assert None is await_(rx_b.receive_until(loop.time() + 1))
+    assert None is await_(rx_a.receive(loop.time() + 1))
+    assert None is await_(rx_b.receive(loop.time() + 1))
 
 
 def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
@@ -644,7 +644,7 @@ def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     # If at least one transmission succeeds, the call succeeds.
     with caplog.at_level(logging.CRITICAL, logger=__name__):
         inf_a.exception = RuntimeError('INTENDED EXCEPTION')
-        assert await_(ses.send_until(
+        assert await_(ses.send(
             Transfer(timestamp=ts,
                      priority=Priority.FAST,
                      transfer_id=444444444444,
@@ -670,8 +670,8 @@ def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
                 ),
             ],
         )
-        assert None is await_(rx_a.receive_until(loop.time() + 1))
-        tf_rx = await_(rx_b.receive_until(loop.time() + 1))
+        assert None is await_(rx_a.receive(loop.time() + 1))
+        tf_rx = await_(rx_b.receive(loop.time() + 1))
         assert isinstance(tf_rx, TransferFrom)
         assert tf_rx.transfer_id == 444444444444
         assert tf_rx.fragmented_payload == [memoryview(b'INTENDED EXCEPTION')]
@@ -679,7 +679,7 @@ def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
         # Transmission timeout.
         # One times out, one raises an exception --> the result is timeout.
         inf_b.should_timeout = True
-        assert not await_(ses.send_until(
+        assert not await_(ses.send(
             Transfer(timestamp=ts,
                      priority=Priority.FAST,
                      transfer_id=2222222222222,
@@ -690,14 +690,14 @@ def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
         assert ses.sample_statistics().payload_bytes == len('INTENDED EXCEPTION')
         assert ses.sample_statistics().errors == 0
         assert ses.sample_statistics().drops == 1
-        assert None is await_(rx_a.receive_until(loop.time() + 1))
-        assert None is await_(rx_b.receive_until(loop.time() + 1))
+        assert None is await_(rx_a.receive(loop.time() + 1))
+        assert None is await_(rx_b.receive(loop.time() + 1))
 
         # Transmission with exceptions.
         # If all transmissions fail, the call fails.
         inf_b.exception = RuntimeError('INTENDED EXCEPTION')
         with pytest.raises(RuntimeError, match='INTENDED EXCEPTION'):
-            assert await_(ses.send_until(
+            assert await_(ses.send(
                 Transfer(timestamp=ts,
                          priority=Priority.FAST,
                          transfer_id=3333333333333,
@@ -708,8 +708,8 @@ def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
         assert ses.sample_statistics().payload_bytes == len('INTENDED EXCEPTION')
         assert ses.sample_statistics().errors == 1
         assert ses.sample_statistics().drops == 1
-        assert None is await_(rx_a.receive_until(loop.time() + 1))
-        assert None is await_(rx_b.receive_until(loop.time() + 1))
+        assert None is await_(rx_a.receive(loop.time() + 1))
+        assert None is await_(rx_b.receive(loop.time() + 1))
 
     # Retirement.
     assert not is_retired

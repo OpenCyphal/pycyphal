@@ -5,6 +5,7 @@
 #
 
 from __future__ import annotations
+import typing
 import logging
 import uavcan.node
 import pyuavcan
@@ -31,25 +32,37 @@ class Node:
     This class automatically instantiates the following application-level function implementations:
 
     - :class:`pyuavcan.application.heartbeat_publisher.HeartbeatPublisher` (see :attr:`heartbeat_publisher`).
-    - :class:`pyuavcan.application.diagnostic.DiagnosticSubscriber`.
+
+    Additionally, if enabled via the corresponding constructor arguments, optional application-level function
+    implementations are instantiated as described in the constructor documentation.
     """
 
-    def __init__(self,
-                 presentation: pyuavcan.presentation.Presentation,
-                 info:         NodeInfo):
+    def __init__(
+            self,
+            presentation:                  pyuavcan.presentation.Presentation,
+            info:                          NodeInfo,
+            with_diagnostic_subscriber:    bool = False,
+    ):
         """
-        The node takes ownership of the supplied presentation controller.
-        Ownership here means that the controller will be closed (along with all sessions and other resources)
-        when the node is closed.
+        :param presentation: The node takes ownership of the supplied presentation controller.
+            Ownership here means that the controller will be closed (along with all sessions and other resources)
+            when the node is closed.
 
-        The info structure is sent as a response to requests of type ``uavcan.node.GetInfo``;
-        the corresponding server instance is established and run by the node class automatically.
+        :param info: The info structure is sent as a response to requests of type ``uavcan.node.GetInfo``;
+            the corresponding server instance is established and run by the node class automatically.
+
+        :param with_diagnostic_subscriber: If True, an instance of
+            :class:`pyuavcan.application.diagnostic.DiagnosticSubscriber` will be constructed to channel
+            standard UAVCAN diagnostic messages into the local Python logging facility.
         """
         self._presentation = presentation
         self._info = info
         self._heartbeat_publisher = pyuavcan.application.heartbeat_publisher.HeartbeatPublisher(self._presentation)
-        self._diagnostic_subscriber = pyuavcan.application.diagnostic.DiagnosticSubscriber(self._presentation)
         self._srv_info = self._presentation.get_server_with_fixed_service_id(uavcan.node.GetInfo_1_0)
+
+        self._diagnostic_subscriber = pyuavcan.application.diagnostic.DiagnosticSubscriber(self._presentation) \
+            if with_diagnostic_subscriber else None
+
         self._started = False
 
     @property
@@ -76,7 +89,8 @@ class Node:
         if not self._started:
             self._srv_info.serve_in_background(self._handle_get_info_request)
             self._heartbeat_publisher.start()
-            self._diagnostic_subscriber.start()
+            if self._diagnostic_subscriber is not None:
+                self._diagnostic_subscriber.start()
             self._started = True
 
     def close(self) -> None:
@@ -86,8 +100,9 @@ class Node:
         """
         try:
             self._heartbeat_publisher.close()
-            self._diagnostic_subscriber.close()
             self._srv_info.close()
+            if self._diagnostic_subscriber is not None:
+                self._diagnostic_subscriber.close()
         finally:
             self._presentation.close()
 

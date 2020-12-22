@@ -11,6 +11,7 @@ import asyncio
 import logging
 import dataclasses
 import pyuavcan
+from pyuavcan.transport import Timestamp
 from pyuavcan.transport.commons.high_overhead_transport import TransferReassembler
 from .._frame import SerialFrame
 from ._base import SerialSession
@@ -54,12 +55,12 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
         self._statistics = SerialInputSessionStatistics()
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
-        self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
+        self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue(loop=loop)
         self._reassemblers: typing.Dict[int, TransferReassembler] = {}
 
         super(SerialInputSession, self).__init__(finalizer)
 
-    def _process_frame(self, frame: SerialFrame) -> None:
+    def _process_frame(self, timestamp: Timestamp, frame: SerialFrame) -> None:
         """
         This is a part of the transport-internal API. It's a public method despite the name because Python's
         visibility handling capabilities are limited. I guess we could define a private abstract base to
@@ -70,13 +71,14 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
         transfer: typing.Optional[pyuavcan.transport.TransferFrom]
         if frame.source_node_id is None:
-            transfer = TransferReassembler.construct_anonymous_transfer(frame)
+            transfer = TransferReassembler.construct_anonymous_transfer(timestamp, frame)
             if transfer is None:
                 self._statistics.errors += 1
                 _logger.debug('%s: Invalid anonymous frame: %s', self, frame)
         else:
-            transfer = self._get_reassembler(frame.source_node_id).process_frame(frame, self._transfer_id_timeout)
-
+            transfer = self._get_reassembler(frame.source_node_id).process_frame(timestamp,
+                                                                                 frame,
+                                                                                 self._transfer_id_timeout)
         if transfer is not None:
             self._statistics.transfers += 1
             self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
@@ -87,7 +89,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
                 # TODO: make the queue capacity configurable
                 self._statistics.drops += len(transfer.fragmented_payload)
 
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         try:
             timeout = monotonic_deadline - self._loop.time()
             if timeout > 0:
@@ -151,7 +153,7 @@ def _unittest_input_session() -> None:
     import asyncio
     from pytest import raises, approx
     from pyuavcan.transport import InputSessionSpecifier, MessageDataSpecifier, Priority, TransferFrom
-    from pyuavcan.transport import PayloadMetadata, Timestamp
+    from pyuavcan.transport import PayloadMetadata
     from pyuavcan.transport.commons.high_overhead_transport import TransferCRC
 
     ts = Timestamp.now()
@@ -186,16 +188,15 @@ def _unittest_input_session() -> None:
         sis.transfer_id_timeout = 0.0
     assert sis.transfer_id_timeout == approx(1.0)
 
-    assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
-    assert run_until_complete(sis.receive_until(0.0)) is None
+    assert run_until_complete(sis.receive(get_monotonic() + 0.1)) is None
+    assert run_until_complete(sis.receive(0.0)) is None
 
     def mk_frame(transfer_id:       int,
                  index:             int,
                  end_of_transfer:   bool,
                  payload:           typing.Union[bytes, memoryview],
                  source_node_id:    typing.Optional[int]) -> SerialFrame:
-        return SerialFrame(timestamp=ts,
-                           priority=prio,
+        return SerialFrame(priority=prio,
                            transfer_id=transfer_id,
                            index=index,
                            end_of_transfer=end_of_transfer,
@@ -205,58 +206,68 @@ def _unittest_input_session() -> None:
                            data_specifier=session_spec.data_specifier)
 
     # ANONYMOUS TRANSFERS.
-    sis._process_frame(mk_frame(transfer_id=0,
-                                index=0,
-                                end_of_transfer=False,
-                                payload=nihil_supernum,
-                                source_node_id=None))
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=0,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=nihil_supernum,
+                 source_node_id=None))
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         frames=1,
         errors=1,
     )
 
-    sis._process_frame(mk_frame(transfer_id=0,
-                                index=1,
-                                end_of_transfer=True,
-                                payload=nihil_supernum,
-                                source_node_id=None))
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=0,
+                 index=1,
+                 end_of_transfer=True,
+                 payload=nihil_supernum,
+                 source_node_id=None))
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         frames=2,
         errors=2,
     )
 
-    sis._process_frame(mk_frame(transfer_id=0,
-                                index=0,
-                                end_of_transfer=True,
-                                payload=nihil_supernum,
-                                source_node_id=None))
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=0,
+                 index=0,
+                 end_of_transfer=True,
+                 payload=nihil_supernum,
+                 source_node_id=None))
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=1,
         frames=3,
         payload_bytes=len(nihil_supernum),
         errors=2,
     )
-    assert run_until_complete(sis.receive_until(0)) == \
+    assert run_until_complete(sis.receive(0)) == \
         TransferFrom(timestamp=ts,
                      priority=prio,
                      transfer_id=0,
                      fragmented_payload=[memoryview(nihil_supernum)],
                      source_node_id=None)
-    assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
-    assert run_until_complete(sis.receive_until(0.0)) is None
+    assert run_until_complete(sis.receive(get_monotonic() + 0.1)) is None
+    assert run_until_complete(sis.receive(0.0)) is None
 
     # VALID TRANSFERS. Notice that they are unordered on purpose. The reassembler can deal with that.
-    sis._process_frame(mk_frame(transfer_id=0,
-                                index=1,
-                                end_of_transfer=False,
-                                payload=nihil_supernum,
-                                source_node_id=1111))
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=0,
+                 index=1,
+                 end_of_transfer=False,
+                 payload=nihil_supernum,
+                 source_node_id=1111))
 
-    sis._process_frame(mk_frame(transfer_id=0,
-                                index=0,
-                                end_of_transfer=True,
-                                payload=nihil_supernum,
-                                source_node_id=2222))       # COMPLETED FIRST
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=0,
+                 index=0,
+                 end_of_transfer=True,
+                 payload=nihil_supernum,
+                 source_node_id=2222))       # COMPLETED FIRST
 
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=2,
@@ -269,23 +280,29 @@ def _unittest_input_session() -> None:
         },
     )
 
-    sis._process_frame(mk_frame(transfer_id=0,
-                                index=3,
-                                end_of_transfer=True,
-                                payload=TransferCRC.new(nihil_supernum * 3).value_as_bytes,
-                                source_node_id=1111))
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=0,
+                 index=3,
+                 end_of_transfer=True,
+                 payload=TransferCRC.new(nihil_supernum * 3).value_as_bytes,
+                 source_node_id=1111))
 
-    sis._process_frame(mk_frame(transfer_id=0,
-                                index=0,
-                                end_of_transfer=False,
-                                payload=nihil_supernum,
-                                source_node_id=1111))
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=0,
+                 index=0,
+                 end_of_transfer=False,
+                 payload=nihil_supernum,
+                 source_node_id=1111))
 
-    sis._process_frame(mk_frame(transfer_id=0,
-                                index=2,
-                                end_of_transfer=False,
-                                payload=nihil_supernum,
-                                source_node_id=1111))       # COMPLETED SECOND
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=0,
+                 index=2,
+                 end_of_transfer=False,
+                 payload=nihil_supernum,
+                 source_node_id=1111))       # COMPLETED SECOND
 
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=3,
@@ -298,33 +315,37 @@ def _unittest_input_session() -> None:
         },
     )
 
-    assert run_until_complete(sis.receive_until(0)) == \
+    assert run_until_complete(sis.receive(0)) == \
         TransferFrom(timestamp=ts,
                      priority=prio,
                      transfer_id=0,
                      fragmented_payload=[memoryview(nihil_supernum)],
                      source_node_id=2222)
-    assert run_until_complete(sis.receive_until(0)) == \
+    assert run_until_complete(sis.receive(0)) == \
         TransferFrom(timestamp=ts,
                      priority=prio,
                      transfer_id=0,
                      fragmented_payload=[memoryview(nihil_supernum)] * 3,
                      source_node_id=1111)
-    assert run_until_complete(sis.receive_until(get_monotonic() + 0.1)) is None
-    assert run_until_complete(sis.receive_until(0.0)) is None
+    assert run_until_complete(sis.receive(get_monotonic() + 0.1)) is None
+    assert run_until_complete(sis.receive(0.0)) is None
 
     # TRANSFERS WITH REASSEMBLY ERRORS.
-    sis._process_frame(mk_frame(transfer_id=1,          # EMPTY IN MULTIFRAME
-                                index=0,
-                                end_of_transfer=False,
-                                payload=b'',
-                                source_node_id=1111))
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=1,          # EMPTY IN MULTIFRAME
+                 index=0,
+                 end_of_transfer=False,
+                 payload=b'',
+                 source_node_id=1111))
 
-    sis._process_frame(mk_frame(transfer_id=2,          # EMPTY IN MULTIFRAME
-                                index=0,
-                                end_of_transfer=False,
-                                payload=b'',
-                                source_node_id=1111))
+    sis._process_frame(
+        ts,
+        mk_frame(transfer_id=2,          # EMPTY IN MULTIFRAME
+                 index=0,
+                 end_of_transfer=False,
+                 payload=b'',
+                 source_node_id=1111))
 
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=3,

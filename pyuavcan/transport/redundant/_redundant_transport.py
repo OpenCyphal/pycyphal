@@ -43,7 +43,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
     Read https://forum.uavcan.org/t/alternative-transport-protocols/324.
     """
 
-    def __init__(self, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
+    def __init__(self, *, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
         """
         :param loop: All inferiors shall run on the same event loop,
             which is configured once here and cannot be changed after the instance is constructed.
@@ -51,6 +51,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         """
         self._cols: typing.List[pyuavcan.transport.Transport] = []
         self._rows: typing.Dict[pyuavcan.transport.SessionSpecifier, RedundantSession] = {}
+        self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._check_matrix_consistency()
 
@@ -63,7 +64,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
         The values are obtained from the set of inferiors by applying the following reductions:
 
-        - min transfer-ID
+        - min transfer-ID modulo
         - min max-nodes
         - min MTU
         """
@@ -150,23 +151,6 @@ class RedundantTransport(pyuavcan.transport.Transport):
         return [s for s in self._rows.values() if isinstance(s, RedundantOutputSession)]
 
     @property
-    def descriptor(self) -> str:
-        """
-        The outer tag is ``<redundant>``;
-        the inner elements are descriptors of the inferiors (if any), ordered as in :attr:`inferiors`.
-
-        >>> tr = RedundantTransport()
-        >>> tr.descriptor
-        '<redundant></redundant>'
-        >>> from pyuavcan.transport.loopback import LoopbackTransport
-        >>> tr.attach_inferior(LoopbackTransport(None))
-        >>> tr.attach_inferior(LoopbackTransport(None))
-        >>> tr.descriptor
-        '<redundant><loopback/><loopback/></redundant>'
-        """
-        return '<redundant>' + ''.join(t.descriptor for t in self._cols) + '</redundant>'
-
-    @property
     def inferiors(self) -> typing.Sequence[pyuavcan.transport.Transport]:
         """
         Read-only access to the list of inferior transports.
@@ -197,6 +181,8 @@ class RedundantTransport(pyuavcan.transport.Transport):
         the operation will be rolled back to ensure state consistency.
         """
         self._validate_inferior(transport)
+        for ch in self._capture_handlers:
+            transport.begin_capture(ch)
         self._cols.append(transport)
         try:
             for redundant_session in self._rows.values():
@@ -256,6 +242,48 @@ class RedundantTransport(pyuavcan.transport.Transport):
         self._cols.clear()
         assert not self._rows, 'All sessions should have been unregistered'
         self._check_matrix_consistency()
+
+    def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
+        """
+        Stores the handler in the local list of handlers.
+        Invokes :class:`pyuavcan.transport.Transport.begin_capture` on each inferior with the provided handler.
+        If at least one inferior raises an exception, it is propagated immediately and the remaining inferiors
+        will remain in an inconsistent state.
+        When a new inferior is added later, the stored handlers will be automatically used to enable capture on it.
+        If such auto-restoration behavior is undesirable, configure capture individually per-inferior instead.
+
+        The redundant transport does not define its own capture events and does not wrap captured events reported
+        by its inferiors.
+        """
+        self._capture_handlers.append(handler)
+        for c in self._cols:
+            c.begin_capture(handler)
+
+    @staticmethod
+    def make_tracer() -> pyuavcan.transport.Tracer:
+        """
+        This method is not implemented for redundant transport. Access the inferiors directly instead.
+        """
+        raise NotImplementedError
+
+    async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
+        """
+        Simply propagates the call to every inferior.
+        The return value is a logical AND for all inferiors; False if there are no inferiors.
+
+        First exception to occur terminates the operation and is raised immediately.
+        This is different from regular sending; the assumption is that the caller necessarily wants to ensure
+        that spoofing takes place against every inferior.
+        """
+        if not self._cols:
+            return False
+        gather = asyncio.gather(*[inf.spoof(transfer, monotonic_deadline) for inf in self._cols])
+        try:
+            results = await gather
+        except Exception:
+            gather.cancel()
+            raise
+        return all(results)
 
     def _validate_inferior(self, transport: pyuavcan.transport.Transport) -> None:
         # Ensure all inferiors run on the same event loop.
@@ -350,3 +378,6 @@ class RedundantTransport(pyuavcan.transport.Transport):
     def _check_matrix_consistency(self) -> None:
         for row in self._rows.values():
             assert len(row.inferiors) == len(self._cols)
+
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        return list(self.inferiors), {}

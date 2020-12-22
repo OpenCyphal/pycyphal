@@ -1,10 +1,12 @@
-.. _basic_usage:
+.. _demo_app:
 
-Basic usage demo
+Demo application
 ================
 
-The reader is assumed to have read the **UAVCAN v1** specification beforehand.
+The reader is assumed to have at least skimmed through *The UAVCAN Guide* beforehand.
 See `uavcan.org <https://uavcan.org>`_ for details.
+
+This demo has been tested against GNU/Linux and Windows; it is also expected to work with any major OS.
 
 
 Custom data types
@@ -17,7 +19,6 @@ The root namespace directory layout is as follows::
         PerformLinearLeastSquaresFit.1.0.uavcan     <-- service type definition
         PointXY.1.0.uavcan                          <-- nested message type definition
 
-If this doesn't look familiar, please read the UAVCAN specification first.
 The referenced DSDL definitions are provided below.
 
 ``sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0``:
@@ -39,7 +40,7 @@ The demo relies on the custom data types presented above.
 In order to run the demo, please copy-paste its source code into a file on your computer
 and update the DSDL paths to match your environment.
 
-.. literalinclude:: /../tests/demo/basic_usage.py
+.. literalinclude:: /../tests/demo/demo_app.py
    :linenos:
 
 
@@ -79,7 +80,7 @@ but it is also possible to use the ``--tr`` command line argument if found more 
 
 Please use one of the following transport configuration expressions depending on your demo configuration:
 
-- ``"UDP('127.0.0.111/8')"`` --
+- ``"UDP('127.0.0.111')"`` --
   UDP/IP transport on localhost. Local node-ID 111.
 
 - ``"Serial('socket://loopback:50905',111)"`` --
@@ -90,14 +91,14 @@ Please use one of the following transport configuration expressions depending on
   virtual CAN bus via SocketCAN (GNU/Linux systems only).
   Local node-ID 111.
 
-Redundant transports can be configured using the Python list notation like ``[a, b, c]``
+Redundant transports can be configured by specifying multiple comma-separated expressions (bracketed list is also ok)
 (or by specifying the ``--tr`` option more than once if the command line arguments are used instead
 of the environment variable):
 
-- ``"[UDP('127.0.0.111/8'), Serial('socket://loopback:50905',111)]"`` --
+- ``"UDP('127.0.0.111'), Serial('socket://loopback:50905',111)"`` --
   dissimilar double redundancy, UDP plus serial.
 
-- ``"[CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111), CAN(can.media.socketcan.SocketCANMedia('vcan1',32),111), CAN(can.media.socketcan.SocketCANMedia('vcan2',64),111)]"`` --
+- ``"CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111), CAN(can.media.socketcan.SocketCANMedia('vcan1',32),111), CAN(can.media.socketcan.SocketCANMedia('vcan2',64),111)"`` --
   triple redundant CAN bus, classic CAN with CAN FD.
 
 Specifying a single transport using the list notation is also acceptable --
@@ -108,13 +109,13 @@ If you are using bash/sh/zsh or similar, the syntax to set the variable is:
 
 .. code-block:: sh
 
-    export PYUAVCAN_CLI_TRANSPORT="[Loopback(None)]"  # Using LoopbackTransport as an example
+    export PYUAVCAN_CLI_TRANSPORT="Loopback(None)"  # Using LoopbackTransport as an example
 
 If you are using PowerShell:
 
 .. code-block:: ps1
 
-    $env:PYUAVCAN_CLI_TRANSPORT="[Loopback(None), Loopback(None)]"
+    $env:PYUAVCAN_CLI_TRANSPORT="Loopback(None), Loopback(None)"
 
 
 Running the application
@@ -144,3 +145,7 @@ Now let's publish temperature:
     uvc pub 12345.uavcan.si.sample.temperature.Scalar.1.0 '{kelvin: 123.456}' --count=2
 
 You will see the demo application emit two more diagnostic messages.
+
+If you want to see what exactly is happening under the hood,
+set the environment variable ``PYUAVCAN_LOGLEVEL=DEBUG`` before starting the process.
+This will slow down the library significantly.
