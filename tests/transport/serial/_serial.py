@@ -12,7 +12,7 @@ import logging
 import pyuavcan.transport
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pyuavcan.transport.serial import SerialTransport, SerialTransportStatistics, SerialFrame
-from pyuavcan.transport.serial import SerialCapture, SerialTxCapture, SerialRxFrameCapture, SerialRxOutOfBandCapture
+from pyuavcan.transport.serial import SerialCapture
 
 
 @pytest.mark.asyncio    # type: ignore
@@ -284,11 +284,10 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.serial.__name__):
         stats_reference = tr.sample_statistics()
 
-        grownups = b"Aren't there any grownups at all? - No grownups!"
-
         # The frame delimiter is needed to force new frame into the state machine.
-        tr.serial_port.write(grownups + bytes([SerialFrame.FRAME_DELIMITER_BYTE]))
-        stats_reference.in_bytes += len(grownups) + 1
+        grownups = b"Aren't there any grownups at all? - No grownups!\x00"
+        tr.serial_port.write(grownups)
+        stats_reference.in_bytes += len(grownups)
         stats_reference.in_out_of_band_bytes += len(grownups)
 
         # Wait for the reader thread to catch up.
@@ -303,7 +302,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         # The frame delimiter is needed to force new frame into the state machine.
         tr.serial_port.write(bytes([0xFF, 0xFF, SerialFrame.FRAME_DELIMITER_BYTE]))
         stats_reference.in_bytes += 3
-        stats_reference.in_out_of_band_bytes += 2
+        stats_reference.in_out_of_band_bytes += 3
 
         # Wait for the reader thread to catch up.
         assert None is await subscriber_selective.receive(get_monotonic() + 0.2)
@@ -372,7 +371,12 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
 
     events: typing.List[pyuavcan.transport.Capture] = []
     events2: typing.List[pyuavcan.transport.Capture] = []
-    tr.begin_capture(events.append)
+
+    def append_events(cap: pyuavcan.transport.Capture) -> None:
+        assert isinstance(cap, SerialCapture)
+        events.append(cap)
+
+    tr.begin_capture(append_events)
     tr.begin_capture(events2.append)
     assert events == []
     assert events2 == []
@@ -390,39 +394,38 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     )
     await asyncio.sleep(0.1)
     assert events == events2
-    # Send three -- one event, receive three -- three events.
+    # Send three, receive three.
     # Sorting is required because the ordering of the events in the middle is not defined: arrival events
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, c, d = sorted(events, key=lambda x: not isinstance(x, SerialRxFrameCapture))
-    assert isinstance(a, SerialRxFrameCapture)
-    assert isinstance(b, SerialRxFrameCapture)
-    assert isinstance(c, SerialRxFrameCapture)
-    assert isinstance(d, SerialTxCapture)
-    assert len(d.frames) == 3
+    a, b, c, d, e, f = sorted(events, key=lambda x: x.direction == SerialCapture.Direction.RX)
+    assert isinstance(a, SerialCapture) and a.direction == SerialCapture.Direction.TX
+    assert isinstance(b, SerialCapture) and b.direction == SerialCapture.Direction.TX
+    assert isinstance(c, SerialCapture) and c.direction == SerialCapture.Direction.TX
+    assert isinstance(d, SerialCapture) and d.direction == SerialCapture.Direction.RX
+    assert isinstance(e, SerialCapture) and e.direction == SerialCapture.Direction.RX
+    assert isinstance(f, SerialCapture) and f.direction == SerialCapture.Direction.RX
 
-    assert a.frame.transfer_id == 777
-    assert b.frame.transfer_id == 777
-    assert c.frame.transfer_id == 777
+    def parse(x: SerialCapture) -> SerialFrame:
+        out = SerialFrame.parse_from_cobs_image(x.fragment)
+        assert out is not None
+        return out
+
+    assert parse(a).transfer_id == 777
+    assert parse(b).transfer_id == 777
+    assert parse(c).transfer_id == 777
     assert a.timestamp.monotonic >= ts.monotonic
     assert b.timestamp.monotonic >= ts.monotonic
     assert c.timestamp.monotonic >= ts.monotonic
-    assert a.frame.index == 0
-    assert b.frame.index == 1
-    assert c.frame.index == 2
-    assert not a.frame.end_of_transfer
-    assert not b.frame.end_of_transfer
-    assert c.frame.end_of_transfer
+    assert parse(a).index == 0
+    assert parse(b).index == 1
+    assert parse(c).index == 2
+    assert not parse(a).end_of_transfer
+    assert not parse(b).end_of_transfer
+    assert parse(c).end_of_transfer
 
-    assert d.timestamp.monotonic >= ts.monotonic
-    assert d.frames[0].transfer_id == 777
-    assert d.frames[1].transfer_id == 777
-    assert d.frames[2].transfer_id == 777
-    assert d.frames[0].index == 0
-    assert d.frames[1].index == 1
-    assert d.frames[2].index == 2
-    assert not d.frames[0].end_of_transfer
-    assert not d.frames[1].end_of_transfer
-    assert d.frames[2].end_of_transfer
+    assert a.fragment.tobytes().strip(b'\x00') == d.fragment.tobytes().strip(b'\x00')
+    assert b.fragment.tobytes().strip(b'\x00') == e.fragment.tobytes().strip(b'\x00')
+    assert c.fragment.tobytes().strip(b'\x00') == f.fragment.tobytes().strip(b'\x00')
 
     events.clear()
     events2.clear()
@@ -440,34 +443,26 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     )
     await asyncio.sleep(0.1)
     assert events == events2
-    # Send two -- two events, receive two -- two events.
+    # Send two, receive two.
     # Sorting is required because the order of the two events in the middle is not defined: the arrival event
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, d, d2 = sorted(events, key=lambda x: not isinstance(x, SerialRxFrameCapture))
-    assert isinstance(a, SerialRxFrameCapture)
-    assert isinstance(b, SerialRxFrameCapture)
-    assert isinstance(d, SerialTxCapture)
-    assert isinstance(d2, SerialTxCapture)
-    assert len(d.frames) == 1
-    assert len(d2.frames) == 1
+    a, b, c, d = sorted(events, key=lambda x: x.direction == SerialCapture.Direction.RX)
+    assert isinstance(a, SerialCapture) and a.direction == SerialCapture.Direction.TX
+    assert isinstance(b, SerialCapture) and b.direction == SerialCapture.Direction.TX
+    assert isinstance(c, SerialCapture) and c.direction == SerialCapture.Direction.RX
+    assert isinstance(d, SerialCapture) and d.direction == SerialCapture.Direction.RX
 
-    assert a.frame.transfer_id == 888
-    assert b.frame.transfer_id == 888
+    assert parse(a).transfer_id == 888
+    assert parse(b).transfer_id == 888
     assert a.timestamp.monotonic >= ts.monotonic
     assert b.timestamp.monotonic >= ts.monotonic
-    assert a.frame.index == 0
-    assert b.frame.index == 0
-    assert a.frame.end_of_transfer
-    assert b.frame.end_of_transfer
+    assert parse(a).index == 0
+    assert parse(b).index == 0
+    assert parse(a).end_of_transfer
+    assert parse(b).end_of_transfer
 
-    assert d.timestamp.monotonic >= ts.monotonic
-    assert d2.timestamp.monotonic >= ts.monotonic
-    assert d.frames[0].transfer_id == 888
-    assert d2.frames[0].transfer_id == 888
-    assert d.frames[0].index == 0
-    assert d2.frames[0].index == 0
-    assert d.frames[0].end_of_transfer
-    assert d2.frames[0].end_of_transfer
+    assert a.fragment.tobytes().strip(b'\x00') == c.fragment.tobytes().strip(b'\x00')
+    assert b.fragment.tobytes().strip(b'\x00') == d.fragment.tobytes().strip(b'\x00')
 
     events.clear()
     events2.clear()
@@ -475,15 +470,16 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     #
     # Out-of-band data.
     #
-    grownups = b"Aren't there any grownups at all? - No grownups!"
+    grownups = b"Aren't there any grownups at all? - No grownups!\x00"
     with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.serial.__name__):
         # The frame delimiter is needed to force new frame into the state machine.
-        tr.serial_port.write(grownups + bytes([SerialFrame.FRAME_DELIMITER_BYTE]))
+        tr.serial_port.write(grownups)
         await asyncio.sleep(1)
     assert events == events2
     oob, = events
-    assert isinstance(oob, SerialRxOutOfBandCapture)
-    assert bytes(oob.data) == grownups  # The delimiter is (responsibly) consumed by the parser. Bye bye delimiter.
+    assert isinstance(oob, SerialCapture)
+    assert oob.direction == SerialCapture.Direction.RX
+    assert bytes(oob.fragment) == grownups
 
     events.clear()
     events2.clear()

@@ -119,15 +119,20 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         return (payload_size_bytes * 255 + 253) // 254
 
     @staticmethod
-    def parse_from_cobs_image(header_payload_crc_image: typing.Union[memoryview, bytearray]) \
-            -> typing.Optional[SerialFrame]:
+    def parse_from_cobs_image(image: memoryview) -> typing.Optional[SerialFrame]:
         """
+        Delimiters will be stripped if present but they are not required.
         :returns: Frame or None if the image is invalid.
         """
-        if not isinstance(header_payload_crc_image, bytearray):
-            header_payload_crc_image = bytearray(header_payload_crc_image)
         try:
-            unescaped_image = cobs.decode(header_payload_crc_image)
+            while image[0] == SerialFrame.FRAME_DELIMITER_BYTE:
+                image = image[1:]
+            while image[-1] == SerialFrame.FRAME_DELIMITER_BYTE:
+                image = image[:-1]
+        except IndexError:
+            return None
+        try:
+            unescaped_image = cobs.decode(bytearray(image))  # TODO: PERFORMANCE WARNING: AVOID THE COPY
         except cobs.DecodeError:
             return None
         return SerialFrame.parse_from_unescaped_image(memoryview(unescaped_image))

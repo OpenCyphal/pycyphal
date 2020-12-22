@@ -210,12 +210,8 @@ from ._session import SerialFeedback as SerialFeedback
 from ._session import SerialInputSessionStatistics as SerialInputSessionStatistics
 
 from ._frame import SerialFrame as SerialFrame
-from ._stream_parser import StreamParser as StreamParser
 
 from ._tracer import SerialCapture as SerialCapture
-from ._tracer import SerialTxCapture as SerialTxCapture
-from ._tracer import SerialRxFrameCapture as SerialRxFrameCapture
-from ._tracer import SerialRxOutOfBandCapture as SerialRxOutOfBandCapture
 from ._tracer import SerialTracer as SerialTracer
 from ._tracer import SerialErrorTrace as SerialErrorTrace
 from ._tracer import SerialOutOfBandTrace as SerialOutOfBandTrace
