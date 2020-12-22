@@ -181,8 +181,9 @@ class _AlienSession:
 def _unittest_serial_tracer() -> None:
     from pytest import raises, approx
     from pyuavcan.transport import Priority, MessageDataSpecifier
+    from pyuavcan.transport.serial import SerialTransport
 
-    tr = pyuavcan.transport.serial.SerialTransport.make_tracer()
+    tr = SerialTransport.make_tracer()
     ts = Timestamp.now()
 
     def tx(x: typing.Union[bytes, bytearray, memoryview]) -> typing.Optional[Trace]:

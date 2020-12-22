@@ -118,9 +118,10 @@ def _unittest_udp_tracer() -> None:
     from pytest import raises, approx
     from ipaddress import ip_address
     from pyuavcan.transport import Priority, ServiceDataSpecifier
+    from pyuavcan.transport.udp import UDPTransport
     from ._ip import MACHeader, IPHeader, UDPHeader, service_data_specifier_to_udp_port
 
-    tr = pyuavcan.transport.udp.UDPTransport.make_tracer()
+    tr = UDPTransport.make_tracer()
     ts = Timestamp.now()
 
     ds = ServiceDataSpecifier(11, ServiceDataSpecifier.Role.RESPONSE)
