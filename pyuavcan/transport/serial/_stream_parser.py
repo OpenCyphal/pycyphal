@@ -40,20 +40,20 @@ class StreamParser:
         self._max_frame_size_bytes = SerialFrame.calc_cobs_size(
             max_payload_size_bytes + SerialFrame.NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING
         ) + 2
-        self._frame_buffer = bytearray()  # Entire frame including all delimiters.
+        self._buffer = bytearray()  # Entire frame including all delimiters.
         self._timestamp: typing.Optional[Timestamp] = None
 
     def process_next_chunk(self, chunk: typing.Union[bytes, bytearray, memoryview], timestamp: Timestamp) -> None:
         # TODO: PERFORMANCE WARNING: DECODE COBS ON THE FLY TO AVOID EXTRA COPYING
         for b in chunk:
-            self._frame_buffer.append(b)
+            self._buffer.append(b)
             if b == SerialFrame.FRAME_DELIMITER_BYTE:
                 self._finalize(known_invalid=self._outside_frame)
             else:
                 if self._timestamp is None:
                     self._timestamp = timestamp  # https://github.com/UAVCAN/pyuavcan/issues/112
 
-        if self._outside_frame or (len(self._frame_buffer) > self._max_frame_size_bytes):
+        if self._outside_frame or (len(self._buffer) > self._max_frame_size_bytes):
             self._finalize(known_invalid=True)
 
     @property
@@ -61,15 +61,15 @@ class StreamParser:
         return self._timestamp is None
 
     def _finalize(self, known_invalid: bool) -> None:
-        buf = memoryview(self._frame_buffer)
-        self._frame_buffer = bytearray()    # There are memoryview instances pointing to the old buffer!
-        ts = self._timestamp or Timestamp.now()
-        self._timestamp = None
-
-        if not buf or (len(buf) == 1 and buf[0] == SerialFrame.FRAME_DELIMITER_BYTE):
+        if not self._buffer or (len(self._buffer) == 1 and self._buffer[0] == SerialFrame.FRAME_DELIMITER_BYTE):
             # Avoid noise in the OOB output during normal operation.
             # TODO: this is a hack in place of the proper on-the-fly COBS parser.
             return
+
+        buf = memoryview(self._buffer)
+        self._buffer = bytearray()    # There are memoryview instances pointing to the old buffer!
+        ts = self._timestamp or Timestamp.now()
+        self._timestamp = None
 
         parsed: typing.Optional[SerialFrame] = None
         if (not known_invalid) and len(buf) <= self._max_frame_size_bytes:

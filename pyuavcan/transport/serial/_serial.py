@@ -263,7 +263,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         self._capture_handlers.append(handler)
 
     @staticmethod
-    def make_tracer() -> pyuavcan.transport.Tracer:
+    def make_tracer() -> SerialTracer:
         """
         See :class:`SerialTracer`.
         """

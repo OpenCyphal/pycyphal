@@ -5,6 +5,7 @@
 from __future__ import annotations
 import enum
 import typing
+import logging
 import dataclasses
 import pyuavcan
 from pyuavcan.transport import Trace, TransferTrace, Capture, AlienSessionSpecifier, AlienTransferMetadata
@@ -12,6 +13,9 @@ from pyuavcan.transport import AlienTransfer, TransferFrom, Timestamp
 from pyuavcan.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
 from ._frame import SerialFrame
 from ._stream_parser import StreamParser
+
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -130,9 +134,12 @@ class SerialTracer(pyuavcan.transport.Tracer):
         return self._sessions[specifier]
 
     def _on_parsed(self, timestamp: Timestamp, data: memoryview, frame: typing.Optional[SerialFrame]) -> None:
+        _logger.debug('Stream parser output (conflict: %s): %s <%d bytes> %s',
+                      bool(self._parser_output), timestamp, len(data), frame)
         if self._parser_output is None:
             self._parser_output = timestamp, (data if frame is None else frame)
         else:
+            self._parser_output = None
             raise ValueError(
                 f'The supplied serial capture object contains more than one serialized entity. '
                 f'Such arrangement cannot be processed correctly by this implementation. '
@@ -166,3 +173,89 @@ class _AlienSession:
         else:
             assert tr is None
         return None
+
+
+# ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
+
+
+def _unittest_serial_tracer() -> None:
+    from pytest import raises
+    from pyuavcan.transport import Priority, MessageDataSpecifier
+
+    tr = SerialTracer()
+    ts = Timestamp.now()
+
+    def tx(x: typing.Union[bytes, bytearray, memoryview]) -> typing.Optional[Trace]:
+        return tr.update(SerialCapture(ts, SerialCapture.Direction.TX, memoryview(x)))
+
+    def rx(x: typing.Union[bytes, bytearray, memoryview]) -> typing.Optional[Trace]:
+        return tr.update(SerialCapture(ts, SerialCapture.Direction.RX, memoryview(x)))
+
+    buf = SerialFrame(priority=Priority.SLOW,
+                      transfer_id=1234567890,
+                      index=0,
+                      end_of_transfer=True,
+                      payload=memoryview(b'abc'),
+                      source_node_id=1111,
+                      destination_node_id=None,
+                      data_specifier=MessageDataSpecifier(6666)).compile_into(bytearray(100))
+    head, tail = buf[:10], buf[10:]
+
+    assert None is tx(head)  # Semi-complete.
+
+    trace = tx(head)  # Double-head invalidates the previous one.
+    assert isinstance(trace, SerialOutOfBandTrace)
+    assert trace.timestamp == ts
+    assert trace.data.tobytes().strip(b'\0') == head.tobytes().strip(b'\0')
+
+    trace = tx(tail)
+    assert isinstance(trace, TransferTrace)
+    assert trace.timestamp == ts
+    assert trace.transfer_id_timeout == AlienTransferReassembler.MAX_TRANSFER_ID_TIMEOUT  # Initial value.
+    assert trace.transfer.metadata.transfer_id == 1234567890
+    assert trace.transfer.metadata.priority == Priority.SLOW
+    assert trace.transfer.metadata.session_specifier.source_node_id == 1111
+    assert trace.transfer.metadata.session_specifier.destination_node_id is None
+    assert trace.transfer.metadata.session_specifier.data_specifier == MessageDataSpecifier(6666)
+    assert trace.transfer.fragmented_payload == [memoryview(b'abc')]
+
+    buf = SerialFrame(priority=Priority.SLOW,
+                      transfer_id=1234567890,
+                      index=0,
+                      end_of_transfer=True,
+                      payload=memoryview(b'abc'),
+                      source_node_id=None,
+                      destination_node_id=None,
+                      data_specifier=MessageDataSpecifier(6666)).compile_into(bytearray(100))
+
+    trace = rx(buf)
+    assert isinstance(trace, TransferTrace)
+    assert trace.timestamp == ts
+    assert trace.transfer.metadata.transfer_id == 1234567890
+    assert trace.transfer.metadata.session_specifier.source_node_id is None
+    assert trace.transfer.metadata.session_specifier.destination_node_id is None
+
+    assert None is tr.update(pyuavcan.transport.Capture(ts))  # Wrong type, ignore.
+
+    trace = tx(SerialFrame(priority=Priority.SLOW,
+                           transfer_id=1234567890,
+                           index=0,
+                           end_of_transfer=False,
+                           payload=memoryview(bytes(range(256))),
+                           source_node_id=3333,
+                           destination_node_id=None,
+                           data_specifier=MessageDataSpecifier(6666)).compile_into(bytearray(10_000)))
+    assert trace is None
+    trace = tx(SerialFrame(priority=Priority.SLOW,
+                           transfer_id=1234567890,
+                           index=1,
+                           end_of_transfer=True,
+                           payload=memoryview(bytes(range(256))),
+                           source_node_id=3333,
+                           destination_node_id=None,
+                           data_specifier=MessageDataSpecifier(6666)).compile_into(bytearray(10_000)))
+    assert isinstance(trace, SerialErrorTrace)
+    assert trace.error == TransferReassembler.Error.MULTIFRAME_INTEGRITY_ERROR
+
+    with raises(ValueError, match='.*delimiters.*'):
+        rx(b''.join([buf, buf]))
