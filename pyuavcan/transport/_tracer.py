@@ -152,7 +152,7 @@ class TransferTrace(Trace):
 class Tracer(abc.ABC):
     """
     The tracer takes single instances of :class:`Capture` at the input and delivers a reconstructed high-level
-    view of the network at the output.
+    view of network events (modeled by :class:`Trace`) at the output.
     It keeps massive internal state that is modified whenever :meth:`update` is invoked.
     The class may be used either for real-time analysis on a live network, or for post-mortem analysis with capture
     events read from a black box recorder or a log file.

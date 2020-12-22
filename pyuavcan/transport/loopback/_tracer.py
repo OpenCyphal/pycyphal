@@ -5,7 +5,7 @@
 import typing
 import pyuavcan.transport
 import dataclasses
-from pyuavcan.transport import Trace, TransferTrace, Capture, AlienSessionSpecifier
+from pyuavcan.transport import Trace, TransferTrace, Capture
 
 
 @dataclasses.dataclass(frozen=True)

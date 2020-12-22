@@ -257,7 +257,7 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
         """
-        The reported events are all subtypes of :class:`SerialCapture`, please read its documentation for details.
+        The reported events are of type :class:`SerialCapture`, please read its documentation for details.
         The events may be reported from a different thread (use locks).
         """
         self._capture_handlers.append(handler)

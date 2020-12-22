@@ -28,7 +28,6 @@ class SerialCapture(pyuavcan.transport.Capture):
     AT MOST one frame along with the delimiter bytes (at least the last byte of the fragment is zero).
     When reading data from a file, it is trivial to split the data into frames by looking for the frame separators,
     which are simply zero bytes.
-    See also: :class:`pyuavcan.transport.serial.StreamParser`.
     """
 
     class Direction(enum.Enum):

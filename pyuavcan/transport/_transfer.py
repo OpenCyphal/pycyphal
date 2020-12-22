@@ -65,7 +65,7 @@ class Transfer:
     Received transfers usually have it fragmented such that one fragment corresponds to one received frame.
     Outgoing transfers usually fragment it according to the structure of the serialized data object.
     The purpose of fragmentation is to eliminate unnecessary data copying within the protocol stack.
-    :func:`pyuavcan.util.refragment` is designed to facilitate regrouping when sending a transfer.
+    :func:`pyuavcan.transport.commons.refragment` is designed to facilitate regrouping when sending a transfer.
     """
 
     def __repr__(self) -> str:
