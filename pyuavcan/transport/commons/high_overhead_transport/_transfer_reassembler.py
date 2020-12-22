@@ -188,7 +188,12 @@ class TransferReassembler:
             # above the maximum expected size, but it is hard to combine with out-of-order frame acceptance.
             while result.fragmented_payload and \
                     sum(map(len, result.fragmented_payload[:-1])) > self._extent_bytes:
-                result.fragmented_payload = result.fragmented_payload[:-1]
+                # TODO: a minor refactoring is needed to avoid re-creating the transfer instance here.
+                result = TransferFrom(timestamp=result.timestamp,
+                                      priority=result.priority,
+                                      transfer_id=result.transfer_id,
+                                      fragmented_payload=result.fragmented_payload[:-1],
+                                      source_node_id=result.source_node_id)
         return result
 
     @property

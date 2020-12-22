@@ -40,8 +40,8 @@ The serial transport supports all transfer categories:
 Protocol definition
 +++++++++++++++++++
 
-The packet header is defined as follows (byte and bit ordering in this definition follow the DSDL specification:
-least significant byte first, most significant bit first)::
+The packet header is defined as follows (byte/bit ordering in this definition follow the DSDL specification:
+least significant first)::
 
     uint8   version              # Always zero. Discard the frame if not.
     uint8   priority             # 0 = highest, 7 = lowest; the rest are unused.

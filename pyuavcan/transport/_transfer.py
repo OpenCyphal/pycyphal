@@ -36,7 +36,7 @@ class Priority(enum.IntEnum):
     OPTIONAL    = 7
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Transfer:
     """
     UAVCAN transfer representation.
@@ -79,7 +79,7 @@ class Transfer:
         return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
 
-@dataclasses.dataclass(repr=False)
+@dataclasses.dataclass(frozen=True, repr=False)
 class TransferFrom(Transfer):
     """
     Specialization for received transfers.

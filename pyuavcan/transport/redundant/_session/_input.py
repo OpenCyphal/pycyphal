@@ -18,7 +18,7 @@ from .._deduplicator import Deduplicator, MonotonicDeduplicator, CyclicDeduplica
 _logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(repr=False)
+@dataclasses.dataclass(frozen=True, repr=False)
 class RedundantTransferFrom(pyuavcan.transport.TransferFrom):
     inferior_session: pyuavcan.transport.InputSession
 
