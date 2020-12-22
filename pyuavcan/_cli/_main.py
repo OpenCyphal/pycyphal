@@ -81,6 +81,7 @@ def _main_impl() -> int:
 def _construct_argument_parser(command_instances: typing.Sequence[commands.Command]) -> argparse.ArgumentParser:
     from pyuavcan import __version__
 
+    # noinspection PyTypeChecker
     root_parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
         description=r"""
@@ -154,7 +155,7 @@ def _make_executor(cmd: commands.Command) -> typing.Callable[[argparse.Namespace
                 ss = sf.construct_subsystem(args)
             except Exception as ex:
                 raise RuntimeError(
-                    f"Subsystem factory {type(sf).__name__!r} for command {cmd.names[0]!r} " f"has failed: {ex}"
+                    f"Subsystem factory {type(sf).__name__!r} for command {cmd.names[0]!r} has failed: {ex}"
                 )
             else:
                 subsystems.append(ss)

@@ -122,7 +122,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
                     self._feedback_handler(SerialFeedback(transfer.timestamp, tx_timestamp))
                 except Exception as ex:  # pragma: no cover
                     _logger.exception(
-                        f"Unhandled exception in the output session feedback handler " f"{self._feedback_handler}: {ex}"
+                        f"Unhandled exception in the output session feedback handler {self._feedback_handler}: {ex}"
                     )
             return True
         else:
