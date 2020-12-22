@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 #
-# A basic PyUAVCAN demo. This file is included in the user documentation, please keep it tidy.
+# PyUAVCAN demo application. This file is included in the user documentation, please keep it tidy.
 #
 # Distributed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication. To the extent possible under law, the
-# UAVCAN Development Team has waived all copyright and related or neighboring rights to this work.
-#
+# UAVCAN Consortium has waived all copyright and related or neighboring rights to this work.
 
 import os
 import sys

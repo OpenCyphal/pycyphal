@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 r"""
 Submodule import policy
@@ -54,8 +52,10 @@ import sys as _sys
 with open(_os.path.join(_os.path.dirname(__file__), "VERSION")) as _version:
     __version__ = _version.read().strip()
 __version_info__ = tuple(map(int, __version__.split(".")[:3]))
+__author__ = "UAVCAN Consortium"
+__copyright__ = "Copyright (c) 2019 UAVCAN Consortium"
+__email__ = "consortium@uavcan.org"
 __license__ = "MIT"
-__author__ = "UAVCAN Development Team"
 
 
 UAVCAN_SPECIFICATION_VERSION = 1, 0
