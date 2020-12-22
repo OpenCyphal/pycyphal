@@ -20,9 +20,11 @@ def _unittest_slow_constants(generated_packages: typing.List[pyuavcan.dsdl.Gener
                     reference = c.value
                     generated = pyuavcan.dsdl.get_attribute(dtype, c.name)
                     assert isinstance(reference, pydsdl.Primitive)
-                    assert reference.native_value == pytest.approx(generated), \
-                        'The generated constant does not compare equal against the DSDL source'
+                    assert reference.native_value == pytest.approx(
+                        generated
+                    ), "The generated constant does not compare equal against the DSDL source"
             if issubclass(dtype, pyuavcan.dsdl.FixedPortObject):
-                assert issubclass(dtype, pyuavcan.dsdl.CompositeObject) \
-                    and issubclass(dtype, pyuavcan.dsdl.FixedPortObject)
+                assert issubclass(dtype, pyuavcan.dsdl.CompositeObject) and issubclass(
+                    dtype, pyuavcan.dsdl.FixedPortObject
+                )
                 assert pyuavcan.dsdl.get_fixed_port_id(dtype) == pyuavcan.dsdl.get_model(dtype).fixed_port_id

@@ -28,17 +28,20 @@ class AlienTransferReassembler:
 
     def __init__(self, source_node_id: int) -> None:
         self._last_error: typing.Optional[TransferReassembler.Error] = None
-        self._reassembler = TransferReassembler(source_node_id=source_node_id,
-                                                extent_bytes=AlienTransferReassembler._EXTENT_BYTES,
-                                                on_error_callback=self._register_reassembly_error)
+        self._reassembler = TransferReassembler(
+            source_node_id=source_node_id,
+            extent_bytes=AlienTransferReassembler._EXTENT_BYTES,
+            on_error_callback=self._register_reassembly_error,
+        )
         self._last_transfer_monotonic: float = 0.0
         self._transfer_id_timeout = float(AlienTransferReassembler.MAX_TRANSFER_ID_TIMEOUT)
 
-    def process_frame(self, timestamp: Timestamp, frame: Frame) \
-            -> typing.Union[TransferFrom, TransferReassembler.Error, None]:
-        trf = self._reassembler.process_frame(timestamp=timestamp,
-                                              frame=frame,
-                                              transfer_id_timeout=self._transfer_id_timeout)
+    def process_frame(
+        self, timestamp: Timestamp, frame: Frame
+    ) -> typing.Union[TransferFrom, TransferReassembler.Error, None]:
+        trf = self._reassembler.process_frame(
+            timestamp=timestamp, frame=frame, transfer_id_timeout=self._transfer_id_timeout
+        )
         if trf is None:
             out, self._last_error = self._last_error, None
             return out

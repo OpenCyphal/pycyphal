@@ -18,6 +18,7 @@ class Capture:
     for them such that it is always possible to determine which transport an event has arrived from using a single
     instance check.
     """
+
     timestamp: pyuavcan.transport.Timestamp
 
 
@@ -29,6 +30,7 @@ class AlienSessionSpecifier:
     """
     See :class:`AlienTransfer` and the abstract transport model.
     """
+
     source_node_id: typing.Optional[int]
     """None represents an anonymous transfer."""
 
@@ -38,10 +40,9 @@ class AlienSessionSpecifier:
     data_specifier: pyuavcan.transport.DataSpecifier
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             self.data_specifier,
-                                             source_node_id=self.source_node_id,
-                                             destination_node_id=self.destination_node_id)
+        return pyuavcan.util.repr_attributes(
+            self, self.data_specifier, source_node_id=self.source_node_id, destination_node_id=self.destination_node_id
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -58,10 +59,9 @@ class AlienTransferMetadata:
     session_specifier: AlienSessionSpecifier
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             self.session_specifier,
-                                             priority=str(self.priority).split('.')[-1],
-                                             transfer_id=self.transfer_id)
+        return pyuavcan.util.repr_attributes(
+            self, self.session_specifier, priority=str(self.priority).split(".")[-1], transfer_id=self.transfer_id
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -75,6 +75,7 @@ class AlienTransfer:
     You may notice that the regular transfer model does not include some information such as, say, the route specifier,
     because the respective behaviors are managed by the transport configuration.
     """
+
     metadata: AlienTransferMetadata
 
     fragmented_payload: pyuavcan.transport.FragmentedPayload
@@ -98,15 +99,16 @@ class AlienTransfer:
         False
         """
         if isinstance(other, AlienTransfer):
+
             def cat(fp: pyuavcan.transport.FragmentedPayload) -> memoryview:
-                return fp[0] if len(fp) == 1 else memoryview(b''.join(fp))
+                return fp[0] if len(fp) == 1 else memoryview(b"".join(fp))
 
             return self.metadata == other.metadata and cat(self.fragmented_payload) == cat(other.fragmented_payload)
         return NotImplemented
 
     def __repr__(self) -> str:
-        fragmented_payload = '+'.join(f'{len(x)}B' for x in self.fragmented_payload)
-        return pyuavcan.util.repr_attributes(self, self.metadata, fragmented_payload=f'[{fragmented_payload}]')
+        fragmented_payload = "+".join(f"{len(x)}B" for x in self.fragmented_payload)
+        return pyuavcan.util.repr_attributes(self, self.metadata, fragmented_payload=f"[{fragmented_payload}]")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -115,6 +117,7 @@ class Trace:
     Base event reconstructed by :class:`Tracer`.
     Transport-specific implementations may define custom subclasses.
     """
+
     timestamp: pyuavcan.transport.Timestamp
     """
     The local time when the traced event took place or was commenced.
@@ -128,6 +131,7 @@ class ErrorTrace(Trace):
     This trace is yielded when the tracer has determined that it is unable to reconstruct a transfer.
     It may be further specialized by transport implementations.
     """
+
     pass
 
 
@@ -136,6 +140,7 @@ class TransferTrace(Trace):
     """
     Reconstructed network data transfer (possibly exchanged between remote nodes) along with metadata.
     """
+
     transfer: AlienTransfer
 
     transfer_id_timeout: float

@@ -25,9 +25,9 @@ class FilterConfiguration:
     def __post_init__(self) -> None:
         max_bit_length = 2 ** self.identifier_bit_length - 1
         if not (0 <= self.identifier <= max_bit_length):
-            raise ValueError(f'Invalid identifier: {self.identifier}')
+            raise ValueError(f"Invalid identifier: {self.identifier}")
         if not (0 <= self.mask <= max_bit_length):
-            raise ValueError(f'Invalid mask: {self.mask}')
+            raise ValueError(f"Invalid mask: {self.mask}")
 
     @property
     def identifier_bit_length(self) -> int:
@@ -54,9 +54,9 @@ class FilterConfiguration:
         (or 29 if the filter accepts both base and extended identifiers) from the original rank.
         """
         mask_mask = 2 ** self.identifier_bit_length - 1
-        rank = bin(self.mask & mask_mask).count('1')
+        rank = bin(self.mask & mask_mask).count("1")
         if self.format is None:
-            rank -= int(self.identifier_bit_length)       # Discourage merger of ambivalent filters.
+            rank -= int(self.identifier_bit_length)  # Discourage merger of ambivalent filters.
         return rank
 
     def merge(self, other: FilterConfiguration) -> FilterConfiguration:
@@ -75,15 +75,16 @@ class FilterConfiguration:
         return FilterConfiguration(identifier=identifier, mask=mask, format=fmt)
 
     def __str__(self) -> str:
-        out = ''.join(
-            (str((self.identifier >> bit) & 1) if self.mask & (1 << bit) != 0 else 'x')
+        out = "".join(
+            (str((self.identifier >> bit) & 1) if self.mask & (1 << bit) != 0 else "x")
             for bit in reversed(range(int(self.format or FrameFormat.EXTENDED)))
         )
-        return (self.format.name[:3].lower() if self.format else "any") + ':' + out
+        return (self.format.name[:3].lower() if self.format else "any") + ":" + out
 
 
-def optimize_filter_configurations(configurations: typing.Iterable[FilterConfiguration],
-                                   target_number_of_configurations: int) -> typing.Sequence[FilterConfiguration]:
+def optimize_filter_configurations(
+    configurations: typing.Iterable[FilterConfiguration], target_number_of_configurations: int
+) -> typing.Sequence[FilterConfiguration]:
     """
     Implements the CAN acceptance filter configuration optimization algorithm described in the Specification.
     The algorithm was originally proposed by P. Kirienko and I. Sheremet.
@@ -101,12 +102,13 @@ def optimize_filter_configurations(configurations: typing.Iterable[FilterConfigu
     The time complexity of this implementation is ``O(K!)``; it should be optimized.
     """
     if target_number_of_configurations < 1:
-        raise ValueError(f'The number of configurations must be positive; found {target_number_of_configurations}')
+        raise ValueError(f"The number of configurations must be positive; found {target_number_of_configurations}")
 
     configurations = list(configurations)
     while len(configurations) > target_number_of_configurations:
-        options = itertools.starmap(lambda ia, ib: (ia[0], ib[0], ia[1].merge(ib[1])),
-                                    itertools.permutations(enumerate(configurations), 2))
+        options = itertools.starmap(
+            lambda ia, ib: (ia[0], ib[0], ia[1].merge(ib[1])), itertools.permutations(enumerate(configurations), 2)
+        )
         index_replace, index_remove, merged = max(options, key=lambda x: int(x[2].rank))
         configurations[index_replace] = merged
         del configurations[index_remove]  # Invalidates indexes
@@ -137,28 +139,31 @@ def _unittest_can_media_filter_faults() -> None:
 
 # noinspection SpellCheckingInspection
 def _unittest_can_media_filter_str() -> None:
-    assert str(FilterConfiguration(0b10101010,
-                                   0b11101000,
-                                   FrameFormat.EXTENDED)) == 'ext:xxxxxxxxxxxxxxxxxxxxx101x1xxx'
+    assert str(FilterConfiguration(0b10101010, 0b11101000, FrameFormat.EXTENDED)) == "ext:xxxxxxxxxxxxxxxxxxxxx101x1xxx"
 
-    assert str(FilterConfiguration(0b10101010101010101010101010101,
-                                   0b10111111111111111111111111111,
-                                   FrameFormat.EXTENDED)) == 'ext:1x101010101010101010101010101'
+    assert (
+        str(FilterConfiguration(0b10101010101010101010101010101, 0b10111111111111111111111111111, FrameFormat.EXTENDED))
+        == "ext:1x101010101010101010101010101"
+    )
 
-    assert str(FilterConfiguration(0b10101010101, 0b11111111111, FrameFormat.BASE)) == 'bas:10101010101'
+    assert str(FilterConfiguration(0b10101010101, 0b11111111111, FrameFormat.BASE)) == "bas:10101010101"
 
-    assert str(FilterConfiguration(123, 456, None)) == 'any:xxxxxxxxxxxxxxxxxxxx001xx1xxx'
+    assert str(FilterConfiguration(123, 456, None)) == "any:xxxxxxxxxxxxxxxxxxxx001xx1xxx"
 
-    assert str(FilterConfiguration.new_promiscuous()) == 'any:xxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    assert str(FilterConfiguration.new_promiscuous()) == "any:xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
-    assert repr(FilterConfiguration(123, 456, None)) == 'FilterConfiguration(identifier=123, mask=456, format=None)'
+    assert repr(FilterConfiguration(123, 456, None)) == "FilterConfiguration(identifier=123, mask=456, format=None)"
 
 
 def _unittest_can_media_filter_merge() -> None:
-    assert FilterConfiguration(123456, 0, None).rank == -29         # Worst rank
-    assert FilterConfiguration(123456, 0b110, None).rank == -27     # Two better
+    assert FilterConfiguration(123456, 0, None).rank == -29  # Worst rank
+    assert FilterConfiguration(123456, 0b110, None).rank == -27  # Two better
 
     assert FilterConfiguration(1234, 0b110, FrameFormat.BASE).rank == 2
 
-    assert FilterConfiguration(0b111, 0b111, FrameFormat.EXTENDED).merge(
-        FilterConfiguration(0b111, 0b111, FrameFormat.BASE)).rank == -29 + 3
+    assert (
+        FilterConfiguration(0b111, 0b111, FrameFormat.EXTENDED)
+        .merge(FilterConfiguration(0b111, 0b111, FrameFormat.BASE))
+        .rank
+        == -29 + 3
+    )

@@ -16,6 +16,7 @@ class Command(abc.ABC):
     Base command class.
     The constructor shall have no required arguments.
     """
+
     @property
     @abc.abstractmethod
     def names(self) -> typing.Sequence[str]:

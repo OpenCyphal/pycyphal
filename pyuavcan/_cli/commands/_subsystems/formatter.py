@@ -23,10 +23,11 @@ class FormatterFactory(SubsystemFactory):
     def register_arguments(self, parser: argparse.ArgumentParser) -> None:
         # noinspection PyTypeChecker
         parser.add_argument(
-            '--format', '-F',
+            "--format",
+            "-F",
             default=next(iter(_Format)),
             action=make_enum_action(_Format),
-            help='''
+            help="""
 The format of the data printed into stdout. The final representation is constructed from an intermediate
 "builtin-based" representation, which is a simplified form that is stripped of the detailed DSDL type information,
 like JSON. For the background info please read the PyUAVCAN documentation on builtin-based representations.
@@ -40,20 +41,21 @@ TSV (tab separated values) output is intended for use with third-party software 
 spreadsheet processors.
 
 Default: %(default)s
-'''.strip())
+""".strip(),
+        )
 
     def construct_subsystem(self, args: argparse.Namespace) -> Formatter:
         return {
             _Format.YAML: _make_yaml_formatter,
             _Format.JSON: _make_json_formatter,
-            _Format.TSV:  _make_tsv_formatter,
+            _Format.TSV: _make_tsv_formatter,
         }[args.format]()
 
 
 class _Format(enum.Enum):
     YAML = enum.auto()
     JSON = enum.auto()
-    TSV  = enum.auto()
+    TSV = enum.auto()
 
 
 def _make_yaml_formatter() -> Formatter:
@@ -66,7 +68,8 @@ def _make_json_formatter() -> Formatter:
     #  - simplejson preserves dict ordering, which is very important for UX.
     #  - simplejson supports Decimal.
     import simplejson as json
-    return lambda data: json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+
+    return lambda data: json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
 
 def _make_tsv_formatter() -> Formatter:
@@ -77,19 +80,24 @@ def _make_tsv_formatter() -> Formatter:
     # We may need to obtain the full type information here in order to build the final representation.
     # Sounds complex. Search for better ways later. We just need a straightforward way of dumping data into a
     # standard tabular format for later processing using third-party software.
-    raise NotImplementedError('Sorry, the TSV formatter is not yet implemented')
+    raise NotImplementedError("Sorry, the TSV formatter is not yet implemented")
 
 
 def _unittest_formatter() -> None:
     obj = {
         2345: {
-            'abc': {
-                'def': [123, 456, ],
+            "abc": {
+                "def": [
+                    123,
+                    456,
+                ],
             },
-            'ghi': 789,
+            "ghi": 789,
         }
     }
-    assert FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.YAML))(obj) == """---
+    assert (
+        FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.YAML))(obj)
+        == """---
 2345:
   abc:
     def:
@@ -97,5 +105,8 @@ def _unittest_formatter() -> None:
     - 456
   ghi: 789
 """
-    assert FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.JSON))(obj) == \
-        '{"2345":{"abc":{"def":[123,456]},"ghi":789}}'
+    )
+    assert (
+        FormatterFactory().construct_subsystem(argparse.Namespace(format=_Format.JSON))(obj)
+        == '{"2345":{"abc":{"def":[123,456]},"ghi":789}}'
+    )

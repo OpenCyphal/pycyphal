@@ -12,10 +12,11 @@ from . import TRANSPORT_FACTORIES, TransportFactory
 
 
 # noinspection PyProtectedMember
-@pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
+@pytest.mark.parametrize("transport_factory", TRANSPORT_FACTORIES)  # type: ignore
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
-                                          transport_factory:  TransportFactory) -> None:
+async def _unittest_slow_presentation_rpc(
+    generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
+) -> None:
     assert generated_packages
     import uavcan.register
     import uavcan.primitive
@@ -61,17 +62,16 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     client0.priority = Priority.SLOW
 
     last_request = uavcan.register.Access_1_0.Request()
-    last_metadata = pyuavcan.presentation.ServiceRequestMetadata(timestamp=Timestamp(0, 0),
-                                                                 priority=Priority(0),
-                                                                 transfer_id=0,
-                                                                 client_node_id=0)
+    last_metadata = pyuavcan.presentation.ServiceRequestMetadata(
+        timestamp=Timestamp(0, 0), priority=Priority(0), transfer_id=0, client_node_id=0
+    )
     response: typing.Optional[uavcan.register.Access_1_0.Response] = None
 
-    async def server_handler(request: uavcan.register.Access_1_0.Request,
-                             metadata: pyuavcan.presentation.ServiceRequestMetadata) \
-            -> typing.Optional[uavcan.register.Access_1_0.Response]:
+    async def server_handler(
+        request: uavcan.register.Access_1_0.Request, metadata: pyuavcan.presentation.ServiceRequestMetadata
+    ) -> typing.Optional[uavcan.register.Access_1_0.Response]:
         nonlocal last_metadata
-        print('SERVICE REQUEST:', request, metadata)
+        print("SERVICE REQUEST:", request, metadata)
         assert isinstance(request, server.dtype.Request) and isinstance(request, uavcan.register.Access_1_0.Request)
         assert repr(last_request) == repr(request)
         last_metadata = metadata
@@ -80,22 +80,23 @@ async def _unittest_slow_presentation_rpc(generated_packages: typing.List[pyuavc
     server.serve_in_background(server_handler)
 
     last_request = uavcan.register.Access_1_0.Request(
-        name=uavcan.register.Name_1_0('Hello world!'),
-        value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0('Profanity will not be tolerated')))
+        name=uavcan.register.Name_1_0("Hello world!"),
+        value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0("Profanity will not be tolerated")),
+    )
     result_a = await client0.call(last_request)
-    assert result_a is None, 'Expected to fail'
+    assert result_a is None, "Expected to fail"
     assert last_metadata.client_node_id == 42
     assert last_metadata.transfer_id == 0
     assert last_metadata.priority == Priority.SLOW
 
     client0.response_timeout = 2.0  # Increase the timeout back because otherwise the test fails on slow systems.
 
-    last_request = uavcan.register.Access_1_0.Request(name=uavcan.register.Name_1_0('security.uber_secure_password'))
+    last_request = uavcan.register.Access_1_0.Request(name=uavcan.register.Name_1_0("security.uber_secure_password"))
     response = uavcan.register.Access_1_0.Response(
         timestamp=uavcan.time.SynchronizedTimestamp_1_0(123456789),
         mutable=True,
         persistent=False,
-        value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0('hunter2'))
+        value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0("hunter2")),
     )
     client0.priority = Priority.IMMEDIATE
     result_b = (await client0.call(last_request))[0]  # type: ignore

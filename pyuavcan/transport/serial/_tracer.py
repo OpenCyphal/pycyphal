@@ -52,10 +52,10 @@ class SerialCapture(pyuavcan.transport.Capture):
         """
         limit = 64
         if len(self.fragment) > limit:
-            fragment = bytes(self.fragment[:limit]).hex() + f'...<+{len(self.fragment) - limit}B>...'
+            fragment = bytes(self.fragment[:limit]).hex() + f"...<+{len(self.fragment) - limit}B>..."
         else:
             fragment = bytes(self.fragment).hex()
-        return pyuavcan.util.repr_attributes(self, str(self.direction).split('.')[-1], fragment)
+        return pyuavcan.util.repr_attributes(self, str(self.direction).split(".")[-1], fragment)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -68,6 +68,7 @@ class SerialOutOfBandTrace(pyuavcan.transport.ErrorTrace):
     """
     Out-of-band data or a malformed frame received. See :class:`pyuavcan.serial.StreamParser`.
     """
+
     data: memoryview
 
 
@@ -117,9 +118,11 @@ class SerialTracer(pyuavcan.transport.Tracer):
             return SerialOutOfBandTrace(timestamp, item)
 
         elif isinstance(item, SerialFrame):
-            spec = AlienSessionSpecifier(source_node_id=item.source_node_id,
-                                         destination_node_id=item.destination_node_id,
-                                         data_specifier=item.data_specifier)
+            spec = AlienSessionSpecifier(
+                source_node_id=item.source_node_id,
+                destination_node_id=item.destination_node_id,
+                data_specifier=item.data_specifier,
+            )
             return self._get_session(spec).update(timestamp, item)
 
         else:
@@ -133,18 +136,23 @@ class SerialTracer(pyuavcan.transport.Tracer):
         return self._sessions[specifier]
 
     def _on_parsed(self, timestamp: Timestamp, data: memoryview, frame: typing.Optional[SerialFrame]) -> None:
-        _logger.debug('Stream parser output (conflict: %s): %s <%d bytes> %s',
-                      bool(self._parser_output), timestamp, len(data), frame)
+        _logger.debug(
+            "Stream parser output (conflict: %s): %s <%d bytes> %s",
+            bool(self._parser_output),
+            timestamp,
+            len(data),
+            frame,
+        )
         if self._parser_output is None:
             self._parser_output = timestamp, (data if frame is None else frame)
         else:
             self._parser_output = None
             raise ValueError(
-                f'The supplied serial capture object contains more than one serialized entity. '
-                f'Such arrangement cannot be processed correctly by this implementation. '
-                f'Please update the caller code to always fragment the input byte stream at the frame delimiters, '
-                f'which are simply zero bytes. '
-                f'The timestamp of the offending capture is {timestamp}.'
+                f"The supplied serial capture object contains more than one serialized entity. "
+                f"Such arrangement cannot be processed correctly by this implementation. "
+                f"Please update the caller code to always fragment the input byte stream at the frame delimiters, "
+                f"which are simply zero bytes. "
+                f"The timestamp of the offending capture is {timestamp}."
             )
 
 
@@ -191,14 +199,16 @@ def _unittest_serial_tracer() -> None:
     def rx(x: typing.Union[bytes, bytearray, memoryview]) -> typing.Optional[Trace]:
         return tr.update(SerialCapture(ts, SerialCapture.Direction.RX, memoryview(x)))
 
-    buf = SerialFrame(priority=Priority.SLOW,
-                      transfer_id=1234567890,
-                      index=0,
-                      end_of_transfer=True,
-                      payload=memoryview(b'abc'),
-                      source_node_id=1111,
-                      destination_node_id=None,
-                      data_specifier=MessageDataSpecifier(6666)).compile_into(bytearray(100))
+    buf = SerialFrame(
+        priority=Priority.SLOW,
+        transfer_id=1234567890,
+        index=0,
+        end_of_transfer=True,
+        payload=memoryview(b"abc"),
+        source_node_id=1111,
+        destination_node_id=None,
+        data_specifier=MessageDataSpecifier(6666),
+    ).compile_into(bytearray(100))
     head, tail = buf[:10], buf[10:]
 
     assert None is tx(head)  # Semi-complete.
@@ -206,7 +216,7 @@ def _unittest_serial_tracer() -> None:
     trace = tx(head)  # Double-head invalidates the previous one.
     assert isinstance(trace, SerialOutOfBandTrace)
     assert trace.timestamp == ts
-    assert trace.data.tobytes().strip(b'\0') == head.tobytes().strip(b'\0')
+    assert trace.data.tobytes().strip(b"\0") == head.tobytes().strip(b"\0")
 
     trace = tx(tail)
     assert isinstance(trace, TransferTrace)
@@ -217,16 +227,18 @@ def _unittest_serial_tracer() -> None:
     assert trace.transfer.metadata.session_specifier.source_node_id == 1111
     assert trace.transfer.metadata.session_specifier.destination_node_id is None
     assert trace.transfer.metadata.session_specifier.data_specifier == MessageDataSpecifier(6666)
-    assert trace.transfer.fragmented_payload == [memoryview(b'abc')]
+    assert trace.transfer.fragmented_payload == [memoryview(b"abc")]
 
-    buf = SerialFrame(priority=Priority.SLOW,
-                      transfer_id=1234567890,
-                      index=0,
-                      end_of_transfer=True,
-                      payload=memoryview(b'abc'),
-                      source_node_id=None,
-                      destination_node_id=None,
-                      data_specifier=MessageDataSpecifier(6666)).compile_into(bytearray(100))
+    buf = SerialFrame(
+        priority=Priority.SLOW,
+        transfer_id=1234567890,
+        index=0,
+        end_of_transfer=True,
+        payload=memoryview(b"abc"),
+        source_node_id=None,
+        destination_node_id=None,
+        data_specifier=MessageDataSpecifier(6666),
+    ).compile_into(bytearray(100))
 
     trace = rx(buf)
     assert isinstance(trace, TransferTrace)
@@ -237,25 +249,33 @@ def _unittest_serial_tracer() -> None:
 
     assert None is tr.update(pyuavcan.transport.Capture(ts))  # Wrong type, ignore.
 
-    trace = tx(SerialFrame(priority=Priority.SLOW,
-                           transfer_id=1234567890,
-                           index=0,
-                           end_of_transfer=False,
-                           payload=memoryview(bytes(range(256))),
-                           source_node_id=3333,
-                           destination_node_id=None,
-                           data_specifier=MessageDataSpecifier(6666)).compile_into(bytearray(10_000)))
+    trace = tx(
+        SerialFrame(
+            priority=Priority.SLOW,
+            transfer_id=1234567890,
+            index=0,
+            end_of_transfer=False,
+            payload=memoryview(bytes(range(256))),
+            source_node_id=3333,
+            destination_node_id=None,
+            data_specifier=MessageDataSpecifier(6666),
+        ).compile_into(bytearray(10_000))
+    )
     assert trace is None
-    trace = tx(SerialFrame(priority=Priority.SLOW,
-                           transfer_id=1234567890,
-                           index=1,
-                           end_of_transfer=True,
-                           payload=memoryview(bytes(range(256))),
-                           source_node_id=3333,
-                           destination_node_id=None,
-                           data_specifier=MessageDataSpecifier(6666)).compile_into(bytearray(10_000)))
+    trace = tx(
+        SerialFrame(
+            priority=Priority.SLOW,
+            transfer_id=1234567890,
+            index=1,
+            end_of_transfer=True,
+            payload=memoryview(bytes(range(256))),
+            source_node_id=3333,
+            destination_node_id=None,
+            data_specifier=MessageDataSpecifier(6666),
+        ).compile_into(bytearray(10_000))
+    )
     assert isinstance(trace, SerialErrorTrace)
     assert trace.error == TransferReassembler.Error.MULTIFRAME_INTEGRITY_ERROR
 
-    with raises(ValueError, match='.*delimiters.*'):
-        rx(b''.join([buf, buf]))
+    with raises(ValueError, match=".*delimiters.*"):
+        rx(b"".join([buf, buf]))

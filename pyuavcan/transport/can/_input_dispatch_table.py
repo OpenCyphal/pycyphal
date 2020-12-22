@@ -16,6 +16,7 @@ class InputDispatchTable:
     Time-memory trade-off: the input dispatch table is tens of megabytes large, but the lookup is very fast and O(1).
     This is necessary to ensure scalability for high-load applications such as real-time network monitoring.
     """
+
     _NUM_SUBJECTS = MessageDataSpecifier.SUBJECT_ID_MASK + 1
     _NUM_SERVICES = ServiceDataSpecifier.SERVICE_ID_MASK + 1
     _NUM_NODE_IDS = CANID.NODE_ID_MASK + 1
@@ -91,10 +92,12 @@ def _unittest_input_dispatch_table() -> None:
     with raises(LookupError):
         t.remove(InputSessionSpecifier(MessageDataSpecifier(1234), 123))
 
-    a = CANInputSession(InputSessionSpecifier(MessageDataSpecifier(1234), None),
-                        PayloadMetadata(456),
-                        asyncio.get_event_loop(),
-                        lambda: None)
+    a = CANInputSession(
+        InputSessionSpecifier(MessageDataSpecifier(1234), None),
+        PayloadMetadata(456),
+        asyncio.get_event_loop(),
+        lambda: None,
+    )
     t.add(a)
     t.add(a)
     assert list(t.items) == [a]
@@ -115,8 +118,9 @@ def _unittest_slow_input_dispatch_table_index() -> None:
 
         for serv in range(InputDispatchTable._NUM_SERVICES):
             for role in ServiceDataSpecifier.Role:
-                out = InputDispatchTable._compute_index(InputSessionSpecifier(ServiceDataSpecifier(serv, role),
-                                                                              node_id))
+                out = InputDispatchTable._compute_index(
+                    InputSessionSpecifier(ServiceDataSpecifier(serv, role), node_id)
+                )
                 assert out not in values
                 values.add(out)
                 assert out < InputDispatchTable._TABLE_SIZE

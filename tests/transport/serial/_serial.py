@@ -10,12 +10,13 @@ import pytest
 import serial
 import logging
 import pyuavcan.transport
+
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pyuavcan.transport.serial import SerialTransport, SerialTransportStatistics, SerialFrame
 from pyuavcan.transport.serial import SerialCapture
 
 
-@pytest.mark.asyncio    # type: ignore
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_serial_transport(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
@@ -26,19 +27,15 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     service_multiplication_factor = 2
 
     with pytest.raises(ValueError):
-        _ = SerialTransport(serial_port='loop://',
-                            local_node_id=None,
-                            mtu=1)
+        _ = SerialTransport(serial_port="loop://", local_node_id=None, mtu=1)
 
     with pytest.raises(ValueError):
-        _ = SerialTransport(serial_port='loop://',
-                            local_node_id=None,
-                            service_transfer_multiplier=10000)
+        _ = SerialTransport(serial_port="loop://", local_node_id=None, service_transfer_multiplier=10000)
 
     with pytest.raises(pyuavcan.transport.InvalidMediaConfigurationError):
-        _ = SerialTransport(serial_port=serial.serial_for_url('loop://', do_not_open=True), local_node_id=None)
+        _ = SerialTransport(serial_port=serial.serial_for_url("loop://", do_not_open=True), local_node_id=None)
 
-    tr = SerialTransport(serial_port='loop://', local_node_id=None, mtu=1024)
+    tr = SerialTransport(serial_port="loop://", local_node_id=None, mtu=1024)
 
     assert tr.loop is asyncio.get_event_loop()
     assert tr.local_node_id is None
@@ -57,7 +54,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 
     sft_capacity = 1024
 
-    payload_single = [_mem('qwertyui'), _mem('01234567')] * (sft_capacity // 16)
+    payload_single = [_mem("qwertyui"), _mem("01234567")] * (sft_capacity // 16)
     assert sum(map(len, payload_single)) == sft_capacity
 
     payload_x3 = (payload_single * 3)[:-1]
@@ -73,29 +70,34 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
-    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None),
-                                                          meta)
+    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
     assert subscriber_selective is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
 
     server_listener = tr.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta
+    )
     assert server_listener is tr.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta
+    )
 
     client_requester = tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta
+    )
     assert client_requester is tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta
+    )
 
     client_listener = tr.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta
+    )
     assert client_listener is tr.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta
+    )
 
-    print('INPUTS:', tr.input_sessions)
-    print('OUTPUTS:', tr.output_sessions)
+    print("INPUTS:", tr.input_sessions)
+    print("OUTPUTS:", tr.output_sessions)
     assert set(tr.input_sessions) == {subscriber_promiscuous, subscriber_selective, server_listener, client_listener}
     assert set(tr.output_sessions) == {broadcaster, client_requester}
     assert tr.sample_statistics() == SerialTransportStatistics()
@@ -104,19 +106,18 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     # Message exchange test.
     #
     assert await broadcaster.send(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
-                 transfer_id=77777,
-                 fragmented_payload=payload_single),
-        monotonic_deadline=get_monotonic() + 5.0
+        Transfer(
+            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=77777, fragmented_payload=payload_single
+        ),
+        monotonic_deadline=get_monotonic() + 5.0,
     )
 
     rx_transfer = await subscriber_promiscuous.receive(get_monotonic() + 5.0)
-    print('PROMISCUOUS SUBSCRIBER TRANSFER:', rx_transfer)
+    print("PROMISCUOUS SUBSCRIBER TRANSFER:", rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.LOW
     assert rx_transfer.transfer_id == 77777
-    assert rx_transfer.fragmented_payload == [b''.join(payload_single)]
+    assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
 
     print(tr.sample_statistics())
     assert tr.sample_statistics().in_bytes >= 32 + sft_capacity + 2
@@ -130,11 +131,10 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
         # Anonymous nodes can't send multiframe transfers.
         assert await broadcaster.send(
-            Transfer(timestamp=Timestamp.now(),
-                     priority=Priority.LOW,
-                     transfer_id=77777,
-                     fragmented_payload=payload_x3),
-            monotonic_deadline=get_monotonic() + 5.0
+            Transfer(
+                timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=77777, fragmented_payload=payload_x3
+            ),
+            monotonic_deadline=get_monotonic() + 5.0,
         )
 
     assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
@@ -148,17 +148,16 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
         # Anonymous nodes can't emit service transfers.
         assert await client_requester.send(
-            Transfer(timestamp=Timestamp.now(),
-                     priority=Priority.HIGH,
-                     transfer_id=88888,
-                     fragmented_payload=payload_single),
-            monotonic_deadline=get_monotonic() + 5.0
+            Transfer(
+                timestamp=Timestamp.now(), priority=Priority.HIGH, transfer_id=88888, fragmented_payload=payload_single
+            ),
+            monotonic_deadline=get_monotonic() + 5.0,
         )
 
     #
     # Replace the transport with a different one where the local node-ID is not None.
     #
-    tr = SerialTransport(serial_port='loop://', local_node_id=3210, mtu=1024)
+    tr = SerialTransport(serial_port="loop://", local_node_id=3210, mtu=1024)
     assert tr.local_node_id == 3210
 
     #
@@ -172,42 +171,46 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
 
     server_listener = tr.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta
+    )
 
     server_responder = tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta
+    )
     assert server_responder is tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta
+    )
 
     client_requester = tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta
+    )
     assert client_requester is tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta)
+        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta
+    )
 
     client_listener = tr.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta
+    )
     assert client_listener is tr.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta)
+        InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta
+    )
 
     assert set(tr.input_sessions) == {subscriber_promiscuous, subscriber_selective, server_listener, client_listener}
     assert set(tr.output_sessions) == {broadcaster, server_responder, client_requester}
     assert tr.sample_statistics() == SerialTransportStatistics()
 
     assert await client_requester.send(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.HIGH,
-                 transfer_id=88888,
-                 fragmented_payload=payload_x3),
-        monotonic_deadline=get_monotonic() + 5.0
+        Transfer(timestamp=Timestamp.now(), priority=Priority.HIGH, transfer_id=88888, fragmented_payload=payload_x3),
+        monotonic_deadline=get_monotonic() + 5.0,
     )
 
     rx_transfer = await server_listener.receive(get_monotonic() + 5.0)
-    print('SERVER LISTENER TRANSFER:', rx_transfer)
+    print("SERVER LISTENER TRANSFER:", rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.HIGH
     assert rx_transfer.transfer_id == 88888
     assert len(rx_transfer.fragmented_payload) == 3
-    assert b''.join(rx_transfer.fragmented_payload) == b''.join(payload_x3)
+    assert b"".join(rx_transfer.fragmented_payload) == b"".join(payload_x3)
 
     assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
     assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.1)
@@ -227,11 +230,10 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     # Write timeout test.
     #
     assert not await broadcaster.send(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.IMMEDIATE,
-                 transfer_id=99999,
-                 fragmented_payload=payload_x3),
-        monotonic_deadline=get_monotonic() - 5.0    # The deadline is in the past.
+        Transfer(
+            timestamp=Timestamp.now(), priority=Priority.IMMEDIATE, transfer_id=99999, fragmented_payload=payload_x3
+        ),
+        monotonic_deadline=get_monotonic() - 5.0,  # The deadline is in the past.
     )
 
     assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
@@ -246,32 +248,31 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
     assert tr.sample_statistics().out_frames == 3 * service_multiplication_factor
     assert tr.sample_statistics().out_transfers == 1 * service_multiplication_factor
-    assert tr.sample_statistics().out_incomplete == 1   # INCREMENTED HERE
+    assert tr.sample_statistics().out_incomplete == 1  # INCREMENTED HERE
 
     #
     # Selective message exchange test.
     #
     assert await broadcaster.send(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.IMMEDIATE,
-                 transfer_id=99999,
-                 fragmented_payload=payload_x3),
-        monotonic_deadline=get_monotonic() + 5.0
+        Transfer(
+            timestamp=Timestamp.now(), priority=Priority.IMMEDIATE, transfer_id=99999, fragmented_payload=payload_x3
+        ),
+        monotonic_deadline=get_monotonic() + 5.0,
     )
 
     rx_transfer = await subscriber_promiscuous.receive(get_monotonic() + 5.0)
-    print('PROMISCUOUS SUBSCRIBER TRANSFER:', rx_transfer)
+    print("PROMISCUOUS SUBSCRIBER TRANSFER:", rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.IMMEDIATE
     assert rx_transfer.transfer_id == 99999
-    assert b''.join(rx_transfer.fragmented_payload) == b''.join(payload_x3)
+    assert b"".join(rx_transfer.fragmented_payload) == b"".join(payload_x3)
 
     rx_transfer = await subscriber_selective.receive(get_monotonic() + 1.0)
-    print('SELECTIVE SUBSCRIBER TRANSFER:', rx_transfer)
+    print("SELECTIVE SUBSCRIBER TRANSFER:", rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.IMMEDIATE
     assert rx_transfer.transfer_id == 99999
-    assert b''.join(rx_transfer.fragmented_payload) == b''.join(payload_x3)
+    assert b"".join(rx_transfer.fragmented_payload) == b"".join(payload_x3)
 
     assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
     assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.1)
@@ -346,7 +347,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio    # type: ignore
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
@@ -354,19 +355,20 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
 
     get_monotonic = asyncio.get_event_loop().time
 
-    tr = SerialTransport(serial_port='loop://', local_node_id=42, mtu=1024, service_transfer_multiplier=2)
+    tr = SerialTransport(serial_port="loop://", local_node_id=42, mtu=1024, service_transfer_multiplier=2)
     sft_capacity = 1024
-    payload_single = [_mem('qwertyui'), _mem('01234567')] * (sft_capacity // 16)
+    payload_single = [_mem("qwertyui"), _mem("01234567")] * (sft_capacity // 16)
     assert sum(map(len, payload_single)) == sft_capacity
     payload_x3 = (payload_single * 3)[:-1]
     payload_x3_size_bytes = sft_capacity * 3 - 8
     assert sum(map(len, payload_x3)) == payload_x3_size_bytes
 
-    broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None),
-                                        PayloadMetadata(10000))
+    broadcaster = tr.get_output_session(
+        OutputSessionSpecifier(MessageDataSpecifier(2345), None), PayloadMetadata(10000)
+    )
     client_requester = tr.get_output_session(
         OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210),
-        PayloadMetadata(10000)
+        PayloadMetadata(10000),
     )
 
     events: typing.List[SerialCapture] = []
@@ -386,11 +388,8 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     #
     ts = Timestamp.now()
     assert await broadcaster.send(
-        Transfer(timestamp=ts,
-                 priority=Priority.LOW,
-                 transfer_id=777,
-                 fragmented_payload=payload_x3),
-        monotonic_deadline=get_monotonic() + 5.0
+        Transfer(timestamp=ts, priority=Priority.LOW, transfer_id=777, fragmented_payload=payload_x3),
+        monotonic_deadline=get_monotonic() + 5.0,
     )
     await asyncio.sleep(0.1)
     assert events == events2
@@ -423,9 +422,9 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     assert not parse(b).end_of_transfer
     assert parse(c).end_of_transfer
 
-    assert a.fragment.tobytes().strip(b'\x00') == d.fragment.tobytes().strip(b'\x00')
-    assert b.fragment.tobytes().strip(b'\x00') == e.fragment.tobytes().strip(b'\x00')
-    assert c.fragment.tobytes().strip(b'\x00') == f.fragment.tobytes().strip(b'\x00')
+    assert a.fragment.tobytes().strip(b"\x00") == d.fragment.tobytes().strip(b"\x00")
+    assert b.fragment.tobytes().strip(b"\x00") == e.fragment.tobytes().strip(b"\x00")
+    assert c.fragment.tobytes().strip(b"\x00") == f.fragment.tobytes().strip(b"\x00")
 
     events.clear()
     events2.clear()
@@ -435,11 +434,8 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     #
     ts = Timestamp.now()
     assert await client_requester.send(
-        Transfer(timestamp=ts,
-                 priority=Priority.HIGH,
-                 transfer_id=888,
-                 fragmented_payload=payload_single),
-        monotonic_deadline=get_monotonic() + 5.0
+        Transfer(timestamp=ts, priority=Priority.HIGH, transfer_id=888, fragmented_payload=payload_single),
+        monotonic_deadline=get_monotonic() + 5.0,
     )
     await asyncio.sleep(0.1)
     assert events == events2
@@ -461,8 +457,8 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     assert parse(a).end_of_transfer
     assert parse(b).end_of_transfer
 
-    assert a.fragment.tobytes().strip(b'\x00') == c.fragment.tobytes().strip(b'\x00')
-    assert b.fragment.tobytes().strip(b'\x00') == d.fragment.tobytes().strip(b'\x00')
+    assert a.fragment.tobytes().strip(b"\x00") == c.fragment.tobytes().strip(b"\x00")
+    assert b.fragment.tobytes().strip(b"\x00") == d.fragment.tobytes().strip(b"\x00")
 
     events.clear()
     events2.clear()
@@ -476,7 +472,7 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
         tr.serial_port.write(grownups)
         await asyncio.sleep(1)
     assert events == events2
-    oob, = events
+    (oob,) = events
     assert isinstance(oob, SerialCapture)
     assert oob.direction == SerialCapture.Direction.RX
     assert bytes(oob.fragment) == grownups

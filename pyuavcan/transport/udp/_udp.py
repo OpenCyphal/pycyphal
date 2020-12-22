@@ -25,8 +25,9 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pyuavcan.transport.TransportStatistics):
-    received_datagrams: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReaderStatistics] = \
-        dataclasses.field(default_factory=dict)
+    received_datagrams: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReaderStatistics] = dataclasses.field(
+        default_factory=dict
+    )
     """
     Basic input session statistics: instances of :class:`SocketReaderStatistics` keyed by data specifier.
     """
@@ -52,13 +53,15 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
 
-    def __init__(self,
-                 local_ip_address:            typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
-                 *,
-                 anonymous:                   bool = False,
-                 mtu:                         int = min(VALID_MTU_RANGE),
-                 service_transfer_multiplier: int = 1,
-                 loop:                        typing.Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(
+        self,
+        local_ip_address: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
+        *,
+        anonymous: bool = False,
+        mtu: int = min(VALID_MTU_RANGE),
+        service_transfer_multiplier: int = 1,
+        loop: typing.Optional[asyncio.AbstractEventLoop] = None,
+    ):
         """
         :param local_ip_address: Specifies which local IP address to use for this transport.
             This setting also implicitly specifies the network interface to use.
@@ -115,11 +118,11 @@ class UDPTransport(pyuavcan.transport.Transport):
 
         low, high = self.VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE
         if not (low <= self._srv_multiplier <= high):
-            raise ValueError(f'Invalid service transfer multiplier: {self._srv_multiplier}')
+            raise ValueError(f"Invalid service transfer multiplier: {self._srv_multiplier}")
 
         low, high = self.VALID_MTU_RANGE
         if not (low <= self._mtu <= high):
-            raise ValueError(f'Invalid MTU: {self._mtu} bytes')
+            raise ValueError(f"Invalid MTU: {self._mtu} bytes")
 
         self._socket_reader_registry: typing.Dict[pyuavcan.transport.DataSpecifier, SocketReader] = {}
         self._input_registry: typing.Dict[pyuavcan.transport.InputSessionSpecifier, UDPInputSession] = {}
@@ -131,7 +134,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._closed = False
         self._statistics = UDPTransportStatistics()
 
-        _logger.debug(f'{self}: Initialized with local node-ID {self.local_node_id}')
+        _logger.debug(f"{self}: Initialized with local node-ID {self.local_node_id}")
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -156,14 +159,14 @@ class UDPTransport(pyuavcan.transport.Transport):
             try:
                 s.close()
             except Exception as ex:  # pragma: no cover
-                _logger.exception('%s: Failed to close %r: %s', self, s, ex)
+                _logger.exception("%s: Failed to close %r: %s", self, s, ex)
         if self._sniffer is not None:
             self._sniffer.close()
             self._sniffer = None
 
-    def get_input_session(self,
-                          specifier:        pyuavcan.transport.InputSessionSpecifier,
-                          payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPInputSession:
+    def get_input_session(
+        self, specifier: pyuavcan.transport.InputSessionSpecifier, payload_metadata: pyuavcan.transport.PayloadMetadata
+    ) -> UDPInputSession:
         self._ensure_not_closed()
         if specifier not in self._input_registry:
             self._setup_input_session(specifier, payload_metadata)
@@ -173,9 +176,9 @@ class UDPTransport(pyuavcan.transport.Transport):
         assert out.specifier == specifier
         return out
 
-    def get_output_session(self,
-                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
-                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> UDPOutputSession:
+    def get_output_session(
+        self, specifier: pyuavcan.transport.OutputSessionSpecifier, payload_metadata: pyuavcan.transport.PayloadMetadata
+    ) -> UDPOutputSession:
         self._ensure_not_closed()
         if specifier not in self._output_registry:
             if self.local_node_id is None:
@@ -183,17 +186,19 @@ class UDPTransport(pyuavcan.transport.Transport):
                 # The underlying protocol (IP) does not have the concept of anonymous packet.
                 # We add it artificially as an implementation detail of this library.
                 raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
-                    'Cannot create an output session instance because this UAVCAN/UDP transport instance is '
-                    'configured in the anonymous mode. '
-                    'If you need to emit a transfer, create a new instance with anonymous=False.'
+                    "Cannot create an output session instance because this UAVCAN/UDP transport instance is "
+                    "configured in the anonymous mode. "
+                    "If you need to emit a transfer, create a new instance with anonymous=False."
                 )
 
             def finalizer() -> None:
                 del self._output_registry[specifier]
 
-            multiplier = \
-                self._srv_multiplier if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) \
+            multiplier = (
+                self._srv_multiplier
+                if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
                 else 1
+            )
             sock = self._sock_factory.make_output_socket(specifier.remote_node_id, specifier.data_specifier)
             self._output_registry[specifier] = UDPOutputSession(
                 specifier=specifier,
@@ -247,7 +252,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         """
         self._ensure_not_closed()
         if self._sniffer is None:
-            _logger.debug('%s: Starting UDP/IP packet capture (hope you have permissions)', self)
+            _logger.debug("%s: Starting UDP/IP packet capture (hope you have permissions)", self)
             self._sniffer = self._sock_factory.make_sniffer(self._process_captured_packet)
         self._capture_handlers.append(handler)
 
@@ -261,9 +266,9 @@ class UDPTransport(pyuavcan.transport.Transport):
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
         raise NotImplementedError
 
-    def _setup_input_session(self,
-                             specifier:        pyuavcan.transport.InputSessionSpecifier,
-                             payload_metadata: pyuavcan.transport.PayloadMetadata) -> None:
+    def _setup_input_session(
+        self, specifier: pyuavcan.transport.InputSessionSpecifier, payload_metadata: pyuavcan.transport.PayloadMetadata
+    ) -> None:
         """
         In order to set up a new input session, we have to link together a lot of objects. Tricky.
         Also, the setup and teardown actions shall be atomic. Hence the separate method.
@@ -271,28 +276,37 @@ class UDPTransport(pyuavcan.transport.Transport):
         assert specifier not in self._input_registry
         try:
             if specifier.data_specifier not in self._socket_reader_registry:
-                _logger.debug('%r: Setting up new socket reader for %s. Existing entries at the moment: %s',
-                              self, specifier.data_specifier, self._socket_reader_registry)
+                _logger.debug(
+                    "%r: Setting up new socket reader for %s. Existing entries at the moment: %s",
+                    self,
+                    specifier.data_specifier,
+                    self._socket_reader_registry,
+                )
                 self._socket_reader_registry[specifier.data_specifier] = SocketReader(
                     sock=self._sock_factory.make_input_socket(specifier.data_specifier),
                     local_ip_address=self._sock_factory.local_ip_address,
                     anonymous=self._anonymous,
-                    statistics=self._statistics.received_datagrams.setdefault(specifier.data_specifier,
-                                                                              SocketReaderStatistics()),
+                    statistics=self._statistics.received_datagrams.setdefault(
+                        specifier.data_specifier, SocketReaderStatistics()
+                    ),
                     loop=self.loop,
                 )
 
-            cls: typing.Union[typing.Type[PromiscuousUDPInputSession], typing.Type[SelectiveUDPInputSession]] = \
+            cls: typing.Union[typing.Type[PromiscuousUDPInputSession], typing.Type[SelectiveUDPInputSession]] = (
                 PromiscuousUDPInputSession if specifier.is_promiscuous else SelectiveUDPInputSession
+            )
 
-            session = cls(specifier=specifier,
-                          payload_metadata=payload_metadata,
-                          loop=self.loop,
-                          finalizer=lambda: self._teardown_input_session(specifier))
+            session = cls(
+                specifier=specifier,
+                payload_metadata=payload_metadata,
+                loop=self.loop,
+                finalizer=lambda: self._teardown_input_session(specifier),
+            )
 
             # noinspection PyProtectedMember
-            self._socket_reader_registry[specifier.data_specifier].add_listener(specifier.remote_node_id,
-                                                                                session._process_frame)
+            self._socket_reader_registry[specifier.data_specifier].add_listener(
+                specifier.remote_node_id, session._process_frame
+            )
         except Exception:
             self._teardown_input_session(specifier)  # Rollback to ensure atomicity.
             raise
@@ -314,7 +328,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         try:
             demux = self._socket_reader_registry[specifier.data_specifier]
         except LookupError:
-            pass    # The reader has not been set up yet, nothing to do.
+            pass  # The reader has not been set up yet, nothing to do.
         else:
             try:
                 demux.remove_listener(specifier.remote_node_id)
@@ -323,7 +337,7 @@ class UDPTransport(pyuavcan.transport.Transport):
             # Destroy the reader if there are no listeners left.
             if not demux.has_listeners:
                 try:
-                    _logger.debug('%r: Destroying %r for %s', self, demux, specifier.data_specifier)
+                    _logger.debug("%r: Destroying %r for %s", self, demux, specifier.data_specifier)
                     demux.close()
                 finally:
                     del self._socket_reader_registry[specifier.data_specifier]
@@ -334,11 +348,11 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     def _ensure_not_closed(self) -> None:
         if self._closed:
-            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+            raise pyuavcan.transport.ResourceClosedError(f"{self} is closed")
 
     def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
         return [repr(str(self.local_ip_address))], {
-            'anonymous': self._anonymous,
-            'service_transfer_multiplier': self._srv_multiplier,
-            'mtu': self._mtu,
+            "anonymous": self._anonymous,
+            "service_transfer_multiplier": self._srv_multiplier,
+            "mtu": self._mtu,
         }

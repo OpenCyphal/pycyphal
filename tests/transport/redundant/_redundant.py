@@ -9,6 +9,7 @@ import asyncio
 import logging
 import pytest
 import pyuavcan.transport
+
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pyuavcan.transport.redundant import RedundantTransport, RedundantTransportStatistics
 from pyuavcan.transport.redundant import InconsistentInferiorConfigurationError
@@ -18,7 +19,7 @@ from pyuavcan.transport.udp import UDPTransport
 from tests.transport.serial import VIRTUAL_BUS_URI as SERIAL_URI
 
 
-@pytest.mark.asyncio    # type: ignore
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
@@ -70,11 +71,10 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert len(pub_a.inferiors) == 0
     assert len(sub_any_a.inferiors) == 0
     assert not await pub_a.send(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
-                 transfer_id=1,
-                 fragmented_payload=[memoryview(b'abc')]),
-        monotonic_deadline=loop.time() + 1.0
+        Transfer(
+            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=1, fragmented_payload=[memoryview(b"abc")]
+        ),
+        monotonic_deadline=loop.time() + 1.0,
     )
     assert not await sub_any_a.receive(loop.time() + 0.1)
     assert not await sub_any_b.receive(loop.time() + 0.1)
@@ -84,7 +84,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     # Adding inferiors - loopback, transport A only.
     #
-    with pytest.raises(InconsistentInferiorConfigurationError, match='(?i).*loop.*'):
+    with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*loop.*"):
         tr_a.attach_inferior(LoopbackTransport(111, loop=asyncio.new_event_loop()))  # Wrong event loop.
     assert len(pub_a.inferiors) == 0
     assert len(sub_any_a.inferiors) == 0
@@ -106,10 +106,10 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     with pytest.raises(ValueError):
         tr_a.attach_inferior(lo_mono_0)  # Double-add not allowed.
 
-    with pytest.raises(InconsistentInferiorConfigurationError, match='(?i).*node-id.*'):
+    with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*node-id.*"):
         tr_a.attach_inferior(LoopbackTransport(None))  # Wrong node-ID.
 
-    with pytest.raises(InconsistentInferiorConfigurationError, match='(?i).*node-id.*'):
+    with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*node-id.*"):
         tr_a.attach_inferior(LoopbackTransport(1230))  # Wrong node-ID.
 
     assert tr_a.inferiors == [lo_mono_0, lo_mono_1]
@@ -123,19 +123,19 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         ]
     )
     assert tr_a.local_node_id == 111
-    assert repr(tr_a) == \
-        'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))'
+    assert (
+        repr(tr_a) == "RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))"
+    )
 
     assert await pub_a.send(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
-                 transfer_id=2,
-                 fragmented_payload=[memoryview(b'def')]),
-        monotonic_deadline=loop.time() + 1.0
+        Transfer(
+            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=2, fragmented_payload=[memoryview(b"def")]
+        ),
+        monotonic_deadline=loop.time() + 1.0,
     )
     rx = await sub_any_a.receive(loop.time() + 1.0)
     assert rx is not None
-    assert rx.fragmented_payload == [memoryview(b'def')]
+    assert rx.fragmented_payload == [memoryview(b"def")]
     assert rx.transfer_id == 2
     assert not await sub_any_b.receive(loop.time() + 0.1)
 
@@ -144,18 +144,17 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.redundant.__name__):
         for s in lo_mono_0.output_sessions:
-            s.exception = RuntimeError('INTENDED EXCEPTION')
+            s.exception = RuntimeError("INTENDED EXCEPTION")
 
         assert await pub_a.send(
-            Transfer(timestamp=Timestamp.now(),
-                     priority=Priority.LOW,
-                     transfer_id=3,
-                     fragmented_payload=[memoryview(b'qwe')]),
-            monotonic_deadline=loop.time() + 1.0
+            Transfer(
+                timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=3, fragmented_payload=[memoryview(b"qwe")]
+            ),
+            monotonic_deadline=loop.time() + 1.0,
         )
         rx = await sub_any_a.receive(loop.time() + 1.0)
         assert rx is not None
-        assert rx.fragmented_payload == [memoryview(b'qwe')]
+        assert rx.fragmented_payload == [memoryview(b"qwe")]
         assert rx.transfer_id == 3
 
     #
@@ -165,15 +164,15 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     lo_cyc_1 = LoopbackTransport(111)
     cyc_proto_params = ProtocolParameters(
         transfer_id_modulo=32,  # Like CAN
-        max_nodes=128,          # Like CAN
-        mtu=63,                 # Like CAN
+        max_nodes=128,  # Like CAN
+        mtu=63,  # Like CAN
     )
     lo_cyc_0.protocol_parameters = cyc_proto_params
     lo_cyc_1.protocol_parameters = cyc_proto_params
     assert lo_cyc_0.protocol_parameters == lo_cyc_1.protocol_parameters == cyc_proto_params
 
     assert tr_a.protocol_parameters.transfer_id_modulo >= 2 ** 56
-    with pytest.raises(InconsistentInferiorConfigurationError, match='(?i).*transfer-id.*'):
+    with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*transfer-id.*"):
         tr_a.attach_inferior(lo_cyc_0)  # Transfer-ID modulo mismatch
 
     tr_a.detach_inferior(lo_mono_0)
@@ -183,29 +182,29 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert tr_a.inferiors == []  # All removed, okay.
     assert pub_a.inferiors == []
     assert sub_any_a.inferiors == []
-    assert tr_a.local_node_id is None                       # Back to the roots
-    assert repr(tr_a) == 'RedundantTransport()'
+    assert tr_a.local_node_id is None  # Back to the roots
+    assert repr(tr_a) == "RedundantTransport()"
 
     # Now we can add our cyclic transports safely.
     tr_a.attach_inferior(lo_cyc_0)
     assert tr_a.protocol_parameters.transfer_id_modulo == 32
     tr_a.attach_inferior(lo_cyc_1)
-    assert tr_a.protocol_parameters == cyc_proto_params, 'Protocol parameter mismatch'
+    assert tr_a.protocol_parameters == cyc_proto_params, "Protocol parameter mismatch"
     assert tr_a.local_node_id == 111
-    assert repr(tr_a) == \
-        'RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))'
+    assert (
+        repr(tr_a) == "RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))"
+    )
 
     # Exchange test.
     assert await pub_a.send(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
-                 transfer_id=4,
-                 fragmented_payload=[memoryview(b'rty')]),
-        monotonic_deadline=loop.time() + 1.0
+        Transfer(
+            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=4, fragmented_payload=[memoryview(b"rty")]
+        ),
+        monotonic_deadline=loop.time() + 1.0,
     )
     rx = await sub_any_a.receive(loop.time() + 1.0)
     assert rx is not None
-    assert rx.fragmented_payload == [memoryview(b'rty')]
+    assert rx.fragmented_payload == [memoryview(b"rty")]
     assert rx.transfer_id == 4
 
     #
@@ -216,8 +215,8 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     del lo_cyc_0  # Prevent accidental reuse.
     del lo_cyc_1
 
-    udp_a = UDPTransport('127.0.0.111')
-    udp_b = UDPTransport('127.0.0.222')
+    udp_a = UDPTransport("127.0.0.111")
+    udp_b = UDPTransport("127.0.0.222")
 
     serial_a = SerialTransport(SERIAL_URI, 111)
     serial_b = SerialTransport(SERIAL_URI, 222, mtu=2048)  # Heterogeneous.
@@ -234,7 +233,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         mtu=udp_a.protocol_parameters.mtu,
     )
     assert tr_a.local_node_id == 111
-    assert repr(tr_a) == f'RedundantTransport({udp_a}, {serial_a})'
+    assert repr(tr_a) == f"RedundantTransport({udp_a}, {serial_a})"
 
     assert tr_b.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2 ** 64,
@@ -244,15 +243,14 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert tr_b.local_node_id == 222
 
     assert await pub_a.send(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
-                 transfer_id=5,
-                 fragmented_payload=[memoryview(b'uio')]),
-        monotonic_deadline=loop.time() + 1.0
+        Transfer(
+            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=5, fragmented_payload=[memoryview(b"uio")]
+        ),
+        monotonic_deadline=loop.time() + 1.0,
     )
     rx = await sub_any_b.receive(loop.time() + 1.0)
     assert rx is not None
-    assert rx.fragmented_payload == [memoryview(b'uio')]
+    assert rx.fragmented_payload == [memoryview(b"uio")]
     assert rx.transfer_id == 5
     assert not await sub_any_a.receive(loop.time() + 0.1)
     assert not await sub_any_b.receive(loop.time() + 0.1)
@@ -267,15 +265,14 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     sub_b_new = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(255), None), meta)
 
     assert await pub_a_new.send(
-        Transfer(timestamp=Timestamp.now(),
-                 priority=Priority.LOW,
-                 transfer_id=6,
-                 fragmented_payload=[memoryview(b'asd')]),
-        monotonic_deadline=loop.time() + 1.0
+        Transfer(
+            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=6, fragmented_payload=[memoryview(b"asd")]
+        ),
+        monotonic_deadline=loop.time() + 1.0,
     )
     rx = await sub_b_new.receive(loop.time() + 1.0)
     assert rx is not None
-    assert rx.fragmented_payload == [memoryview(b'asd')]
+    assert rx.fragmented_payload == [memoryview(b"asd")]
     assert rx.transfer_id == 6
     assert None is await sub_any_b.receive(loop.time() + 1.0)
 
@@ -295,11 +292,8 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
 
     with pytest.raises(pyuavcan.transport.ResourceClosedError):  # Make sure the sessions are closed.
         await pub_a.send(
-            Transfer(timestamp=Timestamp.now(),
-                     priority=Priority.LOW,
-                     transfer_id=100,
-                     fragmented_payload=[]),
-            monotonic_deadline=loop.time() + 1.0
+            Transfer(timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=100, fragmented_payload=[]),
+            monotonic_deadline=loop.time() + 1.0,
         )
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.

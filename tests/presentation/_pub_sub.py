@@ -15,10 +15,11 @@ _RX_TIMEOUT = 1.0
 
 
 # noinspection PyProtectedMember
-@pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
+@pytest.mark.parametrize("transport_factory", TRANSPORT_FACTORIES)  # type: ignore
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
-                                                   transport_factory:  TransportFactory) -> None:
+async def _unittest_slow_presentation_pub_sub_anon(
+    generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
+) -> None:
     assert generated_packages
     import uavcan.node
     from pyuavcan.transport import Priority
@@ -75,10 +76,12 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
     assert pub_heart.port_id == pyuavcan.dsdl.get_fixed_port_id(uavcan.node.Heartbeat_1_0)
     assert sub_heart.dtype is uavcan.node.Heartbeat_1_0
 
-    heart = uavcan.node.Heartbeat_1_0(uptime=123456,
-                                      health=uavcan.node.Health_1_0(uavcan.node.Health_1_0.CAUTION),
-                                      mode=uavcan.node.Mode_1_0(uavcan.node.Mode_1_0.OPERATIONAL),
-                                      vendor_specific_status_code=0xc0)
+    heart = uavcan.node.Heartbeat_1_0(
+        uptime=123456,
+        health=uavcan.node.Health_1_0(uavcan.node.Health_1_0.CAUTION),
+        mode=uavcan.node.Mode_1_0(uavcan.node.Mode_1_0.OPERATIONAL),
+        vendor_specific_status_code=0xC0,
+    )
     assert pub_heart.priority == pyuavcan.presentation.DEFAULT_PRIORITY
     pub_heart.priority = Priority.SLOW
     assert pub_heart.priority == Priority.SLOW
@@ -86,7 +89,7 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
 
     item = await sub_heart.receive_for(1)
     assert item
-    rx, transfer = item                 # type: typing.Any, pyuavcan.transport.TransferFrom
+    rx, transfer = item  # type: typing.Any, pyuavcan.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id is None
     assert transfer.priority == Priority.SLOW
@@ -116,10 +119,11 @@ async def _unittest_slow_presentation_pub_sub_anon(generated_packages: typing.Li
 
 
 # noinspection PyProtectedMember
-@pytest.mark.parametrize('transport_factory', TRANSPORT_FACTORIES)  # type: ignore
+@pytest.mark.parametrize("transport_factory", TRANSPORT_FACTORIES)  # type: ignore
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
-                                              transport_factory:  TransportFactory) -> None:
+async def _unittest_slow_presentation_pub_sub(
+    generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
+) -> None:
     assert generated_packages
     import uavcan.node
     from test_dsdl_namespace.numpy import Complex_254_255
@@ -143,10 +147,12 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     sub_record = pres_a.make_subscriber(Complex_254_255, 2222)
     sub_record2 = pres_a.make_subscriber(Complex_254_255, 2222)
 
-    heart = uavcan.node.Heartbeat_1_0(uptime=123456,
-                                      health=uavcan.node.Health_1_0(uavcan.node.Health_1_0.CAUTION),
-                                      mode=uavcan.node.Mode_1_0(uavcan.node.Mode_1_0.OPERATIONAL),
-                                      vendor_specific_status_code=0xc0)
+    heart = uavcan.node.Heartbeat_1_0(
+        uptime=123456,
+        health=uavcan.node.Health_1_0(uavcan.node.Health_1_0.CAUTION),
+        mode=uavcan.node.Mode_1_0(uavcan.node.Mode_1_0.OPERATIONAL),
+        vendor_specific_status_code=0xC0,
+    )
 
     pub_heart.transfer_id_counter.override(23)
     await pub_heart.publish(heart)
@@ -178,12 +184,12 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert rx is None
 
     sub_heart.close()
-    sub_heart.close()       # Shall not raise.
+    sub_heart.close()  # Shall not raise.
 
     handler_output: typing.List[typing.Tuple[Complex_254_255, pyuavcan.transport.TransferFrom]] = []
 
     async def handler(message: Complex_254_255, cb_transfer: pyuavcan.transport.TransferFrom) -> None:
-        print('HANDLER:', message, cb_transfer)
+        print("HANDLER:", message, cb_transfer)
         handler_output.append((message, cb_transfer))
 
     sub_record2.receive_in_background(handler)
@@ -192,12 +198,12 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert pub_record.priority == pyuavcan.presentation.DEFAULT_PRIORITY
     pub_record.priority = Priority.NOMINAL
     assert pub_record.priority == Priority.NOMINAL
-    with pytest.raises(TypeError, match='.*Heartbeat.*'):
+    with pytest.raises(TypeError, match=".*Heartbeat.*"):
         # noinspection PyTypeChecker
         await pub_heart.publish(record)  # type: ignore
 
     pub_record.publish_soon(record)
-    await asyncio.sleep(0.1)                # Needed to make the deferred publication get the message out
+    await asyncio.sleep(0.1)  # Needed to make the deferred publication get the message out
     item2 = await sub_record.receive(asyncio.get_running_loop().time() + 1)
     assert item2
     rx, transfer = item2
@@ -214,12 +220,15 @@ async def _unittest_slow_presentation_pub_sub(generated_packages: typing.List[py
     assert stat.deserialization_failures == 0
     assert stat.messages == 1
 
-    await pub_record.transport_session.send(pyuavcan.transport.Transfer(
-        timestamp=pyuavcan.transport.Timestamp.now(),
-        priority=Priority.NOMINAL,
-        transfer_id=12,
-        fragmented_payload=[memoryview(b'\xFF' * 15)],  # Invalid union tag.
-    ), tran_a.loop.time() + 1.0)
+    await pub_record.transport_session.send(
+        pyuavcan.transport.Transfer(
+            timestamp=pyuavcan.transport.Timestamp.now(),
+            priority=Priority.NOMINAL,
+            transfer_id=12,
+            fragmented_payload=[memoryview(b"\xFF" * 15)],  # Invalid union tag.
+        ),
+        tran_a.loop.time() + 1.0,
+    )
     assert (await sub_record.receive(asyncio.get_event_loop().time() + _RX_TIMEOUT)) is None
 
     stat = sub_record.sample_statistics()

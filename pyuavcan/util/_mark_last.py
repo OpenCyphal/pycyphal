@@ -7,7 +7,7 @@
 import typing
 
 
-T = typing.TypeVar('T')
+T = typing.TypeVar("T")
 
 
 def mark_last(it: typing.Iterable[T]) -> typing.Iterable[typing.Tuple[bool, T]]:

@@ -26,14 +26,15 @@ class Priority(enum.IntEnum):
     We use integers here in order to allow usage of static lookup tables for conversion into transport-specific
     priority values. The particular integer values used here may be meaningless for some transports.
     """
+
     EXCEPTIONAL = 0
-    IMMEDIATE   = 1
-    FAST        = 2
-    HIGH        = 3
-    NOMINAL     = 4
-    LOW         = 5
-    SLOW        = 6
-    OPTIONAL    = 7
+    IMMEDIATE = 1
+    FAST = 2
+    HIGH = 3
+    NOMINAL = 4
+    LOW = 5
+    SLOW = 6
+    OPTIONAL = 7
 
 
 @dataclasses.dataclass(frozen=True)
@@ -41,6 +42,7 @@ class Transfer:
     """
     UAVCAN transfer representation.
     """
+
     timestamp: Timestamp
     """
     For output (tx) transfers this field contains the transfer creation timestamp.
@@ -69,13 +71,11 @@ class Transfer:
     """
 
     def __repr__(self) -> str:
-        fragmented_payload = '+'.join(f'{len(x)}B' for x in self.fragmented_payload)
-        kwargs = {
-            f.name: getattr(self, f.name) for f in dataclasses.fields(self)
-        }
-        kwargs['priority'] = str(self.priority).split('.')[-1]
-        kwargs['fragmented_payload'] = f'[{fragmented_payload}]'
-        del kwargs['timestamp']
+        fragmented_payload = "+".join(f"{len(x)}B" for x in self.fragmented_payload)
+        kwargs = {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
+        kwargs["priority"] = str(self.priority).split(".")[-1]
+        kwargs["fragmented_payload"] = f"[{fragmented_payload}]"
+        del kwargs["timestamp"]
         return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
 
@@ -84,6 +84,7 @@ class TransferFrom(Transfer):
     """
     Specialization for received transfers.
     """
+
     source_node_id: typing.Optional[int]
     """
     None indicates anonymous transfers.

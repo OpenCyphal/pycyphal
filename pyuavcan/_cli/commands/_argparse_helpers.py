@@ -16,17 +16,19 @@ def make_enum_action(enum_type: typing.Type[enum.Enum]) -> typing.Type[argparse.
 
     class ArgparseEnumAction(argparse.Action):
         # noinspection PyShadowingBuiltins
-        def __init__(self,
-                     option_strings: typing.Sequence[str],
-                     dest:           str,
-                     nargs:          typing.Union[int, str, None] = None,
-                     const:          typing.Any = None,
-                     default:        typing.Any = None,
-                     type:           typing.Any = None,
-                     choices:        typing.Any = None,
-                     required:       bool = False,
-                     help:           typing.Optional[str] = None,
-                     metavar:        typing.Any = None):
+        def __init__(
+            self,
+            option_strings: typing.Sequence[str],
+            dest: str,
+            nargs: typing.Union[int, str, None] = None,
+            const: typing.Any = None,
+            default: typing.Any = None,
+            type: typing.Any = None,
+            choices: typing.Any = None,
+            required: bool = False,
+            help: typing.Optional[str] = None,
+            metavar: typing.Any = None,
+        ):
             def type_proxy(x: str) -> typing.Any:
                 """A proxy is needed because a method of an unhashable type is unhashable."""
                 return mapping.get(x)
@@ -35,9 +37,7 @@ def make_enum_action(enum_type: typing.Type[enum.Enum]) -> typing.Type[argparse.
                 type = type_proxy
 
             if choices is None:
-                choices = [
-                    _NamedChoice(key, value) for key, value in mapping.items()
-                ]
+                choices = [_NamedChoice(key, value) for key, value in mapping.items()]
 
             super(ArgparseEnumAction, self).__init__(
                 option_strings,
@@ -52,11 +52,13 @@ def make_enum_action(enum_type: typing.Type[enum.Enum]) -> typing.Type[argparse.
                 metavar=metavar,
             )
 
-        def __call__(self,
-                     parser:        argparse.ArgumentParser,
-                     namespace:     argparse.Namespace,
-                     values:        typing.Union[str, typing.Sequence[typing.Any], None],
-                     option_string: typing.Optional[str] = None) -> None:
+        def __call__(
+            self,
+            parser: argparse.ArgumentParser,
+            namespace: argparse.Namespace,
+            values: typing.Union[str, typing.Sequence[typing.Any], None],
+            option_string: typing.Optional[str] = None,
+        ) -> None:
             setattr(namespace, self.dest, values)
 
     return ArgparseEnumAction

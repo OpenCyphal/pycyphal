@@ -24,14 +24,14 @@ def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
         output_directory_name = pathlib.Path(output_directory).resolve()
         caplog.clear()
         pyuavcan.dsdl.generate_package(
-            PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan',
+            PUBLIC_REGULATED_DATA_TYPES_DIR / "uavcan",
             output_directory=output_directory,
         )
         logs = caplog.record_tuples
     assert len(logs) == 1
-    print('Captured warning log entry:', logs[0], sep='\n')
-    assert 'dsdl' in logs[0][0]
+    print("Captured warning log entry:", logs[0], sep="\n")
+    assert "dsdl" in logs[0][0]
     assert logs[0][1] == logging.WARNING
-    assert ' path' in logs[0][2]
-    assert 'Path(' not in logs[0][2]  # Ensure decent formatting
+    assert " path" in logs[0][2]
+    assert "Path(" not in logs[0][2]  # Ensure decent formatting
     assert str(output_directory_name) in logs[0][2]

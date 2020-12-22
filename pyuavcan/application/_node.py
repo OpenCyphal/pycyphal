@@ -38,10 +38,10 @@ class Node:
     """
 
     def __init__(
-            self,
-            presentation:                  pyuavcan.presentation.Presentation,
-            info:                          NodeInfo,
-            with_diagnostic_subscriber:    bool = False,
+        self,
+        presentation: pyuavcan.presentation.Presentation,
+        info: NodeInfo,
+        with_diagnostic_subscriber: bool = False,
     ):
         """
         :param presentation: The node takes ownership of the supplied presentation controller.
@@ -60,8 +60,11 @@ class Node:
         self._heartbeat_publisher = pyuavcan.application.heartbeat_publisher.HeartbeatPublisher(self._presentation)
         self._srv_info = self._presentation.get_server_with_fixed_service_id(uavcan.node.GetInfo_1_0)
 
-        self._diagnostic_subscriber = pyuavcan.application.diagnostic.DiagnosticSubscriber(self._presentation) \
-            if with_diagnostic_subscriber else None
+        self._diagnostic_subscriber = (
+            pyuavcan.application.diagnostic.DiagnosticSubscriber(self._presentation)
+            if with_diagnostic_subscriber
+            else None
+        )
 
         self._started = False
 
@@ -106,14 +109,13 @@ class Node:
         finally:
             self._presentation.close()
 
-    async def _handle_get_info_request(self,
-                                       _: uavcan.node.GetInfo_1_0.Request,
-                                       metadata: pyuavcan.presentation.ServiceRequestMetadata) -> NodeInfo:
-        _logger.debug('%s got a node info request: %s', self, metadata)
+    async def _handle_get_info_request(
+        self, _: uavcan.node.GetInfo_1_0.Request, metadata: pyuavcan.presentation.ServiceRequestMetadata
+    ) -> NodeInfo:
+        _logger.debug("%s got a node info request: %s", self, metadata)
         return self._info
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             info=self._info,
-                                             heartbeat=self._heartbeat_publisher.make_message(),
-                                             presentation=self._presentation)
+        return pyuavcan.util.repr_attributes(
+            self, info=self._info, heartbeat=self._heartbeat_publisher.make_message(), presentation=self._presentation
+        )

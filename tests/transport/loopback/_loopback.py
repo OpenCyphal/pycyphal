@@ -14,7 +14,7 @@ import pyuavcan.transport
 import pyuavcan.transport.loopback
 
 
-@pytest.mark.asyncio    # type: ignore
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     tr = pyuavcan.transport.loopback.LoopbackTransport(None)
     protocol_params = pyuavcan.transport.ProtocolParameters(
@@ -50,12 +50,15 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     out_123.enable_feedback(on_feedback)
 
     ts = pyuavcan.transport.Timestamp.now()
-    assert await out_123.send(pyuavcan.transport.Transfer(
-        timestamp=ts,
-        priority=pyuavcan.transport.Priority.IMMEDIATE,
-        transfer_id=123,        # mod 32 = 27
-        fragmented_payload=[memoryview(b'Hello world!')],
-    ), tr.loop.time() + 1.0)
+    assert await out_123.send(
+        pyuavcan.transport.Transfer(
+            timestamp=ts,
+            priority=pyuavcan.transport.Priority.IMMEDIATE,
+            transfer_id=123,  # mod 32 = 27
+            fragmented_payload=[memoryview(b"Hello world!")],
+        ),
+        tr.loop.time() + 1.0,
+    )
     out_123.disable_feedback()
 
     assert last_feedback is not None
@@ -66,7 +69,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert out_123.sample_statistics() == pyuavcan.transport.SessionStatistics(
         transfers=1,
         frames=1,
-        payload_bytes=len('Hello world!'),
+        payload_bytes=len("Hello world!"),
     )
 
     old_out = out_123
@@ -90,12 +93,15 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert None is await inp_123.receive(tr.loop.time() + 1.0)
 
     # This one will be dropped because wrong target node 123 != 42
-    assert await out_123.send(pyuavcan.transport.Transfer(
-        timestamp=pyuavcan.transport.Timestamp.now(),
-        priority=pyuavcan.transport.Priority.IMMEDIATE,
-        transfer_id=123,        # mod 32 = 27
-        fragmented_payload=[memoryview(b'Hello world!')],
-    ), tr.loop.time() + 1.0)
+    assert await out_123.send(
+        pyuavcan.transport.Transfer(
+            timestamp=pyuavcan.transport.Timestamp.now(),
+            priority=pyuavcan.transport.Priority.IMMEDIATE,
+            transfer_id=123,  # mod 32 = 27
+            fragmented_payload=[memoryview(b"Hello world!")],
+        ),
+        tr.loop.time() + 1.0,
+    )
     assert None is await inp_123.receive(0)
     assert None is await inp_123.receive(tr.loop.time() + 1.0)
 
@@ -105,12 +111,15 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     inp_42 = tr.get_input_session(specifier=message_spec_42_in, payload_metadata=payload_metadata)
     assert inp_123 is not inp_42
 
-    assert await out_bc.send(pyuavcan.transport.Transfer(
-        timestamp=pyuavcan.transport.Timestamp.now(),
-        priority=pyuavcan.transport.Priority.IMMEDIATE,
-        transfer_id=123,        # mod 32 = 27
-        fragmented_payload=[memoryview(b'Hello world!')],
-    ), tr.loop.time() + 1.0)
+    assert await out_bc.send(
+        pyuavcan.transport.Transfer(
+            timestamp=pyuavcan.transport.Timestamp.now(),
+            priority=pyuavcan.transport.Priority.IMMEDIATE,
+            transfer_id=123,  # mod 32 = 27
+            fragmented_payload=[memoryview(b"Hello world!")],
+        ),
+        tr.loop.time() + 1.0,
+    )
     assert None is await inp_123.receive(0)
     assert None is await inp_123.receive(tr.loop.time() + 1.0)
 
@@ -120,27 +129,30 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert rx.timestamp.system <= time.time()
     assert rx.priority == pyuavcan.transport.Priority.IMMEDIATE
     assert rx.transfer_id == 27
-    assert rx.fragmented_payload == [memoryview(b'Hello world!')]
+    assert rx.fragmented_payload == [memoryview(b"Hello world!")]
     assert rx.source_node_id == tr.local_node_id
 
     assert inp_42.sample_statistics() == pyuavcan.transport.SessionStatistics(
         transfers=1,
         frames=1,
-        payload_bytes=len('Hello world!'),
+        payload_bytes=len("Hello world!"),
     )
 
     with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.loopback.__name__):
-        out_bc.exception = RuntimeError('INTENDED EXCEPTION')
+        out_bc.exception = RuntimeError("INTENDED EXCEPTION")
         with pytest.raises(ValueError):
             # noinspection PyTypeHints
             out_bc.exception = 123  # type: ignore
-        with pytest.raises(RuntimeError, match='INTENDED EXCEPTION'):
-            assert await out_bc.send(pyuavcan.transport.Transfer(
-                timestamp=pyuavcan.transport.Timestamp.now(),
-                priority=pyuavcan.transport.Priority.IMMEDIATE,
-                transfer_id=123,        # mod 32 = 27
-                fragmented_payload=[memoryview(b'Hello world!')],
-            ), tr.loop.time() + 1.0)
+        with pytest.raises(RuntimeError, match="INTENDED EXCEPTION"):
+            assert await out_bc.send(
+                pyuavcan.transport.Transfer(
+                    timestamp=pyuavcan.transport.Timestamp.now(),
+                    priority=pyuavcan.transport.Priority.IMMEDIATE,
+                    transfer_id=123,  # mod 32 = 27
+                    fragmented_payload=[memoryview(b"Hello world!")],
+                ),
+                tr.loop.time() + 1.0,
+            )
         assert isinstance(out_bc.exception, RuntimeError)
         out_bc.exception = None
         assert out_bc.exception is None
@@ -154,16 +166,19 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert len(tr.capture_handlers) == 1
     tr.begin_capture(mon_events2.append)
     assert len(tr.capture_handlers) == 2
-    assert await out_bc.send(pyuavcan.transport.Transfer(
-        timestamp=pyuavcan.transport.Timestamp.now(),
-        priority=pyuavcan.transport.Priority.IMMEDIATE,
-        transfer_id=200,
-        fragmented_payload=[memoryview(b'Hello world!')],
-    ), tr.loop.time() + 1.0)
+    assert await out_bc.send(
+        pyuavcan.transport.Transfer(
+            timestamp=pyuavcan.transport.Timestamp.now(),
+            priority=pyuavcan.transport.Priority.IMMEDIATE,
+            transfer_id=200,
+            fragmented_payload=[memoryview(b"Hello world!")],
+        ),
+        tr.loop.time() + 1.0,
+    )
     rx = await inp_42.receive(0)
     assert rx is not None
     assert rx.transfer_id == 200 % 32
-    ev, = mon_events
+    (ev,) = mon_events
     assert isinstance(ev, pyuavcan.transport.loopback.LoopbackCapture)
     assert ev.timestamp == rx.timestamp
     assert ev.transfer.metadata.transfer_id == rx.transfer_id
@@ -179,7 +194,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio    # type: ignore
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_loopback_transport_service() -> None:
     from pyuavcan.transport import ServiceDataSpecifier, InputSessionSpecifier, OutputSessionSpecifier
 
@@ -187,25 +202,28 @@ async def _unittest_loopback_transport_service() -> None:
 
     tr = pyuavcan.transport.loopback.LoopbackTransport(1234)
 
-    inp = tr.get_input_session(InputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
-                                                     1234),
-                               payload_metadata)
+    inp = tr.get_input_session(
+        InputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST), 1234), payload_metadata
+    )
 
-    out = tr.get_output_session(OutputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST),
-                                                       1234),
-                                payload_metadata)
+    out = tr.get_output_session(
+        OutputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST), 1234), payload_metadata
+    )
 
-    assert await out.send(pyuavcan.transport.Transfer(
-        timestamp=pyuavcan.transport.Timestamp.now(),
-        priority=pyuavcan.transport.Priority.IMMEDIATE,
-        transfer_id=123,        # mod 32 = 27
-        fragmented_payload=[memoryview(b'Hello world!')],
-    ), tr.loop.time() + 1.0)
+    assert await out.send(
+        pyuavcan.transport.Transfer(
+            timestamp=pyuavcan.transport.Timestamp.now(),
+            priority=pyuavcan.transport.Priority.IMMEDIATE,
+            transfer_id=123,  # mod 32 = 27
+            fragmented_payload=[memoryview(b"Hello world!")],
+        ),
+        tr.loop.time() + 1.0,
+    )
 
     assert None is not await inp.receive(0)
 
 
-@pytest.mark.asyncio    # type: ignore
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_loopback_tracer() -> None:
     from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Timestamp, Priority
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, TransferTrace
@@ -215,9 +233,10 @@ async def _unittest_loopback_tracer() -> None:
     ts = Timestamp.now()
 
     # MESSAGE
-    msg = AlienTransfer(AlienTransferMetadata(Priority.IMMEDIATE, 54321,
-                                              AlienSessionSpecifier(1234, None, MessageDataSpecifier(7777))),
-                        [])
+    msg = AlienTransfer(
+        AlienTransferMetadata(Priority.IMMEDIATE, 54321, AlienSessionSpecifier(1234, None, MessageDataSpecifier(7777))),
+        [],
+    )
     assert tr.update(LoopbackCapture(ts, msg)) == TransferTrace(
         timestamp=ts,
         transfer=msg,
@@ -225,13 +244,14 @@ async def _unittest_loopback_tracer() -> None:
     )
 
     # REQUEST
-    req = AlienTransfer(AlienTransferMetadata(Priority.NOMINAL, 333333333,
-                                              AlienSessionSpecifier(
-                                                  321,
-                                                  123,
-                                                  ServiceDataSpecifier(222, ServiceDataSpecifier.Role.REQUEST)),
-                                              ),
-                        [])
+    req = AlienTransfer(
+        AlienTransferMetadata(
+            Priority.NOMINAL,
+            333333333,
+            AlienSessionSpecifier(321, 123, ServiceDataSpecifier(222, ServiceDataSpecifier.Role.REQUEST)),
+        ),
+        [],
+    )
     trace_req = tr.update(LoopbackCapture(ts, req))
     assert isinstance(trace_req, TransferTrace)
     assert trace_req == TransferTrace(
@@ -241,13 +261,14 @@ async def _unittest_loopback_tracer() -> None:
     )
 
     # RESPONSE
-    res = AlienTransfer(AlienTransferMetadata(Priority.NOMINAL, 333333333,
-                                              AlienSessionSpecifier(
-                                                  123,
-                                                  444,
-                                                  ServiceDataSpecifier(222, ServiceDataSpecifier.Role.RESPONSE)),
-                                              ),
-                        [])
+    res = AlienTransfer(
+        AlienTransferMetadata(
+            Priority.NOMINAL,
+            333333333,
+            AlienSessionSpecifier(123, 444, ServiceDataSpecifier(222, ServiceDataSpecifier.Role.RESPONSE)),
+        ),
+        [],
+    )
     assert tr.update(LoopbackCapture(ts, res)) == TransferTrace(
         timestamp=ts,
         transfer=res,
@@ -255,13 +276,14 @@ async def _unittest_loopback_tracer() -> None:
     )
 
     # RESPONSE
-    res = AlienTransfer(AlienTransferMetadata(Priority.NOMINAL, 333333333,
-                                              AlienSessionSpecifier(
-                                                  123,
-                                                  321,
-                                                  ServiceDataSpecifier(222, ServiceDataSpecifier.Role.RESPONSE)),
-                                              ),
-                        [])
+    res = AlienTransfer(
+        AlienTransferMetadata(
+            Priority.NOMINAL,
+            333333333,
+            AlienSessionSpecifier(123, 321, ServiceDataSpecifier(222, ServiceDataSpecifier.Role.RESPONSE)),
+        ),
+        [],
+    )
     assert tr.update(LoopbackCapture(ts, res)) == TransferTrace(
         timestamp=ts,
         transfer=res,

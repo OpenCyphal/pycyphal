@@ -61,8 +61,8 @@ class CompositeObject(abc.ABC):  # Members are surrounded with underscores to av
         return out
 
     # These typing hints are provided here for use in the generated classes. They are obviously not part of the API.
-    _SerializerTypeVar_ = typing.TypeVar('_SerializerTypeVar_', bound=_serialized_representation.Serializer)
-    _DeserializerTypeVar_ = typing.TypeVar('_DeserializerTypeVar_', bound=_serialized_representation.Deserializer)
+    _SerializerTypeVar_ = typing.TypeVar("_SerializerTypeVar_", bound=_serialized_representation.Serializer)
+    _DeserializerTypeVar_ = typing.TypeVar("_DeserializerTypeVar_", bound=_serialized_representation.Deserializer)
 
 
 class ServiceObject(CompositeObject):
@@ -70,6 +70,7 @@ class ServiceObject(CompositeObject):
     This is the base class for all Python classes generated from DSDL service type definitions.
     Observe that it inherits from the composite object class, just like the nested types Request and Response.
     """
+
     Request: typing.Type[CompositeObject]
     """
     Nested request type. Inherits from :class:`CompositeObject`.
@@ -85,17 +86,18 @@ class ServiceObject(CompositeObject):
     _EXTENT_BYTES_ = 0
 
     def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
-        raise TypeError(f'Service type {type(self).__name__} cannot be serialized')
+        raise TypeError(f"Service type {type(self).__name__} cannot be serialized")
 
     @staticmethod
     def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
-        raise TypeError('Service types cannot be deserialized')
+        raise TypeError("Service types cannot be deserialized")
 
 
 class FixedPortObject(abc.ABC):
     """
     This is the base class for all Python classes generated from DSDL types that have a fixed port identifier.
     """
+
     _FIXED_PORT_ID_: int
 
 
@@ -114,7 +116,7 @@ class FixedPortServiceObject(ServiceObject, FixedPortObject):
     pass
 
 
-CompositeObjectTypeVar = typing.TypeVar('CompositeObjectTypeVar', bound=CompositeObject)
+CompositeObjectTypeVar = typing.TypeVar("CompositeObjectTypeVar", bound=CompositeObject)
 
 
 # noinspection PyProtectedMember
@@ -135,9 +137,9 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
 
 
 # noinspection PyProtectedMember
-def deserialize(dtype: typing.Type[CompositeObjectTypeVar],
-                fragmented_serialized_representation: typing.Sequence[memoryview]) \
-        -> typing.Optional[CompositeObjectTypeVar]:
+def deserialize(
+    dtype: typing.Type[CompositeObjectTypeVar], fragmented_serialized_representation: typing.Sequence[memoryview]
+) -> typing.Optional[CompositeObjectTypeVar]:
     """
     Constructs an instance of the supplied DSDL-generated data type from its serialized representation.
     Returns None if the provided serialized representation is invalid.
@@ -156,7 +158,7 @@ def deserialize(dtype: typing.Type[CompositeObjectTypeVar],
     try:
         return dtype._deserialize_(deserializer)  # type: ignore
     except _serialized_representation.Deserializer.FormatError:
-        _logger.info('Invalid serialized representation of %s: %s', get_model(dtype), deserializer, exc_info=True)
+        _logger.info("Invalid serialized representation of %s: %s", get_model(dtype), deserializer, exc_info=True)
         return None
 
 
@@ -187,31 +189,34 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
           To fix this, regenerate the package and make sure that all components of the application use identical
           or compatible DSDL source files.
     """
+
     def do_import(name_components: typing.List[str]) -> typing.Any:
         mod = None
         for comp in name_components:
-            name = (mod.__name__ + '.' + comp) if mod else comp  # type: ignore
+            name = (mod.__name__ + "." + comp) if mod else comp  # type: ignore
             try:
                 mod = importlib.import_module(name)
-            except ImportError:                         # We seem to have hit a reserved word; try with an underscore.
-                mod = importlib.import_module(name + '_')
+            except ImportError:  # We seem to have hit a reserved word; try with an underscore.
+                mod = importlib.import_module(name + "_")
         return mod
 
-    if model.has_parent_service:    # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
+    if model.has_parent_service:  # uavcan.node.GetInfo.Request --> uavcan.node.GetInfo then Request
         parent_name, child_name = model.name_components[-2:]
         mod = do_import(model.name_components[:-2])
-        out = getattr(mod, f'{parent_name}_{model.version.major}_{model.version.minor}')
+        out = getattr(mod, f"{parent_name}_{model.version.major}_{model.version.minor}")
         assert issubclass(out, ServiceObject)
         out = getattr(out, child_name)
     else:
         mod = do_import(model.name_components[:-1])
-        out = getattr(mod, f'{model.short_name}_{model.version.major}_{model.version.minor}')
+        out = getattr(mod, f"{model.short_name}_{model.version.major}_{model.version.minor}")
 
     out_model = get_model(out)
     if out_model.inner_type != model.inner_type:
-        raise TypeError(f'The class has been generated using an incompatible DSDL definition. '
-                        f'Requested model: {model} defined in {model.source_file_path}. '
-                        f'Model found in the class: {out_model} defined in {out_model.source_file_path}.')
+        raise TypeError(
+            f"The class has been generated using an incompatible DSDL definition. "
+            f"Requested model: {model} defined in {model.source_file_path}. "
+            f"Model found in the class: {out_model} defined in {out_model.source_file_path}."
+        )
 
     assert str(get_model(out)) == str(model)
     assert isinstance(out, type)
@@ -224,8 +229,9 @@ def get_extent_bytes(class_or_instance: typing.Union[typing.Type[CompositeObject
     return int(class_or_instance._EXTENT_BYTES_)
 
 
-def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[FixedPortObject],
-                                                      FixedPortObject]) -> typing.Optional[int]:
+def get_fixed_port_id(
+    class_or_instance: typing.Union[typing.Type[FixedPortObject], FixedPortObject]
+) -> typing.Optional[int]:
     """
     Returns None if the supplied type has no fixed port-ID.
     """
@@ -235,14 +241,14 @@ def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[FixedPortObjec
     except TypeError:
         return None
     else:
-        if (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)) or \
-                isinstance(class_or_instance, CompositeObject):  # pragma: no branch
+        if (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)) or isinstance(
+            class_or_instance, CompositeObject
+        ):  # pragma: no branch
             assert out == get_model(class_or_instance).fixed_port_id
         return out
 
 
-def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject]],
-                  name: str) -> typing.Any:
+def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject]], name: str) -> typing.Any:
     """
     DSDL type attributes whose names can't be represented in Python (such as ``def`` or ``type``)
     are suffixed with an underscore.
@@ -254,7 +260,7 @@ def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject
     try:
         return getattr(obj, name)
     except AttributeError:
-        return getattr(obj, name + '_')
+        return getattr(obj, name + "_")
 
 
 def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
@@ -266,7 +272,7 @@ def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
 
     If the attribute does not exist, raises :class:`AttributeError`.
     """
-    suffixed = name + '_'
+    suffixed = name + "_"
     # We can't call setattr() without asking first because if it doesn't exist it will be created,
     # which would be disastrous.
     if hasattr(obj, name):

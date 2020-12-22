@@ -13,11 +13,13 @@ import pyuavcan.transport
 class LoopbackInputSession(pyuavcan.transport.InputSession):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2
 
-    def __init__(self,
-                 specifier:        pyuavcan.transport.InputSessionSpecifier,
-                 payload_metadata: pyuavcan.transport.PayloadMetadata,
-                 loop:             asyncio.AbstractEventLoop,
-                 closer:           typing.Callable[[], None]):
+    def __init__(
+        self,
+        specifier: pyuavcan.transport.InputSessionSpecifier,
+        payload_metadata: pyuavcan.transport.PayloadMetadata,
+        loop: asyncio.AbstractEventLoop,
+        closer: typing.Callable[[], None],
+    ):
         self._specifier = specifier
         self._payload_metadata = payload_metadata
         self._loop = loop
@@ -62,7 +64,7 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
         if value > 0:
             self._transfer_id_timeout = float(value)
         else:
-            raise ValueError(f'Invalid TID timeout: {value!r}')
+            raise ValueError(f"Invalid TID timeout: {value!r}")
 
     @property
     def specifier(self) -> pyuavcan.transport.InputSessionSpecifier:
@@ -91,10 +93,9 @@ def _unittest_session() -> None:
         nonlocal closed
         closed = True
 
-    ses = LoopbackInputSession(specifier=specifier,
-                               payload_metadata=payload_metadata,
-                               loop=asyncio.get_event_loop(),
-                               closer=do_close)
+    ses = LoopbackInputSession(
+        specifier=specifier, payload_metadata=payload_metadata, loop=asyncio.get_event_loop(), closer=do_close
+    )
 
     ses.transfer_id_timeout = 123.456
     with pytest.raises(ValueError):

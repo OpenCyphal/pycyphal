@@ -7,4 +7,4 @@
 import os as _os
 from . import dsdl as dsdl
 
-assert _os.environ.get('PYTHONASYNCIODEBUG', False), 'PYTHONASYNCIODEBUG should be set while running the tests'
+assert _os.environ.get("PYTHONASYNCIODEBUG", False), "PYTHONASYNCIODEBUG should be set while running the tests"

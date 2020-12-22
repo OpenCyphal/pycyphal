@@ -4,6 +4,7 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from pyuavcan import _cli
+
     _cli.main()

@@ -22,8 +22,8 @@ _LISTEN_FOREVER_TIMEOUT = 1
 
 
 OutputTransportSessionFactory = typing.Callable[[int], pyuavcan.transport.OutputSession]
-ServiceRequestClass = typing.TypeVar('ServiceRequestClass', bound=pyuavcan.dsdl.CompositeObject)
-ServiceResponseClass = typing.TypeVar('ServiceResponseClass', bound=pyuavcan.dsdl.CompositeObject)
+ServiceRequestClass = typing.TypeVar("ServiceRequestClass", bound=pyuavcan.dsdl.CompositeObject)
+ServiceResponseClass = typing.TypeVar("ServiceResponseClass", bound=pyuavcan.dsdl.CompositeObject)
 
 
 _logger = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ class ServiceRequestMetadata:
     This structure is supplied with every received request for informational purposes.
     The application is not required to do anything with it.
     """
+
     timestamp: pyuavcan.transport.Timestamp
     """Timestamp of the first frame of the request transfer."""
 
@@ -65,16 +66,15 @@ class ServiceRequestMetadata:
     """The response will be sent back to this node."""
 
     def __repr__(self) -> str:
-        kwargs = {
-            f.name: getattr(self, f.name) for f in dataclasses.fields(self)
-        }
-        kwargs['priority'] = str(self.priority).split('.')[-1]
-        del kwargs['timestamp']
+        kwargs = {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
+        kwargs["priority"] = str(self.priority).split(".")[-1]
+        del kwargs["timestamp"]
         return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
 
-ServiceRequestHandler = typing.Callable[[ServiceRequestClass, ServiceRequestMetadata],
-                                        typing.Awaitable[typing.Optional[ServiceResponseClass]]]
+ServiceRequestHandler = typing.Callable[
+    [ServiceRequestClass, ServiceRequestMetadata], typing.Awaitable[typing.Optional[ServiceResponseClass]]
+]
 """Type of the async request handler callable."""
 
 
@@ -91,12 +91,14 @@ class Server(ServicePort[ServiceClass]):
         in MyPy, this should be switched back to proper implementation.
     """
 
-    def __init__(self,
-                 dtype:                            typing.Type[ServiceClass],
-                 input_transport_session:          pyuavcan.transport.InputSession,
-                 output_transport_session_factory: OutputTransportSessionFactory,
-                 finalizer:                        PortFinalizer,
-                 loop:                             asyncio.AbstractEventLoop):
+    def __init__(
+        self,
+        dtype: typing.Type[ServiceClass],
+        input_transport_session: pyuavcan.transport.InputSession,
+        output_transport_session_factory: OutputTransportSessionFactory,
+        finalizer: PortFinalizer,
+        loop: asyncio.AbstractEventLoop,
+    ):
         """
         Do not call this directly! Use :meth:`Presentation.get_server`.
         """
@@ -117,9 +119,11 @@ class Server(ServicePort[ServiceClass]):
 
     # ----------------------------------------  MAIN API  ----------------------------------------
 
-    async def serve(self,
-                    handler:            ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
-                    monotonic_deadline: typing.Optional[float] = None) -> None:
+    async def serve(
+        self,
+        handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
+        monotonic_deadline: typing.Optional[float] = None,
+    ) -> None:
         """
         This is like :meth:`serve_for` except that it exits normally after the specified monotonic deadline is reached.
         The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
@@ -137,38 +141,36 @@ class Server(ServicePort[ServiceClass]):
             else:
                 out = await self._receive(monotonic_deadline)
                 if out is None:
-                    break       # Timed out.
+                    break  # Timed out.
 
             self._served_request_count += 1
             request, meta = out
             response: typing.Optional[ServiceResponseClass] = None  # Fallback state
-            assert isinstance(request, self._dtype.Request), 'Internal protocol violation'
+            assert isinstance(request, self._dtype.Request), "Internal protocol violation"
             try:
                 response = await handler(request, meta)  # type: ignore
                 if response is not None and not isinstance(response, self._dtype.Response):
                     raise TypeError(
-                        f'The application request handler has returned an invalid response: '
-                        f'expected an instance of {self._dtype.Response} or None, '
-                        f'found {type(response)} instead. '
-                        f'The corresponding request was {request} with metadata {meta}.')
+                        f"The application request handler has returned an invalid response: "
+                        f"expected an instance of {self._dtype.Response} or None, "
+                        f"found {type(response)} instead. "
+                        f"The corresponding request was {request} with metadata {meta}."
+                    )
             except asyncio.CancelledError:
                 raise
             except Exception as ex:
-                _logger.exception('%s unhandled exception in the handler: %s', self, ex)
+                _logger.exception("%s unhandled exception in the handler: %s", self, ex)
 
             response_transport_session = self._get_output_transport_session(meta.client_node_id)
 
             # Send the response unless the application has opted out, in which case do nothing.
             if response is not None:
                 # TODO: make the send timeout configurable.
-                await self._do_send(response,
-                                    meta,
-                                    response_transport_session,
-                                    self._loop.time() + self._send_timeout)
+                await self._do_send(response, meta, response_transport_session, self._loop.time() + self._send_timeout)
 
-    async def serve_for(self,
-                        handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
-                        timeout: float) -> None:
+    async def serve_for(
+        self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass], timeout: float
+    ) -> None:
         """
         Listen for requests for the specified time or until the instance is closed, then exit.
 
@@ -192,18 +194,19 @@ class Server(ServicePort[ServiceClass]):
         If the background task is already running, it will be cancelled and a new one will be started instead.
         This method of serving requests shall not be used concurrently with other methods.
         """
+
         async def task_function() -> None:
             while not self._closed:
                 try:
                     await self.serve_for(handler, _LISTEN_FOREVER_TIMEOUT)
                 except asyncio.CancelledError:
-                    _logger.debug('%s task cancelled', self)
+                    _logger.debug("%s task cancelled", self)
                     break
                 except pyuavcan.transport.ResourceClosedError as ex:
-                    _logger.debug('%s task got a resource closed error and will exit: %s', self, ex)
+                    _logger.debug("%s task got a resource closed error and will exit: %s", self, ex)
                     break
                 except Exception as ex:
-                    _logger.exception('%s task failure: %s', self, ex)
+                    _logger.exception("%s task failure: %s", self, ex)
                     await asyncio.sleep(1)  # TODO is this an adequate failure management strategy?
 
         if self._maybe_task is not None:
@@ -226,22 +229,25 @@ class Server(ServicePort[ServiceClass]):
     @send_timeout.setter
     def send_timeout(self, value: float) -> None:
         value = float(value)
-        if 0 < value < float('+inf'):
+        if 0 < value < float("+inf"):
             self._send_timeout = value
         else:
-            raise ValueError(f'Invalid send timeout value: {value}')
+            raise ValueError(f"Invalid send timeout value: {value}")
 
     def sample_statistics(self) -> ServerStatistics:
         """
         Returns the statistical counters of this server instance,
         including the statistical metrics of the underlying transport sessions.
         """
-        return ServerStatistics(request_transport_session=self._input_transport_session.sample_statistics(),
-                                response_transport_sessions={nid: ts.sample_statistics()
-                                                             for nid, ts in self._output_transport_sessions.items()},
-                                served_requests=self._served_request_count,
-                                deserialization_failures=self._deserialization_failure_count,
-                                malformed_requests=self._malformed_request_count)
+        return ServerStatistics(
+            request_transport_session=self._input_transport_session.sample_statistics(),
+            response_transport_sessions={
+                nid: ts.sample_statistics() for nid, ts in self._output_transport_sessions.items()
+            },
+            served_requests=self._served_request_count,
+            deserialization_failures=self._deserialization_failure_count,
+            malformed_requests=self._malformed_request_count,
+        )
 
     @property
     def dtype(self) -> typing.Type[ServiceClass]:
@@ -254,26 +260,29 @@ class Server(ServicePort[ServiceClass]):
     def close(self) -> None:
         if not self._closed:
             self._closed = True
-            if self._maybe_task is not None:    # The task may be holding the lock.
+            if self._maybe_task is not None:  # The task may be holding the lock.
                 try:
-                    self._maybe_task.cancel()   # We don't wait for it to exit because it's pointless.
+                    self._maybe_task.cancel()  # We don't wait for it to exit because it's pointless.
                 except Exception as ex:
-                    _logger.exception('%s task could not be cancelled: %s', self, ex)
+                    _logger.exception("%s task could not be cancelled: %s", self, ex)
                 self._maybe_task = None
 
             self._finalizer((self._input_transport_session, *self._output_transport_sessions.values()))
 
-    async def _receive(self, monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[ServiceRequestClass, ServiceRequestMetadata]]:
+    async def _receive(
+        self, monotonic_deadline: float
+    ) -> typing.Optional[typing.Tuple[ServiceRequestClass, ServiceRequestMetadata]]:
         while True:
             transfer = await self._input_transport_session.receive(monotonic_deadline)
             if transfer is None:
                 return None
             if transfer.source_node_id is not None:
-                meta = ServiceRequestMetadata(timestamp=transfer.timestamp,
-                                              priority=transfer.priority,
-                                              transfer_id=transfer.transfer_id,
-                                              client_node_id=transfer.source_node_id)
+                meta = ServiceRequestMetadata(
+                    timestamp=transfer.timestamp,
+                    priority=transfer.priority,
+                    transfer_id=transfer.transfer_id,
+                    client_node_id=transfer.source_node_id,
+                )
                 request = pyuavcan.dsdl.deserialize(self._dtype.Request, transfer.fragmented_payload)
                 if request is not None:
                     return request, meta  # type: ignore
@@ -283,16 +292,20 @@ class Server(ServicePort[ServiceClass]):
                 self._malformed_request_count += 1
 
     @staticmethod
-    async def _do_send(response:           ServiceResponseClass,
-                       metadata:           ServiceRequestMetadata,
-                       session:            pyuavcan.transport.OutputSession,
-                       monotonic_deadline: float) -> bool:
+    async def _do_send(
+        response: ServiceResponseClass,
+        metadata: ServiceRequestMetadata,
+        session: pyuavcan.transport.OutputSession,
+        monotonic_deadline: float,
+    ) -> bool:
         timestamp = pyuavcan.transport.Timestamp.now()
         fragmented_payload = list(pyuavcan.dsdl.serialize(response))
-        transfer = pyuavcan.transport.Transfer(timestamp=timestamp,
-                                               priority=metadata.priority,
-                                               transfer_id=metadata.transfer_id,
-                                               fragmented_payload=fragmented_payload)
+        transfer = pyuavcan.transport.Transfer(
+            timestamp=timestamp,
+            priority=metadata.priority,
+            transfer_id=metadata.transfer_id,
+            fragmented_payload=fragmented_payload,
+        )
         return await session.send(transfer, monotonic_deadline)
 
     def _get_output_transport_session(self, client_node_id: int) -> pyuavcan.transport.OutputSession:

@@ -16,8 +16,9 @@ from pyuavcan.presentation import Presentation
 
 # noinspection PyProtectedMember
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_diagnostic(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo],
-                                    caplog: typing.Any) -> None:
+async def _unittest_slow_diagnostic(
+    generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
+) -> None:
     from pyuavcan.application import diagnostic
     from uavcan.time import SynchronizedTimestamp_1_0
 
@@ -30,22 +31,26 @@ async def _unittest_slow_diagnostic(generated_packages: typing.List[pyuavcan.dsd
     diag.start()
 
     caplog.clear()
-    await pub.publish(diagnostic.Record(timestamp=SynchronizedTimestamp_1_0(123456789),
-                                        severity=diagnostic.Severity(diagnostic.Severity.INFO),
-                                        text='Hello world!'))
+    await pub.publish(
+        diagnostic.Record(
+            timestamp=SynchronizedTimestamp_1_0(123456789),
+            severity=diagnostic.Severity(diagnostic.Severity.INFO),
+            text="Hello world!",
+        )
+    )
     await asyncio.sleep(1.0)
-    print('Captured log records:')
+    print("Captured log records:")
     for lr in caplog.records:
-        print('   ', lr)
+        print("   ", lr)
         assert isinstance(lr, logging.LogRecord)
-        pat = '''
+        pat = """
 Received uavcan.diagnostic.Record from node 2222; severity 2; remote ts 123.456789 s, local ts [^;]*; text:
     Hello world!
-'''.strip()
+""".strip()
         if lr.levelno == logging.INFO and re.match(pat, lr.message):
             break
     else:
-        assert False, 'Expected log message not captured'
+        assert False, "Expected log message not captured"
 
     diag.close()
     pub.close()

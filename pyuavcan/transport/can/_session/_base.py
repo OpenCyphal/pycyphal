@@ -23,7 +23,8 @@ class CANSession:
     def _raise_if_closed(self) -> None:
         if self._close_finalizer is None:
             raise pyuavcan.transport.ResourceClosedError(
-                f'The requested action cannot be performed because the session object {self} is closed')
+                f"The requested action cannot be performed because the session object {self} is closed"
+            )
 
     def close(self) -> None:
         fin = self._close_finalizer

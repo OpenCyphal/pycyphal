@@ -14,16 +14,19 @@ from ._base import SerialSession
 
 
 #: Returns the transmission timestamp.
-SendHandler = typing.Callable[[typing.List[SerialFrame], float],
-                              typing.Awaitable[typing.Optional[pyuavcan.transport.Timestamp]]]
+SendHandler = typing.Callable[
+    [typing.List[SerialFrame], float], typing.Awaitable[typing.Optional[pyuavcan.transport.Timestamp]]
+]
 
 _logger = logging.getLogger(__name__)
 
 
 class SerialFeedback(pyuavcan.transport.Feedback):
-    def __init__(self,
-                 original_transfer_timestamp:        pyuavcan.transport.Timestamp,
-                 first_frame_transmission_timestamp: pyuavcan.transport.Timestamp):
+    def __init__(
+        self,
+        original_transfer_timestamp: pyuavcan.transport.Timestamp,
+        first_frame_transmission_timestamp: pyuavcan.transport.Timestamp,
+    ):
         self._original_transfer_timestamp = original_transfer_timestamp
         self._first_frame_transmission_timestamp = first_frame_transmission_timestamp
 
@@ -37,13 +40,15 @@ class SerialFeedback(pyuavcan.transport.Feedback):
 
 
 class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
-    def __init__(self,
-                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
-                 payload_metadata: pyuavcan.transport.PayloadMetadata,
-                 mtu:              int,
-                 local_node_id:    typing.Optional[int],
-                 send_handler:     SendHandler,
-                 finalizer:        typing.Callable[[], None]):
+    def __init__(
+        self,
+        specifier: pyuavcan.transport.OutputSessionSpecifier,
+        payload_metadata: pyuavcan.transport.PayloadMetadata,
+        mtu: int,
+        local_node_id: typing.Optional[int],
+        send_handler: SendHandler,
+        finalizer: typing.Callable[[], None],
+    ):
         """
         Do not call this directly.
         Instead, use the factory method :meth:`pyuavcan.transport.serial.SerialTransport.get_output_session`.
@@ -58,44 +63,52 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         assert isinstance(self._local_node_id, int) or self._local_node_id is None
         assert callable(send_handler)
 
-        if not isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier) or \
-                not isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata):  # pragma: no cover
-            raise TypeError('Invalid parameters')
+        if not isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier) or not isinstance(
+            self._payload_metadata, pyuavcan.transport.PayloadMetadata
+        ):  # pragma: no cover
+            raise TypeError("Invalid parameters")
 
-        assert specifier.remote_node_id is not None \
-            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier) else True, \
-            'Internal protocol violation: cannot broadcast a service transfer'
+        assert (
+            specifier.remote_node_id is not None
+            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
+            else True
+        ), "Internal protocol violation: cannot broadcast a service transfer"
 
         super(SerialOutputSession, self).__init__(finalizer)
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         self._raise_if_closed()
 
-        if self._local_node_id is None and isinstance(self._specifier.data_specifier,
-                                                      pyuavcan.transport.ServiceDataSpecifier):
+        if self._local_node_id is None and isinstance(
+            self._specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier
+        ):
             raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
-                f'Anonymous nodes cannot emit service transfers. Session specifier: {self._specifier}')
+                f"Anonymous nodes cannot emit service transfers. Session specifier: {self._specifier}"
+            )
 
         def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> SerialFrame:
             if not end_of_transfer and self._local_node_id is None:
                 raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
-                    f'Anonymous nodes cannot emit multi-frame transfers. Session specifier: {self._specifier}')
+                    f"Anonymous nodes cannot emit multi-frame transfers. Session specifier: {self._specifier}"
+                )
 
-            return SerialFrame(priority=transfer.priority,
-                               transfer_id=transfer.transfer_id,
-                               index=index,
-                               end_of_transfer=end_of_transfer,
-                               payload=payload,
-                               source_node_id=self._local_node_id,
-                               destination_node_id=self._specifier.remote_node_id,
-                               data_specifier=self._specifier.data_specifier)
+            return SerialFrame(
+                priority=transfer.priority,
+                transfer_id=transfer.transfer_id,
+                index=index,
+                end_of_transfer=end_of_transfer,
+                payload=payload,
+                source_node_id=self._local_node_id,
+                destination_node_id=self._specifier.remote_node_id,
+                data_specifier=self._specifier.data_specifier,
+            )
 
-        frames = list(pyuavcan.transport.commons.high_overhead_transport.serialize_transfer(
-            transfer.fragmented_payload,
-            self._mtu,
-            construct_frame
-        ))
-        _logger.debug('%s: Sending transfer: %s; current stats: %s', self, transfer, self._statistics)
+        frames = list(
+            pyuavcan.transport.commons.high_overhead_transport.serialize_transfer(
+                transfer.fragmented_payload, self._mtu, construct_frame
+            )
+        )
+        _logger.debug("%s: Sending transfer: %s; current stats: %s", self, transfer, self._statistics)
         try:
             tx_timestamp = await self._send_handler(frames, monotonic_deadline)
         except Exception:
@@ -110,8 +123,9 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
                 try:
                     self._feedback_handler(SerialFeedback(transfer.timestamp, tx_timestamp))
                 except Exception as ex:  # pragma: no cover
-                    _logger.exception(f'Unhandled exception in the output session feedback handler '
-                                      f'{self._feedback_handler}: {ex}')
+                    _logger.exception(
+                        f"Unhandled exception in the output session feedback handler " f"{self._feedback_handler}: {ex}"
+                    )
             return True
         else:
             self._statistics.drops += len(frames)
@@ -177,13 +191,12 @@ def _unittest_output_session() -> None:
     )
 
     with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
-        run_until_complete(sos.send(
-            Transfer(timestamp=ts,
-                     priority=Priority.NOMINAL,
-                     transfer_id=12340,
-                     fragmented_payload=[]),
-            loop.time() + 10.0
-        ))
+        run_until_complete(
+            sos.send(
+                Transfer(timestamp=ts, priority=Priority.NOMINAL, transfer_id=12340, fragmented_payload=[]),
+                loop.time() + 10.0,
+            )
+        )
 
     sos = SerialOutputSession(
         specifier=OutputSessionSpecifier(MessageDataSpecifier(3210), None),
@@ -199,24 +212,32 @@ def _unittest_output_session() -> None:
     assert sos.payload_metadata == PayloadMetadata(1024)
     assert sos.sample_statistics() == SessionStatistics()
 
-    assert run_until_complete(sos.send(
-        Transfer(timestamp=ts,
-                 priority=Priority.NOMINAL,
-                 transfer_id=12340,
-                 fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
-        999999999.999
-    ))
+    assert run_until_complete(
+        sos.send(
+            Transfer(
+                timestamp=ts,
+                priority=Priority.NOMINAL,
+                transfer_id=12340,
+                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+            ),
+            999999999.999,
+        )
+    )
     assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 1
 
     with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
-        run_until_complete(sos.send(
-            Transfer(timestamp=ts,
-                     priority=Priority.NOMINAL,
-                     transfer_id=12340,
-                     fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three four five')]),
-            loop.time() + 10.0
-        ))
+        run_until_complete(
+            sos.send(
+                Transfer(
+                    timestamp=ts,
+                    priority=Priority.NOMINAL,
+                    transfer_id=12340,
+                    fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three four five")],
+                ),
+                loop.time() + 10.0,
+            )
+        )
 
     last_feedback: typing.Optional[Feedback] = None
 
@@ -227,13 +248,11 @@ def _unittest_output_session() -> None:
     sos.enable_feedback(feedback_handler)
 
     assert last_feedback is None
-    assert run_until_complete(sos.send(
-        Transfer(timestamp=ts,
-                 priority=Priority.NOMINAL,
-                 transfer_id=12340,
-                 fragmented_payload=[]),
-        999999999.999
-    ))
+    assert run_until_complete(
+        sos.send(
+            Transfer(timestamp=ts, priority=Priority.NOMINAL, transfer_id=12340, fragmented_payload=[]), 999999999.999
+        )
+    )
     assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 1
     assert last_feedback is not None
@@ -243,13 +262,7 @@ def _unittest_output_session() -> None:
     sos.disable_feedback()
     sos.disable_feedback()  # Idempotency check
 
-    assert sos.sample_statistics() == SessionStatistics(
-        transfers=2,
-        frames=2,
-        payload_bytes=11,
-        errors=0,
-        drops=0
-    )
+    assert sos.sample_statistics() == SessionStatistics(transfers=2, frames=2, payload_bytes=11, errors=0, drops=0)
 
     assert not finalized
     sos.close()
@@ -267,41 +280,37 @@ def _unittest_output_session() -> None:
 
     # Induced failure
     tx_timestamp = None
-    assert not run_until_complete(sos.send(
-        Transfer(timestamp=ts,
-                 priority=Priority.NOMINAL,
-                 transfer_id=12340,
-                 fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
-        999999999.999
-    ))
+    assert not run_until_complete(
+        sos.send(
+            Transfer(
+                timestamp=ts,
+                priority=Priority.NOMINAL,
+                transfer_id=12340,
+                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+            ),
+            999999999.999,
+        )
+    )
     assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 2
 
-    assert sos.sample_statistics() == SessionStatistics(
-        transfers=0,
-        frames=0,
-        payload_bytes=0,
-        errors=0,
-        drops=2
-    )
+    assert sos.sample_statistics() == SessionStatistics(transfers=0, frames=0, payload_bytes=0, errors=0, drops=2)
 
     tx_exception = RuntimeError()
     with raises(RuntimeError):
-        _ = run_until_complete(sos.send(
-            Transfer(timestamp=ts,
-                     priority=Priority.NOMINAL,
-                     transfer_id=12340,
-                     fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
-            loop.time() + 10.0
-        ))
+        _ = run_until_complete(
+            sos.send(
+                Transfer(
+                    timestamp=ts,
+                    priority=Priority.NOMINAL,
+                    transfer_id=12340,
+                    fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+                ),
+                loop.time() + 10.0,
+            )
+        )
 
-    assert sos.sample_statistics() == SessionStatistics(
-        transfers=0,
-        frames=0,
-        payload_bytes=0,
-        errors=1,
-        drops=2
-    )
+    assert sos.sample_statistics() == SessionStatistics(transfers=0, frames=0, payload_bytes=0, errors=1, drops=2)
 
     assert not finalized
     sos.close()
@@ -309,10 +318,14 @@ def _unittest_output_session() -> None:
     sos.close()  # Idempotency
 
     with raises(pyuavcan.transport.ResourceClosedError):
-        run_until_complete(sos.send(
-            Transfer(timestamp=ts,
-                     priority=Priority.NOMINAL,
-                     transfer_id=12340,
-                     fragmented_payload=[memoryview(b'one'), memoryview(b'two'), memoryview(b'three')]),
-            loop.time() + 10.0
-        ))
+        run_until_complete(
+            sos.send(
+                Transfer(
+                    timestamp=ts,
+                    priority=Priority.NOMINAL,
+                    transfer_id=12340,
+                    fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+                ),
+                loop.time() + 10.0,
+            )
+        )

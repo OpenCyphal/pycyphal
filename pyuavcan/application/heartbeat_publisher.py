@@ -24,10 +24,11 @@ class Health(enum.IntEnum):
     Mirrors the health enumeration defined in ``uavcan.node.Heartbeat``.
     When enumerations are natively supported in DSDL, this will be replaced with an alias.
     """
-    NOMINAL  = uavcan.node.Health_1_0.NOMINAL
+
+    NOMINAL = uavcan.node.Health_1_0.NOMINAL
     ADVISORY = uavcan.node.Health_1_0.ADVISORY
-    CAUTION  = uavcan.node.Health_1_0.CAUTION
-    WARNING  = uavcan.node.Health_1_0.WARNING
+    CAUTION = uavcan.node.Health_1_0.CAUTION
+    WARNING = uavcan.node.Health_1_0.WARNING
 
 
 class Mode(enum.IntEnum):
@@ -35,14 +36,16 @@ class Mode(enum.IntEnum):
     Mirrors the mode enumeration defined in ``uavcan.node.Heartbeat``.
     When enumerations are natively supported in DSDL, this will be replaced with an alias.
     """
-    OPERATIONAL     = uavcan.node.Mode_1_0.OPERATIONAL
-    INITIALIZATION  = uavcan.node.Mode_1_0.INITIALIZATION
-    MAINTENANCE     = uavcan.node.Mode_1_0.MAINTENANCE
+
+    OPERATIONAL = uavcan.node.Mode_1_0.OPERATIONAL
+    INITIALIZATION = uavcan.node.Mode_1_0.INITIALIZATION
+    MAINTENANCE = uavcan.node.Mode_1_0.MAINTENANCE
     SOFTWARE_UPDATE = uavcan.node.Mode_1_0.SOFTWARE_UPDATE
 
 
-VENDOR_SPECIFIC_STATUS_CODE_MASK = \
-    2 ** list(pyuavcan.dsdl.get_model(Heartbeat)['vendor_specific_status_code'].data_type.bit_length_set)[0] - 1
+VENDOR_SPECIFIC_STATUS_CODE_MASK = (
+    2 ** list(pyuavcan.dsdl.get_model(Heartbeat)["vendor_specific_status_code"].data_type.bit_length_set)[0] - 1
+)
 
 
 _logger = logging.getLogger(__name__)
@@ -124,7 +127,7 @@ class HeartbeatPublisher:
         if 0 <= value <= VENDOR_SPECIFIC_STATUS_CODE_MASK:
             self._vendor_specific_status_code = value
         else:
-            raise ValueError(f'Invalid vendor-specific status code: {value}')
+            raise ValueError(f"Invalid vendor-specific status code: {value}")
 
     @property
     def period(self) -> float:
@@ -141,7 +144,7 @@ class HeartbeatPublisher:
         if 0 < value <= Heartbeat.MAX_PUBLICATION_PERIOD:
             self._publisher.send_timeout = value  # This is not a typo! Send timeout equals period here.
         else:
-            raise ValueError(f'Invalid heartbeat period: {value}')
+            raise ValueError(f"Invalid heartbeat period: {value}")
 
     @property
     def priority(self) -> pyuavcan.transport.Priority:
@@ -180,10 +183,12 @@ class HeartbeatPublisher:
 
     def make_message(self) -> Heartbeat:
         """Constructs a new heartbeat message from the object's state."""
-        return Heartbeat(uptime=int(self.uptime),  # must floor
-                         health=uavcan.node.Health_1_0(self.health),
-                         mode=uavcan.node.Mode_1_0(self.mode),
-                         vendor_specific_status_code=self.vendor_specific_status_code)
+        return Heartbeat(
+            uptime=int(self.uptime),  # must floor
+            health=uavcan.node.Health_1_0(self.health),
+            mode=uavcan.node.Mode_1_0(self.mode),
+            vendor_specific_status_code=self.vendor_specific_status_code,
+        )
 
     def close(self) -> None:
         """
@@ -203,18 +208,18 @@ class HeartbeatPublisher:
                 self._call_pre_heartbeat_handlers()
                 if self._presentation.transport.local_node_id is not None:
                     if not await self._publisher.publish(self.make_message()):
-                        _logger.warning('%s heartbeat send timed out', self)
+                        _logger.warning("%s heartbeat send timed out", self)
 
                 next_heartbeat_at += self._publisher.send_timeout
                 await asyncio.sleep(next_heartbeat_at - time.monotonic())
             except asyncio.CancelledError:
-                _logger.debug('%s publisher task cancelled', self)
+                _logger.debug("%s publisher task cancelled", self)
                 break
             except pyuavcan.transport.ResourceClosedError as ex:
-                _logger.debug('%s transport closed, publisher task will exit: %s', self, ex)
+                _logger.debug("%s transport closed, publisher task will exit: %s", self, ex)
                 break
             except Exception as ex:
-                _logger.exception('%s publisher task exception: %s', self, ex)
+                _logger.exception("%s publisher task exception: %s", self, ex)
         try:
             self._publisher.close()
         except pyuavcan.transport.TransportError:
@@ -227,8 +232,13 @@ class HeartbeatPublisher:
         local_node_id = self._presentation.transport.local_node_id
         remote_node_id = metadata.source_node_id
         if local_node_id is not None and remote_node_id is not None and local_node_id == remote_node_id:
-            _logger.warning('NODE-ID CONFLICT: There is another node on the network that uses the same node-ID %d. '
-                            'Its latest heartbeat is %s with transfer metadata %s', remote_node_id, msg, metadata)
+            _logger.warning(
+                "NODE-ID CONFLICT: There is another node on the network that uses the same node-ID %d. "
+                "Its latest heartbeat is %s with transfer metadata %s",
+                remote_node_id,
+                msg,
+                metadata,
+            )
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, heartbeat=self.make_message(), publisher=self._publisher)

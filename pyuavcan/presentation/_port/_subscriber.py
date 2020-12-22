@@ -29,9 +29,9 @@ ReceivedMessageHandler = typing.Callable[[MessageClass, pyuavcan.transport.Trans
 
 @dataclasses.dataclass
 class SubscriberStatistics:
-    transport_session:        pyuavcan.transport.SessionStatistics  #: Shared per session specifier.
-    messages:                 int  #: Number of received messages, individual per subscriber.
-    overruns:                 int  #: Number of messages lost to queue overruns; individual per subscriber.
+    transport_session: pyuavcan.transport.SessionStatistics  #: Shared per session specifier.
+    messages: int  #: Number of received messages, individual per subscriber.
+    overruns: int  #: Number of messages lost to queue overruns; individual per subscriber.
     deserialization_failures: int  #: Number of messages lost to deserialization errors; shared per session specifier.
 
 
@@ -58,20 +58,20 @@ class Subscriber(MessagePort[MessageClass]):
     automatically when the last subscriber with that session specifier is closed;
     the user code cannot access it and generally shouldn't care.
     """
-    def __init__(self,
-                 impl:           SubscriberImpl[MessageClass],
-                 loop:           asyncio.AbstractEventLoop,
-                 queue_capacity: typing.Optional[int]):
+
+    def __init__(
+        self, impl: SubscriberImpl[MessageClass], loop: asyncio.AbstractEventLoop, queue_capacity: typing.Optional[int]
+    ):
         """
         Do not call this directly! Use :meth:`Presentation.make_subscriber`.
         """
-        assert not impl.is_closed, 'Internal logic error'
+        assert not impl.is_closed, "Internal logic error"
         if queue_capacity is None:
-            queue_capacity = 0      # This case is defined by the Queue API. Means unlimited.
+            queue_capacity = 0  # This case is defined by the Queue API. Means unlimited.
         else:
             queue_capacity = int(queue_capacity)
             if queue_capacity < 1:
-                raise ValueError(f'Invalid queue capacity: {queue_capacity}')
+                raise ValueError(f"Invalid queue capacity: {queue_capacity}")
 
         self._closed = False
         self._impl = impl
@@ -97,6 +97,7 @@ class Subscriber(MessagePort[MessageClass]):
         This method of handling messages should not be used with the plain async receive API;
         an attempt to do so may lead to unpredictable message distribution between consumers.
         """
+
         async def task_function() -> None:
             # This could be an interesting opportunity for optimization: instead of using the queue, just let the
             # implementation class invoke the handler from its own receive task directly. Eliminates extra indirection.
@@ -108,12 +109,12 @@ class Subscriber(MessagePort[MessageClass]):
                         except asyncio.CancelledError:
                             raise
                         except Exception as ex:
-                            _logger.exception('%s got an unhandled exception in the message handler: %s', self, ex)
+                            _logger.exception("%s got an unhandled exception in the message handler: %s", self, ex)
                 except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError) as ex:
-                    _logger.debug('%s receive task is stopping because: %r', self, ex)
+                    _logger.debug("%s receive task is stopping because: %r", self, ex)
                     break
                 except Exception as ex:
-                    _logger.exception('%s receive task failure: %s', self, ex)
+                    _logger.exception("%s receive task failure: %s", self, ex)
                     await asyncio.sleep(1)  # TODO is this an adequate failure management strategy?
 
         if self._maybe_task is not None:
@@ -123,8 +124,9 @@ class Subscriber(MessagePort[MessageClass]):
 
     # ----------------------------------------  DIRECT RECEIVE  ----------------------------------------
 
-    async def receive(self, monotonic_deadline: float) \
-            -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
+    async def receive(
+        self, monotonic_deadline: float
+    ) -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
         Blocks until either a valid message is received,
         in which case it is returned along with the transfer which delivered it;
@@ -142,8 +144,9 @@ class Subscriber(MessagePort[MessageClass]):
         """
         return await self.receive_for(timeout=monotonic_deadline - self._loop.time())
 
-    async def receive_for(self, timeout: float) \
-            -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
+    async def receive_for(
+        self, timeout: float
+    ) -> typing.Optional[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]:
         """
         This is like :meth:`receive` but with a relative timeout instead of an absolute deadline.
         """
@@ -158,8 +161,8 @@ class Subscriber(MessagePort[MessageClass]):
         except asyncio.TimeoutError:
             return None
         else:
-            assert isinstance(message, self._impl.dtype), 'Internal protocol violation'
-            assert isinstance(transfer, pyuavcan.transport.TransferFrom), 'Internal protocol violation'
+            assert isinstance(message, self._impl.dtype), "Internal protocol violation"
+            assert isinstance(transfer, pyuavcan.transport.TransferFrom), "Internal protocol violation"
             return message, transfer
 
     # ----------------------------------------  ITERATOR API  ----------------------------------------
@@ -198,20 +201,22 @@ class Subscriber(MessagePort[MessageClass]):
         Returns the statistical counters of this subscriber, including the statistical metrics of the underlying
         transport session, which is shared across all subscribers with the same session specifier.
         """
-        return SubscriberStatistics(transport_session=self.transport_session.sample_statistics(),
-                                    messages=self._rx.push_count,
-                                    deserialization_failures=self._impl.deserialization_failure_count,
-                                    overruns=self._rx.overrun_count)
+        return SubscriberStatistics(
+            transport_session=self.transport_session.sample_statistics(),
+            messages=self._rx.push_count,
+            deserialization_failures=self._impl.deserialization_failure_count,
+            overruns=self._rx.overrun_count,
+        )
 
     def close(self) -> None:
         if not self._closed:
             self._closed = True
             self._impl.remove_listener(self._rx)
-            if self._maybe_task is not None:    # The task may be holding the lock.
+            if self._maybe_task is not None:  # The task may be holding the lock.
                 try:
-                    self._maybe_task.cancel()   # We don't wait for it to exit because it's pointless.
+                    self._maybe_task.cancel()  # We don't wait for it to exit because it's pointless.
                 except Exception as ex:
-                    _logger.exception('%s task could not be cancelled: %s', self, ex)
+                    _logger.exception("%s task could not be cancelled: %s", self, ex)
                 self._maybe_task = None
 
     def _raise_if_closed_or_failed(self) -> None:
@@ -220,7 +225,7 @@ class Subscriber(MessagePort[MessageClass]):
 
         if self._rx.exception is not None:
             self._closed = True
-            raise self._rx.exception from RuntimeError('The subscriber has failed and been closed')
+            raise self._rx.exception from RuntimeError("The subscriber has failed and been closed")
 
     def __del__(self) -> None:
         try:
@@ -244,10 +249,11 @@ class _Listener(typing.Generic[MessageClass]):
     is shared among many subscribers or not. If not, it should bypass the queue and read from the transport directly
     instead. This would avoid the unnecessary overheads and at the same time would be transparent for the user.
     """
-    queue:         asyncio.Queue[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]
-    push_count:    int = 0
+
+    queue: asyncio.Queue[typing.Tuple[MessageClass, pyuavcan.transport.TransferFrom]]
+    push_count: int = 0
     overrun_count: int = 0
-    exception:     typing.Optional[Exception] = None
+    exception: typing.Optional[Exception] = None
 
     def push(self, message: MessageClass, transfer: pyuavcan.transport.TransferFrom) -> None:
         try:
@@ -262,11 +268,13 @@ class _Listener(typing.Generic[MessageClass]):
         The queue contains DSDL objects, which may be large and the output of their repr() may be very expensive
         to compute, especially if the queue is long.
         """
-        return pyuavcan.util.repr_attributes_noexcept(self,
-                                                      queue_length=self.queue.qsize(),
-                                                      push_count=self.push_count,
-                                                      overrun_count=self.overrun_count,
-                                                      exception=self.exception)
+        return pyuavcan.util.repr_attributes_noexcept(
+            self,
+            queue_length=self.queue.qsize(),
+            push_count=self.push_count,
+            overrun_count=self.overrun_count,
+            exception=self.exception,
+        )
 
 
 class SubscriberImpl(Closable, typing.Generic[MessageClass]):
@@ -276,11 +284,14 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
     with the help of the proxy class. When the last proxy is closed or garbage collected, the implementation will
     also be closed and removed.
     """
-    def __init__(self,
-                 dtype:             typing.Type[MessageClass],
-                 transport_session: pyuavcan.transport.InputSession,
-                 finalizer:         PortFinalizer,
-                 loop:              asyncio.AbstractEventLoop):
+
+    def __init__(
+        self,
+        dtype: typing.Type[MessageClass],
+        transport_session: pyuavcan.transport.InputSession,
+        finalizer: PortFinalizer,
+        loop: asyncio.AbstractEventLoop,
+    ):
         self.dtype = dtype
         self.transport_session = transport_session
         self.deserialization_failure_count = 0
@@ -306,11 +317,11 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
                     else:
                         self.deserialization_failure_count += 1
         except asyncio.CancelledError:
-            _logger.debug('Cancelling the subscriber task of %s', self)
+            _logger.debug("Cancelling the subscriber task of %s", self)
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
-            _logger.exception('Fatal error in the subscriber task of %s: %s', self, ex)
+            _logger.exception("Fatal error in the subscriber task of %s: %s", self, ex)
         finally:
             self._finalize(exception)
 
@@ -321,33 +332,35 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
                 self._maybe_finalizer([self.transport_session])
                 self._maybe_finalizer = None
         except Exception as ex:
-            _logger.exception('Failed to finalize %s: %s', self, ex)
+            _logger.exception("Failed to finalize %s: %s", self, ex)
         for rx in self._listeners:
             rx.exception = exception
 
     def close(self) -> None:
         try:
-            self._task.cancel()         # Force the task to be stopped ASAP without waiting for timeout
+            self._task.cancel()  # Force the task to be stopped ASAP without waiting for timeout
         except Exception as ex:
-            _logger.debug('Explicit close: could not cancel the task %r: %s', self._task, ex, exc_info=True)
+            _logger.debug("Explicit close: could not cancel the task %r: %s", self._task, ex, exc_info=True)
         self._finalize()
 
     def add_listener(self, rx: _Listener[MessageClass]) -> None:
-        assert not self.is_closed, 'Internal logic error: cannot add listener to a closed subscriber implementation'
+        assert not self.is_closed, "Internal logic error: cannot add listener to a closed subscriber implementation"
         self._listeners.append(rx)
 
     def remove_listener(self, rx: _Listener[MessageClass]) -> None:
         try:
             self._listeners.remove(rx)
         except ValueError:
-            _logger.exception('%r does not have listener %r', self, rx)
+            _logger.exception("%r does not have listener %r", self, rx)
         if len(self._listeners) == 0:
             self.close()
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes_noexcept(self,
-                                                      dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
-                                                      transport_session=self.transport_session,
-                                                      deserialization_failure_count=self.deserialization_failure_count,
-                                                      listeners=self._listeners,
-                                                      closed=self.is_closed)
+        return pyuavcan.util.repr_attributes_noexcept(
+            self,
+            dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
+            transport_session=self.transport_session,
+            deserialization_failure_count=self.deserialization_failure_count,
+            listeners=self._listeners,
+            closed=self.is_closed,
+        )

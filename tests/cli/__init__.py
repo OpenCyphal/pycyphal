@@ -11,7 +11,7 @@ import dataclasses
 
 @dataclasses.dataclass(frozen=True)
 class TransportConfig:
-    cli_args:     typing.Sequence[str]
+    cli_args: typing.Sequence[str]
     can_transmit: bool
 
 
@@ -27,10 +27,10 @@ def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:
     Sensible transport configurations supported by the CLI to test against.
     Don't forget to extend when adding support for new transports.
     """
-    if sys.platform == 'linux':
+    if sys.platform == "linux":
         # CAN via SocketCAN
         yield lambda nid: TransportConfig(
-            cli_args=(f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan0",64),local_node_id={nid})', ),
+            cli_args=(f'--tr=CAN(can.media.socketcan.SocketCANMedia("vcan0",64),local_node_id={nid})',),
             can_transmit=True,
         )
 
@@ -46,17 +46,18 @@ def _make_transport_factories_for_cli() -> typing.Iterable[TransportFactory]:
 
     # Serial via TCP/IP tunnel (emulation)
     from tests.transport.serial import VIRTUAL_BUS_URI
+
     yield lambda nid: TransportConfig(
-        cli_args=(f'--tr=Serial("{VIRTUAL_BUS_URI}",local_node_id={nid})', ),
+        cli_args=(f'--tr=Serial("{VIRTUAL_BUS_URI}",local_node_id={nid})',),
         can_transmit=True,
     )
 
     # UDP/IP on localhost (cannot transmit if anonymous)
     yield lambda nid: TransportConfig(
-        cli_args=(f'--tr=UDP("127.0.0.{nid}")', ),
+        cli_args=(f'--tr=UDP("127.0.0.{nid}")',),
         can_transmit=True,
     ) if nid is not None else TransportConfig(
-        cli_args=('--tr=UDP("127.0.0.1",anonymous=True)', ),
+        cli_args=('--tr=UDP("127.0.0.1",anonymous=True)',),
         can_transmit=False,
     )
 

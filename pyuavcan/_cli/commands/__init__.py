@@ -11,6 +11,7 @@ from ._paths import DEFAULT_PUBLIC_REGULATED_DATA_TYPES_ARCHIVE_URL as DEFAULT_P
 
 def get_available_command_classes() -> typing.Sequence[typing.Type[Command]]:
     import pyuavcan._cli
+
     # noinspection PyTypeChecker
     pyuavcan.util.import_submodules(pyuavcan._cli)
     # https://github.com/python/mypy/issues/5374

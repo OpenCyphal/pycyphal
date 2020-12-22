@@ -36,6 +36,7 @@ class SocketReaderStatistics:
     """
     Incoming UDP datagram statistics for an input socket.
     """
+
     accepted_datagrams: typing.Dict[int, int] = dataclasses.field(default_factory=dict)
     """
     Key is the remote node-ID; value is the number of datagrams received from that node.
@@ -73,12 +74,14 @@ class SocketReader:
     the callback is invoked with None for error statistic collection purposes.
     """
 
-    def __init__(self,
-                 sock:             socket.socket,
-                 local_ip_address: _IPAddress,
-                 anonymous:        bool,
-                 statistics:       SocketReaderStatistics,
-                 loop:             asyncio.AbstractEventLoop):
+    def __init__(
+        self,
+        sock: socket.socket,
+        local_ip_address: _IPAddress,
+        anonymous: bool,
+        statistics: SocketReaderStatistics,
+        loop: asyncio.AbstractEventLoop,
+    ):
         """
         :param sock: The instance takes ownership of the socket; it will be closed when the instance is closed.
         :param local_ip_address: Needed for node-ID mapping.
@@ -101,9 +104,9 @@ class SocketReader:
 
         self._listeners: typing.Dict[typing.Optional[int], SocketReader.Listener] = {}
         self._ctl_worker, self._ctl_main = socket.socketpair()  # For communicating with the worker thread.
-        self._thread = threading.Thread(target=self._thread_entry_point,
-                                        name=f'socket_reader_fd_{self._original_file_desc}',
-                                        daemon=True)
+        self._thread = threading.Thread(
+            target=self._thread_entry_point, name=f"socket_reader_fd_{self._original_file_desc}", daemon=True
+        )
         self._thread.start()
 
     def add_listener(self, source_node_id: typing.Optional[int], handler: Listener) -> None:
@@ -119,20 +122,23 @@ class SocketReader:
             in order to let it update its error statistics.
         """
         if not self._thread.is_alive():
-            raise pyuavcan.transport.ResourceClosedError(f'{self} is no longer operational')
+            raise pyuavcan.transport.ResourceClosedError(f"{self} is no longer operational")
 
         if source_node_id in self._listeners:
-            raise ValueError(f'{self}: The listener for node-ID {source_node_id} is already registered '
-                             f'with handler {self._listeners[source_node_id]}')
-        _logger.debug('%r: Adding listener %r for node-ID %r. Current stats: %s',
-                      self, handler, source_node_id, self._statistics)
+            raise ValueError(
+                f"{self}: The listener for node-ID {source_node_id} is already registered "
+                f"with handler {self._listeners[source_node_id]}"
+            )
+        _logger.debug(
+            "%r: Adding listener %r for node-ID %r. Current stats: %s", self, handler, source_node_id, self._statistics
+        )
         self._listeners[source_node_id] = handler
 
     def remove_listener(self, node_id: typing.Optional[int]) -> None:
         """
         Raises :class:`LookupError` if there is no such listener.
         """
-        _logger.debug('%r: Removing listener for node-ID %r. Current stats: %s', self, node_id, self._statistics)
+        _logger.debug("%r: Removing listener for node-ID %r. Current stats: %s", self, node_id, self._statistics)
         del self._listeners[node_id]
 
     @property
@@ -164,24 +170,23 @@ class SocketReader:
         Raises :class:`RuntimeError` instead of closing if there is at least one active listener.
         """
         if self.has_listeners:
-            raise RuntimeError('Refusing to close socket reader with active listeners. Call remove_listener first.')
+            raise RuntimeError("Refusing to close socket reader with active listeners. Call remove_listener first.")
         if self._sock.fileno() < 0:  # Ensure idempotency.
             return
         started_at = time.monotonic()
         try:
-            _logger.debug('%r: Stopping the thread before closing the socket to avoid accidental fd reuse...', self)
-            self._ctl_main.send(b'stop')  # The actual data is irrelevant, we just need it to unblock the select().
+            _logger.debug("%r: Stopping the thread before closing the socket to avoid accidental fd reuse...", self)
+            self._ctl_main.send(b"stop")  # The actual data is irrelevant, we just need it to unblock the select().
             self._thread.join(timeout=_READ_TIMEOUT)
         finally:
             self._sock.close()
             self._ctl_worker.close()
             self._ctl_main.close()
-        _logger.debug('%r: Closed. Elapsed time: %.3f milliseconds', self, (time.monotonic() - started_at) * 1e3)
+        _logger.debug("%r: Closed. Elapsed time: %.3f milliseconds", self, (time.monotonic() - started_at) * 1e3)
 
-    def _dispatch_frame(self,
-                        timestamp:         Timestamp,
-                        source_ip_address: _IPAddress,
-                        frame:             typing.Optional[UDPFrame]) -> None:
+    def _dispatch_frame(
+        self, timestamp: Timestamp, source_ip_address: _IPAddress, frame: typing.Optional[UDPFrame]
+    ) -> None:
         # Do not accept datagrams emitted by the local node itself. Do not update the statistics either.
         external = self._anonymous or (source_ip_address != self._local_ip_address)
         if not external:
@@ -204,7 +209,7 @@ class SocketReader:
                     try:
                         callback(timestamp, source_node_id, frame)
                     except Exception as ex:  # pragma: no cover
-                        _logger.exception('%r: Unhandled exception in the listener for node-ID %r: %s', self, key, ex)
+                        _logger.exception("%r: Unhandled exception in the listener for node-ID %r: %s", self, key, ex)
 
         # Update the statistics.
         if not handled:
@@ -233,23 +238,28 @@ class SocketReader:
                     # meaning that the data we allocate here, at the very bottom of the protocol stack,
                     # is likely to be carried all the way up to the application layer without being copied.
                     data, endpoint = self._sock.recvfrom(_READ_SIZE)
-                    assert len(data) < _READ_SIZE, 'Datagram might have been truncated'
+                    assert len(data) < _READ_SIZE, "Datagram might have been truncated"
                     source_ip = _parse_address(endpoint[0])
 
                     frame = UDPFrame.parse(memoryview(data))
-                    _logger.debug('%r: Received UDP packet of %d bytes from %s containing frame: %s',
-                                  self, len(data), endpoint, frame)
+                    _logger.debug(
+                        "%r: Received UDP packet of %d bytes from %s containing frame: %s",
+                        self,
+                        len(data),
+                        endpoint,
+                        frame,
+                    )
                     self._loop.call_soon_threadsafe(self._dispatch_frame, ts, source_ip, frame)
 
                 if self._ctl_worker in read_ready:
                     cmd = self._ctl_worker.recv(_READ_SIZE)
                     if cmd:
-                        _logger.debug('%r: Worker thread has received the stop signal: %r', self, cmd)
+                        _logger.debug("%r: Worker thread has received the stop signal: %r", self, cmd)
                         break
             except Exception as ex:  # pragma: no cover
-                _logger.exception('%r: Worker thread error: %s; will continue after a short nap', self, ex)
+                _logger.exception("%r: Worker thread error: %s; will continue after a short nap", self, ex)
                 time.sleep(1)
-        _logger.debug('%r: Worker thread is exiting, bye bye', self)
+        _logger.debug("%r: Worker thread is exiting, bye bye", self)
 
     def __repr__(self) -> str:
         """
@@ -258,11 +268,13 @@ class SocketReader:
         Also, the object ID is printed to differentiate instances sharing the same file descriptor
         (which is NOT permitted, of course, but there have been issues related to that so it was added for debugging).
         """
-        return pyuavcan.util.repr_attributes_noexcept(self,
-                                                      id=hex(id(self)),
-                                                      original_fd=self._original_file_desc,
-                                                      socket=self._sock,
-                                                      remote_node_ids=list(self._listeners.keys()))
+        return pyuavcan.util.repr_attributes_noexcept(
+            self,
+            id=hex(id(self)),
+            original_fd=self._original_file_desc,
+            socket=self._sock,
+            remote_node_ids=list(self._listeners.keys()),
+        )
 
 
 def _unittest_socket_reader(caplog: typing.Any) -> None:
@@ -270,7 +282,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     from pytest import raises
     from pyuavcan.transport import Priority, Timestamp
 
-    destination_endpoint = '127.100.0.100', 58724
+    destination_endpoint = "127.100.0.100", 58724
 
     ts = Timestamp.now()
     loop = asyncio.get_event_loop()
@@ -292,11 +304,9 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         return sock
 
     stats = SocketReaderStatistics()
-    srd = SocketReader(sock=sock_rx,
-                       local_ip_address=ip_address('127.100.4.210'),  # 1234
-                       anonymous=False,
-                       statistics=stats,
-                       loop=loop)
+    srd = SocketReader(
+        sock=sock_rx, local_ip_address=ip_address("127.100.4.210"), anonymous=False, statistics=stats, loop=loop  # 1234
+    )
     assert not srd.has_listeners
     with raises(LookupError):
         srd.remove_listener(123)
@@ -311,18 +321,22 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         srd.add_listener(3, lambda t, i, f: received_frames_3.append((t, i, f)))
     assert srd.has_listeners
 
-    sock_tx_1 = make_sock_tx('127.100.0.1')
-    sock_tx_3 = make_sock_tx('127.100.0.3')
-    sock_tx_9 = make_sock_tx('127.200.0.9')
+    sock_tx_1 = make_sock_tx("127.100.0.1")
+    sock_tx_3 = make_sock_tx("127.100.0.3")
+    sock_tx_9 = make_sock_tx("127.200.0.9")
 
     # FRAME FOR THE PROMISCUOUS LISTENER
-    sock_tx_1.send(b''.join(
-        UDPFrame(priority=Priority.HIGH,
-                 transfer_id=0x_dead_beef_c0ffee,
-                 index=0,
-                 end_of_transfer=True,
-                 payload=memoryview(b'HARDBASS')).compile_header_and_payload()
-    ))
+    sock_tx_1.send(
+        b"".join(
+            UDPFrame(
+                priority=Priority.HIGH,
+                transfer_id=0x_DEAD_BEEF_C0FFEE,
+                index=0,
+                end_of_transfer=True,
+                payload=memoryview(b"HARDBASS"),
+            ).compile_header_and_payload()
+        )
+    )
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1},
@@ -332,22 +346,26 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert rxf is not None
     assert nid == 1
     assert check_timestamp(t)
-    assert bytes(rxf.payload) == b'HARDBASS'
+    assert bytes(rxf.payload) == b"HARDBASS"
     assert rxf.priority == Priority.HIGH
-    assert rxf.transfer_id == 0x_dead_beef_c0ffee
+    assert rxf.transfer_id == 0x_DEAD_BEEF_C0FFEE
     assert rxf.single_frame_transfer
 
     assert not received_frames_promiscuous
     assert not received_frames_3
 
     # FRAME FOR THE SELECTIVE AND THE PROMISCUOUS LISTENER
-    sock_tx_3.send(b''.join(
-        UDPFrame(priority=Priority.LOW,
-                 transfer_id=0x_deadbeef_deadbe,
-                 index=0,
-                 end_of_transfer=False,
-                 payload=memoryview(b'Oy blin!')).compile_header_and_payload()
-    ))
+    sock_tx_3.send(
+        b"".join(
+            UDPFrame(
+                priority=Priority.LOW,
+                transfer_id=0x_DEADBEEF_DEADBE,
+                index=0,
+                end_of_transfer=False,
+                payload=memoryview(b"Oy blin!"),
+            ).compile_header_and_payload()
+        )
+    )
 
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
@@ -358,12 +376,12 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert rxf is not None
     assert nid == 3
     assert check_timestamp(t)
-    assert bytes(rxf.payload) == b'Oy blin!'
+    assert bytes(rxf.payload) == b"Oy blin!"
     assert rxf.priority == Priority.LOW
-    assert rxf.transfer_id == 0x_deadbeef_deadbe
+    assert rxf.transfer_id == 0x_DEADBEEF_DEADBE
     assert not rxf.single_frame_transfer
 
-    assert (3, rxf) == received_frames_3.pop()[1:]   # Same exact frame in the other listener.
+    assert (3, rxf) == received_frames_3.pop()[1:]  # Same exact frame in the other listener.
 
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -374,13 +392,17 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
         srd.remove_listener(None)
     assert srd.has_listeners
 
-    sock_tx_3.send(b''.join(
-        UDPFrame(priority=Priority.HIGH,
-                 transfer_id=0x_dead_beef_c0ffee,
-                 index=0,
-                 end_of_transfer=True,
-                 payload=memoryview(b'HARDBASS')).compile_header_and_payload()
-    ))
+    sock_tx_3.send(
+        b"".join(
+            UDPFrame(
+                priority=Priority.HIGH,
+                transfer_id=0x_DEAD_BEEF_C0FFEE,
+                index=0,
+                end_of_transfer=True,
+                payload=memoryview(b"HARDBASS"),
+            ).compile_header_and_payload()
+        )
+    )
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
@@ -390,22 +412,26 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert rxf is not None
     assert nid == 3
     assert check_timestamp(t)
-    assert bytes(rxf.payload) == b'HARDBASS'
+    assert bytes(rxf.payload) == b"HARDBASS"
     assert rxf.priority == Priority.HIGH
-    assert rxf.transfer_id == 0x_dead_beef_c0ffee
+    assert rxf.transfer_id == 0x_DEAD_BEEF_C0FFEE
     assert rxf.single_frame_transfer
 
     assert not received_frames_promiscuous
     assert not received_frames_3
 
     # DROPPED DATAGRAM FROM VALID NODE-ID
-    sock_tx_1.send(b''.join(
-        UDPFrame(priority=Priority.LOW,
-                 transfer_id=0x_deadbeef_deadbe,
-                 index=0,
-                 end_of_transfer=False,
-                 payload=memoryview(b'Oy blin!')).compile_header_and_payload()
-    ))
+    sock_tx_1.send(
+        b"".join(
+            UDPFrame(
+                priority=Priority.LOW,
+                transfer_id=0x_DEADBEEF_DEADBE,
+                index=0,
+                end_of_transfer=False,
+                payload=memoryview(b"Oy blin!"),
+            ).compile_header_and_payload()
+        )
+    )
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
@@ -415,38 +441,42 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_3
 
     # DROPPED DATAGRAM FROM AN UNMAPPED IP ADDRESS
-    sock_tx_9.send(b''.join(
-        UDPFrame(priority=Priority.LOW,
-                 transfer_id=0x_deadbeef_deadbe,
-                 index=0,
-                 end_of_transfer=False,
-                 payload=memoryview(b'Oy blin!')).compile_header_and_payload()
-    ))
+    sock_tx_9.send(
+        b"".join(
+            UDPFrame(
+                priority=Priority.LOW,
+                transfer_id=0x_DEADBEEF_DEADBE,
+                index=0,
+                end_of_transfer=False,
+                payload=memoryview(b"Oy blin!"),
+            ).compile_header_and_payload()
+        )
+    )
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
-        dropped_datagrams={1: 1, ip_address('127.200.0.9'): 1},
+        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 1},
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
 
     # INVALID FRAME FROM NODE
-    sock_tx_3.send(b'abc')
+    sock_tx_3.send(b"abc")
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 3},
-        dropped_datagrams={1: 1, ip_address('127.200.0.9'): 1},
+        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 1},
     )
     assert received_frames_3.pop()[1:] == (3, None)
     assert not received_frames_promiscuous
     assert not received_frames_3
 
     # INVALID FRAME FROM UNMAPPED IP ADDRESS
-    sock_tx_9.send(b'abc')
+    sock_tx_9.send(b"abc")
     run_until_complete(asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 3},
-        dropped_datagrams={1: 1, ip_address('127.200.0.9'): 2},
+        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 2},
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -458,21 +488,23 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
     srd.remove_listener(3)
     assert not srd.has_listeners
     srd.close()
-    srd.close()   # Idempotency
+    srd.close()  # Idempotency
     with raises(pyuavcan.transport.ResourceClosedError):
         srd.add_listener(3, lambda t, i, f: received_frames_3.append((t, i, f)))
-    assert sock_rx.fileno() < 0, 'The socket has not been closed'
+    assert sock_rx.fileno() < 0, "The socket has not been closed"
 
     # SOCKET FAILURE
     with caplog.at_level(logging.CRITICAL, logger=__name__):
         sock_rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock_rx.bind(('127.100.0.100', 0))
+        sock_rx.bind(("127.100.0.100", 0))
         stats = SocketReaderStatistics()
-        srd = SocketReader(sock=sock_rx,
-                           local_ip_address=ip_address('127.100.4.210'),  # 1234
-                           anonymous=False,
-                           statistics=stats,
-                           loop=loop)
+        srd = SocketReader(
+            sock=sock_rx,
+            local_ip_address=ip_address("127.100.4.210"),  # 1234
+            anonymous=False,
+            statistics=stats,
+            loop=loop,
+        )
         # noinspection PyProtectedMember
         srd._sock.close()
         run_until_complete(asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
@@ -500,25 +532,29 @@ def _unittest_socket_reader_endpoint_reuse() -> None:
     from ipaddress import ip_address
     from pyuavcan.transport import Priority, Timestamp
 
-    destination_endpoint = '127.30.0.30', 9999
+    destination_endpoint = "127.30.0.30", 9999
 
     loop = asyncio.get_event_loop()
     run_until_complete = loop.run_until_complete
 
     sock_tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock_tx.bind(('127.30.0.10', 0))
+    sock_tx.bind(("127.30.0.10", 0))
     sock_tx.connect(destination_endpoint)
     listener_node_id = 10  # from 127.30.0.10
 
     def send_and_wait() -> None:
         ts = Timestamp.now()
-        sock_tx.send(b''.join(
-            UDPFrame(priority=Priority.HIGH,
-                     transfer_id=0,
-                     index=0,
-                     end_of_transfer=True,
-                     payload=memoryview(str(ts).encode())).compile_header_and_payload()
-        ))
+        sock_tx.send(
+            b"".join(
+                UDPFrame(
+                    priority=Priority.HIGH,
+                    transfer_id=0,
+                    index=0,
+                    end_of_transfer=True,
+                    payload=memoryview(str(ts).encode()),
+                ).compile_header_and_payload()
+            )
+        )
         run_until_complete(asyncio.sleep(0.5))  # Let the handler run in the background.
 
     stats = SocketReaderStatistics()
@@ -526,14 +562,16 @@ def _unittest_socket_reader_endpoint_reuse() -> None:
     def make_reader(destination: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]]) -> SocketReader:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if sys.platform.startswith('linux'):  # pragma: no branch
+        if sys.platform.startswith("linux"):  # pragma: no branch
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         sock.bind(destination_endpoint)
-        out = SocketReader(sock=sock,
-                           local_ip_address=ip_address(destination_endpoint[0]),
-                           anonymous=False,
-                           statistics=stats,
-                           loop=loop)
+        out = SocketReader(
+            sock=sock,
+            local_ip_address=ip_address(destination_endpoint[0]),
+            anonymous=False,
+            statistics=stats,
+            loop=loop,
+        )
         out.add_listener(listener_node_id, lambda *args: destination.append(args))  # type: ignore
         return out
 

@@ -52,14 +52,14 @@ class DiagnosticSubscriber:
     """
 
     _LEVEL_MAP = {
-        Severity.TRACE:    logging.INFO,
-        Severity.DEBUG:    logging.INFO,
-        Severity.INFO:     logging.INFO,
-        Severity.NOTICE:   logging.INFO,
-        Severity.WARNING:  logging.WARNING,
-        Severity.ERROR:    logging.ERROR,
+        Severity.TRACE: logging.INFO,
+        Severity.DEBUG: logging.INFO,
+        Severity.INFO: logging.INFO,
+        Severity.NOTICE: logging.INFO,
+        Severity.WARNING: logging.WARNING,
+        Severity.ERROR: logging.ERROR,
         Severity.CRITICAL: logging.CRITICAL,
-        Severity.ALERT:    logging.CRITICAL,
+        Severity.ALERT: logging.CRITICAL,
     }
 
     def __init__(self, presentation: pyuavcan.presentation.Presentation):
@@ -72,11 +72,13 @@ class DiagnosticSubscriber:
         self._sub_record.close()
 
     async def _on_message(self, msg: Record, meta: pyuavcan.transport.TransferFrom) -> None:
-        node_id = meta.source_node_id if meta.source_node_id is not None else 'anonymous'
-        diag_text = textwrap.indent(msg.text.tobytes().decode('utf8'), ' ' * 4)
-        log_text = f'Received uavcan.diagnostic.Record from node {node_id}; ' \
-                   f'severity {msg.severity.value}; ' \
-                   f'remote ts {msg.timestamp.microsecond * 1e-6:0.6f} s, local ts {meta.timestamp}; ' \
-                   f'text:\n' + diag_text
+        node_id = meta.source_node_id if meta.source_node_id is not None else "anonymous"
+        diag_text = textwrap.indent(msg.text.tobytes().decode("utf8"), " " * 4)
+        log_text = (
+            f"Received uavcan.diagnostic.Record from node {node_id}; "
+            f"severity {msg.severity.value}; "
+            f"remote ts {msg.timestamp.microsecond * 1e-6:0.6f} s, local ts {meta.timestamp}; "
+            f"text:\n" + diag_text
+        )
         level = self._LEVEL_MAP.get(msg.severity.value, logging.CRITICAL)
         _logger.log(level, log_text)

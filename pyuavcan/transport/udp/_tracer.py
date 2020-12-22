@@ -19,6 +19,7 @@ class UDPCapture(pyuavcan.transport.Capture):
     """
     See :meth:`pyuavcan.transport.udp.UDPTransport.begin_capture` for details.
     """
+
     packet: RawPacket
 
     def parse(self) -> typing.Optional[typing.Tuple[pyuavcan.transport.AlienSessionSpecifier, UDPFrame]]:
@@ -50,9 +51,9 @@ class UDPCapture(pyuavcan.transport.Capture):
 
         src_nid = unicast_ip_to_node_id(ip_header.source, ip_header.source)
         assert src_nid is not None
-        ses_spec = pyuavcan.transport.AlienSessionSpecifier(source_node_id=src_nid,
-                                                            destination_node_id=dst_nid,
-                                                            data_specifier=data_spec)
+        ses_spec = pyuavcan.transport.AlienSessionSpecifier(
+            source_node_id=src_nid, destination_node_id=dst_nid, data_specifier=data_spec
+        )
         return ses_spec, frame
 
 
@@ -125,21 +126,27 @@ def _unittest_udp_tracer() -> None:
     ts = Timestamp.now()
 
     ds = ServiceDataSpecifier(11, ServiceDataSpecifier.Role.RESPONSE)
-    trace = tr.update(UDPCapture(
-        ts,
-        RawPacket(
-            MACHeader(memoryview(b''), memoryview(b'')),
-            IPHeader(ip_address('127.0.0.42'), ip_address('127.0.0.63')),
-            UDPHeader(12345, service_data_specifier_to_udp_port(ds)),
-            memoryview(b''.join(UDPFrame(
-                priority=Priority.SLOW,
-                transfer_id=1234567890,
-                index=0,
-                end_of_transfer=True,
-                payload=memoryview(b'Hello world!'),
-            ).compile_header_and_payload())),
+    trace = tr.update(
+        UDPCapture(
+            ts,
+            RawPacket(
+                MACHeader(memoryview(b""), memoryview(b"")),
+                IPHeader(ip_address("127.0.0.42"), ip_address("127.0.0.63")),
+                UDPHeader(12345, service_data_specifier_to_udp_port(ds)),
+                memoryview(
+                    b"".join(
+                        UDPFrame(
+                            priority=Priority.SLOW,
+                            transfer_id=1234567890,
+                            index=0,
+                            end_of_transfer=True,
+                            payload=memoryview(b"Hello world!"),
+                        ).compile_header_and_payload()
+                    )
+                ),
+            ),
         )
-    ))
+    )
     assert isinstance(trace, TransferTrace)
     assert trace.timestamp == ts
     assert trace.transfer_id_timeout == approx(AlienTransferReassembler.MAX_TRANSFER_ID_TIMEOUT)  # Initial value.
@@ -148,16 +155,18 @@ def _unittest_udp_tracer() -> None:
     assert trace.transfer.metadata.session_specifier.source_node_id == 42
     assert trace.transfer.metadata.session_specifier.destination_node_id == 63
     assert trace.transfer.metadata.session_specifier.data_specifier == ds
-    assert trace.transfer.fragmented_payload == [memoryview(b'Hello world!')]
+    assert trace.transfer.fragmented_payload == [memoryview(b"Hello world!")]
 
     assert None is tr.update(pyuavcan.transport.Capture(ts))  # Another transport, ignored.
 
-    assert None is tr.update(UDPCapture(  # Malformed frame.
-        ts,
-        RawPacket(
-            MACHeader(memoryview(b''), memoryview(b'')),
-            IPHeader(ip_address('127.0.0.42'), ip_address('127.1.0.63')),
-            UDPHeader(1, 1),
-            memoryview(b''),
+    assert None is tr.update(
+        UDPCapture(  # Malformed frame.
+            ts,
+            RawPacket(
+                MACHeader(memoryview(b""), memoryview(b"")),
+                IPHeader(ip_address("127.0.0.42"), ip_address("127.1.0.63")),
+                UDPHeader(1, 1),
+                memoryview(b""),
+            ),
         )
-    ))
+    )

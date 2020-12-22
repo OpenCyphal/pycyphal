@@ -12,7 +12,7 @@ class SerialSession:
     def __init__(self, finalizer: typing.Callable[[], None]):
         self._close_finalizer: typing.Optional[typing.Callable[[], None]] = finalizer
         if not callable(self._close_finalizer):  # pragma: no cover
-            raise TypeError(f'Invalid finalizer: {type(self._close_finalizer).__name__}')
+            raise TypeError(f"Invalid finalizer: {type(self._close_finalizer).__name__}")
 
     def close(self) -> None:
         fin = self._close_finalizer
@@ -22,4 +22,4 @@ class SerialSession:
 
     def _raise_if_closed(self) -> None:
         if self._close_finalizer is None:
-            raise pyuavcan.transport.ResourceClosedError(f'Session is closed: {self}')
+            raise pyuavcan.transport.ResourceClosedError(f"Session is closed: {self}")

@@ -7,6 +7,7 @@
 import sys
 import pytest
 import logging
+
 # The fixture is imported here to make it visible to other tests in this suite.
 from .dsdl.conftest import generated_packages as generated_packages  # noqa
 
@@ -22,9 +23,10 @@ should a test go crazy and eat all memory.
 _logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope='session', autouse=True)  # type: ignore
+@pytest.fixture(scope="session", autouse=True)  # type: ignore
 def _configure_memory_limit() -> None:
-    if sys.platform == 'linux':
+    if sys.platform == "linux":
         import resource
-        _logger.info('Limiting process memory usage to %.1f GiB', MEMORY_LIMIT / GIBIBYTE)
+
+        _logger.info("Limiting process memory usage to %.1f GiB", MEMORY_LIMIT / GIBIBYTE)
         resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT, MEMORY_LIMIT))

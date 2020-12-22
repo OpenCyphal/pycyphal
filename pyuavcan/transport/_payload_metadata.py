@@ -39,4 +39,4 @@ class PayloadMetadata:
 
     def __post_init__(self) -> None:
         if self.extent_bytes < 0:
-            raise ValueError(f'Invalid extent [byte]: {self.extent_bytes}')
+            raise ValueError(f"Invalid extent [byte]: {self.extent_bytes}")

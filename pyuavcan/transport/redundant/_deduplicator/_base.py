@@ -10,10 +10,9 @@ import pyuavcan.transport
 
 class Deduplicator(abc.ABC):
     @abc.abstractmethod
-    def should_accept_transfer(self,
-                               iface_id:            int,
-                               transfer_id_timeout: float,
-                               transfer:            pyuavcan.transport.TransferFrom) -> bool:
+    def should_accept_transfer(
+        self, iface_id: int, transfer_id_timeout: float, transfer: pyuavcan.transport.TransferFrom
+    ) -> bool:
         """
         The iface-ID is an arbitrary integer that is unique within the redundant group identifying the transport
         instance the transfer was received from.

@@ -57,6 +57,7 @@ class TransportStatistics:
     Not to be confused with :class:`pyuavcan.transport.SessionStatistics`,
     which is tracked per-session.
     """
+
     pass
 
 
@@ -66,6 +67,7 @@ class Transport(abc.ABC):
 
     Implementations should ensure that properties do not raise exceptions.
     """
+
     @property
     @abc.abstractmethod
     def loop(self) -> asyncio.AbstractEventLoop:

@@ -11,28 +11,30 @@ import pytest
 
 
 # noinspection PyProtectedMember
-@pytest.mark.asyncio    # type: ignore
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_can_socketcan() -> None:
     from pyuavcan.transport import Timestamp
     from pyuavcan.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
 
-    if sys.platform != 'linux':  # pragma: no cover
-        pytest.skip('SocketCAN test skipped because we do not seem to be on a GNU/Linux-based system')
+    if sys.platform != "linux":  # pragma: no cover
+        pytest.skip("SocketCAN test skipped because we do not seem to be on a GNU/Linux-based system")
 
     from pyuavcan.transport.can.media.socketcan import SocketCANMedia
-    available = SocketCANMedia.list_available_interface_names()
-    print('Available SocketCAN ifaces:', available)
-    assert 'vcan0' in available, \
-        'Either the interface listing method is not working or the environment is not configured correctly. ' \
-        'Please ensure that the virtual SocketCAN interface "vcan0" is available, and its MTU is set to 64+8.'
 
-    media_a = SocketCANMedia('vcan0', 12)
-    media_b = SocketCANMedia('vcan0', 64)
+    available = SocketCANMedia.list_available_interface_names()
+    print("Available SocketCAN ifaces:", available)
+    assert "vcan0" in available, (
+        "Either the interface listing method is not working or the environment is not configured correctly. "
+        'Please ensure that the virtual SocketCAN interface "vcan0" is available, and its MTU is set to 64+8.'
+    )
+
+    media_a = SocketCANMedia("vcan0", 12)
+    media_b = SocketCANMedia("vcan0", 64)
 
     assert media_a.mtu == 12
     assert media_b.mtu == 64
-    assert media_a.interface_name == 'vcan0'
-    assert media_b.interface_name == 'vcan0'
+    assert media_a.interface_name == "vcan0"
+    assert media_b.interface_name == "vcan0"
     assert media_a.number_of_acceptance_filters == media_b.number_of_acceptance_filters
     assert media_a._maybe_thread is None
     assert media_b._maybe_thread is None
@@ -45,14 +47,13 @@ async def _unittest_can_socketcan() -> None:
     def on_rx_a(frames: typing.Iterable[typing.Tuple[Timestamp, Envelope]]) -> None:
         nonlocal rx_a
         frames = list(frames)
-        print('RX A:', frames)
+        print("RX A:", frames)
         rx_a += frames
 
     def on_rx_b(frames: typing.Iterable[typing.Tuple[Timestamp, Envelope]]) -> None:
         frames = list(frames)
-        print('RX B:', frames)
-        asyncio.ensure_future(media_b.send((e for _, e in frames),
-                                           asyncio.get_event_loop().time() + 1.0))
+        print("RX B:", frames)
+        asyncio.ensure_future(media_b.send((e for _, e in frames), asyncio.get_event_loop().time() + 1.0))
 
     media_a.start(on_rx_a, False)
     media_b.start(on_rx_b, True)
@@ -60,21 +61,21 @@ async def _unittest_can_socketcan() -> None:
     assert media_a._maybe_thread is not None
     assert media_b._maybe_thread is not None
 
-    await asyncio.sleep(2.0)    # This wait is needed to ensure that the RX thread handles select() timeout properly
+    await asyncio.sleep(2.0)  # This wait is needed to ensure that the RX thread handles select() timeout properly
 
     ts_begin = Timestamp.now()
-    await media_a.send([
-        Envelope(DataFrame(FrameFormat.EXTENDED, 0xbadc0fe, bytearray(range(8))),
-                 loopback=True),
-        Envelope(DataFrame(FrameFormat.EXTENDED, 0x12345678, bytearray(range(0))),
-                 loopback=False),
-        Envelope(DataFrame(FrameFormat.BASE, 0x123, bytearray(range(6))),
-                 loopback=True),
-    ], asyncio.get_event_loop().time() + 1.0)
+    await media_a.send(
+        [
+            Envelope(DataFrame(FrameFormat.EXTENDED, 0xBADC0FE, bytearray(range(8))), loopback=True),
+            Envelope(DataFrame(FrameFormat.EXTENDED, 0x12345678, bytearray(range(0))), loopback=False),
+            Envelope(DataFrame(FrameFormat.BASE, 0x123, bytearray(range(6))), loopback=True),
+        ],
+        asyncio.get_event_loop().time() + 1.0,
+    )
     await asyncio.sleep(0.1)
     ts_end = Timestamp.now()
 
-    print('rx_a:', rx_a)
+    print("rx_a:", rx_a)
     # Three sent back from the other end, two loopback
     assert len(rx_a) == 5
     for t, f in rx_a:
@@ -85,7 +86,7 @@ async def _unittest_can_socketcan() -> None:
     rx_external = [e.frame for t, e in rx_a if not e.loopback]
     assert len(rx_loopback) == 2 and len(rx_external) == 3
 
-    assert rx_loopback[0].identifier == 0xbadc0fe
+    assert rx_loopback[0].identifier == 0xBADC0FE
     assert rx_loopback[0].data == bytearray(range(8))
     assert rx_loopback[0].format == FrameFormat.EXTENDED
 
@@ -93,7 +94,7 @@ async def _unittest_can_socketcan() -> None:
     assert rx_loopback[1].data == bytearray(range(6))
     assert rx_loopback[1].format == FrameFormat.BASE
 
-    assert rx_external[0].identifier == 0xbadc0fe
+    assert rx_external[0].identifier == 0xBADC0FE
     assert rx_external[0].data == bytearray(range(8))
     assert rx_external[0].format == FrameFormat.EXTENDED
 

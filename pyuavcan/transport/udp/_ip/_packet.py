@@ -17,13 +17,14 @@ class MACHeader:
     The source and the destination addresses are represented in the original, network byte order.
     Usually these are EUI-48 MAC addresses.
     """
-    source:      memoryview
+
+    source: memoryview
     destination: memoryview
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             source=bytes(self.source).hex(),
-                                             destination=bytes(self.destination).hex())
+        return pyuavcan.util.repr_attributes(
+            self, source=bytes(self.source).hex(), destination=bytes(self.destination).hex()
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -32,12 +33,13 @@ class IPHeader:  # The IPv6 implementation may subclass this to add flow info an
     Raw IP packet header used to represent captured packets.
     The addresses are specialized per protocol version.
     """
-    source:      IPAddress
+
+    source: IPAddress
     destination: IPAddress
 
     def __post_init__(self) -> None:
         if self.source.is_multicast:
-            raise ValueError(f'Source IP address cannot be a multicast group address')
+            raise ValueError(f"Source IP address cannot be a multicast group address")
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, source=str(self.source), destination=str(self.destination))
@@ -48,14 +50,15 @@ class UDPHeader:
     """
     Raw UDP packet header used to represent captured packets.
     """
-    source_port:      int
+
+    source_port: int
     destination_port: int
 
     def __post_init__(self) -> None:
         if not (0 <= self.source_port <= 0xFFFF):
-            raise ValueError(f'Invalid source port: {self.source_port}')
+            raise ValueError(f"Invalid source port: {self.source_port}")
         if not (0 <= self.destination_port <= 0xFFFF):
-            raise ValueError(f'Invalid destination port: {self.destination_port}')
+            raise ValueError(f"Invalid destination port: {self.destination_port}")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -69,9 +72,10 @@ class RawPacket:
     |**MAC header** | **IP header** |**UDP header** |**UDP payload**|
     +---------------+---------------+---------------+---------------+
     """
-    mac_header:  MACHeader
-    ip_header:   IPHeader
-    udp_header:  UDPHeader
+
+    mac_header: MACHeader
+    ip_header: IPHeader
+    udp_header: UDPHeader
     udp_payload: memoryview
 
     def __repr__(self) -> str:
@@ -83,9 +87,7 @@ class RawPacket:
         if len(self.udp_payload) <= limit:
             pld = bytes(self.udp_payload).hex()
         else:
-            pld = bytes(self.udp_payload[:limit]).hex() + '...'
-        return pyuavcan.util.repr_attributes(self,
-                                             mac_header=self.mac_header,
-                                             ip_header=self.ip_header,
-                                             udp_header=self.udp_header,
-                                             udp_payload=pld)
+            pld = bytes(self.udp_payload[:limit]).hex() + "..."
+        return pyuavcan.util.repr_attributes(
+            self, mac_header=self.mac_header, ip_header=self.ip_header, udp_header=self.udp_header, udp_payload=pld
+        )

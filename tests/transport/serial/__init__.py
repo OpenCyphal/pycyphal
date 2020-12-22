@@ -4,4 +4,4 @@
 # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 #
 
-VIRTUAL_BUS_URI = 'socket://localhost:50905'
+VIRTUAL_BUS_URI = "socket://localhost:50905"

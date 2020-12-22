@@ -23,5 +23,5 @@ Please read the SocketCAN documentation for more information.
 
 from sys import platform as _platform
 
-if _platform == 'linux':
+if _platform == "linux":
     from ._socketcan import SocketCANMedia as SocketCANMedia
