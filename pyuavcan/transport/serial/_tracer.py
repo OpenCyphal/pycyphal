@@ -129,9 +129,9 @@ class SerialTracer(pyuavcan.transport.Tracer):
             self._sessions[specifier] = _AlienSession(specifier)
         return self._sessions[specifier]
 
-    def _on_parsed(self, timestamp: Timestamp, item: typing.Union[SerialFrame, memoryview]) -> None:
+    def _on_parsed(self, timestamp: Timestamp, data: memoryview, frame: typing.Optional[SerialFrame]) -> None:
         if self._parser_output is None:
-            self._parser_output = timestamp, item
+            self._parser_output = timestamp, (data if frame is None else frame)
         else:
             raise ValueError(
                 f'The supplied serial capture object contains more than one serialized entity. '

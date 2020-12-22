@@ -369,7 +369,7 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
         PayloadMetadata(10000)
     )
 
-    events: typing.List[pyuavcan.transport.Capture] = []
+    events: typing.List[SerialCapture] = []
     events2: typing.List[pyuavcan.transport.Capture] = []
 
     def append_events(cap: pyuavcan.transport.Capture) -> None:
