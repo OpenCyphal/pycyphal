@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import pyuavcan.transport
 
@@ -12,4 +10,5 @@ class InconsistentInferiorConfigurationError(pyuavcan.transport.InvalidTransport
     Raised when a redundant transport instance is asked to attach a new inferior whose configuration
     does not match that of the other inferiors or of the redundant transport itself.
     """
+
     pass

@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import enum
@@ -18,10 +16,11 @@ class TransferReassemblyErrorID(enum.Enum):
     See the UAVCAN specification for background info.
     We have ``ID`` in the name to make clear that this is not an exception type.
     """
+
     MISSED_START_OF_TRANSFER = enum.auto()
-    UNEXPECTED_TOGGLE_BIT    = enum.auto()
-    UNEXPECTED_TRANSFER_ID   = enum.auto()
-    TRANSFER_CRC_MISMATCH    = enum.auto()
+    UNEXPECTED_TOGGLE_BIT = enum.auto()
+    UNEXPECTED_TRANSFER_ID = enum.auto()
+    TRANSFER_CRC_MISMATCH = enum.auto()
 
 
 class TransferReassembler:
@@ -35,11 +34,13 @@ class TransferReassembler:
         self._payload_truncated = False
         self._fragmented_payload: typing.List[memoryview] = []
 
-    def process_frame(self,
-                      timestamp:              Timestamp,
-                      priority:               pyuavcan.transport.Priority,
-                      frame:                  UAVCANFrame,
-                      transfer_id_timeout_ns: int) -> typing.Union[None, TransferReassemblyErrorID, TransferFrom]:
+    def process_frame(
+        self,
+        timestamp: Timestamp,
+        priority: pyuavcan.transport.Priority,
+        frame: UAVCANFrame,
+        transfer_id_timeout_ns: int,
+    ) -> typing.Union[None, TransferReassemblyErrorID, TransferFrom]:
         """
         Observe that occasionally newer frames may have lower timestamp values due to error variations in the time
         recovery algorithms, depending on the methods of timestamping. This class therefore does not check if the
@@ -48,9 +49,10 @@ class TransferReassembler:
         """
         # FIRST STAGE - DETECTION OF NEW TRANSFERS.
         # Decide if we need to begin a new transfer.
-        tid_timed_out = \
-            timestamp.monotonic_ns - self._timestamp.monotonic_ns > transfer_id_timeout_ns or \
-            self._timestamp.monotonic_ns == 0
+        tid_timed_out = (
+            timestamp.monotonic_ns - self._timestamp.monotonic_ns > transfer_id_timeout_ns
+            or self._timestamp.monotonic_ns == 0
+        )
 
         not_previous_tid = compute_transfer_id_forward_distance(frame.transfer_id, self._transfer_id) > 1
 
@@ -75,10 +77,9 @@ class TransferReassembler:
             self._crc = pyuavcan.transport.commons.crc.CRC16CCITT()
             self._payload_truncated = False
             self._fragmented_payload.clear()
-            self._timestamp = timestamp   # Initialization from the first frame
+            self._timestamp = timestamp  # Initialization from the first frame
 
-        if self._timestamp.monotonic_ns > timestamp.monotonic_ns or \
-                self._timestamp.system_ns > timestamp.system_ns:
+        if self._timestamp.monotonic_ns > timestamp.monotonic_ns or self._timestamp.system_ns > timestamp.system_ns:
             # The timestamping algorithm may have corrected the time error since the first frame, accept lower value
             self._timestamp = Timestamp.combine_oldest(self._timestamp, timestamp)
 
@@ -96,9 +97,9 @@ class TransferReassembler:
             self._fragmented_payload.clear()
 
             if frame.start_of_transfer:
-                assert len(fragmented_payload) == 1     # Single-frame transfer, additional checks not needed
+                assert len(fragmented_payload) == 1  # Single-frame transfer, additional checks not needed
             else:
-                assert len(fragmented_payload) > 1      # Multi-frame transfer, check and remove the trailing CRC
+                assert len(fragmented_payload) > 1  # Multi-frame transfer, check and remove the trailing CRC
                 if not self._crc.check_residue():
                     return TransferReassemblyErrorID.TRANSFER_CRC_MISMATCH
 
@@ -110,18 +111,20 @@ class TransferReassembler:
                     else:
                         cutoff = TRANSFER_CRC_LENGTH_BYTES - len(fragmented_payload[-1])
                         assert cutoff >= 0
-                        fragmented_payload = fragmented_payload[:-1]                    # Drop the last fragment
+                        fragmented_payload = fragmented_payload[:-1]  # Drop the last fragment
                         if cutoff > 0:
-                            fragmented_payload[-1] = fragmented_payload[-1][:-cutoff]   # Truncate the previous fragment
+                            fragmented_payload[-1] = fragmented_payload[-1][:-cutoff]  # Truncate the previous fragment
                     assert expected_length == sum(map(len, fragmented_payload))
 
-            return TransferFrom(timestamp=self._timestamp,
-                                priority=priority,
-                                transfer_id=frame.transfer_id,
-                                fragmented_payload=fragmented_payload,
-                                source_node_id=self._source_node_id)
+            return TransferFrom(
+                timestamp=self._timestamp,
+                priority=priority,
+                transfer_id=frame.transfer_id,
+                fragmented_payload=fragmented_payload,
+                source_node_id=self._source_node_id,
+            )
         else:
-            return None     # Expect more frames to come
+            return None  # Expect more frames to come
 
     def _prepare_for_next_transfer(self) -> None:
         self._transfer_id = (self._transfer_id + 1) % TRANSFER_ID_MODULO
@@ -132,23 +135,27 @@ def _unittest_can_transfer_reassembler_manual() -> None:
     priority = pyuavcan.transport.Priority.IMMEDIATE
     source_node_id = 123
     transfer_id_timeout_ns = 900
-    can_identifier = 0xbadc0fe
+    can_identifier = 0xBADC0FE
 
     err = TransferReassemblyErrorID
 
     def proc(monotonic_ns: int, frame: UAVCANFrame) -> typing.Union[None, TransferReassemblyErrorID, TransferFrom]:
-        away = rx.process_frame(timestamp=Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
-                                priority=priority,
-                                frame=frame,
-                                transfer_id_timeout_ns=transfer_id_timeout_ns)
+        away = rx.process_frame(
+            timestamp=Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
+            priority=priority,
+            frame=frame,
+            transfer_id_timeout_ns=transfer_id_timeout_ns,
+        )
         assert away is None or isinstance(away, (TransferReassemblyErrorID, TransferFrom))
         return away
 
-    def frm(padded_payload:    typing.Union[bytes, str],
-            transfer_id:       int,
-            start_of_transfer: bool,
-            end_of_transfer:   bool,
-            toggle_bit:        bool) -> UAVCANFrame:
+    def frm(
+        padded_payload: typing.Union[bytes, str],
+        transfer_id: int,
+        start_of_transfer: bool,
+        end_of_transfer: bool,
+        toggle_bit: bool,
+    ) -> UAVCANFrame:
         return UAVCANFrame(
             identifier=can_identifier,
             padded_payload=memoryview(padded_payload if isinstance(padded_payload, bytes) else padded_payload.encode()),
@@ -158,9 +165,9 @@ def _unittest_can_transfer_reassembler_manual() -> None:
             toggle_bit=toggle_bit,
         )
 
-    def trn(monotonic_ns:       int,
-            transfer_id:        int,
-            fragmented_payload: typing.Sequence[typing.Union[bytes, str, memoryview]]) -> TransferFrom:
+    def trn(
+        monotonic_ns: int, transfer_id: int, fragmented_payload: typing.Sequence[typing.Union[bytes, str, memoryview]]
+    ) -> TransferFrom:
         return TransferFrom(
             timestamp=Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
             priority=priority,
@@ -174,86 +181,110 @@ def _unittest_can_transfer_reassembler_manual() -> None:
     rx = TransferReassembler(source_node_id, 50)
 
     # Correct single-frame transfers.
-    assert proc(1000, frm('Hello', 0, True, True, True)) == trn(1000, 0, ['Hello'])
-    assert proc(1000, frm('Hello', 0, True, True, True)) == err.UNEXPECTED_TRANSFER_ID
-    assert proc(1000, frm('Hello', 0, True, True, True)) == err.UNEXPECTED_TRANSFER_ID
-    assert proc(2000, frm('Hello', 0, True, True, True)) == trn(2000, 0, ['Hello'])         # TID timeout
+    assert proc(1000, frm("Hello", 0, True, True, True)) == trn(1000, 0, ["Hello"])
+    assert proc(1000, frm("Hello", 0, True, True, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(1000, frm("Hello", 0, True, True, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(2000, frm("Hello", 0, True, True, True)) == trn(2000, 0, ["Hello"])  # TID timeout
 
     # Correct multi-frame transfer.
-    assert proc(2000, frm(b'\x00\x01\x02\x03\x04\x05\x06', 1, True, False, True)) is None
-    assert proc(2001, frm(b'\x07\x08\x09\x0a\x0b\x0c\x0d', 1, False, False, False)) is None
-    assert proc(2002, frm(b'\x0e\x0f\x10\x11\x12\x13\x14', 1, False, False, True)) is None
-    assert proc(2003, frm(b'\x15\x16\x17\x18\x19\x1a\x1b', 1, False, False, False)) is None
-    assert proc(2004, frm(b'\x1c\x1d\x35\x54',             1, False, True, True)) == trn(2000, 1, [
-        b'\x00\x01\x02\x03\x04\x05\x06',
-        b'\x07\x08\x09\x0a\x0b\x0c\x0d',
-        b'\x0e\x0f\x10\x11\x12\x13\x14',
-        b'\x15\x16\x17\x18\x19\x1a\x1b',
-        b'\x1c\x1d',
-    ])
+    assert proc(2000, frm(b"\x00\x01\x02\x03\x04\x05\x06", 1, True, False, True)) is None
+    assert proc(2001, frm(b"\x07\x08\x09\x0a\x0b\x0c\x0d", 1, False, False, False)) is None
+    assert proc(2002, frm(b"\x0e\x0f\x10\x11\x12\x13\x14", 1, False, False, True)) is None
+    assert proc(2003, frm(b"\x15\x16\x17\x18\x19\x1a\x1b", 1, False, False, False)) is None
+    assert proc(2004, frm(b"\x1c\x1d\x35\x54", 1, False, True, True)) == trn(
+        2000,
+        1,
+        [
+            b"\x00\x01\x02\x03\x04\x05\x06",
+            b"\x07\x08\x09\x0a\x0b\x0c\x0d",
+            b"\x0e\x0f\x10\x11\x12\x13\x14",
+            b"\x15\x16\x17\x18\x19\x1a\x1b",
+            b"\x1c\x1d",
+        ],
+    )
 
     # Correct transfer with the old transfer ID will be ignored.
-    assert proc(2010, frm(b'\x00\x01\x02\x03\x04\x05\x06', 1, True, False, True)) == err.UNEXPECTED_TRANSFER_ID
-    assert proc(2011, frm(b'\x07\x08\x09\x0a\x0b\x0c\x0d', 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
-    assert proc(2012, frm(b'\x0e\x0f\x10\x11\x12\x13\x14', 1, False, False, True)) == err.UNEXPECTED_TRANSFER_ID
-    assert proc(2013, frm(b'\x15\x16\x17\x18\x19\x1a\x1b', 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
-    assert proc(2014, frm(b'\x1c\x1d\x35\x54',             1, False, True, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(2010, frm(b"\x00\x01\x02\x03\x04\x05\x06", 1, True, False, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(2011, frm(b"\x07\x08\x09\x0a\x0b\x0c\x0d", 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(2012, frm(b"\x0e\x0f\x10\x11\x12\x13\x14", 1, False, False, True)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(2013, frm(b"\x15\x16\x17\x18\x19\x1a\x1b", 1, False, False, False)) == err.UNEXPECTED_TRANSFER_ID
+    assert proc(2014, frm(b"\x1c\x1d\x35\x54", 1, False, True, True)) == err.UNEXPECTED_TRANSFER_ID
 
     # Correct reassembly where the CRC spills over into the next frame.
-    assert proc(2100, frm(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 9, True, False, True)) \
-        is None
-    assert proc(2101, frm(b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 9, False, False, False)) \
-        is None
-    assert proc(2102, frm(b'\x6f', 9, False, True, True)) == trn(2100, 9, [
-        b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e',
-        b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c',      # Third fragment is gone - used to contain CRC
-    ])
+    assert (
+        proc(2100, frm(b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e", 9, True, False, True)) is None
+    )
+    assert (
+        proc(2101, frm(b"\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4", 9, False, False, False)) is None
+    )
+    assert proc(2102, frm(b"\x6f", 9, False, True, True)) == trn(
+        2100,
+        9,
+        [
+            b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e",
+            b"\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c",  # Third fragment is gone - used to contain CRC
+        ],
+    )
 
     # Transfer ID rolled back but should be accepted anyway; CRC is invalid
-    assert proc(2200, frm(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e', 8, True, False, True)) \
-        is None
-    assert proc(2201, frm(b'\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4', 8, False, False, False)) \
-        is None
-    assert proc(2202, frm(b'\x00', 8, False, True, True)) == err.TRANSFER_CRC_MISMATCH
+    assert (
+        proc(2200, frm(b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e", 8, True, False, True)) is None
+    )
+    assert (
+        proc(2201, frm(b"\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\xc4", 8, False, False, False)) is None
+    )
+    assert proc(2202, frm(b"\x00", 8, False, True, True)) == err.TRANSFER_CRC_MISMATCH
 
     # Transfer ID timeout and the new frame is not a start of new transfer --> missed start error
-    assert proc(4000, frm(b'123456', 8, False, False, True)) == err.MISSED_START_OF_TRANSFER
+    assert proc(4000, frm(b"123456", 8, False, False, True)) == err.MISSED_START_OF_TRANSFER
 
     # New transfer; same TID is accepted anyway due to the timeout condition; repeated frames (bad toggles)
-    assert proc(4000, frm(b'\x00\x01\x02\x03\x04\x05\x06', 8, True, False, True)) is None
-    assert proc(4010, frm(b'123456', 8, True, False, True)) == err.UNEXPECTED_TOGGLE_BIT
-    assert proc(3500, frm(b'\x07\x08\x09\x0a\x0b\x0c\x0d', 8, False, False, False)) is None    # Timestamp update!
-    assert proc(3000, frm(b'', 8, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT           # Timestamp ignored
-    assert proc(4022, frm(b'\x0e\x0f\x10\x11\x12\x13\x14', 8, False, False, True)) is None
-    assert proc(4002, frm(b'\x0e\x0f\x10\x11\x12\x13\x14', 8, False, False, True)) == err.UNEXPECTED_TOGGLE_BIT
-    assert proc(4013, frm(b'\x15\x16\x17\x18\x19\x1a\x1b', 8, False, False, False)) is None
-    assert proc(4003, frm(b'\x15\x16\x17\x18\x19\x1a\x1b' * 2, 8, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT
-    assert proc(4004, frm(b'\x1c\x1d\x35\x54',             8, False, True, True)) == trn(3500, 8, [
-        b'\x00\x01\x02\x03\x04\x05\x06',
-        b'\x07\x08\x09\x0a\x0b\x0c\x0d',
-        b'\x0e\x0f\x10\x11\x12\x13\x14',
-        b'\x15\x16\x17\x18\x19\x1a\x1b',
-        b'\x1c\x1d',
-    ])
-    assert proc(4004, frm(b'\x1c\x1d\x35\x54', 8, False, True, True)) == err.UNEXPECTED_TRANSFER_ID  # Not toggle!
+    assert proc(4000, frm(b"\x00\x01\x02\x03\x04\x05\x06", 8, True, False, True)) is None
+    assert proc(4010, frm(b"123456", 8, True, False, True)) == err.UNEXPECTED_TOGGLE_BIT
+    assert proc(3500, frm(b"\x07\x08\x09\x0a\x0b\x0c\x0d", 8, False, False, False)) is None  # Timestamp update!
+    assert proc(3000, frm(b"", 8, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT  # Timestamp ignored
+    assert proc(4022, frm(b"\x0e\x0f\x10\x11\x12\x13\x14", 8, False, False, True)) is None
+    assert proc(4002, frm(b"\x0e\x0f\x10\x11\x12\x13\x14", 8, False, False, True)) == err.UNEXPECTED_TOGGLE_BIT
+    assert proc(4013, frm(b"\x15\x16\x17\x18\x19\x1a\x1b", 8, False, False, False)) is None
+    assert proc(4003, frm(b"\x15\x16\x17\x18\x19\x1a\x1b" * 2, 8, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT
+    assert proc(4004, frm(b"\x1c\x1d\x35\x54", 8, False, True, True)) == trn(
+        3500,
+        8,
+        [
+            b"\x00\x01\x02\x03\x04\x05\x06",
+            b"\x07\x08\x09\x0a\x0b\x0c\x0d",
+            b"\x0e\x0f\x10\x11\x12\x13\x14",
+            b"\x15\x16\x17\x18\x19\x1a\x1b",
+            b"\x1c\x1d",
+        ],
+    )
+    assert proc(4004, frm(b"\x1c\x1d\x35\x54", 8, False, True, True)) == err.UNEXPECTED_TRANSFER_ID  # Not toggle!
 
     # Transfer that is too large (above the configured limit) is implicitly truncated. Time goes back but it's fine.
-    assert proc(1000, frm(b'0123456789abcdefghi', 0, True, False, True)) is None       # 19
-    assert proc(1001, frm(b'0123456789abcdefghi', 0, False, False, False)) is None     # 38
-    assert proc(1001, frm(b'0123456789abcdefghi', 0, False, False, True)) is None      # 57
-    assert proc(1001, frm(b'0123456789abcdefghi', 0, False, False, False)) is None     # 76
-    assert proc(1001, frm(b':B',                  0, False, True, True)) == trn(1000, 0, [
-        b'0123456789abcdefghi',
-        b'0123456789abcdefghi',
-        b'0123456789abcdefghi',
-        # Last two are truncated away.
-    ])
+    assert proc(1000, frm(b"0123456789abcdefghi", 0, True, False, True)) is None  # 19
+    assert proc(1001, frm(b"0123456789abcdefghi", 0, False, False, False)) is None  # 38
+    assert proc(1001, frm(b"0123456789abcdefghi", 0, False, False, True)) is None  # 57
+    assert proc(1001, frm(b"0123456789abcdefghi", 0, False, False, False)) is None  # 76
+    assert proc(1001, frm(b":B", 0, False, True, True)) == trn(
+        1000,
+        0,
+        [
+            b"0123456789abcdefghi",
+            b"0123456789abcdefghi",
+            b"0123456789abcdefghi",
+            # Last two are truncated away.
+        ],
+    )
 
     # Transfer above the limit but accepted nevertheless because the overflow induced by the last frame is not checked.
-    assert proc(1000, frm(b'0123456789abcdefghi',         31, True, False, True)) is None       # 19
-    assert proc(1001, frm(b'0123456789abcdefghi',         31, False, False, False)) is None     # 38
-    assert proc(1001, frm(b'0123456789abcdefghi\xa9\x72', 31, False, True, True)) == trn(1000, 31, [
-        b'0123456789abcdefghi',
-        b'0123456789abcdefghi',
-        b'0123456789abcdefghi',
-    ])
+    assert proc(1000, frm(b"0123456789abcdefghi", 31, True, False, True)) is None  # 19
+    assert proc(1001, frm(b"0123456789abcdefghi", 31, False, False, False)) is None  # 38
+    assert proc(1001, frm(b"0123456789abcdefghi\xa9\x72", 31, False, True, True)) == trn(
+        1000,
+        31,
+        [
+            b"0123456789abcdefghi",
+            b"0123456789abcdefghi",
+            b"0123456789abcdefghi",
+        ],
+    )

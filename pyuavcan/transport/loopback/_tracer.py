@@ -13,6 +13,7 @@ class LoopbackCapture(pyuavcan.transport.Capture):
     """
     Since the loopback transport is not really a transport, its capture events contain entire transfers.
     """
+
     transfer: pyuavcan.transport.AlienTransfer
 
 
@@ -21,6 +22,7 @@ class LoopbackTracer(pyuavcan.transport.Tracer):
     Since loopback transport does not have frames to trace, this tracer simply returns the transfer
     from the capture object.
     """
+
     def update(self, cap: Capture) -> typing.Optional[Trace]:
         if isinstance(cap, LoopbackCapture):
             return TransferTrace(cap.timestamp, cap.transfer, transfer_id_timeout=0)

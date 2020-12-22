@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2020 UAVCAN Development Team
+# Copyright (c) 2020 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 """
 Keeps track of online nodes by subscribing to ``uavcan.node.Heartbeat`` and requesting ``uavcan.node.GetInfo``
@@ -17,10 +15,13 @@ from uavcan.node import GetInfo_1_0 as GetInfo
 import pyuavcan
 
 
-Entry = typing.NamedTuple('Entry', [
-    ('heartbeat', Heartbeat),
-    ('info', typing.Optional[GetInfo.Response]),
-])
+Entry = typing.NamedTuple(
+    "Entry",
+    [
+        ("heartbeat", Heartbeat),
+        ("info", typing.Optional[GetInfo.Response]),
+    ],
+)
 """
 The data kept per online node.
 The heartbeat is the latest received one.
@@ -101,10 +102,10 @@ class NodeTracker:
     @get_info_timeout.setter
     def get_info_timeout(self, value: float) -> None:
         value = float(value)
-        if 0 < value < float('+inf'):
+        if 0 < value < float("+inf"):
             self._get_info_timeout = value
         else:
-            raise ValueError(f'Invalid response timeout value: {value}')
+            raise ValueError(f"Invalid response timeout value: {value}")
 
     @property
     def get_info_attempts(self) -> int:
@@ -121,7 +122,7 @@ class NodeTracker:
         if 0 <= value:
             self._get_info_attempts = value
         else:
-            raise ValueError(f'Invalid attempt limit: {value}')
+            raise ValueError(f"Invalid attempt limit: {value}")
 
     @property
     def registry(self) -> typing.Dict[int, Entry]:
@@ -136,7 +137,7 @@ class NodeTracker:
         """
         The registry is empty and hooks are not invoked until the instance is started.
         """
-        _logger.debug('Starting %s', self)
+        _logger.debug("Starting %s", self)
         self._sub_heartbeat.receive_in_background(self._on_heartbeat)  # Idempotent
 
     def close(self) -> None:
@@ -144,7 +145,7 @@ class NodeTracker:
         When closed the registry is emptied and all handlers are removed.
         This is to avoid accidental reliance on obsolete data.
         """
-        _logger.debug('Closing %s', self)
+        _logger.debug("Closing %s", self)
         self._sub_heartbeat.close()
         self._registry.clear()
         self._update_handlers.clear()
@@ -172,7 +173,7 @@ class NodeTracker:
         Handlers can be added and removed at any moment regardless of whether the instance is started.
         """
         if not callable(handler):  # pragma: no cover
-            raise ValueError(f'Bad handler: {handler}')
+            raise ValueError(f"Bad handler: {handler}")
         self._update_handlers.append(handler)
 
     def remove_update_handler(self, handler: UpdateHandler) -> None:
@@ -184,7 +185,7 @@ class NodeTracker:
     async def _on_heartbeat(self, msg: Heartbeat, metadata: pyuavcan.transport.TransferFrom) -> None:
         node_id = metadata.source_node_id
         if node_id is None:
-            _logger.warning(f'Anonymous nodes shall not publish Heartbeat. Message: {msg}. Metadata: {metadata}.')
+            _logger.warning(f"Anonymous nodes shall not publish Heartbeat. Message: {msg}. Metadata: {metadata}.")
             return
 
         # Construct the new entry and decide if we need to issue another GetInfo request.
@@ -192,10 +193,10 @@ class NodeTracker:
         old = self._registry.get(node_id)
         if old is None:
             new = Entry(msg, None)
-            _logger.debug('New node %s heartbeat %s', node_id, msg)
+            _logger.debug("New node %s heartbeat %s", node_id, msg)
         elif old[0].uptime > msg.uptime:
             new = Entry(msg, None)
-            _logger.debug('Known node %s restarted. New heartbeat: %s. Old entry: %s', node_id, msg, old)
+            _logger.debug("Known node %s restarted. New heartbeat: %s. Old entry: %s", node_id, msg, old)
         else:
             new = Entry(msg, old[1])
             update = False
@@ -206,9 +207,9 @@ class NodeTracker:
             self._offline_timers[node_id].cancel()
         except LookupError:
             pass
-        self._offline_timers[node_id] = self._presentation.loop.call_later(Heartbeat.OFFLINE_TIMEOUT,
-                                                                           self._on_offline,
-                                                                           node_id)
+        self._offline_timers[node_id] = self._presentation.loop.call_later(
+            Heartbeat.OFFLINE_TIMEOUT, self._on_offline, node_id
+        )
 
         # Do the update unless this is just a regular heartbeat (no restart, known node).
         if update:
@@ -218,13 +219,13 @@ class NodeTracker:
     def _on_offline(self, node_id: int) -> None:
         try:
             old = self._registry[node_id]
-            _logger.debug('Offline timeout expired for node %s. Old entry: %s', node_id, old)
+            _logger.debug("Offline timeout expired for node %s. Old entry: %s", node_id, old)
             self._notify(node_id, old, None)
             del self._registry[node_id]
             self._cancel_task(node_id)
             del self._offline_timers[node_id]
         except Exception as ex:
-            _logger.exception(f'Offline timeout handler error for node {node_id}: {ex}')
+            _logger.exception(f"Offline timeout handler error for node {node_id}: {ex}")
 
     def _cancel_task(self, node_id: int) -> None:
         try:
@@ -234,7 +235,7 @@ class NodeTracker:
         else:
             task.cancel()
             del self._info_tasks[node_id]
-            _logger.debug('GetInfo task for node %s canceled', node_id)
+            _logger.debug("GetInfo task for node %s canceled", node_id)
 
     def _request_info(self, node_id: int) -> None:
         async def attempt() -> bool:
@@ -244,7 +245,7 @@ class NodeTracker:
                 client.response_timeout = self._get_info_timeout
                 response = await client.call(GetInfo.Request())
                 if response is not None:
-                    _logger.debug('GetInfo response: %s', response)
+                    _logger.debug("GetInfo response: %s", response)
                     obj, _meta = response
                     assert isinstance(obj, GetInfo.Response)
                     old = self._registry[node_id]
@@ -252,33 +253,38 @@ class NodeTracker:
                     self._registry[node_id] = new
                     self._notify(node_id, old, new)
                     return True
-                _logger.debug('GetInfo request to %s has timed out in %.3f seconds', node_id, client.response_timeout)
+                _logger.debug("GetInfo request to %s has timed out in %.3f seconds", node_id, client.response_timeout)
                 return False
             finally:
                 client.close()
 
         async def worker() -> None:
             try:
-                _logger.debug('GetInfo task for node %s started', node_id)
+                _logger.debug("GetInfo task for node %s started", node_id)
                 remaining_attempts = self._get_info_attempts
                 while remaining_attempts > 0:
-                    _logger.debug('GetInfo task for node %s is making a new attempt; remaining attempts: %s',
-                                  node_id, remaining_attempts)
+                    _logger.debug(
+                        "GetInfo task for node %s is making a new attempt; remaining attempts: %s",
+                        node_id,
+                        remaining_attempts,
+                    )
                     remaining_attempts -= 1
                     try:
                         if await attempt():
                             break
-                    except (pyuavcan.transport.OperationNotDefinedForAnonymousNodeError,
-                            pyuavcan.presentation.RequestTransferIDVariabilityExhaustedError) as ex:
-                        _logger.debug('GetInfo task for node %s encountered a transient error: %s', node_id, ex)
+                    except (
+                        pyuavcan.transport.OperationNotDefinedForAnonymousNodeError,
+                        pyuavcan.presentation.RequestTransferIDVariabilityExhaustedError,
+                    ) as ex:
+                        _logger.debug("GetInfo task for node %s encountered a transient error: %s", node_id, ex)
                         await asyncio.sleep(self._get_info_timeout)
-                _logger.debug('GetInfo task for node %s is exiting', node_id)
+                _logger.debug("GetInfo task for node %s is exiting", node_id)
             except asyncio.CancelledError:
                 raise
             except pyuavcan.transport.ResourceClosedError:
-                _logger.debug(f'GetInfo task for node {node_id} is stopping because the transport is closed.')
+                _logger.debug(f"GetInfo task for node {node_id} is stopping because the transport is closed.")
             except Exception as ex:
-                _logger.exception(f'GetInfo task for node {node_id} has crashed: {ex}')
+                _logger.exception(f"GetInfo task for node {node_id} has crashed: {ex}")
             del self._info_tasks[node_id]
 
         self._cancel_task(node_id)

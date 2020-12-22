@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import sys
 import typing
@@ -19,11 +17,11 @@ from ._base import Command, SubsystemFactory
 class PickNodeIDCommand(Command):
     @property
     def names(self) -> typing.Sequence[str]:
-        return ['pick-node-id', 'pick-nid']
+        return ["pick-node-id", "pick-nid"]
 
     @property
     def help(self) -> str:
-        return '''
+        return """
 Automatically find a node-ID value that is not used by any other node that is currently online. This is a simpler
 alternative to plug-and-play node-ID allocation logic defined in Specification. Unlike the solution presented there,
 this alternative is non-deterministic and collision-prone; it is fundamentally unsafe and it should not be used in
@@ -32,7 +30,7 @@ automation scripts. The operating principle is extremely simple and can be viewe
 claiming procedure defined in J1939: listen to Heartbeat messages for a short while, build the list of node-ID values
 that are currently in use, and then randomly pick a node-ID from the unused ones. The listening duration is determined
 heuristically at run time; for most use cases it is unlikely to exceed three seconds.
-'''.strip()
+""".strip()
 
     @property
     def examples(self) -> typing.Optional[str]:
@@ -48,7 +46,7 @@ heuristically at run time; for most use cases it is unlikely to exceed three sec
         del parser
 
     def execute(self, args: argparse.Namespace, subsystems: typing.Sequence[object]) -> int:
-        transport, = subsystems
+        (transport,) = subsystems
         assert isinstance(transport, pyuavcan.transport.Transport)
         return asyncio.get_event_loop().run_until_complete(_run(transport=transport))
 
@@ -58,8 +56,9 @@ _logger = logging.getLogger(__name__)
 
 async def _run(transport: pyuavcan.transport.Transport) -> int:
     import uavcan.node
+
     if transport.local_node_id is not None:
-        print('The transport has a valid node-ID already, use it:', transport.local_node_id, file=sys.stderr)
+        print("The transport has a valid node-ID already, use it:", transport.local_node_id, file=sys.stderr)
         return 2
 
     node_id_set_cardinality = transport.protocol_parameters.max_nodes
@@ -76,7 +75,7 @@ async def _run(transport: pyuavcan.transport.Transport) -> int:
         # of the platform itself. For example, a UDP/IP transport over IPv4 with a node-ID of zero would map to
         # an IP address with trailing zeros which happens to be the address of the subnet, which is likely
         # to cause all sorts of complications.
-        _logger.debug('Removing the zero node-ID from the set of available values to avoid platform-specific issues')
+        _logger.debug("Removing the zero node-ID from the set of available values to avoid platform-specific issues")
         candidates.remove(0)
 
     pres = pyuavcan.presentation.Presentation(transport)
@@ -88,11 +87,15 @@ async def _run(transport: pyuavcan.transport.Transport) -> int:
             if result is not None:
                 msg, transfer = result
                 assert isinstance(transfer, pyuavcan.transport.TransferFrom)
-                _logger.debug('Received %r via %r', msg, transfer)
+                _logger.debug("Received %r via %r", msg, transfer)
                 if transfer.source_node_id is None:
-                    _logger.warning('FYI, the network contains an anonymous node which is publishing Heartbeat. '
-                                    'Please contact the vendor and inform them that this behavior is non-compliant. '
-                                    'The offending heartbeat message is: %r, transfer: %r', msg, transfer)
+                    _logger.warning(
+                        "FYI, the network contains an anonymous node which is publishing Heartbeat. "
+                        "Please contact the vendor and inform them that this behavior is non-compliant. "
+                        "The offending heartbeat message is: %r, transfer: %r",
+                        msg,
+                        transfer,
+                    )
                 else:
                     try:
                         candidates.remove(int(transfer.source_node_id))
@@ -103,18 +106,25 @@ async def _run(transport: pyuavcan.transport.Transport) -> int:
                         # so we need to listen longer to minimize the chance of collision.
                         multiplier = 3.0 if msg.mode.value == uavcan.node.Mode_1_0.INITIALIZATION else 1.0
                         advancement = uavcan.node.Heartbeat_1_0.MAX_PUBLICATION_PERIOD * multiplier
-                        _logger.info('Deadline advanced by %.1f s; %d candidates left of %d possible',
-                                     advancement, len(candidates), node_id_set_cardinality)
+                        _logger.info(
+                            "Deadline advanced by %.1f s; %d candidates left of %d possible",
+                            advancement,
+                            len(candidates),
+                            node_id_set_cardinality,
+                        )
                         deadline = max(deadline, asyncio.get_event_loop().time() + advancement)
             else:
                 break
 
     if not candidates:
-        print(f'All {node_id_set_cardinality} of the available node-ID values are occupied.', file=sys.stderr)
+        print(f"All {node_id_set_cardinality} of the available node-ID values are occupied.", file=sys.stderr)
         return 1
     else:
         pick = random.choice(list(candidates))
-        _logger.info('The set of unoccupied node-ID values contains %d elements; the randomly chosen value is %d',
-                     len(candidates), pick)
+        _logger.info(
+            "The set of unoccupied node-ID values contains %d elements; the randomly chosen value is %d",
+            len(candidates),
+            pick,
+        )
         print(pick)
         return 0

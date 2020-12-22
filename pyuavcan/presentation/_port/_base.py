@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import abc
@@ -25,9 +23,9 @@ This value is recommended by Specification.
 PortFinalizer = typing.Callable[[typing.Sequence[pyuavcan.transport.Session]], None]
 
 
-TypeClass = typing.TypeVar('TypeClass', bound=pyuavcan.dsdl.CompositeObject)
-MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
-ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)
+TypeClass = typing.TypeVar("TypeClass", bound=pyuavcan.dsdl.CompositeObject)
+MessageClass = typing.TypeVar("MessageClass", bound=pyuavcan.dsdl.CompositeObject)
+ServiceClass = typing.TypeVar("ServiceClass", bound=pyuavcan.dsdl.ServiceObject)
 
 
 class OutgoingTransferIDCounter:
@@ -59,7 +57,7 @@ class OutgoingTransferIDCounter:
         if value >= 0:
             self._value = value
         else:
-            raise ValueError(f'Not a valid transfer-ID value: {value}')
+            raise ValueError(f"Not a valid transfer-ID value: {value}")
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, self._value)
@@ -69,6 +67,7 @@ class Closable(abc.ABC):
     """
     Base class for closable session resources.
     """
+
     @abc.abstractmethod
     def close(self) -> None:
         """
@@ -89,6 +88,7 @@ class Port(Closable, typing.Generic[TypeClass]):
     The base class for any presentation layer session such as publisher, subscriber, client, or server.
     The term "port" came to be from <https://forum.uavcan.org/t/a-generic-term-for-either-subject-or-service/182>.
     """
+
     @property
     @abc.abstractmethod
     def dtype(self) -> typing.Type[TypeClass]:
@@ -115,6 +115,7 @@ class MessagePort(Port[MessageClass]):
     """
     The base class for publishers and subscribers.
     """
+
     @property
     @abc.abstractmethod
     def transport_session(self) -> pyuavcan.transport.Session:
@@ -131,9 +132,9 @@ class MessagePort(Port[MessageClass]):
         return ds.subject_id
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
-                                             transport_session=self.transport_session)
+        return pyuavcan.util.repr_attributes(
+            self, dtype=str(pyuavcan.dsdl.get_model(self.dtype)), transport_session=self.transport_session
+        )
 
 
 # noinspection DuplicatedCode
@@ -154,6 +155,6 @@ class ServicePort(Port[ServiceClass]):
         return ds.service_id
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self,
-                                             dtype=str(pyuavcan.dsdl.get_model(self.dtype)),
-                                             input_transport_session=self.input_transport_session)
+        return pyuavcan.util.repr_attributes(
+            self, dtype=str(pyuavcan.dsdl.get_model(self.dtype)), input_transport_session=self.input_transport_session
+        )

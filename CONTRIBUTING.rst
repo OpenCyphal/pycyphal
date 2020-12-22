@@ -66,11 +66,12 @@ There are three kinds of 3rd-party dependencies used by this library:
 Coding conventions
 ------------------
 
-Please follow the `Zubax Python coding conventions <https://kb.zubax.com/x/_oAh>`_.
-Compliance is mostly enforced automatically by the test suite.
-Some of the rules cannot be easily enforced automatically, so please keep an eye out for those.
+Consistent code formatting is enforced automatically with `Black <https://github.com/psf/black>`_.
+The only non-default (and non-PEP8) setting is that the line length is set to 120 characters.
+Be sure to integrate Black with your IDE.
+CI/CD pipelines will fail unless the code is formatted properly.
 
-It is particularly important to ensure that none of the entities, including sub-modules,
+Ensure that none of the entities, including sub-modules,
 that are not part of the library API are reachable from outside the package.
 This means that every module, class, function, etc. defined in the library should be named with a leading underscore,
 unless it a part of the public library API

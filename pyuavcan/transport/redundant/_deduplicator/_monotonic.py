@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 import dataclasses
@@ -14,10 +12,9 @@ class MonotonicDeduplicator(Deduplicator):
     def __init__(self) -> None:
         self._remote_states: typing.List[typing.Optional[_RemoteState]] = []
 
-    def should_accept_transfer(self,
-                               iface_id:            int,
-                               transfer_id_timeout: float,
-                               transfer:            pyuavcan.transport.TransferFrom) -> bool:
+    def should_accept_transfer(
+        self, iface_id: int, transfer_id_timeout: float, transfer: pyuavcan.transport.TransferFrom
+    ) -> bool:
         del iface_id  # Not used in monotonic deduplicator.
         if transfer.source_node_id is None:
             # Anonymous transfers are fully stateless, so always accepted.
@@ -31,8 +28,9 @@ class MonotonicDeduplicator(Deduplicator):
 
         if self._remote_states[transfer.source_node_id] is None:
             # First transfer from this node, create new state and accept unconditionally.
-            self._remote_states[transfer.source_node_id] = _RemoteState(last_transfer_id=transfer.transfer_id,
-                                                                        last_timestamp=transfer.timestamp)
+            self._remote_states[transfer.source_node_id] = _RemoteState(
+                last_transfer_id=transfer.transfer_id, last_timestamp=transfer.timestamp
+            )
             return True
 
         # We have seen transfers from this node before, so we need to perform actual deduplication.
@@ -53,4 +51,4 @@ class MonotonicDeduplicator(Deduplicator):
 @dataclasses.dataclass
 class _RemoteState:
     last_transfer_id: int
-    last_timestamp:   pyuavcan.transport.Timestamp
+    last_timestamp: pyuavcan.transport.Timestamp

@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 import asyncio
@@ -28,10 +26,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     The only valid usage is sending and receiving same data on the same node.
     """
 
-    def __init__(self,
-                 local_node_id: typing.Optional[int],
-                 *,
-                 loop:          typing.Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self, local_node_id: typing.Optional[int], *, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._local_node_id = int(local_node_id) if local_node_id is not None else None
         self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
@@ -57,7 +52,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         if isinstance(value, pyuavcan.transport.ProtocolParameters):
             self._protocol_parameters = value
         else:  # pragma: no cover
-            raise ValueError(f'Unexpected value: {value}')
+            raise ValueError(f"Unexpected value: {value}")
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
@@ -70,9 +65,9 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         for s in sessions:
             s.close()
 
-    def get_input_session(self,
-                          specifier:        pyuavcan.transport.InputSessionSpecifier,
-                          payload_metadata: pyuavcan.transport.PayloadMetadata) -> LoopbackInputSession:
+    def get_input_session(
+        self, specifier: pyuavcan.transport.InputSessionSpecifier, payload_metadata: pyuavcan.transport.PayloadMetadata
+    ) -> LoopbackInputSession:
         def do_close() -> None:
             try:
                 del self._input_sessions[specifier]
@@ -82,16 +77,15 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         try:
             sess = self._input_sessions[specifier]
         except KeyError:
-            sess = LoopbackInputSession(specifier=specifier,
-                                        payload_metadata=payload_metadata,
-                                        loop=self.loop,
-                                        closer=do_close)
+            sess = LoopbackInputSession(
+                specifier=specifier, payload_metadata=payload_metadata, loop=self.loop, closer=do_close
+            )
             self._input_sessions[specifier] = sess
         return sess
 
-    def get_output_session(self,
-                           specifier:        pyuavcan.transport.OutputSessionSpecifier,
-                           payload_metadata: pyuavcan.transport.PayloadMetadata) -> LoopbackOutputSession:
+    def get_output_session(
+        self, specifier: pyuavcan.transport.OutputSessionSpecifier, payload_metadata: pyuavcan.transport.PayloadMetadata
+    ) -> LoopbackOutputSession:
         def do_close() -> None:
             try:
                 del self._output_sessions[specifier]
@@ -99,7 +93,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                 pass
 
         async def do_route(tr: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
-            del monotonic_deadline      # Unused, all operations always successful and instantaneous.
+            del monotonic_deadline  # Unused, all operations always successful and instantaneous.
             if specifier.remote_node_id in {self.local_node_id, None}:  # Otherwise drop the transfer.
                 tr_from = pyuavcan.transport.TransferFrom(
                     timestamp=tr.timestamp,
@@ -109,19 +103,21 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                     source_node_id=self.local_node_id,
                 )
                 del tr
-                pyuavcan.util.broadcast(self._capture_handlers)(LoopbackCapture(
-                    tr_from.timestamp,
-                    pyuavcan.transport.AlienTransfer(
-                        pyuavcan.transport.AlienTransferMetadata(
-                            tr_from.priority,
-                            tr_from.transfer_id,
-                            pyuavcan.transport.AlienSessionSpecifier(self.local_node_id,
-                                                                     specifier.remote_node_id,
-                                                                     specifier.data_specifier),
+                pyuavcan.util.broadcast(self._capture_handlers)(
+                    LoopbackCapture(
+                        tr_from.timestamp,
+                        pyuavcan.transport.AlienTransfer(
+                            pyuavcan.transport.AlienTransferMetadata(
+                                tr_from.priority,
+                                tr_from.transfer_id,
+                                pyuavcan.transport.AlienSessionSpecifier(
+                                    self.local_node_id, specifier.remote_node_id, specifier.data_specifier
+                                ),
+                            ),
+                            list(tr_from.fragmented_payload),
                         ),
-                        list(tr_from.fragmented_payload),
-                    ),
-                ))
+                    )
+                )
                 for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
                     try:
                         destination_session = self._input_sessions[
@@ -136,11 +132,9 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         try:
             sess = self._output_sessions[specifier]
         except KeyError:
-            sess = LoopbackOutputSession(specifier=specifier,
-                                         payload_metadata=payload_metadata,
-                                         loop=self.loop,
-                                         closer=do_close,
-                                         router=do_route)
+            sess = LoopbackOutputSession(
+                specifier=specifier, payload_metadata=payload_metadata, loop=self.loop, closer=do_close, router=do_route
+            )
             self._output_sessions[specifier] = sess
         return sess
 
@@ -174,5 +168,5 @@ class LoopbackTransport(pyuavcan.transport.Transport):
 
     def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
         return [], {
-            'local_node_id': self.local_node_id,
+            "local_node_id": self.local_node_id,
         }

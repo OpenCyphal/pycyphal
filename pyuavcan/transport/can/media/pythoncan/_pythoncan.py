@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 import logging
@@ -42,9 +40,12 @@ class PythonCANMedia(Media):
         raise NotImplementedError
 
     def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
-        _logger.warning('%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! '
-                        'Requested configuration: %s',
-                        self, ', '.join(map(str, configuration)))
+        _logger.warning(
+            "%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! "
+            "Requested configuration: %s",
+            self,
+            ", ".join(map(str, configuration)),
+        )
 
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         raise NotImplementedError

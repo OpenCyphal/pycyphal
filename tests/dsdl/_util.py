@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 import random
@@ -16,8 +14,9 @@ import pydsdl
 import pyuavcan.dsdl
 
 
-def expand_service_types(models: typing.Iterable[pydsdl.CompositeType], keep_services: bool = False) \
-        -> typing.Iterator[pydsdl.CompositeType]:
+def expand_service_types(
+    models: typing.Iterable[pydsdl.CompositeType], keep_services: bool = False
+) -> typing.Iterator[pydsdl.CompositeType]:
     """
     Iterates all types in the provided list, expanding each ServiceType into a pair of CompositeType: one for
     request, one for response.
@@ -36,6 +35,7 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
     """
     Returns an object of the specified DSDL type populated with random data.
     """
+
     def fifty_fifty() -> bool:
         return random.random() >= 0.5
 
@@ -43,23 +43,22 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
         return fifty_fifty()
 
     elif isinstance(model, pydsdl.IntegerType):  # noinspection PyTypeChecker
-        return random.randint(int(model.inclusive_value_range.min),
-                              int(model.inclusive_value_range.max))
+        return random.randint(int(model.inclusive_value_range.min), int(model.inclusive_value_range.max))
 
-    elif isinstance(model, pydsdl.FloatType):   # We want inf/nan as well, so we generate int and then reinterpret
+    elif isinstance(model, pydsdl.FloatType):  # We want inf/nan as well, so we generate int and then reinterpret
         int_value = random.randrange(0, 2 ** model.bit_length)
         unpack_fmt, pack_fmt = {
-            16: ('e', 'H'),
-            32: ('f', 'I'),
-            64: ('d', 'Q'),
+            16: ("e", "H"),
+            32: ("f", "I"),
+            64: ("d", "Q"),
         }[model.bit_length]
-        fmt_prefix = '<'
-        out, = struct.unpack(fmt_prefix + unpack_fmt, struct.pack(fmt_prefix + pack_fmt, int_value))
+        fmt_prefix = "<"
+        (out,) = struct.unpack(fmt_prefix + unpack_fmt, struct.pack(fmt_prefix + pack_fmt, int_value))
         return out
 
     elif isinstance(model, pydsdl.FixedLengthArrayType):
         et = model.element_type
-        if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length == 8:   # Special case for faster testing
+        if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length == 8:  # Special case for faster testing
             out = numpy.random.randint(0, 256, size=model.capacity, dtype=numpy.uint8)
         else:
             out = [make_random_object(model.element_type) for _ in range(model.capacity)]
@@ -71,7 +70,7 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
     elif isinstance(model, pydsdl.VariableLengthArrayType):
         length = random.randint(0, model.capacity)
         et = model.element_type
-        if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length == 8:   # Special case for faster testing
+        if isinstance(et, pydsdl.UnsignedIntegerType) and et.bit_length == 8:  # Special case for faster testing
             out = numpy.random.randint(0, 256, size=length, dtype=numpy.uint8)
         else:
             out = [make_random_object(model.element_type) for _ in range(length)]
@@ -102,8 +101,8 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
     elif isinstance(model, pydsdl.DelimitedType):
         return make_random_object(model.inner_type)  # Unwrap and delegate
 
-    else:   # pragma: no cover
-        raise TypeError(f'Unsupported type: {type(model)}')
+    else:  # pragma: no cover
+        raise TypeError(f"Unsupported type: {type(model)}")
 
 
 def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> bool:
@@ -119,11 +118,11 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
         if type(a) != type(b):  # pragma: no cover
             return False
         for f in pyuavcan.dsdl.get_model(a).fields_except_padding:  # pragma: no cover
-            if not are_close(f.data_type,
-                             pyuavcan.dsdl.get_attribute(a, f.name),
-                             pyuavcan.dsdl.get_attribute(b, f.name)):
+            if not are_close(
+                f.data_type, pyuavcan.dsdl.get_attribute(a, f.name), pyuavcan.dsdl.get_attribute(b, f.name)
+            ):
                 return False
-        return True                 # Empty objects of same type compare equal
+        return True  # Empty objects of same type compare equal
 
     elif isinstance(model, pydsdl.ArrayType):
         if len(a) != len(b) or a.dtype != b.dtype:  # pragma: no cover

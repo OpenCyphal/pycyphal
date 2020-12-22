@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import copy
@@ -19,8 +17,8 @@ from ._transfer_sender import serialize_transfer
 
 @dataclasses.dataclass(frozen=True)
 class SendTransaction:
-    frames:             typing.List[UAVCANFrame]
-    loopback_first:     bool
+    frames: typing.List[UAVCANFrame]
+    loopback_first: bool
     monotonic_deadline: float
 
 
@@ -30,9 +28,7 @@ _logger = logging.getLogger(__name__)
 
 
 class CANFeedback(pyuavcan.transport.Feedback):
-    def __init__(self,
-                 original_transfer_timestamp:        Timestamp,
-                 first_frame_transmission_timestamp: Timestamp):
+    def __init__(self, original_transfer_timestamp: Timestamp, first_frame_transmission_timestamp: Timestamp):
         self._original_transfer_timestamp = original_transfer_timestamp
         self._first_frame_transmission_timestamp = first_frame_transmission_timestamp
 
@@ -57,12 +53,15 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
     This is actually an abstract class, but its concrete inheritors are hidden from the API.
     The implementation is chosen according to the type of the session requested: broadcast or unicast.
     """
-    def __init__(self,
-                 transport:        pyuavcan.transport.can.CANTransport,
-                 send_handler:     SendHandler,
-                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
-                 payload_metadata: pyuavcan.transport.PayloadMetadata,
-                 finalizer:        SessionFinalizer):
+
+    def __init__(
+        self,
+        transport: pyuavcan.transport.can.CANTransport,
+        send_handler: SendHandler,
+        specifier: pyuavcan.transport.OutputSessionSpecifier,
+        payload_metadata: pyuavcan.transport.PayloadMetadata,
+        finalizer: SessionFinalizer,
+    ):
         """Use the factory method."""
         self._transport = transport
         self._send_handler = send_handler
@@ -87,15 +86,17 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
             try:
                 original_timestamp = self._pending_feedback.pop(key)
             except KeyError:
-                _logger.debug('%s: No pending feedback entry for frame: %s', self, frame)
+                _logger.debug("%s: No pending feedback entry for frame: %s", self, frame)
             else:
                 if self._feedback_handler is not None:
                     feedback = CANFeedback(original_timestamp, timestamp)
                     try:
                         self._feedback_handler(feedback)
                     except Exception as ex:  # pragma: no cover
-                        _logger.exception(f'{self}: Unhandled exception in the output session feedback handler '
-                                          f'{self._feedback_handler}: {ex}')
+                        _logger.exception(
+                            f"{self}: Unhandled exception in the output session feedback handler "
+                            f"{self._feedback_handler}: {ex}"
+                        )
 
     @property
     def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
@@ -124,17 +125,19 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
         # Decompose the outgoing transfer into individual CAN frames.
         compiled_identifier = can_id.compile(transfer.fragmented_payload)
         tid_mod = transfer.transfer_id % TRANSFER_ID_MODULO  # https://github.com/UAVCAN/pyuavcan/issues/120
-        frames = list(serialize_transfer(
-            compiled_identifier=compiled_identifier,
-            transfer_id=tid_mod,
-            fragmented_payload=transfer.fragmented_payload,
-            max_frame_payload_bytes=self._transport.protocol_parameters.mtu,
-        ))
+        frames = list(
+            serialize_transfer(
+                compiled_identifier=compiled_identifier,
+                transfer_id=tid_mod,
+                fragmented_payload=transfer.fragmented_payload,
+                max_frame_payload_bytes=self._transport.protocol_parameters.mtu,
+            )
+        )
 
         # Ensure we're not trying to emit a multi-frame anonymous transfer - that's illegal.
         if can_id.source_node_id is None and len(frames) > 1:
             raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
-                f'Anonymous nodes cannot emit multi-frame transfers. CANID: {can_id}, transfer: {transfer}'
+                f"Anonymous nodes cannot emit multi-frame transfers. CANID: {can_id}, transfer: {transfer}"
             )
 
         # If a loopback was requested, register it in the pending loopback registry.
@@ -147,14 +150,14 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
                 pass
             else:
                 self._statistics.errors += 1
-                _logger.warning('%s: Overriding old feedback entry %s at key %s', self, old, key)
+                _logger.warning("%s: Overriding old feedback entry %s at key %s", self, old, key)
             self._pending_feedback[key] = transfer.timestamp
 
         # Emit the frames and update the statistical counters.
         try:
-            transaction = SendTransaction(frames=frames,
-                                          loopback_first=loopback_first_frame,
-                                          monotonic_deadline=monotonic_deadline)
+            transaction = SendTransaction(
+                frames=frames, loopback_first=loopback_first_frame, monotonic_deadline=monotonic_deadline
+            )
             if await self._send_handler(transaction):
                 self._statistics.transfers += 1
                 self._statistics.frames += len(frames)
@@ -169,68 +172,80 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
 
 
 class BroadcastCANOutputSession(CANOutputSession):
-    def __init__(self,
-                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
-                 payload_metadata: pyuavcan.transport.PayloadMetadata,
-                 transport:        pyuavcan.transport.can.CANTransport,
-                 send_handler:     SendHandler,
-                 finalizer:        SessionFinalizer):
+    def __init__(
+        self,
+        specifier: pyuavcan.transport.OutputSessionSpecifier,
+        payload_metadata: pyuavcan.transport.PayloadMetadata,
+        transport: pyuavcan.transport.can.CANTransport,
+        send_handler: SendHandler,
+        finalizer: SessionFinalizer,
+    ):
         """Use the factory method."""
-        assert specifier.remote_node_id is None, 'Internal protocol violation: expected broadcast'
+        assert specifier.remote_node_id is None, "Internal protocol violation: expected broadcast"
         if not isinstance(specifier.data_specifier, pyuavcan.transport.MessageDataSpecifier):
             raise pyuavcan.transport.UnsupportedSessionConfigurationError(
-                f'This transport does not support broadcast outputs for {specifier.data_specifier}')
+                f"This transport does not support broadcast outputs for {specifier.data_specifier}"
+            )
         self._subject_id = specifier.data_specifier.subject_id
 
-        super(BroadcastCANOutputSession, self).__init__(transport=transport,
-                                                        send_handler=send_handler,
-                                                        specifier=specifier,
-                                                        payload_metadata=payload_metadata,
-                                                        finalizer=finalizer)
+        super(BroadcastCANOutputSession, self).__init__(
+            transport=transport,
+            send_handler=send_handler,
+            specifier=specifier,
+            payload_metadata=payload_metadata,
+            finalizer=finalizer,
+        )
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         can_id = MessageCANID(
             priority=transfer.priority,
             subject_id=self._subject_id,
-            source_node_id=self._transport.local_node_id  # May be anonymous
+            source_node_id=self._transport.local_node_id,  # May be anonymous
         )
         return await self._do_send(can_id, transfer, monotonic_deadline)
 
 
 class UnicastCANOutputSession(CANOutputSession):
-    def __init__(self,
-                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
-                 payload_metadata: pyuavcan.transport.PayloadMetadata,
-                 transport:        pyuavcan.transport.can.CANTransport,
-                 send_handler:     SendHandler,
-                 finalizer:        SessionFinalizer):
+    def __init__(
+        self,
+        specifier: pyuavcan.transport.OutputSessionSpecifier,
+        payload_metadata: pyuavcan.transport.PayloadMetadata,
+        transport: pyuavcan.transport.can.CANTransport,
+        send_handler: SendHandler,
+        finalizer: SessionFinalizer,
+    ):
         """Use the factory method."""
-        assert isinstance(specifier.remote_node_id, int), 'Internal protocol violation: expected unicast'
+        assert isinstance(specifier.remote_node_id, int), "Internal protocol violation: expected unicast"
         self._destination_node_id = int(specifier.remote_node_id)
         if not isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
             raise pyuavcan.transport.UnsupportedSessionConfigurationError(
-                f'This transport does not support unicast outputs for {specifier.data_specifier}')
+                f"This transport does not support unicast outputs for {specifier.data_specifier}"
+            )
         self._service_id = specifier.data_specifier.service_id
-        self._request_not_response = \
+        self._request_not_response = (
             specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
+        )
 
-        super(UnicastCANOutputSession, self).__init__(transport=transport,
-                                                      send_handler=send_handler,
-                                                      specifier=specifier,
-                                                      payload_metadata=payload_metadata,
-                                                      finalizer=finalizer)
+        super(UnicastCANOutputSession, self).__init__(
+            transport=transport,
+            send_handler=send_handler,
+            specifier=specifier,
+            payload_metadata=payload_metadata,
+            finalizer=finalizer,
+        )
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         source_node_id = self._transport.local_node_id
         if source_node_id is None:
             raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
-                'Cannot emit a service transfer because the local node is anonymous (does not have a node-ID)')
+                "Cannot emit a service transfer because the local node is anonymous (does not have a node-ID)"
+            )
 
         can_id = ServiceCANID(
             priority=transfer.priority,
             service_id=self._service_id,
             request_not_response=self._request_not_response,
             source_node_id=source_node_id,
-            destination_node_id=self._destination_node_id
+            destination_node_id=self._destination_node_id,
         )
         return await self._do_send(can_id, transfer, monotonic_deadline)

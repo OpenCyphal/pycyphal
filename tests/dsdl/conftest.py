@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import sys
 import pickle
@@ -21,14 +19,14 @@ import pyuavcan.dsdl
 # Please maintain these carefully if you're changing the project's directory structure.
 TEST_ROOT_DIR = pathlib.Path(__file__).parent.parent
 LIBRARY_ROOT_DIR = TEST_ROOT_DIR.parent
-DESTINATION_DIR = LIBRARY_ROOT_DIR / pathlib.Path('.test_dsdl_generated')
-PUBLIC_REGULATED_DATA_TYPES_DIR = TEST_ROOT_DIR / 'public_regulated_data_types'
-TEST_DATA_TYPES_DIR = pathlib.Path(__file__).parent / 'namespaces'
+DESTINATION_DIR = LIBRARY_ROOT_DIR / pathlib.Path(".test_dsdl_generated")
+PUBLIC_REGULATED_DATA_TYPES_DIR = TEST_ROOT_DIR / "public_regulated_data_types"
+TEST_DATA_TYPES_DIR = pathlib.Path(__file__).parent / "namespaces"
 
-_CACHE_FILE_NAME = 'pydsdl_cache.pickle.tmp'
+_CACHE_FILE_NAME = "pydsdl_cache.pickle.tmp"
 
 
-@pytest.fixture(scope='session')  # type: ignore
+@pytest.fixture(scope="session")  # type: ignore
 def generated_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
     """
     https://docs.pytest.org/en/latest/fixture.html#conftest-py-sharing-fixture-functions
@@ -56,7 +54,7 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
 
     if DESTINATION_DIR.exists():  # pragma: no cover
         if cache_file.exists():
-            with open(cache_file, 'rb') as f:
+            with open(cache_file, "rb") as f:
                 out = pickle.load(f)
             assert out and isinstance(out, list)
             assert all(map(lambda x: isinstance(x, pyuavcan.dsdl.GeneratedPackageInfo), out))
@@ -65,25 +63,23 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
         shutil.rmtree(DESTINATION_DIR, ignore_errors=True)
     DESTINATION_DIR.mkdir(parents=True, exist_ok=True)
 
-    pydsdl_logger = logging.getLogger('pydsdl')
+    pydsdl_logger = logging.getLogger("pydsdl")
     pydsdl_logging_level = pydsdl_logger.level
     try:
         pydsdl_logger.setLevel(logging.INFO)
         out = [
             pyuavcan.dsdl.generate_package(
-                PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan',
+                PUBLIC_REGULATED_DATA_TYPES_DIR / "uavcan",
                 [],
                 DESTINATION_DIR,
             ),
             pyuavcan.dsdl.generate_package(
-                TEST_DATA_TYPES_DIR / 'test_dsdl_namespace',
-                [
-                    PUBLIC_REGULATED_DATA_TYPES_DIR / 'uavcan'
-                ],
+                TEST_DATA_TYPES_DIR / "test_dsdl_namespace",
+                [PUBLIC_REGULATED_DATA_TYPES_DIR / "uavcan"],
                 DESTINATION_DIR,
             ),
             pyuavcan.dsdl.generate_package(
-                TEST_DATA_TYPES_DIR / 'sirius_cyber_corp',
+                TEST_DATA_TYPES_DIR / "sirius_cyber_corp",
                 [],
                 DESTINATION_DIR,
             ),
@@ -91,7 +87,7 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
     finally:
         pydsdl_logger.setLevel(pydsdl_logging_level)
 
-    with open(cache_file, 'wb') as f:
+    with open(cache_file, "wb") as f:
         pickle.dump(out, f)
 
     assert out and isinstance(out, list)

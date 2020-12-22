@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import types
 import typing
@@ -10,7 +8,7 @@ import pkgutil
 import importlib
 
 
-T = typing.TypeVar('T', bound=object)  # https://github.com/python/mypy/issues/5374
+T = typing.TypeVar("T", bound=object)  # https://github.com/python/mypy/issues/5374
 
 
 def iter_descendants(ty: typing.Type[T]) -> typing.Iterable[typing.Type[T]]:
@@ -42,8 +40,9 @@ def iter_descendants(ty: typing.Type[T]) -> typing.Iterable[typing.Type[T]]:
         yield from iter_descendants(t)
 
 
-def import_submodules(root_module: types.ModuleType,
-                      error_handler: typing.Optional[typing.Callable[[str, ImportError], None]] = None) -> None:
+def import_submodules(
+    root_module: types.ModuleType, error_handler: typing.Optional[typing.Callable[[str, ImportError], None]] = None
+) -> None:
     # noinspection PyTypeChecker,PyUnresolvedReferences
     """
     Recursively imports all submodules and subpackages of the specified Python module or package.
@@ -75,7 +74,7 @@ def import_submodules(root_module: types.ModuleType,
     ...                                 lambda parent, ex: print(parent, ex.name))
     tests.util.import_error._subpackage nonexistent_module_should_raise_import_error
     """
-    for _, module_name, _ in pkgutil.walk_packages(root_module.__path__, root_module.__name__ + '.'):  # type: ignore
+    for _, module_name, _ in pkgutil.walk_packages(root_module.__path__, root_module.__name__ + "."):  # type: ignore
         try:
             importlib.import_module(module_name)
         except ImportError as ex:

@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 import dataclasses
@@ -16,10 +14,9 @@ class CyclicDeduplicator(Deduplicator):
         assert self._tid_modulo > 0
         self._remote_states: typing.List[typing.Optional[_RemoteState]] = []
 
-    def should_accept_transfer(self,
-                               iface_id:            int,
-                               transfer_id_timeout: float,
-                               transfer:            pyuavcan.transport.TransferFrom) -> bool:
+    def should_accept_transfer(
+        self, iface_id: int, transfer_id_timeout: float, transfer: pyuavcan.transport.TransferFrom
+    ) -> bool:
         if transfer.source_node_id is None:
             # Anonymous transfers are fully stateless, so always accepted.
             # This may lead to duplications and reordering but this is a design limitation.
@@ -32,8 +29,9 @@ class CyclicDeduplicator(Deduplicator):
 
         if self._remote_states[transfer.source_node_id] is None:
             # First transfer from this node, create new state and accept unconditionally.
-            self._remote_states[transfer.source_node_id] = _RemoteState(iface_id=iface_id,
-                                                                        last_timestamp=transfer.timestamp)
+            self._remote_states[transfer.source_node_id] = _RemoteState(
+                iface_id=iface_id, last_timestamp=transfer.timestamp
+            )
             return True
 
         # We have seen transfers from this node before, so we need to perform actual deduplication.
@@ -58,5 +56,5 @@ class CyclicDeduplicator(Deduplicator):
 
 @dataclasses.dataclass
 class _RemoteState:
-    iface_id:       int
+    iface_id: int
     last_timestamp: pyuavcan.transport.Timestamp

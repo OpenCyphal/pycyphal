@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import abc
@@ -49,11 +47,12 @@ class SocketFactory(abc.ABC):
         """
         if isinstance(local_ip_address, ipaddress.IPv4Address):
             from ._v4 import IPv4SocketFactory
+
             return IPv4SocketFactory(local_ip_address)
         elif isinstance(local_ip_address, ipaddress.IPv6Address):
-            raise NotImplementedError('Sorry, IPv6 is not yet supported by this implementation.')
+            raise NotImplementedError("Sorry, IPv6 is not yet supported by this implementation.")
         else:  # pragma: no cover
-            raise TypeError(f'Invalid local IP address: {local_ip_address!r}')
+            raise TypeError(f"Invalid local IP address: {local_ip_address!r}")
 
     @property
     @abc.abstractmethod
@@ -69,9 +68,9 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def make_output_socket(self,
-                           remote_node_id: typing.Optional[int],
-                           data_specifier: pyuavcan.transport.DataSpecifier) -> socket.socket:
+    def make_output_socket(
+        self, remote_node_id: typing.Optional[int], data_specifier: pyuavcan.transport.DataSpecifier
+    ) -> socket.socket:
         """
         Make a new non-blocking output socket connected to the appropriate endpoint
         (unicast for service data specifiers, multicast for message data specifiers).
@@ -131,6 +130,7 @@ class Sniffer(abc.ABC):
     """
     Network sniffer is responsible for managing the raw socket and parsing and filtering the raw IP packets.
     """
+
     @abc.abstractmethod
     def close(self) -> None:
         raise NotImplementedError

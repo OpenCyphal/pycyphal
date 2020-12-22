@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import pyuavcan.transport
 
@@ -13,6 +11,7 @@ class PortClosedError(pyuavcan.transport.ResourceClosedError):
     Observe that it is a specialization of the corresponding transport-layer error type.
     Double-close is NOT an error, so closing the same instance twice will not result in this exception being raised.
     """
+
     pass
 
 
@@ -22,4 +21,5 @@ class RequestTransferIDVariabilityExhaustedError(pyuavcan.transport.TransportErr
     For CAN, the number is 32; for some transports the number is unlimited (technically, there is always a limit,
     but for some transports, such as the serial transport, it is unreachable in practice).
     """
+
     pass

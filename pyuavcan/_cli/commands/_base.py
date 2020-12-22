@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import abc
 import typing
@@ -16,6 +14,7 @@ class Command(abc.ABC):
     Base command class.
     The constructor shall have no required arguments.
     """
+
     @property
     @abc.abstractmethod
     def names(self) -> typing.Sequence[str]:

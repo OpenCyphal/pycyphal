@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 import ipaddress
@@ -58,7 +56,7 @@ def node_id_to_unicast_ip(local_ip_address: IPAddress, node_id: int) -> IPAddres
     ValueError: Invalid node-ID...
     """
     if node_id > IP_ADDRESS_NODE_ID_MASK:
-        raise ValueError(f'Invalid node-ID: {node_id} is larger than {IP_ADDRESS_NODE_ID_MASK}')
+        raise ValueError(f"Invalid node-ID: {node_id} is larger than {IP_ADDRESS_NODE_ID_MASK}")
     ty: type
     if isinstance(local_ip_address, ipaddress.IPv4Address):
         mask = 2 ** ipaddress.IPV4LENGTH - 1
@@ -69,7 +67,7 @@ def node_id_to_unicast_ip(local_ip_address: IPAddress, node_id: int) -> IPAddres
     else:
         assert False
     if local_ip_address.is_multicast:
-        raise ValueError(f'The local address shall be a unicast address, not multicast: {local_ip_address}')
+        raise ValueError(f"The local address shall be a unicast address, not multicast: {local_ip_address}")
     return ty((int(local_ip_address) & (mask ^ IP_ADDRESS_NODE_ID_MASK)) | node_id)  # type: ignore
 
 
@@ -95,16 +93,17 @@ def unicast_ip_to_node_id(local_ip_address: IPAddress, node_ip_address: IPAddres
     ValueError: Multicast group address cannot be mapped to a node-ID...
     """
     if local_ip_address.is_multicast:
-        raise ValueError(f'Multicast group address cannot be a local IP address: {local_ip_address}')
+        raise ValueError(f"Multicast group address cannot be a local IP address: {local_ip_address}")
     if node_ip_address.is_multicast:
-        raise ValueError(f'Multicast group address cannot be mapped to a node-ID: {node_ip_address}')
+        raise ValueError(f"Multicast group address cannot be mapped to a node-ID: {node_ip_address}")
     if (int(local_ip_address) | IP_ADDRESS_NODE_ID_MASK) == (int(node_ip_address) | IP_ADDRESS_NODE_ID_MASK):
         return int(node_ip_address) & IP_ADDRESS_NODE_ID_MASK
     return None
 
 
-def message_data_specifier_to_multicast_group(local_ip_address: IPAddress,
-                                              data_specifier:   MessageDataSpecifier) -> IPAddress:
+def message_data_specifier_to_multicast_group(
+    local_ip_address: IPAddress, data_specifier: MessageDataSpecifier
+) -> IPAddress:
     r"""
     The local IP address is needed to deduce the subnet that the UAVCAN/UDP transport is operating on.
     For IPv4, the resulting address is constructed as follows::
@@ -130,7 +129,7 @@ def message_data_specifier_to_multicast_group(local_ip_address: IPAddress,
       ...
     ValueError: The local address shall be a unicast address, not multicast: 239.168.11.22
     """
-    assert data_specifier.subject_id <= MULTICAST_GROUP_SUBJECT_ID_MASK, 'Protocol design error'
+    assert data_specifier.subject_id <= MULTICAST_GROUP_SUBJECT_ID_MASK, "Protocol design error"
     ty: type
     if isinstance(local_ip_address, ipaddress.IPv4Address):
         ty = ipaddress.IPv4Address
@@ -138,16 +137,17 @@ def message_data_specifier_to_multicast_group(local_ip_address: IPAddress,
         sub = 0b_00000000_01111111_00000000_00000000 & int(local_ip_address)
         msb = fix | sub
     elif isinstance(local_ip_address, ipaddress.IPv6Address):
-        raise NotImplementedError('IPv6 is not yet supported; please, submit patches!')
+        raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
     else:
         assert False
     if local_ip_address.is_multicast:
-        raise ValueError(f'The local address shall be a unicast address, not multicast: {local_ip_address}')
+        raise ValueError(f"The local address shall be a unicast address, not multicast: {local_ip_address}")
     return ty(msb | data_specifier.subject_id)  # type: ignore
 
 
-def multicast_group_to_message_data_specifier(local_ip_address: IPAddress,
-                                              multicast_group:  IPAddress) -> typing.Optional[MessageDataSpecifier]:
+def multicast_group_to_message_data_specifier(
+    local_ip_address: IPAddress, multicast_group: IPAddress
+) -> typing.Optional[MessageDataSpecifier]:
     """
     The inverse of :func:`message_data_specifier_to_multicast_group`.
     The local IP address is needed to ensure that the multicast group belongs to the correct UAVCAN/UDP subnet.

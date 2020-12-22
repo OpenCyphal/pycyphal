@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import os
 import sys
@@ -10,12 +8,13 @@ import time
 import typing
 import logging
 import argparse
+
 # noinspection PyCompatibility
 from . import commands
 
 _logger = logging.getLogger(__name__)
 
-_LOG_FORMAT = '%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s'
+_LOG_FORMAT = "%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s"
 
 
 def main() -> None:
@@ -24,14 +23,14 @@ def main() -> None:
     try:
         exit(_main_impl())
     except KeyboardInterrupt:
-        _logger.info('Interrupted')
-        _logger.debug('Stack trace where the program has been interrupted', exc_info=True)
+        _logger.info("Interrupted")
+        _logger.debug("Stack trace where the program has been interrupted", exc_info=True)
         exit(1)
     except AssertionError:
         raise  # Re-raise directly in order to have the stack trace printed. The user is not expected to see this.
     except Exception as ex:
-        print('Error: %s:' % type(ex).__name__, ex, file=sys.stderr)
-        _logger.info('Unhandled exception: %s', ex, exc_info=True)
+        print("Error: %s:" % type(ex).__name__, ex, file=sys.stderr)
+        _logger.info("Unhandled exception: %s", ex, exc_info=True)
         exit(1)
 
 
@@ -42,15 +41,15 @@ def _main_impl() -> int:
 
     _configure_logging(args.verbose)
 
-    _logger.debug('Available commands: %s', command_instances)
-    _logger.debug('Parsed args: %s', args)
+    _logger.debug("Available commands: %s", command_instances)
+    _logger.debug("Parsed args: %s", args)
 
     # It is a common use case when the user generates DSDL packages in the current directory and then runs the CLI
     # tool in it. Do not require the user to manually export PYTHONPATH=. by extending it with the CWD automatically.
     sys.path.append(os.getcwd())
-    _logger.debug('sys.path: %r', sys.path)
+    _logger.debug("sys.path: %r", sys.path)
 
-    if hasattr(args, 'func'):
+    if hasattr(args, "func"):
         started_at = time.monotonic()
         try:
             result = args.func(args)
@@ -58,17 +57,21 @@ def _main_impl() -> int:
             # If the application submodule fails to import with an import error, a DSDL data type package
             # probably needs to be generated first, which we suggest the user to do.
             from .commands.dsdl_generate_packages import DSDLGeneratePackagesCommand
-            raise ImportError(DSDLGeneratePackagesCommand.make_usage_suggestion_text(ex.name or ''))
 
-        _logger.debug('Command executed in %.1f seconds', time.monotonic() - started_at)
+            raise ImportError(DSDLGeneratePackagesCommand.make_usage_suggestion_text(ex.name or ""))
+
+        _logger.debug("Command executed in %.1f seconds", time.monotonic() - started_at)
         assert isinstance(result, int)
         return result
     else:
-        print('No command specified, nothing to do. Run with --help for usage help. '
-              'Online support: https://forum.uavcan.org.', file=sys.stderr)
-        print('Available commands:', file=sys.stderr)
+        print(
+            "No command specified, nothing to do. Run with --help for usage help. "
+            "Online support: https://forum.uavcan.org.",
+            file=sys.stderr,
+        )
+        print("Available commands:", file=sys.stderr)
         for cmd in command_instances:
-            text = f'\t{cmd.names[0]}'
+            text = f"\t{cmd.names[0]}"
             if len(cmd.names) > 1:
                 text += f' (aliases: {", ".join(cmd.names[1:])})'
             print(text, file=sys.stderr)
@@ -78,9 +81,10 @@ def _main_impl() -> int:
 def _construct_argument_parser(command_instances: typing.Sequence[commands.Command]) -> argparse.ArgumentParser:
     from pyuavcan import __version__
 
+    # noinspection PyTypeChecker
     root_parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
-        description=r'''
+        description=r"""
          __   __   _______   __   __   _______   _______   __   __
         |  | |  | /   _   \ |  | |  | /   ____| /   _   \ |  \ |  |
         |  | |  | |  |_|  | |  | |  | |  |      |  |_|  | |   \|  |
@@ -97,29 +101,35 @@ This tool is designed for use either directly by humans or from automation scrip
 
 Read the docs: https://pyuavcan.readthedocs.io
 Ask questions: https://forum.uavcan.org
-'''.strip('\r\n'))
+""".strip(
+            "\r\n"
+        ),
+    )
 
     # Register common arguments
     root_parser.add_argument(
-        '--version', '-V',
-        action='version',
-        version=f'%(prog)s {__version__}',
-        help='''
+        "--version",
+        "-V",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="""
 Print the PyUAVCAN version string and exit. The tool is versioned synchronously with the PyUAVCAN library.
-'''.strip())
+""".strip(),
+    )
     root_parser.add_argument(
-        '--verbose', '-v',
-        action='count',
-        help='Increase the verbosity of the output. Twice for extra verbosity.',
+        "--verbose",
+        "-v",
+        action="count",
+        help="Increase the verbosity of the output. Twice for extra verbosity.",
     )
 
     # Register commands
     subparsers = root_parser.add_subparsers()
     for cmd in command_instances:
         if cmd.examples:
-            epilog = 'Examples:\n' + cmd.examples
+            epilog = "Examples:\n" + cmd.examples
         else:
-            epilog = ''
+            epilog = ""
 
         parser = subparsers.add_parser(
             cmd.names[0],
@@ -144,11 +154,12 @@ def _make_executor(cmd: commands.Command) -> typing.Callable[[argparse.Namespace
             try:
                 ss = sf.construct_subsystem(args)
             except Exception as ex:
-                raise RuntimeError(f'Subsystem factory {type(sf).__name__!r} for command {cmd.names[0]!r} '
-                                   f'has failed: {ex}')
+                raise RuntimeError(
+                    f"Subsystem factory {type(sf).__name__!r} for command {cmd.names[0]!r} has failed: {ex}"
+                )
             else:
                 subsystems.append(ss)
-        _logger.debug('Invoking %r with subsystems %r and arguments %r', cmd, subsystems, args)
+        _logger.debug("Invoking %r with subsystems %r and arguments %r", cmd, subsystems, args)
         return cmd.execute(args, subsystems)
 
     return execute
@@ -171,12 +182,13 @@ def _configure_logging(verbosity_level: int) -> None:
         # This is not listed among the deps because the availability on other platforms is questionable and it's not
         # actually required at all. See https://stackoverflow.com/a/16847935/1007777.
         import coloredlogs
+
         # The level spec applies to the handler, not the root logger! This is different from basicConfig().
         coloredlogs.install(level=log_level, fmt=_LOG_FORMAT)
     except Exception as ex:
-        _logger.debug('Colored logs are not available: %s: %s', type(ex), ex)
+        _logger.debug("Colored logs are not available: %s: %s", type(ex), ex)
         _logger.info('Consider installing "coloredlogs" from PyPI to make log messages look better')
 
     # Handle special cases one by one.
     if log_level < logging.INFO:
-        logging.getLogger('pydsdl').setLevel(logging.INFO)  # Too much low-level logs from PyDSDL.
+        logging.getLogger("pydsdl").setLevel(logging.INFO)  # Too much low-level logs from PyDSDL.

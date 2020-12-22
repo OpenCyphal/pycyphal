@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 from ._base import CRCAlgorithm
@@ -39,6 +37,7 @@ class CRC32C(CRCAlgorithm):
     >>> CRC32C.new(b'123', b'', b'456789').value
     3808858755
     """
+
     def __init__(self) -> None:
         assert len(self._TABLE) == 256
         self._value = 0xFFFFFFFF
@@ -50,7 +49,7 @@ class CRC32C(CRCAlgorithm):
         self._value = val
 
     def check_residue(self) -> bool:
-        return self._value == 0xB798B438    # Checked before the output XOR is applied.
+        return self._value == 0xB798B438  # Checked before the output XOR is applied.
 
     @property
     def value(self) -> int:
@@ -59,8 +58,9 @@ class CRC32C(CRCAlgorithm):
 
     @property
     def value_as_bytes(self) -> bytes:
-        return self.value.to_bytes(4, 'little')
+        return self.value.to_bytes(4, "little")
 
+    # fmt: off
     _TABLE = [
         0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4, 0xC79A971F, 0x35F1141C, 0x26A1E7E8, 0xD4CA64EB,
         0x8AD958CF, 0x78B2DBCC, 0x6BE22838, 0x9989AB3B, 0x4D43CFD0, 0xBF284CD3, 0xAC78BF27, 0x5E133C24,
@@ -95,3 +95,4 @@ class CRC32C(CRCAlgorithm):
         0xF36E6F75, 0x0105EC76, 0x12551F82, 0xE03E9C81, 0x34F4F86A, 0xC69F7B69, 0xD5CF889D, 0x27A40B9E,
         0x79B737BA, 0x8BDCB4B9, 0x988C474D, 0x6AE7C44E, 0xBE2DA0A5, 0x4C4623A6, 0x5F16D052, 0xAD7D5351,
     ]
+    # fmt: on

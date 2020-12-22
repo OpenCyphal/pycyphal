@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import os
 import sys
@@ -26,7 +24,7 @@ import pyuavcan
 
 _AnyPath = typing.Union[str, pathlib.Path]
 
-_TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).absolute().parent / pathlib.Path('_templates')
+_TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).absolute().parent / pathlib.Path("_templates")
 
 _OUTPUT_FILE_PERMISSIONS = 0o444
 """
@@ -56,10 +54,12 @@ class GeneratedPackageInfo:
     """
 
 
-def generate_package(root_namespace_directory:        _AnyPath,
-                     lookup_directories:              typing.Optional[typing.List[_AnyPath]] = None,
-                     output_directory:                typing.Optional[_AnyPath] = None,
-                     allow_unregulated_fixed_port_id: bool = False) -> typing.Optional[GeneratedPackageInfo]:
+def generate_package(
+    root_namespace_directory: _AnyPath,
+    lookup_directories: typing.Optional[typing.List[_AnyPath]] = None,
+    output_directory: typing.Optional[_AnyPath] = None,
+    allow_unregulated_fixed_port_id: bool = False,
+) -> typing.Optional[GeneratedPackageInfo]:
     """
     This function runs the DSDL compiler, converting a specified DSDL root namespace into a Python package.
     In the generated package, nested DSDL namespaces are represented as Python subpackages,
@@ -184,69 +184,82 @@ def generate_package(root_namespace_directory:        _AnyPath,
     # Read the DSDL definitions
     if isinstance(lookup_directories, (str, bytes)):
         # https://forum.uavcan.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
-        raise TypeError(f'Lookup directories shall be an iterable of strings, not {type(lookup_directories).__name__}')
-    composite_types = pydsdl.read_namespace(root_namespace_directory=str(root_namespace_directory),
-                                            lookup_directories=list(map(str, lookup_directories or [])),
-                                            allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
+        raise TypeError(f"Lookup directories shall be an iterable of strings, not {type(lookup_directories).__name__}")
+    composite_types = pydsdl.read_namespace(
+        root_namespace_directory=str(root_namespace_directory),
+        lookup_directories=list(map(str, lookup_directories or [])),
+        allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id,
+    )
     if not composite_types:
-        _logger.info('Root namespace directory %r does not contain DSDL definitions', root_namespace_directory)
+        _logger.info("Root namespace directory %r does not contain DSDL definitions", root_namespace_directory)
         return None
-    root_namespace_name, = set(map(lambda x: x.root_namespace, composite_types))  # type: str,
-    _logger.info('Read %d definitions from root namespace %r', len(composite_types), root_namespace_name)
+    (root_namespace_name,) = set(map(lambda x: x.root_namespace, composite_types))  # type: str,
+    _logger.info("Read %d definitions from root namespace %r", len(composite_types), root_namespace_name)
 
     # Template primitives
     filters = {
-        'pickle':             _pickle_object,
-        'numpy_scalar_type':  _numpy_scalar_type,
+        "pickle": _pickle_object,
+        "numpy_scalar_type": _numpy_scalar_type,
     }
 
     # Generate code
     output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory)
-    language_context = nunavut.lang.LanguageContext('py', namespace_output_stem='__init__')
-    root_ns = nunavut.build_namespace_tree(types=composite_types,
-                                           root_namespace_dir=root_namespace_directory,
-                                           output_dir=str(output_directory),
-                                           language_context=language_context)
-    generator = nunavut.jinja.DSDLCodeGenerator(namespace=root_ns,
-                                                generate_namespace_types=nunavut.YesNoDefault.YES,
-                                                templates_dir=_TEMPLATE_DIRECTORY,
-                                                followlinks=True,
-                                                additional_filters=filters,
-                                                post_processors=[
-                                                    nunavut.postprocessors.SetFileMode(_OUTPUT_FILE_PERMISSIONS),
-                                                    nunavut.postprocessors.LimitEmptyLines(2),
-                                                    nunavut.postprocessors.TrimTrailingWhitespace(),
-                                                ])
+    language_context = nunavut.lang.LanguageContext("py", namespace_output_stem="__init__")
+    root_ns = nunavut.build_namespace_tree(
+        types=composite_types,
+        root_namespace_dir=root_namespace_directory,
+        output_dir=str(output_directory),
+        language_context=language_context,
+    )
+    generator = nunavut.jinja.DSDLCodeGenerator(
+        namespace=root_ns,
+        generate_namespace_types=nunavut.YesNoDefault.YES,
+        templates_dir=_TEMPLATE_DIRECTORY,
+        followlinks=True,
+        additional_filters=filters,
+        post_processors=[
+            nunavut.postprocessors.SetFileMode(_OUTPUT_FILE_PERMISSIONS),
+            nunavut.postprocessors.LimitEmptyLines(2),
+            nunavut.postprocessors.TrimTrailingWhitespace(),
+        ],
+    )
     generator.generate_all()
-    _logger.info('Generated %d types from the root namespace %r in %.1f seconds',
-                 len(composite_types), root_namespace_name, time.monotonic() - started_at)
+    _logger.info(
+        "Generated %d types from the root namespace %r in %.1f seconds",
+        len(composite_types),
+        root_namespace_name,
+        time.monotonic() - started_at,
+    )
 
     # A minor UX improvement; see https://github.com/UAVCAN/pyuavcan/issues/115
     for p in sys.path:
         if pathlib.Path(p).resolve() == pathlib.Path(output_directory):
             break
     else:
-        if os.name == 'nt':
+        if os.name == "nt":
             quick_fix = f'Quick fix: `$env:PYTHONPATH += ";{output_directory.resolve()}"`'
-        elif os.name == 'posix':
+        elif os.name == "posix":
             quick_fix = f'Quick fix: `export PYTHONPATH="{output_directory.resolve()}"`'
         else:
-            quick_fix = 'Quick fix is not available for this OS.'
+            quick_fix = "Quick fix is not available for this OS."
         _logger.warning(
-            'Generated package is stored in %r, which is not in Python module search path list. '
-            'The package will fail to import unless you add the destination directory to sys.path or PYTHONPATH. %s',
-            str(output_directory), quick_fix,
+            "Generated package is stored in %r, which is not in Python module search path list. "
+            "The package will fail to import unless you add the destination directory to sys.path or PYTHONPATH. %s",
+            str(output_directory),
+            quick_fix,
         )
 
-    return GeneratedPackageInfo(path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),
-                                models=composite_types,
-                                name=root_namespace_name)
+    return GeneratedPackageInfo(
+        path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),
+        models=composite_types,
+        name=root_namespace_name,
+    )
 
 
 def _pickle_object(x: typing.Any) -> str:
     pck: str = base64.b85encode(gzip.compress(pickle.dumps(x, protocol=4))).decode().strip()
-    segment_gen = map(''.join, itertools.zip_longest(*([iter(pck)] * 100), fillvalue=''))
-    return '\n'.join(repr(x) for x in segment_gen)
+    segment_gen = map("".join, itertools.zip_longest(*([iter(pck)] * 100), fillvalue=""))
+    return "\n".join(repr(x) for x in segment_gen)
 
 
 def _numpy_scalar_type(t: pydsdl.Any) -> str:
@@ -254,16 +267,16 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
         for o in [8, 16, 32, 64]:
             if w <= o:
                 return o
-        raise ValueError(f'Invalid bit width: {w}')  # pragma: no cover
+        raise ValueError(f"Invalid bit width: {w}")  # pragma: no cover
 
     if isinstance(t, pydsdl.BooleanType):
-        return f'_np_.bool'
+        return f"_np_.bool"
     elif isinstance(t, pydsdl.SignedIntegerType):
-        return f'_np_.int{pick_width(t.bit_length)}'
+        return f"_np_.int{pick_width(t.bit_length)}"
     elif isinstance(t, pydsdl.UnsignedIntegerType):
-        return f'_np_.uint{pick_width(t.bit_length)}'
+        return f"_np_.uint{pick_width(t.bit_length)}"
     elif isinstance(t, pydsdl.FloatType):
-        return f'_np_.float{pick_width(t.bit_length)}'
+        return f"_np_.float{pick_width(t.bit_length)}"
     else:
-        assert not isinstance(t, pydsdl.PrimitiveType), 'Forgot to handle some primitive types'
-        return f'_np_.object_'
+        assert not isinstance(t, pydsdl.PrimitiveType), "Forgot to handle some primitive types"
+        return f"_np_.object_"

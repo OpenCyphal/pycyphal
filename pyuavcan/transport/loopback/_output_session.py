@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 import asyncio
@@ -27,12 +25,14 @@ class LoopbackFeedback(pyuavcan.transport.Feedback):
 
 
 class LoopbackOutputSession(pyuavcan.transport.OutputSession):
-    def __init__(self,
-                 specifier:        pyuavcan.transport.OutputSessionSpecifier,
-                 payload_metadata: pyuavcan.transport.PayloadMetadata,
-                 loop:             asyncio.AbstractEventLoop,
-                 closer:           typing.Callable[[], None],
-                 router:           TransferRouter):
+    def __init__(
+        self,
+        specifier: pyuavcan.transport.OutputSessionSpecifier,
+        payload_metadata: pyuavcan.transport.PayloadMetadata,
+        loop: asyncio.AbstractEventLoop,
+        closer: typing.Callable[[], None],
+        router: TransferRouter,
+    ):
         self._specifier = specifier
         self._payload_metadata = payload_metadata
         self._loop = loop
@@ -77,7 +77,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         return self._stats
 
     def close(self) -> None:
-        self._injected_exception = pyuavcan.transport.ResourceClosedError(f'{self} is closed')
+        self._injected_exception = pyuavcan.transport.ResourceClosedError(f"{self} is closed")
         self._closer()
 
     @property
@@ -95,7 +95,7 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         if isinstance(value, Exception) or value is None:
             self._injected_exception = value
         else:
-            raise ValueError(f'Bad exception: {value}')
+            raise ValueError(f"Bad exception: {value}")
 
     @property
     def should_timeout(self) -> bool:
@@ -119,11 +119,13 @@ def _unittest_session() -> None:
     async def do_route(_a: pyuavcan.transport.Transfer, _b: float) -> bool:
         raise NotImplementedError
 
-    ses = LoopbackOutputSession(specifier=specifier,
-                                payload_metadata=payload_metadata,
-                                loop=asyncio.get_event_loop(),
-                                closer=do_close,
-                                router=do_route)
+    ses = LoopbackOutputSession(
+        specifier=specifier,
+        payload_metadata=payload_metadata,
+        loop=asyncio.get_event_loop(),
+        closer=do_close,
+        router=do_route,
+    )
 
     assert specifier == ses.specifier
     assert payload_metadata == ses.payload_metadata

@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import abc
@@ -57,6 +55,7 @@ class TransportStatistics:
     Not to be confused with :class:`pyuavcan.transport.SessionStatistics`,
     which is tracked per-session.
     """
+
     pass
 
 
@@ -66,6 +65,7 @@ class Transport(abc.ABC):
 
     Implementations should ensure that properties do not raise exceptions.
     """
+
     @property
     @abc.abstractmethod
     def loop(self) -> asyncio.AbstractEventLoop:

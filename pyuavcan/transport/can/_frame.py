@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import typing
@@ -18,19 +16,19 @@ TRANSFER_CRC_LENGTH_BYTES = 2
 
 @dataclasses.dataclass(frozen=True)
 class UAVCANFrame:
-    identifier:        int
-    transfer_id:       int
+    identifier: int
+    transfer_id: int
     start_of_transfer: bool
-    end_of_transfer:   bool
-    toggle_bit:        bool
-    padded_payload:    memoryview
+    end_of_transfer: bool
+    toggle_bit: bool
+    padded_payload: memoryview
 
     def __post_init__(self) -> None:
         if self.transfer_id < 0:
-            raise ValueError('Transfer ID cannot be negative')
+            raise ValueError("Transfer ID cannot be negative")
 
         if self.start_of_transfer and not self.toggle_bit:
-            raise ValueError(f'The toggle bit must be set in the first frame of the transfer')
+            raise ValueError(f"The toggle bit must be set in the first frame of the transfer")
 
     def compile(self) -> DataFrame:
         tail = self.transfer_id % TRANSFER_ID_MODULO
@@ -58,21 +56,23 @@ class UAVCANFrame:
         if sot and not tog:
             return None
 
-        return UAVCANFrame(identifier=source.identifier,
-                           transfer_id=transfer_id,
-                           start_of_transfer=sot,
-                           end_of_transfer=eot,
-                           toggle_bit=tog,
-                           padded_payload=padded_payload)
+        return UAVCANFrame(
+            identifier=source.identifier,
+            transfer_id=transfer_id,
+            start_of_transfer=sot,
+            end_of_transfer=eot,
+            toggle_bit=tog,
+            padded_payload=padded_payload,
+        )
 
     @staticmethod
     def get_required_padding(data_length: int) -> int:
-        return DataFrame.get_required_padding(data_length + 1)   # +1 for the tail byte
+        return DataFrame.get_required_padding(data_length + 1)  # +1 for the tail byte
 
     def __repr__(self) -> str:
         kwargs = {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
-        kwargs['identifier'] = f'0x{self.identifier:08x}'
-        kwargs['padded_payload'] = bytes(self.padded_payload).hex()
+        kwargs["identifier"] = f"0x{self.identifier:08x}"
+        kwargs["padded_payload"] = bytes(self.padded_payload).hex()
         return pyuavcan.util.repr_attributes(self, **kwargs)
 
 
@@ -107,48 +107,48 @@ def _unittest_can_transfer_id_forward_distance() -> None:
 def _unittest_can_uavcan_frame() -> None:
     from pytest import raises
 
-    UAVCANFrame(123, 123, True, False, True, memoryview(b''))
-    UAVCANFrame(123, 123, False, False, True, memoryview(b''))
-    UAVCANFrame(123, 123, False, False, False, memoryview(b''))
+    UAVCANFrame(123, 123, True, False, True, memoryview(b""))
+    UAVCANFrame(123, 123, False, False, True, memoryview(b""))
+    UAVCANFrame(123, 123, False, False, False, memoryview(b""))
 
     with raises(ValueError):
-        UAVCANFrame(123, -1, True, False, True, memoryview(b''))
+        UAVCANFrame(123, -1, True, False, True, memoryview(b""))
 
     with raises(ValueError):
-        UAVCANFrame(123, 123, True, False, False, memoryview(b''))
+        UAVCANFrame(123, 123, True, False, False, memoryview(b""))
 
-    ref = UAVCANFrame(identifier=0,
-                      transfer_id=0,
-                      start_of_transfer=False,
-                      end_of_transfer=False,
-                      toggle_bit=False,
-                      padded_payload=memoryview(b''))
-    assert ref == UAVCANFrame.parse(DataFrame(FrameFormat.EXTENDED, 0, bytearray(b'\x00')))
+    ref = UAVCANFrame(
+        identifier=0,
+        transfer_id=0,
+        start_of_transfer=False,
+        end_of_transfer=False,
+        toggle_bit=False,
+        padded_payload=memoryview(b""),
+    )
+    assert ref == UAVCANFrame.parse(DataFrame(FrameFormat.EXTENDED, 0, bytearray(b"\x00")))
 
-    ref = UAVCANFrame(identifier=123456,
-                      transfer_id=12,
-                      start_of_transfer=True,
-                      end_of_transfer=False,
-                      toggle_bit=True,
-                      padded_payload=memoryview(b'Hello'))
-    assert ref == UAVCANFrame.parse(DataFrame(FrameFormat.EXTENDED, 123456, bytearray(b'Hello\xAC')))
+    ref = UAVCANFrame(
+        identifier=123456,
+        transfer_id=12,
+        start_of_transfer=True,
+        end_of_transfer=False,
+        toggle_bit=True,
+        padded_payload=memoryview(b"Hello"),
+    )
+    assert ref == UAVCANFrame.parse(DataFrame(FrameFormat.EXTENDED, 123456, bytearray(b"Hello\xAC")))
 
-    ref = UAVCANFrame(identifier=1234567,
-                      transfer_id=12,
-                      start_of_transfer=False,
-                      end_of_transfer=True,
-                      toggle_bit=True,
-                      padded_payload=memoryview(b'Hello'))
-    assert ref == UAVCANFrame.parse(DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b'Hello\x6C')))
+    ref = UAVCANFrame(
+        identifier=1234567,
+        transfer_id=12,
+        start_of_transfer=False,
+        end_of_transfer=True,
+        toggle_bit=True,
+        padded_payload=memoryview(b"Hello"),
+    )
+    assert ref == UAVCANFrame.parse(DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b"Hello\x6C")))
 
-    assert UAVCANFrame.parse(
-        DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b'Hello\xCC'))
-    ) is None   # Bad toggle
+    assert UAVCANFrame.parse(DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b"Hello\xCC"))) is None  # Bad toggle
 
-    assert UAVCANFrame.parse(
-        DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b''))
-    ) is None   # No tail byte
+    assert UAVCANFrame.parse(DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b""))) is None  # No tail byte
 
-    assert UAVCANFrame.parse(
-        DataFrame(FrameFormat.BASE, 123, bytearray(b'Hello\x6C'))
-    ) is None   # Bad frame format
+    assert UAVCANFrame.parse(DataFrame(FrameFormat.BASE, 123, bytearray(b"Hello\x6C"))) is None  # Bad frame format

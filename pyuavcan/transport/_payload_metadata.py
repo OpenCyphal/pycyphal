@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import dataclasses
@@ -39,4 +37,4 @@ class PayloadMetadata:
 
     def __post_init__(self) -> None:
         if self.extent_bytes < 0:
-            raise ValueError(f'Invalid extent [byte]: {self.extent_bytes}')
+            raise ValueError(f"Invalid extent [byte]: {self.extent_bytes}")

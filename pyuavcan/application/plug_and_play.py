@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2020 UAVCAN Development Team
+# Copyright (c) 2020 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 """
 Plug-and-play node-ID allocation logic. See the class documentation for usage info.
@@ -26,16 +24,17 @@ from uavcan.node import ID_1_0 as ID
 import pyuavcan
 
 
-_PSEUDO_UNIQUE_ID_MASK = \
-    2 ** list(pyuavcan.dsdl.get_model(NodeIDAllocationData_1)['unique_id_hash'].data_type.bit_length_set)[0] - 1
+_PSEUDO_UNIQUE_ID_MASK = (
+    2 ** list(pyuavcan.dsdl.get_model(NodeIDAllocationData_1)["unique_id_hash"].data_type.bit_length_set)[0] - 1
+)
 
-_NODE_ID_MASK = 2 ** max(pyuavcan.dsdl.get_model(ID)['value'].data_type.bit_length_set) - 1
+_NODE_ID_MASK = 2 ** max(pyuavcan.dsdl.get_model(ID)["value"].data_type.bit_length_set) - 1
 
 _UNIQUE_ID_SIZE_BYTES = 16
 
 _NUM_RESERVED_TOP_NODE_IDS = 2
 
-_DB_DEFAULT_LOCATION = ':memory:'
+_DB_DEFAULT_LOCATION = ":memory:"
 _DB_TIMEOUT = 0.1
 
 
@@ -61,10 +60,12 @@ class Allocatee:
 
     _MTU_THRESHOLD = max(pyuavcan.dsdl.get_model(NodeIDAllocationData_2).bit_length_set) // 8
 
-    def __init__(self,
-                 presentation:      pyuavcan.presentation.Presentation,
-                 local_unique_id:   bytes,
-                 preferred_node_id: typing.Optional[int] = None):
+    def __init__(
+        self,
+        presentation: pyuavcan.presentation.Presentation,
+        local_unique_id: bytes,
+        preferred_node_id: typing.Optional[int] = None,
+    ):
         """
         :param presentation: The presentation instance to use. If the underlying transport is not anonymous
             (i.e., a node-ID is already set), the allocatee will simply return the existing node-ID and do nothing.
@@ -81,16 +82,18 @@ class Allocatee:
         self._local_unique_id = local_unique_id
         self._preferred_node_id = int(preferred_node_id if preferred_node_id is not None else _NODE_ID_MASK)
         if not isinstance(self._local_unique_id, bytes) or len(self._local_unique_id) != _UNIQUE_ID_SIZE_BYTES:
-            raise ValueError(f'Invalid unique-ID: {self._local_unique_id!r}')
+            raise ValueError(f"Invalid unique-ID: {self._local_unique_id!r}")
         if not (0 <= self._preferred_node_id <= _NODE_ID_MASK):
-            raise ValueError(f'Invalid preferred node-ID: {self._preferred_node_id}')
+            raise ValueError(f"Invalid preferred node-ID: {self._preferred_node_id}")
 
         self._result: typing.Optional[int] = None
         self._sub_1 = self._presentation.make_subscriber_with_fixed_subject_id(NodeIDAllocationData_1)
         self._sub_2 = self._presentation.make_subscriber_with_fixed_subject_id(NodeIDAllocationData_2)
-        self._pub: typing.Union[None,
-                                pyuavcan.presentation.Publisher[NodeIDAllocationData_1],
-                                pyuavcan.presentation.Publisher[NodeIDAllocationData_2]] = None
+        self._pub: typing.Union[
+            None,
+            pyuavcan.presentation.Publisher[NodeIDAllocationData_1],
+            pyuavcan.presentation.Publisher[NodeIDAllocationData_2],
+        ] = None
         self._timer: typing.Optional[asyncio.TimerHandle] = None
 
     def get_result(self) -> typing.Optional[int]:
@@ -136,18 +139,18 @@ class Allocatee:
                 self._pub = self._presentation.make_publisher_with_fixed_subject_id(type(msg))
                 self._pub.priority = self.DEFAULT_PRIORITY
 
-            _logger.debug('Publishing allocation request %s', msg)
+            _logger.debug("Publishing allocation request %s", msg)
             self._pub.publish_soon(msg)
         except Exception as ex:
-            _logger.exception(f'Could not send allocation request {msg}: {ex}')
+            _logger.exception(f"Could not send allocation request {msg}: {ex}")
 
     def _restart_timer(self) -> None:
         t_request = random.random()
         self._timer = self._presentation.loop.call_later(t_request, self._on_timer)
 
-    async def _on_response(self,
-                           msg: typing.Union[NodeIDAllocationData_1, NodeIDAllocationData_2],
-                           meta: pyuavcan.transport.TransferFrom) -> None:
+    async def _on_response(
+        self, msg: typing.Union[NodeIDAllocationData_1, NodeIDAllocationData_2], meta: pyuavcan.transport.TransferFrom
+    ) -> None:
         if self.get_result() is not None:  # Allocation already done, nothing else to do.
             return
 
@@ -162,7 +165,7 @@ class Allocatee:
             if msg.unique_id.tobytes() == self._local_unique_id:
                 allocated = msg.node_id.value
         else:
-            assert False, 'Internal logic error'
+            assert False, "Internal logic error"
 
         if allocated is None:
             return  # UID mismatch.
@@ -171,11 +174,13 @@ class Allocatee:
         protocol_params = self._presentation.transport.protocol_parameters
         max_node_id = min(protocol_params.max_nodes - 1, _NODE_ID_MASK)
         if not (0 <= allocated <= max_node_id):
-            _logger.warning(f'Allocated node-ID {allocated} ignored because it is incompatible with the transport: '
-                            f'{protocol_params}')
+            _logger.warning(
+                f"Allocated node-ID {allocated} ignored because it is incompatible with the transport: "
+                f"{protocol_params}"
+            )
             return
 
-        _logger.info('Plug-and-play allocation done: got node-ID %s from server %s', allocated, meta.source_node_id)
+        _logger.info("Plug-and-play allocation done: got node-ID %s from server %s", allocated, meta.source_node_id)
         self._result = allocated
 
 
@@ -217,10 +222,12 @@ class CentralizedAllocator(Allocator):
     The centralized plug-and-play node-ID allocator.
     """
 
-    def __init__(self,
-                 presentation:    pyuavcan.presentation.Presentation,
-                 local_unique_id: typing.Optional[bytes] = None,
-                 database_file:   typing.Optional[typing.Union[str, pathlib.Path]] = None):
+    def __init__(
+        self,
+        presentation: pyuavcan.presentation.Presentation,
+        local_unique_id: typing.Optional[bytes] = None,
+        database_file: typing.Optional[typing.Union[str, pathlib.Path]] = None,
+    ):
         """
         :param presentation: The presentation instance to run the allocator on.
 
@@ -236,11 +243,11 @@ class CentralizedAllocator(Allocator):
 
         self._local_unique_id = local_unique_id if local_unique_id is not None else bytes(_UNIQUE_ID_SIZE_BYTES)
         if not isinstance(self._local_unique_id, bytes) or len(self._local_unique_id) != _UNIQUE_ID_SIZE_BYTES:
-            raise ValueError(f'Invalid local unique-ID: {self._local_unique_id!r}')
+            raise ValueError(f"Invalid local unique-ID: {self._local_unique_id!r}")
 
         local_node_id = self._presentation.transport.local_node_id
         if local_node_id is None:
-            raise ValueError('The allocator cannot run on an anonymous node')
+            raise ValueError("The allocator cannot run on an anonymous node")
 
         self._alloc = _AllocationTable(sqlite3.connect(str(database_file or _DB_DEFAULT_LOCATION), timeout=_DB_TIMEOUT))
         self._alloc.register(local_node_id, self._local_unique_id)
@@ -257,7 +264,7 @@ class CentralizedAllocator(Allocator):
         self._alloc.register(node_id, unique_id)
 
     def start(self) -> None:
-        _logger.debug('Centralized allocator starting with the following allocation table:\n%s', self._alloc)
+        _logger.debug("Centralized allocator starting with the following allocation table:\n%s", self._alloc)
         self._sub1.receive_in_background(self._on_message)
         self._sub2.receive_in_background(self._on_message)
 
@@ -267,19 +274,19 @@ class CentralizedAllocator(Allocator):
             port.close()
         self._alloc.close()
 
-    async def _on_message(self,
-                          msg: typing.Union[NodeIDAllocationData_1, NodeIDAllocationData_2],
-                          meta: pyuavcan.transport.TransferFrom) -> None:
+    async def _on_message(
+        self, msg: typing.Union[NodeIDAllocationData_1, NodeIDAllocationData_2], meta: pyuavcan.transport.TransferFrom
+    ) -> None:
         if meta.source_node_id is not None:
             _logger.error(
-                f'Invalid network configuration: another node-ID allocator detected at node-ID {meta.source_node_id}. '
-                f'There shall be exactly one allocator on the network. If modular redundancy is desired, '
-                f'use a distributed allocator (currently, a centralized allocator is running). '
-                f'The detected allocation response message is {msg} with metadata {meta}.'
+                f"Invalid network configuration: another node-ID allocator detected at node-ID {meta.source_node_id}. "
+                f"There shall be exactly one allocator on the network. If modular redundancy is desired, "
+                f"use a distributed allocator (currently, a centralized allocator is running). "
+                f"The detected allocation response message is {msg} with metadata {meta}."
             )
             return
 
-        _logger.debug('Received allocation request %s with metadata %s', msg, meta)
+        _logger.debug("Received allocation request %s with metadata %s", msg, meta)
         max_node_id = self._presentation.transport.protocol_parameters.max_nodes - 1 - _NUM_RESERVED_TOP_NODE_IDS
         assert max_node_id > 0
 
@@ -295,20 +302,23 @@ class CentralizedAllocator(Allocator):
                 self._respond_v2(meta.priority, uid, allocated)
                 return
         else:
-            assert False, 'Internal logic error'
+            assert False, "Internal logic error"
         _logger.warning(
-            f'Allocation table is full, ignoring request {msg} with metadata {meta}. Please purge the table.'
+            f"Allocation table is full, ignoring request {msg} with metadata {meta}. Please purge the table."
         )
 
     def _respond_v1(self, priority: pyuavcan.transport.Priority, unique_id_hash: int, allocated_node_id: int) -> None:
         msg = NodeIDAllocationData_1(unique_id_hash=unique_id_hash, allocated_node_id=[ID(allocated_node_id)])
-        _logger.info('Publishing allocation response v1: %s', msg)
+        _logger.info("Publishing allocation response v1: %s", msg)
         self._pub1.priority = priority
         self._pub1.publish_soon(msg)
 
     def _respond_v2(self, priority: pyuavcan.transport.Priority, unique_id: bytes, allocated_node_id: int) -> None:
-        msg = NodeIDAllocationData_2(node_id=ID(allocated_node_id), unique_id=unique_id,)
-        _logger.info('Publishing allocation response v2: %s', msg)
+        msg = NodeIDAllocationData_2(
+            node_id=ID(allocated_node_id),
+            unique_id=unique_id,
+        )
+        _logger.info("Publishing allocation response v2: %s", msg)
         self._pub2.priority = priority
         self._pub2.publish_soon(msg)
 
@@ -323,11 +333,11 @@ class DistributedAllocator(Allocator):
 
     def __init__(self, presentation: pyuavcan.presentation.Presentation):
         assert presentation
-        raise NotImplementedError((self.__doc__ or '').strip())
+        raise NotImplementedError((self.__doc__ or "").strip())
 
 
 class _AllocationTable:
-    _SCHEMA = '''
+    _SCHEMA = """
     create table if not exists `allocation` (
         `node_id`          int not null unique check(node_id >= 0),
         `unique_id_hex`    varchar(32) not null,  -- all zeros if unique-ID is unknown.
@@ -335,7 +345,7 @@ class _AllocationTable:
         `ts`               time not null default current_timestamp,
         primary key(node_id)
     );
-    '''
+    """
 
     def __init__(self, db_connection: sqlite3.Connection):
         self._con = db_connection
@@ -347,37 +357,45 @@ class _AllocationTable:
         if unique_id is None:
             unique_id = bytes(_UNIQUE_ID_SIZE_BYTES)
         if not isinstance(unique_id, bytes) or len(unique_id) != _UNIQUE_ID_SIZE_BYTES:
-            raise ValueError(f'Invalid unique-ID: {unique_id!r}')
+            raise ValueError(f"Invalid unique-ID: {unique_id!r}")
         if not isinstance(node_id, int) or not (0 <= node_id <= _NODE_ID_MASK):
-            raise ValueError(f'Invalid node-ID: {node_id!r}')
+            raise ValueError(f"Invalid node-ID: {node_id!r}")
 
         def execute() -> None:
             assert isinstance(unique_id, bytes)
             self._con.execute(
-                'insert or replace into allocation (node_id, unique_id_hex, pseudo_unique_id) values (?, ?, ?);',
-                (node_id, unique_id.hex(), _make_pseudo_unique_id(unique_id))
+                "insert or replace into allocation (node_id, unique_id_hex, pseudo_unique_id) values (?, ?, ?);",
+                (node_id, unique_id.hex(), _make_pseudo_unique_id(unique_id)),
             )
             self._con.commit()
 
-        res = self._con.execute('select unique_id_hex from allocation where node_id = ?', (node_id,)).fetchone()
+        res = self._con.execute("select unique_id_hex from allocation where node_id = ?", (node_id,)).fetchone()
         existing_uid = bytes.fromhex(res[0]) if res is not None else None
         if existing_uid is None:
-            _logger.debug('Original node registration: NID % 5d, UID %s', node_id, unique_id.hex())
+            _logger.debug("Original node registration: NID % 5d, UID %s", node_id, unique_id.hex())
             execute()
         elif unique_id_defined and existing_uid != unique_id:
-            _logger.debug('Updated node registration:  NID % 5d, UID %s -> %s',
-                          node_id, existing_uid.hex(), unique_id.hex())
+            _logger.debug(
+                "Updated node registration:  NID % 5d, UID %s -> %s", node_id, existing_uid.hex(), unique_id.hex()
+            )
             execute()
 
-    def allocate(self,
-                 preferred_node_id: int,
-                 max_node_id:       int,
-                 unique_id:         typing.Optional[bytes] = None,
-                 pseudo_unique_id:  typing.Optional[int] = None) -> typing.Optional[int]:
+    def allocate(
+        self,
+        preferred_node_id: int,
+        max_node_id: int,
+        unique_id: typing.Optional[bytes] = None,
+        pseudo_unique_id: typing.Optional[int] = None,
+    ) -> typing.Optional[int]:
         use_unique_id = unique_id is not None
         preferred_node_id = min(max(preferred_node_id, 0), max_node_id)
-        _logger.debug('Table alloc request: preferred_node_id=%s, max_node_id=%s, unique_id=%s, pseudo_unique_id=%s',
-                      preferred_node_id, max_node_id, unique_id.hex() if unique_id else None, pseudo_unique_id)
+        _logger.debug(
+            "Table alloc request: preferred_node_id=%s, max_node_id=%s, unique_id=%s, pseudo_unique_id=%s",
+            preferred_node_id,
+            max_node_id,
+            unique_id.hex() if unique_id else None,
+            pseudo_unique_id,
+        )
         if unique_id is None:
             unique_id = bytes(_UNIQUE_ID_SIZE_BYTES)
         if pseudo_unique_id is None:
@@ -390,19 +408,22 @@ class _AllocationTable:
         # allocation table with a less capable transport.
         if use_unique_id:
             res = self._con.execute(
-                'select node_id from allocation where unique_id_hex = ? and node_id <= ? order by ts desc limit 1',
-                (unique_id.hex(), max_node_id)
+                "select node_id from allocation where unique_id_hex = ? and node_id <= ? order by ts desc limit 1",
+                (unique_id.hex(), max_node_id),
             ).fetchone()
         else:
             res = self._con.execute(
-                'select node_id from allocation where pseudo_unique_id = ? and node_id <= ? order by ts desc limit 1',
-                (pseudo_unique_id, max_node_id)
+                "select node_id from allocation where pseudo_unique_id = ? and node_id <= ? order by ts desc limit 1",
+                (pseudo_unique_id, max_node_id),
             ).fetchone()
         if res is not None:
             candidate = int(res[0])
-            assert 0 <= candidate <= max_node_id, 'Internal logic error'
-            _logger.debug('Serving existing allocation: NID %s, (pseudo-)UID %s',
-                          candidate, unique_id.hex() if use_unique_id else hex(pseudo_unique_id))
+            assert 0 <= candidate <= max_node_id, "Internal logic error"
+            _logger.debug(
+                "Serving existing allocation: NID %s, (pseudo-)UID %s",
+                candidate,
+                unique_id.hex() if use_unique_id else hex(pseudo_unique_id),
+            )
             return candidate
 
         # Do a new allocation. Consider re-implementing this in pure SQL -- should be possible with SQLite.
@@ -420,8 +441,12 @@ class _AllocationTable:
 
         # Final report.
         if result is not None:
-            _logger.debug('New allocation: allocated NID %s, (pseudo-)UID %s, preferred NID %s',
-                          result, unique_id.hex() if use_unique_id else hex(pseudo_unique_id), preferred_node_id)
+            _logger.debug(
+                "New allocation: allocated NID %s, (pseudo-)UID %s, preferred NID %s",
+                result,
+                unique_id.hex() if use_unique_id else hex(pseudo_unique_id),
+                preferred_node_id,
+            )
         return result
 
     def close(self) -> None:
@@ -430,8 +455,8 @@ class _AllocationTable:
     def _try_allocate(self, node_id: int, unique_id: bytes, pseudo_unique_id: int) -> bool:
         try:
             self._con.execute(
-                'insert into allocation (node_id, unique_id_hex, pseudo_unique_id) values (?, ?, ?);',
-                (node_id, unique_id.hex(), pseudo_unique_id)
+                "insert into allocation (node_id, unique_id_hex, pseudo_unique_id) values (?, ?, ?);",
+                (node_id, unique_id.hex(), pseudo_unique_id),
             )
             self._con.commit()
         except sqlite3.IntegrityError:  # Such entry already exists.
@@ -440,12 +465,12 @@ class _AllocationTable:
 
     def __str__(self) -> str:
         """Displays the table as a multi-line string in TSV format with one header line."""
-        lines = ['Node-ID\t' + 'Unique-ID/hash (hex)'.ljust(32 + 1 + 12) + '\tUpdate timestamp']
+        lines = ["Node-ID\t" + "Unique-ID/hash (hex)".ljust(32 + 1 + 12) + "\tUpdate timestamp"]
         for nid, uid_hex, pseudo, ts in self._con.execute(
-            'select node_id, unique_id_hex, pseudo_unique_id, ts from allocation order by ts desc'
+            "select node_id, unique_id_hex, pseudo_unique_id, ts from allocation order by ts desc"
         ).fetchall():
-            lines.append(f'{nid: 5d}  \t{uid_hex:32s}/{pseudo:012x}\t{ts}')
-        return '\n'.join(lines) + '\n'
+            lines.append(f"{nid: 5d}  \t{uid_hex:32s}/{pseudo:012x}\t{ts}")
+        return "\n".join(lines) + "\n"
 
 
 def _make_pseudo_unique_id(unique_id: bytes) -> int:
@@ -453,5 +478,6 @@ def _make_pseudo_unique_id(unique_id: bytes) -> int:
     The recommended mapping function from unique-ID to pseudo unique-ID.
     """
     from pyuavcan.transport.commons.crc import CRC64WE
+
     assert isinstance(unique_id, bytes) and len(unique_id) == _UNIQUE_ID_SIZE_BYTES
     return int(CRC64WE.new(unique_id).value & _PSEUDO_UNIQUE_ID_MASK)

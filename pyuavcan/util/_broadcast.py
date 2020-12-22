@@ -1,17 +1,18 @@
-# Copyright (c) 2020 UAVCAN Development Team
+# Copyright (c) 2020 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 import logging
 
-R = typing.TypeVar('R')
+R = typing.TypeVar("R")
 
 _logger = logging.getLogger(__name__)
 
 
-def broadcast(functions: typing.Iterable[typing.Callable[..., R]]) \
-        -> typing.Callable[..., typing.List[typing.Union[R, Exception]]]:
+def broadcast(
+    functions: typing.Iterable[typing.Callable[..., R]]
+) -> typing.Callable[..., typing.List[typing.Union[R, Exception]]]:
     """
     Returns a function that invokes each supplied function in series with the specified arguments
     following the specified order.
@@ -33,6 +34,7 @@ def broadcast(functions: typing.Iterable[typing.Callable[..., R]]) \
     >>> broadcast([])()
     []
     """
+
     def delegate(*args: typing.Any, **kwargs: typing.Any) -> typing.List[typing.Union[R, Exception]]:
         out: typing.List[typing.Union[R, Exception]] = []
         for fn in functions:
@@ -40,7 +42,8 @@ def broadcast(functions: typing.Iterable[typing.Callable[..., R]]) \
                 r: typing.Union[R, Exception] = fn(*args, **kwargs)
             except Exception as ex:
                 r = ex
-                _logger.exception(f'Unhandled exception in {fn}: {ex}')
+                _logger.exception(f"Unhandled exception in {fn}: {ex}")
             out.append(r)
         return out
+
     return delegate
