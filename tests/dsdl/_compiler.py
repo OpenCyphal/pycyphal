@@ -33,3 +33,8 @@ def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
     assert " path" in logs[0][2]
     assert "Path(" not in logs[0][2]  # Ensure decent formatting
     assert str(output_directory_name) in logs[0][2]
+
+
+def _unittest_issue_133() -> None:
+    with pytest.raises(ValueError, match=".*output directory.*"):
+        pyuavcan.dsdl.generate_package(pathlib.Path.cwd() / "irrelevant")

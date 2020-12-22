@@ -181,6 +181,15 @@ def generate_package(
     """
     started_at = time.monotonic()
 
+    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
+    root_namespace_directory = pathlib.Path(root_namespace_directory).resolve()
+    if root_namespace_directory.parent == output_directory:
+        # https://github.com/UAVCAN/pyuavcan/issues/133 and https://github.com/UAVCAN/pyuavcan/issues/127
+        raise ValueError(
+            "The specified destination may overwrite the DSDL root namespace directory. "
+            "Consider specifying a different output directory instead."
+        )
+
     # Read the DSDL definitions
     if isinstance(lookup_directories, (str, bytes)):
         # https://forum.uavcan.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
@@ -203,11 +212,11 @@ def generate_package(
     }
 
     # Generate code
-    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory)
+    assert isinstance(output_directory, pathlib.Path)
     language_context = nunavut.lang.LanguageContext("py", namespace_output_stem="__init__")
     root_ns = nunavut.build_namespace_tree(
         types=composite_types,
-        root_namespace_dir=root_namespace_directory,
+        root_namespace_dir=str(root_namespace_directory),
         output_dir=str(output_directory),
         language_context=language_context,
     )

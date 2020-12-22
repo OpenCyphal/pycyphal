@@ -1,7 +1,6 @@
 Full-featured UAVCAN stack in Python
 ====================================
 
-[![Travis CI](https://travis-ci.org/UAVCAN/pyuavcan.svg)](https://travis-ci.org/UAVCAN/pyuavcan)
 [![AppVeyor CI](https://ci.appveyor.com/api/projects/status/2vv83afj3dxqibi5?svg=true)](https://ci.appveyor.com/project/Zubax/pyuavcan)
 [![RTFD](https://readthedocs.org/projects/pyuavcan/badge/)](https://pyuavcan.readthedocs.io/)
 [![Coverage Status](https://coveralls.io/repos/github/UAVCAN/pyuavcan/badge.svg)](https://coveralls.io/github/UAVCAN/pyuavcan)
