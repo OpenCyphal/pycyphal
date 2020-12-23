@@ -111,9 +111,7 @@ banner STATIC ANALYSIS
 rm -rf .mypy_cache/ &> /dev/null
 echo 'YOU SHALL NOT PASS' > .mypy_cache
 chmod 444 .mypy_cache
-mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg \
-    pyuavcan tests .test_dsdl_generated demo \
-    || die "MyPy returned $?"
+mypy --strict pyuavcan tests .test_dsdl_generated demo || die "MyPy returned $?"
 
 # See configuration file for details.
 black --check . || die "black returned $?"
