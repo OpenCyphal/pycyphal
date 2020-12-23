@@ -13,7 +13,6 @@ Full-featured UAVCAN stack in Python
 
 PyUAVCAN is a full-featured implementation of the UAVCAN protocol stack intended for non-embedded,
 user-facing applications such as GUI software, diagnostic tools, automation scripts, prototypes, and various R&D cases.
-PyUAVCAN consists of a Python library (package) and a simple CLI tool for basic diagnostics and shell script automation.
 
 PyUAVCAN aims to support all features and transport layers of UAVCAN,
 be portable across all major platforms supporting Python,
@@ -31,3 +30,6 @@ The acronym *UAVCAN* stands for ***Uncomplicated Application-level Vehicular Com
 **READ THE DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**
 
 **Ask questions: [forum.uavcan.org](https://forum.uavcan.org/)**
+
+*See also: [**U-tool**](https://github.com/UAVCAN/u) -- a CLI tool for diagnostics and management of
+UAVCAN networks built on top of PyUAVCAN.*
