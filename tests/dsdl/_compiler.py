@@ -8,12 +8,13 @@ import pathlib
 import tempfile
 import pytest
 import pyuavcan.dsdl
-from .conftest import TEST_DATA_TYPES_DIR, PUBLIC_REGULATED_DATA_TYPES_DIR
+from .conftest import DEMO_DIR
 
 
 def _unittest_bad_usage() -> None:
     with pytest.raises(TypeError):
-        pyuavcan.dsdl.generate_package(TEST_DATA_TYPES_DIR, TEST_DATA_TYPES_DIR)  # type: ignore
+        # noinspection PyTypeChecker
+        pyuavcan.dsdl.generate_package("irrelevant", "irrelevant")  # type: ignore
 
 
 def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
@@ -22,7 +23,7 @@ def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
         output_directory_name = pathlib.Path(output_directory).resolve()
         caplog.clear()
         pyuavcan.dsdl.generate_package(
-            PUBLIC_REGULATED_DATA_TYPES_DIR / "uavcan",
+            DEMO_DIR / "public_regulated_data_types" / "uavcan",
             output_directory=output_directory,
         )
         logs = caplog.record_tuples

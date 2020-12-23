@@ -89,7 +89,7 @@ banner TEST EXECUTION
 #   - https://coverage.readthedocs.io/en/coverage-4.2/subprocess.html
 #   - https://docs.python.org/3/library/site.html
 log_format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s'
-coverage run -m pytest --log-format="$log_format" --log-file='pyuavcan.log' || die "PyTest returned $?"
+coverage run -m pytest --log-format="$log_format" || die "PyTest returned $?"
 
 # Every time we launch a Python process, a new coverage file is created, so there may be a lot of those,
 # possibly nested in sub-directories.
@@ -111,7 +111,8 @@ banner STATIC ANALYSIS
 rm -rf .mypy_cache/ &> /dev/null
 echo 'YOU SHALL NOT PASS' > .mypy_cache
 chmod 444 .mypy_cache
-mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg pyuavcan tests .test_dsdl_generated \
+mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg \
+    pyuavcan tests .test_dsdl_generated demo \
     || die "MyPy returned $?"
 
 # See configuration file for details.

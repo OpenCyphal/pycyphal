@@ -23,13 +23,13 @@ The referenced DSDL definitions are provided below.
 
 ``sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0``:
 
-.. literalinclude:: /../tests/dsdl/namespaces/sirius_cyber_corp/PerformLinearLeastSquaresFit.1.0.uavcan
+.. literalinclude:: /../demo/custom_data_types/sirius_cyber_corp/PerformLinearLeastSquaresFit.1.0.uavcan
    :linenos:
 
 
 ``sirius_cyber_corp.PointXY.1.0``:
 
-.. literalinclude:: /../tests/dsdl/namespaces/sirius_cyber_corp/PointXY.1.0.uavcan
+.. literalinclude:: /../demo/custom_data_types/sirius_cyber_corp/PointXY.1.0.uavcan
    :linenos:
 
 
@@ -40,7 +40,7 @@ The demo relies on the custom data types presented above.
 In order to run the demo, please copy-paste its source code into a file on your computer
 and update the DSDL paths to match your environment.
 
-.. literalinclude:: /../tests/demo/demo_app.py
+.. literalinclude:: /../demo/demo_app.py
    :linenos:
 
 
@@ -56,14 +56,14 @@ Transcompiling DSDL namespaces into Python packages
 +++++++++++++++++++++++++++++++++++++++++++++++++++
 
 First, we need to make sure that the required DSDL-generated packages are available for the command-line tool.
-Suppose that the application-specific data types listed above are located at ``../dsdl/namespaces/``,
+Suppose that the application-specific data types listed above are located under ``custom_data_types``,
 and that instead of using a local copy of the public regulated data types we prefer to download them from the
 repository.
 This is the command:
 
 .. code-block:: sh
 
-    u dsdlc ../dsdl/namespaces/sirius_cyber_corp/ https://github.com/UAVCAN/public_regulated_data_types/archive/master.zip
+    u dsdlc custom_data_types/sirius_cyber_corp/ https://github.com/UAVCAN/public_regulated_data_types/archive/master.zip
 
 That's it.
 The DSDL-generated packages have been stored in the current working directory, so now we can use them.

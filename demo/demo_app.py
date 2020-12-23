@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# PyUAVCAN demo application. This file is included in the user documentation, please keep it tidy.
+# PyUAVCAN demo application.
 #
 # Distributed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication. To the extent possible under law, the
 # UAVCAN Consortium has waived all copyright and related or neighboring rights to this work.
@@ -45,18 +45,18 @@ try:
     import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
     import pyuavcan.application  # The application module requires the standard types from the root namespace "uavcan".
 except (ImportError, AttributeError):
-    src_dir = os.path.abspath(os.path.dirname(__file__))
-    # Generate our vendor-specific namespace. It may make use of the standard data types (most namespaces do,
+    src_dir = pathlib.Path(__file__).resolve().parent
+    # Generate our application-specific namespace. It may make use of the standard data types (most namespaces do,
     # because the standard root namespace contains important basic types), so we include it in the lookup path set.
     # The paths are hard-coded here for the sake of conciseness.
     pyuavcan.dsdl.generate_package(
-        root_namespace_directory=os.path.join(src_dir, "../dsdl/namespaces/sirius_cyber_corp/"),
-        lookup_directories=[os.path.join(src_dir, "../public_regulated_data_types/uavcan")],
+        root_namespace_directory=src_dir / "custom_data_types/sirius_cyber_corp",
+        lookup_directories=[src_dir / "public_regulated_data_types/uavcan/"],
         output_directory=dsdl_generated_dir,
     )
     # Generate the standard namespace. The order actually doesn't matter.
     pyuavcan.dsdl.generate_package(
-        root_namespace_directory=os.path.join(src_dir, "../public_regulated_data_types/uavcan"),
+        root_namespace_directory=src_dir / "public_regulated_data_types/uavcan/",
         output_directory=dsdl_generated_dir,
     )
     # Okay, we can try importing again. We need to clear the import cache first because Python's import machinery
