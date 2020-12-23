@@ -34,7 +34,7 @@ class BackgroundChildProcess:
 
     def __init__(self, *args: str, environment_variables: typing.Optional[typing.Dict[str, str]] = None):
         cmd = _make_process_args(*args)
-        _logger.info("Starting background child process: %s", " ".join(cmd))
+        _logger.info("Starting in background: %s with env vars: %s", args, environment_variables)
 
         if sys.platform.startswith("win"):
             # If the current process group is used, CTRL_C_EVENT will kill the parent and everyone in the group!
