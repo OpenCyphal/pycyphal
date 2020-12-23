@@ -28,7 +28,7 @@ class RunConfig:
     local_transport_factory: typing.Callable[[typing.Optional[int]], pyuavcan.transport.Transport]
 
 
-def _get_run_configurations() -> typing.Iterable[RunConfig]:
+def _get_run_configs() -> typing.Iterable[RunConfig]:
     """
     Provides interface options to test the demo against.
     When adding new transports, add them to the demo and update this factory accordingly.
@@ -92,9 +92,7 @@ def _get_run_configurations() -> typing.Iterable[RunConfig]:
         )
 
 
-@pytest.mark.parametrize(
-    "parameters", [(idx == 0, rc) for idx, rc in enumerate(_get_run_configurations())]  # type: ignore
-)
+@pytest.mark.parametrize("parameters", [(idx == 0, rc) for idx, rc in enumerate(_get_run_configs())])  # type: ignore
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_demo_app(
     generated_packages: typing.Iterator[typing.List[pyuavcan.dsdl.GeneratedPackageInfo]],
@@ -126,14 +124,15 @@ async def _unittest_slow_demo_app(
     demo_proc_env_vars = run_config.demo_env_vars.copy()
     demo_proc_env_vars["PYUAVCAN_LOGLEVEL"] = "INFO"
     demo_proc = BackgroundChildProcess(
-        "python", str(DEMO_DIR / "demo_app.py"), environment_variables=demo_proc_env_vars
+        *f"python -m coverage run {DEMO_DIR / 'demo_app.py'}".split(),
+        environment_variables=demo_proc_env_vars,
     )
     assert demo_proc.alive
-    print("DEMO APP STARTED WITH PID", demo_proc.pid)
+    print("DEMO APP STARTED WITH PID", demo_proc.pid, "FROM", pathlib.Path.cwd())
 
     # Initialize the local node for testing.
     try:
-        transport = run_config.local_transport_factory(123)
+        transport = run_config.local_transport_factory(123)  # type: ignore
         presentation = pyuavcan.presentation.Presentation(transport)
     except Exception:
         demo_proc.kill()
@@ -285,12 +284,14 @@ async def _unittest_slow_demo_app(
                 assert t.source_node_id == DEMO_APP_NODE_ID
                 assert t.priority == pyuavcan.transport.Priority.OPTIONAL
                 assert isinstance(m, uavcan.diagnostic.Record_1_1)
-                return m.text.tobytes().decode()
+                s = m.text.tobytes().decode()
+                assert isinstance(s, str)
+                return s
             return None
 
-        assert re.match(rf"Least squares request from {transport.local_node_id}.*", await get_next_diagnostic())
-        assert re.match(r"Solution for .*: ", await get_next_diagnostic())
-        assert re.match(rf"Temperature .* from {transport.local_node_id}.*", await get_next_diagnostic())
+        assert re.match(rf"Least squares request from {transport.local_node_id}.*", await get_next_diagnostic() or "")
+        assert re.match(r"Solution for .*: ", await get_next_diagnostic() or "")
+        assert re.match(rf"Temperature .* from {transport.local_node_id}.*", await get_next_diagnostic() or "")
         assert not await get_next_diagnostic()
 
         # We've asked the node to terminate, wait for it here.
