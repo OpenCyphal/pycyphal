@@ -2,6 +2,7 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
+import os
 import re
 import sys
 import shutil
@@ -123,6 +124,7 @@ async def _unittest_slow_demo_app(
     # The demo may need to generate packages as well, so we launch it first.
     demo_proc_env_vars = run_config.demo_env_vars.copy()
     demo_proc_env_vars["PYUAVCAN_LOGLEVEL"] = "INFO"
+    demo_proc_env_vars["SYSTEMROOT"] = os.environ.get("SYSTEMROOT")  # https://github.com/appveyor/ci/issues/1995
     demo_proc = BackgroundChildProcess(
         *f"python -m coverage run {DEMO_DIR / 'demo_app.py'}".split(),
         environment_variables=demo_proc_env_vars,
