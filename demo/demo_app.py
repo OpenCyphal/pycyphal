@@ -73,7 +73,7 @@ import uavcan.si.sample.temperature  # noqa E402
 
 
 class DemoApplication:
-    def __init__(self):
+    def __init__(self) -> None:
         # The interface to run the demo against is selected via the environment variable with a default option provided.
         # Virtual CAN bus is supported only on GNU/Linux, but other interfaces used here should be compatible
         # with at least Windows as well.
@@ -88,6 +88,7 @@ class DemoApplication:
         # For example, anonymous node cannot be a server, since without an ID it cannot be addressed.
         # Here, we assign a node-ID statically, because this is a simplified demo.
         # Most applications would need this to be configurable, some may support the PnP node-ID allocation protocol.
+        transport: pyuavcan.transport.Transport
         if interface_kind == "udp" or not interface_kind:  # This is the default.
             # The UDP/IP transport in this example runs on the local loopback interface, so no setup is needed.
             # The UDP transport requires us to specify the IP address; the node-ID equals the value of several least
@@ -122,6 +123,7 @@ class DemoApplication:
             media_1 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f"vcan1", mtu=32)
             media_2 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f"vcan2", mtu=64)
             # All transports in a redundant group MUST share the same node-ID.
+            assert isinstance(transport, pyuavcan.transport.redundant.RedundantTransport)
             transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_0, local_node_id=42))
             transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_1, local_node_id=42))
             transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_2, local_node_id=42))
@@ -134,6 +136,7 @@ class DemoApplication:
             # may be observed with wired+wireless links used concurrently; see https://forum.uavcan.org/t/557.
             # All transports in a redundant group MUST share the same node-ID.
             transport = pyuavcan.transport.redundant.RedundantTransport()
+            assert isinstance(transport, pyuavcan.transport.redundant.RedundantTransport)
             transport.attach_inferior(pyuavcan.transport.udp.UDPTransport("127.0.0.42"))
             transport.attach_inferior(
                 pyuavcan.transport.serial.SerialTransport("socket://localhost:50905", local_node_id=42)
@@ -163,7 +166,7 @@ class DemoApplication:
         self._node = pyuavcan.application.Node(presentation, node_info)
 
         # Published heartbeat fields can be configured trivially by assigning them on the heartbeat publisher instance.
-        self._node.heartbeat_publisher.mode = uavcan.node.Mode_1_0.OPERATIONAL
+        self._node.heartbeat_publisher.mode = uavcan.node.Mode_1_0.OPERATIONAL  # type: ignore
         # The vendor-specific status code is the two least significant decimal digits of the local process' PID.
         self._node.heartbeat_publisher.vendor_specific_status_code = os.getpid() % 100
 
@@ -219,10 +222,10 @@ class DemoApplication:
         self._pub_diagnostic_record.publish_soon(diagnostic_msg)
 
         # This is just the business logic.
-        sum_x = sum(map(lambda p: p.x, request.points))
-        sum_y = sum(map(lambda p: p.y, request.points))
-        a = sum_x * sum_y - len(request.points) * sum(map(lambda p: p.x * p.y, request.points))
-        b = sum_x * sum_x - len(request.points) * sum(map(lambda p: p.x ** 2, request.points))
+        sum_x = sum(map(lambda p: p.x, request.points))  # type: ignore
+        sum_y = sum(map(lambda p: p.y, request.points))  # type: ignore
+        a = sum_x * sum_y - len(request.points) * sum(map(lambda p: p.x * p.y, request.points))  # type: ignore
+        b = sum_x * sum_x - len(request.points) * sum(map(lambda p: p.x ** 2, request.points))  # type: ignore
         try:
             slope = a / b
             y_intercept = (sum_y - slope * sum_x) / len(request.points)
