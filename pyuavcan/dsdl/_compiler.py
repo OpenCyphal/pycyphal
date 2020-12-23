@@ -181,6 +181,10 @@ def generate_package(
     """
     started_at = time.monotonic()
 
+    if isinstance(lookup_directories, (str, bytes, pathlib.Path)):
+        # https://forum.uavcan.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
+        raise TypeError(f"Lookup directories shall be an iterable of paths, not {type(lookup_directories).__name__}")
+
     output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
     root_namespace_directory = pathlib.Path(root_namespace_directory).resolve()
     if root_namespace_directory.parent == output_directory:
@@ -191,9 +195,6 @@ def generate_package(
         )
 
     # Read the DSDL definitions
-    if isinstance(lookup_directories, (str, bytes, pathlib.Path)):
-        # https://forum.uavcan.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
-        raise TypeError(f"Lookup directories shall be an iterable of paths, not {type(lookup_directories).__name__}")
     composite_types = pydsdl.read_namespace(
         root_namespace_directory=str(root_namespace_directory),
         lookup_directories=list(map(str, lookup_directories or [])),
