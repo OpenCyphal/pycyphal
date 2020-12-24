@@ -126,7 +126,7 @@ async def _unittest_slow_demo_app(
     demo_proc_env_vars.update(
         {
             "PYUAVCAN_LOGLEVEL": "INFO",
-            "PATH": os.environ.get("PATH"),
+            "PATH": os.environ.get("PATH", ""),
             "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),  # https://github.com/appveyor/ci/issues/1995
         }
     )
@@ -135,7 +135,7 @@ async def _unittest_slow_demo_app(
         "-m",
         "coverage",
         "run",
-        DEMO_DIR / "demo_app.py",
+        str(DEMO_DIR / "demo_app.py"),
         environment_variables=demo_proc_env_vars,
     )
     assert demo_proc.alive
