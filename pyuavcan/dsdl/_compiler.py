@@ -252,7 +252,7 @@ def generate_package(
             quick_fix = f'Quick fix: `export PYTHONPATH="{output_directory.resolve()}"`'
         else:
             quick_fix = "Quick fix is not available for this OS."
-        _logger.warning(
+        _logger.info(
             "Generated package is stored in %r, which is not in Python module search path list. "
             "The package will fail to import unless you add the destination directory to sys.path or PYTHONPATH. %s",
             str(output_directory),

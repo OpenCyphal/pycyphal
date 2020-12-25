@@ -63,11 +63,11 @@ This is the command:
 
 .. code-block:: sh
 
-    u dsdlc custom_data_types/sirius_cyber_corp/ https://github.com/UAVCAN/public_regulated_data_types/archive/master.zip
+    u compile custom_data_types/sirius_cyber_corp/ https://github.com/UAVCAN/public_regulated_data_types/archive/master.zip
 
 That's it.
 The DSDL-generated packages have been stored in the current working directory, so now we can use them.
-If you decided to change the working directory, please make sure to update the ``PYTHONPATH`` environment
+If you decided to change the working directory, please make sure to update the ``U_PATH`` environment
 variable to include the path where the generated packages are stored, otherwise you won't be able to import them.
 Alternatively, you can just move the generated packages to a new location (they are location-invariant)
 or just generate them anew where needed.

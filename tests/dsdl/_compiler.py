@@ -18,7 +18,7 @@ def _unittest_bad_usage() -> None:
 
 
 def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
-    caplog.set_level(logging.WARNING)
+    caplog.set_level(logging.INFO)
     with tempfile.TemporaryDirectory() as output_directory:
         output_directory_name = pathlib.Path(output_directory).resolve()
         caplog.clear()
@@ -27,13 +27,15 @@ def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
             output_directory=output_directory,
         )
         logs = caplog.record_tuples
-    assert len(logs) == 1
-    print("Captured warning log entry:", logs[0], sep="\n")
-    assert "dsdl" in logs[0][0]
-    assert logs[0][1] == logging.WARNING
-    assert " path" in logs[0][2]
-    assert "Path(" not in logs[0][2]  # Ensure decent formatting
-    assert str(output_directory_name) in logs[0][2]
+    print("Captured log entries:", logs, sep="\n")
+    for e in logs:
+        if "dsdl" in e[0] and str(output_directory_name) in e[2]:
+            assert e[1] == logging.INFO
+            assert " path" in e[2]
+            assert "Path(" not in e[2]  # Ensure decent formatting
+            break
+    else:
+        assert False
 
 
 def _unittest_issue_133() -> None:
