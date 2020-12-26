@@ -60,7 +60,7 @@ class AlienTransferMetadata:
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(
-            self, self.session_specifier, priority=str(self.priority).split(".")[-1], transfer_id=self.transfer_id
+            self, self.session_specifier, priority=self.priority.name, transfer_id=self.transfer_id
         )
 
 
