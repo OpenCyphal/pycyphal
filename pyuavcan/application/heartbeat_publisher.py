@@ -77,6 +77,7 @@ class HeartbeatPublisher:
 
         self._publisher = self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)
         self._publisher.send_timeout = float(Heartbeat.MAX_PUBLICATION_PERIOD)
+        self._period = float(Heartbeat.MAX_PUBLICATION_PERIOD)
 
         self._subscriber = self._presentation.make_subscriber_with_fixed_subject_id(Heartbeat)
 
@@ -132,15 +133,14 @@ class HeartbeatPublisher:
         """
         How often the Heartbeat messages should be published. The upper limit (i.e., the lowest frequency)
         is constrained by the UAVCAN specification; please see the DSDL source of ``uavcan.node.Heartbeat``.
-        The send timeout equals the period.
         """
-        return self._publisher.send_timeout
+        return self._period
 
     @period.setter
     def period(self, value: float) -> None:
         value = float(value)
         if 0 < value <= Heartbeat.MAX_PUBLICATION_PERIOD:
-            self._publisher.send_timeout = value  # This is not a typo! Send timeout equals period here.
+            self._period = value
         else:
             raise ValueError(f"Invalid heartbeat period: {value}")
 
@@ -206,9 +206,9 @@ class HeartbeatPublisher:
                 self._call_pre_heartbeat_handlers()
                 if self._presentation.transport.local_node_id is not None:
                     if not await self._publisher.publish(self.make_message()):
-                        _logger.warning("%s heartbeat send timed out", self)
+                        _logger.error("%s heartbeat send timed out", self)
 
-                next_heartbeat_at += self._publisher.send_timeout
+                next_heartbeat_at += self._period
                 await asyncio.sleep(next_heartbeat_at - time.monotonic())
             except asyncio.CancelledError:
                 _logger.debug("%s publisher task cancelled", self)
