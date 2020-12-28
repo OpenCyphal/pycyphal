@@ -88,13 +88,12 @@ In this example we configure the transport using the environment variable ``U_TR
 but it is also possible to use the ``--transport`` command line argument if found more convenient
 (the syntax is identical).
 
-Use one of the following transport configuration expressions depending on your demo configuration:
+Use one of the following initialization expressions depending on your demo configuration:
 
-- ``"UDP('127.0.0.111')"`` --
-  UDP/IP transport on localhost. Local node-ID 111.
+- ``"UDP('127.0.0.111')"`` -- UDP/IP on loopback. Local node-ID 111.
 
 - ``"Serial('socket://loopback:50905',111)"`` --
-  serial transport emulated over a TCP/IP tunnel instead of a real serial port (use Ncat for TCP connection brokering).
+  UAVCAN/serial emulated over a TCP/IP tunnel instead of a real serial port (use Ncat for TCP connection brokering).
   Local node-ID 111.
 
 - ``"CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"`` --
@@ -109,22 +108,17 @@ Redundant transports can be configured by specifying multiple comma-separated ex
 - ``"CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111), CAN(can.media.socketcan.SocketCANMedia('vcan1',32),111), CAN(can.media.socketcan.SocketCANMedia('vcan2',64),111)"`` --
   triple redundant CAN bus, classic CAN with CAN FD.
 
-Specifying a single transport using the list notation is also acceptable --
-this case is handled as if there was no list notation used: ``[a] == a``.
-For more info on command line arguments, run ``u --help``.
-
-If you are using bash/sh/zsh or similar, the syntax to set the variable is
-(using the loopback transport in this example):
+Complete example if you are using bash/sh/zsh or similar:
 
 .. code-block:: sh
 
-    export U_TRANSPORT="Loopback(None)"
+    export U_TRANSPORT="UDP('127.0.0.111')"
 
 If you are using PowerShell:
 
 .. code-block:: ps1
 
-    $env:U_TRANSPORT="Loopback(None), Loopback(None)"
+    $env:U_TRANSPORT="UDP('127.0.0.111')"
 
 
 Running the application
@@ -135,8 +129,8 @@ To listen to the demo's heartbeat or its diagnostics, run the following commands
 
 .. code-block:: sh
 
-    u sub uavcan.node.Heartbeat.1.0 --with-metadata --count=3
-    u sub uavcan.diagnostic.Record.1.1 --with-metadata
+    u sub uavcan.node.Heartbeat.1.0 --count=3
+    u sub uavcan.diagnostic.Record.1.1
 
 The latter may not output anything because the demo application is not doing anything interesting,
 so it has nothing to report.
