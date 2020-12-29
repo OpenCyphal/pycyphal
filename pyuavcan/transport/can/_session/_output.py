@@ -221,6 +221,10 @@ class UnicastCANOutputSession(CANOutputSession):
             raise pyuavcan.transport.UnsupportedSessionConfigurationError(
                 f"This transport does not support unicast outputs for {specifier.data_specifier}"
             )
+        if transport.local_node_id is None:
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                "Cannot emit service transfers because the local node is anonymous (does not have a node-ID)"
+            )
         self._service_id = specifier.data_specifier.service_id
         self._request_not_response = (
             specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
@@ -235,17 +239,11 @@ class UnicastCANOutputSession(CANOutputSession):
         )
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
-        source_node_id = self._transport.local_node_id
-        if source_node_id is None:
-            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
-                "Cannot emit a service transfer because the local node is anonymous (does not have a node-ID)"
-            )
-
         can_id = ServiceCANID(
             priority=transfer.priority,
             service_id=self._service_id,
             request_not_response=self._request_not_response,
-            source_node_id=source_node_id,
+            source_node_id=self._transport.local_node_id,
             destination_node_id=self._destination_node_id,
         )
         return await self._do_send(can_id, transfer, monotonic_deadline)

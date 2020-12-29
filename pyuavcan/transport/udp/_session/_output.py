@@ -9,7 +9,7 @@ import typing
 import asyncio
 import logging
 import pyuavcan
-from pyuavcan.transport import Timestamp
+from pyuavcan.transport import Timestamp, ServiceDataSpecifier
 from .._frame import UDPFrame
 
 
@@ -91,9 +91,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
             else True
         ), "Internal protocol violation: cannot unicast a message transfer"
         assert (
-            specifier.remote_node_id is not None
-            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
-            else True
+            specifier.remote_node_id is not None if isinstance(specifier.data_specifier, ServiceDataSpecifier) else True
         ), "Internal protocol violation: cannot broadcast a service transfer"
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
