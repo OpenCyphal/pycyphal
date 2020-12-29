@@ -110,7 +110,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
         assert callable(self._maybe_finalizer)
 
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
-        self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue(loop=loop)
+        self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
 
     def _process_frame(self, timestamp: Timestamp, source_node_id: int, frame: typing.Optional[UDPFrame]) -> None:
         """
@@ -143,7 +143,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
         try:
             timeout = monotonic_deadline - self._loop.time()
             if timeout > 0:
-                transfer = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                transfer = await asyncio.wait_for(self._queue.get(), timeout)
             else:
                 transfer = self._queue.get_nowait()
         except (asyncio.TimeoutError, asyncio.QueueEmpty):

@@ -74,9 +74,9 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         self._deduplicator: typing.Optional[Deduplicator] = None
 
         # The actual deduplicated transfers received by the inferiors.
-        self._read_queue: asyncio.Queue[RedundantTransferFrom] = asyncio.Queue(loop=loop)
+        self._read_queue: asyncio.Queue[RedundantTransferFrom] = asyncio.Queue()
         # Queuing errors is meaningless because they lose relevance immediately, so the queue is only one item deep.
-        self._error_queue: asyncio.Queue[Exception] = asyncio.Queue(1, loop=loop)
+        self._error_queue: asyncio.Queue[Exception] = asyncio.Queue(1)
 
         self._stat_transfers = 0
         self._stat_payload_bytes = 0
@@ -156,7 +156,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         try:
             timeout = monotonic_deadline - self._loop.time()
             if timeout > 0:
-                tr = await asyncio.wait_for(self._read_queue.get(), timeout, loop=self._loop)
+                tr = await asyncio.wait_for(self._read_queue.get(), timeout)
             else:
                 tr = self._read_queue.get_nowait()
         except (asyncio.TimeoutError, asyncio.QueueEmpty):

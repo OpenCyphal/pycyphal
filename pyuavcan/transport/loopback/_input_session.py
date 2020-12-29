@@ -24,14 +24,14 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
         self._closer = closer
         self._transfer_id_timeout = float(self.DEFAULT_TRANSFER_ID_TIMEOUT)
         self._stats = pyuavcan.transport.SessionStatistics()
-        self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue(loop=loop)
+        self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
         super(LoopbackInputSession, self).__init__()
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         timeout = monotonic_deadline - self._loop.time()
         try:
             if timeout > 0:
-                out = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                out = await asyncio.wait_for(self._queue.get(), timeout)
             else:
                 out = self._queue.get_nowait()
         except asyncio.TimeoutError:

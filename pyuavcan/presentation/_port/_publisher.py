@@ -166,7 +166,7 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         self.transfer_id_counter = transfer_id_counter
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
         self._loop = loop
-        self._lock = asyncio.Lock(loop=loop)
+        self._lock = asyncio.Lock()
         self._proxy_count = 0
 
     async def publish(

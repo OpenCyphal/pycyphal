@@ -219,7 +219,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
         self._loop = loop
 
-        self._lock = asyncio.Lock(loop=loop)
+        self._lock = asyncio.Lock()
         self._proxy_count = 0
         self._response_futures_by_transfer_id: typing.Dict[
             int, asyncio.Future[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]
@@ -265,7 +265,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         try:
             if send_result:
                 self.sent_request_count += 1
-                response, transfer = await asyncio.wait_for(future, timeout=response_timeout, loop=self._loop)
+                response, transfer = await asyncio.wait_for(future, timeout=response_timeout)
                 assert isinstance(response, self.dtype.Response)
                 assert isinstance(transfer, pyuavcan.transport.TransferFrom)
                 return response, transfer

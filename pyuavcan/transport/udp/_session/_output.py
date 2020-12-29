@@ -186,7 +186,6 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
                 await asyncio.wait_for(
                     self._loop.sock_sendall(self._sock, b"".join((header, payload))),
                     timeout=monotonic_deadline - self._loop.time(),
-                    loop=self._loop,
                 )
 
                 # TODO: use socket timestamping when running on Linux (Windows does not support timestamping).

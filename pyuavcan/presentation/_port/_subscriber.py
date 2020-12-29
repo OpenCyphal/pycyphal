@@ -75,7 +75,7 @@ class Subscriber(MessagePort[MessageClass]):
         self._impl = impl
         self._loop = loop
         self._maybe_task: typing.Optional[asyncio.Task[None]] = None
-        self._rx: _Listener[MessageClass] = _Listener(asyncio.Queue(maxsize=queue_capacity, loop=loop))
+        self._rx: _Listener[MessageClass] = _Listener(asyncio.Queue(maxsize=queue_capacity))
         impl.add_listener(self._rx)
 
     # ----------------------------------------  HANDLER-BASED API  ----------------------------------------
@@ -151,7 +151,7 @@ class Subscriber(MessagePort[MessageClass]):
         self._raise_if_closed_or_failed()
         try:
             if timeout > 0:
-                message, transfer = await asyncio.wait_for(self._rx.queue.get(), timeout, loop=self._loop)
+                message, transfer = await asyncio.wait_for(self._rx.queue.get(), timeout)
             else:
                 message, transfer = self._rx.queue.get_nowait()
         except asyncio.QueueEmpty:
