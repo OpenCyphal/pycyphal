@@ -50,11 +50,6 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         self._loop = loop
         assert self._loop is not None
 
-        if not isinstance(self._specifier, pyuavcan.transport.InputSessionSpecifier) or not isinstance(
-            self._payload_metadata, pyuavcan.transport.PayloadMetadata
-        ):  # pragma: no cover
-            raise TypeError("Invalid parameters")
-
         self._statistics = SerialInputSessionStatistics()
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue(loop=loop)

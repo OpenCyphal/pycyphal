@@ -82,12 +82,6 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         self._finalizer = finalizer
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._statistics = pyuavcan.transport.SessionStatistics()
-
-        if not isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier) or not isinstance(
-            self._payload_metadata, pyuavcan.transport.PayloadMetadata
-        ):  # pragma: no cover
-            raise TypeError("Invalid parameters")
-
         if self._multiplier < 1:  # pragma: no cover
             raise ValueError(f"Invalid transfer multiplier: {self._multiplier}")
 

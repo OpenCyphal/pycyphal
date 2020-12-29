@@ -60,12 +60,6 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         self._statistics = pyuavcan.transport.SessionStatistics()
         assert isinstance(self._local_node_id, int) or self._local_node_id is None
         assert callable(send_handler)
-
-        if not isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier) or not isinstance(
-            self._payload_metadata, pyuavcan.transport.PayloadMetadata
-        ):  # pragma: no cover
-            raise TypeError("Invalid parameters")
-
         assert (
             specifier.remote_node_id is not None
             if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
