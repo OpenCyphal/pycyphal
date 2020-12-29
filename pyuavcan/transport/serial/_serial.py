@@ -220,7 +220,6 @@ class SerialTransport(pyuavcan.transport.Transport):
                 async def send_transfer(
                     frames: typing.List[SerialFrame], monotonic_deadline: float
                 ) -> typing.Optional[Timestamp]:
-                    frames = list(frames)
                     first_tx_ts: typing.Optional[Timestamp] = None
                     for _ in range(self._service_transfer_multiplier):  # pragma: no branch
                         ts = await self._send_transfer(frames, monotonic_deadline)
