@@ -169,21 +169,14 @@ def _unittest_output_session() -> None:
         nonlocal finalized
         finalized = True
 
-    sos = SerialOutputSession(
-        specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
-        payload_metadata=PayloadMetadata(1024),
-        mtu=10,
-        local_node_id=None,  # pragma: no cover
-        send_handler=do_send,
-        finalizer=do_finalize,
-    )
-
     with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
-        run_until_complete(
-            sos.send(
-                Transfer(timestamp=ts, priority=Priority.NOMINAL, transfer_id=12340, fragmented_payload=[]),
-                loop.time() + 10.0,
-            )
+        sos = SerialOutputSession(
+            specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
+            payload_metadata=PayloadMetadata(1024),
+            mtu=10,
+            local_node_id=None,
+            send_handler=do_send,
+            finalizer=do_finalize,
         )
 
     sos = SerialOutputSession(

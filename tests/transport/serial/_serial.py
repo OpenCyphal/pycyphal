@@ -80,13 +80,6 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
         InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta
     )
 
-    client_requester = tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta
-    )
-    assert client_requester is tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta
-    )
-
     client_listener = tr.get_input_session(
         InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 3210), meta
     )
@@ -97,7 +90,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     print("INPUTS:", tr.input_sessions)
     print("OUTPUTS:", tr.output_sessions)
     assert set(tr.input_sessions) == {subscriber_promiscuous, subscriber_selective, server_listener, client_listener}
-    assert set(tr.output_sessions) == {broadcaster, client_requester}
+    assert set(tr.output_sessions) == {broadcaster}
     assert tr.sample_statistics() == SerialTransportStatistics()
 
     #
@@ -145,11 +138,8 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     #
     with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
         # Anonymous nodes can't emit service transfers.
-        assert await client_requester.send(
-            Transfer(
-                timestamp=Timestamp.now(), priority=Priority.HIGH, transfer_id=88888, fragmented_payload=payload_single
-            ),
-            monotonic_deadline=get_monotonic() + 5.0,
+        tr.get_output_session(
+            OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta
         )
 
     #
