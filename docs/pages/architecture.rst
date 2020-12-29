@@ -328,6 +328,6 @@ Command-line tool
 -----------------
 
 There is an independent but related project that is built on top of PyUAVCAN:
-the `U-tool <https://github.com/UAVCAN/u>`_.
+`Yakut <https://github.com/UAVCAN/yakut>`_.
 It is a command-line interface utility for diagnostics and management of UAVCAN networks.
 Consider it as an extensive collection of practical usage examples for PyUAVCAN.

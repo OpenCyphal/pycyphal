@@ -44,37 +44,31 @@ and update the DSDL paths to match your environment.
    :linenos:
 
 
-Evaluating the demo using the U-tool
-------------------------------------
+Evaluating the demo using Yakut command-line tool
+-------------------------------------------------
 
-The `U-tool <https://github.com/UAVCAN/u>`_ is a simple CLI tool based on PyUAVCAN.
-This section showcases how to interact with this demo application using it.
-Please refer to the U-tool docs to see how to get it running on your system.
+`Yakut <https://github.com/UAVCAN/yakut>`_ is a simple CLI tool for diagnostics and management of UAVCAN networks
+built on PyUAVCAN.
+Please refer to Yakut docs to see how to get it running on your system.
 
 
-Transcompiling DSDL namespaces into Python packages
-+++++++++++++++++++++++++++++++++++++++++++++++++++
+Compiling DSDL
+++++++++++++++
 
-First, we need to make sure that the required DSDL-generated packages are available for the command-line tool.
+We need to compile DSDL namespaces before using them with Yakut.
 Suppose that the application-specific data types listed above are located under ``custom_data_types``,
-and that instead of using a local copy of the public regulated data types we prefer to download them from the
-repository.
+and the public regulated data types are under ``public_regulated_data_types``.
 This is the command:
 
 .. code-block:: sh
 
-    u compile custom_data_types/sirius_cyber_corp/ https://github.com/UAVCAN/public_regulated_data_types/archive/master.zip
+    yakut compile  custom_data_types/sirius_cyber_corp  public_regulated_data_types/uavcan
 
-That's it.
-The DSDL-generated packages have been stored in the current working directory, so now we can use them.
-If you decided to change the working directory, please make sure to update the ``U_PATH`` environment
-variable to include the path where the generated packages are stored, otherwise you won't be able to import them.
-Alternatively, you can just move the generated packages to a new location (they are location-invariant)
-or just generate them anew where needed.
+Outputs are stored in the current working directory, so now we can use them.
+If you decided to change the working directory or move the compilation outputs,
+make sure to update the ``YAKUT_PATH`` environment variable.
 
 This command is actually a thin wrapper over the `Nunavut DSDL transpiler <https://github.com/UAVCAN/nunavut>`_.
-The resulting Python packages can be used with any Python script that doesn't have to rely on PyUAVCAN at all.
-The only required dependency is NumPy which is needed for serialization.
 
 If you want to know what exactly has been done, rerun the command with ``-v`` (V for Verbose).
 As always, use ``--help`` to get the full usage information.
@@ -84,7 +78,7 @@ Configuring the transport
 +++++++++++++++++++++++++
 
 The commands shown later have to be instructed to use the same transport interface as the demo.
-In this example we configure the transport using the environment variable ``U_TRANSPORT``,
+In this example we configure the transport using the environment variable ``YAKUT_TRANSPORT``,
 but it is also possible to use the ``--transport`` command line argument if found more convenient
 (the syntax is identical).
 
@@ -97,10 +91,9 @@ Use one of the following initialization expressions depending on your demo confi
   Local node-ID 111.
 
 - ``"CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111)"`` --
-  virtual CAN bus via SocketCAN (GNU/Linux systems only).
-  Local node-ID 111.
+  virtual CAN bus via SocketCAN (GNU/Linux systems only). Local node-ID 111.
 
-Redundant transports can be configured by specifying multiple comma-separated expressions (bracketed list is also ok):
+Redundant transports can be configured by specifying multiple comma-separated expressions:
 
 - ``"UDP('127.0.0.111'), Serial('socket://loopback:50905',111)"`` --
   dissimilar double redundancy, UDP plus serial.
@@ -112,13 +105,13 @@ Complete example if you are using bash/sh/zsh or similar:
 
 .. code-block:: sh
 
-    export U_TRANSPORT="UDP('127.0.0.111')"
+    export YAKUT_TRANSPORT="UDP('127.0.0.111')"
 
 If you are using PowerShell:
 
 .. code-block:: ps1
 
-    $env:U_TRANSPORT="UDP('127.0.0.111')"
+    $env:YAKUT_TRANSPORT="UDP('127.0.0.111')"
 
 
 Running the application
@@ -129,8 +122,8 @@ To listen to the demo's heartbeat or its diagnostics, run the following commands
 
 .. code-block:: sh
 
-    u sub uavcan.node.Heartbeat.1.0 --count=3
-    u sub uavcan.diagnostic.Record.1.1
+    yakut sub uavcan.node.Heartbeat.1.0 --count=3
+    yakut sub uavcan.diagnostic.Record.1.1
 
 The latter may not output anything because the demo application is not doing anything interesting,
 so it has nothing to report.
@@ -138,14 +131,14 @@ Keep the command running, and open a yet another terminal, whereat run this:
 
 .. code-block:: sh
 
-    u call 42 123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0 '{points: [{x: 10, y: 1}, {x: 20, y: 2}]}'
+    yakut call 42 123.sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0 'points: [{x: 10, y: 1}, {x: 20, y: 2}]'
 
 Once you've executed the last command, you should see a diagnostic message being emitted in the other terminal.
 Now let's publish temperature:
 
 .. code-block:: sh
 
-    u pub 12345.uavcan.si.sample.temperature.Scalar.1.0 '{kelvin: 123.456}' --count=2
+    yakut pub 12345.uavcan.si.sample.temperature.Scalar.1.0 '{kelvin: 123.456}' --count=2
 
 You will see the demo application emit two more diagnostic messages.
 
