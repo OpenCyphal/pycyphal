@@ -239,11 +239,13 @@ class UnicastCANOutputSession(CANOutputSession):
         )
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
+        source_node_id = self._transport.local_node_id
+        assert source_node_id is not None, "Internal logic error"
         can_id = ServiceCANID(
             priority=transfer.priority,
             service_id=self._service_id,
             request_not_response=self._request_not_response,
-            source_node_id=self._transport.local_node_id,
+            source_node_id=source_node_id,
             destination_node_id=self._destination_node_id,
         )
         return await self._do_send(can_id, transfer, monotonic_deadline)

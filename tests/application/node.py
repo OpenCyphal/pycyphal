@@ -40,8 +40,8 @@ async def _unittest_slow_node(generated_packages: typing.List[pyuavcan.dsdl.Gene
 
         node.heartbeat_publisher.priority = pyuavcan.transport.Priority.FAST
         node.heartbeat_publisher.period = 0.5
-        node.heartbeat_publisher.mode = Mode_1_0.MAINTENANCE
-        node.heartbeat_publisher.health = Health_1_0.ADVISORY
+        node.heartbeat_publisher.mode = Mode_1_0.MAINTENANCE  # type: ignore
+        node.heartbeat_publisher.health = Health_1_0.ADVISORY  # type: ignore
         node.heartbeat_publisher.vendor_specific_status_code = 93
         with pytest.raises(ValueError):
             node.heartbeat_publisher.period = 99.0
@@ -73,12 +73,12 @@ async def _unittest_slow_node(generated_packages: typing.List[pyuavcan.dsdl.Gene
 
         info_transfer = await remote_info_cln.call(GetInfo_1_0.Request())
         assert info_transfer is not None
-        info, transfer = info_transfer
+        resp, transfer = info_transfer
         assert transfer.source_node_id == 258
-        assert isinstance(info, GetInfo_1_0.Response)
-        assert info.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node"
-        assert info.protocol_version.major == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
-        assert info.software_version.major == pyuavcan.__version_info__[0]
+        assert isinstance(resp, GetInfo_1_0.Response)
+        assert resp.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node"
+        assert resp.protocol_version.major == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
+        assert resp.software_version.major == pyuavcan.__version_info__[0]
 
         trans.detach_inferior(trans.inferiors[0])
         assert trans.local_node_id is None
