@@ -23,12 +23,6 @@ the DSDL-generated package ``uavcan`` containing the standard data types must be
 There are no internal (hidden) API between the submodules; they rely only on each other's public API.
 
 
-CLI tool invocation
-+++++++++++++++++++
-
-The module can be run as ``python -m pyuavcan`` to invoke the CLI tool.
-
-
 Log level override
 ++++++++++++++++++
 

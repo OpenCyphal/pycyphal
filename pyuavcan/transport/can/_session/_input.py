@@ -94,7 +94,7 @@ class CANInputSession(CANSession, pyuavcan.transport.InputSession):
             raise ValueError(f"Invalid value for queue capacity: {value}")
 
         old_queue = self._queue
-        self._queue = asyncio.Queue(int(value) if value is not None else 0, loop=self._loop)
+        self._queue = asyncio.Queue(int(value) if value is not None else 0)
         try:
             while True:
                 self._push_frame(*old_queue.get_nowait())
@@ -139,7 +139,7 @@ class CANInputSession(CANSession, pyuavcan.transport.InputSession):
                 # Continue reading past the deadline until the queue is empty or a transfer is received.
                 timeout = monotonic_deadline - self._loop.time()
                 if timeout > 0:
-                    timestamp, canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                    timestamp, canid, frame = await asyncio.wait_for(self._queue.get(), timeout)
                 else:
                     timestamp, canid, frame = self._queue.get_nowait()
                 assert isinstance(timestamp, Timestamp)

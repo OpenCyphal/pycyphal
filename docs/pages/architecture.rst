@@ -9,8 +9,6 @@ Overview
 PyUAVCAN is a full-featured implementation of the `UAVCAN protocol stack <https://uavcan.org>`_
 intended for non-embedded, user-facing applications such as GUI software, diagnostic tools,
 automation scripts, prototypes, and various R&D cases.
-PyUAVCAN consists of a Python library (package) and a simple :abbr:`CLI (command line interface)`
-tool for basic diagnostics and shell script automation.
 It is designed to support **GNU/Linux**, **MS Windows**, and **macOS** as first-class target platforms.
 
 The reader should understand the basics of `UAVCAN <https://uavcan.org/>`_ and be familiar with
@@ -329,9 +327,7 @@ For more information, read the API docs for :mod:`pyuavcan.util`.
 Command-line tool
 -----------------
 
-The command-line tool named ``pyuavcan`` (like the library)
-can be installed as described in the :ref:`installation` chapter.
-Run ``pyuavcan --help`` (or ``python -m pyuavcan --help``)
-to see the usage documentation, or read the :ref:`cli` chapter.
-
-The tool also serves as a (somewhat convoluted) library usage demo.
+There is an independent but related project that is built on top of PyUAVCAN:
+`Yakut <https://github.com/UAVCAN/yakut>`_.
+It is a command-line interface utility for diagnostics and management of UAVCAN networks.
+Consider it as an extensive collection of practical usage examples for PyUAVCAN.

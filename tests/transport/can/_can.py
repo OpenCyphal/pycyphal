@@ -81,20 +81,6 @@ async def _unittest_can_transport_anon() -> None:
         InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), None), meta
     )
 
-    server_responder = tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta
-    )
-    assert server_responder is tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta
-    )
-
-    client_requester = tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta
-    )
-    assert client_requester is tr.get_output_session(
-        OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta
-    )
-
     client_listener = tr.get_input_session(
         InputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta
     )
@@ -115,7 +101,7 @@ async def _unittest_can_transport_anon() -> None:
     del inputs
 
     print("OUTPUTS:", tr.output_sessions)
-    assert set(tr.output_sessions) == {broadcaster, server_responder, client_requester}
+    assert set(tr.output_sessions) == {broadcaster}
 
     #
     # Basic exchange test, no one is listening
@@ -170,11 +156,13 @@ async def _unittest_can_transport_anon() -> None:
 
     # Can't send anonymous service transfers
     with pytest.raises(OperationNotDefinedForAnonymousNodeError):
-        assert await client_requester.send(
-            Transfer(timestamp=ts, priority=Priority.IMMEDIATE, transfer_id=0, fragmented_payload=[]),
-            tr.loop.time() + 1.0,
+        tr.get_output_session(
+            OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.RESPONSE), 123), meta
         )
-    assert client_requester.sample_statistics() == SessionStatistics()  # Not incremented!
+    with pytest.raises(OperationNotDefinedForAnonymousNodeError):
+        tr.get_output_session(
+            OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 123), meta
+        )
 
     # Can't send multiframe anonymous messages
     with pytest.raises(OperationNotDefinedForAnonymousNodeError):
@@ -632,10 +620,10 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
                 transfer_id=12,
                 fragmented_payload=[
                     _mem(
-                        "Until philosophers are kings, or the kings and princes of this world have the spirit and power "
-                        "of philosophy, and political greatness and wisdom meet in one, and those commoner natures who "
-                        "pursue either to the exclusion of the other are compelled to stand aside, cities will never "
-                        "have rest from their evils "
+                        "Until philosophers are kings, or the kings and princes of this world have the spirit and "
+                        "power of philosophy, and political greatness and wisdom meet in one, and those commoner "
+                        "natures who pursue either to the exclusion of the other are compelled to stand aside, "
+                        "cities will never have rest from their evils "
                     ),
                     _mem("- no, nor the human race, as I believe - "),
                     _mem("and then only will this our State have a possibility of life and behold the light of day."),

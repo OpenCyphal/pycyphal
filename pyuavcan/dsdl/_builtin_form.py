@@ -80,9 +80,7 @@ def _to_builtin_impl(
         assert False, "Unexpected inputs"
 
 
-def update_from_builtin(
-    destination: CompositeObjectTypeVar, source: typing.Dict[str, typing.Any]
-) -> CompositeObjectTypeVar:
+def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any) -> CompositeObjectTypeVar:
     """
     Updates the provided DSDL object (an instance of a Python class auto-generated from a DSDL definition)
     with the values from a native representation, where DSDL objects are represented as dicts, arrays

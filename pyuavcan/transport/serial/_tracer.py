@@ -55,7 +55,7 @@ class SerialCapture(pyuavcan.transport.Capture):
             fragment = bytes(self.fragment[:limit]).hex() + f"...<+{len(self.fragment) - limit}B>..."
         else:
             fragment = bytes(self.fragment).hex()
-        return pyuavcan.util.repr_attributes(self, str(self.direction).split(".")[-1], fragment)
+        return pyuavcan.util.repr_attributes(self, self.direction.name, fragment)
 
 
 @dataclasses.dataclass(frozen=True)

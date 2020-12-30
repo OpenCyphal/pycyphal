@@ -127,7 +127,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         self._closed = False
 
         # For serial port write serialization. Read operations are performed concurrently (no sync) in separate thread.
-        self._port_lock = asyncio.Lock(loop=loop)
+        self._port_lock = asyncio.Lock()
 
         # The serialization buffer is re-used for performance reasons; it is needed to store frame contents before
         # they are emitted into the serial port. It may grow as necessary at runtime; the initial size is a guess.
@@ -220,7 +220,6 @@ class SerialTransport(pyuavcan.transport.Transport):
                 async def send_transfer(
                     frames: typing.List[SerialFrame], monotonic_deadline: float
                 ) -> typing.Optional[Timestamp]:
-                    frames = list(frames)
                     first_tx_ts: typing.Optional[Timestamp] = None
                     for _ in range(self._service_transfer_multiplier):  # pragma: no branch
                         ts = await self._send_transfer(frames, monotonic_deadline)

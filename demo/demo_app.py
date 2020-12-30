@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# PyUAVCAN demo application. This file is included in the user documentation, please keep it tidy.
+# PyUAVCAN demo application.
 #
 # Distributed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication. To the extent possible under law, the
 # UAVCAN Consortium has waived all copyright and related or neighboring rights to this work.
@@ -45,18 +45,18 @@ try:
     import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
     import pyuavcan.application  # The application module requires the standard types from the root namespace "uavcan".
 except (ImportError, AttributeError):
-    src_dir = os.path.abspath(os.path.dirname(__file__))
-    # Generate our vendor-specific namespace. It may make use of the standard data types (most namespaces do,
+    src_dir = pathlib.Path(__file__).resolve().parent
+    # Generate our application-specific namespace. It may make use of the standard data types (most namespaces do,
     # because the standard root namespace contains important basic types), so we include it in the lookup path set.
     # The paths are hard-coded here for the sake of conciseness.
     pyuavcan.dsdl.generate_package(
-        root_namespace_directory=os.path.join(src_dir, "../dsdl/namespaces/sirius_cyber_corp/"),
-        lookup_directories=[os.path.join(src_dir, "../public_regulated_data_types/uavcan")],
+        root_namespace_directory=src_dir / "custom_data_types/sirius_cyber_corp",
+        lookup_directories=[src_dir / "public_regulated_data_types/uavcan/"],
         output_directory=dsdl_generated_dir,
     )
     # Generate the standard namespace. The order actually doesn't matter.
     pyuavcan.dsdl.generate_package(
-        root_namespace_directory=os.path.join(src_dir, "../public_regulated_data_types/uavcan"),
+        root_namespace_directory=src_dir / "public_regulated_data_types/uavcan/",
         output_directory=dsdl_generated_dir,
     )
     # Okay, we can try importing again. We need to clear the import cache first because Python's import machinery
@@ -73,7 +73,7 @@ import uavcan.si.sample.temperature  # noqa E402
 
 
 class DemoApplication:
-    def __init__(self):
+    def __init__(self) -> None:
         # The interface to run the demo against is selected via the environment variable with a default option provided.
         # Virtual CAN bus is supported only on GNU/Linux, but other interfaces used here should be compatible
         # with at least Windows as well.
@@ -88,6 +88,7 @@ class DemoApplication:
         # For example, anonymous node cannot be a server, since without an ID it cannot be addressed.
         # Here, we assign a node-ID statically, because this is a simplified demo.
         # Most applications would need this to be configurable, some may support the PnP node-ID allocation protocol.
+        transport: pyuavcan.transport.Transport
         if interface_kind == "udp" or not interface_kind:  # This is the default.
             # The UDP/IP transport in this example runs on the local loopback interface, so no setup is needed.
             # The UDP transport requires us to specify the IP address; the node-ID equals the value of several least
@@ -122,6 +123,7 @@ class DemoApplication:
             media_1 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f"vcan1", mtu=32)
             media_2 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f"vcan2", mtu=64)
             # All transports in a redundant group MUST share the same node-ID.
+            assert isinstance(transport, pyuavcan.transport.redundant.RedundantTransport)
             transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_0, local_node_id=42))
             transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_1, local_node_id=42))
             transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_2, local_node_id=42))
@@ -134,6 +136,7 @@ class DemoApplication:
             # may be observed with wired+wireless links used concurrently; see https://forum.uavcan.org/t/557.
             # All transports in a redundant group MUST share the same node-ID.
             transport = pyuavcan.transport.redundant.RedundantTransport()
+            assert isinstance(transport, pyuavcan.transport.redundant.RedundantTransport)
             transport.attach_inferior(pyuavcan.transport.udp.UDPTransport("127.0.0.42"))
             transport.attach_inferior(
                 pyuavcan.transport.serial.SerialTransport("socket://localhost:50905", local_node_id=42)
@@ -163,7 +166,7 @@ class DemoApplication:
         self._node = pyuavcan.application.Node(presentation, node_info)
 
         # Published heartbeat fields can be configured trivially by assigning them on the heartbeat publisher instance.
-        self._node.heartbeat_publisher.mode = uavcan.node.Mode_1_0.OPERATIONAL
+        self._node.heartbeat_publisher.mode = uavcan.node.Mode_1_0.OPERATIONAL  # type: ignore
         # The vendor-specific status code is the two least significant decimal digits of the local process' PID.
         self._node.heartbeat_publisher.vendor_specific_status_code = os.getpid() % 100
 
@@ -219,10 +222,10 @@ class DemoApplication:
         self._pub_diagnostic_record.publish_soon(diagnostic_msg)
 
         # This is just the business logic.
-        sum_x = sum(map(lambda p: p.x, request.points))
-        sum_y = sum(map(lambda p: p.y, request.points))
-        a = sum_x * sum_y - len(request.points) * sum(map(lambda p: p.x * p.y, request.points))
-        b = sum_x * sum_x - len(request.points) * sum(map(lambda p: p.x ** 2, request.points))
+        sum_x = sum(map(lambda p: p.x, request.points))  # type: ignore
+        sum_y = sum(map(lambda p: p.y, request.points))  # type: ignore
+        a = sum_x * sum_y - len(request.points) * sum(map(lambda p: p.x * p.y, request.points))  # type: ignore
+        b = sum_x * sum_x - len(request.points) * sum(map(lambda p: p.x ** 2, request.points))  # type: ignore
         try:
             slope = a / b
             y_intercept = (sum_y - slope * sum_x) / len(request.points)
@@ -241,7 +244,7 @@ class DemoApplication:
             self._pub_diagnostic_record.publish_soon(
                 uavcan.diagnostic.Record_1_1(
                     severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
-                    text=f'Solution for {",".join(f"({p.x},{p.y})" for p in request.points)}: {slope}, {y_intercept}',
+                    text=f"Solution for {','.join(f'({p.x},{p.y})' for p in request.points)}: {slope}, {y_intercept}",
                 )
             )
             return sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response(slope=slope, y_intercept=y_intercept)
@@ -295,9 +298,7 @@ class DemoApplication:
             )
         ):
             print(
-                "Diagnostic message could not be sent in",
-                self._pub_diagnostic_record.send_timeout,
-                "seconds",
+                f"Diagnostic publication timed out in {self._pub_diagnostic_record.send_timeout} seconds",
                 file=sys.stderr,
             )
 
@@ -309,14 +310,17 @@ if __name__ == "__main__":
     async def list_tasks_periodically() -> None:
         """Print active tasks periodically for demo purposes."""
         while True:
-            print(
-                "\nRunning tasks:\n" + "\n".join(f"{i:4}: {t.get_coro()}" for i, t in enumerate(asyncio.all_tasks())),
-                file=sys.stderr,
-            )
+            if sys.version_info >= (3, 8):  # The task introspection API we use is not available before Python 3.8
+                print(
+                    "\nRunning tasks:\n"
+                    + "\n".join(f"{i:4}: {t.get_coro()}" for i, t in enumerate(asyncio.all_tasks())),
+                    file=sys.stderr,
+                )
+            else:
+                print(f"\nRunning {len(asyncio.all_tasks())} tasks")
             await asyncio.sleep(10)
 
-    if sys.version_info >= (3, 8):  # The task introspection API we use is not available before Python 3.8
-        asyncio.get_event_loop().create_task(list_tasks_periodically())
+    asyncio.get_event_loop().create_task(list_tasks_periodically())
 
     # The node and PyUAVCAN objects have created internal tasks, which we need to run now.
     # In this case we want to automatically stop and exit when no tasks are left to run.

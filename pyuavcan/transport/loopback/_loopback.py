@@ -26,9 +26,16 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     The only valid usage is sending and receiving same data on the same node.
     """
 
-    def __init__(self, local_node_id: typing.Optional[int], *, loop: typing.Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(
+        self,
+        local_node_id: typing.Optional[int],
+        *,
+        allow_anonymous_transfers: bool = True,
+        loop: typing.Optional[asyncio.AbstractEventLoop] = None,
+    ):
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._local_node_id = int(local_node_id) if local_node_id is not None else None
+        self._allow_anonymous_transfers = allow_anonymous_transfers
         self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
         self._output_sessions: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, LoopbackOutputSession] = {}
         self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
@@ -132,6 +139,10 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         try:
             sess = self._output_sessions[specifier]
         except KeyError:
+            if self.local_node_id is None and not self._allow_anonymous_transfers:
+                raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                    f"Anonymous transfers are not enabled for {self}"
+                )
             sess = LoopbackOutputSession(
                 specifier=specifier, payload_metadata=payload_metadata, loop=self.loop, closer=do_close, router=do_route
             )
@@ -169,4 +180,5 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
         return [], {
             "local_node_id": self.local_node_id,
+            "allow_anonymous_transfers": self._allow_anonymous_transfers,
         }

@@ -71,7 +71,7 @@ class Transfer:
     def __repr__(self) -> str:
         fragmented_payload = "+".join(f"{len(x)}B" for x in self.fragmented_payload)
         kwargs = {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
-        kwargs["priority"] = str(self.priority).split(".")[-1]
+        kwargs["priority"] = self.priority.name
         kwargs["fragmented_payload"] = f"[{fragmented_payload}]"
         del kwargs["timestamp"]
         return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)

@@ -83,7 +83,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         self._inferiors: typing.List[pyuavcan.transport.OutputSession] = []
         self._feedback_handler: typing.Optional[typing.Callable[[RedundantFeedback], None]] = None
         self._idle_send_future: typing.Optional[asyncio.Future[None]] = None
-        self._lock = asyncio.Lock(loop=self._loop)
+        self._lock = asyncio.Lock()
 
         self._stat_transfers = 0
         self._stat_payload_bytes = 0
@@ -185,9 +185,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                     _logger.debug("%s has no inferiors; suspending the send method...", self)
                     self._idle_send_future = self._loop.create_future()
                     try:
-                        await asyncio.wait_for(
-                            self._idle_send_future, timeout=monotonic_deadline - self._loop.time(), loop=self._loop
-                        )
+                        await asyncio.wait_for(self._idle_send_future, timeout=monotonic_deadline - self._loop.time())
                     except asyncio.TimeoutError:
                         pass
                     else:

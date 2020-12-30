@@ -122,7 +122,9 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     )
     assert tr_a.local_node_id == 111
     assert (
-        repr(tr_a) == "RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))"
+        repr(tr_a)
+        == "RedundantTransport(LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True),"
+        + " LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True))"
     )
 
     assert await pub_a.send(
@@ -190,7 +192,9 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert tr_a.protocol_parameters == cyc_proto_params, "Protocol parameter mismatch"
     assert tr_a.local_node_id == 111
     assert (
-        repr(tr_a) == "RedundantTransport(LoopbackTransport(local_node_id=111), LoopbackTransport(local_node_id=111))"
+        repr(tr_a)
+        == "RedundantTransport(LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True),"
+        + " LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True))"
     )
 
     # Exchange test.
@@ -313,3 +317,19 @@ def _unittest_redundant_transport_capture() -> None:
     tr.attach_inferior(inf_b)
     assert inf_a.capture_handlers == [mon]
     assert inf_b.capture_handlers == [mon]
+
+
+def _unittest_redundant_transport_reconfiguration() -> None:
+    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, PayloadMetadata
+
+    tr = RedundantTransport()
+    tr.attach_inferior(LoopbackTransport(1234))
+    ses = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(5555), None), PayloadMetadata(0))
+    assert ses
+    tr.detach_inferior(tr.inferiors[0])
+    tr.attach_inferior(LoopbackTransport(1235))  # Different node-ID
+    tr.detach_inferior(tr.inferiors[0])
+    tr.attach_inferior(LoopbackTransport(None, allow_anonymous_transfers=True))  # Anonymous
+    with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+        tr.attach_inferior(LoopbackTransport(None, allow_anonymous_transfers=False))
+    assert len(tr.inferiors) == 1

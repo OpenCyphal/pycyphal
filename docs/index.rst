@@ -20,7 +20,6 @@ Contents
 
    pages/architecture
    pages/installation
-   pages/cli
    pages/demo
    pages/faq
    pages/api

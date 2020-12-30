@@ -42,15 +42,6 @@ python -c "import sys; exit('linux' not in sys.platform)" || die "This script ca
 
 cd "${0%/*}" || die "Couldn't cd into this script's directory"
 
-# Extend PYTHONPATH to make sitecustomize.py/usercustomize.py importable.
-if [[ -z "${PYTHONPATH:-}" ]]
-then
-    export PYTHONPATH="$PWD"
-else
-    export PYTHONPATH="$PYTHONPATH:$PWD"
-fi
-echo "PYTHONPATH: $PYTHONPATH"
-
 export PYTHONASYNCIODEBUG=1
 
 command -v ncat || die "Please install ncat. On Debian-based: apt install ncat"
@@ -85,19 +76,17 @@ sudo setcap cap_net_raw+eip "$(readlink -f $(command -v python))" || die "Could 
 
 banner TEST EXECUTION
 
-# TODO: run the tests with the minimal dependency configuration. Set up a new environment here.
-# Note that we do not invoke coverage.py explicitly here; this is handled by usercustomize.py. Relevant docs:
+# Relevant docs:
 #   - https://coverage.readthedocs.io/en/coverage-4.2/subprocess.html
 #   - https://docs.python.org/3/library/site.html
 log_format='%(asctime)s %(process)5d %(levelname)-8s %(name)s: %(message)s'
-pytest --log-format="$log_format" --log-file='main.log'               || die "Core PyTest returned $?"
-pytest --log-format="$log_format" --log-file='cli.log'  pyuavcan/_cli || die "CLI PyTest returned $?"
+coverage run -m pytest --log-format="$log_format" || die "PyTest returned $?"
 
 # Every time we launch a Python process, a new coverage file is created, so there may be a lot of those,
 # possibly nested in sub-directories.
 find ./*/ -name '.coverage*' -type f -print -exec mv {} . \;  || die "Could not lift coverage files"
 ls -l .coverage*
-coverage combine                                              || die "Could not combine coverage data"
+coverage combine || die "Could not combine coverage data"
 
 # Shall it be desired to measure coverage of the generated code, it is necessary to ensure that the target
 # directory where the generated code is stored exists before the coverage utility is invoked.
@@ -113,8 +102,7 @@ banner STATIC ANALYSIS
 rm -rf .mypy_cache/ &> /dev/null
 echo 'YOU SHALL NOT PASS' > .mypy_cache
 chmod 444 .mypy_cache
-mypy --strict --strict-equality --no-implicit-reexport --config-file=setup.cfg pyuavcan tests .test_dsdl_generated \
-    || die "MyPy returned $?"
+mypy --strict pyuavcan tests .test_dsdl_generated demo || die "MyPy returned $?"
 
 # See configuration file for details.
 black --check . || die "black returned $?"

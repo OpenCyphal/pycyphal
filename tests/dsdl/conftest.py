@@ -19,9 +19,8 @@ import pyuavcan.dsdl
 # Please maintain these carefully if you're changing the project's directory structure.
 TEST_ROOT_DIR = pathlib.Path(__file__).parent.parent
 LIBRARY_ROOT_DIR = TEST_ROOT_DIR.parent
-DESTINATION_DIR = LIBRARY_ROOT_DIR / pathlib.Path(".test_dsdl_generated")
-PUBLIC_REGULATED_DATA_TYPES_DIR = TEST_ROOT_DIR / "public_regulated_data_types"
-TEST_DATA_TYPES_DIR = pathlib.Path(__file__).parent / "namespaces"
+DEMO_DIR = LIBRARY_ROOT_DIR / "demo"
+DESTINATION_DIR = LIBRARY_ROOT_DIR / ".test_dsdl_generated"
 
 _CACHE_FILE_NAME = "pydsdl_cache.pickle.tmp"
 
@@ -69,18 +68,18 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
         pydsdl_logger.setLevel(logging.INFO)
         out = [
             pyuavcan.dsdl.generate_package(
-                PUBLIC_REGULATED_DATA_TYPES_DIR / "uavcan",
+                DEMO_DIR / "public_regulated_data_types" / "uavcan",
                 [],
                 DESTINATION_DIR,
             ),
             pyuavcan.dsdl.generate_package(
-                TEST_DATA_TYPES_DIR / "test_dsdl_namespace",
-                [PUBLIC_REGULATED_DATA_TYPES_DIR / "uavcan"],
+                DEMO_DIR / "custom_data_types" / "sirius_cyber_corp",
+                [],
                 DESTINATION_DIR,
             ),
             pyuavcan.dsdl.generate_package(
-                TEST_DATA_TYPES_DIR / "sirius_cyber_corp",
-                [],
+                TEST_ROOT_DIR / "dsdl" / "test_dsdl_namespace",
+                [DEMO_DIR / "public_regulated_data_types" / "uavcan"],
                 DESTINATION_DIR,
             ),
         ]

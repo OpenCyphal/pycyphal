@@ -16,22 +16,15 @@ When adding new tools and such, please put all their configuration there to keep
 All shippable entities are located exclusively inside the directory ``pyuavcan/``.
 The entirety of the directory is shipped.
 
-The directory ``tests/public_regulated_data_types/`` is needed only for testing and documentation building.
+The submodule ``demo/public_regulated_data_types/`` is needed only for demo, testing, and documentation building.
 It should be kept reasonably up-to-date, but remember that it does not affect the final product in any way.
 We no longer ship DSDL namespaces with code for reasons explained in the user documentation.
 
 Please desist from adding any new VCS submodules or subtrees.
 
-The usage demo scripts that are included in the user documentation are located under ``tests/demo/``.
-This is probably mildly surprising since one would expect to find docs under ``docs/``,
-but it is done this way to facilitate testing and static analysis of the demo scripts.
+The demos that are included in the user documentation are located under ``demo/``.
 Whenever the test suite is run, it tests the demo application as well in order to ensure that it is correct and
 compatible with the current version of the library -- keeping the docs up-to-date is vitally important.
-
-The CLI tool is auto-tested as well, the tests are located under ``tests/cli/``.
-It's somewhat trickier than with the rest of the code because it requires us to
-launch new processes and keep track of their code coverage metrics;
-the details are explained in a dedicated section.
 
 There are major automation scripts located in the source root directory.
 You will need them if you are developing the library; please open them and read the comments inside to understand
@@ -45,7 +38,7 @@ Third-party dependencies
 
 The general rule is that external dependencies are to be avoided unless doing so would increase the complexity
 of the codebase considerably.
-There are three kinds of 3rd-party dependencies used by this library:
+There are two kinds of 3rd-party dependencies used by this library:
 
 - **Core dependencies.** Those are absolutely required to use the library.
   The list of core deps contains two libraries: Nunavut and NumPy, and it is probably not going to be extended ever
@@ -58,9 +51,6 @@ There are three kinds of 3rd-party dependencies used by this library:
   instead, they are registered as *package extras*. Please read the detailed documentation and the applicable
   conventions in the user documentation and in ``setup.cfg``.
   When developing new transports or media sub-layers, try to avoid adding new dependencies.
-
-- **Other dependencies.** Those are needed for some minor optional components and features of the library,
-  such as the CLI tool.
 
 
 Coding conventions
@@ -187,7 +177,7 @@ The scanner should not be run before the full general test suite since it relies
 
 When writing tests, aim to cover at least 90% of branches, excepting the DSDL generated packages (at least for now)
 (the DSDL test data is synthesized at run time).
-Ensure that your tests do not emit any errors or warnings into the CLI output upon successful execution,
+Ensure that your tests do not emit any errors or warnings into stderr output upon successful execution,
 because that may distract the developer from noticing true abnormalities
 (you may use ``caplog.at_level('CRITICAL')`` to suppress undesirable output).
 
@@ -214,22 +204,6 @@ Certain tests require real-time execution.
 If they appear to be failing with timeout errors and such, consider re-running them on a faster system.
 It is recommended to run the test suite with at least 2 GB of free RAM and an SSD.
 
-Auto-tests may spawn new processes, e.g., to test the CLI tool. In order to keep their code coverage measured,
-we have put the coverage setup code into a special module ``sitecustomize.py``, which is auto-imported
-every time a new Python interpreter is started (as long as the module's path is in ``PYTHONPATH``, of course).
-Hence, every invocation of Python made during testing is coverage-tracked, which is great.
-This is why we don't invoke ``coverage`` manually when running tests.
-After the tests are executed, we end up with some dozen or more of ``.coverage*`` files scattered across the
-source directories.
-The scattered coverage files are then located automatically and combined into one file,
-which is then analyzed by report generators and other tools like SonarQube.
-
-When tests that spawn new processes fail, they may leave their children running in the background,
-which may adversely influence other tests that are executed later,
-so an error in one test may crash a dozen of unrelated ones invoked afterwards.
-You need to be prepared for that and always start analyzing the test report starting with the first failure.
-Ideally, though, this should be fixed by adding robust cleanup logic for each test.
-
 Some of the components of the library and of the test suite require DSDL packages to be generated.
 Those must be dealt with carefully as it needs to be ensured that the code that requires generated
 packages to be available is not executed until they are generated.
@@ -239,7 +213,7 @@ and other higher-level components are tested against them.
 At least the following locations should be checked first:
 
 - ``tests/presentation`` -- generic presentation layer test cases.
-- ``tests/cli`` -- CLI and demo test cases.
+- ``tests/demo`` -- demo test cases.
 - The list may not be exhaustive, please grep the sources to locate all relevant modules.
 
 Many tests rely on the DSDL-generated packages being available for importing.
@@ -263,14 +237,6 @@ Normally, this should be done a few months after a new version of CPython is rel
 4. Bump the version number using the ``.dev`` suffix to indicate that it is not release-ready until tested.
 
 If the CI/CD pipelines pass, you are all set.
-
-
-Debugging
----------
-
-When debugging argument parsing issues in the CLI,
-you won't see any stacktrace unless verbose logging is enabled before the argument parser is constructed.
-To work around that, use the environment variable `PYUAVCAN_LOGLEVEL` (see the user docs for details).
 
 
 Releasing
@@ -300,3 +266,5 @@ Make sure to mark it as a source directory to enable code completion and type an
 (for PyCharm: right click -> Mark Directory As -> Sources Root).
 
 Configure the IDE to remove trailing whitespace on save in the entire file.
+Or, even better, configure a File Watcher to run Black on save
+(make sure to disable running it on external file changes though).

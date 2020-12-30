@@ -7,6 +7,7 @@ import copy
 import typing
 import logging
 import pyuavcan
+from pyuavcan.transport import ServiceDataSpecifier
 from .._frame import SerialFrame
 from ._base import SerialSession
 
@@ -58,31 +59,20 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
         self._send_handler = send_handler
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._statistics = pyuavcan.transport.SessionStatistics()
+        if self._local_node_id is None and isinstance(self._specifier.data_specifier, ServiceDataSpecifier):
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                f"Anonymous nodes cannot emit service transfers. Session specifier: {self._specifier}"
+            )
         assert isinstance(self._local_node_id, int) or self._local_node_id is None
         assert callable(send_handler)
-
-        if not isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier) or not isinstance(
-            self._payload_metadata, pyuavcan.transport.PayloadMetadata
-        ):  # pragma: no cover
-            raise TypeError("Invalid parameters")
-
         assert (
-            specifier.remote_node_id is not None
-            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
-            else True
+            specifier.remote_node_id is not None if isinstance(specifier.data_specifier, ServiceDataSpecifier) else True
         ), "Internal protocol violation: cannot broadcast a service transfer"
 
         super(SerialOutputSession, self).__init__(finalizer)
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         self._raise_if_closed()
-
-        if self._local_node_id is None and isinstance(
-            self._specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier
-        ):
-            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
-                f"Anonymous nodes cannot emit service transfers. Session specifier: {self._specifier}"
-            )
 
         def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> SerialFrame:
             if not end_of_transfer and self._local_node_id is None:
@@ -179,21 +169,14 @@ def _unittest_output_session() -> None:
         nonlocal finalized
         finalized = True
 
-    sos = SerialOutputSession(
-        specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
-        payload_metadata=PayloadMetadata(1024),
-        mtu=10,
-        local_node_id=None,  # pragma: no cover
-        send_handler=do_send,
-        finalizer=do_finalize,
-    )
-
     with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
-        run_until_complete(
-            sos.send(
-                Transfer(timestamp=ts, priority=Priority.NOMINAL, transfer_id=12340, fragmented_payload=[]),
-                loop.time() + 10.0,
-            )
+        sos = SerialOutputSession(
+            specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
+            payload_metadata=PayloadMetadata(1024),
+            mtu=10,
+            local_node_id=None,
+            send_handler=do_send,
+            finalizer=do_finalize,
         )
 
     sos = SerialOutputSession(

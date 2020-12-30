@@ -9,7 +9,7 @@ import typing
 import asyncio
 import logging
 import pyuavcan
-from pyuavcan.transport import Timestamp
+from pyuavcan.transport import Timestamp, ServiceDataSpecifier
 from .._frame import UDPFrame
 
 
@@ -82,12 +82,6 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         self._finalizer = finalizer
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._statistics = pyuavcan.transport.SessionStatistics()
-
-        if not isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier) or not isinstance(
-            self._payload_metadata, pyuavcan.transport.PayloadMetadata
-        ):  # pragma: no cover
-            raise TypeError("Invalid parameters")
-
         if self._multiplier < 1:  # pragma: no cover
             raise ValueError(f"Invalid transfer multiplier: {self._multiplier}")
 
@@ -97,9 +91,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
             else True
         ), "Internal protocol violation: cannot unicast a message transfer"
         assert (
-            specifier.remote_node_id is not None
-            if isinstance(specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
-            else True
+            specifier.remote_node_id is not None if isinstance(specifier.data_specifier, ServiceDataSpecifier) else True
         ), "Internal protocol violation: cannot broadcast a service transfer"
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
@@ -194,7 +186,6 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
                 await asyncio.wait_for(
                     self._loop.sock_sendall(self._sock, b"".join((header, payload))),
                     timeout=monotonic_deadline - self._loop.time(),
-                    loop=self._loop,
                 )
 
                 # TODO: use socket timestamping when running on Linux (Windows does not support timestamping).

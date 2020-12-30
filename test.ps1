@@ -30,7 +30,7 @@ $ncat_proc = Start-Process '.test_deps/ncat.exe' -Args '-vv --broker --listen lo
 # TESTING
 #
 
-# The DSDL gen directory shall exist before coverage is invoked, otherwise its coverage won't be tracked.
+# The DSDL gen directory shall exist before coverage is invoked if we want to track its coverage.
 Remove-Item -Recurse -Force ".test_dsdl_generated" -ErrorAction SilentlyContinue
 New-Item -Path . -Name ".test_dsdl_generated" -ItemType Directory
 
@@ -42,7 +42,7 @@ $test_ok = False
 For ($i=1; ($i -le $test_attempts) -and -not $test_ok; $i++)
 {
     Write-Host "Running the tests, attempt $i of $test_attempts..."
-    python -m pytest
+    python -m coverage run -m pytest
     $test_ok = $?
     Write-Host "Attempt $i of $test_attempts completed; success: $test_ok"
 }

@@ -124,7 +124,6 @@ class SocketCANMedia(Media):
                 await asyncio.wait_for(
                     self._loop.sock_sendall(self._sock, self._compile_native_frame(f.frame)),
                     timeout=monotonic_deadline - self._loop.time(),
-                    loop=self._loop,
                 )
             except asyncio.TimeoutError:
                 break

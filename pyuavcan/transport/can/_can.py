@@ -83,7 +83,7 @@ class CANTransport(pyuavcan.transport.Transport):
         """
         self._maybe_media: typing.Optional[Media] = media
         self._local_node_id = int(local_node_id) if local_node_id is not None else None
-        self._media_lock = asyncio.Lock(loop=loop)
+        self._media_lock = asyncio.Lock()
         self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         # Lookup performance for the output registry is not important because it's only used for loopback frames.

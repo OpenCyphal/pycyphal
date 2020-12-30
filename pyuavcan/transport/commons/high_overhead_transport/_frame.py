@@ -73,7 +73,7 @@ class Frame:
         else:
             payload = bytes(self.payload).hex()
         kwargs = {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
-        kwargs["priority"] = str(self.priority).split(".")[-1]
+        kwargs["priority"] = self.priority.name
         kwargs["payload"] = payload
         return pyuavcan.util.repr_attributes(self, **kwargs)
 

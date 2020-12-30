@@ -65,7 +65,7 @@ class ServiceRequestMetadata:
 
     def __repr__(self) -> str:
         kwargs = {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
-        kwargs["priority"] = str(self.priority).split(".")[-1]
+        kwargs["priority"] = self.priority.name
         del kwargs["timestamp"]
         return pyuavcan.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
