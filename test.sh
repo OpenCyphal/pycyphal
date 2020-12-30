@@ -42,15 +42,6 @@ python -c "import sys; exit('linux' not in sys.platform)" || die "This script ca
 
 cd "${0%/*}" || die "Couldn't cd into this script's directory"
 
-# Extend PYTHONPATH to make sitecustomize.py/usercustomize.py importable.
-if [[ -z "${PYTHONPATH:-}" ]]
-then
-    export PYTHONPATH="$PWD"
-else
-    export PYTHONPATH="$PYTHONPATH:$PWD"
-fi
-echo "PYTHONPATH: $PYTHONPATH"
-
 export PYTHONASYNCIODEBUG=1
 
 command -v ncat || die "Please install ncat. On Debian-based: apt install ncat"
