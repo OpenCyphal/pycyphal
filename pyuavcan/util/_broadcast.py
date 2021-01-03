@@ -42,7 +42,7 @@ def broadcast(
                 r: typing.Union[R, Exception] = fn(*args, **kwargs)
             except Exception as ex:
                 r = ex
-                _logger.exception(f"Unhandled exception in {fn}: {ex}")
+                _logger.exception("Unhandled exception in %s: %s", fn, ex)
             out.append(r)
         return out
 

@@ -55,7 +55,7 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
         self._reassemblers: typing.Dict[int, TransferReassembler] = {}
 
-        super(SerialInputSession, self).__init__(finalizer)
+        super().__init__(finalizer)
 
     def _process_frame(self, timestamp: Timestamp, frame: SerialFrame) -> None:
         """
@@ -150,7 +150,6 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
 # noinspection PyProtectedMember
 def _unittest_input_session() -> None:
-    import asyncio
     from pytest import raises, approx
     from pyuavcan.transport import InputSessionSpecifier, MessageDataSpecifier, Priority, TransferFrom
     from pyuavcan.transport import PayloadMetadata
@@ -209,7 +208,7 @@ def _unittest_input_session() -> None:
         )
 
     # ANONYMOUS TRANSFERS.
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts, mk_frame(transfer_id=0, index=0, end_of_transfer=False, payload=nihil_supernum, source_node_id=None)
     )
     assert sis.sample_statistics() == SerialInputSessionStatistics(
@@ -217,7 +216,7 @@ def _unittest_input_session() -> None:
         errors=1,
     )
 
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts, mk_frame(transfer_id=0, index=1, end_of_transfer=True, payload=nihil_supernum, source_node_id=None)
     )
     assert sis.sample_statistics() == SerialInputSessionStatistics(
@@ -225,7 +224,7 @@ def _unittest_input_session() -> None:
         errors=2,
     )
 
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts, mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=nihil_supernum, source_node_id=None)
     )
     assert sis.sample_statistics() == SerialInputSessionStatistics(
@@ -241,11 +240,11 @@ def _unittest_input_session() -> None:
     assert run_until_complete(sis.receive(0.0)) is None
 
     # VALID TRANSFERS. Notice that they are unordered on purpose. The reassembler can deal with that.
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts, mk_frame(transfer_id=0, index=1, end_of_transfer=False, payload=nihil_supernum, source_node_id=1111)
     )
 
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts, mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=nihil_supernum, source_node_id=2222)
     )  # COMPLETED FIRST
 
@@ -260,7 +259,7 @@ def _unittest_input_session() -> None:
         },
     )
 
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts,
         mk_frame(
             transfer_id=0,
@@ -271,11 +270,11 @@ def _unittest_input_session() -> None:
         ),
     )
 
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts, mk_frame(transfer_id=0, index=0, end_of_transfer=False, payload=nihil_supernum, source_node_id=1111)
     )
 
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts, mk_frame(transfer_id=0, index=2, end_of_transfer=False, payload=nihil_supernum, source_node_id=1111)
     )  # COMPLETED SECOND
 
@@ -304,14 +303,14 @@ def _unittest_input_session() -> None:
     assert run_until_complete(sis.receive(0.0)) is None
 
     # TRANSFERS WITH REASSEMBLY ERRORS.
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts,
         mk_frame(
             transfer_id=1, index=0, end_of_transfer=False, payload=b"", source_node_id=1111  # EMPTY IN MULTIFRAME
         ),
     )
 
-    sis._process_frame(
+    sis._process_frame(  # pylint: disable=protected-access
         ts,
         mk_frame(
             transfer_id=2, index=0, end_of_transfer=False, payload=b"", source_node_id=1111  # EMPTY IN MULTIFRAME

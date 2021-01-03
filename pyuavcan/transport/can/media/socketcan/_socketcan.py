@@ -73,7 +73,7 @@ class SocketCANMedia(Media):
 
         self._ancillary_data_buffer_size = socket.CMSG_SPACE(_TIMEVAL_STRUCT.size)  # Used for recvmsg()
 
-        super(SocketCANMedia, self).__init__()
+        super().__init__()
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:

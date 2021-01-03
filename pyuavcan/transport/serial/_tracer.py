@@ -117,7 +117,7 @@ class SerialTracer(pyuavcan.transport.Tracer):
         if isinstance(item, memoryview):
             return SerialOutOfBandTrace(timestamp, item)
 
-        elif isinstance(item, SerialFrame):
+        if isinstance(item, SerialFrame):
             spec = AlienSessionSpecifier(
                 source_node_id=item.source_node_id,
                 destination_node_id=item.destination_node_id,
@@ -125,8 +125,7 @@ class SerialTracer(pyuavcan.transport.Tracer):
             )
             return self._get_session(spec).update(timestamp, item)
 
-        else:
-            assert False
+        assert False
 
     def _get_session(self, specifier: AlienSessionSpecifier) -> _AlienSession:
         try:
@@ -174,11 +173,12 @@ class _AlienSession:
 
         if isinstance(tr, TransferReassembler.Error):
             return SerialErrorTrace(timestamp=timestamp, error=tr)
-        elif isinstance(tr, TransferFrom):
+
+        if isinstance(tr, TransferFrom):
             meta = AlienTransferMetadata(tr.priority, tr.transfer_id, self._specifier)
             return TransferTrace(timestamp, AlienTransfer(meta, tr.fragmented_payload), tid_timeout)
-        else:
-            assert tr is None
+
+        assert tr is None
         return None
 
 

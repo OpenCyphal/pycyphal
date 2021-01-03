@@ -77,7 +77,7 @@ if _log_level_from_env is not None:
 
 
 # The sub-packages are imported in the order of their interdependency.
-import pyuavcan.util as util  # noqa
-import pyuavcan.dsdl as dsdl  # noqa
-import pyuavcan.transport as transport  # noqa
-import pyuavcan.presentation as presentation  # noqa
+import pyuavcan.util as util  # pylint: disable=wrong-import-position  # noqa
+import pyuavcan.dsdl as dsdl  # pylint: disable=wrong-import-position  # noqa
+import pyuavcan.transport as transport  # pylint: disable=wrong-import-position  # noqa
+import pyuavcan.presentation as presentation  # pylint: disable=wrong-import-position  # noqa

@@ -14,8 +14,6 @@ class DataSpecifier:
     See the abstract transport model for details.
     """
 
-    pass
-
 
 @dataclasses.dataclass(frozen=True)
 class MessageDataSpecifier(DataSpecifier):

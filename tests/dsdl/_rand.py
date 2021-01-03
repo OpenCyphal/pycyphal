@@ -49,8 +49,8 @@ def _unittest_slow_random(
     generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
 ) -> None:
     _logger.info(
-        f"Number of random samples: {_NUM_RANDOM_SAMPLES}. "
-        f"Set the environment variable PYUAVCAN_TEST_NUM_RANDOM_SAMPLES to override."
+        "Number of random samples: %s. Set the environment variable PYUAVCAN_TEST_NUM_RANDOM_SAMPLES to override.",
+        _NUM_RANDOM_SAMPLES,
     )
 
     # The random test intentionally generates a lot of faulty data, which generates a lot of log messages.
@@ -78,7 +78,7 @@ def _unittest_slow_random(
     for ty, stat in sorted(performance.items(), key=lambda kv: -kv[1].worst_time):  # pragma: no branch
         assert isinstance(stat, _TypeTestStatistics)
         _logger.info(
-            f"%-60s %3.0f%% %6.0f %6.0f%s",
+            "%-60s %3.0f%% %6.0f %6.0f%s",
             ty,
             stat.random_serialized_representation_correctness_ratio * 100,
             stat.mean_serialization_time * 1e6,
@@ -118,7 +118,7 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
         if elapsed > 1.0:
             duration_ser = f"{sample_ser[0] * 1e6:.0f}/{sample_ser[1] * 1e6:.0f}"
             duration_des = f"{sample_des[0] * 1e6:.0f}/{sample_des[1] * 1e6:.0f}" if sample_des else "N/A"
-            _logger.debug(
+            _logger.debug(  # pylint: disable=logging-fstring-interpolation
                 f"Random sample {index + 1} of {num_random_samples} took {elapsed:.1f} s; "
                 f"random SR correct: {ob is not None}; "
                 f"duration forward/reverse [us]: ({duration_ser})/({duration_des})"

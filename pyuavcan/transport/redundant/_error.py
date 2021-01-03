@@ -10,5 +10,3 @@ class InconsistentInferiorConfigurationError(pyuavcan.transport.InvalidTransport
     Raised when a redundant transport instance is asked to attach a new inferior whose configuration
     does not match that of the other inferiors or of the redundant transport itself.
     """
-
-    pass

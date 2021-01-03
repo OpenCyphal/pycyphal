@@ -210,7 +210,7 @@ class LinkLayerSniffer:
                 suggestion = ""
             raise PermissionError(
                 f"You need special privileges to perform low-level network packet capture (sniffing). {suggestion}"
-            )
+            ) from None
         if not caps:
             raise LinkLayerCaptureError(
                 f"There are no devices available for packet capture at the moment. Evaluated candidates: {dev_names}"
@@ -391,8 +391,8 @@ def _capture_all(
                 pcap.close(pd)
                 _logger.info(
                     "Device %r will not be used for packet capture because its data link layer type=%r "
-                    + "is not supported by this library. Either the device is irrelevant, "
-                    + "or the library needs to be extended to support this link layer protocol.",
+                    "is not supported by this library. Either the device is irrelevant, "
+                    "or the library needs to be extended to support this link layer protocol.",
                     name,
                     data_link_type,
                 )
@@ -662,8 +662,6 @@ def _unittest_encode_decode_ethernet() -> None:
 
 
 def _unittest_find_devices() -> None:
-    import sys
-
     devices = _find_devices()
     print("Devices:", devices)
     assert len(devices) >= 1

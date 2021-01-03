@@ -35,7 +35,7 @@ PUBLIC_REGULATED_DATA_TYPES_ROOT = REPOSITORY_ROOT / "demo" / "public_regulated_
 sys.path.insert(0, str(REPOSITORY_ROOT))
 sys.path.insert(0, str(DSDL_GENERATED_ROOT))
 
-import pyuavcan
+import pyuavcan  # pylint: disable=wrong-import-position
 
 try:
     import pyuavcan.application
@@ -59,7 +59,7 @@ EXTERNAL_LINKS = {
 
 project = "PyUAVCAN"
 # noinspection PyShadowingBuiltins
-copyright = f"2019\u2013{datetime.datetime.now().year}, {pyuavcan.__author__}"
+copyright = f"2019\u2013{datetime.datetime.now().year}, {pyuavcan.__author__}"  # pylint: disable=redefined-builtin
 author = pyuavcan.__author__
 
 # The short semantic version
@@ -109,8 +109,8 @@ autodoc_default_options = {
     "imported-members": True,
     "show-inheritance": True,
     "member-order": "bysource",
-    "exclude-members": "__weakref__, __module__, __dict__, __dataclass_fields__, __dataclass_params__, __annotations__, "
-    "__abstractmethods__, __orig_bases__, __parameters__, __post_init__, __getnewargs__",
+    "exclude-members": "__weakref__, __module__, __dict__, __dataclass_fields__, __dataclass_params__, "
+    "__annotations__, __abstractmethods__, __orig_bases__, __parameters__, __post_init__, __getnewargs__",
 }
 
 # For sphinx.ext.todo_

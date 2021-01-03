@@ -99,7 +99,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
         self._frame_stats = CANTransportStatistics()
 
-        if self._local_node_id is not None and not (0 <= self._local_node_id <= CANID.NODE_ID_MASK):
+        if self._local_node_id is not None and not 0 <= self._local_node_id <= CANID.NODE_ID_MASK:
             raise ValueError(f"Invalid node ID for CAN: {self._local_node_id}")
 
         if media.mtu not in Media.VALID_MTU_SET:
@@ -307,7 +307,7 @@ class CANTransport(pyuavcan.transport.Transport):
                         self._handle_any_frame(timestamp, cid, ufr, loopback=envelope.loopback)
             except Exception as ex:  # pragma: no cover
                 self._frame_stats.in_frames_errored += 1
-                _logger.exception(f"{self}: Error while processing received {envelope}: {ex}")
+                _logger.exception("%s: Error while processing received %s: %s", self, envelope, ex)
 
     def _handle_any_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame, loopback: bool) -> None:
         if not loopback:
@@ -326,7 +326,7 @@ class CANTransport(pyuavcan.transport.Transport):
             session = self._input_dispatch_table.get(ss)
             if session is not None:
                 # noinspection PyProtectedMember
-                session._push_frame(timestamp, can_id, frame)
+                session._push_frame(timestamp, can_id, frame)  # pylint: disable=protected-access
                 accepted = True
 
             if ss.remote_node_id is not None:
@@ -334,7 +334,7 @@ class CANTransport(pyuavcan.transport.Transport):
                 session = self._input_dispatch_table.get(ss)
                 if session is not None:
                     # noinspection PyProtectedMember
-                    session._push_frame(timestamp, can_id, frame)
+                    session._push_frame(timestamp, can_id, frame)  # pylint: disable=protected-access
                     accepted = True
 
         return accepted
@@ -355,7 +355,7 @@ class CANTransport(pyuavcan.transport.Transport):
             )
         else:
             # noinspection PyProtectedMember
-            session._handle_loopback_frame(timestamp, frame)
+            session._handle_loopback_frame(timestamp, frame)  # pylint: disable=protected-access
 
     def _reconfigure_acceptance_filters(self) -> None:
         subject_ids = set(

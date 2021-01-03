@@ -19,8 +19,6 @@ import nunavut
 import nunavut.jinja
 import nunavut.postprocessors
 
-import pyuavcan
-
 
 _AnyPath = typing.Union[str, pathlib.Path]
 
@@ -281,12 +279,11 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
 
     if isinstance(t, pydsdl.BooleanType):
         return f"_np_.bool"
-    elif isinstance(t, pydsdl.SignedIntegerType):
+    if isinstance(t, pydsdl.SignedIntegerType):
         return f"_np_.int{pick_width(t.bit_length)}"
-    elif isinstance(t, pydsdl.UnsignedIntegerType):
+    if isinstance(t, pydsdl.UnsignedIntegerType):
         return f"_np_.uint{pick_width(t.bit_length)}"
-    elif isinstance(t, pydsdl.FloatType):
+    if isinstance(t, pydsdl.FloatType):
         return f"_np_.float{pick_width(t.bit_length)}"
-    else:
-        assert not isinstance(t, pydsdl.PrimitiveType), "Forgot to handle some primitive types"
-        return f"_np_.object_"
+    assert not isinstance(t, pydsdl.PrimitiveType), "Forgot to handle some primitive types"
+    return f"_np_.object_"

@@ -162,7 +162,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         except (asyncio.TimeoutError, asyncio.QueueEmpty):
             # If there are unprocessed transfers, allow the caller to read them even if the instance is closed.
             if self._finalizer is None:
-                raise pyuavcan.transport.ResourceClosedError(f"{self} is closed")
+                raise pyuavcan.transport.ResourceClosedError(f"{self} is closed") from None
             return None
         # We do not re-check the error queue at the output because that would mean losing the received transfer.
         # If there are new errors, they will be handled at the next invocation.
@@ -343,7 +343,7 @@ def _unittest_redundant_input_cyclic() -> None:
     async def add_inferior(inferior: pyuavcan.transport.InputSession) -> None:
         await asyncio.sleep(1.0)
         # noinspection PyProtectedMember
-        ses._add_inferior(inferior)
+        ses._add_inferior(inferior)  # pylint: disable=protected-access
 
     time_before = loop.time()
     tr, _ = await_(
@@ -365,10 +365,10 @@ def _unittest_redundant_input_cyclic() -> None:
     # More inferiors
     assert ses.transfer_id_timeout == pytest.approx(1.1)
     # noinspection PyProtectedMember
-    ses._add_inferior(inf_a)  # No change, added above
+    ses._add_inferior(inf_a)  # No change, added above    # pylint: disable=protected-access
     assert ses.inferiors == [inf_a]
     # noinspection PyProtectedMember
-    ses._add_inferior(inf_b)
+    ses._add_inferior(inf_b)  # pylint: disable=protected-access
     assert ses.inferiors == [inf_a, inf_b]
     assert ses.transfer_id_timeout == pytest.approx(1.1)
     assert inf_b.transfer_id_timeout == pytest.approx(1.1)
@@ -440,9 +440,9 @@ def _unittest_redundant_input_cyclic() -> None:
 
     # Inferior removal resets the state of the deduplicator.
     # noinspection PyProtectedMember
-    ses._close_inferior(0)
+    ses._close_inferior(0)  # pylint: disable=protected-access
     # noinspection PyProtectedMember
-    ses._close_inferior(1)  # Out of range, no effect.
+    ses._close_inferior(1)  # Out of range, no effect.  # pylint: disable=protected-access
     assert ses.inferiors == [inf_b]
 
     assert await_(
@@ -526,10 +526,10 @@ def _unittest_redundant_input_monotonic() -> None:
 
     # Add inferiors.
     # noinspection PyProtectedMember
-    ses._add_inferior(inf_a)  # No change, added above
+    ses._add_inferior(inf_a)  # No change, added above    # pylint: disable=protected-access
     assert ses.inferiors == [inf_a]
     # noinspection PyProtectedMember
-    ses._add_inferior(inf_b)
+    ses._add_inferior(inf_b)  # pylint: disable=protected-access
     assert ses.inferiors == [inf_a, inf_b]
 
     ses.transfer_id_timeout = 1.1

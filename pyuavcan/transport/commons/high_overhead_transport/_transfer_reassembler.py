@@ -214,7 +214,9 @@ class TransferReassembler:
                     "max_idx": self._max_index,
                     "payload": f"{len(list(x for x in self._payloads if x))}/{len(self._payloads)}",
                 }
-                _logger.debug(f"{self}: {error.name}: " + " ".join(f"{k}={v}" for k, v in context.items()))
+                _logger.debug(  # pylint: disable=logging-not-lazy
+                    f"{self}: {error.name}: " + " ".join(f"{k}={v}" for k, v in context.items())
+                )
         # The error must be processed before the state is reset because when the state is destroyed
         # the useful diagnostic information becomes unavailable.
         self._timestamp = timestamp
@@ -277,8 +279,7 @@ def _validate_and_finalize_transfer(
         size_ok = sum(map(len, frame_payloads)) > _CRC_SIZE_BYTES
         crc_ok = TransferCRC.new(*frame_payloads).check_residue()
         return package(_drop_crc(frame_payloads)) if size_ok and crc_ok else None
-    else:
-        return package(frame_payloads)
+    return package(frame_payloads)
 
 
 def _drop_crc(fragments: typing.List[memoryview]) -> typing.Sequence[memoryview]:

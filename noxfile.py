@@ -150,8 +150,6 @@ def pristine(session):
     Install the library into a pristine environment and ensure that it is importable.
     This is needed to catch errors caused by accidental reliance on test dependencies in the main codebase.
     """
-    from functools import partial
-
     exe = partial(session.run, "python", "-c", silent=True)
     session.cd(session.create_tmp())  # Change the directory to reveal spurious dependencies from the project root.
 
@@ -167,6 +165,7 @@ def pristine(session):
 
 @nox.session(reuse_venv=True)
 def lint(session):
+    session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
     session.install("pylint == 2.6.0")
     session.run("pylint", "pyuavcan", "tests")
 

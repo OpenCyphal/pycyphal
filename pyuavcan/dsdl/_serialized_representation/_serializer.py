@@ -280,8 +280,7 @@ class Serializer(abc.ABC):
             bits_to_cut_off = 8 - self._bit_offset % 8
             tail = ("x" * bits_to_cut_off) + tail[bits_to_cut_off:]
             return s + " " + tail
-        else:
-            return s
+        return s
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self})"
@@ -503,7 +502,7 @@ def _unittest_serializer_unaligned() -> None:  # Tricky cases with unaligned fie
     assert str(ser) == "11000101 00101111 01010111 10000010 11000110 xxx01010"
 
     ser.add_unaligned_array_of_bits(numpy.array([False, True, True], numpy.bool))
-    assert ser._bit_offset % 8 == 0, "Byte alignment is not restored"
+    assert ser._bit_offset % 8 == 0, "Byte alignment is not restored"  # pylint: disable=protected-access
     assert str(ser) == "11000101 00101111 01010111 10000010 11000110 11001010"
 
     ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=_Byte))  # We're actually aligned here
@@ -523,7 +522,7 @@ def _unittest_serializer_unaligned() -> None:  # Tricky cases with unaligned fie
     )
 
     ser.add_unaligned_unsigned(0b11101100101, 11)  # Tricky, eh? Eleven bits, unaligned write
-    assert ser._bit_offset % 8 == 0, "Byte alignment is not restored"
+    assert ser._bit_offset % 8 == 0, "Byte alignment is not restored"  # pylint: disable=protected-access
     assert (
         str(ser) == "11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 "
         "10111111 11101100"
@@ -569,7 +568,7 @@ def _unittest_serializer_unaligned() -> None:  # Tricky cases with unaligned fie
     )
 
     ser.skip_bits(5)
-    assert ser._bit_offset % 8 == 0, "Byte alignment is not restored"
+    assert ser._bit_offset % 8 == 0, "Byte alignment is not restored"  # pylint: disable=protected-access
     assert (
         str(ser) == "11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 "
         "10111111 11101100 00000110 00000000 00000000 00000000 00000000 00000000 10000000 11111111 "

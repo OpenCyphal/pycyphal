@@ -100,12 +100,12 @@ class RedundantTransport(pyuavcan.transport.Transport):
             if len(nid_set) == 1:
                 (out,) = nid_set
                 return out
-            else:
-                raise InconsistentInferiorConfigurationError(
-                    f"Redundant transports have different node-IDs: {[x.local_node_id for x in self._cols]}"
-                )
-        else:
-            return None
+            # The following exception should not occur during normal operation unless one of the inferiors is
+            # reconfigured sneakily.
+            raise InconsistentInferiorConfigurationError(
+                f"Redundant transports have different node-IDs: {[x.local_node_id for x in self._cols]}"
+            )
+        return None
 
     def get_input_session(
         self, specifier: pyuavcan.transport.InputSessionSpecifier, payload_metadata: pyuavcan.transport.PayloadMetadata
@@ -198,7 +198,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         for owner in self._rows.values():
             try:
                 # noinspection PyProtectedMember
-                owner._close_inferior(index)
+                owner._close_inferior(index)  # pylint: disable=protected-access
             except Exception as ex:
                 _logger.exception("%s could not close inferior session #%d in %s: %s", self, index, owner, ex)
         self._check_matrix_consistency()
@@ -351,20 +351,20 @@ class RedundantTransport(pyuavcan.transport.Transport):
         new_index = len(owner.inferiors)
         try:
             # noinspection PyProtectedMember
-            owner._add_inferior(inferior)
+            owner._add_inferior(inferior)  # pylint: disable=protected-access
         except Exception:
             # The inferior MUST be closed manually because in the case of failure it is not registered
             # in the redundant session.
             inferior.close()
+            # If the inferior has not been added, this method will have no effect:
             # noinspection PyProtectedMember
-            owner._close_inferior(new_index)  # If the inferior has not been added, this method will have no effect.
+            owner._close_inferior(new_index)  # pylint: disable=protected-access
             raise
 
     def _get_tid_modulo(self) -> typing.Optional[int]:
         if self.protocol_parameters.transfer_id_modulo < self.MONOTONIC_TRANSFER_ID_MODULO_THRESHOLD:
             return self.protocol_parameters.transfer_id_modulo
-        else:
-            return None
+        return None
 
     def _check_matrix_consistency(self) -> None:
         for row in self._rows.values():

@@ -73,7 +73,7 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
 
         self._statistics = pyuavcan.transport.SessionStatistics()
 
-        super(CANOutputSession, self).__init__(finalizer=finalizer)
+        super().__init__(finalizer=finalizer)
 
     def _handle_loopback_frame(self, timestamp: Timestamp, frame: UAVCANFrame) -> None:
         """
@@ -94,8 +94,10 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
                         self._feedback_handler(feedback)
                     except Exception as ex:  # pragma: no cover
                         _logger.exception(
-                            f"{self}: Unhandled exception in the output session feedback handler "
-                            f"{self._feedback_handler}: {ex}"
+                            "%s: Unhandled exception in the output session feedback handler %s: %s",
+                            self,
+                            self._feedback_handler,
+                            ex,
                         )
 
     @property
@@ -116,8 +118,8 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
     def sample_statistics(self) -> pyuavcan.transport.SessionStatistics:
         return copy.copy(self._statistics)
 
-    def close(self) -> None:
-        super(CANOutputSession, self).close()
+    def close(self) -> None:  # pylint: disable=useless-super-delegation
+        super().close()
 
     async def _do_send(self, can_id: CANID, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         self._raise_if_closed()
@@ -163,9 +165,8 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
                 self._statistics.frames += len(frames)
                 self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))  # Session level
                 return True
-            else:
-                self._statistics.drops += len(frames)
-                return False
+            self._statistics.drops += len(frames)
+            return False
         except Exception:
             self._statistics.errors += 1
             raise
@@ -188,7 +189,7 @@ class BroadcastCANOutputSession(CANOutputSession):
             )
         self._subject_id = specifier.data_specifier.subject_id
 
-        super(BroadcastCANOutputSession, self).__init__(
+        super().__init__(
             transport=transport,
             send_handler=send_handler,
             specifier=specifier,
@@ -230,7 +231,7 @@ class UnicastCANOutputSession(CANOutputSession):
             specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
         )
 
-        super(UnicastCANOutputSession, self).__init__(
+        super().__init__(
             transport=transport,
             send_handler=send_handler,
             specifier=specifier,

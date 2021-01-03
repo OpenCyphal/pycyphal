@@ -104,9 +104,9 @@ class Subscriber(MessagePort[MessageClass]):
                     async for message, transfer in self:
                         try:
                             await handler(message, transfer)
-                        except asyncio.CancelledError:
-                            raise
                         except Exception as ex:
+                            if isinstance(ex, asyncio.CancelledError):
+                                raise
                             _logger.exception("%s got an unhandled exception in the message handler: %s", self, ex)
                 except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError) as ex:
                     _logger.debug("%s receive task is stopping because: %r", self, ex)
@@ -304,7 +304,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
 
     async def _task_function(self) -> None:
         exception: typing.Optional[Exception] = None
-        try:
+        try:  # pylint: disable=too-many-nested-blocks
             while not self.is_closed:
                 transfer = await self.transport_session.receive(self._loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is not None:

@@ -54,30 +54,27 @@ def _to_builtin_impl(
             if get_attribute(obj, f.name) is not None  # The check is to hide inactive union variants.
         }
 
-    elif isinstance(model, pydsdl.ArrayType):
+    if isinstance(model, pydsdl.ArrayType):
         assert isinstance(obj, numpy.ndarray)
         if model.string_like:  # TODO: drop this special case when strings are natively supported in DSDL.
             try:
                 return bytes(e for e in obj).decode()
             except UnicodeError:
                 return list(map(int, obj))
-        else:
-            return [_to_builtin_impl(e, model.element_type) for e in obj]
+        return [_to_builtin_impl(e, model.element_type) for e in obj]
 
-    elif isinstance(model, pydsdl.PrimitiveType):
+    if isinstance(model, pydsdl.PrimitiveType):
         # The explicit conversions are needed to get rid of NumPy scalar types.
         if isinstance(model, pydsdl.IntegerType):
             return int(obj)  # type: ignore
-        elif isinstance(model, pydsdl.FloatType):
+        if isinstance(model, pydsdl.FloatType):
             return float(obj)  # type: ignore
-        elif isinstance(model, pydsdl.BooleanType):
+        if isinstance(model, pydsdl.BooleanType):
             return bool(obj)
-        else:
-            assert isinstance(obj, str)
-            return obj
+        assert isinstance(obj, str)
+        return obj
 
-    else:
-        assert False, "Unexpected inputs"
+    assert False, "Unexpected inputs"
 
 
 def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any) -> CompositeObjectTypeVar:

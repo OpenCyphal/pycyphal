@@ -106,21 +106,24 @@ def _unittest_input_dispatch_table() -> None:
 
 # noinspection PyProtectedMember
 def _unittest_slow_input_dispatch_table_index() -> None:
+    table_size = InputDispatchTable._TABLE_SIZE  # pylint: disable=protected-access
     values: typing.Set[int] = set()
-    for node_id in (*range(InputDispatchTable._NUM_NODE_IDS), None):
-        for subj in range(InputDispatchTable._NUM_SUBJECTS):
-            out = InputDispatchTable._compute_index(InputSessionSpecifier(MessageDataSpecifier(subj), node_id))
+    for node_id in (*range(InputDispatchTable._NUM_NODE_IDS), None):  # pylint: disable=protected-access
+        for subj in range(InputDispatchTable._NUM_SUBJECTS):  # pylint: disable=protected-access
+            out = InputDispatchTable._compute_index(  # pylint: disable=protected-access
+                InputSessionSpecifier(MessageDataSpecifier(subj), node_id)
+            )
             assert out not in values
             values.add(out)
-            assert out < InputDispatchTable._TABLE_SIZE
+            assert out < table_size
 
-        for serv in range(InputDispatchTable._NUM_SERVICES):
+        for serv in range(InputDispatchTable._NUM_SERVICES):  # pylint: disable=protected-access
             for role in ServiceDataSpecifier.Role:
-                out = InputDispatchTable._compute_index(
+                out = InputDispatchTable._compute_index(  # pylint: disable=protected-access
                     InputSessionSpecifier(ServiceDataSpecifier(serv, role), node_id)
                 )
                 assert out not in values
                 values.add(out)
-                assert out < InputDispatchTable._TABLE_SIZE
+                assert out < table_size
 
-    assert len(values) == InputDispatchTable._TABLE_SIZE
+    assert len(values) == table_size

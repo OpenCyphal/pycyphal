@@ -3,11 +3,11 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import sys
-import pytest
 import logging
+import pytest
 
 # The fixture is imported here to make it visible to other tests in this suite.
-from .dsdl.conftest import generated_packages as generated_packages  # noqa
+from .dsdl.conftest import generated_packages as generated_packages  # noqa  # pylint: disable=unused-import
 
 
 GIBIBYTE = 1024 ** 3

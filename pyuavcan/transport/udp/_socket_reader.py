@@ -278,7 +278,7 @@ class SocketReader:
 def _unittest_socket_reader(caplog: typing.Any) -> None:
     from ipaddress import ip_address
     from pytest import raises
-    from pyuavcan.transport import Priority, Timestamp
+    from pyuavcan.transport import Priority
 
     destination_endpoint = "127.100.0.100", 58724
 
@@ -504,14 +504,14 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
             loop=loop,
         )
         # noinspection PyProtectedMember
-        srd._sock.close()
+        srd._sock.close()  # pylint: disable=protected-access
         run_until_complete(asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
         # noinspection PyProtectedMember
-        assert not srd._thread.is_alive()
+        assert not srd._thread.is_alive()  # pylint: disable=protected-access
         # noinspection PyProtectedMember
-        srd._ctl_main.close()
+        srd._ctl_main.close()  # pylint: disable=protected-access
         # noinspection PyProtectedMember
-        srd._ctl_worker.close()
+        srd._ctl_worker.close()  # pylint: disable=protected-access
 
     sock_tx_1.close()
     sock_tx_3.close()
@@ -528,7 +528,7 @@ def _unittest_socket_reader_endpoint_reuse() -> None:
     """
     import sys
     from ipaddress import ip_address
-    from pyuavcan.transport import Priority, Timestamp
+    from pyuavcan.transport import Priority
 
     destination_endpoint = "127.30.0.30", 9999
 

@@ -4,9 +4,9 @@
 
 import time
 import typing
-import pytest
 import asyncio
 import logging
+import pytest
 import pyuavcan.transport
 from pyuavcan.transport import can
 

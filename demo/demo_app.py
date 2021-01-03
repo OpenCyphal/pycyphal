@@ -43,7 +43,7 @@ sys.path.insert(0, str(dsdl_generated_dir))
 # Now we can import our packages. If import fails, invoke the code generator, then import again.
 try:
     import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
-    import pyuavcan.application  # The application module requires the standard types from the root namespace "uavcan".
+    import pyuavcan.application  # This module requires the root namespace "uavcan". # pylint: disable=ungrouped-imports
 except (ImportError, AttributeError):
     src_dir = pathlib.Path(__file__).resolve().parent
     # Generate our application-specific namespace. It may make use of the standard data types (most namespaces do,
@@ -62,14 +62,14 @@ except (ImportError, AttributeError):
     # Okay, we can try importing again. We need to clear the import cache first because Python's import machinery
     # requires that; see the docs for importlib.invalidate_caches() for more info.
     importlib.invalidate_caches()
-    import sirius_cyber_corp
-    import pyuavcan.application
+    import sirius_cyber_corp  # pylint: disable=ungrouped-imports
+    import pyuavcan.application  # pylint: disable=ungrouped-imports
 
 # Import other namespaces we're planning to use. Nested namespaces are not auto-imported, so in order to reach,
 # say, "uavcan.node.Heartbeat", you have to do "import uavcan.node".
-import uavcan.node  # noqa E402
-import uavcan.diagnostic  # noqa E402
-import uavcan.si.sample.temperature  # noqa E402
+import uavcan.node  # noqa E402  # pylint: disable=wrong-import-position
+import uavcan.diagnostic  # noqa E402  # pylint: disable=wrong-import-position
+import uavcan.si.sample.temperature  # noqa E402  # pylint: disable=wrong-import-position
 
 
 class DemoApplication:
@@ -269,15 +269,14 @@ class DemoApplication:
             asyncio.ensure_future(do_delayed_shutdown())  # Delay shutdown to let the transport emit the response.
             return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS)
 
-        elif request.command == 23456:
+        if request.command == 23456:
             # This is a custom application-specific command. Just print the string parameter and do nothing.
             parameter_text = request.parameter.tobytes().decode(errors="replace")
             print("CUSTOM COMMAND PARAMETER:", parameter_text)
             return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS)
 
-        else:
-            # Command not supported.
-            return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND)
+        # Command not supported.
+        return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND)
 
     async def _handle_temperature(
         self, msg: uavcan.si.sample.temperature.Scalar_1_0, metadata: pyuavcan.transport.TransferFrom

@@ -109,7 +109,7 @@ def _unittest_slow_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsd
 def _unittest_slow_delimited(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     del generated_packages
 
-    from test_dsdl_namespace.delimited import A_1_0, A_1_1, BDelimited_1_0, BDelimited_1_1, BSealed_1_0
+    from test_dsdl_namespace.delimited import A_1_0, A_1_1, BDelimited_1_0, BDelimited_1_1
     from test_dsdl_namespace.delimited import CFixed_1_0, CFixed_1_1, CVariable_1_0, CVariable_1_1
 
     def u8(x: int) -> bytes:

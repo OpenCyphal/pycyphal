@@ -56,8 +56,6 @@ class TransportStatistics:
     which is tracked per-session.
     """
 
-    pass
-
 
 class Transport(abc.ABC):
     """

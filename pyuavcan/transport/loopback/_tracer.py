@@ -3,8 +3,8 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
-import pyuavcan.transport
 import dataclasses
+import pyuavcan.transport
 from pyuavcan.transport import Trace, TransferTrace, Capture
 
 

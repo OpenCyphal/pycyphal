@@ -10,8 +10,8 @@ import typing
 import socket
 import struct
 import logging
-import pyuavcan
 from ipaddress import IPv4Address
+import pyuavcan
 from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
 from pyuavcan.transport import InvalidMediaConfigurationError, Timestamp
 from ._socket_factory import SocketFactory, Sniffer
@@ -176,13 +176,13 @@ class SnifferIPv4(Sniffer):
         data = llp.payload
         (
             ver_ihl,
-            dscp_ecn,
-            ip_length,
-            ident,
-            flags_frag_off,
-            ttl,
+            _dscp_ecn,
+            _ip_length,
+            _ident,
+            _flags_frag_off,
+            _ttl,
             proto,
-            hdr_chk,
+            _hdr_chk,
             src_adr,
             dst_adr,
         ) = SnifferIPv4._IP_V4_FORMAT.unpack_from(data)
@@ -191,7 +191,7 @@ class SnifferIPv4(Sniffer):
         udp_ip_header_size = ip_header_size + SnifferIPv4._UDP_V4_FORMAT.size
         if ver != 4 or proto != SnifferIPv4._PROTO_UDP or len(data) < udp_ip_header_size:
             return None
-        src_port, dst_port, udp_length, udp_chk = SnifferIPv4._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
+        src_port, dst_port, _udp_length, _udp_chk = SnifferIPv4._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
         return RawPacket(
             mac_header=MACHeader(source=llp.source, destination=llp.destination),
             ip_header=IPHeader(source=IPv4Address(src_adr), destination=IPv4Address(dst_adr)),
@@ -311,7 +311,7 @@ def _unittest_sniffer() -> None:
     sniffer = fac.make_sniffer(sniff_sniff)
     assert isinstance(sniffer, SnifferIPv4)
     # noinspection PyProtectedMember
-    assert sniffer._link_layer._filter_expr == "udp and src net 127.66.0.0/16"
+    assert sniffer._link_layer._filter_expr == "udp and src net 127.66.0.0/16"  # pylint: disable=protected-access
 
     # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback
     # multicast group for which there are no receivers may fail with the following errors:

@@ -129,8 +129,8 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     It is guaranteed that at least one fragment is always returned (which may be empty).
     """
     # TODO: update the Serializer class to emit an iterable of fragments.
-    ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)
-    obj._serialize_(ser)
+    ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)  # pylint: disable=protected-access
+    obj._serialize_(ser)  # pylint: disable=protected-access
     yield ser.buffer.data
 
 
@@ -154,7 +154,7 @@ def deserialize(
     """
     deserializer = _serialized_representation.Deserializer.new(fragmented_serialized_representation)
     try:
-        return dtype._deserialize_(deserializer)  # type: ignore
+        return dtype._deserialize_(deserializer)  # type: ignore    # pylint: disable=protected-access
     except _serialized_representation.Deserializer.FormatError:
         _logger.info("Invalid serialized representation of %s: %s", get_model(dtype), deserializer, exc_info=True)
         return None
@@ -166,7 +166,7 @@ def get_model(class_or_instance: typing.Union[typing.Type[CompositeObject], Comp
     This is the inverse of :func:`get_class`.
     """
     # noinspection PyProtectedMember
-    out = class_or_instance._MODEL_
+    out = class_or_instance._MODEL_  # pylint: disable=protected-access
     assert isinstance(out, pydsdl.CompositeType)
     return out
 
@@ -224,7 +224,7 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
 
 def get_extent_bytes(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> int:
     # noinspection PyProtectedMember
-    return int(class_or_instance._EXTENT_BYTES_)
+    return int(class_or_instance._EXTENT_BYTES_)  # pylint: disable=protected-access
 
 
 def get_fixed_port_id(
@@ -235,7 +235,7 @@ def get_fixed_port_id(
     """
     try:
         # noinspection PyProtectedMember
-        out = int(class_or_instance._FIXED_PORT_ID_)
+        out = int(class_or_instance._FIXED_PORT_ID_)  # pylint: disable=protected-access
     except TypeError:
         return None
     else:

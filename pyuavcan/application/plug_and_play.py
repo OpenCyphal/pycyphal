@@ -142,7 +142,7 @@ class Allocatee:
             _logger.debug("Publishing allocation request %s", msg)
             self._pub.publish_soon(msg)
         except Exception as ex:
-            _logger.exception(f"Could not send allocation request {msg}: {ex}")
+            _logger.exception("Could not send allocation request %s: %s", msg, ex)
 
     def _restart_timer(self) -> None:
         t_request = random.random()
@@ -175,8 +175,9 @@ class Allocatee:
         max_node_id = min(protocol_params.max_nodes - 1, _NODE_ID_MASK)
         if not (0 <= allocated <= max_node_id):
             _logger.warning(
-                f"Allocated node-ID {allocated} ignored because it is incompatible with the transport: "
-                f"{protocol_params}"
+                "Allocated node-ID %s ignored because it is incompatible with the transport: %s",
+                allocated,
+                protocol_params,
             )
             return
 
@@ -278,7 +279,7 @@ class CentralizedAllocator(Allocator):
         self, msg: typing.Union[NodeIDAllocationData_1, NodeIDAllocationData_2], meta: pyuavcan.transport.TransferFrom
     ) -> None:
         if meta.source_node_id is not None:
-            _logger.error(
+            _logger.error(  # pylint: disable=logging-fstring-interpolation
                 f"Invalid network configuration: another node-ID allocator detected at node-ID {meta.source_node_id}. "
                 f"There shall be exactly one allocator on the network. If modular redundancy is desired, "
                 f"use a distributed allocator (currently, a centralized allocator is running). "
@@ -303,9 +304,7 @@ class CentralizedAllocator(Allocator):
                 return
         else:
             assert False, "Internal logic error"
-        _logger.warning(
-            f"Allocation table is full, ignoring request {msg} with metadata {meta}. Please purge the table."
-        )
+        _logger.warning("Allocation table is full, ignoring request %s with %s. Please purge the table.", msg, meta)
 
     def _respond_v1(self, priority: pyuavcan.transport.Priority, unique_id_hash: int, allocated_node_id: int) -> None:
         msg = NodeIDAllocationData_1(unique_id_hash=unique_id_hash, allocated_node_id=[ID(allocated_node_id)])

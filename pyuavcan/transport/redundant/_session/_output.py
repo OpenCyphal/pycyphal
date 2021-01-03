@@ -217,7 +217,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             # Result consolidation logic as described in the doc.
             if exceptions:
                 # Taking great efforts to make the error message very understandable to the user.
-                _logger.error(
+                _logger.error(  # pylint: disable=logging-not-lazy
                     f"{self}: {len(exceptions)} of {len(results)} inferiors have failed: "
                     + ", ".join(f"{i}:{self._describe_send_result(r)}" for i, r in enumerate(results))
                 )
@@ -229,9 +229,8 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                 self._stat_transfers += 1
                 self._stat_payload_bytes += sum(map(len, transfer.fragmented_payload))
                 return True
-            else:
-                self._stat_drops += 1
-                return False
+            self._stat_drops += 1
+            return False
 
     @property
     def specifier(self) -> pyuavcan.transport.OutputSessionSpecifier:
@@ -306,10 +305,9 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
     def _describe_send_result(result: typing.Union[bool, Exception]) -> str:
         if isinstance(result, Exception):
             return repr(result)
-        elif isinstance(result, bool):
+        if isinstance(result, bool):
             return "success" if result else "timeout"
-        else:
-            assert False
+        assert False
 
 
 def _unittest_redundant_output() -> None:
@@ -373,7 +371,7 @@ def _unittest_redundant_output() -> None:
         await asyncio.sleep(2.0)
         _logger.debug("Test: adding the inferior...")
         # noinspection PyProtectedMember
-        ses._add_inferior(inferior)
+        ses._add_inferior(inferior)  # pylint: disable=protected-access
         _logger.debug("Test: inferior has been added.")
 
     assert await_(
@@ -388,7 +386,7 @@ def _unittest_redundant_output() -> None:
                 ),
                 loop.time() + 5.0,
             ),
-            # While the transmission is stalled, add one inferior with a two-second delay. It will unlock the stalled task.
+            # While the transmission is stalled, add one inferior with a 2-sec delay. It will unlock the stalled task.
             add_inferior(inf_a),
             # Then make sure that the transmission has actually taken place about after two seconds from the start.
         )
@@ -456,14 +454,14 @@ def _unittest_redundant_output() -> None:
 
     # Add a new inferior and ensure that its feedback is auto-enabled!
     # noinspection PyProtectedMember
-    ses._add_inferior(inf_b)
+    ses._add_inferior(inf_b)  # pylint: disable=protected-access
     assert ses.inferiors == [
         inf_a,
         inf_b,
     ]
     # Double-add has no effect.
     # noinspection PyProtectedMember
-    ses._add_inferior(inf_b)
+    ses._add_inferior(inf_b)  # pylint: disable=protected-access
     assert ses.inferiors == [
         inf_a,
         inf_b,
@@ -523,10 +521,10 @@ def _unittest_redundant_output() -> None:
 
     # Remove the first inferior.
     # noinspection PyProtectedMember
-    ses._close_inferior(0)
+    ses._close_inferior(0)  # pylint: disable=protected-access
     assert ses.inferiors == [inf_b]
     # noinspection PyProtectedMember
-    ses._close_inferior(1)  # Out of range, no effect.
+    ses._close_inferior(1)  # Out of range, no effect.  # pylint: disable=protected-access
     assert ses.inferiors == [inf_b]
     # Make sure the removed inferior has been closed.
     assert not tr_a.output_sessions
@@ -572,7 +570,7 @@ def _unittest_redundant_output() -> None:
     ses.disable_feedback()
     # A diversion - enable the feedback in the inferior and make sure it's not propagated.
     # noinspection PyProtectedMember
-    ses._enable_feedback_on_inferior(inf_b)
+    ses._enable_feedback_on_inferior(inf_b)  # pylint: disable=protected-access
     assert await_(
         ses.send(
             Transfer(
@@ -668,9 +666,9 @@ def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     rx_b = tr_b.get_input_session(spec_rx, meta)
 
     # noinspection PyProtectedMember
-    ses._add_inferior(inf_a)
+    ses._add_inferior(inf_a)  # pylint: disable=protected-access
     # noinspection PyProtectedMember
-    ses._add_inferior(inf_b)
+    ses._add_inferior(inf_b)  # pylint: disable=protected-access
 
     # Transmission with exceptions.
     # If at least one transmission succeeds, the call succeeds.

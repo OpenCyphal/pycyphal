@@ -69,7 +69,7 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
             specifier.remote_node_id is not None if isinstance(specifier.data_specifier, ServiceDataSpecifier) else True
         ), "Internal protocol violation: cannot broadcast a service transfer"
 
-        super(SerialOutputSession, self).__init__(finalizer)
+        super().__init__(finalizer)
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         self._raise_if_closed()
@@ -112,12 +112,11 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
                     self._feedback_handler(SerialFeedback(transfer.timestamp, tx_timestamp))
                 except Exception as ex:  # pragma: no cover
                     _logger.exception(
-                        f"Unhandled exception in the output session feedback handler {self._feedback_handler}: {ex}"
+                        "Unhandled exception in the output session feedback handler %s: %s", self._feedback_handler, ex
                     )
             return True
-        else:
-            self._statistics.drops += len(frames)
-            return False
+        self._statistics.drops += len(frames)
+        return False
 
     def enable_feedback(self, handler: typing.Callable[[pyuavcan.transport.Feedback], None]) -> None:
         self._feedback_handler = handler
@@ -136,14 +135,14 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
     def sample_statistics(self) -> pyuavcan.transport.SessionStatistics:
         return copy.copy(self._statistics)
 
-    def close(self) -> None:
-        super(SerialOutputSession, self).close()
+    def close(self) -> None:  # pylint: disable=useless-super-delegation
+        super().close()
 
 
 def _unittest_output_session() -> None:
     import asyncio
     from pytest import raises, approx
-    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority
+    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
     from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback, Transfer
 
     ts = Timestamp.now()
