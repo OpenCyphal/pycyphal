@@ -18,6 +18,8 @@ async def _unittest_udp_transport_ipv4() -> None:
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
     from pyuavcan.transport import ProtocolParameters
 
+    asyncio.get_running_loop().slow_callback_duration = 5.0
+
     get_monotonic = asyncio.get_event_loop().time
 
     with pytest.raises(ValueError):
@@ -252,6 +254,8 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
     from pyuavcan.transport import Capture, AlienSessionSpecifier
+
+    asyncio.get_running_loop().slow_callback_duration = 5.0
 
     tr_capture = UDPTransport("127.50.0.2", anonymous=True)
     captures: typing.List[UDPCapture] = []

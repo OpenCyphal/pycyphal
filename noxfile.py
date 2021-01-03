@@ -17,6 +17,7 @@ import nox
 ROOT_DIR = Path(__file__).resolve().parent
 DEPS_DIR = ROOT_DIR / ".test_deps"
 assert DEPS_DIR.is_dir(), "Invalid configuration"
+os.environ["PATH"] += os.pathsep + str(DEPS_DIR)
 
 CONFIG = configparser.ConfigParser()
 CONFIG.read("setup.cfg")
@@ -67,9 +68,6 @@ def test(session):
         (tmp_dir / fn).symlink_to(ROOT_DIR / fn)
 
     # Configure the environment to meet expectations of the test suite.
-    session.env["PATH"] += os.pathsep + str(DEPS_DIR)
-    os.environ["PATH"] += os.pathsep + str(DEPS_DIR)
-
     if sys.platform.startswith("linux"):
         sudo = partial(session.run, "sudo", external=True)
         # Enable packet capture for the Python executable. This is necessary for testing the UDP capture capability.
@@ -138,7 +136,7 @@ def test(session):
 
         session.run("unzip", str(list(DEPS_DIR.glob("sonar-scanner*.zip"))[0]), silent=True, external=True)
         (sonar_scanner_bin,) = list(Path().cwd().resolve().glob("sonar-scanner*/bin"))
-        session.env["PATH"] = os.pathsep.join([str(sonar_scanner_bin), session.env["PATH"]])
+        os.environ["PATH"] = os.pathsep.join([str(sonar_scanner_bin), os.environ["PATH"]])
 
         session.cd(ROOT_DIR)
         session.run("sonar-scanner", f"-Dsonar.login={sonarcloud_token}")
