@@ -27,7 +27,7 @@ _logger = logging.getLogger(__name__)
 @pytest.fixture(scope="session", autouse=True)  # type: ignore
 def _configure_host_environment() -> None:
     def execute(*cmd: typing.Any, ensure_success: bool = True) -> typing.Tuple[int, str, str]:
-        cmd = list(map(str, cmd))
+        cmd = tuple(map(str, cmd))
         out = subprocess.run(  # pylint: disable=subprocess-run-check
             cmd,
             encoding="utf8",
