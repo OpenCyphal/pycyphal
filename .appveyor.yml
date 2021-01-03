@@ -11,7 +11,6 @@ environment:
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.9'
-      analysis: 1    # Always perform analysis on the latest Python version on a GNU/Linux worker.
     -
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
@@ -26,75 +25,60 @@ environment:
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.9'
 
-  # Access credentials for continuous deployment: a new tag is pushed upstream and the package is uploaded to PyPI.
   GIT_TOKEN:
     secure: +jQhxLpePj6hdDryfET/XpLo7VL9fhDXVHlwLOPp/nRDYe97TJAfd0XCTuPz1qkT
   TWINE_USERNAME: __token__
   TWINE_PASSWORD:
     secure: +ZVhECKV0ESBrvUGXVd9wmqekK49PnIKW+rkN7Wb3cvSK1jAuiuOKH4Hx5u+aQsagyf72qhnVs+m0yHejMsU2uNgoGxQAawpsyAr3Yj3eCpEy0Mk75cnT/REa9i9WOMwIDDsdPcKrJIKeQdMsKHCn1CWg0COksQbECcm1wbTIamFflJ+MORMYrURwdaDqX5mJyFaER2+IrRQx0A0ZaU3hL4UhpTESvXdExz3/iwoVFnkN0liT//Uo0TTWEVMW5aOlpQ2eosM/jVubo90Ys/MGg==
-
-  # Access credentials for static analysis tools.
   SONARCLOUD_TOKEN:
     secure: WhIOqdzyx8VkpAsNjwy4O+OiAQ4FzUu8d1sFcQ7xz8DlFABiNajhPv0lhc1Dpz7G
+  COVERALLS_REPO_TOKEN: FIRr9jzyjV67BIyomHl1JnRe3t2TPfKvK
 
 stack: python %PYTHON%
 build: off
 skip_tags: true
 
 for:
-  -
+  - # WINDOWS TEST
     matrix:
       only:
         - job_group: tests
+          APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
     install:
-      # ------------------------------ GNU/Linux build config ------------------------------
-      - sh: 'lsb_release -a'
-      - sh: 'export extras_pkg="linux-*-extra-$(uname -r)"'
-      # Graphviz is needed for the docs, ncat is needed for testing the UAVCAN/serial transport.
-      - sh: 'sudo apt-get install -y $extras_pkg graphviz ncat'
-
-      # ------------------------------ MS Windows build config ------------------------------
-      - cmd: 'systeminfo & route print & ipconfig /all'
+      - 'systeminfo & route print & ipconfig /all'
       # Configure Npcap. This is for testing the packet capture functionality in the UAVCAN/UDP transport.
-      - cmd: '.test_deps\npcap-0.96.exe /loopback_support=yes /winpcap_mode=yes /S'
+      - '.test_deps\npcap-0.96.exe /loopback_support=yes /winpcap_mode=yes /S'
       # Installation of the NDIS filter driver from Npcap may have disrupted network connectivity, as explained in
       # https://github.com/nmap/npcap/issues/215. Also, a restart appears to be necessary to enable the NPF service.
       # Therefore, we restart the VM as suggested in https://github.com/appveyor/ci/issues/3491.
-      - cmd: 'shutdown /r /f /t 5'
-      - cmd: 'timeout 30'         # Boot-up delay. This should be sufficient for the VM to get ready. Increase if not.
+      - 'shutdown /r /f /t 5'
+      - 'timeout 30'         # Boot-up delay. This should be sufficient for the VM to get ready. Increase if not.
       # Due to the reboot, all volatile configuration like environment variables is lost here. We need to set it up now.
-      - cmd: 'set PATH=%PYTHON%;%PYTHON%\Scripts;%PATH%'
-      - cmd: 'echo %PATH%'
-
-      # ------------------------------ Common configuration ------------------------------
-      - git submodule update --init --recursive
+      - 'set PATH=%PYTHON%;%PYTHON%\Scripts;%PATH%'
+      - 'echo %PATH%'
+      - 'git submodule update --init --recursive'
+      - 'python -m pip install --upgrade pip setuptools nox'
     test_script:
-      - sh:  './test.sh'
-      - cmd: 'powershell .\test.ps1'
-    on_success:
-      - sh: |
-          echo "APPVEYOR_REPO_BRANCH:                   $APPVEYOR_REPO_BRANCH"
-          echo "APPVEYOR_PULL_REQUEST_NUMBER:           $APPVEYOR_PULL_REQUEST_NUMBER"
-          echo "APPVEYOR_PULL_REQUEST_HEAD_REPO_BRANCH: $APPVEYOR_PULL_REQUEST_HEAD_REPO_BRANCH"
-          echo "APPVEYOR_PULL_REQUEST_HEAD_COMMIT:      $APPVEYOR_PULL_REQUEST_HEAD_COMMIT"
-      - sh: |
-          if ((analysis))
-          then
-            pip install pyyaml coveralls  # Not listed in requirements.txt because they are only useful in the CI
-            coveralls
-          fi
+      - 'nox --non-interactive --session test pristine'
+
+  - # GNU/LINUX TEST
+    matrix:
+      only:
+        - job_group: tests
+          APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+    install:
+      - 'export extras_pkg="linux-*-extra-$(uname -r)"'
+      # Graphviz is needed for the docs, ncat is needed for testing the UAVCAN/serial transport.
+      - 'sudo apt-get install -y $extras_pkg graphviz ncat'
+      - 'git submodule update --init --recursive'
+      - 'python -m pip install --upgrade pip setuptools nox'
       # Sonar scanner unconditionally fails on PR builds with a NullPointerException, so don't run it there.
-      - sh: |
-          if ((analysis)) && [[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]]
-          then
-            wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.5.0.2216-linux.zip -O sonar.zip
-            unzip sonar.zip
-            export PATH="$(echo sonar-scanner*/bin):$PATH"
-            sonar-scanner -Dsonar.login=$SONARCLOUD_TOKEN
-          else
-            echo "Sonar scan skipped."
-          fi
-  -
+      - '[[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]] || unset SONARCLOUD_TOKEN; echo $SONARCLOUD_TOKEN'
+    test_script:
+      - 'nox --non-interactive --python $PYTHON --session test'
+      - 'nox --non-interactive --session pristine lint docs'
+
+  - # DEPLOYMENT
     matrix:
       only:
         - job_name: deploy
@@ -103,15 +87,20 @@ for:
         - master
     install:
       - git submodule update --init --recursive
-      - pip install -r requirements.txt
+      - python -m pip install --upgrade pip setuptools wheel twine
     deploy_script:
       # Ensure we deploy only from master, not from PR builds.
-      - '[[ "$APPVEYOR_REPO_BRANCH" == "master" ]] && [[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]] || exit 1'
+      - '[[ "$APPVEYOR_REPO_BRANCH" == "master" ]] && [[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]] || exit'
+      # Configure git credentials.
       - echo "https://${GIT_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
       - git config --global credential.helper store
-      - git config --global user.email "devnull@uavcan.org"
+      - git config --global user.email "hedgehoginthefog@uavcan.org"
       - git config --global user.name  "Release Automation"
-      - ./release.sh
+      # Tag and publish this release. Push the tag after the release is out in case it could not be published.
+      - 'git tag "$(cat pyuavcan/VERSION)"'
+      - 'python setup.py sdist bdist_wheel'
+      - 'python -m twine upload dist/*'
+      - 'git push --tags'
 
 artifacts:
-  - path: '*.log'
+  - path: '.nox/*/*/*.log'

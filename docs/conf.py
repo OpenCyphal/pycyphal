@@ -29,7 +29,7 @@ DOC_ROOT = pathlib.Path(__file__).absolute().parent
 REPOSITORY_ROOT = DOC_ROOT.parent
 
 # The generated files are not documented, but they must be importable to import the target package.
-DSDL_GENERATED_ROOT = REPOSITORY_ROOT / ".test_dsdl_generated"
+DSDL_GENERATED_ROOT = REPOSITORY_ROOT / ".compiled"
 PUBLIC_REGULATED_DATA_TYPES_ROOT = REPOSITORY_ROOT / "demo" / "public_regulated_data_types"
 
 sys.path.insert(0, str(REPOSITORY_ROOT))

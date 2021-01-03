@@ -39,7 +39,7 @@ and make sure to include at least its core dependencies, which are:
 
     import configparser, textwrap
     cp = configparser.ConfigParser()
-    cp.read('../setup.cfg')
+    cp.read('setup.cfg')
     print('.. code-block::\n')
     print(textwrap.indent(cp['options']['install_requires'].strip(), ' '))
 

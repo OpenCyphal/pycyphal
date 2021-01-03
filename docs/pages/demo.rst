@@ -86,7 +86,7 @@ Use one of the following initialization expressions depending on your demo confi
 
 - ``"UDP('127.0.0.111')"`` -- UDP/IP on loopback. Local node-ID 111.
 
-- ``"Serial('socket://loopback:50905',111)"`` --
+- ``"Serial('socket://localhost:50905',111)"`` --
   UAVCAN/serial emulated over a TCP/IP tunnel instead of a real serial port (use Ncat for TCP connection brokering).
   Local node-ID 111.
 
@@ -95,7 +95,7 @@ Use one of the following initialization expressions depending on your demo confi
 
 Redundant transports can be configured by specifying multiple comma-separated expressions:
 
-- ``"UDP('127.0.0.111'), Serial('socket://loopback:50905',111)"`` --
+- ``"UDP('127.0.0.111'), Serial('socket://localhost:50905',111)"`` --
   dissimilar double redundancy, UDP plus serial.
 
 - ``"CAN(can.media.socketcan.SocketCANMedia('vcan0',8),111), CAN(can.media.socketcan.SocketCANMedia('vcan1',32),111), CAN(can.media.socketcan.SocketCANMedia('vcan2',64),111)"`` --

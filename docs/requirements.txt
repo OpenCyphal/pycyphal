@@ -1,0 +1,8 @@
+# These dependencies are only needed to build the docs.
+# There are a few pending issues with Sphinx (update when resolved):
+#   - https://github.com/sphinx-doc/sphinx/issues/6574
+#   - https://github.com/sphinx-doc/sphinx/issues/6607
+
+sphinx           == 3.2.1
+sphinx_rtd_theme == 0.5.0
+sphinx-computron >= 0.2.0

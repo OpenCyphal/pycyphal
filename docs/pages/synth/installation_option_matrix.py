@@ -13,7 +13,7 @@ import pyuavcan
 HEADER_SUFFIX = "\n" + "." * 80 + "\n"
 
 cp = configparser.ConfigParser()
-cp.read("../setup.cfg")
+cp.read("setup.cfg")
 extras: typing.Dict[str, str] = dict(cp["options.extras_require"])
 
 
