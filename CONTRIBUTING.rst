@@ -159,6 +159,10 @@ Naturally, these are mostly Windows-specific utilities.
 Testing, analysis, and documentation generation are automated with Nox via ``noxfile.py``.
 Do look at this file to see what actions are available and how the automation is set up.
 If you need to test a specific module or part thereof, consider invoking PyTest directly to speed things up.
+If you want to run the full suite locally::
+
+    pip install -U nox
+    nox --no-error-on-missing-interpreters
 
 When writing tests, aim to cover at least 90% of branches.
 Ensure that your tests do not emit any errors or warnings into stderr output upon successful execution,
