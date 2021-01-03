@@ -6,7 +6,6 @@ import sys
 import typing
 import logging
 import subprocess
-from pathlib import Path
 import pytest
 
 # The fixture is imported here to make it visible to other tests in this suite.
