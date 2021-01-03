@@ -24,6 +24,7 @@ EXTRAS_REQUIRE = dict(CONFIG["options.extras_require"])
 assert EXTRAS_REQUIRE, "Config could not be read correctly"
 
 PYTHONS = ["3.7", "3.8", "3.9"]
+"""The newest supported Python shall be listed last."""
 
 
 @nox.session(python=False)
@@ -61,32 +62,34 @@ def test(session):
     # We have to symlink the original setup.cfg as well if we run tools from the new directory.
     tmp_dir = Path(session.create_tmp()).resolve()
     session.cd(tmp_dir)
-    session.log(f"Working directory: {Path.cwd()}")
     fn = "setup.cfg"
     if not (tmp_dir / fn).exists():
         (tmp_dir / fn).symlink_to(ROOT_DIR / fn)
 
-    # Configure the operating system to meet the expectations of the test suite.
+    # Configure the environment to meet expectations of the test suite.
     session.env["PATH"] += os.pathsep + str(DEPS_DIR)
+    os.environ["PATH"] += os.pathsep + str(DEPS_DIR)
+
     if sys.platform.startswith("linux"):
         sudo = partial(session.run, "sudo", external=True)
         # Enable packet capture for the Python executable. This is necessary for testing the UDP capture capability.
-        sudo(f"setcap cap_net_raw+eip '{Path(sys.executable).resolve()}'")
+        sudo("setcap", "cap_net_raw+eip", str(Path(sys.executable).resolve()))
         # Set up virtual SocketCAN interfaces.
-        sudo("modprobe can")
-        sudo("modprobe can_raw")
-        sudo("modprobe vcan")
+        sudo("modprobe", "can")
+        sudo("modprobe", "can_raw")
+        sudo("modprobe", "vcan")
         for idx in range(3):
             iface = f"vcan{idx}"
-            sudo(f"ip link add dev {iface} type vcan", success_codes={0, 2})  # Returns non-zero if interface exists.
-            sudo(f"ip link set     {iface} mtu 72")  # Enable both Classic CAN and CAN FD.
-            sudo(f"ip link set up  {iface}")
+            sudo("ip", "link", "add", "dev", iface, "type", "vcan", success_codes={0, 2})  # Non-zero if exists.
+            sudo("ip", "link", "set", iface, "mtu", "72")  # Enable both Classic CAN and CAN FD.
+            sudo("ip", "link", "set", "up", iface)
 
     if sys.platform.startswith("win"):
         # Reconfigure the system timer to run at a higher resolution. This is desirable for the real-time tests.
         t = ctypes.c_ulong()
         ctypes.WinDLL("NTDLL.DLL").NtSetTimerResolution(5000, 1, ctypes.byref(t))
         session.log("System timer resolution: %.3f ms", t.value / 10e3)
+        session.run("ls", session.env["PATH"].split(os.pathsep)[-1])
 
     # Launch the TCP broker for testing the UAVCAN/serial transport.
     broker_process = subprocess.Popen(
@@ -135,9 +138,9 @@ def test(session):
     # Submit analysis to SonarCloud. This also has to be run from the test session to access the coverage files.
     sonarcloud_token = session.env.get("SONARCLOUD_TOKEN")
     if is_latest_python(session) and sonarcloud_token:
-        session.run("coverage", "xml", "-i", "-o", ROOT_DIR / ".coverage.xml")
+        session.run("coverage", "xml", "-i", "-o", str(ROOT_DIR / ".coverage.xml"))
 
-        session.run("unzip", list(DEPS_DIR.glob("sonar-scanner*.zip"))[0])
+        session.run("unzip", list(DEPS_DIR.glob("sonar-scanner*.zip"))[0], external=True)
         (sonar_scanner_bin,) = list(Path().cwd().resolve().glob("sonar-scanner*/bin"))
         session.env["PATH"] = os.pathsep.join([sonar_scanner_bin, session.env["PATH"]])
 
@@ -147,7 +150,7 @@ def test(session):
         session.log("SonarQube scan skipped")
 
 
-@nox.session()
+@nox.session(python=PYTHONS)
 def pristine(session):
     """
     Install the library into a pristine environment and ensure that it is importable.
@@ -158,13 +161,13 @@ def pristine(session):
     exe = partial(session.run, "python", "-c", silent=True)
     session.cd(session.create_tmp())  # Change the directory to reveal spurious dependencies from the project root.
 
-    session.install(".")  # Testing bare installation first.
+    session.install(f"{ROOT_DIR}")  # Testing bare installation first.
     exe("import pyuavcan")
     exe("import pyuavcan.transport.can")
     exe("import pyuavcan.transport.udp")
     exe("import pyuavcan.transport.loopback")
 
-    session.install(".[transport_serial]")
+    session.install(f"{ROOT_DIR}[transport_serial]")
     exe("import pyuavcan.transport.serial")
 
 

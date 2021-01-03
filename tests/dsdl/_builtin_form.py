@@ -59,7 +59,7 @@ def _unittest_slow_builtin_form_manual(generated_packages: typing.List[pyuavcan.
         "name": "org.node.my",
         "software_image_crc": [0x0DDDEADB16B00B5],
         # The following will have to be changed when strings are supported natively in DSDL:
-        "certificate_of_authenticity": bytes(range(100)).decode("unicode_escape"),
+        "certificate_of_authenticity": bytes(range(100)).decode(),
     }
 
     bi = pyuavcan.dsdl.to_builtin(
