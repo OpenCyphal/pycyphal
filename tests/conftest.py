@@ -48,9 +48,6 @@ def _configure_host_environment() -> None:
         _logger.info("Limiting process memory usage to %.1f GiB", MEMORY_LIMIT / GIBIBYTE)
         resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT, MEMORY_LIMIT))
 
-        # Enable packet capture for the Python executable. This is necessary for testing the UDP capture capability.
-        execute("sudo", "setcap", "cap_net_raw+eip", Path(sys.executable).resolve())
-
         # Set up virtual SocketCAN interfaces.
         execute("sudo", "modprobe", "can")
         execute("sudo", "modprobe", "can_raw")

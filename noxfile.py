@@ -69,6 +69,11 @@ def test(session):
     if not (tmp_dir / fn).exists():
         (tmp_dir / fn).symlink_to(ROOT_DIR / fn)
 
+    if sys.platform.startswith("linux"):
+        # Enable packet capture for the Python executable. This is necessary for testing the UDP capture capability.
+        # It can't be done from within the test suite because it has to be done before the interpreter is started.
+        session.run("sudo", "setcap", "cap_net_raw+eip", str(Path(session.bin, "python").resolve()), external=True)
+
     # Launch the TCP broker for testing the UAVCAN/serial transport.
     broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"], env=session.env)
     time.sleep(1.0)  # Ensure that it has started.
