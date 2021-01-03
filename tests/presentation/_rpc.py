@@ -6,11 +6,10 @@ import typing
 import asyncio
 import pytest
 import pyuavcan
-from . import TRANSPORT_FACTORIES, TransportFactory
+from .conftest import TransportFactory
 
 
 # noinspection PyProtectedMember
-@pytest.mark.parametrize("transport_factory", TRANSPORT_FACTORIES)  # type: ignore
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_presentation_rpc(
     generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
