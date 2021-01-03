@@ -169,7 +169,7 @@ def _unittest_output_session() -> None:
         finalized = True
 
     with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
-        sos = SerialOutputSession(
+        SerialOutputSession(
             specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
             payload_metadata=PayloadMetadata(1024),
             mtu=10,

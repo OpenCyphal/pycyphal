@@ -76,7 +76,7 @@ for:
       - '[[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]] || unset SONARCLOUD_TOKEN; echo $SONARCLOUD_TOKEN'
     test_script:
       - 'nox --non-interactive --python $PYTHON --session test pristine'
-      - 'nox --non-interactive --session lint docs'
+      - 'nox --non-interactive --session check_style docs'
 
   - # DEPLOYMENT
     matrix:
