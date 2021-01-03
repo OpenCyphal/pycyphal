@@ -86,8 +86,7 @@ class UDPFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
                 end_of_transfer=bool(frame_index_eot & (UDPFrame.INDEX_MASK + 1)),
                 payload=image[UDPFrame._HEADER_FORMAT.size :],
             )
-        else:
-            return None
+        return None
 
 
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------

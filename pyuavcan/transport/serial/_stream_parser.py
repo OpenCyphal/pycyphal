@@ -85,7 +85,6 @@ class StreamParser:
 def _unittest_stream_parser() -> None:
     from pytest import raises
     from pyuavcan.transport import Priority, MessageDataSpecifier
-    from ._frame import SerialFrame
 
     ts = Timestamp.now()
 
@@ -95,8 +94,7 @@ def _unittest_stream_parser() -> None:
         sp = StreamParser(lambda *_: None, 0)
 
     sp = StreamParser(lambda ts, buf, item: outputs.append((ts, buf, item)), 4)
-    # noinspection PyProtectedMember
-    print("sp._max_frame_size_bytes:", sp._max_frame_size_bytes)
+    print("sp._max_frame_size_bytes:", sp._max_frame_size_bytes)  # pylint: disable=protected-access
 
     def proc(
         b: typing.Union[bytes, memoryview]
@@ -104,8 +102,8 @@ def _unittest_stream_parser() -> None:
         sp.process_next_chunk(b, ts)
         out = outputs[:]
         outputs.clear()
-        for i, (t, b, f) in enumerate(out):
-            print(f"output {i + 1} of {len(out)}: ", t, bytes(b), f)
+        for i, (t, bb, f) in enumerate(out):
+            print(f"output {i + 1} of {len(out)}: ", t, bytes(bb), f)
         return out
 
     assert not outputs

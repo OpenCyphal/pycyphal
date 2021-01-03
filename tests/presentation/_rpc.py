@@ -6,11 +6,9 @@ import typing
 import asyncio
 import pytest
 import pyuavcan
-from . import TRANSPORT_FACTORIES, TransportFactory
+from .conftest import TransportFactory
 
 
-# noinspection PyProtectedMember
-@pytest.mark.parametrize("transport_factory", TRANSPORT_FACTORIES)  # type: ignore
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_presentation_rpc(
     generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
@@ -39,13 +37,13 @@ async def _unittest_slow_presentation_rpc(
     client1 = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_1_0, 123)
     client_dead = pres_b.make_client_with_fixed_service_id(uavcan.register.Access_1_0, 111)
     assert client0 is not client1
-    assert client0._maybe_impl is not None
-    assert client1._maybe_impl is not None
-    assert client0._maybe_impl is client1._maybe_impl
-    assert client0._maybe_impl is not client_dead._maybe_impl
-    assert client0._maybe_impl.proxy_count == 2
-    assert client_dead._maybe_impl is not None
-    assert client_dead._maybe_impl.proxy_count == 1
+    assert client0._maybe_impl is not None  # pylint: disable=protected-access
+    assert client1._maybe_impl is not None  # pylint: disable=protected-access
+    assert client0._maybe_impl is client1._maybe_impl  # pylint: disable=protected-access
+    assert client0._maybe_impl is not client_dead._maybe_impl  # pylint: disable=protected-access
+    assert client0._maybe_impl.proxy_count == 2  # pylint: disable=protected-access
+    assert client_dead._maybe_impl is not None  # pylint: disable=protected-access
+    assert client_dead._maybe_impl.proxy_count == 1  # pylint: disable=protected-access
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker

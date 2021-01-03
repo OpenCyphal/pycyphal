@@ -4,9 +4,9 @@
 
 import time
 import typing
-import pytest
 import asyncio
 import logging
+import pytest
 import pyuavcan.transport
 from pyuavcan.transport import can
 
@@ -20,11 +20,7 @@ async def _unittest_can_transport_anon() -> None:
     from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
     from pyuavcan.transport import OperationNotDefinedForAnonymousNodeError
     from pyuavcan.transport import InputSessionSpecifier, OutputSessionSpecifier
-
-    # noinspection PyProtectedMember
     from pyuavcan.transport.can._identifier import MessageCANID
-
-    # noinspection PyProtectedMember
     from pyuavcan.transport.can._frame import UAVCANFrame
     from .media.mock import MockMedia, FrameCollector
 
@@ -240,11 +236,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
     from pyuavcan.transport import ResourceClosedError, InputSessionSpecifier, OutputSessionSpecifier
-
-    # noinspection PyProtectedMember
     from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
-
-    # noinspection PyProtectedMember
     from pyuavcan.transport.can._frame import UAVCANFrame
     from pyuavcan.transport.can.media import Envelope
     from .media.mock import MockMedia, FrameCollector

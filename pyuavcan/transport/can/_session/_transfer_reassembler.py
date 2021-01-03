@@ -123,8 +123,8 @@ class TransferReassembler:
                 fragmented_payload=fragmented_payload,
                 source_node_id=self._source_node_id,
             )
-        else:
-            return None  # Expect more frames to come
+
+        return None  # Expect more frames to come
 
     def _prepare_for_next_transfer(self) -> None:
         self._transfer_id = (self._transfer_id + 1) % TRANSFER_ID_MODULO

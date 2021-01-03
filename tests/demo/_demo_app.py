@@ -7,16 +7,13 @@ import re
 import sys
 import shutil
 import typing
-import pytest
 import asyncio
 import pathlib
 import tempfile
 import dataclasses
+import pytest
 import pyuavcan
 from ._subprocess import BackgroundChildProcess
-
-# noinspection PyUnresolvedReferences
-from tests.dsdl.conftest import generated_packages
 
 
 DEMO_APP_NODE_ID = 42
@@ -107,7 +104,7 @@ async def _unittest_slow_demo_app(
     import uavcan.diagnostic
     import uavcan.si.sample.temperature
     import sirius_cyber_corp
-    import pyuavcan.application
+    import pyuavcan.application  # pylint: disable=redefined-outer-name
 
     asyncio.get_running_loop().slow_callback_duration = 3.0
     _ = generated_packages

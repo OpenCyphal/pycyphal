@@ -135,7 +135,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
                 )
             except Exception as ex:  # pragma: no cover
                 _logger.exception(
-                    f"Unhandled exception in the output session feedback handler {self._feedback_handler}: {ex}"
+                    "Unhandled exception in the output session feedback handler %s: %s", self._feedback_handler, ex
                 )
 
         return True
@@ -203,7 +203,7 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
                     # loopback interface, send() may raise WinError 1231 or 10051. This error shall be suppressed.
                     _logger.debug(
                         "%r: Socket send error ignored (the likely cause is that there are no known receivers "
-                        + "on the other end of the link): %r",
+                        "on the other end of the link): %r",
                         self,
                         ex,
                     )
@@ -222,8 +222,8 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
 
 def _unittest_output_session() -> None:
     from pytest import raises
-    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority
-    from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback, Transfer
+    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
+    from pyuavcan.transport import PayloadMetadata, SessionStatistics, Feedback, Transfer
 
     ts = Timestamp.now()
     loop = asyncio.get_event_loop()
@@ -448,8 +448,8 @@ def _unittest_output_session_no_listener() -> None:
     """
     Test the Windows-specific corner case. Should be handled identically on all platforms.
     """
-    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, ServiceDataSpecifier, Priority
-    from pyuavcan.transport import PayloadMetadata, Timestamp, Feedback, Transfer
+    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
+    from pyuavcan.transport import PayloadMetadata, Feedback, Transfer
 
     ts = Timestamp.now()
     loop = asyncio.get_event_loop()

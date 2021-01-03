@@ -8,14 +8,14 @@ import asyncio
 import pytest
 
 
-# noinspection PyProtectedMember
+if sys.platform != "linux":  # pragma: no cover
+    pytest.skip("SocketCAN test skipped because the system is not GNU/Linux", allow_module_level=True)
+
+
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_can_socketcan() -> None:
     from pyuavcan.transport import Timestamp
     from pyuavcan.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
-
-    if sys.platform != "linux":  # pragma: no cover
-        pytest.skip("SocketCAN test skipped because we do not seem to be on a GNU/Linux-based system")
 
     from pyuavcan.transport.can.media.socketcan import SocketCANMedia
 
@@ -34,8 +34,8 @@ async def _unittest_can_socketcan() -> None:
     assert media_a.interface_name == "vcan0"
     assert media_b.interface_name == "vcan0"
     assert media_a.number_of_acceptance_filters == media_b.number_of_acceptance_filters
-    assert media_a._maybe_thread is None
-    assert media_b._maybe_thread is None
+    assert media_a._maybe_thread is None  # pylint: disable=protected-access
+    assert media_b._maybe_thread is None  # pylint: disable=protected-access
 
     media_a.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
     media_b.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
@@ -56,8 +56,8 @@ async def _unittest_can_socketcan() -> None:
     media_a.start(on_rx_a, False)
     media_b.start(on_rx_b, True)
 
-    assert media_a._maybe_thread is not None
-    assert media_b._maybe_thread is not None
+    assert media_a._maybe_thread is not None  # pylint: disable=protected-access
+    assert media_b._maybe_thread is not None  # pylint: disable=protected-access
 
     await asyncio.sleep(2.0)  # This wait is needed to ensure that the RX thread handles select() timeout properly
 
@@ -76,7 +76,7 @@ async def _unittest_can_socketcan() -> None:
     print("rx_a:", rx_a)
     # Three sent back from the other end, two loopback
     assert len(rx_a) == 5
-    for t, f in rx_a:
+    for t, _ in rx_a:
         assert ts_begin.monotonic_ns <= t.monotonic_ns <= ts_end.monotonic_ns
         assert ts_begin.system_ns <= t.system_ns <= ts_end.system_ns
 

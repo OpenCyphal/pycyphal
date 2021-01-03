@@ -4,8 +4,8 @@
 
 from __future__ import annotations
 import typing
-import pytest
 import asyncio
+import pytest
 import pyuavcan.transport
 from pyuavcan.transport import Timestamp
 from pyuavcan.transport.can.media import Media, Envelope, FilterConfiguration, DataFrame, FrameFormat
@@ -28,7 +28,7 @@ class MockMedia(Media):
 
         self._raise_on_send_once: typing.Optional[Exception] = None
 
-        super(MockMedia, self).__init__()
+        super().__init__()
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -93,7 +93,9 @@ class MockMedia(Media):
             if p is not self:
                 # Unconditionally clear the loopback flag because for the other side these are
                 # regular received frames, not loopback frames.
-                p._receive((timestamp, Envelope(f.frame, loopback=False)) for f in frames)
+                p._receive(  # pylint: disable=protected-access
+                    (timestamp, Envelope(f.frame, loopback=False)) for f in frames
+                )
 
         # Simple loopback emulation with acceptance filtering.
         self._receive((timestamp, f) for f in frames if f.loopback)
@@ -143,9 +145,6 @@ class MockMedia(Media):
 
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_can_mock_media() -> None:
-    import asyncio
-    from pyuavcan.transport.can.media import DataFrame, FrameFormat, FilterConfiguration
-
     peers: typing.Set[MockMedia] = set()
 
     me = MockMedia(peers, 64, 3)

@@ -154,9 +154,9 @@ class Server(ServicePort[ServiceClass]):
                         f"found {type(response)} instead. "
                         f"The corresponding request was {request} with metadata {meta}."
                     )
-            except asyncio.CancelledError:
-                raise
             except Exception as ex:
+                if isinstance(ex, asyncio.CancelledError):
+                    raise
                 _logger.exception("%s unhandled exception in the handler: %s", self, ex)
 
             response_transport_session = self._get_output_transport_session(meta.client_node_id)
@@ -284,8 +284,7 @@ class Server(ServicePort[ServiceClass]):
                 request = pyuavcan.dsdl.deserialize(self._dtype.Request, transfer.fragmented_payload)
                 if request is not None:
                     return request, meta  # type: ignore
-                else:
-                    self._deserialization_failure_count += 1
+                self._deserialization_failure_count += 1
             else:
                 self._malformed_request_count += 1
 

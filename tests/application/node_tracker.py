@@ -3,16 +3,15 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
-import pytest
 import asyncio
 import logging
+import pytest
 import pyuavcan
 
 
 _logger = logging.getLogger(__name__)
 
 
-# noinspection PyProtectedMember
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_node_tracker(
     generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
@@ -300,7 +299,7 @@ def _serve_get_info(pres: pyuavcan.presentation.Presentation, name: str) -> None
         resp = GetInfo.Response(
             name=name,
         )
-        _logger.info(f"GetInfo request {req} metadata {meta} response {resp}")
+        _logger.info("GetInfo request %s metadata %s response %s", req, meta, resp)
         return resp
 
     srv.serve_in_background(handler)  # type: ignore

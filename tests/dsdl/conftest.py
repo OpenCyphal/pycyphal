@@ -6,21 +6,19 @@ import sys
 import pickle
 import typing
 import shutil
-import pathlib
 import logging
 import functools
 import importlib
-
+from pathlib import Path
 import pytest
-
 import pyuavcan.dsdl
 
 
 # Please maintain these carefully if you're changing the project's directory structure.
-TEST_ROOT_DIR = pathlib.Path(__file__).parent.parent
-LIBRARY_ROOT_DIR = TEST_ROOT_DIR.parent
+SELF_DIR = Path(__file__).resolve().parent
+LIBRARY_ROOT_DIR = SELF_DIR.parent.parent
 DEMO_DIR = LIBRARY_ROOT_DIR / "demo"
-DESTINATION_DIR = LIBRARY_ROOT_DIR / ".test_dsdl_generated"
+DESTINATION_DIR = Path.cwd().resolve() / ".compiled"
 
 _CACHE_FILE_NAME = "pydsdl_cache.pickle.tmp"
 
@@ -78,7 +76,7 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
                 DESTINATION_DIR,
             ),
             pyuavcan.dsdl.generate_package(
-                TEST_ROOT_DIR / "dsdl" / "test_dsdl_namespace",
+                SELF_DIR / "test_dsdl_namespace",
                 [DEMO_DIR / "public_regulated_data_types" / "uavcan"],
                 DESTINATION_DIR,
             ),

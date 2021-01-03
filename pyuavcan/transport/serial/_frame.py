@@ -6,8 +6,8 @@ from __future__ import annotations
 import typing
 import struct
 import dataclasses
-import pyuavcan
 from cobs import cobs  # type: ignore
+import pyuavcan
 
 _VERSION = 0
 

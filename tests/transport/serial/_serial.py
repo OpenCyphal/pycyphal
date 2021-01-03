@@ -4,9 +4,9 @@
 
 import typing
 import asyncio
+import logging
 import pytest
 import serial
-import logging
 import pyuavcan.transport
 
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
@@ -339,7 +339,6 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
-    from pyuavcan.transport.serial import SerialFrame
 
     get_monotonic = asyncio.get_event_loop().time
 

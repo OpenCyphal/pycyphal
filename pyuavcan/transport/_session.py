@@ -176,8 +176,7 @@ class SessionStatistics:
         if isinstance(other, SessionStatistics):
             fds = set(f.name for f in dataclasses.fields(self)) & set(f.name for f in dataclasses.fields(other))
             return all(getattr(self, n) == getattr(other, n) for n in fds)
-        else:  # pragma: no cover
-            return NotImplemented
+        return NotImplemented
 
 
 class Session(abc.ABC):

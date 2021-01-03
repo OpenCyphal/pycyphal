@@ -106,8 +106,7 @@ class Timestamp:
         """
         if isinstance(other, Timestamp):
             return self._system_ns == other._system_ns and self._monotonic_ns == other._monotonic_ns
-        else:
-            return NotImplemented
+        return NotImplemented
 
     def __hash__(self) -> int:
         return hash(self._system_ns + self._monotonic_ns)

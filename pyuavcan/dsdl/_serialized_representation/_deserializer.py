@@ -34,8 +34,6 @@ class Deserializer(abc.ABC):
         which then returns None instead of a valid instance, indicating that the serialized representation is invalid.
         """
 
-        pass
-
     def __init__(self, fragmented_buffer: typing.Sequence[memoryview]):
         """
         Do not call this directly. Use :meth:`new` to instantiate.
@@ -258,10 +256,8 @@ class Deserializer(abc.ABC):
                     self._bit_offset += 8
                 assert len(out) == count
                 return out
-            else:
-                return self.fetch_aligned_bytes(count)
-        else:
-            return numpy.zeros(0, dtype=_Byte)
+            return self.fetch_aligned_bytes(count)
+        return numpy.zeros(0, dtype=_Byte)
 
     def fetch_unaligned_unsigned(self, bit_length: int) -> int:
         _ensure_cardinal(bit_length)
@@ -453,10 +449,11 @@ def _unittest_deserializer_aligned() -> None:
     sample = bytes(
         map(
             lambda x: int(x, 2),
-            "10100111 11101111 11001101 10101011 10010000 01111000 01010110 00110100 00010010 10001000 10101001 11001011 "
-            "11101101 11111110 11111111 00000000 01111111 00000000 00000000 00000000 00000000 00000000 00000000 11110000 "
-            "00111111 00000000 00000000 10000000 00111111 00000000 01111100 11011010 00001110 11011010 10111110 11111110 "
-            "00000001 10101101 11011110 11101111 10111110 11000101 01100111 11000101 11101011".split(),
+            "10100111 11101111 11001101 10101011 10010000 01111000 01010110 00110100 00010010 10001000 10101001 "
+            "11001011 11101101 11111110 11111111 00000000 01111111 00000000 00000000 00000000 00000000 00000000 "
+            "00000000 11110000 00111111 00000000 00000000 10000000 00111111 00000000 01111100 11011010 00001110 "
+            "11011010 10111110 11111110 00000001 10101101 11011110 11101111 10111110 11000101 01100111 11000101 "
+            "11101011".split(),
         )
     )
     assert len(sample) == 45
@@ -589,9 +586,9 @@ def _unittest_deserializer_unaligned() -> None:
     sample = bytearray(
         map(
             lambda x: int(x, 2),
-            "11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 10111111 11101100 "
-            "00000110 00000000 00000000 00000000 00000000 00000000 10000000 11111111 00000001 00000000 00000000 11111100 "
-            "00000001 11100000 01101111 11110101 01111110 11110111 00000101".split(),
+            "11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110 11011001 10111111 "
+            "11101100 00000110 00000000 00000000 00000000 00000000 00000000 10000000 11111111 00000001 00000000 "
+            "00000000 11111100 00000001 11100000 01101111 11110101 01111110 11110111 00000101".split(),
         )
     )
     assert len(sample) == 31

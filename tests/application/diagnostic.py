@@ -12,7 +12,6 @@ from pyuavcan.transport.loopback import LoopbackTransport
 from pyuavcan.presentation import Presentation
 
 
-# noinspection PyProtectedMember
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_diagnostic(
     generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any

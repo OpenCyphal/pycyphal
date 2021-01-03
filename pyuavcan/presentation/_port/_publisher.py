@@ -110,8 +110,7 @@ class Publisher(MessagePort[MessageClass]):
         """
         if self._maybe_impl is None:
             raise PortClosedError(repr(self))
-        else:
-            return await self._maybe_impl.publish(message, self._priority, self._loop.time() + self._send_timeout)
+        return await self._maybe_impl.publish(message, self._priority, self._loop.time() + self._send_timeout)
 
     def publish_soon(self, message: MessageClass) -> None:
         """

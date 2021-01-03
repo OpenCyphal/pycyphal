@@ -22,7 +22,7 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 htmlcov/
-.tox/
+.nox/
 .coverage
 .coverage.*
 .xml
@@ -42,7 +42,8 @@ coverage.xml
 
 *.tmp
 *.log
-*_generated
+.*generated
+.*compiled
 *.cache
 
 .scannerwork

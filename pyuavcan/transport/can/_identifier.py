@@ -64,14 +64,13 @@ class CANID:
                 source_node_id=source_node_id,
                 destination_node_id=(identifier >> 7) & CANID.NODE_ID_MASK,
             )
-        else:
-            if identifier & (_BIT_R23 | _BIT_MSG_R7):
-                return None  # Wrong protocol
-            return MessageCANID(
-                priority=priority,
-                subject_id=(identifier >> 8) & pyuavcan.transport.MessageDataSpecifier.SUBJECT_ID_MASK,
-                source_node_id=None if identifier & _BIT_MSG_ANON else source_node_id,
-            )
+        if identifier & (_BIT_R23 | _BIT_MSG_R7):
+            return None  # Wrong protocol
+        return MessageCANID(
+            priority=priority,
+            subject_id=(identifier >> 8) & pyuavcan.transport.MessageDataSpecifier.SUBJECT_ID_MASK,
+            source_node_id=None if identifier & _BIT_MSG_ANON else source_node_id,
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -79,7 +78,7 @@ class MessageCANID(CANID):
     subject_id: int
 
     def __post_init__(self) -> None:
-        super(MessageCANID, self).__post_init__()
+        super().__post_init__()
         _validate_unsigned_range(int(self.priority), self.PRIORITY_MASK)
         _validate_unsigned_range(self.subject_id, pyuavcan.transport.MessageDataSpecifier.SUBJECT_ID_MASK)
         if self.source_node_id is not None:
@@ -120,7 +119,7 @@ class ServiceCANID(CANID):
     request_not_response: bool
 
     def __post_init__(self) -> None:
-        super(ServiceCANID, self).__post_init__()
+        super().__post_init__()
         _validate_unsigned_range(int(self.priority), self.PRIORITY_MASK)
         _validate_unsigned_range(self.service_id, pyuavcan.transport.ServiceDataSpecifier.SERVICE_ID_MASK)
         _validate_unsigned_range(self.source_node_id, self.NODE_ID_MASK)

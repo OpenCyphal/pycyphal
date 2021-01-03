@@ -6,14 +6,12 @@ import typing
 import asyncio
 import pytest
 import pyuavcan
-from . import TRANSPORT_FACTORIES, TransportFactory
+from .conftest import TransportFactory
 
 
 _RX_TIMEOUT = 1.0
 
 
-# noinspection PyProtectedMember
-@pytest.mark.parametrize("transport_factory", TRANSPORT_FACTORIES)  # type: ignore
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_presentation_pub_sub_anon(
     generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
@@ -51,23 +49,23 @@ async def _unittest_slow_presentation_pub_sub_anon(
         pres_b.close()
         return  # The test ends here.
 
-    assert pub_heart._maybe_impl is not None
-    assert pub_heart._maybe_impl.proxy_count == 1
+    assert pub_heart._maybe_impl is not None  # pylint: disable=protected-access
+    assert pub_heart._maybe_impl.proxy_count == 1  # pylint: disable=protected-access
     pub_heart_new = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
-    assert pub_heart_new._maybe_impl is not None
+    assert pub_heart_new._maybe_impl is not None  # pylint: disable=protected-access
     assert pub_heart is not pub_heart_new
-    assert pub_heart._maybe_impl is pub_heart_new._maybe_impl
-    assert pub_heart._maybe_impl.proxy_count == 2
+    assert pub_heart._maybe_impl is pub_heart_new._maybe_impl  # pylint: disable=protected-access
+    assert pub_heart._maybe_impl.proxy_count == 2  # pylint: disable=protected-access
     pub_heart_new.close()
     del pub_heart_new
-    assert pub_heart._maybe_impl.proxy_count == 1
+    assert pub_heart._maybe_impl.proxy_count == 1  # pylint: disable=protected-access
 
-    pub_heart_impl_old = pub_heart._maybe_impl
+    pub_heart_impl_old = pub_heart._maybe_impl  # pylint: disable=protected-access
     pub_heart.close()
     assert pub_heart_impl_old.proxy_count == 0
 
     pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
-    assert pub_heart._maybe_impl is not pub_heart_impl_old
+    assert pub_heart._maybe_impl is not pub_heart_impl_old  # pylint: disable=protected-access
 
     assert pub_heart.transport_session.destination_node_id is None
     assert sub_heart.transport_session.specifier.data_specifier == pub_heart.transport_session.specifier.data_specifier
@@ -116,8 +114,6 @@ async def _unittest_slow_presentation_pub_sub_anon(
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-# noinspection PyProtectedMember
-@pytest.mark.parametrize("transport_factory", TRANSPORT_FACTORIES)  # type: ignore
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_presentation_pub_sub(
     generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory

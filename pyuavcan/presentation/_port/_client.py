@@ -86,10 +86,9 @@ class Client(ServicePort[ServiceClass]):
         """
         if self._maybe_impl is None:
             raise PortClosedError(repr(self))
-        else:
-            return await self._maybe_impl.call(
-                request=request, priority=self._priority, response_timeout=self._response_timeout
-            )
+        return await self._maybe_impl.call(
+            request=request, priority=self._priority, response_timeout=self._response_timeout
+        )
 
     @property
     def response_timeout(self) -> float:
@@ -158,14 +157,13 @@ class Client(ServicePort[ServiceClass]):
         """
         if self._maybe_impl is None:
             raise PortClosedError(repr(self))
-        else:
-            return ClientStatistics(
-                request_transport_session=self.output_transport_session.sample_statistics(),
-                response_transport_session=self.input_transport_session.sample_statistics(),
-                sent_requests=self._maybe_impl.sent_request_count,
-                deserialization_failures=self._maybe_impl.deserialization_failure_count,
-                unexpected_responses=self._maybe_impl.unexpected_response_count,
-            )
+        return ClientStatistics(
+            request_transport_session=self.output_transport_session.sample_statistics(),
+            response_transport_session=self.input_transport_session.sample_statistics(),
+            sent_requests=self._maybe_impl.sent_request_count,
+            deserialization_failures=self._maybe_impl.deserialization_failure_count,
+            unexpected_responses=self._maybe_impl.unexpected_response_count,
+        )
 
     def close(self) -> None:
         impl, self._maybe_impl = self._maybe_impl, None
@@ -269,9 +267,8 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                 assert isinstance(response, self.dtype.Response)
                 assert isinstance(transfer, pyuavcan.transport.TransferFrom)
                 return response, transfer
-            else:
-                self.unsent_request_count += 1
-                return None
+            self.unsent_request_count += 1
+            return None
         except asyncio.TimeoutError:
             return None
         finally:

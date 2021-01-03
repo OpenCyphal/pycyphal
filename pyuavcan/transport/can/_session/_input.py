@@ -55,7 +55,7 @@ class CANInputSession(CANSession, pyuavcan.transport.InputSession):
 
         self._statistics = CANInputSessionStatistics()  # We could easily support per-source-node statistics if needed
 
-        super(CANInputSession, self).__init__(finalizer=finalizer)
+        super().__init__(finalizer=finalizer)
 
     def _push_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame) -> None:
         """
@@ -130,8 +130,8 @@ class CANInputSession(CANSession, pyuavcan.transport.InputSession):
         ), "Internal input session protocol violation"
         return out
 
-    def close(self) -> None:
-        super(CANInputSession, self).close()
+    def close(self) -> None:  # pylint: disable=useless-super-delegation
+        super().close()
 
     async def _do_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:

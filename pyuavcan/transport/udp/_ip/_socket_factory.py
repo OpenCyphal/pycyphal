@@ -49,10 +49,11 @@ class SocketFactory(abc.ABC):
             from ._v4 import IPv4SocketFactory
 
             return IPv4SocketFactory(local_ip_address)
-        elif isinstance(local_ip_address, ipaddress.IPv6Address):
+
+        if isinstance(local_ip_address, ipaddress.IPv6Address):
             raise NotImplementedError("Sorry, IPv6 is not yet supported by this implementation.")
-        else:  # pragma: no cover
-            raise TypeError(f"Invalid local IP address: {local_ip_address!r}")
+
+        raise TypeError(f"Invalid local IP address: {local_ip_address!r}")  # pragma: no cover
 
     @property
     @abc.abstractmethod

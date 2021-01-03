@@ -149,7 +149,7 @@ class UDPInputSession(pyuavcan.transport.InputSession):
         except (asyncio.TimeoutError, asyncio.QueueEmpty):
             # If there are unprocessed transfers, allow the caller to read them even if the instance is closed.
             if self._maybe_finalizer is None:
-                raise pyuavcan.transport.ResourceClosedError(f"{self} is closed")
+                raise pyuavcan.transport.ResourceClosedError(f"{self} is closed") from None
             return None
         else:
             assert isinstance(transfer, pyuavcan.transport.TransferFrom), "Internal protocol violation"
@@ -213,9 +213,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         """
         self._statistics_impl = PromiscuousUDPInputSessionStatistics()
         self._reassemblers: typing.Dict[int, TransferReassembler] = {}
-        super(PromiscuousUDPInputSession, self).__init__(
-            specifier=specifier, payload_metadata=payload_metadata, loop=loop, finalizer=finalizer
-        )
+        super().__init__(specifier=specifier, payload_metadata=payload_metadata, loop=loop, finalizer=finalizer)
 
     def sample_statistics(self) -> PromiscuousUDPInputSessionStatistics:
         return copy.copy(self._statistics)
@@ -286,9 +284,7 @@ class SelectiveUDPInputSession(UDPInputSession):
             on_error_callback=on_reassembly_error,
         )
 
-        super(SelectiveUDPInputSession, self).__init__(
-            specifier=specifier, payload_metadata=payload_metadata, loop=loop, finalizer=finalizer
-        )
+        super().__init__(specifier=specifier, payload_metadata=payload_metadata, loop=loop, finalizer=finalizer)
 
     def sample_statistics(self) -> SelectiveUDPInputSessionStatistics:
         return copy.copy(self._statistics)

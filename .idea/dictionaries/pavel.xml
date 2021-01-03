@@ -85,11 +85,13 @@
       <w>fgsfds</w>
       <w>findalldevs</w>
       <w>fontname</w>
+      <w>forcecolor</w>
       <w>frombuffer</w>
       <w>fyodor</w>
       <w>geez</w>
       <w>gendsdl</w>
       <w>genericity</w>
+      <w>genindex</w>
       <w>getpeername</w>
       <w>getsockopt</w>
       <w>gibibyte</w>
@@ -129,6 +131,7 @@
       <w>meth</w>
       <w>mismaintenance</w>
       <w>modifyitems</w>
+      <w>modindex</w>
       <w>modprobe</w>
       <w>mult</w>
       <w>multiframe</w>
@@ -148,10 +151,12 @@
       <w>noqa</w>
       <w>norecursedirs</w>
       <w>nosignatures</w>
+      <w>noxfile</w>
       <w>npcap</w>
       <w>ntdll</w>
       <w>octothorp</w>
       <w>onboard</w>
+      <w>overgeneral</w>
       <w>packbits</w>
       <w>parseltongue</w>
       <w>pathlib</w>

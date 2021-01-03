@@ -104,11 +104,10 @@ class _AlienSession:
         tr = self._reassembler.process_frame(timestamp, frame)
         if isinstance(tr, TransferReassembler.Error):
             return UDPErrorTrace(timestamp=timestamp, error=tr)
-        elif isinstance(tr, TransferFrom):
+        if isinstance(tr, TransferFrom):
             meta = AlienTransferMetadata(tr.priority, tr.transfer_id, self._specifier)
             return TransferTrace(timestamp, AlienTransfer(meta, tr.fragmented_payload), tid_timeout)
-        else:
-            assert tr is None
+        assert tr is None
         return None
 
 
@@ -116,7 +115,7 @@ class _AlienSession:
 
 
 def _unittest_udp_tracer() -> None:
-    from pytest import raises, approx
+    from pytest import approx
     from ipaddress import ip_address
     from pyuavcan.transport import Priority, ServiceDataSpecifier
     from pyuavcan.transport.udp import UDPTransport

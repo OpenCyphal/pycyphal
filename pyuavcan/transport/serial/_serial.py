@@ -286,8 +286,7 @@ class SerialTransport(pyuavcan.transport.Transport):
                 except LookupError:
                     pass
                 else:
-                    # noinspection PyProtectedMember
-                    session._process_frame(timestamp, frame)
+                    session._process_frame(timestamp, frame)  # pylint: disable=protected-access
 
     def _handle_received_out_of_band_data(self, timestamp: Timestamp, data: memoryview) -> None:
         self._statistics.in_out_of_band_bytes += len(data)
@@ -368,8 +367,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         except Exception as ex:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(f"{self} is closed, transmission aborted.") from ex
-            else:
-                raise
+            raise
         else:
             if tx_ts is not None:
                 self._statistics.out_transfers += 1

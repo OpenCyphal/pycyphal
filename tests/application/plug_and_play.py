@@ -3,10 +3,10 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
-import pytest
 import asyncio
 import logging
 import pathlib
+import pytest
 import pyuavcan
 from pyuavcan.transport.can import CANTransport
 from pyuavcan.presentation import Presentation
@@ -17,7 +17,6 @@ _TABLE = pathlib.Path("allocation_table.sqlite.tmp")
 _logger = logging.getLogger(__name__)
 
 
-# noinspection PyProtectedMember
 @pytest.mark.parametrize("mtu", [8, 16, 20, 64])  # type: ignore
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_plug_and_play_centralized(
@@ -58,7 +57,7 @@ async def _unittest_slow_plug_and_play_centralized(
     allocator.register_node(43, _uid("00000000000000000000000000000003"))  # Overwrites
     allocator.register_node(43, None)  # Does not overwrite
 
-    use_v2 = mtu > cln_a._MTU_THRESHOLD
+    use_v2 = mtu > cln_a._MTU_THRESHOLD  # pylint: disable=protected-access
     await asyncio.sleep(2.0)
     assert cln_a.get_result() == (44 if use_v2 else 125)
 

@@ -7,7 +7,7 @@ Full-featured UAVCAN stack in Python
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=UAVCAN_pyuavcan&metric=alert_status)](https://sonarcloud.io/dashboard?id=UAVCAN_pyuavcan)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=UAVCAN_pyuavcan&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=UAVCAN_pyuavcan)
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=UAVCAN_pyuavcan&metric=ncloc)](https://sonarcloud.io/dashboard?id=UAVCAN_pyuavcan)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pyuavcan.svg)](https://pypi.org/project/pyuavcan/)
+[![PyPI - Version](https://img.shields.io/pypi/v/pyuavcan.svg)](https://pypi.org/project/pyuavcan/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Forum](https://img.shields.io/discourse/https/forum.uavcan.org/users.svg)](https://forum.uavcan.org)
 
@@ -31,5 +31,5 @@ The acronym *UAVCAN* stands for ***Uncomplicated Application-level Vehicular Com
 
 **Ask questions: [forum.uavcan.org](https://forum.uavcan.org/)**
 
-*See also: [**U-tool**](https://github.com/UAVCAN/u) -- a CLI tool for diagnostics and management of
+*See also: [**Yakut**](https://github.com/UAVCAN/yakut) -- a CLI tool for diagnostics and management of
 UAVCAN networks built on top of PyUAVCAN.*

@@ -131,7 +131,9 @@ class NodeTracker:
         The returned value is a copy of the actual registry to prevent accidental mutation.
         Elements are ordered by node-ID.
         """
-        return {k: v for k, v in sorted(self._registry.items(), key=lambda item: item[0])}
+        return {  # pylint: disable=unnecessary-comprehension
+            k: v for k, v in sorted(self._registry.items(), key=lambda item: item[0])
+        }
 
     def start(self) -> None:
         """
@@ -185,7 +187,7 @@ class NodeTracker:
     async def _on_heartbeat(self, msg: Heartbeat, metadata: pyuavcan.transport.TransferFrom) -> None:
         node_id = metadata.source_node_id
         if node_id is None:
-            _logger.warning(f"Anonymous nodes shall not publish Heartbeat. Message: {msg}. Metadata: {metadata}.")
+            _logger.warning("Anonymous nodes shall not publish Heartbeat. Message: %s. Metadata: %s", msg, metadata)
             return
 
         # Construct the new entry and decide if we need to issue another GetInfo request.
@@ -225,7 +227,7 @@ class NodeTracker:
             self._cancel_task(node_id)
             del self._offline_timers[node_id]
         except Exception as ex:
-            _logger.exception(f"Offline timeout handler error for node {node_id}: {ex}")
+            _logger.exception("Offline timeout handler error for node %s: %s", node_id, ex)
 
     def _cancel_task(self, node_id: int) -> None:
         try:
@@ -279,12 +281,12 @@ class NodeTracker:
                         _logger.debug("GetInfo task for node %s encountered a transient error: %s", node_id, ex)
                         await asyncio.sleep(self._get_info_timeout)
                 _logger.debug("GetInfo task for node %s is exiting", node_id)
-            except asyncio.CancelledError:
+            except asyncio.CancelledError:  # pylint: disable=try-except-raise
                 raise
             except pyuavcan.transport.ResourceClosedError:
-                _logger.debug(f"GetInfo task for node {node_id} is stopping because the transport is closed.")
+                _logger.debug("GetInfo task for node %s is stopping because the transport is closed.", node_id)
             except Exception as ex:
-                _logger.exception(f"GetInfo task for node {node_id} has crashed: {ex}")
+                _logger.exception("GetInfo task for node %s has crashed: %s", node_id, ex)
             del self._info_tasks[node_id]
 
         self._cancel_task(node_id)

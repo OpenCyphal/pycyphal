@@ -14,8 +14,6 @@ class TransportError(RuntimeError):
     code generation time.
     """
 
-    pass
-
 
 class InvalidTransportConfigurationError(TransportError):
     """
@@ -23,16 +21,12 @@ class InvalidTransportConfigurationError(TransportError):
     because the specified configuration is invalid.
     """
 
-    pass
-
 
 class InvalidMediaConfigurationError(InvalidTransportConfigurationError):
     """
     The transport could not be initialized or the operation could not be performed
     because the specified media configuration is invalid.
     """
-
-    pass
 
 
 class UnsupportedSessionConfigurationError(TransportError):
@@ -42,8 +36,6 @@ class UnsupportedSessionConfigurationError(TransportError):
     the CAN bus transport.
     """
 
-    pass
-
 
 class OperationNotDefinedForAnonymousNodeError(TransportError):
     """
@@ -51,13 +43,9 @@ class OperationNotDefinedForAnonymousNodeError(TransportError):
     have a node-ID assigned.
     """
 
-    pass
-
 
 class ResourceClosedError(TransportError):
     """
     The requested operation could not be performed because an associated resource has already been terminated.
     Double-close should not raise exceptions.
     """
-
-    pass

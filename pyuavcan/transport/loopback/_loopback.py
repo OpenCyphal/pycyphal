@@ -142,7 +142,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
             if self.local_node_id is None and not self._allow_anonymous_transfers:
                 raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                     f"Anonymous transfers are not enabled for {self}"
-                )
+                ) from None
             sess = LoopbackOutputSession(
                 specifier=specifier, payload_metadata=payload_metadata, loop=self.loop, closer=do_close, router=do_route
             )

@@ -132,8 +132,6 @@ class ErrorTrace(Trace):
     It may be further specialized by transport implementations.
     """
 
-    pass
-
 
 @dataclasses.dataclass(frozen=True)
 class TransferTrace(Trace):

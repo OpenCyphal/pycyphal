@@ -3,7 +3,6 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
-import typing
 import logging
 import uavcan.node
 import pyuavcan
