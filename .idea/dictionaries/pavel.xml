@@ -150,6 +150,7 @@
       <w>noqa</w>
       <w>norecursedirs</w>
       <w>nosignatures</w>
+      <w>noxfile</w>
       <w>npcap</w>
       <w>ntdll</w>
       <w>octothorp</w>
