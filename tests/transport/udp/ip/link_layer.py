@@ -9,12 +9,12 @@ import sys
 import time
 import typing
 import socket
+import libpcap as pcap  # type: ignore
 from pyuavcan.transport import Timestamp
 from pyuavcan.transport.udp._ip._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket
 
 
 def _unittest_encode_decode_null() -> None:
-    import libpcap as pcap
     from socket import AddressFamily
 
     mv = memoryview
@@ -50,7 +50,6 @@ def _unittest_encode_decode_null() -> None:
 
 
 def _unittest_encode_decode_loop() -> None:
-    import libpcap as pcap
     from socket import AddressFamily
 
     mv = memoryview
@@ -86,7 +85,6 @@ def _unittest_encode_decode_loop() -> None:
 
 
 def _unittest_encode_decode_ethernet() -> None:
-    import libpcap as pcap
     from socket import AddressFamily
 
     mv = memoryview
