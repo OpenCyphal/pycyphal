@@ -94,7 +94,6 @@ def _unittest_stream_parser() -> None:
         sp = StreamParser(lambda *_: None, 0)
 
     sp = StreamParser(lambda ts, buf, item: outputs.append((ts, buf, item)), 4)
-    # noinspection PyProtectedMember
     print("sp._max_frame_size_bytes:", sp._max_frame_size_bytes)  # pylint: disable=protected-access
 
     def proc(

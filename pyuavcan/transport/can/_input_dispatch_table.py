@@ -104,7 +104,6 @@ def _unittest_input_dispatch_table() -> None:
     assert len(list(t.items)) == 0
 
 
-# noinspection PyProtectedMember
 def _unittest_slow_input_dispatch_table_index() -> None:
     table_size = InputDispatchTable._TABLE_SIZE  # pylint: disable=protected-access
     values: typing.Set[int] = set()

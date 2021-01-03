@@ -12,7 +12,6 @@ import pyuavcan
 _logger = logging.getLogger(__name__)
 
 
-# noinspection PyProtectedMember
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_node_tracker(
     generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any

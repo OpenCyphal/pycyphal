@@ -370,7 +370,6 @@ def _unittest_redundant_output() -> None:
         _logger.debug("Test: sleeping before adding the inferior...")
         await asyncio.sleep(2.0)
         _logger.debug("Test: adding the inferior...")
-        # noinspection PyProtectedMember
         ses._add_inferior(inferior)  # pylint: disable=protected-access
         _logger.debug("Test: inferior has been added.")
 
@@ -453,14 +452,12 @@ def _unittest_redundant_output() -> None:
     assert None is await_(rx_b.receive(loop.time() + 0.1))
 
     # Add a new inferior and ensure that its feedback is auto-enabled!
-    # noinspection PyProtectedMember
     ses._add_inferior(inf_b)  # pylint: disable=protected-access
     assert ses.inferiors == [
         inf_a,
         inf_b,
     ]
     # Double-add has no effect.
-    # noinspection PyProtectedMember
     ses._add_inferior(inf_b)  # pylint: disable=protected-access
     assert ses.inferiors == [
         inf_a,
@@ -520,10 +517,8 @@ def _unittest_redundant_output() -> None:
     assert tf_rx.fragmented_payload == [memoryview(b"fgsfds")]
 
     # Remove the first inferior.
-    # noinspection PyProtectedMember
     ses._close_inferior(0)  # pylint: disable=protected-access
     assert ses.inferiors == [inf_b]
-    # noinspection PyProtectedMember
     ses._close_inferior(1)  # Out of range, no effect.  # pylint: disable=protected-access
     assert ses.inferiors == [inf_b]
     # Make sure the removed inferior has been closed.
@@ -569,7 +564,6 @@ def _unittest_redundant_output() -> None:
     # Disable the feedback.
     ses.disable_feedback()
     # A diversion - enable the feedback in the inferior and make sure it's not propagated.
-    # noinspection PyProtectedMember
     ses._enable_feedback_on_inferior(inf_b)  # pylint: disable=protected-access
     assert await_(
         ses.send(
@@ -664,10 +658,7 @@ def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     inf_b = tr_b.get_output_session(spec, meta)
     rx_a = tr_a.get_input_session(spec_rx, meta)
     rx_b = tr_b.get_input_session(spec_rx, meta)
-
-    # noinspection PyProtectedMember
     ses._add_inferior(inf_a)  # pylint: disable=protected-access
-    # noinspection PyProtectedMember
     ses._add_inferior(inf_b)  # pylint: disable=protected-access
 
     # Transmission with exceptions.

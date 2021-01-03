@@ -148,7 +148,6 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
             return reasm
 
 
-# noinspection PyProtectedMember
 def _unittest_input_session() -> None:
     from pytest import raises, approx
     from pyuavcan.transport import InputSessionSpecifier, MessageDataSpecifier, Priority, TransferFrom

@@ -818,7 +818,6 @@ def _unittest_validate_and_finalize_transfer() -> None:
     assert call([b"hello world", b"0123456789"]) is None  # no CRC
 
 
-# noinspection PyProtectedMember
 def _unittest_drop_crc() -> None:
     mv = memoryview
     assert _drop_crc([mv(b"0123456789")]) == [mv(b"012345")]

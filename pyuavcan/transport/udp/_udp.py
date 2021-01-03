@@ -300,8 +300,6 @@ class UDPTransport(pyuavcan.transport.Transport):
                 loop=self.loop,
                 finalizer=lambda: self._teardown_input_session(specifier),
             )
-
-            # noinspection PyProtectedMember
             self._socket_reader_registry[specifier.data_specifier].add_listener(
                 specifier.remote_node_id, session._process_frame  # pylint: disable=protected-access
             )

@@ -197,7 +197,6 @@ class RedundantTransport(pyuavcan.transport.Transport):
         self._cols.remove(transport)
         for owner in self._rows.values():
             try:
-                # noinspection PyProtectedMember
                 owner._close_inferior(index)  # pylint: disable=protected-access
             except Exception as ex:
                 _logger.exception("%s could not close inferior session #%d in %s: %s", self, index, owner, ex)
@@ -350,14 +349,12 @@ class RedundantTransport(pyuavcan.transport.Transport):
         # If anything whatsoever goes wrong, just roll everything back and re-raise the exception.
         new_index = len(owner.inferiors)
         try:
-            # noinspection PyProtectedMember
             owner._add_inferior(inferior)  # pylint: disable=protected-access
         except Exception:
             # The inferior MUST be closed manually because in the case of failure it is not registered
             # in the redundant session.
             inferior.close()
             # If the inferior has not been added, this method will have no effect:
-            # noinspection PyProtectedMember
             owner._close_inferior(new_index)  # pylint: disable=protected-access
             raise
 

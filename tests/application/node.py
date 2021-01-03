@@ -11,7 +11,6 @@ from pyuavcan.transport.redundant import RedundantTransport
 from pyuavcan.presentation import Presentation
 
 
-# noinspection PyProtectedMember
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_node(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     from pyuavcan.application import Node

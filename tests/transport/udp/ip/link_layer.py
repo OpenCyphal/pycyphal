@@ -10,8 +10,6 @@ import time
 import typing
 import socket
 from pyuavcan.transport import Timestamp
-
-# noinspection PyProtectedMember
 from pyuavcan.transport.udp._ip._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket
 
 
@@ -142,7 +140,6 @@ def _unittest_encode_decode_ethernet() -> None:
 
 
 def _unittest_find_devices() -> None:
-    # noinspection PyProtectedMember
     from pyuavcan.transport.udp._ip._link_layer import _find_devices
 
     devices = _find_devices()
@@ -233,7 +230,6 @@ def _unittest_sniff() -> None:
 def _unittest_sniff_errors() -> None:
     from pytest import raises
 
-    # noinspection PyProtectedMember
     from pyuavcan.transport.udp._ip._link_layer import LinkLayerCaptureError
 
     with raises(LinkLayerCaptureError, match=r".*filter expression.*"):

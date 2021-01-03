@@ -117,7 +117,6 @@ class FixedPortServiceObject(ServiceObject, FixedPortObject):
 CompositeObjectTypeVar = typing.TypeVar("CompositeObjectTypeVar", bound=CompositeObject)
 
 
-# noinspection PyProtectedMember
 def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     """
     Constructs a serialized representation of the provided top-level object.
@@ -134,7 +133,6 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     yield ser.buffer.data
 
 
-# noinspection PyProtectedMember
 def deserialize(
     dtype: typing.Type[CompositeObjectTypeVar], fragmented_serialized_representation: typing.Sequence[memoryview]
 ) -> typing.Optional[CompositeObjectTypeVar]:
@@ -165,7 +163,6 @@ def get_model(class_or_instance: typing.Union[typing.Type[CompositeObject], Comp
     Obtains a PyDSDL model of the supplied DSDL-generated class or its instance.
     This is the inverse of :func:`get_class`.
     """
-    # noinspection PyProtectedMember
     out = class_or_instance._MODEL_  # pylint: disable=protected-access
     assert isinstance(out, pydsdl.CompositeType)
     return out
@@ -223,7 +220,6 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
 
 
 def get_extent_bytes(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> int:
-    # noinspection PyProtectedMember
     return int(class_or_instance._EXTENT_BYTES_)  # pylint: disable=protected-access
 
 
@@ -234,7 +230,6 @@ def get_fixed_port_id(
     Returns None if the supplied type has no fixed port-ID.
     """
     try:
-        # noinspection PyProtectedMember
         out = int(class_or_instance._FIXED_PORT_ID_)  # pylint: disable=protected-access
     except TypeError:
         return None

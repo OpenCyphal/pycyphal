@@ -17,7 +17,6 @@ _TABLE = pathlib.Path("allocation_table.sqlite.tmp")
 _logger = logging.getLogger(__name__)
 
 
-# noinspection PyProtectedMember
 @pytest.mark.parametrize("mtu", [8, 16, 20, 64])  # type: ignore
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_plug_and_play_centralized(

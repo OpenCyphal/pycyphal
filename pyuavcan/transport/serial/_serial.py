@@ -286,7 +286,6 @@ class SerialTransport(pyuavcan.transport.Transport):
                 except LookupError:
                     pass
                 else:
-                    # noinspection PyProtectedMember
                     session._process_frame(timestamp, frame)  # pylint: disable=protected-access
 
     def _handle_received_out_of_band_data(self, timestamp: Timestamp, data: memoryview) -> None:

@@ -454,7 +454,6 @@ def _unittest_serializer_aligned() -> None:
         ser.buffer[0] = 123  # The buffer is read-only for safety reasons
 
 
-# noinspection PyProtectedMember
 def _unittest_serializer_unaligned() -> None:  # Tricky cases with unaligned fields (very tricky)
     ser = Serializer.new(40)
 

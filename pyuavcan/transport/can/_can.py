@@ -325,7 +325,6 @@ class CANTransport(pyuavcan.transport.Transport):
         if dest_nid is None or dest_nid == self._local_node_id:
             session = self._input_dispatch_table.get(ss)
             if session is not None:
-                # noinspection PyProtectedMember
                 session._push_frame(timestamp, can_id, frame)  # pylint: disable=protected-access
                 accepted = True
 
@@ -333,7 +332,6 @@ class CANTransport(pyuavcan.transport.Transport):
                 ss = pyuavcan.transport.InputSessionSpecifier(ss.data_specifier, None)
                 session = self._input_dispatch_table.get(ss)
                 if session is not None:
-                    # noinspection PyProtectedMember
                     session._push_frame(timestamp, can_id, frame)  # pylint: disable=protected-access
                     accepted = True
 
@@ -354,7 +352,6 @@ class CANTransport(pyuavcan.transport.Transport):
                 ss,
             )
         else:
-            # noinspection PyProtectedMember
             session._handle_loopback_frame(timestamp, frame)  # pylint: disable=protected-access
 
     def _reconfigure_acceptance_filters(self) -> None:

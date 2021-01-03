@@ -121,7 +121,6 @@ def _unittest_sniffer() -> None:
 
     sniffer = fac.make_sniffer(sniff_sniff)
     assert isinstance(sniffer, SnifferIPv4)
-    # noinspection PyProtectedMember
     assert sniffer._link_layer._filter_expr == "udp and src net 127.66.0.0/16"
 
     # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback

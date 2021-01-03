@@ -503,14 +503,10 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
             statistics=stats,
             loop=loop,
         )
-        # noinspection PyProtectedMember
         srd._sock.close()  # pylint: disable=protected-access
         run_until_complete(asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
-        # noinspection PyProtectedMember
         assert not srd._thread.is_alive()  # pylint: disable=protected-access
-        # noinspection PyProtectedMember
         srd._ctl_main.close()  # pylint: disable=protected-access
-        # noinspection PyProtectedMember
         srd._ctl_worker.close()  # pylint: disable=protected-access
 
     sock_tx_1.close()
