@@ -84,13 +84,14 @@ def test(session):
         env = {
             "PYTHONASYNCIODEBUG": "1",
         }
-        session.run("coverage", "run", "-m", "pytest", *map(str, src_dirs), env=env)
+        session.run("coverage", "run", "-m", "pytest", *map(str, src_dirs), *session.posargs, env=env)
     finally:
         broker_process.kill()
 
     # Coverage analysis and report.
+    fail_under = 0 if session.posargs else 90
     session.run("coverage", "combine")
-    session.run("coverage", "report", f"--fail-under=90")
+    session.run("coverage", "report", f"--fail-under={fail_under}")
     if session.interactive:
         session.run("coverage", "html")
         report_file = Path.cwd().resolve() / "htmlcov" / "index.html"
