@@ -162,7 +162,6 @@ def docs(session):
         session.error("Please install graphviz. It may be available from your package manager as 'graphviz'.")
         raise
 
-    session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
     session.install("-r", "docs/requirements.txt")
 
     out_dir = Path(session.create_tmp()).resolve()
