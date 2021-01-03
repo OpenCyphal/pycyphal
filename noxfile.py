@@ -89,13 +89,9 @@ def test(session):
         t = ctypes.c_ulong()
         ctypes.WinDLL("NTDLL.DLL").NtSetTimerResolution(5000, 1, ctypes.byref(t))
         session.log("System timer resolution: %.3f ms", t.value / 10e3)
-        session.run("ls", session.env["PATH"].split(os.pathsep)[-1])
 
     # Launch the TCP broker for testing the UAVCAN/serial transport.
-    broker_process = subprocess.Popen(
-        ["ncat", "--broker", "--listen", "-p", "50905"],
-        env=session.env,
-    )
+    broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"], env=session.env)
     time.sleep(1.0)  # Ensure that it has started.
     if broker_process.poll() is not None:
         raise RuntimeError("Could not start the TCP broker")
@@ -140,9 +136,9 @@ def test(session):
     if is_latest_python(session) and sonarcloud_token:
         session.run("coverage", "xml", "-i", "-o", str(ROOT_DIR / ".coverage.xml"))
 
-        session.run("unzip", list(DEPS_DIR.glob("sonar-scanner*.zip"))[0], external=True)
+        session.run("unzip", str(list(DEPS_DIR.glob("sonar-scanner*.zip"))[0]), silent=True, external=True)
         (sonar_scanner_bin,) = list(Path().cwd().resolve().glob("sonar-scanner*/bin"))
-        session.env["PATH"] = os.pathsep.join([sonar_scanner_bin, session.env["PATH"]])
+        session.env["PATH"] = os.pathsep.join([str(sonar_scanner_bin), session.env["PATH"]])
 
         session.cd(ROOT_DIR)
         session.run("sonar-scanner", f"-Dsonar.login={sonarcloud_token}")

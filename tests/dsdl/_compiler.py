@@ -19,14 +19,13 @@ def _unittest_bad_usage() -> None:
 
 def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
     caplog.set_level(logging.INFO)
-    with tempfile.TemporaryDirectory() as output_directory:
-        output_directory_name = pathlib.Path(output_directory).resolve()
-        caplog.clear()
-        pyuavcan.dsdl.generate_package(
-            DEMO_DIR / "public_regulated_data_types" / "uavcan",
-            output_directory=output_directory,
-        )
-        logs = caplog.record_tuples
+    output_directory = tempfile.TemporaryDirectory()
+    output_directory_name = pathlib.Path(output_directory.name).resolve()
+    caplog.clear()
+    pyuavcan.dsdl.generate_package(
+        DEMO_DIR / "public_regulated_data_types" / "uavcan", output_directory=output_directory.name
+    )
+    logs = caplog.record_tuples
     print("Captured log entries:", logs, sep="\n")
     for e in logs:
         if "dsdl" in e[0] and str(output_directory_name) in e[2]:
@@ -36,6 +35,10 @@ def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
             break
     else:
         assert False
+    try:
+        output_directory.cleanup()  # This may fail on Windows with Python 3.7, we don't care.
+    except PermissionError:  # pragma: no cover
+        pass
 
 
 def _unittest_issue_133() -> None:
