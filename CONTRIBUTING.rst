@@ -242,7 +242,8 @@ Tools
 -----
 
 We recommend the `JetBrains PyCharm <https://www.jetbrains.com/pycharm/>`_ IDE for development.
-The recommended OS is GNU/Linux; if you are on a different system, you are on your own.
+Inspections that are already covered by the CI/CD toolchain should be disabled to avoid polluting the code
+with suppression comments.
 
 Configure a File Watcher to run Black on save (make sure to disable running it on external file changes though).
 
