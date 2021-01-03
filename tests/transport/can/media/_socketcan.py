@@ -8,14 +8,15 @@ import asyncio
 import pytest
 
 
+if sys.platform != "linux":  # pragma: no cover
+    pytest.skip("SocketCAN test skipped because the system is not GNU/Linux", allow_module_level=True)
+
+
 # noinspection PyProtectedMember
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_can_socketcan() -> None:
     from pyuavcan.transport import Timestamp
     from pyuavcan.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
-
-    if sys.platform != "linux":  # pragma: no cover
-        pytest.skip("SocketCAN test skipped because we do not seem to be on a GNU/Linux-based system")
 
     from pyuavcan.transport.can.media.socketcan import SocketCANMedia
 

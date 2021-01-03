@@ -123,7 +123,7 @@ def test(session):
     session.run("mypy", "--strict", *map(str, src_dirs), ".compiled")
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
-    if is_latest_python(session) and session.env.get("COVERALLS_REPO_TOKEN"):
+    if sys.platform.startswith("linux") and is_latest_python(session) and session.env.get("COVERALLS_REPO_TOKEN"):
         session.install("coveralls")
         session.run("coveralls")
     else:
@@ -131,7 +131,7 @@ def test(session):
 
     # Submit analysis to SonarCloud. This also has to be run from the test session to access the coverage files.
     sonarcloud_token = session.env.get("SONARCLOUD_TOKEN")
-    if is_latest_python(session) and sonarcloud_token:
+    if sys.platform.startswith("linux") and is_latest_python(session) and sonarcloud_token:
         session.run("coverage", "xml", "-i", "-o", str(ROOT_DIR / ".coverage.xml"))
 
         session.run("unzip", str(list(DEPS_DIR.glob("sonar-scanner*.zip"))[0]), silent=True, external=True)
@@ -139,7 +139,7 @@ def test(session):
         os.environ["PATH"] = os.pathsep.join([str(sonar_scanner_bin), os.environ["PATH"]])
 
         session.cd(ROOT_DIR)
-        session.run("sonar-scanner", f"-Dsonar.login={sonarcloud_token}")
+        session.run("sonar-scanner", f"-Dsonar.login={sonarcloud_token}", external=True)
     else:
         session.log("SonarQube scan skipped")
 
@@ -185,7 +185,7 @@ def docs(session):
     session.install("-r", "docs/requirements.txt")
 
     out_dir = Path(session.create_tmp()).resolve()
-    sphinx_args = ["-b", "html", "-W", "--keep-going", f"-j{os.cpu_count() or 4}", "docs", str(out_dir)]
+    sphinx_args = ["-b", "html", "-W", "--keep-going", f"-j{os.cpu_count() or 1}", "docs", str(out_dir)]
     session.run("sphinx-build", *sphinx_args)
     session.log(f"DOCUMENTATION BUILD OUTPUT: file://{out_dir}/index.html")
 
