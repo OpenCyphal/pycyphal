@@ -179,7 +179,10 @@ meaning that if you write your unit test function in there it will never be invo
 
 Complex functions that require sophisticated setup and teardown process or that can't be located near the
 tested code for other reasons should be defined in the ``tests`` package.
-Test functions that are located inside the library are shipped together with the library,
+Specifically, scenarios that depend on particular host configuration (like packet capture being configured
+or virtual interfaces being set up) can only be defined in the dedicated test package
+because the required environment configuration activities may not be performed until the test package is initialized.
+Further, test functions that are located inside the library are shipped together with the library,
 which makes having complex testing logic inside the main codebase undesirable.
 
 Tests that are implemented inside the main codebase shall not use any external components that are not

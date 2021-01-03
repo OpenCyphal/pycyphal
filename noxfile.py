@@ -5,7 +5,6 @@
 import os
 import sys
 import time
-import ctypes
 import shutil
 import subprocess
 from functools import partial
@@ -70,35 +69,14 @@ def test(session):
     if not (tmp_dir / fn).exists():
         (tmp_dir / fn).symlink_to(ROOT_DIR / fn)
 
-    # Configure the environment to meet expectations of the test suite.
-    if sys.platform.startswith("linux"):
-        sudo = partial(session.run, "sudo", external=True)
-        # Enable packet capture for the Python executable. This is necessary for testing the UDP capture capability.
-        sudo("setcap", "cap_net_raw+eip", str(Path(sys.executable).resolve()))
-        # Set up virtual SocketCAN interfaces.
-        sudo("modprobe", "can")
-        sudo("modprobe", "can_raw")
-        sudo("modprobe", "vcan")
-        for idx in range(3):
-            iface = f"vcan{idx}"
-            sudo("ip", "link", "add", "dev", iface, "type", "vcan", success_codes={0, 2})  # Non-zero if exists.
-            sudo("ip", "link", "set", iface, "mtu", "72")  # Enable both Classic CAN and CAN FD.
-            sudo("ip", "link", "set", "up", iface)
-
-    if sys.platform.startswith("win"):
-        # Reconfigure the system timer to run at a higher resolution. This is desirable for the real-time tests.
-        t = ctypes.c_ulong()
-        ctypes.WinDLL("NTDLL.DLL").NtSetTimerResolution(5000, 1, ctypes.byref(t))
-        session.log("System timer resolution: %.3f ms", t.value / 10e3)
-
     # Launch the TCP broker for testing the UAVCAN/serial transport.
     broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"], env=session.env)
     time.sleep(1.0)  # Ensure that it has started.
     if broker_process.poll() is not None:
         raise RuntimeError("Could not start the TCP broker")
 
+    # Run the test suite (takes about 10-30 minutes per virtualenv).
     try:
-        # Run the test suite (takes about 10-30 minutes).
         src_dirs = [
             ROOT_DIR / "pyuavcan",
             ROOT_DIR / "tests",
