@@ -5,6 +5,6 @@
 # This file is meant to be used from the project root directory.
 
 .[transport_can_pythoncan,transport_serial,transport_udp]
-sphinx           == 3.2.1
+sphinx           == 3.4.1
 sphinx_rtd_theme == 0.5.0
 sphinx-computron >= 0.2.0
