@@ -169,9 +169,8 @@ def docs(session):
         raise
 
     session.install("-r", "docs/requirements.txt")
-
-    session.cd("docs")
     out_dir = Path(session.create_tmp()).resolve()
+    session.cd("docs")
     sphinx_args = ["-b", "html", "-W", "--keep-going", f"-j{os.cpu_count() or 1}", ".", str(out_dir)]
     session.run("sphinx-build", *sphinx_args)
     session.log(f"DOCUMENTATION BUILD OUTPUT: file://{out_dir}/index.html")
