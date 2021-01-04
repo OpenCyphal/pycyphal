@@ -40,6 +40,10 @@ Each of the submodules can be used separately depending on the level of abstract
   that are used across the library. User applications may benefit from them also.
   Every other submodule depends on this one.
 
+.. note::
+   In order to use this library the user should at least
+   skim through the API docs for the first three of the listed modules.
+
 The overall structure of the library and its mapping onto the UAVCAN protocol is shown on the following diagram:
 
 .. image:: /_static/arch-non-redundant.svg

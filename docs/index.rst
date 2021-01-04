@@ -6,11 +6,8 @@ PyUAVCAN aims to support all features and transport layers of UAVCAN,
 be portable across all major platforms supporting Python, and
 be extensible to permit low-effort experimentation and testing of new protocol capabilities.
 
-It helps to know that UAVCAN stands for *Uncomplicated Application-level Vehicular Computing and Networking*.
-
+Start reading this documentation from the first chapter -- :ref:`architecture`.
 If you have questions, please bring them to the `UAVCAN support forum <https://forum.uavcan.org/>`_.
-
-Contributors, please read the :ref:`dev`!
 
 
 Contents
@@ -21,9 +18,9 @@ Contents
 
    pages/architecture
    pages/installation
+   pages/api
    pages/demo
    pages/faq
-   pages/api
    pages/dev
 
 
