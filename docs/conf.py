@@ -40,7 +40,7 @@ import pyuavcan  # pylint: disable=wrong-import-position
 try:
     import pyuavcan.application
 except (ImportError, AttributeError) as ex:
-    print("GENERATING DSDL PACKAGE; EXCEPTION:", ex)
+    print("Generating DSDL packages because:", ex)
     DSDL_GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
     pyuavcan.dsdl.generate_package(PUBLIC_REGULATED_DATA_TYPES_ROOT / "uavcan", [], DSDL_GENERATED_ROOT)
     importlib.invalidate_caches()

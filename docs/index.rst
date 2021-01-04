@@ -17,6 +17,7 @@ Contents
 --------
 
 .. toctree::
+   :maxdepth: 3
 
    pages/architecture
    pages/installation
