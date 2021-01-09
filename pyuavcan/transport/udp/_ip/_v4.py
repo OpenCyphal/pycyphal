@@ -11,11 +11,11 @@ import logging
 from ipaddress import IPv4Address, IPV4LENGTH, ip_network
 import pyuavcan
 from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
-from pyuavcan.transport import InvalidMediaConfigurationError, Timestamp
+from pyuavcan.transport import InvalidMediaConfigurationError
 from ._socket_factory import SocketFactory, Sniffer
 from ._endpoint_mapping import SUBJECT_PORT, IP_ADDRESS_NODE_ID_MASK, service_data_specifier_to_udp_port
 from ._endpoint_mapping import node_id_to_unicast_ip, message_data_specifier_to_multicast_group
-from ._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket
+from ._link_layer import LinkLayerCapture, LinkLayerSniffer
 
 
 _logger = logging.getLogger(__name__)
