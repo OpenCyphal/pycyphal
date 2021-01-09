@@ -35,13 +35,13 @@ class LinkLayerPacket:
 
     protocol: socket.AddressFamily
     """
-    The protocol encapsulated inside the link-layer packet; e.g., IPv6.
+    The protocol encapsulated inside this link-layer packet; e.g., IPv6.
     """
 
     source: memoryview
     destination: memoryview
     """
-    Link-layer addresses, if applicable. If not supported by the link layer, they are to be empty.
+    Link-layer addresses, if applicable. Empty if not supported by the link layer.
     """
 
     payload: memoryview
@@ -167,7 +167,7 @@ class LinkLayerSniffer:
         # be disposed after the last worker is terminated, but we should make it more deterministic.
 
     def _thread_worker(self, name: str, pd: object, decoder: PacketDecoder) -> None:
-        import libpcap as pcap
+        import libpcap as pcap  # type: ignore
 
         assert isinstance(pd, ctypes.POINTER(pcap.pcap_t))
         try:
@@ -262,7 +262,7 @@ def _get_codecs() -> typing.Dict[int, typing.Tuple[PacketEncoder, PacketDecoder]
     The encoder returns None if the encapsulated protocol is not supported by the selected link layer.
     The decoder returns None if the packet is not valid or the encapsulated protocol is not supported.
     """
-    import libpcap as pcap  # type: ignore
+    import libpcap as pcap
     from socket import AddressFamily
 
     def get_ethernet() -> typing.Tuple[PacketEncoder, PacketDecoder]:

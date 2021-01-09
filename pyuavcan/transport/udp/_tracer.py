@@ -32,9 +32,9 @@ class IPPacket:
         import socket
 
         if link_layer_packet.protocol == socket.AF_INET:
-            return IPv4Packet.parse(link_layer_packet.payload)
+            return IPv4Packet.parse_payload(link_layer_packet.payload)
         if link_layer_packet.protocol == socket.AF_INET6:
-            return IPv6Packet.parse(link_layer_packet.payload)
+            return IPv6Packet.parse_payload(link_layer_packet.payload)
         return None
 
 
@@ -54,7 +54,7 @@ class IPv4Packet(IPPacket):
         return self.source, self.destination
 
     @staticmethod
-    def parse(link_layer_payload: memoryview) -> typing.Optional[IPv4Packet]:
+    def parse_payload(link_layer_payload: memoryview) -> typing.Optional[IPv4Packet]:
         try:
             (
                 ver_ihl,
@@ -87,8 +87,12 @@ class IPv6Packet(IPPacket):
     source: IPv6Address
     destination: IPv6Address
 
+    @property
+    def source_destination(self) -> typing.Tuple[IPv6Address, IPv6Address]:
+        return self.source, self.destination
+
     @staticmethod
-    def parse(link_layer_payload: memoryview) -> typing.Optional[IPv6Packet]:
+    def parse_payload(link_layer_payload: memoryview) -> typing.Optional[IPv6Packet]:
         raise NotImplementedError("Support for IPv6 is not implemented yet")
 
 
