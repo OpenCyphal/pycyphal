@@ -339,7 +339,6 @@ Inheritance diagram
                          pyuavcan.transport.udp._session._input
                          pyuavcan.transport.udp._session._output
                          pyuavcan.transport.udp._socket_reader
-                         pyuavcan.transport.udp._ip._packet
                          pyuavcan.transport.udp._tracer
    :parts: 1
 """
