@@ -38,6 +38,7 @@ Inheritance diagram
 .. inheritance-diagram:: pyuavcan.transport.can._can
                          pyuavcan.transport.can._session._input
                          pyuavcan.transport.can._session._output
+                         pyuavcan.transport.can._tracer
    :parts: 1
 """
 
@@ -53,6 +54,11 @@ from ._can import CANTransportStatistics as CANTransportStatistics
 
 from ._session import CANInputSessionStatistics as CANInputSessionStatistics
 from ._session import TransferReassemblyErrorID as TransferReassemblyErrorID
+
+# Analysis.
+from ._tracer import CANCapture as CANCapture
+from ._tracer import CANErrorTrace as CANErrorTrace
+from ._tracer import CANTracer as CANTracer
 
 # Media sub-layer.
 from . import media as media

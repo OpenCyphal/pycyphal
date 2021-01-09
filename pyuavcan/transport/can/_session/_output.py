@@ -86,7 +86,7 @@ class CANOutputSession(CANSession, pyuavcan.transport.OutputSession):
             try:
                 original_timestamp = self._pending_feedback.pop(key)
             except KeyError:
-                _logger.debug("%s: No pending feedback entry for frame: %s", self, frame)
+                pass  # Do not log this because packet capture mode generates a lot of unattended loopback frames.
             else:
                 if self._feedback_handler is not None:
                     feedback = CANFeedback(original_timestamp, timestamp)
