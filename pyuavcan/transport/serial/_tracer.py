@@ -3,7 +3,6 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
-import enum
 import typing
 import logging
 import dataclasses
@@ -30,20 +29,7 @@ class SerialCapture(pyuavcan.transport.Capture):
     which are simply zero bytes.
     """
 
-    class Direction(enum.Enum):
-        RX = enum.auto()
-        """
-        Fragment received by the listening node.
-        When sniffing on a serial link, all fragments are marked as RX fragments.
-        """
-
-        TX = enum.auto()
-        """
-        This is rather uncommon, it represents the case where the capturing node is also engaged in network exchange.
-        Typically, a capturing unit would remain silent, so all captures would be RX captures.
-        """
-
-    direction: Direction
+    direction: pyuavcan.transport.Capture.Direction
     fragment: memoryview
 
     def __repr__(self) -> str:
@@ -221,7 +207,7 @@ def _unittest_serial_tracer() -> None:
     trace = tx(tail)
     assert isinstance(trace, TransferTrace)
     assert trace.timestamp == ts
-    assert trace.transfer_id_timeout == approx(AlienTransferReassembler.MAX_TRANSFER_ID_TIMEOUT)  # Initial value.
+    assert trace.transfer_id_timeout == approx(2.0)  # Initial value.
     assert trace.transfer.metadata.transfer_id == 1234567890
     assert trace.transfer.metadata.priority == Priority.SLOW
     assert trace.transfer.metadata.session_specifier.source_node_id == 1111

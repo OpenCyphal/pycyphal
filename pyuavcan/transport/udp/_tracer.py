@@ -123,8 +123,9 @@ class UDPIPPacket:
 
 
 @dataclasses.dataclass(frozen=True)
-class UDPCapture(pyuavcan.transport.Capture):
+class UDPCapture(Capture):
     """
+    The UDP transport does not differentiate between sent and received packets.
     See :meth:`pyuavcan.transport.udp.UDPTransport.begin_capture` for details.
     """
 
@@ -287,7 +288,7 @@ def _unittest_udp_tracer() -> None:
     trace = tr.update(UDPCapture(ts, llp))
     assert isinstance(trace, TransferTrace)
     assert trace.timestamp == ts
-    assert trace.transfer_id_timeout == approx(AlienTransferReassembler.MAX_TRANSFER_ID_TIMEOUT)  # Initial value.
+    assert trace.transfer_id_timeout == approx(2.0)  # Initial value.
     assert trace.transfer.metadata.transfer_id == 1234567890
     assert trace.transfer.metadata.priority == Priority.SLOW
     assert trace.transfer.metadata.session_specifier.source_node_id == 42
