@@ -29,7 +29,8 @@ class LinkLayerCaptureError(LinkLayerError):
 @dataclasses.dataclass(frozen=True)
 class LinkLayerPacket:
     """
-    The addresses are represented here in the link-native byte order.
+    OSI L2 packet representation.
+    The addresses are represented here in the link-native byte order (big endian for Ethernet).
     """
 
     protocol: socket.AddressFamily
@@ -65,86 +66,6 @@ class LinkLayerPacket:
             destination=bytes(self.destination).hex(),
             payload=pld,
         )
-
-    Encoder = typing.Callable[["LinkLayerPacket"], typing.Optional[memoryview]]
-    Decoder = typing.Callable[[memoryview], typing.Optional["LinkLayerPacket"]]
-
-    @staticmethod
-    def get_codecs() -> typing.Dict[int, typing.Tuple[Encoder, Decoder]]:
-        """
-        A factory of paired encode/decode functions that are used for building and parsing link-layer packets.
-        The pairs are organized into a dict where the key is the data link type code from libpcap;
-        see https://www.tcpdump.org/linktypes.html.
-        The dict is ordered such that the recommended data link types come first.
-        This is useful when setting up packet capture if the adapter supports multiple link layer formats.
-
-        The encoder returns None if the encapsulated protocol is not supported by the selected link layer.
-        The decoder returns None if the packet is not valid or the encapsulated protocol is not supported.
-        """
-        import libpcap as pcap  # type: ignore
-        from socket import AddressFamily
-
-        def get_ethernet() -> typing.Tuple[LinkLayerPacket.Encoder, LinkLayerPacket.Decoder]:
-            # https://en.wikipedia.org/wiki/EtherType
-            af_to_ethertype = {
-                AddressFamily.AF_INET: 0x0800,
-                AddressFamily.AF_INET6: 0x86DD,
-            }
-            ethertype_to_af = {v: k for k, v in af_to_ethertype.items()}
-
-            def enc(p: LinkLayerPacket) -> typing.Optional[memoryview]:
-                try:
-                    return memoryview(
-                        b"".join(
-                            (
-                                bytes(p.source).rjust(6, b"\x00")[:6],
-                                bytes(p.destination).rjust(6, b"\x00")[:6],
-                                af_to_ethertype[p.protocol].to_bytes(2, "big"),
-                                p.payload,
-                            )
-                        )
-                    )
-                except LookupError:
-                    return None
-
-            def dec(p: memoryview) -> typing.Optional[LinkLayerPacket]:
-                if len(p) < 14:
-                    return None
-                src = p[0:6]
-                dst = p[6:12]
-                ethertype = int.from_bytes(p[12:14], "big")
-                try:
-                    protocol = ethertype_to_af[ethertype]
-                except LookupError:
-                    return None
-                return LinkLayerPacket(protocol=protocol, source=src, destination=dst, payload=p[14:])
-
-            return enc, dec
-
-        def get_loopback(byte_order: str) -> typing.Tuple[LinkLayerPacket.Encoder, LinkLayerPacket.Decoder]:
-            # DLT_NULL is used by the Windows loopback interface. Info: https://wiki.wireshark.org/NullLoopback
-            # The source and destination addresses are not representable in this data link layer.
-            def enc(p: LinkLayerPacket) -> typing.Optional[memoryview]:
-                return memoryview(b"".join((p.protocol.to_bytes(4, byte_order), p.payload)))
-
-            def dec(p: memoryview) -> typing.Optional[LinkLayerPacket]:
-                if len(p) < 4:
-                    return None
-                try:
-                    protocol = AddressFamily(int.from_bytes(p[0:4], byte_order))
-                except ValueError:
-                    return None
-                empty = memoryview(b"")
-                return LinkLayerPacket(protocol=protocol, source=empty, destination=empty, payload=p[4:])
-
-            return enc, dec
-
-        # The output is ORDERED, best option first.
-        return {
-            pcap.DLT_EN10MB: get_ethernet(),
-            pcap.DLT_LOOP: get_loopback("big"),
-            pcap.DLT_NULL: get_loopback(sys.byteorder),
-        }
 
 
 @dataclasses.dataclass(frozen=True)
@@ -245,7 +166,7 @@ class LinkLayerSniffer:
         # activities in the background, but they remain invisible to the outside world. Eventually, the instance will
         # be disposed after the last worker is terminated, but we should make it more deterministic.
 
-    def _thread_worker(self, name: str, pd: object, decoder: LinkLayerPacket.Decoder) -> None:
+    def _thread_worker(self, name: str, pd: object, decoder: PacketDecoder) -> None:
         import libpcap as pcap
 
         assert isinstance(pd, ctypes.POINTER(pcap.pcap_t))
@@ -326,6 +247,87 @@ class LinkLayerSniffer:
         )
 
 
+PacketEncoder = typing.Callable[["LinkLayerPacket"], typing.Optional[memoryview]]
+PacketDecoder = typing.Callable[[memoryview], typing.Optional["LinkLayerPacket"]]
+
+
+def _get_codecs() -> typing.Dict[int, typing.Tuple[PacketEncoder, PacketDecoder]]:
+    """
+    A factory of paired encode/decode functions that are used for building and parsing link-layer packets.
+    The pairs are organized into a dict where the key is the data link type code from libpcap;
+    see https://www.tcpdump.org/linktypes.html.
+    The dict is ordered such that the recommended data link types come first.
+    This is useful when setting up packet capture if the adapter supports multiple link layer formats.
+
+    The encoder returns None if the encapsulated protocol is not supported by the selected link layer.
+    The decoder returns None if the packet is not valid or the encapsulated protocol is not supported.
+    """
+    import libpcap as pcap  # type: ignore
+    from socket import AddressFamily
+
+    def get_ethernet() -> typing.Tuple[PacketEncoder, PacketDecoder]:
+        # https://en.wikipedia.org/wiki/EtherType
+        af_to_ethertype = {
+            AddressFamily.AF_INET: 0x0800,
+            AddressFamily.AF_INET6: 0x86DD,
+        }
+        ethertype_to_af = {v: k for k, v in af_to_ethertype.items()}
+
+        def enc(p: LinkLayerPacket) -> typing.Optional[memoryview]:
+            try:
+                return memoryview(
+                    b"".join(
+                        (
+                            bytes(p.source).rjust(6, b"\x00")[:6],
+                            bytes(p.destination).rjust(6, b"\x00")[:6],
+                            af_to_ethertype[p.protocol].to_bytes(2, "big"),
+                            p.payload,
+                        )
+                    )
+                )
+            except LookupError:
+                return None
+
+        def dec(p: memoryview) -> typing.Optional[LinkLayerPacket]:
+            if len(p) < 14:
+                return None
+            src = p[0:6]
+            dst = p[6:12]
+            ethertype = int.from_bytes(p[12:14], "big")
+            try:
+                protocol = ethertype_to_af[ethertype]
+            except LookupError:
+                return None
+            return LinkLayerPacket(protocol=protocol, source=src, destination=dst, payload=p[14:])
+
+        return enc, dec
+
+    def get_loopback(byte_order: str) -> typing.Tuple[PacketEncoder, PacketDecoder]:
+        # DLT_NULL is used by the Windows loopback interface. Info: https://wiki.wireshark.org/NullLoopback
+        # The source and destination addresses are not representable in this data link layer.
+        def enc(p: LinkLayerPacket) -> typing.Optional[memoryview]:
+            return memoryview(b"".join((p.protocol.to_bytes(4, byte_order), p.payload)))
+
+        def dec(p: memoryview) -> typing.Optional[LinkLayerPacket]:
+            if len(p) < 4:
+                return None
+            try:
+                protocol = AddressFamily(int.from_bytes(p[0:4], byte_order))
+            except ValueError:
+                return None
+            empty = memoryview(b"")
+            return LinkLayerPacket(protocol=protocol, source=empty, destination=empty, payload=p[4:])
+
+        return enc, dec
+
+    # The output is ORDERED, best option first.
+    return {
+        pcap.DLT_EN10MB: get_ethernet(),
+        pcap.DLT_LOOP: get_loopback("big"),
+        pcap.DLT_NULL: get_loopback(sys.byteorder),
+    }
+
+
 def _find_devices() -> typing.List[str]:
     """
     Returns a list of local network devices that can be captured from.
@@ -365,7 +367,7 @@ def _find_devices() -> typing.List[str]:
 
 def _capture_all(
     device_names: typing.List[str], filter_expression: str
-) -> typing.List[typing.Tuple[str, object, LinkLayerPacket.Decoder]]:
+) -> typing.List[typing.Tuple[str, object, PacketDecoder]]:
     """
     Begin capture on all devices in promiscuous mode.
     We can't use "any" because libpcap does not support promiscuous mode with it, as stated in the docs and here:
@@ -375,8 +377,8 @@ def _capture_all(
     """
     import libpcap as pcap
 
-    codecs = LinkLayerPacket.get_codecs()
-    caps: typing.List[typing.Tuple[str, object, LinkLayerPacket.Decoder]] = []
+    codecs = _get_codecs()
+    caps: typing.List[typing.Tuple[str, object, PacketDecoder]] = []
     try:
         for name in device_names:
             pd = _capture_single_device(name, filter_expression, list(codecs.keys()))

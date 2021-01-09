@@ -7,14 +7,12 @@ import sys
 import errno
 import typing
 import socket
-import struct
 import logging
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, IPV4LENGTH, ip_network
 import pyuavcan
 from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
 from pyuavcan.transport import InvalidMediaConfigurationError, Timestamp
 from ._socket_factory import SocketFactory, Sniffer
-from ._packet import RawPacket, MACHeader, IPHeader, UDPHeader
 from ._endpoint_mapping import SUBJECT_PORT, IP_ADDRESS_NODE_ID_MASK, service_data_specifier_to_udp_port
 from ._endpoint_mapping import node_id_to_unicast_ip, message_data_specifier_to_multicast_group
 from ._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket
@@ -140,63 +138,20 @@ class IPv4SocketFactory(SocketFactory):
         _logger.debug("%r: New input %r", self, s)
         return s
 
-    def make_sniffer(self, handler: typing.Callable[[Timestamp, RawPacket], None]) -> SnifferIPv4:
+    def make_sniffer(self, handler: typing.Callable[[LinkLayerCapture], None]) -> SnifferIPv4:
         return SnifferIPv4(self._local, handler)
 
 
 class SnifferIPv4(Sniffer):
-    _IP_V4_FORMAT = struct.Struct("!BB HHH BB H II")
-    _UDP_V4_FORMAT = struct.Struct("!HH HH")
-    _PROTO_UDP = 0x11
-
-    def __init__(self, local_ip_address: IPv4Address, handler: typing.Callable[[Timestamp, RawPacket], None]) -> None:
-        from ipaddress import IPV4LENGTH, ip_network
-
+    def __init__(self, local_ip_address: IPv4Address, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
         netmask_width = IPV4LENGTH - IP_ADDRESS_NODE_ID_MASK.bit_length()
         subnet = ip_network(f"{local_ip_address}/{netmask_width}", strict=False)
         filter_expression = f"udp and src net {subnet}"
         _logger.debug("Constructed BPF filter expression: %r", filter_expression)
-        self._link_layer = LinkLayerSniffer(filter_expression, self._callback)
-        self._local = local_ip_address
-        self._handler = handler
+        self._link_layer = LinkLayerSniffer(filter_expression, handler)
 
     def close(self) -> None:
         self._link_layer.close()
 
-    def _callback(self, lls: LinkLayerCapture) -> None:
-        rp = self._try_parse(lls.packet)
-        if rp is not None:
-            self._handler(lls.timestamp, rp)
-
-    @staticmethod
-    def _try_parse(llp: LinkLayerPacket) -> typing.Optional[RawPacket]:
-        if llp.protocol != socket.AddressFamily.AF_INET:
-            return None
-        data = llp.payload
-        (
-            ver_ihl,
-            _dscp_ecn,
-            _ip_length,
-            _ident,
-            _flags_frag_off,
-            _ttl,
-            proto,
-            _hdr_chk,
-            src_adr,
-            dst_adr,
-        ) = SnifferIPv4._IP_V4_FORMAT.unpack_from(data)
-        ver, ihl = ver_ihl >> 4, ver_ihl & 0xF
-        ip_header_size = ihl * 4
-        udp_ip_header_size = ip_header_size + SnifferIPv4._UDP_V4_FORMAT.size
-        if ver != 4 or proto != SnifferIPv4._PROTO_UDP or len(data) < udp_ip_header_size:
-            return None
-        src_port, dst_port, _udp_length, _udp_chk = SnifferIPv4._UDP_V4_FORMAT.unpack_from(data, offset=ip_header_size)
-        return RawPacket(
-            mac_header=MACHeader(source=llp.source, destination=llp.destination),
-            ip_header=IPHeader(source=IPv4Address(src_adr), destination=IPv4Address(dst_adr)),
-            udp_header=UDPHeader(source_port=src_port, destination_port=dst_port),
-            udp_payload=data[udp_ip_header_size:],
-        )
-
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, local_ip_address=str(self._local), link_layer=self._link_layer)
+        return pyuavcan.util.repr_attributes(self, self._link_layer)

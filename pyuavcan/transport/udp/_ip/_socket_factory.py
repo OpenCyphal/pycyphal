@@ -11,7 +11,7 @@ import ipaddress
 import pyuavcan.util
 import pyuavcan.transport
 from ._endpoint_mapping import IPAddress
-from ._packet import RawPacket
+from ._link_layer import LinkLayerCapture
 
 
 _logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def make_sniffer(self, handler: typing.Callable[[pyuavcan.transport.Timestamp, RawPacket], None]) -> Sniffer:
+    def make_sniffer(self, handler: typing.Callable[[LinkLayerCapture], None]) -> Sniffer:
         """
         Launch a new network sniffer based on a raw socket (usually this requires special permissions).
         The sniffer will run in a separate thread, invoking the handler *directly from the worker thread*

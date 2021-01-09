@@ -12,8 +12,7 @@ import pyuavcan
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
-from ._ip import SocketFactory, Sniffer, RawPacket
-from ._ip import unicast_ip_to_node_id
+from ._ip import SocketFactory, Sniffer, LinkLayerCapture, unicast_ip_to_node_id
 from ._socket_reader import SocketReader, SocketReaderStatistics
 from ._tracer import UDPTracer, UDPCapture
 
@@ -251,7 +250,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._ensure_not_closed()
         if self._sniffer is None:
             _logger.debug("%s: Starting UDP/IP packet capture (hope you have permissions)", self)
-            self._sniffer = self._sock_factory.make_sniffer(self._process_captured_packet)
+            self._sniffer = self._sock_factory.make_sniffer(self._process_capture)
         self._capture_handlers.append(handler)
 
     @staticmethod
@@ -338,9 +337,9 @@ class UDPTransport(pyuavcan.transport.Transport):
                 finally:
                     del self._socket_reader_registry[specifier.data_specifier]
 
-    def _process_captured_packet(self, timestamp: pyuavcan.transport.Timestamp, packet: RawPacket) -> None:
+    def _process_capture(self, capture: LinkLayerCapture) -> None:
         """This handler may be invoked from a different thread (the capture thread)."""
-        pyuavcan.util.broadcast(self._capture_handlers)(UDPCapture(timestamp, packet))
+        pyuavcan.util.broadcast(self._capture_handlers)(UDPCapture(capture.timestamp, capture.packet))
 
     def _ensure_not_closed(self) -> None:
         if self._closed:

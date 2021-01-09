@@ -11,7 +11,7 @@ import typing
 import socket
 import libpcap as pcap  # type: ignore
 from pyuavcan.transport import Timestamp
-from pyuavcan.transport.udp._ip._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket
+from pyuavcan.transport.udp._ip._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket, _get_codecs
 
 
 def _unittest_encode_decode_null() -> None:
@@ -19,7 +19,7 @@ def _unittest_encode_decode_null() -> None:
 
     mv = memoryview
 
-    enc, dec = LinkLayerPacket.get_codecs()[pcap.DLT_NULL]
+    enc, dec = _get_codecs()[pcap.DLT_NULL]
     llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, sys.byteorder) + b"abcd"))
     assert isinstance(llp, LinkLayerPacket)
     assert llp.protocol == AddressFamily.AF_INET
@@ -54,7 +54,7 @@ def _unittest_encode_decode_loop() -> None:
 
     mv = memoryview
 
-    enc, dec = LinkLayerPacket.get_codecs()[pcap.DLT_LOOP]
+    enc, dec = _get_codecs()[pcap.DLT_LOOP]
     llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, "big") + b"abcd"))
     assert isinstance(llp, LinkLayerPacket)
     assert llp.protocol == AddressFamily.AF_INET
@@ -89,7 +89,7 @@ def _unittest_encode_decode_ethernet() -> None:
 
     mv = memoryview
 
-    enc, dec = LinkLayerPacket.get_codecs()[pcap.DLT_EN10MB]
+    enc, dec = _get_codecs()[pcap.DLT_EN10MB]
     llp = dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xAA\xBB\xCC\xDD\xEE\xFF" + b"\x08\x00" + b"abcd"))
     assert isinstance(llp, LinkLayerPacket)
     assert llp.protocol == AddressFamily.AF_INET

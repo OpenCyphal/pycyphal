@@ -360,10 +360,6 @@ from ._session import UDPFeedback as UDPFeedback
 
 from ._frame import UDPFrame as UDPFrame
 
-from ._ip import MACHeader as MACHeader
-from ._ip import IPHeader as IPHeader
-from ._ip import UDPHeader as UDPHeader
-from ._ip import RawPacket as RawPacket
 from ._ip import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
 from ._ip import SUBJECT_PORT as SUBJECT_PORT
 from ._ip import node_id_to_unicast_ip as node_id_to_unicast_ip
@@ -372,7 +368,12 @@ from ._ip import message_data_specifier_to_multicast_group as message_data_speci
 from ._ip import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
 from ._ip import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
 from ._ip import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier
+from ._ip import LinkLayerPacket as LinkLayerPacket
 
+from ._tracer import IPPacket as IPPacket
+from ._tracer import IPv4Packet as IPv4Packet
+from ._tracer import IPv6Packet as IPv6Packet
+from ._tracer import UDPIPPacket as UDPIPPacket
 from ._tracer import UDPCapture as UDPCapture
 from ._tracer import UDPTracer as UDPTracer
 from ._tracer import UDPErrorTrace as UDPErrorTrace
