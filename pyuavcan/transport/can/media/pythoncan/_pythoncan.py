@@ -116,17 +116,6 @@ def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         raise TypeError(f'Invalid parameters: {parameters}')
 
 
-def _construct_nican(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(interface=parameters.interface_name,
-                                 channel=parameters.channel_name,
-                                 bitrate=parameters.bitrate)
-    elif isinstance(parameters, _FDInterfaceParameters):
-        raise TypeError('Interface does not support CAN FD: {}'.format(parameters.interface_name))
-    else:
-        raise TypeError(f'Invalid parameters: {parameters}')
-
-
 def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return can.ThreadSafeBus(interface=parameters.interface_name,
@@ -138,7 +127,7 @@ def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    raise TypeError('Interface not supported yet: {}'.format(parameters.interface_name))
+    raise TypeError(f'Interface not supported yet: {parameters.interface_name}')
 
 
 _CONSTRUCTORS: typing.DefaultDict[str, typing.Callable[[_InterfaceParameters],
@@ -149,7 +138,6 @@ _CONSTRUCTORS: typing.DefaultDict[str, typing.Callable[[_InterfaceParameters],
         'kvaser':    _construct_kvaser,
         'slcan':     _construct_slcan,
         'pcan':      _construct_pcan,
-        'nican':     _construct_nican,
         'virtual':   _construct_virtual,
     }
 )
@@ -169,6 +157,8 @@ class PythonCANMedia(_media.Media):
     
         CAN(can.media.pythoncan.PythonCANMedia('kvaser:0',5000000,8),10)
     """
+    
+    MAXIMAL_TIMEOUT_SEC = 0.001
 
     def __init__(self, iface_name: str, bitrate: typing.Union[int, typing.Tuple[int, int]], mtu: int) -> None:
         """
@@ -190,7 +180,7 @@ class PythonCANMedia(_media.Media):
                 "Interface name %r does not match the format 'interface:channel'" % str(iface_name)
             )
         if mtu not in self.VALID_MTU_SET:
-            raise RuntimeError('Wrong MTU value: {}'.format(mtu))
+            raise RuntimeError(f'Wrong MTU value: {mtu}')
         self._mtu = int(mtu)
         self._loop = asyncio.get_event_loop()
         self._closed = False
@@ -330,7 +320,7 @@ class PythonCANMedia(_media.Media):
         _logger.info('%s thread is about to exit', self)
 
     def _read_frame(self) -> _media.TimestampedDataFrame:
-        msg = self._bus.recv(0.001)
+        msg = self._bus.recv(self.MAXIMAL_TIMEOUT_SEC)
         if msg is not None:
             ts_system_ns = time.time_ns()
             ts_mono_ns = time.monotonic_ns()
