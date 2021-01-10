@@ -33,9 +33,13 @@ class FilterConfiguration:
         return int(self.format if self.format is not None else max(FrameFormat))
 
     @staticmethod
-    def new_promiscuous() -> FilterConfiguration:
-        """Returns a configuration that accepts all frames."""
-        return FilterConfiguration(identifier=0, mask=0, format=None)
+    def new_promiscuous(frame_format: typing.Optional[FrameFormat] = None) -> FilterConfiguration:
+        """
+        Returns a configuration that accepts all frames of the specified format.
+        If the format is not specified, no distinction will be made.
+        Note that some CAN controllers may have difficulty supporting both formats on a single filter.
+        """
+        return FilterConfiguration(identifier=0, mask=0, format=frame_format)
 
     @property
     def rank(self) -> int:

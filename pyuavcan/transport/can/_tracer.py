@@ -65,7 +65,14 @@ class CANTracer(pyuavcan.transport.Tracer):
         if not parsed:
             return None
         ss, prio, frame = parsed
-        return self._get_session(ss).update(cap.timestamp, prio, frame)
+        if ss.source_node_id is not None:
+            return self._get_session(ss).update(cap.timestamp, prio, frame)
+        # Anonymous transfer -- no reconstruction needed, no session.
+        return TransferTrace(
+            cap.timestamp,
+            AlienTransfer(AlienTransferMetadata(prio, frame.transfer_id, ss), [frame.padded_payload]),
+            0.0,
+        )
 
     def _get_session(self, specifier: AlienSessionSpecifier) -> _AlienSession:
         try:
@@ -282,6 +289,22 @@ def _unittest_can_tracer() -> None:
     assert tr.transfer.metadata.transfer_id == 0
     assert tr.transfer.metadata.priority == Priority.SLOW
     assert tr.transfer.metadata.session_specifier.source_node_id == 42
+
+    cap = CANCapture(
+        ts,
+        Capture.Direction.RX,  # Direction is ignored.
+        DataFrame(
+            FrameFormat.EXTENDED,
+            MessageCANID(Priority.SLOW, None, 3210).compile([]),
+            bytearray(b"123\xE0"),
+        ),
+    )
+    tr = tracer.update(cap)
+    assert isinstance(tr, TransferTrace)
+    assert tr.timestamp == ts
+    assert tr.transfer.metadata.transfer_id == 0
+    assert tr.transfer.metadata.priority == Priority.SLOW
+    assert tr.transfer.metadata.session_specifier.source_node_id is None
 
     # Invalid captured frame.
     assert None is tracer.update(CANCapture(ts, Capture.Direction.RX, DataFrame(FrameFormat.BASE, 123, bytearray(b""))))

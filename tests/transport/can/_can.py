@@ -975,6 +975,92 @@ async def _unittest_issue_120() -> None:
     assert 0 == tr.sample_statistics().lost_loopback_frames
 
 
+@pytest.mark.asyncio  # type: ignore
+async def _unittest_can_capture_trace() -> None:
+    from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer, Priority, Timestamp
+    from pyuavcan.transport import InputSessionSpecifier, OutputSessionSpecifier, TransferTrace
+    from .media.mock import MockMedia
+    from pyuavcan.transport.can import CANCapture
+    from pyuavcan.transport.can.media import FilterConfiguration, FrameFormat
+
+    asyncio.get_running_loop().slow_callback_duration = 5.0
+
+    ts = Timestamp.now()
+
+    peers: typing.Set[MockMedia] = set()
+    media = MockMedia(peers, 64, 2)
+    media2 = MockMedia(peers, 64, 2)
+
+    tr = can.CANTransport(media, None)
+    tr2 = can.CANTransport(media2, 51)
+
+    captures: typing.List[CANCapture] = []
+    captures_other: typing.List[CANCapture] = []
+
+    def add_capture(cap: pyuavcan.transport.Capture) -> None:
+        assert isinstance(cap, CANCapture)
+        captures.append(cap)
+
+    def add_capture_other(cap: pyuavcan.transport.Capture) -> None:
+        assert isinstance(cap, CANCapture)
+        captures_other.append(cap)
+
+    tr.begin_capture(add_capture)
+    tr.begin_capture(add_capture_other)
+    assert media.acceptance_filters == [
+        FilterConfiguration.new_promiscuous(FrameFormat.BASE),
+        FilterConfiguration.new_promiscuous(FrameFormat.EXTENDED),
+    ]
+
+    a_out = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), PayloadMetadata(800))
+    b_out = tr2.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(5432), None), PayloadMetadata(800))
+
+    # Ensure the filter configuration is not reset when creating new subscriptions.
+    a_in = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), PayloadMetadata(800))
+    assert media.acceptance_filters == [
+        FilterConfiguration.new_promiscuous(FrameFormat.BASE),
+        FilterConfiguration.new_promiscuous(FrameFormat.EXTENDED),
+    ]
+
+    # Send transfers to collect some captures.
+    assert await a_out.send(
+        Transfer(ts, Priority.NOMINAL, transfer_id=11, fragmented_payload=[memoryview(b"first")]),
+        monotonic_deadline=tr.loop.time() + 2.0,
+    )
+    await asyncio.sleep(1.0)  # Let messages propagate.
+    assert await b_out.send(
+        Transfer(ts, Priority.NOMINAL, transfer_id=22, fragmented_payload=[memoryview(b"second")]),
+        monotonic_deadline=tr.loop.time() + 2.0,
+    )
+    transfer = await a_in.receive(tr.loop.time() + 2.0)
+    assert transfer
+    assert transfer.transfer_id == 11
+    await asyncio.sleep(1.0)  # Let messages propagate.
+
+    # Validate the captures.
+    assert captures == captures_other
+    assert len(captures) == 2  # One sent, one received.
+    assert captures[0].direction.name == "TX"
+    assert b"first" in captures[0].frame.data
+    assert captures[1].direction.name == "RX"
+    assert b"second" in captures[1].frame.data
+
+    # Check the loopback stats.
+    assert tr.sample_statistics().in_frames == 1
+    assert tr.sample_statistics().in_frames_loopback == 1
+    assert tr2.sample_statistics().in_frames == 1
+    assert tr2.sample_statistics().in_frames_loopback == 0
+
+    # Perform basic tracer test (the full test is implemented separately).
+    tracer = tr.make_tracer()
+    trc = tracer.update(captures[0])
+    assert isinstance(trc, TransferTrace)
+    assert b"first" in trc.transfer.fragmented_payload[0].tobytes()
+    trc = tracer.update(captures[1])
+    assert isinstance(trc, TransferTrace)
+    assert b"second" in trc.transfer.fragmented_payload[0].tobytes()
+
+
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
     return memoryview(data.encode() if isinstance(data, str) else data)
 

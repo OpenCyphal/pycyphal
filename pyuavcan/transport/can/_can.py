@@ -360,14 +360,7 @@ class CANTransport(pyuavcan.transport.Transport):
         try:
             session = self._output_registry[ss]
         except KeyError:
-            _logger.info(
-                "%s: No matching output session for loopback frame: %s; parsed CAN ID: %s; session specifier: %s. "
-                "Either the session has just been closed or the media driver is misbehaving.",
-                self,
-                frame,
-                can_id,
-                ss,
-            )
+            pass  # Do not log this because packet capture mode generates a lot of unattended loopback frames.
         else:
             session._handle_loopback_frame(timestamp, frame)  # pylint: disable=protected-access
 
@@ -382,8 +375,8 @@ class CANTransport(pyuavcan.transport.Transport):
             assert len(fcs) > len(subject_ids)
         else:
             fcs = [
-                FilterConfiguration(identifier=0, mask=0, format=FrameFormat.BASE),
-                FilterConfiguration(identifier=0, mask=0, format=FrameFormat.EXTENDED),
+                FilterConfiguration.new_promiscuous(FrameFormat.BASE),
+                FilterConfiguration.new_promiscuous(FrameFormat.EXTENDED),
             ]
 
         if self._maybe_media is not None:
