@@ -127,6 +127,16 @@ def _construct_nican(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         raise TypeError(f'Invalid parameters: {parameters}')
 
 
+def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name,
+                                 bitrate=parameters.bitrate)
+    elif isinstance(parameters, _FDInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name)
+    else:
+        raise TypeError(f'Invalid parameters: {parameters}')
+
+
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     raise TypeError('Interface not supported yet: {}'.format(parameters.interface_name))
 
@@ -140,6 +150,7 @@ _CONSTRUCTORS: typing.DefaultDict[str, typing.Callable[[_InterfaceParameters],
         'slcan':     _construct_slcan,
         'pcan':      _construct_pcan,
         'nican':     _construct_nican,
+        'virtual':   _construct_virtual,
     }
 )
 
@@ -197,7 +208,7 @@ class PythonCANMedia(_media.Media):
                                                  channel_name=self._conn_name[1],
                                                  bitrate=bitrate[0])
         self._bus = _CONSTRUCTORS[self._conn_name[0]](params)
-        self._loopback_lock = threading.RLock()
+        self._loopback_lock = threading.Lock()
         self._loop_frames: typing.List[_media.DataFrame] = []
         super(PythonCANMedia, self).__init__()
 
@@ -251,15 +262,14 @@ class PythonCANMedia(_media.Media):
         for f in frames:
             if self._closed:
                 raise pyuavcan.transport.ResourceClosedError(repr(self))
-            message = can.Message(arbitration_id=f.identifier, is_extended_id=True, data=f.data, is_fd=self._is_fd)
-            if f.loopback == True:
+            message = can.Message(arbitration_id=f.identifier, is_extended_id=(f.format == _media.FrameFormat.EXTENDED), data=f.data, is_fd=self._is_fd)
+            if f.loopback:
                 with self._loopback_lock:
                     self._loop_frames.append(f)
             try:
                 await self._loop.run_in_executor(
                     self._background_executor,
                     lambda: self.send_msg(message, timeout=monotonic_deadline - self._loop.time())
-                    #lambda: self._bus.send(message, timeout=monotonic_deadline - self._loop.time())
                 )
             except asyncio.TimeoutError:
                 break
@@ -290,7 +300,9 @@ class PythonCANMedia(_media.Media):
             try:
                 frames: typing.List[_media.TimestampedDataFrame] = []
                 try:
-                    frames.append(self._read_frame())
+                    msg = self._read_frame()
+                    if msg is not None:
+                        frames.append(msg)
                 except OSError as ex:
                     raise
                 if len(self._loop_frames) > 0:
@@ -318,16 +330,15 @@ class PythonCANMedia(_media.Media):
         _logger.info('%s thread is about to exit', self)
 
     def _read_frame(self) -> _media.TimestampedDataFrame:
-        while True:
-            msg = self._bus.recv()
-            if msg is not None:
-                ts_system_ns = time.time_ns()
-                ts_mono_ns = time.monotonic_ns()
-                timestamp = pyuavcan.transport.Timestamp(system_ns=ts_system_ns, monotonic_ns=ts_mono_ns)
-                loopback = False      # no possibility to get real loopback yet
-                out = self._parse_native_frame(msg, loopback=loopback, timestamp=timestamp)
-                if out is not None:
-                    return out
+        msg = self._bus.recv(0.001)
+        if msg is not None:
+            ts_system_ns = time.time_ns()
+            ts_mono_ns = time.monotonic_ns()
+            timestamp = pyuavcan.transport.Timestamp(system_ns=ts_system_ns, monotonic_ns=ts_mono_ns)
+            loopback = False      # no possibility to get real loopback yet
+            out = self._parse_native_frame(msg, loopback=loopback, timestamp=timestamp)
+            if out is not None:
+                return out
 
     @staticmethod
     def _parse_native_frame(msg: can.Message,
