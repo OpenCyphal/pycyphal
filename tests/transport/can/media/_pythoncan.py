@@ -17,9 +17,6 @@ async def _unittest_can_pythoncan() -> None:
     from pyuavcan.transport import Timestamp
     from pyuavcan.transport.can.media import TimestampedDataFrame, DataFrame, FrameFormat, FilterConfiguration
 
-#    if sys.platform != 'linux':  # pragma: no cover
-#        pytest.skip('SocketCAN test skipped because we do not seem to be on a GNU/Linux-based system')
-
     from pyuavcan.transport.can.media.pythoncan import PythonCANMedia
     available = PythonCANMedia.list_available_interface_names()
 #    print('Available SocketCAN ifaces:', available)
@@ -52,7 +49,6 @@ async def _unittest_can_pythoncan() -> None:
         frames = list(frames)
         print('RX B:', frames)
         rx_b += frames
-        #asyncio.ensure_future(media_b.send_until(frames, asyncio.get_event_loop().time() + 1.0))
 
     media_a.start(on_rx_a, False)
     media_b.start(on_rx_b, False)
@@ -79,19 +75,13 @@ async def _unittest_can_pythoncan() -> None:
     ], asyncio.get_event_loop().time() + 1.0)
     await asyncio.sleep(0.1)
     ts_end = Timestamp.now()
-    
-    
 
     print('rx_a:', rx_a)
-    # Three sent back from the other end, two loopback
+    # Three received from another part
     assert len(rx_a) == 3
-    '''for f in rx_a:
+    for f in rx_a:
         assert ts_begin.monotonic_ns <= f.timestamp.monotonic_ns <= ts_end.monotonic_ns
         assert ts_begin.system_ns <= f.timestamp.system_ns <= ts_end.system_ns
-
-    rx_loopback = list(filter(lambda x: x.loopback, rx_a))
-    rx_external = list(filter(lambda x: not x.loopback, rx_a))
-    assert len(rx_loopback) == 2 and len(rx_external) == 3'''
     
     rx_external = list(filter(lambda x: True, rx_a))
 
@@ -108,6 +98,7 @@ async def _unittest_can_pythoncan() -> None:
     assert rx_external[2].format == FrameFormat.BASE
     
     print('rx_b:', rx_b)
+    # Two messages are loopback and were copied
     assert len(rx_b) == 2
     
     rx_loopback = list(filter(lambda x: True, rx_b))
@@ -120,5 +111,5 @@ async def _unittest_can_pythoncan() -> None:
     assert rx_loopback[1].data == bytearray(range(6))
     assert rx_loopback[1].format == FrameFormat.BASE    
 
-    #media_a.close()
-    #media_b.close()
+    media_a.close()
+    media_b.close()
