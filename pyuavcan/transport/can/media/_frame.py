@@ -59,7 +59,7 @@ class DataFrame:
             FrameFormat.EXTENDED: "0x%08x",
             FrameFormat.BASE: "0x%03x",
         }[self.format] % self.identifier
-        return pyuavcan.util.repr_attributes(self, ide, self.data.hex())
+        return pyuavcan.util.repr_attributes(self, id=ide, data=self.data.hex())
 
 
 @dataclasses.dataclass(frozen=True)

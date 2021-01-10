@@ -116,3 +116,172 @@ class _AlienSession:
         It is automatically adjusted whenever a new transfer is received.
         """
         return self._interval * _AlienSession._TID_TIMEOUT_MULTIPLIER
+
+
+# ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
+
+
+def _unittest_can_capture() -> None:
+    from pyuavcan.transport import MessageDataSpecifier
+    from .media import FrameFormat
+    from ._identifier import MessageCANID
+
+    ts = Timestamp.now()
+    payload = bytearray(b"123\x0A")
+    cap = CANCapture(
+        ts,
+        Capture.Direction.TX,
+        DataFrame(
+            FrameFormat.EXTENDED,
+            MessageCANID(Priority.SLOW, 42, 3210).compile([memoryview(payload)]),
+            payload,
+        ),
+    )
+    print(cap)
+    parsed = cap.parse()
+    assert parsed is not None
+    ss, prio, uf = parsed
+    assert ss.source_node_id == 42
+    assert ss.destination_node_id is None
+    assert isinstance(ss.data_specifier, MessageDataSpecifier)
+    assert ss.data_specifier.subject_id == 3210
+    assert prio == Priority.SLOW
+    assert uf.transfer_id == 0x0A
+    assert uf.padded_payload == b"123"
+    assert not uf.start_of_transfer
+    assert not uf.end_of_transfer
+    assert not uf.toggle_bit
+
+    # Invalid CAN ID
+    assert (
+        None
+        is CANCapture(
+            ts,
+            Capture.Direction.TX,
+            DataFrame(FrameFormat.BASE, 123, payload),
+        ).parse()
+    )
+
+    # Invalid CAN payload
+    assert (
+        None
+        is CANCapture(
+            ts,
+            Capture.Direction.TX,
+            DataFrame(FrameFormat.EXTENDED, MessageCANID(Priority.SLOW, 42, 3210).compile([]), bytearray()),
+        ).parse()
+    )
+
+
+def _unittest_can_alien_session() -> None:
+    from pytest import approx
+    from pyuavcan.transport import MessageDataSpecifier
+    from ._identifier import MessageCANID
+
+    ts = Timestamp.now()
+    can_identifier = MessageCANID(Priority.SLOW, 42, 3210).compile([])
+
+    def frm(
+        padded_payload: typing.Union[bytes, str],
+        transfer_id: int,
+        start_of_transfer: bool,
+        end_of_transfer: bool,
+        toggle_bit: bool,
+    ) -> UAVCANFrame:
+        return UAVCANFrame(
+            identifier=can_identifier,
+            padded_payload=memoryview(padded_payload if isinstance(padded_payload, bytes) else padded_payload.encode()),
+            transfer_id=transfer_id,
+            start_of_transfer=start_of_transfer,
+            end_of_transfer=end_of_transfer,
+            toggle_bit=toggle_bit,
+        )
+
+    spec = AlienSessionSpecifier(42, None, MessageDataSpecifier(3210))
+    ses = _AlienSession(spec)
+
+    # Valid multi-frame (test data copy-posted from the reassembler test).
+    assert None is ses.update(ts, Priority.HIGH, frm(b"\x00\x01\x02\x03\x04\x05\x06", 11, True, False, True))
+    assert None is ses.update(ts, Priority.HIGH, frm(b"\x07\x08\x09\x0a\x0b\x0c\x0d", 11, False, False, False))
+    assert None is ses.update(ts, Priority.HIGH, frm(b"\x0e\x0f\x10\x11\x12\x13\x14", 11, False, False, True))
+    assert None is ses.update(ts, Priority.HIGH, frm(b"\x15\x16\x17\x18\x19\x1a\x1b", 11, False, False, False))
+    tr = ses.update(ts, Priority.HIGH, frm(b"\x1c\x1d\x35\x54", 11, False, True, True))
+    assert isinstance(tr, TransferTrace)
+    assert list(tr.transfer.fragmented_payload) == [
+        b"\x00\x01\x02\x03\x04\x05\x06",
+        b"\x07\x08\x09\x0a\x0b\x0c\x0d",
+        b"\x0e\x0f\x10\x11\x12\x13\x14",
+        b"\x15\x16\x17\x18\x19\x1a\x1b",
+        b"\x1c\x1d",  # CRC stripped
+    ]
+    assert tr.transfer.metadata.priority == Priority.HIGH
+    assert tr.transfer.metadata.transfer_id == 11
+    assert tr.transfer.metadata.session_specifier.source_node_id == 42
+    assert tr.transfer.metadata.session_specifier.destination_node_id is None
+    assert isinstance(tr.transfer.metadata.session_specifier.data_specifier, MessageDataSpecifier)
+    assert tr.transfer.metadata.session_specifier.data_specifier.subject_id == 3210
+    assert tr.timestamp == ts
+    assert tr.transfer_id_timeout == approx(2.0)  # Default value.
+
+    # Missed start of transfer.
+    tr = ses.update(ts, Priority.HIGH, frm(b"123456", 2, False, False, False))
+    assert isinstance(tr, CANErrorTrace)
+
+    # Valid single-frame; TID timeout updated.
+    tr = ses.update(ts, Priority.LOW, frm(b"\x00\x01\x02\x03\x04\x05\x06", 12, True, True, True))
+    assert isinstance(tr, TransferTrace)
+    assert tr.transfer.metadata.priority == Priority.LOW
+    assert tr.transfer.metadata.transfer_id == 12
+    assert tr.transfer.metadata.session_specifier.source_node_id == 42
+    assert tr.transfer.metadata.session_specifier.destination_node_id is None
+    assert isinstance(tr.transfer.metadata.session_specifier.data_specifier, MessageDataSpecifier)
+    assert tr.transfer.metadata.session_specifier.data_specifier.subject_id == 3210
+    assert tr.timestamp == ts
+    assert ses.transfer_id_timeout == approx(1.0)  # Shrunk twice because we're using the same timestamp here.
+
+
+def _unittest_can_tracer() -> None:
+    from .media import FrameFormat
+    from ._identifier import MessageCANID
+
+    ts = Timestamp.now()
+    tracer = CANTracer()
+
+    # Foreign capture ignored.
+    assert None is tracer.update(Capture(ts))
+
+    # Valid transfers.
+    cap = CANCapture(
+        ts,
+        Capture.Direction.TX,
+        DataFrame(
+            FrameFormat.EXTENDED,
+            MessageCANID(Priority.FAST, 42, 3210).compile([]),
+            bytearray(b"123\xFF"),
+        ),
+    )
+    tr = tracer.update(cap)
+    assert isinstance(tr, TransferTrace)
+    assert tr.timestamp == ts
+    assert tr.transfer.metadata.transfer_id == 31
+    assert tr.transfer.metadata.priority == Priority.FAST
+    assert tr.transfer.metadata.session_specifier.source_node_id == 42
+
+    cap = CANCapture(
+        ts,
+        Capture.Direction.RX,  # Direction is ignored.
+        DataFrame(
+            FrameFormat.EXTENDED,
+            MessageCANID(Priority.SLOW, 42, 3210).compile([]),
+            bytearray(b"123\xE0"),
+        ),
+    )
+    tr = tracer.update(cap)
+    assert isinstance(tr, TransferTrace)
+    assert tr.timestamp == ts
+    assert tr.transfer.metadata.transfer_id == 0
+    assert tr.transfer.metadata.priority == Priority.SLOW
+    assert tr.transfer.metadata.session_specifier.source_node_id == 42
+
+    # Invalid captured frame.
+    assert None is tracer.update(CANCapture(ts, Capture.Direction.RX, DataFrame(FrameFormat.BASE, 123, bytearray(b""))))

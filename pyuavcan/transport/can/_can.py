@@ -231,7 +231,9 @@ class CANTransport(pyuavcan.transport.Transport):
 
     def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
         """
-        Capture is implemented by reconfiguring the acceptance filter to accept everything.
+        Capture is implemented by reconfiguring the acceptance filter to accept everything
+        and forcing loopback for every outgoing frame.
+        Forced loopback ensures that transmitted frames are timestamped very accurately.
         Captured frames are encapsulated inside :class:`pyuavcan.transport.can.CANCapture`.
         """
         self._capture_handlers.append(handler)
