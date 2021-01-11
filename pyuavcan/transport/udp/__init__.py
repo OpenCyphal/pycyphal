@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 r"""
 UAVCAN/UDP transport overview
@@ -10,23 +8,30 @@ UAVCAN/UDP transport overview
 
 The UAVCAN/UDP transport is experimental and is not yet part of the UAVCAN specification.
 Future revisions may break wire compatibility until the transport is formally specified.
-Context: https://forum.uavcan.org/t/alternative-transport-protocols/324.
+Context: https://forum.uavcan.org/t/alternative-transport-protocols-in-uavcan/324/45?u=pavel.kirienko.
 
-The UAVCAN/UDP transport is essentially a trivial stateless UDP blaster.
+The UAVCAN/UDP transport is essentially a trivial stateless UDP blaster based on IP multicasting.
 This transport is intended for low-latency, high-throughput switched Ethernet networks with complex topologies.
 In the spirit of UAVCAN, it is designed to be simple and robust;
 much of the data handling work is offloaded to the standard underlying UDP/IP stack.
-Both IPv4 and IPv6 are supported.
+Both IPv4 and IPv6 are supported by this design,
+although it is expected that the advantages of IPv6 over IPv4 are less relevant in an intravehicular setting.
+
+The concept of anonymous transfer is not defined for UAVCAN/UDP;
+in this transport, in order to be able to emit a transfer, the node shall have a valid node-ID value.
+This means that an anonymous UAVCAN/UDP node can only listen to network traffic
+(i.e., can subscribe to subjects) but cannot transmit anything.
+If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
 
 This transport module contains no media sublayers because the media abstraction
 is handled directly by the standard UDP/IP stack of the underlying operating system.
 
-The UDP transport supports all transfer categories:
+Per the UAVCAN transport model provided in the UAVCAN specification, the following transfer categories are supported:
 
 +--------------------+--------------------------+---------------------------+
 | Supported transfers| Unicast                  | Broadcast                 |
 +====================+==========================+===========================+
-|**Message**         | Yes                      | Yes                       |
+|**Message**         | No                       | Yes                       |
 +--------------------+--------------------------+---------------------------+
 |**Service**         | Yes                      | Banned by Specification   |
 +--------------------+--------------------------+---------------------------+
@@ -37,79 +42,155 @@ Protocol definition
 
 The entirety of the session specifier (:class:`pyuavcan.transport.SessionSpecifier`)
 is reified through the standard UDP/IP stack without any special extensions.
-The data type hash, transfer-ID, transfer priority,
-and the multi-frame transfer reassembly metadata are allocated in the
+The transfer-ID, transfer priority, and the multi-frame transfer reassembly metadata are allocated in the
 UAVCAN-specific UDP datagram header.
 
-+---------------------------------------+---------------------------------------+
-| Parameter                             | Manifested in                         |
-+=======================================+=======================================+
-| Transfer priority                     |                                       |
-+---------------------------------------+                                       |
-| Transfer-ID                           | UDP datagram payload (frame header)   |
-+---------------------------------------+                                       |
-| Data type hash                        |                                       |
-+-------------------+-------------------+---------------------------------------+
-|                   | Route specifier   | IP address (least significant bits)   |
-| Session specifier +-------------------+---------------------------------------+
-|                   | Data specifier    | UDP destination port number           |
-+-------------------+-------------------+---------------------------------------+
++---------------------------------------+---------------------------------------------------------------------------+
+| Parameter                             | Manifested in                                                             |
++=======================================+===========================================================================+
+| Transfer priority                     |                                                                           |
++---------------------------------------+ UDP datagram payload (frame header)                                       |
+| Transfer-ID                           |                                                                           |
++-------------------+-------------------+---------------------------------------------------------------------------+
+|                   | Route specifier   | 16 least significant bits of the IP address                               |
+| Session specifier +-------------------+---------------------------------------------------------------------------+
+|                   | Data specifier    | For message transfers: 16 least significant bits of the                   |
+|                   |                   | multicast group address.                                                  |
+|                   |                   | For service transfers: UDP destination port number.                       |
++-------------------+-------------------+---------------------------------------------------------------------------+
 
-
-UDP port mapping
-~~~~~~~~~~~~~~~~
-
-The data specifier (:class:`pyuavcan.transport.DataSpecifier`)
-is manifested on the wire as the destination UDP port number;
-the mapping function is implemented in :func:`udp_port_from_data_specifier`.
-The source port number can be arbitrary (ephemeral), its value is ignored.
-
-UAVCAN uses a wide range of UDP ports: [15360, 49151].
-UDP/IP stacks that comply with the IANA ephemeral port range recommendations are expected to be
-compatible with this; otherwise, there may be port assignment conflicts.
-All new versions of MS Windows starting with Vista and Server 2008 are compatible with the IANA recommendations.
-Many versions of GNU/Linux, however, are not, but it can be fixed by manual reconfiguration:
-https://stackoverflow.com/questions/28573390/how-to-view-and-edit-the-ephemeral-port-range-on-linux.
+There are two data types that model UAVCAN/UDP protocol data: :class:`UDPFrame` and :class:`RawPacket`.
+The latter is never used during normal operation but only during on-line capture sessions
+for reporting captured packets (see :class:`UDPCaptured`).
 
 
 IP address mapping
 ~~~~~~~~~~~~~~~~~~
 
-The node-ID of a node is the value of its host address (i.e., IP address with the subnet bits zeroed out);
-the bits above the :attr:`NODE_ID_BIT_LENGTH`-th bit shall be zero::
+The IPv4 address of a node is structured as follows::
 
-    IPv4 address:   127.000.012.123/8
-    Subnet mask:    255.000.000.000
-    Host mask:      000.255.255.255
-                    \_/ \_________/
-                  subnet    host
-                 address   address
-                             \____/
-                           node-ID=3195
+   xxxxxxxx.xddddddd.nnnnnnnn.nnnnnnnn
+   \________/\_____/ \_______________/
+    (9 bits) (7 bits)     (16 bits)
+     prefix  subnet-ID     node-ID
 
-    IPv6 address:   fe80:0000:0000:0000:0000:0000:0000:0c7b%enp6s0/64
-    Subnet mask:    ffff:ffff:ffff:ffff:0000:0000:0000:0000
-    Host mask:      0000:0000:0000:0000:ffff:ffff:ffff:ffff
-                    \_________________/ \_________________/
-                      subnet address        host address
-                                                       \__/
-                                                    node-ID=3195
+Incoming traffic from IP addresses whose 16 most significant bits are different is rejected;
+this behavior enables co-existence of multiple independent UAVCAN/UDP networks along with other UDP protocols
+on the same network.
 
-An IP address that does not match the above requirement cannot be mapped to a node-ID value.
-Nodes that are configured with such IP addresses are considered anonymous.
-Incoming traffic from IP addresses that cannot be mapped to a valid node-ID value is rejected;
-this behavior enables co-existence of UAVCAN/UDP with other UDP protocols on the same network.
+The *subnet-ID* is used to differentiate independent UAVCAN/UDP transport networks sharing the same IP network
+(e.g., multiple UAVCAN/UDP networks running on localhost or on some physical network).
+This is similar to the domain identifier in DDS.
+This value is not used anywhere else in the protocol other than in the construction of the multicast group address,
+as will be shown below.
 
-The concept of anonymous transfer is not defined for UDP/IP;
-in this transport, in order to be able to emit a transfer, the node shall have a valid node-ID value.
-This means that an anonymous UAVCAN/UDP node can only listen to broadcast
-network traffic (i.e., can subscribe to subjects) but cannot transmit anything.
-If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
 
-Both IPv4 and IPv6 are supported with minimal differences, although IPv6 is not expected to be useful in
-a vehicular network because virtually none of its advantages are relevant there,
-and the increased overhead is detrimental to the network's latency and throughput.
-If IPv6 is used, the flow-ID of UAVCAN packets is set to zero.
+Message transfers
+~~~~~~~~~~~~~~~~~
+
+Message transfers are executed as IP multicast transfers.
+The IPv4 multicast group address is computed statically as follows::
+
+       fixed         reserved
+      (9 bits)       (3 bits)
+      ________          _
+     /        \        / \
+     11101111.0ddddddd.000sssss.ssssssss
+     \__/      \_____/    \____________/
+   (4 bits)    (7 bits)      (13 bits)
+     IPv4      subnet-ID     subject-ID
+   multicast   \_______________________/
+    prefix             (23 bits)
+               collision-free multicast
+                  addressing limit of
+                 Ethernet MAC for IPv4
+
+From the most significant bit to the least significant bit, the IPv4 multicast group address components are as follows:
+
+- IPv4 multicast prefix is defined by RFC 1112.
+
+- The following 5 bits are set to 0b11110 by this Specification. The motivation is as follows:
+
+  - Setting the four least significant bits of the most significant byte to 0b1111 moves the address range
+    into the administratively-scoped range (239.0.0.0/8, RFC 2365),
+    which ensures that there may be no conflicts with well-known multicast groups.
+
+  - Setting the most significant bit of the second octet to zero ensures that there may be no conflict
+    with reserved sub-ranges within the administratively-scoped range.
+    The resulting range 239.0.0.0/9 is entirely ad-hoc defined.
+
+  - Fixing the 5+4=9 most significant bits of the multicast group address ensures that the variability
+    is confined to the 23 least significant bits of the address only,
+    which is desirable because the IPv4 Ethernet MAC layer does not differentiate beyond the
+    23 least significant bits of the multicast group address
+    (i.e., addresses that differ only in the 9 MSb collide at the MAC layer,
+    which is unacceptable in a real-time system; see RFC 1112 section 6.4).
+    Without this limitation, an engineer deploying a network might inadvertently create a configuration that
+    causes MAC-layer collisions which may be difficult to detect.
+
+- The following 7 bits (the least significant bits of the second octet) are used to differentiate
+  independent UAVCAN/UDP networks sharing the same physical IP network.
+  Since the 9 most significant bits of the node IP address are not represented in the multicast group address,
+  nodes whose IP addresses differ only by the 9 MSb are not distinguished by UAVCAN/UDP.
+  This limitation does not appear to be significant, though, because such configurations are easy to avoid.
+  It follows that there may be up to 128 independent UAVCAN/UDP networks sharing the same IP subnet.
+
+- The following 16 bits define the data specifier:
+
+  - 3 bits reserved for future use.
+
+  - 13 bits represent the subject-ID as-is.
+
+Per RFC 1112, the default TTL is 1, which is unacceptable.
+Therefore, publishers should use the TTL value of 16 by default,
+which is chosen as a sensible default suitable for any intravehicular network.
+
+Per RFC 1112, in order to emit a multicast packet, a limited level-1 implementation without the full support of
+IGMP and multicast-specific packet handling policies is sufficient.
+
+Due to the dependency on the dynamic IGMP configuration,
+a newly configured subscriber may not immediately receive data from the subject --
+a brief *subscription initialization latency* may occur (typically it is well under one second).
+This is because the underlying IP stack needs to inform the network switch/router about its interest in a particular
+multicast group by sending an IGMP membership report first.
+A high-integrity application may choose to rely on a static switch configuration,
+in which case no initialization delay will take place.
+
+Example::
+
+    Node IP address:    01111111 00000010 00000000 00001000
+                             127        2        0        8
+
+    Subject-ID:                              00010 00101010
+
+    Multicast group:    11101111 00000010 00000010 00101010
+                             239        2        2       42
+
+Example::
+
+    Node IP address:    11000000 10101000 00000000 00000001
+                             192      168        0        1
+
+    Subject-ID:                              00010 00101010
+
+    Multicast group:    11101111 00101000 00000010 00101010
+                             239       40        2       42
+
+
+Service transfers
+~~~~~~~~~~~~~~~~~
+
+Service transfers are executed as regular IP unicast transfers.
+
+The service data specifier (:class:`pyuavcan.transport.ServiceDataSpecifier`)
+is manifested on the wire as the destination UDP port number;
+the mapping function is implemented in :func:`udp_port_from_data_specifier`.
+The source port number can be arbitrary (ephemeral), its value is ignored.
+
+UAVCAN uses a wide range of UDP ports.
+UDP/IP stacks that comply with the IANA ephemeral port range recommendations are expected to be
+compatible with this; otherwise, there may be port assignment conflicts.
+This, however, is not a problem for any major modern OS.
 
 
 Datagram header format
@@ -123,7 +204,7 @@ encoded in the little-endian byte order, expressed here in the DSDL notation::
     void16                  # Set to zero when transmitting, ignore when receiving.
     uint32 frame_index_eot  # MSB is set if the current frame is the last frame of the transfer.
     uint64 transfer_id      # The transfer-ID never overflows.
-    uint64 data_type_hash   # Identifies the data type carried by this transfer (and frame).
+    void64                  # This space may be used later for runtime type identification.
 
 The 31 least significant bits of the field ``frame_index_eot`` contain the frame index within the current transfer;
 the most significant bit (31st) is set if the current frame is the last frame of the transfer.
@@ -195,7 +276,7 @@ Implementation-specific details
 +++++++++++++++++++++++++++++++
 
 Applications relying on this particular transport implementation will be unable to detect a node-ID conflict on
-the bus because the implementation discards all broadcast traffic originating from its own IP address.
+the bus because the implementation discards all traffic originating from its own IP address.
 This is a very environment-specific edge case resulting from certain peculiarities of the Berkeley socket API.
 Other implementations of UAVCAN/UDP (particularly those for embedded systems) may not have this limitation.
 
@@ -207,32 +288,32 @@ Create two transport instances -- one with a node-ID, one anonymous:
 
 >>> import pyuavcan
 >>> import pyuavcan.transport.udp
->>> tr_0 = pyuavcan.transport.udp.UDPTransport('127.0.1.42/8')
->>> tr_0.local_node_id                                               # Derived from the IP address: (1 << 8) + 42 = 298.
+>>> tr_0 = pyuavcan.transport.udp.UDPTransport('127.9.1.42')
+>>> tr_0.local_node_id                                             # Derived from the IP address: (1 << 8) + 42 = 298.
 298
->>> tr_1 = pyuavcan.transport.udp.UDPTransport('127.255.255.255/8')  # Anonymous, for listening purposes only.
+>>> tr_1 = pyuavcan.transport.udp.UDPTransport('127.9.15.254', anonymous=True)  # Anonymous is only for listening.
 >>> tr_1.local_node_id is None
 True
 
 Create an output and an input session:
 
->>> pm = pyuavcan.transport.PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 1024)
->>> ds = pyuavcan.transport.MessageDataSpecifier(12345)
+>>> pm = pyuavcan.transport.PayloadMetadata(1024)
+>>> ds = pyuavcan.transport.MessageDataSpecifier(111)
 >>> pub = tr_0.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
->>> pub.socket.getpeername()   # UDP port number derived from the subject ID: 12345 + 16384 = 28729
-('127.255.255.255', 28729)
+>>> pub.socket.getpeername()   # UDP port is fixed, and the multicast group address is computed as shown above.
+('239.9.0.111', 16383)
 >>> sub = tr_1.get_input_session(pyuavcan.transport.InputSessionSpecifier(ds, None), pm)
 
-Send a transfer from one instance to another:
+Send a transfer from one instance to the other:
 
 >>> await_ = tr_1.loop.run_until_complete
->>> await_(pub.send_until(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
+>>> await_(pub.send(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
 ...                                                   pyuavcan.transport.Priority.LOW,
 ...                                                   1111,
 ...                                                   fragmented_payload=[]),
 ...                       tr_1.loop.time() + 1.0))
 True
->>> await_(sub.receive_until(tr_1.loop.time() + 1.0))
+>>> await_(sub.receive(tr_1.loop.time() + 1.0))
 TransferFrom(..., transfer_id=1111, ...)
 >>> tr_0.close()
 >>> tr_1.close()
@@ -257,7 +338,9 @@ Inheritance diagram
                          pyuavcan.transport.udp._frame
                          pyuavcan.transport.udp._session._input
                          pyuavcan.transport.udp._session._output
-                         pyuavcan.transport.udp._demultiplexer
+                         pyuavcan.transport.udp._socket_reader
+                         pyuavcan.transport.udp._ip._packet
+                         pyuavcan.transport.udp._tracer
    :parts: 1
 """
 
@@ -277,6 +360,19 @@ from ._session import UDPFeedback as UDPFeedback
 
 from ._frame import UDPFrame as UDPFrame
 
-from ._port_mapping import udp_port_from_data_specifier as udp_port_from_data_specifier
+from ._ip import MACHeader as MACHeader
+from ._ip import IPHeader as IPHeader
+from ._ip import UDPHeader as UDPHeader
+from ._ip import RawPacket as RawPacket
+from ._ip import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
+from ._ip import SUBJECT_PORT as SUBJECT_PORT
+from ._ip import node_id_to_unicast_ip as node_id_to_unicast_ip
+from ._ip import unicast_ip_to_node_id as unicast_ip_to_node_id
+from ._ip import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group
+from ._ip import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
+from ._ip import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
+from ._ip import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier
 
-from ._demultiplexer import UDPDemultiplexerStatistics as UDPDemultiplexerStatistics
+from ._tracer import UDPCapture as UDPCapture
+from ._tracer import UDPTracer as UDPTracer
+from ._tracer import UDPErrorTrace as UDPErrorTrace

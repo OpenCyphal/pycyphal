@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 from ._base import CRCAlgorithm
@@ -33,6 +31,7 @@ class CRC16CCITT(CRCAlgorithm):
     >>> c.check_residue()
     True
     """
+
     def __init__(self) -> None:
         assert len(self._TABLE) == 256
         self._value = 0xFFFF
@@ -52,8 +51,9 @@ class CRC16CCITT(CRCAlgorithm):
 
     @property
     def value_as_bytes(self) -> bytes:
-        return self.value.to_bytes(2, 'big')
+        return self.value.to_bytes(2, "big")
 
+    # fmt: off
     _TABLE = [
         0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7,
         0x8108, 0x9129, 0xA14A, 0xB16B, 0xC18C, 0xD1AD, 0xE1CE, 0xF1EF,
@@ -88,3 +88,4 @@ class CRC16CCITT(CRCAlgorithm):
         0xEF1F, 0xFF3E, 0xCF5D, 0xDF7C, 0xAF9B, 0xBFBA, 0x8FD9, 0x9FF8,
         0x6E17, 0x7E36, 0x4E55, 0x5E74, 0x2E93, 0x3EB2, 0x0ED1, 0x1EF0,
     ]
+    # fmt: on

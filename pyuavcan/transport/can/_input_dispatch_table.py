@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import typing
@@ -16,6 +14,7 @@ class InputDispatchTable:
     Time-memory trade-off: the input dispatch table is tens of megabytes large, but the lookup is very fast and O(1).
     This is necessary to ensure scalability for high-load applications such as real-time network monitoring.
     """
+
     _NUM_SUBJECTS = MessageDataSpecifier.SUBJECT_ID_MASK + 1
     _NUM_SERVICES = ServiceDataSpecifier.SERVICE_ID_MASK + 1
     _NUM_NODE_IDS = CANID.NODE_ID_MASK + 1
@@ -91,10 +90,12 @@ def _unittest_input_dispatch_table() -> None:
     with raises(LookupError):
         t.remove(InputSessionSpecifier(MessageDataSpecifier(1234), 123))
 
-    a = CANInputSession(InputSessionSpecifier(MessageDataSpecifier(1234), None),
-                        PayloadMetadata(456, 789),
-                        asyncio.get_event_loop(),
-                        lambda: None)
+    a = CANInputSession(
+        InputSessionSpecifier(MessageDataSpecifier(1234), None),
+        PayloadMetadata(456),
+        asyncio.get_event_loop(),
+        lambda: None,
+    )
     t.add(a)
     t.add(a)
     assert list(t.items) == [a]
@@ -103,22 +104,25 @@ def _unittest_input_dispatch_table() -> None:
     assert len(list(t.items)) == 0
 
 
-# noinspection PyProtectedMember
 def _unittest_slow_input_dispatch_table_index() -> None:
+    table_size = InputDispatchTable._TABLE_SIZE  # pylint: disable=protected-access
     values: typing.Set[int] = set()
-    for node_id in (*range(InputDispatchTable._NUM_NODE_IDS), None):
-        for subj in range(InputDispatchTable._NUM_SUBJECTS):
-            out = InputDispatchTable._compute_index(InputSessionSpecifier(MessageDataSpecifier(subj), node_id))
+    for node_id in (*range(InputDispatchTable._NUM_NODE_IDS), None):  # pylint: disable=protected-access
+        for subj in range(InputDispatchTable._NUM_SUBJECTS):  # pylint: disable=protected-access
+            out = InputDispatchTable._compute_index(  # pylint: disable=protected-access
+                InputSessionSpecifier(MessageDataSpecifier(subj), node_id)
+            )
             assert out not in values
             values.add(out)
-            assert out < InputDispatchTable._TABLE_SIZE
+            assert out < table_size
 
-        for serv in range(InputDispatchTable._NUM_SERVICES):
+        for serv in range(InputDispatchTable._NUM_SERVICES):  # pylint: disable=protected-access
             for role in ServiceDataSpecifier.Role:
-                out = InputDispatchTable._compute_index(InputSessionSpecifier(ServiceDataSpecifier(serv, role),
-                                                                              node_id))
+                out = InputDispatchTable._compute_index(  # pylint: disable=protected-access
+                    InputSessionSpecifier(ServiceDataSpecifier(serv, role), node_id)
+                )
                 assert out not in values
                 values.add(out)
-                assert out < InputDispatchTable._TABLE_SIZE
+                assert out < table_size
 
-    assert len(values) == InputDispatchTable._TABLE_SIZE
+    assert len(values) == table_size

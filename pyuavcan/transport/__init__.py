@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 """
 Abstract transport model
@@ -89,6 +87,46 @@ In cases like this,
 The order (whether selective or promiscuous is served first) is implementation-defined.
 
 
+Sniffing/snooping and tracing
++++++++++++++++++++++++++++++
+
+Set up live capture on a transport using :meth:`Transport.begin_capture`.
+We are using the loopback transport here for demonstration but other transports follow the same interface:
+
+>>> from pyuavcan.transport import Capture
+>>> from pyuavcan.transport.loopback import LoopbackTransport
+>>> captured_events = []
+>>> def on_capture(cap: Capture) -> None:
+...     captured_events.append(cap)
+>>> tr = LoopbackTransport(None)
+>>> tr.begin_capture(on_capture)
+
+Multiple different transports can be set up to deliver capture events into the same handler since they all
+share the same transport-agnostic API.
+This way, heterogeneous redundant transports can write and parse a single shared log file.
+
+Emit a random transfer and see it captured:
+
+>>> from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, OutputSessionSpecifier, Transfer
+>>> from pyuavcan.transport import Timestamp, Priority
+>>> import asyncio
+>>> await_ = asyncio.get_event_loop().run_until_complete
+>>> ses = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(1234), None), PayloadMetadata(1024))
+>>> await_(ses.send(Transfer(Timestamp.now(), Priority.LOW, 1234567890, [memoryview(b'abc')]),
+...                 monotonic_deadline=asyncio.get_event_loop().time() + 1.0))
+True
+>>> captured_events
+[LoopbackCapture(...priority=LOW, transfer_id=1234567890...)]
+
+The captured events can be processed afterwards: logged, displayed, or reconstructed into high-level events.
+The latter is done with the help of :class:`Tracer` instantiated using the static factory method
+:meth:`Transport.make_tracer`:
+
+>>> tracer = LoopbackTransport.make_tracer()
+>>> tracer.update(captured_events[0])  # Captures could be read from live network or from a log file, for instance.
+TransferTrace(...priority=LOW, transfer_id=1234567890...)
+
+
 Implementing new transports
 +++++++++++++++++++++++++++
 
@@ -128,6 +166,7 @@ Below is the class inheritance diagram for this module (trivial classes may be o
                          pyuavcan.transport._data_specifier
                          pyuavcan.transport._transfer
                          pyuavcan.transport._payload_metadata
+                         pyuavcan.transport._tracer
    :parts: 1
 """
 
@@ -141,7 +180,6 @@ from ._transport import TransportStatistics as TransportStatistics
 # Transport model auxiliaries.
 from ._transfer import Transfer as Transfer
 from ._transfer import TransferFrom as TransferFrom
-
 from ._transfer import Priority as Priority
 
 from ._data_specifier import DataSpecifier as DataSpecifier
@@ -172,6 +210,17 @@ from ._error import OperationNotDefinedForAnonymousNodeError as OperationNotDefi
 from ._error import InvalidTransportConfigurationError as InvalidTransportConfigurationError
 from ._error import InvalidMediaConfigurationError as InvalidMediaConfigurationError
 from ._error import ResourceClosedError as ResourceClosedError
+
+# Analysis API.
+from ._tracer import Capture as Capture
+from ._tracer import CaptureCallback as CaptureCallback
+from ._tracer import AlienSessionSpecifier as AlienSessionSpecifier
+from ._tracer import AlienTransferMetadata as AlienTransferMetadata
+from ._tracer import AlienTransfer as AlienTransfer
+from ._tracer import Trace as Trace
+from ._tracer import ErrorTrace as ErrorTrace
+from ._tracer import TransferTrace as TransferTrace
+from ._tracer import Tracer as Tracer
 
 # Reusable components.
 from . import commons as commons

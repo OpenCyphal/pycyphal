@@ -1,14 +1,14 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
+from __future__ import annotations
 import typing
 import asyncio
 import logging
 import dataclasses
 import pyuavcan.transport
+import pyuavcan.util
 from ._base import RedundantSession, RedundantSessionStatistics
 from .._deduplicator import Deduplicator, MonotonicDeduplicator, CyclicDeduplicator
 
@@ -16,28 +16,46 @@ from .._deduplicator import Deduplicator, MonotonicDeduplicator, CyclicDeduplica
 _logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True, repr=False)
 class RedundantTransferFrom(pyuavcan.transport.TransferFrom):
     inferior_session: pyuavcan.transport.InputSession
+
+
+@dataclasses.dataclass(frozen=True)
+class _Inferior:
+    session: pyuavcan.transport.InputSession
+    worker: asyncio.Task[None]
+
+    def close(self) -> None:
+        try:
+            self.session.close()
+        finally:
+            self.worker.cancel()
+
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(
+            self, session=self.session, iface_id=f"{id(self.session):016x}", worker=self.worker
+        )
 
 
 class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
     """
     This is a composite of a group of :class:`pyuavcan.transport.InputSession`.
 
-    When an inferior session is removed, the state of the input transfer deduplicator is automatically reset.
-    Therefore, removal of an inferior may temporarily disrupt the transfer flow by causing the session
-    to skip or repeat several transfers.
-    Applications where this is critical may prefer to avoid dynamic removal of inferiors.
-
-    The transfer deduplication strategy is chosen between cyclic and monotonic automatically.
+    The transfer deduplication strategy is chosen between cyclic and monotonic automatically
+    when the first inferior is added.
     """
-    def __init__(self,
-                 specifier:           pyuavcan.transport.InputSessionSpecifier,
-                 payload_metadata:    pyuavcan.transport.PayloadMetadata,
-                 tid_modulo_provider: typing.Callable[[], typing.Optional[int]],
-                 loop:                asyncio.AbstractEventLoop,
-                 finalizer:           typing.Callable[[], None]):
+
+    _READ_TIMEOUT = 1.0
+
+    def __init__(
+        self,
+        specifier: pyuavcan.transport.InputSessionSpecifier,
+        payload_metadata: pyuavcan.transport.PayloadMetadata,
+        tid_modulo_provider: typing.Callable[[], typing.Optional[int]],
+        loop: asyncio.AbstractEventLoop,
+        finalizer: typing.Callable[[], None],
+    ):
         """
         Do not call this directly! Use the factory method instead.
         """
@@ -52,10 +70,13 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         assert isinstance(self._loop, asyncio.AbstractEventLoop)
         assert callable(self._finalizer)
 
-        self._inferiors: typing.List[pyuavcan.transport.InputSession] = []
-        self._lock = asyncio.Lock(loop=self._loop)
-        self._maybe_deduplicator: typing.Optional[Deduplicator] = None
-        self._backlog: typing.List[RedundantTransferFrom] = []
+        self._inferiors: typing.List[_Inferior] = []
+        self._deduplicator: typing.Optional[Deduplicator] = None
+
+        # The actual deduplicated transfers received by the inferiors.
+        self._read_queue: asyncio.Queue[RedundantTransferFrom] = asyncio.Queue()
+        # Queuing errors is meaningless because they lose relevance immediately, so the queue is only one item deep.
+        self._error_queue: asyncio.Queue[Exception] = asyncio.Queue(1)
 
         self._stat_transfers = 0
         self._stat_payload_bytes = 0
@@ -63,61 +84,89 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
 
     def _add_inferior(self, session: pyuavcan.transport.Session) -> None:
         assert isinstance(session, pyuavcan.transport.InputSession)
-        assert self._finalizer is not None, 'The session was supposed to be unregistered'
+        assert self._finalizer is not None, "The session was supposed to be unregistered"
         assert session.specifier == self.specifier and session.payload_metadata == self.payload_metadata
-        if session not in self._inferiors:
-            if self._inferiors:  # Synchronize the settings.
-                session.transfer_id_timeout = self.transfer_id_timeout
-            self._inferiors.append(session)
+        if session in self.inferiors:
+            return
+        _logger.debug("%s: Adding inferior %s id=%016x", self, session, id(session))
+
+        # Ensure that the deduplicator is constructed when the first inferior is launched.
+        if self._deduplicator is None:
+            tid_modulo = self._get_tid_modulo()
+            if tid_modulo is None:
+                self._deduplicator = MonotonicDeduplicator()
+            else:
+                assert 0 < tid_modulo <= 2 ** 56, "Sanity check"
+                self._deduplicator = CyclicDeduplicator(tid_modulo)
+            _logger.debug("%s: Constructed new deduplicator: %s", self, self._deduplicator)
+
+        # Synchronize the settings for the newly added inferior with its siblings.
+        # If there are no other inferiors, the first added one seeds the configuration for its future siblings.
+        if self._inferiors:
+            session.transfer_id_timeout = self.transfer_id_timeout
+
+        # Launch the inferior's worker task in the last order and add that to the registry.
+        task = self._loop.create_task(self._inferior_worker_task(session))
+        self._inferiors.append(_Inferior(session=session, worker=task))
 
     def _close_inferior(self, session_index: int) -> None:
-        assert session_index >= 0, 'Negative indexes may lead to unexpected side effects'
-        assert self._finalizer is not None, 'The session was supposed to be unregistered'
+        assert session_index >= 0, "Negative indexes may lead to unexpected side effects"
+        assert self._finalizer is not None, "The session was supposed to be unregistered"
         try:
-            session = self._inferiors.pop(session_index)
+            inf = self._inferiors.pop(session_index)
         except LookupError:
             pass
         else:
-            self._maybe_deduplicator = None   # Removal of any inferior invalidates the state of the deduplicator.
-            session.close()  # May raise.
+            _logger.debug(
+                "%s: Closing inferior %s that used to reside at index %d. Remaining siblings: %s",
+                self,
+                inf,
+                session_index,
+                self._inferiors,
+            )
+            inf.close()
+        finally:
+            if not self._inferiors:
+                # Reset because inferiors we add later may require a different deduplication strategy.
+                # When no inferiors are left, there are no consistency constraints to respect.
+                self._deduplicator = None
 
     @property
     def inferiors(self) -> typing.Sequence[pyuavcan.transport.InputSession]:
-        return self._inferiors[:]
+        return [x.session for x in self._inferiors]
 
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[RedundantTransferFrom]:
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[RedundantTransferFrom]:
         """
-        Reads one deduplicated transfer using all inferiors concurrently. Returns None on timeout.
-        If there are no inferiors, waits until the deadline, checks again, and returns if there are still none;
-        otherwise, does a non-blocking read once.
+        Reads one deduplicated transfer received from all inferiors concurrently. Returns None on timeout.
+        If there are no inferiors at the time of the invocation and none appear by the expiration of the timeout,
+        returns None.
 
-        If any of the inferiors raises an exception, all reads are aborted and the exception is propagated immediately.
+        Exceptions raised by inferiors are propagated normally, but it is possible for an exception to be delayed
+        until the next invocation of this method.
         """
-        if self._finalizer is None:
-            raise pyuavcan.transport.ResourceClosedError(f'{self} is closed suka')
-
+        # First of all, handle pending errors, because removing the item from the queue might unblock reader tasks.
         try:
-            async with self._lock:    # Serialize access to the inferiors.
-                if not self._backlog:
-                    if not self._inferiors:
-                        await asyncio.sleep(monotonic_deadline - self._loop.time())
-                        if not self._inferiors:
-                            return None
-                    # It is possible to optimize reads for the case of one inferior by invoking said inferior's
-                    # receive_until() directly instead of dealing with sophisticated multiplexed reads here.
-                    await self._receive_into_backlog(monotonic_deadline)
-                    _logger.debug('%r new backlog (%d transfers): %r', self, len(self._backlog), self._backlog)
-
-                if self._backlog:
-                    out = self._backlog.pop(0)
-                    self._stat_transfers += 1
-                    self._stat_payload_bytes += sum(map(len, out.fragmented_payload))
-                    return out
-                else:
-                    return None
-        except Exception:
-            self._stat_errors += 1
-            raise
+            exc = self._error_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
+        else:
+            assert not isinstance(exc, (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError))
+            raise exc
+        # Check the read queue only if there are no pending errors.
+        try:
+            timeout = monotonic_deadline - self._loop.time()
+            if timeout > 0:
+                tr = await asyncio.wait_for(self._read_queue.get(), timeout)
+            else:
+                tr = self._read_queue.get_nowait()
+        except (asyncio.TimeoutError, asyncio.QueueEmpty):
+            # If there are unprocessed transfers, allow the caller to read them even if the instance is closed.
+            if self._finalizer is None:
+                raise pyuavcan.transport.ResourceClosedError(f"{self} is closed") from None
+            return None
+        # We do not re-check the error queue at the output because that would mean losing the received transfer.
+        # If there are new errors, they will be handled at the next invocation.
+        return tr
 
     @property
     def transfer_id_timeout(self) -> float:
@@ -134,16 +183,15 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         configuration as its own; all inferiors added later will inherit the same setting.
         """
         if self._inferiors:
-            return max(x.transfer_id_timeout for x in self._inferiors)
-        else:
-            return 0.0
+            return max(x.transfer_id_timeout for x in self.inferiors)
+        return 0.0
 
     @transfer_id_timeout.setter
     def transfer_id_timeout(self, value: float) -> None:
         value = float(value)
         if value <= 0.0:
-            raise ValueError(f'Transfer-ID timeout shall be a positive number of seconds, got {value}')
-        for s in self._inferiors:
+            raise ValueError(f"Transfer-ID timeout shall be a positive number of seconds, got {value}")
+        for s in self.inferiors:
             s.transfer_id_timeout = value
 
     @property
@@ -164,7 +212,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         - ``frames``        - the total number of frames summed from all inferiors (i.e., replicated frame count).
           This value is invalidated when the set of inferiors is changed. The semantics may change later.
         """
-        inferiors = [s.sample_statistics() for s in self._inferiors]
+        inferiors = [s.sample_statistics() for s in self.inferiors]
         return RedundantSessionStatistics(
             transfers=self._stat_transfers,
             frames=sum(s.frames for s in inferiors),
@@ -175,84 +223,63 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         )
 
     def close(self) -> None:
-        for s in self._inferiors:
+        for inf in self._inferiors:
             try:
-                s.close()
+                inf.close()
             except Exception as ex:
-                _logger.exception('%s could not close inferior %s: %s', self, s, ex)
+                _logger.exception("%s: Could not close %s: %s", self, inf, ex)
         self._inferiors.clear()
-
         fin, self._finalizer = self._finalizer, None
         if fin is not None:
             fin()
+        self._deduplicator = None
 
-    @property
-    def _deduplicator(self) -> Deduplicator:
-        if self._maybe_deduplicator is None:
-            tid_modulo = self._get_tid_modulo()
-            if tid_modulo is None:
-                self._maybe_deduplicator = MonotonicDeduplicator()
-            else:
-                assert 0 < tid_modulo < 2 ** 56, 'Sanity check'
-                self._maybe_deduplicator = CyclicDeduplicator(tid_modulo)
-        return self._maybe_deduplicator
+    async def _process_transfer(
+        self, session: pyuavcan.transport.InputSession, transfer: pyuavcan.transport.TransferFrom
+    ) -> None:
+        assert self._deduplicator is not None
+        iface_id = id(session)
+        if self._deduplicator.should_accept_transfer(iface_id, self.transfer_id_timeout, transfer):
+            _logger.debug("%s: Accepting %s from %016x", self, transfer, iface_id)
+            self._stat_transfers += 1
+            self._stat_payload_bytes += sum(map(len, transfer.fragmented_payload))
+            await self._read_queue.put(
+                RedundantTransferFrom(
+                    timestamp=transfer.timestamp,
+                    priority=transfer.priority,
+                    transfer_id=transfer.transfer_id,
+                    fragmented_payload=transfer.fragmented_payload,
+                    source_node_id=transfer.source_node_id,
+                    inferior_session=session,
+                )
+            )
+        else:
+            _logger.debug("%s: Discarding redundant duplicate %s from %016x", self, transfer, iface_id)
 
-    async def _receive_into_backlog(self, monotonic_deadline: float) -> None:
-        assert self._lock.locked(), 'The mutex shall be locked to prevent concurrent reads'
-        assert not self._backlog, 'This method need not be invoked if the backlog is not empty'
-        assert self._inferiors, 'Some inferiors are required'
-
-        inferiors = list(self._inferiors)  # Hold down a local copy to prevent concurrent mutation while waiting.
-
-        async def do_receive(iface_index: int, session: pyuavcan.transport.InputSession) -> \
-                typing.Tuple[int,
-                             pyuavcan.transport.InputSession,
-                             typing.Optional[pyuavcan.transport.TransferFrom]]:
-            return iface_index, session, await session.receive_until(monotonic_deadline)
-
-        pending = {self._loop.create_task(do_receive(if_idx, inf)) for if_idx, inf in enumerate(inferiors)}
+    async def _inferior_worker_task(self, session: pyuavcan.transport.InputSession) -> None:
+        iface_id = id(session)
         try:
-            while True:
-                assert len(pending) == len(inferiors)
-                done, pending = await asyncio.wait(pending,  # type: ignore
-                                                   loop=self._loop,
-                                                   return_when=asyncio.FIRST_COMPLETED)
-                _logger.debug('%r wait result: %d pending, %d done: %r', self, len(pending), len(done), done)
-
-                # Process those that are done and push received transfers into the backlog.
-                transfer_id_timeout = self.transfer_id_timeout  # May have been updated.
-                for f in done:
-                    if_idx, inf, tr = await f
-                    assert isinstance(if_idx, int) and isinstance(inf, pyuavcan.transport.InputSession)
-                    if tr is not None:  # Otherwise, the read has timed out.
-                        assert isinstance(tr, pyuavcan.transport.TransferFrom)
-                        if self._deduplicator.should_accept_transfer(if_idx, transfer_id_timeout, tr):
-                            self._backlog.append(self._make_transfer(tr, inf))
-
-                # Termination condition: success or timeout. We may have read more than one transfer.
-                if self._backlog or self._loop.time() >= monotonic_deadline:
+            _logger.debug("%s: Task for inferior %016x is starting", self, iface_id)
+            while self._deduplicator is not None:
+                try:
+                    deadline = self._loop.time() + RedundantInputSession._READ_TIMEOUT
+                    tr = await session.receive(deadline)
+                    if tr is not None:
+                        await self._process_transfer(session, tr)
+                except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError):
                     break
-
-                # Not done yet - restart those reads that have completed; the pending ones remain pending, unchanged.
-                for f in done:
-                    if_idx, inf, _ = f.result()
-                    assert isinstance(if_idx, int) and isinstance(inf, pyuavcan.transport.InputSession)
-                    pending.add(self._loop.create_task(do_receive(if_idx, inf)))
+                except Exception as ex:
+                    # We block until the error is stored in the one-element error queue.
+                    # This behavior allows us to avoid spinning broken inferiors that raise errors continuously.
+                    _logger.debug("%s: Receive from %016x raised %s", self, iface_id, ex, exc_info=True)
+                    self._stat_errors += 1
+                    await self._error_queue.put(ex)
+        except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError):
+            pass
+        except Exception as ex:
+            _logger.exception("%s: Task for %016x has encountered an unhandled exception: %s", self, iface_id, ex)
         finally:
-            if pending:
-                _logger.debug('%r canceling %d pending reads', self, len(pending))
-            for f in pending:
-                f.cancel()
-
-    @staticmethod
-    def _make_transfer(origin:   pyuavcan.transport.TransferFrom,
-                       inferior: pyuavcan.transport.InputSession) -> RedundantTransferFrom:
-        return RedundantTransferFrom(timestamp=origin.timestamp,
-                                     priority=origin.priority,
-                                     transfer_id=origin.transfer_id,
-                                     fragmented_payload=origin.fragmented_payload,
-                                     source_node_id=origin.source_node_id,
-                                     inferior_session=inferior)
+            _logger.debug("%s: Task for %016x is stopping", self, iface_id)
 
 
 def _unittest_redundant_input_cyclic() -> None:
@@ -266,7 +293,7 @@ def _unittest_redundant_input_cyclic() -> None:
 
     spec = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
     spec_tx = pyuavcan.transport.OutputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(0x_deadbeef_deadbeef, 30)
+    meta = pyuavcan.transport.PayloadMetadata(30)
 
     ts = Timestamp.now()
 
@@ -285,10 +312,9 @@ def _unittest_redundant_input_cyclic() -> None:
         nonlocal is_retired
         is_retired = True
 
-    ses = RedundantInputSession(spec, meta,
-                                tid_modulo_provider=lambda: 32,  # Like CAN, for example.
-                                loop=loop,
-                                finalizer=retire)
+    ses = RedundantInputSession(
+        spec, meta, tid_modulo_provider=lambda: 32, loop=loop, finalizer=retire  # Like CAN, for example.
+    )
     assert not is_retired
     assert ses.specifier is spec
     assert ses.payload_metadata is meta
@@ -298,85 +324,108 @@ def _unittest_redundant_input_cyclic() -> None:
 
     # Empty inferior set reception.
     time_before = loop.time()
-    assert not await_(ses.receive_until(loop.time() + 2.0))
-    assert 1.0 < loop.time() - time_before < 5.0, 'The method should have returned in about two seconds.'
+    assert not await_(ses.receive(loop.time() + 2.0))
+    assert 1.0 < loop.time() - time_before < 5.0, "The method should have returned in about two seconds."
 
     # Begin reception, then add an inferior while the reception is in progress.
-    assert await_(tx_a.send_until(Transfer(timestamp=Timestamp.now(),
-                                           priority=Priority.HIGH,
-                                           transfer_id=1,
-                                           fragmented_payload=[memoryview(b'abc')]),
-                                  loop.time() + 1.0))
+    assert await_(
+        tx_a.send(
+            Transfer(
+                timestamp=Timestamp.now(),
+                priority=Priority.HIGH,
+                transfer_id=1,
+                fragmented_payload=[memoryview(b"abc")],
+            ),
+            loop.time() + 1.0,
+        )
+    )
 
     async def add_inferior(inferior: pyuavcan.transport.InputSession) -> None:
         await asyncio.sleep(1.0)
-        # noinspection PyProtectedMember
-        ses._add_inferior(inferior)
+        ses._add_inferior(inferior)  # pylint: disable=protected-access
 
     time_before = loop.time()
-    tr, _ = await_(asyncio.gather(
-        # Start reception here. It would stall for two seconds because no inferiors.
-        ses.receive_until(loop.time() + 2.0),
-        # While the transmission is stalled, add one inferior with a delay.
-        add_inferior(inf_a),
-    ))
-    assert 1.0 < loop.time() - time_before < 5.0, 'The method should have returned in about two seconds.'
+    tr, _ = await_(
+        asyncio.gather(
+            # Start reception here. It would stall for two seconds because no inferiors.
+            ses.receive(loop.time() + 2.0),
+            # While the transmission is stalled, add one inferior with a delay.
+            add_inferior(inf_a),
+        )
+    )
+    assert 0.0 < loop.time() - time_before < 5.0, "The method should have returned in about one second."
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 1
-    assert tr.fragmented_payload == [memoryview(b'abc')]
+    assert tr.fragmented_payload == [memoryview(b"abc")]
     assert tr.inferior_session == inf_a
 
     # More inferiors
     assert ses.transfer_id_timeout == pytest.approx(1.1)
-    # noinspection PyProtectedMember
-    ses._add_inferior(inf_a)  # No change, added above
+    ses._add_inferior(inf_a)  # No change, added above    # pylint: disable=protected-access
     assert ses.inferiors == [inf_a]
-    # noinspection PyProtectedMember
-    ses._add_inferior(inf_b)
+    ses._add_inferior(inf_b)  # pylint: disable=protected-access
     assert ses.inferiors == [inf_a, inf_b]
     assert ses.transfer_id_timeout == pytest.approx(1.1)
     assert inf_b.transfer_id_timeout == pytest.approx(1.1)
 
     # Redundant reception - new transfers accepted because the iface switch timeout is exceeded.
     time.sleep(ses.transfer_id_timeout)  # Just to make sure that it is REALLY exceeded.
-    assert await_(tx_b.send_until(Transfer(timestamp=Timestamp.now(),
-                                           priority=Priority.HIGH,
-                                           transfer_id=2,
-                                           fragmented_payload=[memoryview(b'def')]),
-                                  loop.time() + 1.0))
-    assert await_(tx_b.send_until(Transfer(timestamp=Timestamp.now(),
-                                           priority=Priority.HIGH,
-                                           transfer_id=3,
-                                           fragmented_payload=[memoryview(b'ghi')]),
-                                  loop.time() + 1.0))
+    assert await_(
+        tx_b.send(
+            Transfer(
+                timestamp=Timestamp.now(),
+                priority=Priority.HIGH,
+                transfer_id=2,
+                fragmented_payload=[memoryview(b"def")],
+            ),
+            loop.time() + 1.0,
+        )
+    )
+    assert await_(
+        tx_b.send(
+            Transfer(
+                timestamp=Timestamp.now(),
+                priority=Priority.HIGH,
+                transfer_id=3,
+                fragmented_payload=[memoryview(b"ghi")],
+            ),
+            loop.time() + 1.0,
+        )
+    )
 
-    tr = await_(ses.receive_until(loop.time() + 0.1))
+    tr = await_(ses.receive(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 2
-    assert tr.fragmented_payload == [memoryview(b'def')]
+    assert tr.fragmented_payload == [memoryview(b"def")]
     assert tr.inferior_session == inf_b
 
-    tr = await_(ses.receive_until(loop.time() + 0.1))
+    tr = await_(ses.receive(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 3
-    assert tr.fragmented_payload == [memoryview(b'ghi')]
+    assert tr.fragmented_payload == [memoryview(b"ghi")]
     assert tr.inferior_session == inf_b
 
-    assert None is await_(ses.receive_until(loop.time() + 1.0))  # Nothing left to read now.
+    assert None is await_(ses.receive(loop.time() + 1.0))  # Nothing left to read now.
 
     # This one will be rejected because wrong iface and the switch timeout is not yet exceeded.
-    assert await_(tx_a.send_until(Transfer(timestamp=Timestamp.now(),
-                                           priority=Priority.HIGH,
-                                           transfer_id=4,
-                                           fragmented_payload=[memoryview(b'rej')]),
-                                  loop.time() + 1.0))
-    assert None is await_(ses.receive_until(loop.time() + 0.1))
+    assert await_(
+        tx_a.send(
+            Transfer(
+                timestamp=Timestamp.now(),
+                priority=Priority.HIGH,
+                transfer_id=4,
+                fragmented_payload=[memoryview(b"rej")],
+            ),
+            loop.time() + 1.0,
+        )
+    )
+    assert None is await_(ses.receive(loop.time() + 0.1))
 
     # Transfer-ID timeout reconfiguration.
     ses.transfer_id_timeout = 3.0
@@ -387,23 +436,27 @@ def _unittest_redundant_input_cyclic() -> None:
     assert inf_a.transfer_id_timeout == pytest.approx(3.0)
 
     # Inferior removal resets the state of the deduplicator.
-    # noinspection PyProtectedMember
-    ses._close_inferior(0)
-    # noinspection PyProtectedMember
-    ses._close_inferior(1)  # Out of range, no effect.
+    ses._close_inferior(0)  # pylint: disable=protected-access
+    ses._close_inferior(1)  # Out of range, no effect.  # pylint: disable=protected-access
     assert ses.inferiors == [inf_b]
 
-    assert await_(tx_b.send_until(Transfer(timestamp=Timestamp.now(),
-                                           priority=Priority.HIGH,
-                                           transfer_id=1,
-                                           fragmented_payload=[memoryview(b'acc')]),
-                                  loop.time() + 1.0))
-    tr = await_(ses.receive_until(loop.time() + 0.1))
+    assert await_(
+        tx_b.send(
+            Transfer(
+                timestamp=Timestamp.now(),
+                priority=Priority.HIGH,
+                transfer_id=1,
+                fragmented_payload=[memoryview(b"acc")],
+            ),
+            loop.time() + 1.0,
+        )
+    )
+    tr = await_(ses.receive(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 1
-    assert tr.fragmented_payload == [memoryview(b'acc')]
+    assert tr.fragmented_payload == [memoryview(b"acc")]
     assert tr.inferior_session == inf_b
 
     # Stats check.
@@ -427,7 +480,7 @@ def _unittest_redundant_input_cyclic() -> None:
     assert not is_retired
     assert not ses.inferiors
     with pytest.raises(ResourceClosedError):
-        await_(ses.receive_until(0))
+        await_(ses.receive(0))
 
 
 def _unittest_redundant_input_monotonic() -> None:
@@ -440,7 +493,7 @@ def _unittest_redundant_input_monotonic() -> None:
 
     spec = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
     spec_tx = pyuavcan.transport.OutputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(0x_deadbeef_deadbeef, 30)
+    meta = pyuavcan.transport.PayloadMetadata(30)
 
     ts = Timestamp.now()
 
@@ -453,10 +506,13 @@ def _unittest_redundant_input_monotonic() -> None:
 
     inf_a.transfer_id_timeout = 1.1  # This is used to ensure that the transfer-ID timeout is handled correctly.
 
-    ses = RedundantInputSession(spec, meta,
-                                tid_modulo_provider=lambda: None,  # Like UDP or serial - infinite modulo.
-                                loop=loop,
-                                finalizer=lambda: None)
+    ses = RedundantInputSession(
+        spec,
+        meta,
+        tid_modulo_provider=lambda: None,  # Like UDP or serial - infinite modulo.
+        loop=loop,
+        finalizer=lambda: None,
+    )
     assert ses.specifier is spec
     assert ses.payload_metadata is meta
     assert not ses.inferiors
@@ -464,11 +520,9 @@ def _unittest_redundant_input_monotonic() -> None:
     assert pytest.approx(0.0) == ses.transfer_id_timeout
 
     # Add inferiors.
-    # noinspection PyProtectedMember
-    ses._add_inferior(inf_a)  # No change, added above
+    ses._add_inferior(inf_a)  # No change, added above    # pylint: disable=protected-access
     assert ses.inferiors == [inf_a]
-    # noinspection PyProtectedMember
-    ses._add_inferior(inf_b)
+    ses._add_inferior(inf_b)  # pylint: disable=protected-access
     assert ses.inferiors == [inf_a, inf_b]
 
     ses.transfer_id_timeout = 1.1
@@ -478,45 +532,63 @@ def _unittest_redundant_input_monotonic() -> None:
 
     # Redundant reception from multiple interfaces concurrently.
     for tx_x in (tx_a, tx_b):
-        assert await_(tx_x.send_until(Transfer(timestamp=Timestamp.now(),
-                                               priority=Priority.HIGH,
-                                               transfer_id=2,
-                                               fragmented_payload=[memoryview(b'def')]),
-                                      loop.time() + 1.0))
-        assert await_(tx_x.send_until(Transfer(timestamp=Timestamp.now(),
-                                               priority=Priority.HIGH,
-                                               transfer_id=3,
-                                               fragmented_payload=[memoryview(b'ghi')]),
-                                      loop.time() + 1.0))
+        assert await_(
+            tx_x.send(
+                Transfer(
+                    timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    transfer_id=2,
+                    fragmented_payload=[memoryview(b"def")],
+                ),
+                loop.time() + 1.0,
+            )
+        )
+        assert await_(
+            tx_x.send(
+                Transfer(
+                    timestamp=Timestamp.now(),
+                    priority=Priority.HIGH,
+                    transfer_id=3,
+                    fragmented_payload=[memoryview(b"ghi")],
+                ),
+                loop.time() + 1.0,
+            )
+        )
 
-    tr = await_(ses.receive_until(loop.time() + 0.1))
+    tr = await_(ses.receive(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 2
-    assert tr.fragmented_payload == [memoryview(b'def')]
+    assert tr.fragmented_payload == [memoryview(b"def")]
 
-    tr = await_(ses.receive_until(loop.time() + 0.1))
+    tr = await_(ses.receive(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 3
-    assert tr.fragmented_payload == [memoryview(b'ghi')]
+    assert tr.fragmented_payload == [memoryview(b"ghi")]
 
-    assert None is await_(ses.receive_until(loop.time() + 2.0))  # Nothing left to read now.
+    assert None is await_(ses.receive(loop.time() + 2.0))  # Nothing left to read now.
 
     # This one will be accepted despite a smaller transfer-ID because of the TID timeout.
-    assert await_(tx_a.send_until(Transfer(timestamp=Timestamp.now(),
-                                           priority=Priority.HIGH,
-                                           transfer_id=1,
-                                           fragmented_payload=[memoryview(b'acc')]),
-                                  loop.time() + 1.0))
-    tr = await_(ses.receive_until(loop.time() + 0.1))
+    assert await_(
+        tx_a.send(
+            Transfer(
+                timestamp=Timestamp.now(),
+                priority=Priority.HIGH,
+                transfer_id=1,
+                fragmented_payload=[memoryview(b"acc")],
+            ),
+            loop.time() + 1.0,
+        )
+    )
+    tr = await_(ses.receive(loop.time() + 0.1))
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (loop.time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 1
-    assert tr.fragmented_payload == [memoryview(b'acc')]
+    assert tr.fragmented_payload == [memoryview(b"acc")]
     assert tr.inferior_session == inf_a
 
     # Stats check.

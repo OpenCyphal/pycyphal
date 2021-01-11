@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import abc
@@ -57,6 +55,13 @@ class Feedback(abc.ABC):
         """
         raise NotImplementedError
 
+    def __repr__(self) -> str:
+        return pyuavcan.util.repr_attributes(
+            self,
+            original_transfer_timestamp=self.original_transfer_timestamp,
+            first_frame_transmission_timestamp=self.first_frame_transmission_timestamp,
+        )
+
 
 @dataclasses.dataclass(frozen=True)
 class SessionSpecifier:
@@ -66,6 +71,7 @@ class SessionSpecifier:
     There are specializations for input and output sessions with additional logic,
     but they do not add extra data (because remember this class follows the protocol model definition).
     """
+
     data_specifier: DataSpecifier
     """
     See :class:`pyuavcan.transport.DataSpecifier`.
@@ -80,7 +86,7 @@ class SessionSpecifier:
 
     def __post_init__(self) -> None:
         if self.remote_node_id is not None and self.remote_node_id < 0:
-            raise ValueError(f'Invalid remote node-ID: {self.remote_node_id}')
+            raise ValueError(f"Invalid remote node-ID: {self.remote_node_id}")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -89,6 +95,7 @@ class InputSessionSpecifier(SessionSpecifier):
     If the remote node-ID is set, this is a selective session (accept data from the specified remote node only);
     otherwise this is a promiscuous session (accept data from any node).
     """
+
     @property
     def is_promiscuous(self) -> bool:
         return self.remote_node_id is None
@@ -122,17 +129,18 @@ class OutputSessionSpecifier(SessionSpecifier):
     | **Service**        | Allowed by Specification             | Banned by Specification               |
     +--------------------+--------------------------------------+---------------------------------------+
     """
+
     def __post_init__(self) -> None:
         if isinstance(self.data_specifier, pyuavcan.transport.ServiceDataSpecifier) and self.remote_node_id is None:
-            raise ValueError('Service transfers shall be unicast')
+            raise ValueError("Service transfers shall be unicast")
 
         if isinstance(self.data_specifier, pyuavcan.transport.MessageDataSpecifier) and self.remote_node_id is not None:
             warnings.warn(
-                f'Unicast message transfers are an experimental extension of the protocol which '
-                f'should not be used in production yet. '
-                f'If your application relies on this feature, leave feedback at https://forum.uavcan.org.',
+                f"Unicast message transfers are an experimental extension of the protocol which "
+                f"should not be used in production yet. "
+                f"If your application relies on this feature, leave feedback at https://forum.uavcan.org.",
                 category=RuntimeWarning,
-                stacklevel=-2
+                stacklevel=-2,
             )
 
     @property
@@ -147,11 +155,17 @@ class SessionStatistics:
     Transport implementations are encouraged to extend this class to add more transport-specific information.
     The statistical counters start from zero when a session is first instantiated.
     """
-    transfers:     int = 0  #: Successful transfer count.
-    frames:        int = 0  #: UAVCAN transport frame count (CAN frames, UDP packets, wireless frames, etc).
-    payload_bytes: int = 0  #: Successful transfer payload bytes (not including transport metadata or padding).
-    errors:        int = 0  #: Failures of any kind, even if they are also logged using other means, excepting drops.
-    drops:         int = 0  #: Frames lost to buffer overruns and expired deadlines.
+
+    transfers: int = 0
+    """Successful transfer count."""
+    frames: int = 0
+    """UAVCAN transport frame count (CAN frames, UDP packets, wireless frames, etc)."""
+    payload_bytes: int = 0
+    """Successful transfer payload bytes (not including transport metadata or padding)."""
+    errors: int = 0
+    """Failures of any kind, even if they are also logged using other means, excepting drops."""
+    drops: int = 0
+    """Frames lost to buffer overruns and expired deadlines."""
 
     def __eq__(self, other: object) -> bool:
         """
@@ -162,8 +176,7 @@ class SessionStatistics:
         if isinstance(other, SessionStatistics):
             fds = set(f.name for f in dataclasses.fields(self)) & set(f.name for f in dataclasses.fields(other))
             return all(getattr(self, n) == getattr(other, n) for n in fds)
-        else:  # pragma: no cover
-            return NotImplemented
+        return NotImplemented
 
 
 class Session(abc.ABC):
@@ -218,13 +231,14 @@ class InputSession(Session):
     Users shall never construct instances themselves;
     instead, the factory method :meth:`pyuavcan.transport.Transport.get_input_session` shall be used.
     """
+
     @property
     @abc.abstractmethod
     def specifier(self) -> InputSessionSpecifier:
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[TransferFrom]:
         """
         Attempts to receive the transfer before the deadline [second].
         Returns None if the transfer is not received before the deadline.
@@ -273,13 +287,14 @@ class OutputSession(Session):
     Users shall never construct instances themselves;
     instead, the factory method :meth:`pyuavcan.transport.Transport.get_output_session` shall be used.
     """
+
     @property
     @abc.abstractmethod
     def specifier(self) -> OutputSessionSpecifier:
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def send_until(self, transfer: Transfer, monotonic_deadline: float) -> bool:
+    async def send(self, transfer: Transfer, monotonic_deadline: float) -> bool:
         """
         Sends the transfer; blocks if necessary until the specified deadline [second].
         The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.

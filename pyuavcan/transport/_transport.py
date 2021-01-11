@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import abc
@@ -12,6 +10,7 @@ import dataclasses
 import pyuavcan.util
 from ._session import InputSession, OutputSession, InputSessionSpecifier, OutputSessionSpecifier
 from ._payload_metadata import PayloadMetadata
+from ._tracer import CaptureCallback, Tracer, AlienTransfer
 
 
 @dataclasses.dataclass(frozen=True)
@@ -31,13 +30,13 @@ class ProtocolParameters:
     All high-overhead transports (UDP, Serial, etc.) use a sufficiently large value that will never overflow
     in a realistic, practical scenario.
     The background and motivation are explained at https://forum.uavcan.org/t/alternative-transport-protocols/324.
-    Example: 32 for CAN, 72057594037927936 (2**56) for UDP.
+    Example: 32 for CAN, (2**64) for UDP.
     """
 
     max_nodes: int
     """
     How many nodes can the transport accommodate in a given network.
-    Example: 128 for CAN, 4096 for Serial.
+    Example: 128 for CAN, 65535 for UDP.
     """
 
     mtu: int
@@ -56,7 +55,6 @@ class TransportStatistics:
     Not to be confused with :class:`pyuavcan.transport.SessionStatistics`,
     which is tracked per-session.
     """
-    pass
 
 
 class Transport(abc.ABC):
@@ -65,6 +63,7 @@ class Transport(abc.ABC):
 
     Implementations should ensure that properties do not raise exceptions.
     """
+
     @property
     @abc.abstractmethod
     def loop(self) -> asyncio.AbstractEventLoop:
@@ -172,45 +171,108 @@ class Transport(abc.ABC):
         """
         raise NotImplementedError
 
-    @property
     @abc.abstractmethod
-    def descriptor(self) -> str:
+    def begin_capture(self, handler: CaptureCallback) -> None:
         """
-        A transport-specific specification string containing sufficient information to recreate the current
-        configuration in a human-readable XML-like format.
+        .. warning::
+            This API entity is not yet stable. Suggestions and feedback are welcomed at https://forum.uavcan.org.
 
-        The returned string shall contain exactly one top-level XML element. The tag name of the element shall match
-        the name of the transport class in lower case without the "transport" suffix; e.g:
-        ``CANTransport`` -- ``can``, ``SerialTransport`` -- ``serial``.
-        The element should contain the name of the OS resource associated with the interface,
-        if there is any, e.g., serial port name, network iface name, etc;
-        or another element, e.g., further specifying the media layer or similar, which in turn contains the name
-        of the associated OS resource in it.
-        If it is a pseudo-transport, the element should contain nested elements describing the contained transports,
-        if there are any.
-        The attributes of a transport element should represent the values of applicable configuration parameters,
-        excepting those that are already exposed via :attr:`protocol_parameters` to avoid redundancy.
-        The charset is ASCII.
+        Activates low-level monitoring of the transport interface.
+        Also see related method :meth:`make_tracer`.
 
-        In general, one can view this as an XML-based representation of a Python constructor invocation expression,
-        where the first argument is represented as the XML element data, and all following arguments
-        are represented as named XML attributes.
-        Examples:
+        This method puts the transport instance into the low-level capture mode which does not interfere with its
+        normal operation but may significantly increase the computing load due to the need to process every frame
+        exchanged over the network (not just frames that originate or terminate at the local node).
+        This usually involves reconfiguration of the local networking hardware.
+        For instance, the network card may be put into promiscuous mode,
+        the CAN adapter will have its acceptance filters disabled, etc.
 
-        - ``<can><socketcan mtu="64">vcan0</socketcan></can>``
-        - ``<serial baudrate="115200">/dev/ttyACM0</serial>``
-        - ``<ieee802154><xbee>/dev/ttyACM0</xbee></ieee802154>``
-        - ``<redundant><udp srv_mult="1">127.0.0.42/8</udp><serial baudrate="115200">COM9</serial></redundant>``
+        The capture handler is invoked for every transmitted or received transport frame and, possibly, some
+        additional transport-implementation-specific events (e.g., network errors or hardware state changes)
+        which are described in the specific transport implementation docs.
+        The temporal order of the events delivered to the user may be distorted, depending on the guarantees
+        provided by the hardware and its driver.
+        This means that if the network hardware sees TX frame A and then RX frame B separated by a very short time
+        interval, the user may occasionally see the sequence inverted as (B, A).
 
-        We should consider defining a reverse static factory method that attempts to locate the necessary transport
-        implementation class and instantiate it from a supplied descriptor. This would benefit transport-agnostic
-        applications greatly.
+        There may be an arbitrary number of capture handlers installed; when a new handler is installed, it is
+        added to the existing ones, if any.
+
+        If the transport does not support capture, this method may have no observable effect.
+        Technically, the capture protocol, as you can see, does not present any requirements to the emitted events,
+        so an implementation that pretends to enter the capture mode while not actually doing anything is compliant.
+
+        Since capture reflects actual network events, deterministic data loss mitigation will make the instance emit
+        duplicate frames for affected transfers (although this is probably obvious enough without this elaboration).
+
+        It is not possible to disable capture. Once enabled, it will go on until the transport instance is destroyed.
+
+        :param handler: A one-argument callable invoked to inform the user about low-level network events.
+            The type of the argument is :class:`Capture`, see transport-specific docs for the list of the possible
+            concrete types and what events they represent.
+            **The handler may be invoked from a different thread so the user should ensure synchronization.**
+            If the handler raises an exception, it is suppressed and logged.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    @abc.abstractmethod
+    def make_tracer() -> Tracer:
+        """
+        .. warning::
+            This API entity is not yet stable. Suggestions and feedback are welcomed at https://forum.uavcan.org.
+
+        Use this factory method for constructing tracer implementations for specific transports.
+        Concrete tracers may be Voldemort types themselves.
+        See also: :class:`Tracer`, :meth:`begin_capture`.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def spoof(self, transfer: AlienTransfer, monotonic_deadline: float) -> bool:
+        """
+        .. warning::
+            This API entity is not yet stable. Suggestions and feedback are welcomed at https://forum.uavcan.org.
+
+        Send a spoofed transfer to the network.
+        The configuration of the local transport instance has no effect on spoofed transfers;
+        as such, even anonymous instances may send arbitrary spoofed transfers.
+        The only relevant property of the instance is which network interface to use for spoofing.
+
+        When this method is invoked for the first time, the transport instance may need to perform one-time
+        initialization such as reconfiguring the networking hardware or loading additional drivers.
+        Once this one-time initialization is performed,
+        the transport instance will reside in the spoofing mode until the instance is closed;
+        it is not possible to leave the spoofing mode without closing the instance.
+        Some transports/platforms may require special permissions to perform spoofing (esp. IP-based transports).
+
+        If the source node-ID is not provided, an anonymous transfer will be emitted.
+        If anonymous transfers are not supported, :class:`pyuavcan.transport.OperationNotDefinedForAnonymousNodeError`
+        will be raised.
+
+        If the destination node-ID is not provided, a broadcast transfer will be emitted.
+        If the data specifier is that of a service, a :class:`UnsupportedSessionConfigurationError` will be raised.
+        The reverse conflict for messages is handled identically.
+
+        Transports with cyclic transfer-ID will compute the modulo automatically.
+
+        The return value is True on success, False on timeout.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        """
+        Returns a list of positional and keyword arguments to :func:`pyuavcan.util.repr_attributes_noexcept`
+        for processing the :meth:`__repr__` call.
+        The resulting string constructed by repr should resemble a valid Python expression that would yield
+        an identical transport instance upon its evaluation.
         """
         raise NotImplementedError
 
     def __repr__(self) -> str:
         """
-        Implementations are advised to avoid overriding this method.
+        Implementations should never override this method. Instead, see :meth:`_get_repr_fields`.
         """
-        return pyuavcan.util.repr_attributes(self, self.descriptor, self.protocol_parameters,
-                                             local_node_id=self.local_node_id)
+        positional, keyword = self._get_repr_fields()
+        return pyuavcan.util.repr_attributes_noexcept(self, *positional, **keyword)

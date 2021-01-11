@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 # noinspection PyUnresolvedReferences
 """
@@ -38,10 +36,9 @@ Both methods are idempotent.
 The main entity of this module is the class :class:`pyuavcan.application.Node`.
 There are several nested submodules,
 each dedicated to a particular *application-level function* of the UAVCAN protocol,
-such as :mod:`pyuavcan.application.heartbeat_publisher`.
+such as :mod:`pyuavcan.application.heartbeat_publisher`;
+each such module shall be imported explicitly.
 Read the UAVCAN specification for background.
 """
 
 from ._node import Node as Node, NodeInfo as NodeInfo
-
-from . import heartbeat_publisher as heartbeat_publisher

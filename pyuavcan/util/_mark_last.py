@@ -1,13 +1,11 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 
 
-T = typing.TypeVar('T')
+T = typing.TypeVar("T")
 
 
 def mark_last(it: typing.Iterable[T]) -> typing.Iterable[typing.Tuple[bool, T]]:

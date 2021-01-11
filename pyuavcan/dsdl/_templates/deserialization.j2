@@ -1,145 +1,140 @@
 {#-
- # Copyright (c) 2019 UAVCAN Development Team
+ # Copyright (c) 2019 UAVCAN Consortium
  # This software is distributed under the terms of the MIT License.
- # Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+ # Author: Pavel Kirienko <pavel@uavcan.org>
 -#}
 
-{%- macro deserialize(t, self_type_name) -%}
-    {#- "self" is a reserved keyword in DSDL, conflicts are not possible. -#}
-    {{ _deserialize_composite(t, 'self', 0|bit_length_set, self_type_name) }}
-{%- endmacro -%}
+{% macro deserialize(self, self_type_name) -%}
+    assert _des_.consumed_bit_length % 8 == 0, 'Deserializer is not aligned'
+    _base_offset_ = _des_.consumed_bit_length
+    {% set t = self.inner_type %}
+{% if t is StructureType %}
+    {% set field_ref_map = {} %}
+    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+    {% if f is not padding %}
+    {% set field_ref = 'f'|to_template_unique_name %}
+    {% do field_ref_map.update({f: field_ref}) %}
+    # Temporary {{ field_ref }} holds the value of "{{ f.name }}"
+    {{ _deserialize_any(f.data_type, field_ref, offset) }}
+    {% else %}
+    {{ _deserialize_any(f.data_type, '[void field does not require a reference]', offset) }}
+    {% endif %}
+    {% endfor %}
+    {% set assignment_root -%}
+    self = {{ self_type_name }}(
+    {%- endset %}
+    {{ assignment_root }}
+    {% for f in t.fields_except_padding %}
+        {{ f|id }}={{ field_ref_map[f] }}
+        {{- ')' if loop.last else (',\n' + ' ' * (4 + assignment_root|length)) -}}
+    {% else %}
+            )
+    {% endfor %}
+{% elif t is UnionType %}
+    {% set tag_ref = 'tag'|to_template_unique_name %}
+    {{ _deserialize_integer(t.tag_field_type, tag_ref, 0|bit_length_set) }}
+    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+    {# We generate new temporary for each variant to prevent MyPy from complaining. #}
+    {% set field_ref = 'uni'|to_template_unique_name %}
+    {{ 'if' if loop.first else 'elif' }} {{ tag_ref }} == {{ loop.index0 }}:
+        {{ _deserialize_any(f.data_type, field_ref, offset)|indent }}
+        self = {{ self_type_name }}({{ f|id }}={{ field_ref }})
+    {% endfor %}
+    else:
+        raise _des_.FormatError(f'{{ t }}: Union tag value { {{- tag_ref -}} } is invalid')
+{% else %}{% assert False %}{# Delimited type is not expected in this context. #}
+{% endif %}
+    _des_.pad_to_alignment({{ self.alignment_requirement }})
+    assert {{ t.bit_length_set|min }} <= (_des_.consumed_bit_length - _base_offset_) <= {{ t.bit_length_set|max }}, \
+        'Bad deserialization of {{ self }}'
+{%- endmacro %}
 
 
-{%- macro _deserialize_integer(t, ref, offset) -%}
-{%- if t.standard_bit_length and offset.is_aligned_at_byte() -%}
+{% macro _deserialize_integer(t, ref, offset) %}
+{% if t.standard_bit_length and offset.is_aligned_at_byte() %}
     {{ ref }} = _des_.fetch_aligned_{{ 'i' if t is SignedIntegerType else 'u' }}{{ t.bit_length }}()
-{%- else -%}
-    {%- set signedness = 'signed' if t is SignedIntegerType else 'unsigned' -%}
+{% else %}
+    {% set signedness = 'signed' if t is SignedIntegerType else 'unsigned' %}
     {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_{{ signedness }}({{ t.bit_length }})
-{%- endif -%}
-{%- endmacro -%}
+{% endif %}
+{% endmacro %}
 
 
-{%- macro _deserialize_fixed_length_array(t, ref, offset) -%}
-{%- if t.element_type is BooleanType -%}
+{% macro _deserialize_fixed_length_array(t, ref, offset) %}
+{% if t.element_type is BooleanType %}
     {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_array_of_bits({{ t.capacity }})
-{%- elif t.element_type is PrimitiveType and t.element_type.standard_bit_length -%}
+{% elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
     {{ ref }} = _des_.fetch_{{ offset|alignment_prefix -}}
                       _array_of_standard_bit_length_primitives({{ t.element_type|numpy_scalar_type }}, {{ t.capacity }})
-{%- else -%}
-    {%- set element_ref = 'e'|to_template_unique_name -%}
+{% else %}
+    {% set element_ref = 'e'|to_template_unique_name %}
     # Unrolled fixed-length array: {{ t }}; the temporary {{ element_ref }} is used for element storage.
     {{ ref }} = _np_.empty({{ t.capacity }}, {{ t.element_type|numpy_scalar_type }})
-    {%- for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
+    {% for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
     {{ _deserialize_any(t.element_type, element_ref, element_offset) }}
     {{ ref }}[{{ index }}] = {{ element_ref }}
-    {%- endfor -%}
-{%- endif %}
+    {% endfor %}
+{% endif %}
     assert len({{ ref }}) == {{ t.capacity }}, '{{ t }}'
-{%- endmacro -%}
+{% endmacro %}
 
 
-{%- macro _deserialize_variable_length_array(t, ref, offset) -%}
+{% macro _deserialize_variable_length_array(t, ref, offset) %}
     # Length field byte-aligned: {{ offset.is_aligned_at_byte() }}; {# -#}
-     first element byte-aligned: {{ (offset + t.length_field_type.bit_length).is_aligned_at_byte() }}; {# -#}
       all elements byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}.
-    {%- set length_ref = 'len'|to_template_unique_name %}
+    {% set length_ref = 'len'|to_template_unique_name %}
     {{ _deserialize_integer(t.length_field_type, length_ref, offset) }}
     assert {{ length_ref }} >= 0
     if {{ length_ref }} > {{ t.capacity }}:
         raise _des_.FormatError(f'Variable array length prefix { {{- length_ref -}} } > {{ t.capacity }}')
-
-{%- if t.element_type is BooleanType %}
+{% if t.element_type is BooleanType %}
     {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
                       _array_of_bits({{ length_ref }})
-
-{%- elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
+{% elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
     {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
                       _array_of_standard_bit_length_primitives({{ t.element_type|numpy_scalar_type }}, {{ length_ref }})
-
-{%- else %}
-    {%- set element_ref = 'e'|to_template_unique_name %}
-    {%- set index_ref = 'i'|to_template_unique_name %}
+{% else %}
+    {% set element_ref = 'e'|to_template_unique_name %}
+    {% set index_ref = 'i'|to_template_unique_name %}
     {{ ref }} = _np_.empty({{ length_ref }}, {{ t.element_type|numpy_scalar_type }})
     for {{ index_ref }} in range({{ length_ref }}):
         {{ _deserialize_any(t.element_type, element_ref, offset + t.bit_length_set)|indent }}
         {{ ref }}[{{ index_ref }}] = {{ element_ref }}
-
-{%- endif %}
+{% endif %}
     assert len({{ ref }}) <= {{ t.capacity }}, '{{ t }}'
-{%- endmacro -%}
+{% endmacro %}
 
 
-{%- macro _deserialize_composite(t, ref, base_offset, ref_type_name=None) -%}
-    {#- The begin/end markers are emitted to facilitate automatic testing. -#}
-    # BEGIN COMPOSITE DESERIALIZATION: {{ t }}
-{%- if t is StructureType %}
-    {%- set field_ref_map = {} %}
-    {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
-    # BEGIN STRUCTURE FIELD DESERIALIZATION: {{ f }}
-    {%- if f is not PaddingField %}
-    {%- set field_ref = 'f'|to_template_unique_name %}
-    {%- do field_ref_map.update({f: field_ref}) %}
-    # The temporary {{ field_ref }} holds the value of the field "{{ f.name }}"
-    {{ _deserialize_any(f.data_type, field_ref, offset) }}
-    {%- else %}
-    {{ _deserialize_any(f.data_type, '[void field does not require a reference]', offset) }}
-    {%- endif %}
-    # END STRUCTURE FIELD DESERIALIZATION: {{ f }}
-    {%- endfor %}
-    {%- set assignment_root -%}
-        {{ ref }} = {{ ref_type_name or t|full_reference_name }}(
-    {%- endset %}
-    {{ assignment_root }}
-    {%- for f in t.fields_except_padding -%}
-        {{ f|id }}={{ field_ref_map[f] }}
-        {{- ')' if loop.last else (',\n' + ' ' * (4 + assignment_root|length)) -}}
-    {%- else -%}
-            )
-    {%- endfor %}
-
-{%- elif t is UnionType %}
-    {%- set tag_ref = 'tag'|to_template_unique_name %}
-    # Tag field byte-aligned: {{ base_offset.is_aligned_at_byte() }}; {# -#}
-      values byte-aligned: {{ (base_offset + t.tag_field_type.bit_length).is_aligned_at_byte() }}
-    {{ _deserialize_integer(t.tag_field_type, tag_ref, base_offset) }}
-    {%- for f, offset in t.iterate_fields_with_offsets(base_offset) %}
-    {#- We generate new temporary for each variant to prevent MyPy from complaining. #}
-    {%- set field_ref = 'uni'|to_template_unique_name %}
-    # BEGIN UNION FIELD DESERIALIZATION: {{ f }}
-    {{ 'if' if loop.first else 'elif' }} {{ tag_ref }} == {{ loop.index0 }}:
-        {{ _deserialize_any(f.data_type, field_ref, offset)|indent }}
-        {{ ref }} = {{ ref_type_name or t|full_reference_name }}({{ f|id }}={{ field_ref }})
-    # END UNION FIELD DESERIALIZATION: {{ f }}
-    {%- endfor %}
-    else:
-        raise _des_.FormatError(f'{{ t }}: Union tag value { {{- tag_ref -}} } is invalid')
-
-{%- else -%}{%- assert False -%}
-{%- endif %}
-    # END COMPOSITE DESERIALIZATION: {{ t }}
-{%- endmacro -%}
-
-
-{%- macro _deserialize_any(t, ref, offset) -%}
-    {% if offset.is_aligned_at_byte() -%}
-    assert _des_.consumed_bit_length % 8 == 0, '{{ t }}'
-    {% endif -%}
-    {%- if t is VoidType -%}        _des_.skip_bits({{ t.bit_length }})
-    {%- elif t is BooleanType -%}   {{ ref }} = _des_.fetch_unaligned_bit()
-    {%- elif t is IntegerType -%}   {{ _deserialize_integer(t, ref, offset) }}
-    {%- elif t is FloatType -%}     {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_f{{ t.bit_length }}()
-    {#- Despite the apparent similarities, fixed and variable arrays are very different when it comes to serialization,
-     #- mostly because of the different logic of offset computation. -#}
-    {%- elif t is FixedLengthArrayType -%}      {{ _deserialize_fixed_length_array(t, ref, offset) }}
-    {%- elif t is VariableLengthArrayType -%}   {{ _deserialize_variable_length_array(t, ref, offset) }}
+{% macro _deserialize_any(t, ref, offset) %}
+    {% if t.alignment_requirement > 1 %}
+    _des_.pad_to_alignment({{ t.alignment_requirement }})
+    {% endif %}
+    {%- if t is VoidType -%}                 _des_.skip_bits({{ t.bit_length }})
+    {%- elif t is BooleanType -%}            {{ ref }} = _des_.fetch_unaligned_bit()
+    {%- elif t is IntegerType -%}            {{ _deserialize_integer(t, ref, offset) }}
+    {%- elif t is FloatType -%}              {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_f{{ t.bit_length }}()
+    {%- elif t is FixedLengthArrayType -%}   {{ _deserialize_fixed_length_array(t, ref, offset) }}
+    {%- elif t is VariableLengthArrayType -%}{{ _deserialize_variable_length_array(t, ref, offset) }}
     {%- elif t is CompositeType -%}
-        {%- if offset.is_aligned_at_byte() -%}
-    {{ ref }} = {{ t|full_reference_name }}._deserialize_aligned_(_des_)
-        {%- else -%}
-    # The object is not always byte-aligned, deserializing in-place.
-    {{ _deserialize_composite(t, ref, offset) }}
-        {%- endif -%}
-    {%- else -%}{%- assert False -%}
-    {%- endif -%}
-{%- endmacro -%}
+        {% if t is DelimitedType %}
+    # Delimited deserialization of {{ t }}, extent {{ t.extent }}
+    _dh_ = _des_.fetch_aligned_u32()  # Read the delimiter header.
+    if _dh_ * 8 > _des_.remaining_bit_length:
+        raise _des_.FormatError(f'Delimiter header specifies {_dh_ * 8} bits, '
+                                f'but the remaining length is only {_des_.remaining_bit_length} bits')
+    _nested_ = _des_.fork_bytes(_dh_)
+    _des_.skip_bits(_dh_ * 8)
+    {{ ref }} = {{ t|full_reference_name }}._deserialize_(_nested_)
+    del _nested_
+        {% else %}
+    {{ ref }} = {{ t|full_reference_name }}._deserialize_(_des_)
+        {% endif %}
+    {%- else %}{% assert False %}
+    {%- endif %}
+    {% if t is CompositeType %}
+    assert _des_.consumed_bit_length % {{ t.alignment_requirement }} == 0, 'Nested object alignment error'
+    {% endif %}
+    {% if t is not CompositeType and t.alignment_requirement > 1 %}
+    _des_.pad_to_alignment({{ t.alignment_requirement }})
+    {% endif %}
+{% endmacro %}

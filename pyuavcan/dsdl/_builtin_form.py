@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 
@@ -45,9 +43,9 @@ def to_builtin(obj: CompositeObject) -> typing.Dict[str, typing.Any]:
     return out
 
 
-def _to_builtin_impl(obj:   typing.Union[CompositeObject, numpy.ndarray, str, bool, int, float],
-                     model: pydsdl.SerializableType) \
-        -> typing.Union[typing.Dict[str, typing.Any], typing.List[typing.Any], str, bool, int, float]:
+def _to_builtin_impl(
+    obj: typing.Union[CompositeObject, numpy.ndarray, str, bool, int, float], model: pydsdl.SerializableType
+) -> typing.Union[typing.Dict[str, typing.Any], typing.List[typing.Any], str, bool, int, float]:
     if isinstance(model, pydsdl.CompositeType):
         assert isinstance(obj, CompositeObject)
         return {
@@ -56,34 +54,30 @@ def _to_builtin_impl(obj:   typing.Union[CompositeObject, numpy.ndarray, str, bo
             if get_attribute(obj, f.name) is not None  # The check is to hide inactive union variants.
         }
 
-    elif isinstance(model, pydsdl.ArrayType):
+    if isinstance(model, pydsdl.ArrayType):
         assert isinstance(obj, numpy.ndarray)
         if model.string_like:  # TODO: drop this special case when strings are natively supported in DSDL.
             try:
                 return bytes(e for e in obj).decode()
             except UnicodeError:
                 return list(map(int, obj))
-        else:
-            return [_to_builtin_impl(e, model.element_type) for e in obj]
+        return [_to_builtin_impl(e, model.element_type) for e in obj]
 
-    elif isinstance(model, pydsdl.PrimitiveType):
+    if isinstance(model, pydsdl.PrimitiveType):
         # The explicit conversions are needed to get rid of NumPy scalar types.
         if isinstance(model, pydsdl.IntegerType):
-            return int(obj)                         # type: ignore
-        elif isinstance(model, pydsdl.FloatType):
-            return float(obj)                       # type: ignore
-        elif isinstance(model, pydsdl.BooleanType):
+            return int(obj)  # type: ignore
+        if isinstance(model, pydsdl.FloatType):
+            return float(obj)  # type: ignore
+        if isinstance(model, pydsdl.BooleanType):
             return bool(obj)
-        else:
-            assert isinstance(obj, str)
-            return obj
+        assert isinstance(obj, str)
+        return obj
 
-    else:
-        assert False, 'Unexpected inputs'
+    assert False, "Unexpected inputs"
 
 
-def update_from_builtin(destination: CompositeObjectTypeVar,
-                        source:      typing.Dict[str, typing.Any]) -> CompositeObjectTypeVar:
+def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any) -> CompositeObjectTypeVar:
     """
     Updates the provided DSDL object (an instance of a Python class auto-generated from a DSDL definition)
     with the values from a native representation, where DSDL objects are represented as dicts, arrays
@@ -126,10 +120,17 @@ def update_from_builtin(destination: CompositeObjectTypeVar,
     ... })  # doctest: +NORMALIZE_WHITESPACE
     uavcan.register.Access.Request...name='my.register'...value=[ 1, 2, 42,-10000]...
     """
-    source = dict(source)   # Create copy to prevent mutation of the original
+    # UX improvement; see https://github.com/UAVCAN/pyuavcan/issues/116
+    if not isinstance(source, dict):
+        raise TypeError(
+            f"Invalid format: cannot update an instance of type {type(destination).__name__!r} "
+            f"from value of type {type(source).__name__!r}"
+        )
+
+    source = dict(source)  # Create copy to prevent mutation of the original
 
     if not isinstance(destination, CompositeObject):  # pragma: no cover
-        raise TypeError(f'Bad destination: expected a CompositeObject, got {type(destination).__name__}')
+        raise TypeError(f"Bad destination: expected a CompositeObject, got {type(destination).__name__}")
 
     model = get_model(destination)
     _raise_if_service_type(model)
@@ -139,13 +140,13 @@ def update_from_builtin(destination: CompositeObjectTypeVar,
         try:
             value = source.pop(f.name)
         except LookupError:
-            continue    # No value specified, keep original value
+            continue  # No value specified, keep original value
 
         if isinstance(field_type, pydsdl.CompositeType):
             field_obj = get_attribute(destination, f.name)
-            if field_obj is None:                               # Oh, this is a union
-                field_obj = get_class(field_type)()             # The variant was not selected, construct a default
-                set_attribute(destination, f.name, field_obj)   # Switch the union to the new variant
+            if field_obj is None:  # Oh, this is a union
+                field_obj = get_class(field_type)()  # The variant was not selected, construct a default
+                set_attribute(destination, f.name, field_obj)  # Switch the union to the new variant
             update_from_builtin(field_obj, value)
 
         elif isinstance(field_type, pydsdl.ArrayType):
@@ -156,21 +157,23 @@ def update_from_builtin(destination: CompositeObjectTypeVar,
                 dtype = get_class(element_type)
                 set_attribute(destination, f.name, [update_from_builtin(dtype(), s) for s in value])
             else:
-                assert False, f'Unexpected array element type: {element_type!r}'
+                assert False, f"Unexpected array element type: {element_type!r}"
 
         elif isinstance(field_type, pydsdl.PrimitiveType):
             set_attribute(destination, f.name, value)
 
         else:
-            assert False, f'Unexpected field type: {field_type!r}'
+            assert False, f"Unexpected field type: {field_type!r}"
 
     if source:
-        raise ValueError(f'No such fields in {model}: {list(source.keys())}')
+        raise ValueError(f"No such fields in {model}: {list(source.keys())}")
 
     return destination
 
 
 def _raise_if_service_type(model: pydsdl.SerializableType) -> None:
     if isinstance(model, pydsdl.ServiceType):  # pragma: no cover
-        raise TypeError(f'Built-in form is not defined for service types. '
-                        f'Did you mean to use Request or Response? Input type: {model}')
+        raise TypeError(
+            f"Built-in form is not defined for service types. "
+            f"Did you mean to use Request or Response? Input type: {model}"
+        )

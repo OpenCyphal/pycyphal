@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 """
 Redundant pseudo-transport overview
@@ -84,7 +82,7 @@ across changes in the transport configuration done on-the-fly without stopping t
 Since the redundant transport itself also implements the interface :class:`pyuavcan.transport.Transport`,
 it technically could be used as an inferior of another redundant transport instance,
 although the practicality of such arrangement is questionable.
-Attaching a redundant transfer as an inferior of itself is expressly prohibited and results in an error.
+Attaching a redundant transport as an inferior of itself is expressly prohibited and results in an error.
 
 
 Inferior aggregation restrictions
@@ -200,29 +198,29 @@ ensures that the worst case transfer latency is bounded by the latency of the be
 The following two swim lane diagrams should illustrate the difference.
 First, the case of cyclic-TID::
 
-    A   B
-    |   |
-    T0  |       <-- First transfer received from transport A.
-    T1  T0      <-- Transport B is auto-assigned as a back-up.
-    T2  T1      <-- Up to this point the transport functions normally.
-    X   T2      <-- Transport A fails here.
-        ...     <-- Valid transfers from transport B are ignored due to the mandatory fail-over delay.
-        TN      <-- After the delay, the deduplicator switches over to the back-up transport.
-        TN+1    <-- Now, the roles of the back-up transport and the main transport are swapped.
-        TN+2
-        ...
+    A   B     Deduplicated
+    |   |     |
+    T0  |     T0     <-- First transfer received from transport A.
+    T1  T0    T1     <-- Transport B is auto-assigned as a back-up.
+    T2  T1    T2     <-- Up to this point the transport functions normally.
+    X   T2    |      <-- Transport A fails here.
+        T3    |      <-- Valid transfers from transport B are ignored due to the mandatory fail-over delay.
+        ...   |
+        Tn    Tn     <-- After the delay, the deduplicator switches over to the back-up transport.
+        Tn+1  Tn+1   <-- Now, the roles of the back-up transport and the main transport are swapped.
+        Tn+2  Tn+2
 
 Monotonic-TID::
 
-    A   B
-    |   |
-    T0  |       <-- The monotonic-TID strategy always picks the first transfer to arrive.
-    T1  T0      <-- All available interfaces are always considered.
-    T2  T1      <-- The result is that the transfer latency is defined by the best-performing transport.
-    |   T2      <-- Here, the latency of transport A has increased temporarily.
-    |   T3      <-- The deduplication strategy reacts by picking the next transfer from transport B.
-    T3  X       <-- Shall one transport fail, the deduplication strategy fails over immediately.
-    T4
+    A   B     Deduplicated
+    |   |     |
+    T0  |     T0    <-- The monotonic-TID strategy always picks the first transfer to arrive.
+    T1  T0    T1    <-- All available interfaces are always considered.
+    T2  T1    T2    <-- The result is that the transfer latency is defined by the best-performing transport.
+    |   T2    |     <-- Here, the latency of transport A has increased temporarily.
+    |   T3    T3    <-- The deduplication strategy reacts by picking the next transfer from transport B.
+    T3  X     |     <-- Shall one transport fail, the deduplication strategy fails over immediately.
+    T4        T4
 
 Anonymous transfers are a special case:
 a deduplicator has to keep local state per session in order to perform its functions;
@@ -260,8 +258,8 @@ Any future changes will update all dependent session instances automatically.
 
 >>> from pyuavcan.transport import OutputSessionSpecifier, InputSessionSpecifier, MessageDataSpecifier
 >>> from pyuavcan.transport import PayloadMetadata, Transfer, Timestamp, Priority, ProtocolParameters
->>> pm = PayloadMetadata(0x_bad_c0ffee_0dd_f00d, 1024)
->>> s0 = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(12345), None), pm)
+>>> pm = PayloadMetadata(1024)
+>>> s0 = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), pm)
 >>> s0.inferiors    # No inferior transports; hence, no inferior sessions.
 []
 
@@ -282,7 +280,7 @@ Add another inferior and another session:
 
 >>> lo_1 = LoopbackTransport(local_node_id=42)
 >>> tr.attach_inferior(lo_1)
->>> s1 = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(12345), None), pm)
+>>> s1 = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), pm)
 >>> len(tr.inferiors)
 2
 >>> len(s0.inferiors)  # Updated automatically.
@@ -297,13 +295,13 @@ Add another inferior and another session:
 A simple exchange test (remember this is a loopback, so we get back whatever we send):
 
 >>> await_ = tr.loop.run_until_complete
->>> await_(s0.send_until(Transfer(Timestamp.now(), Priority.LOW, 1111, fragmented_payload=[]), tr.loop.time() + 1.0))
+>>> await_(s0.send(Transfer(Timestamp.now(), Priority.LOW, 1111, fragmented_payload=[]), tr.loop.time() + 1.0))
 True
->>> await_(s1.receive_until(tr.loop.time() + 1.0))
+>>> await_(s1.receive(tr.loop.time() + 1.0))
 RedundantTransferFrom(..., transfer_id=1111, fragmented_payload=[], ...)
 
 Inject a failure into one inferior.
-The redundant transfer will continue to function with the other inferior; an error message will be logged:
+The redundant transport will continue to function with the other inferior; an error message will be logged:
 
 .. The 'doctest: +SKIP' is needed because PyTest is broken. If a failure is actually injected,
 .. the transport will be logging errors, which in turn break the PyTest's doctest plugin.
@@ -311,9 +309,9 @@ The redundant transfer will continue to function with the other inferior; an err
 .. When that is fixed (I suppose it should be by PyTest v6?), please, remove this comment and the 'doctest: +SKIP'.
 
 >>> lo_0.output_sessions[0].exception = RuntimeError('Injected failure')  # doctest: +SKIP
->>> await_(s0.send_until(Transfer(Timestamp.now(), Priority.LOW, 1112, fragmented_payload=[]), tr.loop.time() + 1.0))
+>>> await_(s0.send(Transfer(Timestamp.now(), Priority.LOW, 1112, fragmented_payload=[]), tr.loop.time() + 1.0))
 True
->>> await_(s1.receive_until(tr.loop.time() + 1.0))   # Still works.
+>>> await_(s1.receive(tr.loop.time() + 1.0))   # Still works.
 RedundantTransferFrom(..., transfer_id=1112, fragmented_payload=[], ...)
 
 Inferiors that are no longer needed can be detached.

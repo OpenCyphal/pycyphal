@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
 
@@ -28,9 +26,9 @@ def refragment(input_fragments: typing.Iterable[memoryview], output_fragment_siz
     - ``b'abcdef'[4:6]``      --> output    ``b'ef'``            (slicing, no copy)
     """
     if output_fragment_size < 1:
-        raise ValueError(f'Invalid output fragment size: {output_fragment_size}')
+        raise ValueError(f"Invalid output fragment size: {output_fragment_size}")
 
-    carry: typing.Union[bytearray, memoryview] = memoryview(b'')
+    carry: typing.Union[bytearray, memoryview] = memoryview(b"")
     for frag in input_fragments:
         # First, emit the leftover carry from the previous iteration(s), and update the fragment.
         # After this operation either the carry or the fragment (or both) will be empty.
@@ -38,22 +36,22 @@ def refragment(input_fragments: typing.Iterable[memoryview], output_fragment_siz
             offset = output_fragment_size - len(carry)
             assert len(carry) < output_fragment_size and offset < output_fragment_size
             if isinstance(carry, bytearray):
-                carry += frag[:offset]                                                  # Expensive copy!
+                carry += frag[:offset]  # Expensive copy!
             else:
-                carry = bytearray().join((carry, frag[:offset]))                        # Expensive copy!
+                carry = bytearray().join((carry, frag[:offset]))  # Expensive copy!
 
             frag = frag[offset:]
             if len(carry) >= output_fragment_size:
                 assert len(carry) == output_fragment_size
                 yield memoryview(carry)
-                carry = memoryview(b'')
+                carry = memoryview(b"")
 
         assert not carry or not frag
 
         # Process the remaining data in the current fragment excepting the last incomplete section.
         for offset in range(0, len(frag), output_fragment_size):
             assert not carry
-            chunk = frag[offset:offset + output_fragment_size]
+            chunk = frag[offset : offset + output_fragment_size]
             if len(chunk) < output_fragment_size:
                 carry = chunk
             else:
@@ -69,32 +67,33 @@ def _unittest_util_refragment_manual() -> None:
     from pytest import raises
 
     with raises(ValueError):
-        _ = list(refragment([memoryview(b'')], 0))
+        _ = list(refragment([memoryview(b"")], 0))
 
     assert [] == list(refragment([], 1000))
-    assert [] == list(refragment([memoryview(b'')], 1000))
+    assert [] == list(refragment([memoryview(b"")], 1000))
 
     def lby(it: typing.Iterable[memoryview]) -> typing.List[bytes]:
         return list(map(bytes, it))
 
-    assert [b'012345'] == lby(refragment([memoryview(b'012345')], 1000))
+    assert [b"012345"] == lby(refragment([memoryview(b"012345")], 1000))
 
-    assert [b'0123456789'] == lby(refragment([memoryview(b'012345'), memoryview(b'6789')], 1000))
-    assert [b'012345', b'6789'] == lby(refragment([memoryview(b'012345'), memoryview(b'6789')], 6))
-    assert [b'012', b'345', b'678', b'9'] == lby(refragment([memoryview(b'012345'), memoryview(b'6789')], 3))
-    assert [b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9'] \
-        == lby(refragment([memoryview(b'012345'), memoryview(b'6789'), memoryview(b'')], 1))
+    assert [b"0123456789"] == lby(refragment([memoryview(b"012345"), memoryview(b"6789")], 1000))
+    assert [b"012345", b"6789"] == lby(refragment([memoryview(b"012345"), memoryview(b"6789")], 6))
+    assert [b"012", b"345", b"678", b"9"] == lby(refragment([memoryview(b"012345"), memoryview(b"6789")], 3))
+    assert [b"0", b"1", b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9"] == lby(
+        refragment([memoryview(b"012345"), memoryview(b"6789"), memoryview(b"")], 1)
+    )
 
     tiny = [
-        memoryview(b'0'),
-        memoryview(b'1'),
-        memoryview(b'2'),
-        memoryview(b'3'),
-        memoryview(b'4'),
-        memoryview(b'5'),
+        memoryview(b"0"),
+        memoryview(b"1"),
+        memoryview(b"2"),
+        memoryview(b"3"),
+        memoryview(b"4"),
+        memoryview(b"5"),
     ]
-    assert [b'012345'] == lby(refragment(tiny, 1000))
-    assert [b'0', b'1', b'2', b'3', b'4', b'5'] == lby(refragment(tiny, 1))
+    assert [b"012345"] == lby(refragment(tiny, 1000))
+    assert [b"0", b"1", b"2", b"3", b"4", b"5"] == lby(refragment(tiny, 1))
 
 
 def _unittest_slow_util_refragment_automatic() -> None:
@@ -123,11 +122,11 @@ def _unittest_slow_util_refragment_automatic() -> None:
         if total_size > 0:
             out_list = list(refragment(input_fragments, total_size))
             assert len(out_list) in (0, 1)
-            out = out_list[0] if out_list else b''
+            out = out_list[0] if out_list else b""
             assert out == _to_bytes(input_fragments)
 
     once_all([])
-    once_all([memoryview(b'012345'), memoryview(b'6789')])
+    once_all([memoryview(b"012345"), memoryview(b"6789")])
 
     num_iterations = 100
     max_fragments = 100
@@ -148,10 +147,10 @@ def _to_bytes(fragments: typing.Iterable[memoryview]) -> bytes:
 
 
 def _unittest_util_refragment_to_bytes() -> None:
-    assert _to_bytes([]) == b''
-    assert _to_bytes([memoryview(b'')]) == b''
-    assert _to_bytes([memoryview(b'')] * 3) == b''
-    assert _to_bytes([memoryview(b''), memoryview(b'123'), memoryview(b'')]) == b'123'
-    assert _to_bytes([memoryview(b'123')]) == b'123'
-    assert _to_bytes([memoryview(b'123'), memoryview(b'456')]) == b'123456'
-    assert _to_bytes([memoryview(b'123'), memoryview(b''), memoryview(b'456')]) == b'123456'
+    assert _to_bytes([]) == b""
+    assert _to_bytes([memoryview(b"")]) == b""
+    assert _to_bytes([memoryview(b"")] * 3) == b""
+    assert _to_bytes([memoryview(b""), memoryview(b"123"), memoryview(b"")]) == b"123"
+    assert _to_bytes([memoryview(b"123")]) == b"123"
+    assert _to_bytes([memoryview(b"123"), memoryview(b"456")]) == b"123456"
+    assert _to_bytes([memoryview(b"123"), memoryview(b""), memoryview(b"456")]) == b"123456"

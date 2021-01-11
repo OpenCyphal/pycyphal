@@ -1,19 +1,20 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
+
+"""
+Publishes ``uavcan.node.Heartbeat`` periodically and provides a couple of basic auxiliary services;
+see :class:`HeartbeatPublisher`.
+"""
 
 import enum
 import time
 import typing
 import logging
 import asyncio
+import uavcan.node
 from uavcan.node import Heartbeat_1_0 as Heartbeat
 import pyuavcan
-
-
-DEFAULT_PRIORITY = pyuavcan.transport.Priority.SLOW
 
 
 class Health(enum.IntEnum):
@@ -21,10 +22,11 @@ class Health(enum.IntEnum):
     Mirrors the health enumeration defined in ``uavcan.node.Heartbeat``.
     When enumerations are natively supported in DSDL, this will be replaced with an alias.
     """
-    NOMINAL  = Heartbeat.HEALTH_NOMINAL
-    ADVISORY = Heartbeat.HEALTH_ADVISORY
-    CAUTION  = Heartbeat.HEALTH_CAUTION
-    WARNING  = Heartbeat.HEALTH_WARNING
+
+    NOMINAL = uavcan.node.Health_1_0.NOMINAL
+    ADVISORY = uavcan.node.Health_1_0.ADVISORY
+    CAUTION = uavcan.node.Health_1_0.CAUTION
+    WARNING = uavcan.node.Health_1_0.WARNING
 
 
 class Mode(enum.IntEnum):
@@ -32,15 +34,16 @@ class Mode(enum.IntEnum):
     Mirrors the mode enumeration defined in ``uavcan.node.Heartbeat``.
     When enumerations are natively supported in DSDL, this will be replaced with an alias.
     """
-    OPERATIONAL     = Heartbeat.MODE_OPERATIONAL
-    INITIALIZATION  = Heartbeat.MODE_INITIALIZATION
-    MAINTENANCE     = Heartbeat.MODE_MAINTENANCE
-    SOFTWARE_UPDATE = Heartbeat.MODE_SOFTWARE_UPDATE
-    OFFLINE         = Heartbeat.MODE_OFFLINE
+
+    OPERATIONAL = uavcan.node.Mode_1_0.OPERATIONAL
+    INITIALIZATION = uavcan.node.Mode_1_0.INITIALIZATION
+    MAINTENANCE = uavcan.node.Mode_1_0.MAINTENANCE
+    SOFTWARE_UPDATE = uavcan.node.Mode_1_0.SOFTWARE_UPDATE
 
 
-VENDOR_SPECIFIC_STATUS_CODE_MASK = \
-    2 ** list(pyuavcan.dsdl.get_model(Heartbeat)['vendor_specific_status_code'].data_type.bit_length_set)[0] - 1
+VENDOR_SPECIFIC_STATUS_CODE_MASK = (
+    2 ** list(pyuavcan.dsdl.get_model(Heartbeat)["vendor_specific_status_code"].data_type.bit_length_set)[0] - 1
+)
 
 
 _logger = logging.getLogger(__name__)
@@ -60,7 +63,7 @@ class HeartbeatPublisher:
     - Mode is OPERATIONAL.
     - Vendor-specific status code is zero.
     - Period is MAX_PUBLICATION_PERIOD (see the DSDL definition).
-    - Priority is :data:`DEFAULT_PRIORITY`.
+    - Priority is default as defined by the presentation layer (i.e., NOMINAL).
     """
 
     def __init__(self, presentation: pyuavcan.presentation.Presentation):
@@ -71,10 +74,8 @@ class HeartbeatPublisher:
         self._vendor_specific_status_code = 0
         self._pre_heartbeat_handlers: typing.List[typing.Callable[[], None]] = []
         self._maybe_task: typing.Optional[asyncio.Task[None]] = None
-
-        self._publisher = self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)
-        self._publisher.send_timeout = float(Heartbeat.MAX_PUBLICATION_PERIOD)
-
+        self._priority = pyuavcan.presentation.DEFAULT_PRIORITY
+        self._period = float(Heartbeat.MAX_PUBLICATION_PERIOD)
         self._subscriber = self._presentation.make_subscriber_with_fixed_subject_id(Heartbeat)
 
     def start(self) -> None:
@@ -122,42 +123,35 @@ class HeartbeatPublisher:
         if 0 <= value <= VENDOR_SPECIFIC_STATUS_CODE_MASK:
             self._vendor_specific_status_code = value
         else:
-            raise ValueError(f'Invalid vendor-specific status code: {value}')
+            raise ValueError(f"Invalid vendor-specific status code: {value}")
 
     @property
     def period(self) -> float:
         """
         How often the Heartbeat messages should be published. The upper limit (i.e., the lowest frequency)
         is constrained by the UAVCAN specification; please see the DSDL source of ``uavcan.node.Heartbeat``.
-        The send timeout equals the period.
         """
-        return self._publisher.send_timeout
+        return self._period
 
     @period.setter
     def period(self, value: float) -> None:
         value = float(value)
         if 0 < value <= Heartbeat.MAX_PUBLICATION_PERIOD:
-            self._publisher.send_timeout = value  # This is not a typo! Send timeout equals period here.
+            self._period = value
         else:
-            raise ValueError(f'Invalid heartbeat period: {value}')
+            raise ValueError(f"Invalid heartbeat period: {value}")
 
     @property
     def priority(self) -> pyuavcan.transport.Priority:
         """
         The transfer priority level to use when publishing Heartbeat messages.
         """
-        return self._publisher.priority
+        return self._priority
 
     @priority.setter
     def priority(self, value: pyuavcan.transport.Priority) -> None:
-        self._publisher.priority = pyuavcan.transport.Priority(value)
-
-    @property
-    def publisher(self) -> pyuavcan.presentation.Publisher[Heartbeat]:
-        """
-        Provides access to the underlying presentation layer publisher instance (see constructor).
-        """
-        return self._publisher
+        # noinspection PyArgumentList
+        self._priority = pyuavcan.transport.Priority(value)
 
     def add_pre_heartbeat_handler(self, handler: typing.Callable[[], None]) -> None:
         """
@@ -178,10 +172,12 @@ class HeartbeatPublisher:
 
     def make_message(self) -> Heartbeat:
         """Constructs a new heartbeat message from the object's state."""
-        return Heartbeat(uptime=int(self.uptime),  # must floor
-                         health=self.health,
-                         mode=self.mode,
-                         vendor_specific_status_code=self.vendor_specific_status_code)
+        return Heartbeat(
+            uptime=int(self.uptime),  # must floor
+            health=uavcan.node.Health_1_0(self.health),
+            mode=uavcan.node.Mode_1_0(self.mode),
+            vendor_specific_status_code=self.vendor_specific_status_code,
+        )
 
     def close(self) -> None:
         """
@@ -190,47 +186,52 @@ class HeartbeatPublisher:
         """
         if self._maybe_task:
             self._subscriber.close()
-            self._publisher.close()
             self._maybe_task.cancel()
             self._maybe_task = None
 
     async def _task_function(self) -> None:
         next_heartbeat_at = time.monotonic()
-        while self._maybe_task:
-            try:
-                self._call_pre_heartbeat_handlers()
-                if self._presentation.transport.local_node_id is not None:
-                    if not await self._publisher.publish(self.make_message()):
-                        _logger.warning('%s heartbeat send timed out', self)
-
-                next_heartbeat_at += self._publisher.send_timeout
-                await asyncio.sleep(next_heartbeat_at - time.monotonic())
-            except asyncio.CancelledError:
-                _logger.debug('%s publisher task cancelled', self)
-                break
-            except pyuavcan.transport.ResourceClosedError as ex:
-                _logger.debug('%s transport closed, publisher task will exit: %s', self, ex)
-                break
-            except Exception as ex:
-                _logger.exception('%s publisher task exception: %s', self, ex)
+        pub: typing.Optional[pyuavcan.presentation.Publisher[Heartbeat]] = None
         try:
-            self._publisher.close()
-        except pyuavcan.transport.TransportError:
-            pass
+            while self._maybe_task:
+                try:
+                    pyuavcan.util.broadcast(self._pre_heartbeat_handlers)()
+                    if self._presentation.transport.local_node_id is not None:
+                        if pub is None:
+                            pub = self._presentation.make_publisher_with_fixed_subject_id(Heartbeat)
+                        assert pub is not None
+                        pub.priority = self._priority
+                        if not await pub.publish(self.make_message()):
+                            _logger.error("%s heartbeat send timed out", self)
+                except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError) as ex:
+                    _logger.debug("%s publisher task will exit: %s", self, ex)
+                    break
+                except Exception as ex:  # pragma: no cover
+                    _logger.exception("%s publisher task exception: %s", self, ex)
 
-    def _call_pre_heartbeat_handlers(self) -> None:
-        for fun in self._pre_heartbeat_handlers:
-            try:
-                fun()
-            except Exception as ex:
-                _logger.exception('%s got an unhandled exception from the pre-heartbeat handler: %s', self, ex)
+                next_heartbeat_at += self._period
+                await asyncio.sleep(next_heartbeat_at - time.monotonic())
+        finally:
+            _logger.debug("%s publisher task is stopping", self)
+            if pub is not None:
+                pub.close()
 
     async def _handle_received_heartbeat(self, msg: Heartbeat, metadata: pyuavcan.transport.TransferFrom) -> None:
         local_node_id = self._presentation.transport.local_node_id
         remote_node_id = metadata.source_node_id
         if local_node_id is not None and remote_node_id is not None and local_node_id == remote_node_id:
-            _logger.warning('NODE-ID CONFLICT: There is another node on the network that uses the same node-ID %d. '
-                            'Its latest heartbeat is %s with transfer metadata %s', remote_node_id, msg, metadata)
+            _logger.warning(
+                "NODE-ID CONFLICT: There is another node on the network that uses the same node-ID %d. "
+                "Its latest heartbeat is %s with transfer metadata %s",
+                remote_node_id,
+                msg,
+                metadata,
+            )
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, heartbeat=self.make_message(), publisher=self._publisher)
+        return pyuavcan.util.repr_attributes(
+            self,
+            heartbeat=self.make_message(),
+            priority=self._priority.name,
+            period=self._period,
+        )

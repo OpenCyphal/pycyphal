@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import copy
@@ -12,8 +10,11 @@ import logging
 import dataclasses
 import pyuavcan.util
 import pyuavcan.transport
-from .. import _frame, _identifier
-from . import _base, _transfer_reassembler
+from pyuavcan.transport import Timestamp
+from .._frame import UAVCANFrame
+from .._identifier import CANID, MessageCANID, ServiceCANID
+from ._base import CANSession, SessionFinalizer
+from ._transfer_reassembler import TransferReassemblyErrorID, TransferReassembler
 
 
 _logger = logging.getLogger(__name__)
@@ -21,23 +22,26 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class CANInputSessionStatistics(pyuavcan.transport.SessionStatistics):
-    reception_error_counters: typing.Dict[_transfer_reassembler.TransferReassemblyErrorID, int] = \
-        dataclasses.field(default_factory=lambda: {e: 0 for e in _transfer_reassembler.TransferReassemblyErrorID})
+    reception_error_counters: typing.Dict[TransferReassemblyErrorID, int] = dataclasses.field(
+        default_factory=lambda: {e: 0 for e in TransferReassemblyErrorID}
+    )
 
 
-class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
+class CANInputSession(CANSession, pyuavcan.transport.InputSession):
     DEFAULT_TRANSFER_ID_TIMEOUT = 2
     """
     Per the UAVCAN specification. Units are seconds. Can be overridden after instantiation if needed.
     """
 
-    _QueueItem = typing.Tuple[_identifier.CANID, _frame.TimestampedUAVCANFrame]
+    _QueueItem = typing.Tuple[Timestamp, CANID, UAVCANFrame]
 
-    def __init__(self,
-                 specifier:        pyuavcan.transport.InputSessionSpecifier,
-                 payload_metadata: pyuavcan.transport.PayloadMetadata,
-                 loop:             asyncio.AbstractEventLoop,
-                 finalizer:        _base.SessionFinalizer):
+    def __init__(
+        self,
+        specifier: pyuavcan.transport.InputSessionSpecifier,
+        payload_metadata: pyuavcan.transport.PayloadMetadata,
+        loop: asyncio.AbstractEventLoop,
+        finalizer: SessionFinalizer,
+    ):
         """Use the factory method."""
         self._specifier = specifier
         self._payload_metadata = payload_metadata
@@ -47,25 +51,29 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         self._loop = loop
         self._transfer_id_timeout_ns = int(CANInputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
-        self._receivers = [_transfer_reassembler.TransferReassembler(nid, payload_metadata.max_size_bytes)
-                           for nid in _node_id_range()]
+        self._receivers = [TransferReassembler(nid, payload_metadata.extent_bytes) for nid in _node_id_range()]
 
-        self._statistics = CANInputSessionStatistics()   # We could easily support per-source-node statistics if needed
+        self._statistics = CANInputSessionStatistics()  # We could easily support per-source-node statistics if needed
 
-        super(CANInputSession, self).__init__(finalizer=finalizer)
+        super().__init__(finalizer=finalizer)
 
-    def _push_frame(self, can_id: _identifier.CANID, frame: _frame.TimestampedUAVCANFrame) -> None:
+    def _push_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame) -> None:
         """
         This is a part of the transport-internal API. It's a public method despite the name because Python's
         visibility handling capabilities are limited. I guess we could define a private abstract base to
         handle this but it feels like too much work. Why can't we have protected visibility in Python?
         """
         try:
-            self._queue.put_nowait((can_id, frame))
+            self._queue.put_nowait((timestamp, can_id, frame))
         except asyncio.QueueFull:
             self._statistics.drops += 1
-            _logger.info('Input session %s: input queue overflow; frame %s (CAN ID fields: %s) is dropped',
-                         self, frame, can_id)
+            _logger.info(
+                "%s: Input queue overflow; frame %s (CAN ID fields: %s) received at %s is dropped",
+                self,
+                frame,
+                can_id,
+                timestamp,
+            )
 
     @property
     def frame_queue_capacity(self) -> typing.Optional[int]:
@@ -83,10 +91,10 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
     @frame_queue_capacity.setter
     def frame_queue_capacity(self, value: typing.Optional[int]) -> None:
         if value is not None and not value > 0:
-            raise ValueError(f'Invalid value for queue capacity: {value}')
+            raise ValueError(f"Invalid value for queue capacity: {value}")
 
         old_queue = self._queue
-        self._queue = asyncio.Queue(int(value) if value is not None else 0, loop=self._loop)
+        self._queue = asyncio.Queue(int(value) if value is not None else 0)
         try:
             while True:
                 self._push_frame(*old_queue.get_nowait())
@@ -113,28 +121,30 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
         if value > 0:
             self._transfer_id_timeout_ns = round(value / _NANO)
         else:
-            raise ValueError(f'Invalid value for transfer-ID timeout [second]: {value}')
+            raise ValueError(f"Invalid value for transfer-ID timeout [second]: {value}")
 
-    async def receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
-        out = await self._do_receive_until(monotonic_deadline)
-        assert out is None or self.specifier.remote_node_id is None \
-            or out.source_node_id == self.specifier.remote_node_id, 'Internal input session protocol violation'
+    async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+        out = await self._do_receive(monotonic_deadline)
+        assert (
+            out is None or self.specifier.remote_node_id is None or out.source_node_id == self.specifier.remote_node_id
+        ), "Internal input session protocol violation"
         return out
 
-    def close(self) -> None:
-        super(CANInputSession, self).close()
+    def close(self) -> None:  # pylint: disable=useless-super-delegation
+        super().close()
 
-    async def _do_receive_until(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+    async def _do_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         while True:
             try:
                 # Continue reading past the deadline until the queue is empty or a transfer is received.
                 timeout = monotonic_deadline - self._loop.time()
                 if timeout > 0:
-                    canid, frame = await asyncio.wait_for(self._queue.get(), timeout, loop=self._loop)
+                    timestamp, canid, frame = await asyncio.wait_for(self._queue.get(), timeout)
                 else:
-                    canid, frame = self._queue.get_nowait()
-                assert isinstance(canid, _identifier.CANID)
-                assert isinstance(frame, _frame.TimestampedUAVCANFrame)
+                    timestamp, canid, frame = self._queue.get_nowait()
+                assert isinstance(timestamp, Timestamp)
+                assert isinstance(canid, CANID)
+                assert isinstance(frame, UAVCANFrame)
             except (asyncio.TimeoutError, asyncio.QueueEmpty):
                 # If there are unprocessed messages, allow the caller to read them even if the instance is closed.
                 self._raise_if_closed()
@@ -142,7 +152,7 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
 
             self._statistics.frames += 1
 
-            if isinstance(canid, _identifier.MessageCANID):
+            if isinstance(canid, MessageCANID):
                 assert isinstance(self._specifier.data_specifier, pyuavcan.transport.MessageDataSpecifier)
                 assert self._specifier.data_specifier.subject_id == canid.subject_id
                 source_node_id = canid.source_node_id
@@ -150,44 +160,48 @@ class CANInputSession(_base.CANSession, pyuavcan.transport.InputSession):
                     # Anonymous transfer - no reconstruction needed
                     self._statistics.transfers += 1
                     self._statistics.payload_bytes += len(frame.padded_payload)
-                    out = pyuavcan.transport.TransferFrom(timestamp=frame.timestamp,
-                                                          priority=canid.priority,
-                                                          transfer_id=frame.transfer_id,
-                                                          fragmented_payload=[frame.padded_payload],
-                                                          source_node_id=None)
-                    _logger.debug('%s: Received anonymous transfer: %s; current stats: %s', self, out, self._statistics)
+                    out = pyuavcan.transport.TransferFrom(
+                        timestamp=timestamp,
+                        priority=canid.priority,
+                        transfer_id=frame.transfer_id,
+                        fragmented_payload=[frame.padded_payload],
+                        source_node_id=None,
+                    )
+                    _logger.debug("%s: Received anonymous transfer: %s; current stats: %s", self, out, self._statistics)
                     return out
 
-            elif isinstance(canid, _identifier.ServiceCANID):
+            elif isinstance(canid, ServiceCANID):
                 assert isinstance(self._specifier.data_specifier, pyuavcan.transport.ServiceDataSpecifier)
                 assert self._specifier.data_specifier.service_id == canid.service_id
-                assert (self._specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST) \
-                    == canid.request_not_response
+                assert (
+                    self._specifier.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
+                ) == canid.request_not_response
                 source_node_id = canid.source_node_id
 
             else:
                 assert False
 
             receiver = self._receivers[source_node_id]
-            result = receiver.process_frame(canid.priority, frame, self._transfer_id_timeout_ns)
-            if isinstance(result, _transfer_reassembler.TransferReassemblyErrorID):
+            result = receiver.process_frame(timestamp, canid.priority, frame, self._transfer_id_timeout_ns)
+            if isinstance(result, TransferReassemblyErrorID):
                 self._statistics.errors += 1
                 self._statistics.reception_error_counters[result] += 1
-                _logger.debug('%s: Rejecting CAN frame %s because %s; current stats: %s',
-                              self, frame, result, self._statistics)
+                _logger.debug(
+                    "%s: Rejecting CAN frame %s because %s; current stats: %s", self, frame, result, self._statistics
+                )
             elif isinstance(result, pyuavcan.transport.TransferFrom):
                 self._statistics.transfers += 1
                 self._statistics.payload_bytes += sum(map(len, result.fragmented_payload))
-                _logger.debug('%s: Received transfer: %s; current stats: %s', self, result, self._statistics)
+                _logger.debug("%s: Received transfer: %s; current stats: %s", self, result, self._statistics)
                 return result
             elif result is None:
-                pass        # Nothing to do - expecting more frames
+                pass  # Nothing to do - expecting more frames
             else:
                 assert False
 
 
 def _node_id_range() -> typing.Iterable[int]:
-    return range(_identifier.CANID.NODE_ID_MASK + 1)
+    return range(CANID.NODE_ID_MASK + 1)
 
 
 _NANO = 1e-9

@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 import abc
 import typing
@@ -20,6 +18,7 @@ class RedundantSessionStatistics(pyuavcan.transport.SessionStatistics):
     Aggregate statistics for all inferior sessions in a redundant group.
     This is an atomic immutable sample; it is not updated after construction.
     """
+
     inferiors: typing.List[pyuavcan.transport.SessionStatistics] = dataclasses.field(default_factory=list)
     """
     The ordering is guaranteed to match that of :attr:`RedundantSession.inferiors`.

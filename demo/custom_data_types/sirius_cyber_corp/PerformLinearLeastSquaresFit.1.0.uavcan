@@ -1,0 +1,17 @@
+#
+# This service accepts a dynamic array of 2D coordinates and returns the best-fit linear function coefficients.
+#
+# This service doesn't have a fixed subject-ID.
+#
+
+PointXY.1.0[<64] points
+
+@assert _offset_ % 8 == {0}
+@extent 1024 * 8
+
+---
+
+float64 slope
+float64 y_intercept
+
+@extent 64 * 8

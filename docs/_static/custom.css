@@ -2,31 +2,21 @@
 body {
     color: #000;
 }
-
 .wy-nav-content {
     max-width: unset;
 }
-
 h2 {
     border-bottom: 1px solid #ddd;
     padding-bottom: 0.2em;
 }
-
 p {
     margin-bottom: 16px;
 }
 
-/* Very large screen optimization. */
+/* Desktop optimization. */
 @media (min-width: 1500px) {
-    .wy-nav-content {
-        padding-left:  5em;
-        padding-right: 5em;
-    }
-
-    .rst-content pre.literal-block,
-    .rst-content div[class^="highlight"] pre,
-    .rst-content .linenodiv pre {
-        font-size: inherit !important;
+    .rst-content .toctree-wrapper ul li {
+        margin-left: 48px;
     }
 }
 
@@ -57,15 +47,36 @@ p {
     margin: 0;
 }
 
+.rst-content .section ol li > ol,
+.rst-content .section ol li > ul,
+.rst-content .section ul li > ol,
+.rst-content .section ul li > ul {
+    margin-bottom: 0;
+}
+.rst-content .section ol li > *,
+.rst-content .section ul li > * {
+    margin-top: 0;
+}
+
+.rst-content li.toctree-l1 > a {
+    font-weight: bold;
+}
+
+.rst-content a {
+    color: #2980b9;
+}
+.rst-content a:visited {
+    color: #2980b9;
+}
+
+.rst-content code.literal,
+.rst-content tt.literal {
+    color: #800;
+}
+
 /* This is needed to make transparent images have the same background color.
  * https://stackoverflow.com/questions/19616629/css-inherit-for-unknown-background-color-is-actually-transparent
  */
 div, section, img {
     background-color: inherit;
-}
-
-.thumby-floaty {
-    float: right;
-    width: 33%;
-    padding: 10px;
 }

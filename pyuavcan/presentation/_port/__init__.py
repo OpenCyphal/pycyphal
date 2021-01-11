@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from ._base import Port as Port
 from ._base import Closable as Closable
@@ -11,7 +9,7 @@ from ._base import ServicePort as ServicePort
 from ._base import DEFAULT_PRIORITY as DEFAULT_PRIORITY
 from ._base import DEFAULT_SERVICE_REQUEST_TIMEOUT as DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._base import OutgoingTransferIDCounter as OutgoingTransferIDCounter
-from ._base import TypedSessionFinalizer as TypedSessionFinalizer
+from ._base import PortFinalizer as PortFinalizer
 
 from ._publisher import Publisher as Publisher
 from ._publisher import PublisherImpl as PublisherImpl

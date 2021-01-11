@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 
 def _unittest_transport_primitives() -> None:
@@ -26,10 +24,4 @@ def _unittest_transport_primitives() -> None:
         OutputSessionSpecifier(ServiceDataSpecifier(100, ServiceDataSpecifier.Role.RESPONSE), None)
 
     with raises(ValueError):
-        PayloadMetadata(-1, 0)
-
-    with raises(ValueError):
-        PayloadMetadata(2 ** 64, 0)
-
-    with raises(ValueError):
-        PayloadMetadata(0, -1)
+        PayloadMetadata(-1)

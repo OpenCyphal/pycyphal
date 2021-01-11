@@ -1,8 +1,6 @@
-#
-# Copyright (c) 2019 UAVCAN Development Team
+# Copyright (c) 2019 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-#
+# Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
 import typing
@@ -11,18 +9,18 @@ import asyncio
 import pyuavcan.util
 import pyuavcan.dsdl
 import pyuavcan.transport
-from ._port import OutgoingTransferIDCounter, TypedSessionFinalizer, Closable, Port
+from ._port import OutgoingTransferIDCounter, PortFinalizer, Closable, Port
 from ._port import Publisher, PublisherImpl
 from ._port import Subscriber, SubscriberImpl
 from ._port import Client, ClientImpl
 from ._port import Server
 
 
-MessageClass = typing.TypeVar('MessageClass', bound=pyuavcan.dsdl.CompositeObject)
-ServiceClass = typing.TypeVar('ServiceClass', bound=pyuavcan.dsdl.ServiceObject)
+MessageClass = typing.TypeVar("MessageClass", bound=pyuavcan.dsdl.CompositeObject)
+ServiceClass = typing.TypeVar("ServiceClass", bound=pyuavcan.dsdl.ServiceObject)
 
-FixedPortMessageClass = typing.TypeVar('FixedPortMessageClass', bound=pyuavcan.dsdl.FixedPortCompositeObject)
-FixedPortServiceClass = typing.TypeVar('FixedPortServiceClass', bound=pyuavcan.dsdl.FixedPortServiceObject)
+FixedPortMessageClass = typing.TypeVar("FixedPortMessageClass", bound=pyuavcan.dsdl.FixedPortCompositeObject)
+FixedPortServiceClass = typing.TypeVar("FixedPortServiceClass", bound=pyuavcan.dsdl.FixedPortServiceObject)
 
 
 _logger = logging.getLogger(__name__)
@@ -49,16 +47,19 @@ class Presentation:
         """
         self._transport = transport
         self._closed = False
-        self._output_transfer_id_map: typing.Dict[pyuavcan.transport.OutputSessionSpecifier,
-                                                  OutgoingTransferIDCounter] = {}
+        self._output_transfer_id_map: typing.Dict[
+            pyuavcan.transport.OutputSessionSpecifier, OutgoingTransferIDCounter
+        ] = {}
         # For services, the session is the input session.
-        self._registry: typing.Dict[typing.Tuple[typing.Type[Port[pyuavcan.dsdl.CompositeObject]],
-                                                 pyuavcan.transport.SessionSpecifier],
-                                    Closable] = {}
+        self._registry: typing.Dict[
+            typing.Tuple[typing.Type[Port[pyuavcan.dsdl.CompositeObject]], pyuavcan.transport.SessionSpecifier],
+            Closable,
+        ] = {}
 
     @property
-    def output_transfer_id_map(self) -> typing.Dict[pyuavcan.transport.OutputSessionSpecifier,
-                                                    OutgoingTransferIDCounter]:
+    def output_transfer_id_map(
+        self,
+    ) -> typing.Dict[pyuavcan.transport.OutputSessionSpecifier, OutgoingTransferIDCounter]:
         """
         This property is designed for very short-lived processes like CLI tools. Most applications will not
         benefit from it and should not use it.
@@ -78,7 +79,7 @@ class Presentation:
         property and write it to the predefined storage location atomically. Make sure to shard the location by
         node-ID because nodes that use different node-ID values obviously shall not share their transfer-ID maps.
         Nodes sharing the same node-ID cannot exist on the same transport, but the local system might be running
-        nodes under the same node-ID on different transports concurrently, so this needs to be accounted for.
+        nodes under the same node-ID on independent networks concurrently, so this may need to be accounted for.
         """
         return self._output_transfer_id_map
 
@@ -111,9 +112,10 @@ class Presentation:
         See :class:`Publisher` for further information about publishers.
         """
         if issubclass(dtype, pyuavcan.dsdl.ServiceObject):
-            raise TypeError(f'Not a message type: {dtype}')
+            raise TypeError(f"Not a message type: {dtype}")
 
         self._raise_if_closed()
+        _logger.debug("%s: Constructing new publisher for %r at subject-ID %d", self, dtype, subject_id)
 
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.OutputSessionSpecifier(data_specifier, None)
@@ -121,24 +123,27 @@ class Presentation:
             impl = self._registry[Publisher, session_specifier]
             assert isinstance(impl, PublisherImpl)
         except LookupError:
-            transport_session = self._transport.get_output_session(session_specifier,
-                                                                   self._make_payload_metadata(dtype))
-            transfer_id_counter = self._output_transfer_id_map.setdefault(session_specifier,
-                                                                          OutgoingTransferIDCounter())
-            impl = PublisherImpl(dtype=dtype,
-                                 transport_session=transport_session,
-                                 transfer_id_counter=transfer_id_counter,
-                                 finalizer=self._make_finalizer(Publisher, session_specifier),
-                                 loop=self.loop)
+            transport_session = self._transport.get_output_session(
+                session_specifier, self._make_payload_metadata(dtype)
+            )
+            transfer_id_counter = self._output_transfer_id_map.setdefault(
+                session_specifier, OutgoingTransferIDCounter()
+            )
+            impl = PublisherImpl(
+                dtype=dtype,
+                transport_session=transport_session,
+                transfer_id_counter=transfer_id_counter,
+                finalizer=self._make_finalizer(Publisher, session_specifier),
+                loop=self.loop,
+            )
             self._registry[Publisher, session_specifier] = impl
 
         assert isinstance(impl, PublisherImpl)
         return Publisher(impl, self.loop)
 
-    def make_subscriber(self,
-                        dtype:          typing.Type[MessageClass],
-                        subject_id:     int,
-                        queue_capacity: typing.Optional[int] = None) -> Subscriber[MessageClass]:
+    def make_subscriber(
+        self, dtype: typing.Type[MessageClass], subject_id: int, queue_capacity: typing.Optional[int] = None
+    ) -> Subscriber[MessageClass]:
         """
         Creates a new subscriber instance for the specified subject-ID. All subscribers created for a specific
         subject share the same underlying implementation object which is hidden from the user; the implementation
@@ -156,9 +161,16 @@ class Presentation:
         See :class:`Subscriber` for further information about subscribers.
         """
         if issubclass(dtype, pyuavcan.dsdl.ServiceObject):
-            raise TypeError(f'Not a message type: {dtype}')
+            raise TypeError(f"Not a message type: {dtype}")
 
         self._raise_if_closed()
+        _logger.debug(
+            "%s: Constructing new subscriber for %r at subject-ID %d with queue limit %s",
+            self,
+            dtype,
+            subject_id,
+            queue_capacity,
+        )
 
         data_specifier = pyuavcan.transport.MessageDataSpecifier(subject_id)
         session_specifier = pyuavcan.transport.InputSessionSpecifier(data_specifier, None)
@@ -167,21 +179,20 @@ class Presentation:
             assert isinstance(impl, SubscriberImpl)
         except LookupError:
             transport_session = self._transport.get_input_session(session_specifier, self._make_payload_metadata(dtype))
-            impl = SubscriberImpl(dtype=dtype,
-                                  transport_session=transport_session,
-                                  finalizer=self._make_finalizer(Subscriber, session_specifier),
-                                  loop=self.loop)
+            impl = SubscriberImpl(
+                dtype=dtype,
+                transport_session=transport_session,
+                finalizer=self._make_finalizer(Subscriber, session_specifier),
+                loop=self.loop,
+            )
             self._registry[Subscriber, session_specifier] = impl
 
         assert isinstance(impl, SubscriberImpl)
-        return Subscriber(impl=impl,
-                          loop=self.loop,
-                          queue_capacity=queue_capacity)
+        return Subscriber(impl=impl, loop=self.loop, queue_capacity=queue_capacity)
 
-    def make_client(self,
-                    dtype:          typing.Type[ServiceClass],
-                    service_id:     int,
-                    server_node_id: int) -> Client[ServiceClass]:
+    def make_client(
+        self, dtype: typing.Type[ServiceClass], service_id: int, server_node_id: int
+    ) -> Client[ServiceClass]:
         """
         Creates a new client instance for the specified service-ID and the remote server node-ID.
         The number of such instances can be arbitrary.
@@ -199,38 +210,50 @@ class Presentation:
         See :class:`Client` for further information about clients.
         """
         if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
-            raise TypeError(f'Not a service type: {dtype}')
+            raise TypeError(f"Not a service type: {dtype}")
 
         self._raise_if_closed()
+        _logger.debug(
+            "%s: Constructing new client for %r at service-ID %d with remote server node-ID %s",
+            self,
+            dtype,
+            service_id,
+            server_node_id,
+        )
 
         def transfer_id_modulo_factory() -> int:
             return self._transport.protocol_parameters.transfer_id_modulo
 
         input_session_specifier = pyuavcan.transport.InputSessionSpecifier(
             pyuavcan.transport.ServiceDataSpecifier(service_id, pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE),
-            server_node_id
+            server_node_id,
         )
         output_session_specifier = pyuavcan.transport.OutputSessionSpecifier(
             pyuavcan.transport.ServiceDataSpecifier(service_id, pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST),
-            server_node_id
+            server_node_id,
         )
         try:
             impl = self._registry[Client, input_session_specifier]
             assert isinstance(impl, ClientImpl)
         except LookupError:
-            output_transport_session = self._transport.get_output_session(output_session_specifier,
-                                                                          self._make_payload_metadata(dtype.Request))
-            input_transport_session = self._transport.get_input_session(input_session_specifier,
-                                                                        self._make_payload_metadata(dtype.Response))
-            transfer_id_counter = self._output_transfer_id_map.setdefault(output_session_specifier,
-                                                                          OutgoingTransferIDCounter())
-            impl = ClientImpl(dtype=dtype,
-                              input_transport_session=input_transport_session,
-                              output_transport_session=output_transport_session,
-                              transfer_id_counter=transfer_id_counter,
-                              transfer_id_modulo_factory=transfer_id_modulo_factory,
-                              finalizer=self._make_finalizer(Client, input_session_specifier),
-                              loop=self.loop)
+            output_transport_session = self._transport.get_output_session(
+                output_session_specifier, self._make_payload_metadata(dtype.Request)
+            )
+            input_transport_session = self._transport.get_input_session(
+                input_session_specifier, self._make_payload_metadata(dtype.Response)
+            )
+            transfer_id_counter = self._output_transfer_id_map.setdefault(
+                output_session_specifier, OutgoingTransferIDCounter()
+            )
+            impl = ClientImpl(
+                dtype=dtype,
+                input_transport_session=input_transport_session,
+                output_transport_session=output_transport_session,
+                transfer_id_counter=transfer_id_counter,
+                transfer_id_modulo_factory=transfer_id_modulo_factory,
+                finalizer=self._make_finalizer(Client, input_session_specifier),
+                loop=self.loop,
+            )
             self._registry[Client, input_session_specifier] = impl
 
         assert isinstance(impl, ClientImpl)
@@ -252,32 +275,39 @@ class Presentation:
         See :class:`Server` for further information about servers.
         """
         if not issubclass(dtype, pyuavcan.dsdl.ServiceObject):
-            raise TypeError(f'Not a service type: {dtype}')
+            raise TypeError(f"Not a service type: {dtype}")
 
         self._raise_if_closed()
+        _logger.debug("%s: Providing server for %r at service-ID %d", self, dtype, service_id)
 
         def output_transport_session_factory(client_node_id: int) -> pyuavcan.transport.OutputSession:
-            _logger.info('%r has requested a new output session to client node %s', impl, client_node_id)
-            ds = pyuavcan.transport.ServiceDataSpecifier(service_id,
-                                                         pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE)
-            return self._transport.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, client_node_id),
-                                                      self._make_payload_metadata(dtype.Response))
+            _logger.debug("%s: %r has requested a new output session to client node %s", self, impl, client_node_id)
+            ds = pyuavcan.transport.ServiceDataSpecifier(
+                service_id, pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE
+            )
+            return self._transport.get_output_session(
+                pyuavcan.transport.OutputSessionSpecifier(ds, client_node_id),
+                self._make_payload_metadata(dtype.Response),
+            )
 
         input_session_specifier = pyuavcan.transport.InputSessionSpecifier(
             pyuavcan.transport.ServiceDataSpecifier(service_id, pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST),
-            None
+            None,
         )
         try:
             impl = self._registry[Server, input_session_specifier]
             assert isinstance(impl, Server)
         except LookupError:
-            input_transport_session = self._transport.get_input_session(input_session_specifier,
-                                                                        self._make_payload_metadata(dtype.Request))
-            impl = Server(dtype=dtype,
-                          input_transport_session=input_transport_session,
-                          output_transport_session_factory=output_transport_session_factory,
-                          finalizer=self._make_finalizer(Server, input_session_specifier),
-                          loop=self.loop)
+            input_transport_session = self._transport.get_input_session(
+                input_session_specifier, self._make_payload_metadata(dtype.Request)
+            )
+            impl = Server(
+                dtype=dtype,
+                input_transport_session=input_transport_session,
+                output_transport_session_factory=output_transport_session_factory,
+                finalizer=self._make_finalizer(Server, input_session_specifier),
+                loop=self.loop,
+            )
             self._registry[Server, input_session_specifier] = impl
 
         assert isinstance(impl, Server)
@@ -285,38 +315,38 @@ class Presentation:
 
     # ----------------------------------------  CONVENIENCE FACTORY METHODS  ----------------------------------------
 
-    def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[FixedPortMessageClass]) \
-            -> Publisher[FixedPortMessageClass]:
+    def make_publisher_with_fixed_subject_id(
+        self, dtype: typing.Type[FixedPortMessageClass]
+    ) -> Publisher[FixedPortMessageClass]:
         """
         A wrapper for :meth:`make_publisher` that uses the fixed subject-ID associated with this type.
         Raises a TypeError if the type has no fixed subject-ID.
         """
         return self.make_publisher(dtype=dtype, subject_id=self._get_fixed_port_id(dtype))
 
-    def make_subscriber_with_fixed_subject_id(self,
-                                              dtype:          typing.Type[FixedPortMessageClass],
-                                              queue_capacity: typing.Optional[int] = None) \
-            -> Subscriber[FixedPortMessageClass]:
+    def make_subscriber_with_fixed_subject_id(
+        self, dtype: typing.Type[FixedPortMessageClass], queue_capacity: typing.Optional[int] = None
+    ) -> Subscriber[FixedPortMessageClass]:
         """
         A wrapper for :meth:`make_subscriber` that uses the fixed subject-ID associated with this type.
         Raises a TypeError if the type has no fixed subject-ID.
         """
-        return self.make_subscriber(dtype=dtype,
-                                    subject_id=self._get_fixed_port_id(dtype),
-                                    queue_capacity=queue_capacity)
+        return self.make_subscriber(
+            dtype=dtype, subject_id=self._get_fixed_port_id(dtype), queue_capacity=queue_capacity
+        )
 
-    def make_client_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int) \
-            -> Client[FixedPortServiceClass]:
+    def make_client_with_fixed_service_id(
+        self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int
+    ) -> Client[FixedPortServiceClass]:
         """
         A wrapper for :meth:`make_client` that uses the fixed service-ID associated with this type.
         Raises a TypeError if the type has no fixed service-ID.
         """
-        return self.make_client(dtype=dtype,
-                                service_id=self._get_fixed_port_id(dtype),
-                                server_node_id=server_node_id)
+        return self.make_client(dtype=dtype, service_id=self._get_fixed_port_id(dtype), server_node_id=server_node_id)
 
-    def get_server_with_fixed_service_id(self, dtype: typing.Type[FixedPortServiceClass]) \
-            -> Server[FixedPortServiceClass]:
+    def get_server_with_fixed_service_id(
+        self, dtype: typing.Type[FixedPortServiceClass]
+    ) -> Server[FixedPortServiceClass]:
         """
         A wrapper for :meth:`get_server` that uses the fixed service-ID associated with this type.
         Raises a TypeError if the type has no fixed service-ID.
@@ -334,18 +364,20 @@ class Presentation:
             try:
                 s.close()
             except Exception as ex:
-                _logger.exception('%r.close() could not close session %r: %s', self, s, ex)
+                _logger.exception("%r.close() could not close session %r: %s", self, s, ex)
 
         self._closed = True
         self._transport.close()
 
-    def _make_finalizer(self,
-                        session_type:      typing.Type[Port[pyuavcan.dsdl.CompositeObject]],
-                        session_specifier: pyuavcan.transport.SessionSpecifier) -> TypedSessionFinalizer:
+    def _make_finalizer(
+        self,
+        session_type: typing.Type[Port[pyuavcan.dsdl.CompositeObject]],
+        session_specifier: pyuavcan.transport.SessionSpecifier,
+    ) -> PortFinalizer:
         done = False
 
         def finalizer(transport_sessions: typing.Iterable[pyuavcan.transport.Session]) -> None:
-            # So this is rather messy. Observe that a typed session instance aggregates two distinct resources that
+            # So this is rather messy. Observe that a port instance aggregates two distinct resources that
             # must be allocated and deallocated atomically: the local registry entry in this class and the
             # corresponding transport session instance. I don't want to plaster our session objects with locks and
             # container references, so instead I decided to pass the associated resources into the finalizer, which
@@ -353,26 +385,32 @@ class Presentation:
             # look for a cleaner design. The cleaner design can be retrofitted easily while keeping the API
             # unchanged so this should be easy to fix transparently by bumping only the patch version of the library.
             nonlocal done
-            assert not done, 'Internal protocol violation: double finalization'
+            assert not done, "Internal protocol violation: double finalization"
+            _logger.debug(
+                "%s: Finalizing %s (%s) with transport sessions %s",
+                self,
+                session_specifier,
+                session_type,
+                transport_sessions,
+            )
             done = True
             try:
                 self._registry.pop((session_type, session_specifier))
             except Exception as ex:
-                _logger.exception('Could not remove the session for the specifier %s: %s', session_specifier, ex)
+                _logger.exception("%s could not remove port for %s: %s", self, session_specifier, ex)
 
             for ts in transport_sessions:
                 try:
                     ts.close()
                 except Exception as ex:
-                    _logger.exception('%s could not close the transport session %s: %s', self, ts, ex)
+                    _logger.exception("%s could not finalize (close) %s: %s", self, ts, ex)
 
         return finalizer
 
     @staticmethod
     def _make_payload_metadata(dtype: typing.Type[pyuavcan.dsdl.CompositeObject]) -> pyuavcan.transport.PayloadMetadata:
-        model = pyuavcan.dsdl.get_model(dtype)
-        max_size_bytes = pyuavcan.dsdl.get_max_serialized_representation_size_bytes(dtype)
-        return pyuavcan.transport.PayloadMetadata(data_type_hash=model.data_type_hash, max_size_bytes=max_size_bytes)
+        extent_bytes = pyuavcan.dsdl.get_extent_bytes(dtype)
+        return pyuavcan.transport.PayloadMetadata(extent_bytes=extent_bytes)
 
     def _raise_if_closed(self) -> None:
         if self._closed:
@@ -382,7 +420,7 @@ class Presentation:
     def _get_fixed_port_id(dtype: typing.Type[pyuavcan.dsdl.FixedPortObject]) -> int:
         port_id = pyuavcan.dsdl.get_fixed_port_id(dtype)
         if port_id is None:
-            raise TypeError(f'{dtype} has no fixed port-ID')
+            raise TypeError(f"{dtype} has no fixed port-ID")
         return port_id
 
     def __repr__(self) -> str:
