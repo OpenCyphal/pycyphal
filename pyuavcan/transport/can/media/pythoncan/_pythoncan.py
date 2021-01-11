@@ -22,50 +22,108 @@ _logger = logging.getLogger(__name__)
 
 class PythonCANMedia(Media):
     """
-    A media interface adapter for `python-can <https://github.com/hardbyte/python-can>`_.
+    Media interface adapter for `Python-CAN <https://python-can.readthedocs.io/>`_.
+    It is designed to be usable with all host platforms supported by Python-CAN (GNU/Linux, Windows, macOS).
+    Please refer to the Python-CAN documentation for information about supported CAN hardware and its configuration.
 
-    - Usage example for PCAN-USB channel 1 (bitrate = 500k, mtu = 8, Node-ID = 10)::
+    This media interface supports both Classic CAN and CAN FD. The selection logic is documented below.
 
-        CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',5000000,8),10)
-    - Usage example for PCAN-USB channel 1 (nom.bitrate = 500k, data.bitrate = 2M, mtu = 8, Node-ID = 10)::
-
-        CAN(can.media.pythoncan.PythonCANMedia('pcan:PCAN_USBBUS1',[5000000,2000000],8),10)
-    - Usage example for Kvaser channel 0 (bitrate = 500k, mtu = 8, Node-ID = 10)::
-
-        CAN(can.media.pythoncan.PythonCANMedia('kvaser:0',5000000,8),10)
+    This implementation emulates loopback instead of requesting it from the underlying driver due to the limitations
+    of Python-CAN. Same goes for timestamping.
+    If accurate timestamping is desired, consider using the SocketCAN media driver instead.
     """
 
-    MAXIMAL_TIMEOUT_SEC = 0.001
+    _MAXIMAL_TIMEOUT_SEC = 0.001
 
-    def __init__(self, iface_name: str, bitrate: typing.Union[int, typing.Tuple[int, int]], mtu: int) -> None:
+    def __init__(
+        self,
+        iface_name: str,
+        bitrate: typing.Union[int, typing.Tuple[int, int]],
+        mtu: typing.Optional[int] = None,
+        *,
+        loop: typing.Optional[asyncio.AbstractEventLoop] = None,
+    ) -> None:
         """
-        CAN Classic/FD are possible. CAN FD is used if MTU value > 8 or two bit rates are used (nom and data).
+        :param iface_name: Interface name consisting of Python-CAN interface module name and its channel,
+            separated with a colon. Supported interfaces are documented below.
+            The semantics of the channel name are described in the documentation for Python-CAN.
 
-        :param iface_name: Interface name consisting of interface and channel separated with a colon.
-            E.g., ``kvaser:0``.
+            +--------------+---------------------------------------------------------------------+---------------------+
+            |Interface name| Description                                                         | Example             |
+            +==============+=====================================================================+=====================+
+            |``socketcan`` | :class:`can.interfaces.socketcan.SocketcanBus`                      |``socketcan:vcan0``  |
+            +--------------+---------------------------------------------------------------------+---------------------+
+            |``kvaser``    | :class:`ccan.interfaces.kvaser.canlib.KvaserBus`                    |``kvaser:0``         |
+            +--------------+---------------------------------------------------------------------+---------------------+
+            |``slcan``     | :class:`can.interfaces.slcan.slcanBus`                              |``slcan:COM12``      |
+            |              | The serial port settings are fixed at 115200-8N1.                   |                     |
+            +--------------+---------------------------------------------------------------------+---------------------+
+            |``pcan``      | :class:`can.interfaces.pcan.PcanBus`                                |``pcan:PCAN_USBBUS1``|
+            +--------------+---------------------------------------------------------------------+---------------------+
+            |``virtual``   | https://python-can.readthedocs.io/en/master/interfaces/virtual.html |``virtual:``         |
+            |              | The channel name should be empty.                                   |                     |
+            +--------------+---------------------------------------------------------------------+---------------------+
 
-        :param bitrate: bitrate value in bauds.
-            Single integer for CAN Classic, two values for CAN FD.
+        :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
-        :param mtu: The maximum data field size in bytes.
-            This value must belong to Media.VALID_MTU_SET.
+            - A single integer selects Classic CAN.
+            - A tuple of two selects CAN FD, where the first integer defines the arbitration (nominal) bit rate
+              and the second one defines the data phase bit rate.
+            - If MTU (see below) is given and is greater than 8 bytes, CAN FD is used regardless of the above.
 
+        :param mtu: The maximum CAN data field size in bytes.
+            If provided, this value must belong to :attr:`Media.VALID_MTU_SET`.
+            If not provided, the default is determined as follows:
+
+            - If `bitrate` is a single integer: classic CAN is assumed, MTU defaults to 8 bytes.
+            - If `bitrate` is two integers: CAN FD is assumed, MTU defaults to 64 bytes.
+
+        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+
+        :raises: :class:`InvalidMediaConfigurationError` if the specified media instance
+            could not be constructed, including the case where the underlying library raised a :class:`can.CanError`.
+
+        Use virtual bus with various bit rate and FD configurations:
+
+        >>> media = PythonCANMedia('virtual:', 500_000)
+        >>> media.is_fd, media.mtu
+        (False, 8)
+        >>> media = PythonCANMedia('virtual:', (500_000, 2_000_000))
+        >>> media.is_fd, media.mtu
+        (True, 64)
+        >>> media = PythonCANMedia('virtual:', 1_000_000, 16)
+        >>> media.is_fd, media.mtu
+        (True, 16)
+
+        Use PCAN-USB channel 1 in FD mode with nominal bitrate 500 kbit/s, data bitrate 2 Mbit/s, MTU 64 bytes::
+
+            PythonCANMedia('pcan:PCAN_USBBUS1', (500_000, 2_000_000))
+
+        Use Kvaser channel 0 in classic mode with bitrate 500k::
+
+            PythonCANMedia('kvaser:0', 500_000)
         """
         self._conn_name = str(iface_name).split(":")
         if len(self._conn_name) != 2:
             raise InvalidMediaConfigurationError(
-                "Interface name %r does not match the format 'interface:channel'" % str(iface_name)
+                f"Interface name {iface_name!r} does not match the format 'interface:channel'"
             )
-        if mtu not in self.VALID_MTU_SET:
+
+        single_bitrate = isinstance(bitrate, (int, float))
+        bitrate = (int(bitrate), int(bitrate)) if single_bitrate else (int(bitrate[0]), int(bitrate[1]))
+
+        self._mtu = int(mtu) if mtu is not None else (min(self.VALID_MTU_SET) if single_bitrate else 64)
+        if self._mtu not in self.VALID_MTU_SET:
             raise RuntimeError(f"Wrong MTU value: {mtu}")
-        self._mtu = int(mtu)
-        self._loop = asyncio.get_event_loop()
+
+        self._is_fd = self._mtu > min(self.VALID_MTU_SET) or not single_bitrate
+
+        self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
-        self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
-        bitrate = (int(bitrate), int(bitrate)) if isinstance(bitrate, int) else (int(bitrate[0]), int(bitrate[1]))
-        self._is_fd = self._mtu > min(self.VALID_MTU_SET) or len(set(bitrate)) > 1
+        self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
         if self._is_fd:
             params = _FDInterfaceParameters(
@@ -75,7 +133,10 @@ class PythonCANMedia(Media):
             params = _ClassicInterfaceParameters(
                 interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate[0]
             )
-        self._bus = _CONSTRUCTORS[self._conn_name[0]](params)
+        try:
+            self._bus = _CONSTRUCTORS[self._conn_name[0]](params)
+        except can.CanError as ex:
+            raise InvalidMediaConfigurationError(f"Could not initialize PythonCAN: {ex}") from ex
         super().__init__()
 
     @property
@@ -93,10 +154,17 @@ class PythonCANMedia(Media):
     @property
     def number_of_acceptance_filters(self) -> int:
         """
-        The value is currently fixed at 1 for all backends.
-        TODO: obtain the number of acceptance filters from the driver.
+        The value is currently fixed at 1 for all interfaces.
+        TODO: obtain the number of acceptance filters from Python-CAN.
         """
         return 1
+
+    @property
+    def is_fd(self) -> bool:
+        """
+        Introspection helper. The value is True if the underlying interface operates in CAN FD mode.
+        """
+        return self._is_fd
 
     def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._maybe_thread is None:
@@ -132,17 +200,17 @@ class PythonCANMedia(Media):
                 data=f.frame.data,
                 is_fd=self._is_fd,
             )
-            if f.loopback:
-                loopback.append((Timestamp.now(), f))
             try:
                 await self._loop.run_in_executor(
                     self._background_executor,
                     functools.partial(self._bus.send, message, timeout=monotonic_deadline - self._loop.time()),
                 )
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, can.CanError):  # CanError is also used to report timeouts (weird).
                 break
             else:
                 num_sent += 1
+                if f.loopback:
+                    loopback.append((Timestamp.now(), f))
         if loopback:
             self.loop.call_soon(self._invoke_rx_handler, loopback)
         return num_sent
@@ -193,7 +261,7 @@ class PythonCANMedia(Media):
     def _read_batch(self) -> typing.List[typing.Tuple[Timestamp, Envelope]]:
         batch: typing.List[typing.Tuple[Timestamp, Envelope]] = []
         while not self._closed:
-            msg = self._bus.recv(0.0 if batch else self.MAXIMAL_TIMEOUT_SEC)
+            msg = self._bus.recv(0.0 if batch else self._MAXIMAL_TIMEOUT_SEC)
             if msg is None:
                 break
             timestamp = Timestamp.now()  # TODO: use accurate timestamping
@@ -255,7 +323,6 @@ def _construct_kvaser(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
-        # only default ttyBaudrate is possible (115200)
         return can.ThreadSafeBus(
             interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
         )
