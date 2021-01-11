@@ -93,7 +93,10 @@ class PythonCANMedia(Media):
 
     @property
     def number_of_acceptance_filters(self) -> int:
-        # just a placeholder to avoid error
+        """
+        The value is currently fixed at 1 for all backends.
+        TODO: obtain the number of acceptance filters from the driver.
+        """
         return 1
 
     def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
@@ -110,14 +113,12 @@ class PythonCANMedia(Media):
     def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         if self._closed:
             raise ResourceClosedError(repr(self))
-        filters = [
-            {
-                "can_id": f.identifier,
-                "can_mask": f.mask,
-                "extended": f.format == FrameFormat.EXTENDED,
-            }
-            for f in configuration
-        ]
+        filters = []
+        for f in configuration:
+            d = {"can_id": f.identifier, "can_mask": f.mask}
+            if f.format is not None:  # Per Python-CAN docs, if "extended" is not set, both base/ext will be accepted.
+                d["extended"] = f.format == FrameFormat.EXTENDED
+            filters.append(d)
         _logger.debug("%s: Acceptance filters activated: %s", self, ", ".join(map(str, configuration)))
         self._bus.set_filters(filters)
 
@@ -150,12 +151,18 @@ class PythonCANMedia(Media):
         self._closed = True
         try:
             self._bus.shutdown()
+            if self._maybe_thread is not None:
+                self._maybe_thread.join()
         except Exception as ex:
-            _logger.exception("Bus closing error: %s", ex)
+            _logger.exception("%s: Bus closing error: %s", self, ex)
+        self._maybe_thread = None
 
     @staticmethod
     def list_available_interface_names() -> typing.Iterable[str]:
-        return []  # No support is possible now
+        """
+        Returns an empty list. TODO: provide minimally functional implementation.
+        """
+        return []
 
     def _thread_function(self, handler: Media.ReceivedFramesHandler) -> None:
         def handler_wrapper(frs: typing.List[typing.Tuple[Timestamp, Envelope]]) -> None:
@@ -199,8 +206,8 @@ class PythonCANMedia(Media):
     def _read_frame(self) -> typing.Optional[typing.Tuple[Timestamp, Envelope]]:
         msg = self._bus.recv(self.MAXIMAL_TIMEOUT_SEC)
         if msg is not None:
-            timestamp = Timestamp.now()
-            loopback = False  # no possibility to get real loopback yet
+            timestamp = Timestamp.now()  # TODO: use accurate timestamping
+            loopback = False  # TODO: no possibility to get real loopback yet
             frame = self._parse_native_frame(msg)
             if frame is not None:
                 return timestamp, Envelope(frame, loopback=loopback)
@@ -209,7 +216,7 @@ class PythonCANMedia(Media):
     @staticmethod
     def _parse_native_frame(msg: can.Message) -> typing.Optional[DataFrame]:
         if msg.is_error_frame:  # error frame, ignore silently
-            _logger.debug("Frame dropped: id_raw=%08x", msg.arbitration_id)
+            _logger.debug("Error frame dropped: id_raw=%08x", msg.arbitration_id)
             return None
         frame_format = FrameFormat.EXTENDED if msg.is_extended_id else FrameFormat.BASE
         data = msg.data
