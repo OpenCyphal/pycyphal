@@ -62,6 +62,7 @@ class PythonCANMedia(Media):
         self._loop = asyncio.get_event_loop()
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
+        self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
         bitrate = (int(bitrate), int(bitrate)) if isinstance(bitrate, int) else (int(bitrate[0]), int(bitrate[1]))
         self._is_fd = self._mtu > min(self.VALID_MTU_SET) or len(set(bitrate)) > 1
@@ -75,8 +76,6 @@ class PythonCANMedia(Media):
                 interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate[0]
             )
         self._bus = _CONSTRUCTORS[self._conn_name[0]](params)
-        self._loopback_lock = threading.Lock()
-        self._loop_frames: typing.List[DataFrame] = []
         super().__init__()
 
     @property
@@ -101,9 +100,8 @@ class PythonCANMedia(Media):
 
     def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._maybe_thread is None:
-            self._maybe_thread = threading.Thread(
-                target=self._thread_function, name=str(self), args=(handler,), daemon=True
-            )
+            self._rx_handler = handler
+            self._maybe_thread = threading.Thread(target=self._thread_function, name=str(self), daemon=True)
             self._maybe_thread.start()
             if no_automatic_retransmission:
                 _logger.info("%s non-automatic retransmission is not supported", self)
@@ -124,6 +122,7 @@ class PythonCANMedia(Media):
 
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         num_sent = 0
+        loopback: typing.List[typing.Tuple[Timestamp, Envelope]] = []
         for f in frames:
             if self._closed:
                 raise ResourceClosedError(repr(self))
@@ -134,8 +133,7 @@ class PythonCANMedia(Media):
                 is_fd=self._is_fd,
             )
             if f.loopback:
-                with self._loopback_lock:
-                    self._loop_frames.append(f.frame)
+                loopback.append((Timestamp.now(), f))
             try:
                 await self._loop.run_in_executor(
                     self._background_executor,
@@ -145,6 +143,8 @@ class PythonCANMedia(Media):
                 break
             else:
                 num_sent += 1
+        if loopback:
+            self.loop.call_soon(self._invoke_rx_handler, loopback)
         return num_sent
 
     def close(self) -> None:
@@ -164,33 +164,20 @@ class PythonCANMedia(Media):
         """
         return []
 
-    def _thread_function(self, handler: Media.ReceivedFramesHandler) -> None:
-        def handler_wrapper(frs: typing.List[typing.Tuple[Timestamp, Envelope]]) -> None:
-            try:
-                if not self._closed:  # Don't call after closure to prevent race conditions and use-after-close.
-                    handler(frs)
-            except Exception as exc:
-                _logger.exception("%s unhandled exception in the receive handler: %s; lost frames: %s", self, exc, frs)
+    def _invoke_rx_handler(self, frs: typing.List[typing.Tuple[Timestamp, Envelope]]) -> None:
+        try:
+            # Don't call after closure to prevent race conditions and use-after-close.
+            if not self._closed and self._rx_handler is not None:
+                self._rx_handler(frs)
+        except Exception as exc:
+            _logger.exception("%s unhandled exception in the receive handler: %s; lost frames: %s", self, exc, frs)
 
+    def _thread_function(self) -> None:
         while not self._closed:
             try:
-                frames: typing.List[typing.Tuple[Timestamp, Envelope]] = []
-                item = self._read_frame()
-                if item is not None:
-                    frames.append(item)
-                if len(self._loop_frames) > 0:
-                    loop_ts = Timestamp.now()
-                    with self._loopback_lock:
-                        for frame in self._loop_frames:
-                            frames.append(
-                                (
-                                    loop_ts,
-                                    Envelope(DataFrame(frame.format, frame.identifier, frame.data), loopback=True),
-                                )
-                            )
-                        self._loop_frames.clear()
-                if len(frames) > 0:
-                    self._loop.call_soon_threadsafe(handler_wrapper, frames)
+                batch = self._read_batch()
+                if batch:
+                    self._loop.call_soon_threadsafe(self._invoke_rx_handler, batch)
             except OSError as ex:
                 if not self._closed:
                     _logger.exception("%s thread input/output error; stopping: %s", self, ex)
@@ -203,15 +190,18 @@ class PythonCANMedia(Media):
         self._closed = True
         _logger.info("%s thread is about to exit", self)
 
-    def _read_frame(self) -> typing.Optional[typing.Tuple[Timestamp, Envelope]]:
-        msg = self._bus.recv(self.MAXIMAL_TIMEOUT_SEC)
-        if msg is not None:
+    def _read_batch(self) -> typing.List[typing.Tuple[Timestamp, Envelope]]:
+        batch: typing.List[typing.Tuple[Timestamp, Envelope]] = []
+        while not self._closed:
+            msg = self._bus.recv(0.0 if batch else self.MAXIMAL_TIMEOUT_SEC)
+            if msg is None:
+                break
             timestamp = Timestamp.now()  # TODO: use accurate timestamping
             loopback = False  # TODO: no possibility to get real loopback yet
             frame = self._parse_native_frame(msg)
             if frame is not None:
-                return timestamp, Envelope(frame, loopback=loopback)
-        return None
+                batch.append((timestamp, Envelope(frame, loopback)))
+        return batch
 
     @staticmethod
     def _parse_native_frame(msg: can.Message) -> typing.Optional[DataFrame]:
