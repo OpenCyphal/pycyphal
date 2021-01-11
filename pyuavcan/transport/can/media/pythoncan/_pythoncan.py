@@ -24,13 +24,27 @@ class PythonCANMedia(Media):
     """
     Media interface adapter for `Python-CAN <https://python-can.readthedocs.io/>`_.
     It is designed to be usable with all host platforms supported by Python-CAN (GNU/Linux, Windows, macOS).
-    Please refer to the Python-CAN documentation for information about supported CAN hardware and its configuration.
+    Please refer to the Python-CAN documentation for information about supported CAN hardware, its configuration,
+    and how to install the dependencies properly.
 
     This media interface supports both Classic CAN and CAN FD. The selection logic is documented below.
 
     This implementation emulates loopback instead of requesting it from the underlying driver due to the limitations
     of Python-CAN. Same goes for timestamping.
     If accurate timestamping is desired, consider using the SocketCAN media driver instead.
+
+    Here is a basic usage example based on the Yakut CLI tool.
+    Suppose that there are two interconnected CAN bus adapters connected to the host computer:
+    one SLCAN-based, the other is PCAN USB.
+    Launch Yakut to listen for messages using the SLCAN adapter::
+
+        export YAKUT_TRANSPORT='CAN(can.media.pythoncan.PythonCANMedia("slcan:/dev/ttyACM0", 1_000_000), None)'
+        yakut sub 33.uavcan.si.unit.voltage.Scalar.1.0
+
+    While the subscriber is running, publish a message to this subject::
+
+        export YAKUT_TRANSPORT='CAN(can.media.pythoncan.PythonCANMedia("pcan:PCAN_USBBUS1", 1_000_000), 42)'
+        yakut pub 33.uavcan/si/unit/voltage/Scalar_1_0 '{volt: 12}'
     """
 
     _MAXIMAL_TIMEOUT_SEC = 0.1
@@ -48,23 +62,26 @@ class PythonCANMedia(Media):
             separated with a colon. Supported interfaces are documented below.
             The semantics of the channel name are described in the documentation for Python-CAN.
 
-            +--------------+---------------------------------------------------------------------+---------------------+
-            |Interface name| Description                                                         | Example             |
-            +==============+=====================================================================+=====================+
-            |``socketcan`` | :class:`can.interfaces.socketcan.SocketcanBus`                      |``socketcan:vcan0``  |
-            |              | The bit rate values are only used to select Classic/FD mode. It is  |                     |
-            |              | not possible to configure the actual CAN bit rate using this API.   |                     |
-            +--------------+---------------------------------------------------------------------+---------------------+
-            |``kvaser``    | :class:`can.interfaces.kvaser.canlib.KvaserBus`                     |``kvaser:0``         |
-            +--------------+---------------------------------------------------------------------+---------------------+
-            |``slcan``     | :class:`can.interfaces.slcan.slcanBus`                              |``slcan:COM12``      |
-            |              | The serial port settings are fixed at 115200-8N1. Classic mode only.|                     |
-            +--------------+---------------------------------------------------------------------+---------------------+
-            |``pcan``      | :class:`can.interfaces.pcan.PcanBus`                                |``pcan:PCAN_USBBUS1``|
-            +--------------+---------------------------------------------------------------------+---------------------+
-            |``virtual``   | https://python-can.readthedocs.io/en/master/interfaces/virtual.html |``virtual:``         |
-            |              | The channel name should be empty.                                   |                     |
-            +--------------+---------------------------------------------------------------------+---------------------+
+            - Interface ``socketcan`` is implemented by :class:`can.interfaces.socketcan.SocketcanBus`.
+              The bit rate values are only used to select Classic/FD mode.
+              It is not possible to configure the actual CAN bit rate using this API.
+              Example: ``socketcan:vcan0``
+
+            - Interface ``kvaser`` is implemented by :class:`can.interfaces.kvaser.canlib.KvaserBus`.
+              Example: ``kvaser:0``
+
+            - Interface ``slcan`` is implemented by :class:`can.interfaces.slcan.slcanBus`.
+              Only Classic CAN is supported.
+              The serial port settings are fixed at 115200-8N1.
+              Example: ``slcan:COM12``
+
+            - Interface ``pcan`` is implemented by :class:`can.interfaces.pcan.PcanBus`.
+              Ensure that `PCAN-Basic <https://www.peak-system.com/PCAN-Basic.239.0.html>`_ is installed.
+              Example: ``pcan:PCAN_USBBUS1``
+
+            - Interface ``virtual`` is described in https://python-can.readthedocs.io/en/master/interfaces/virtual.html.
+              The channel name should be empty.
+              Example: ``virtual:``
 
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
