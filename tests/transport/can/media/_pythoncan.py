@@ -2,6 +2,8 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Alex Kiselev <a.kiselev@volz-servos.com>, Pavel Kirienko <pavel@uavcan.org>
 
+# pylint: disable=protected-access
+
 import typing
 import asyncio
 import pytest
@@ -63,7 +65,7 @@ async def _unittest_can_pythoncan() -> None:
     print("rx_a:", rx_a)
     # Three received from another part
     assert len(rx_a) == 3
-    for ts, f in rx_a:
+    for ts, _f in rx_a:
         assert ts_begin.monotonic_ns <= ts.monotonic_ns <= ts_end.monotonic_ns
         assert ts_begin.system_ns <= ts.system_ns <= ts_end.system_ns
 
