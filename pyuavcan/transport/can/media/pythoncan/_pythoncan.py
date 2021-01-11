@@ -2,6 +2,7 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Alex Kiselev <a.kiselev@volz-servos.com>, Pavel Kirienko <pavel@uavcan.org>
 
+from __future__ import annotations
 import time
 import typing
 import asyncio
@@ -17,119 +18,6 @@ from pyuavcan.transport.can.media import Media, FilterConfiguration, Envelope, F
 
 
 _logger = logging.getLogger(__name__)
-
-
-@dataclasses.dataclass(frozen=True)
-class _InterfaceParameters:
-    interface_name: str
-    channel_name: str
-
-
-@dataclasses.dataclass(frozen=True)
-class _ClassicInterfaceParameters(_InterfaceParameters):
-    bitrate: int
-
-
-@dataclasses.dataclass(frozen=True)
-class _FDInterfaceParameters(_InterfaceParameters):
-    bitrate: typing.Tuple[int, int]
-
-
-def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=False)
-    if isinstance(parameters, _FDInterfaceParameters):
-        return can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=True)
-    raise TypeError(f"Invalid parameters: {parameters}")
-
-
-def _construct_kvaser(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate, fd=False
-        )
-    if isinstance(parameters, _FDInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name,
-            channel=parameters.channel_name,
-            bitrate=parameters.bitrate[0],
-            fd=True,
-            data_bitrate=parameters.bitrate[1],
-        )
-    raise TypeError(f"Invalid parameters: {parameters}")
-
-
-def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    if isinstance(parameters, _ClassicInterfaceParameters):
-        # only default ttyBaudrate is possible (115200)
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
-        )
-    if isinstance(parameters, _FDInterfaceParameters):
-        raise TypeError(f"Interface does not support CAN FD: {parameters.interface_name}")
-    raise TypeError(f"Invalid parameters: {parameters}")
-
-
-def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
-        )
-    if isinstance(parameters, _FDInterfaceParameters):
-        # These magic numbers come from the settings of PCAN adapter.
-        # They don't allow any direct baudrate settings, you have to set all lengths and value of the main frequency.
-        # Bit lengths below are very universal and can be applied for almost every popular baudrate.
-        # There is probably a better solution here, but it needs significantly more time to implement it.
-        f_clock = 40000000
-        nom_tseg1, nom_tseg2, nom_sjw = 3, 1, 1
-        data_tseg1, data_tseg2, data_sjw = 3, 1, 1
-
-        nom_br = int(f_clock / parameters.bitrate[0] / (nom_tseg1 + nom_tseg2 + nom_sjw))
-        data_br = int(f_clock / parameters.bitrate[1] / (data_tseg1 + data_tseg2 + data_sjw))
-        # TODO: validate the result and see if it is within an acceptable range
-
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name,
-            channel=parameters.channel_name,
-            f_clock=f_clock,
-            nom_brp=nom_br,
-            data_brp=data_br,
-            nom_tseg1=nom_tseg1,
-            nom_tseg2=nom_tseg2,
-            nom_sjw=nom_sjw,
-            data_tseg1=data_tseg1,
-            data_tseg2=data_tseg2,
-            data_sjw=data_sjw,
-            fd=True,
-        )
-
-    raise TypeError(f"Invalid parameters: {parameters}")
-
-
-def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(interface=parameters.interface_name, bitrate=parameters.bitrate)
-    if isinstance(parameters, _FDInterfaceParameters):
-        return can.ThreadSafeBus(interface=parameters.interface_name)
-    raise TypeError(f"Invalid parameters: {parameters}")
-
-
-def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    raise TypeError(f"Interface not supported yet: {parameters.interface_name}")
-
-
-_CONSTRUCTORS: typing.DefaultDict[
-    str, typing.Callable[[_InterfaceParameters], can.ThreadSafeBus]
-] = collections.defaultdict(
-    lambda: _construct_any,
-    {
-        "socketcan": _construct_socketcan,
-        "kvaser": _construct_kvaser,
-        "slcan": _construct_slcan,
-        "pcan": _construct_pcan,
-        "virtual": _construct_virtual,
-    },
-)
 
 
 class PythonCANMedia(Media):
@@ -326,3 +214,116 @@ class PythonCANMedia(Media):
         frame_format = FrameFormat.EXTENDED if msg.is_extended_id else FrameFormat.BASE
         data = msg.data
         return DataFrame(frame_format, msg.arbitration_id, data)
+
+
+@dataclasses.dataclass(frozen=True)
+class _InterfaceParameters:
+    interface_name: str
+    channel_name: str
+
+
+@dataclasses.dataclass(frozen=True)
+class _ClassicInterfaceParameters(_InterfaceParameters):
+    bitrate: int
+
+
+@dataclasses.dataclass(frozen=True)
+class _FDInterfaceParameters(_InterfaceParameters):
+    bitrate: typing.Tuple[int, int]
+
+
+def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=False)
+    if isinstance(parameters, _FDInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=True)
+    raise TypeError(f"Invalid parameters: {parameters}")
+
+
+def _construct_kvaser(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate, fd=False
+        )
+    if isinstance(parameters, _FDInterfaceParameters):
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name,
+            channel=parameters.channel_name,
+            bitrate=parameters.bitrate[0],
+            fd=True,
+            data_bitrate=parameters.bitrate[1],
+        )
+    raise TypeError(f"Invalid parameters: {parameters}")
+
+
+def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        # only default ttyBaudrate is possible (115200)
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
+        )
+    if isinstance(parameters, _FDInterfaceParameters):
+        raise TypeError(f"Interface does not support CAN FD: {parameters.interface_name}")
+    raise TypeError(f"Invalid parameters: {parameters}")
+
+
+def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
+        )
+    if isinstance(parameters, _FDInterfaceParameters):
+        # These magic numbers come from the settings of PCAN adapter.
+        # They don't allow any direct baudrate settings, you have to set all lengths and value of the main frequency.
+        # Bit lengths below are very universal and can be applied for almost every popular baudrate.
+        # There is probably a better solution here, but it needs significantly more time to implement it.
+        f_clock = 40000000
+        nom_tseg1, nom_tseg2, nom_sjw = 3, 1, 1
+        data_tseg1, data_tseg2, data_sjw = 3, 1, 1
+
+        nom_br = int(f_clock / parameters.bitrate[0] / (nom_tseg1 + nom_tseg2 + nom_sjw))
+        data_br = int(f_clock / parameters.bitrate[1] / (data_tseg1 + data_tseg2 + data_sjw))
+        # TODO: validate the result and see if it is within an acceptable range
+
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name,
+            channel=parameters.channel_name,
+            f_clock=f_clock,
+            nom_brp=nom_br,
+            data_brp=data_br,
+            nom_tseg1=nom_tseg1,
+            nom_tseg2=nom_tseg2,
+            nom_sjw=nom_sjw,
+            data_tseg1=data_tseg1,
+            data_tseg2=data_tseg2,
+            data_sjw=data_sjw,
+            fd=True,
+        )
+
+    raise TypeError(f"Invalid parameters: {parameters}")
+
+
+def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name, bitrate=parameters.bitrate)
+    if isinstance(parameters, _FDInterfaceParameters):
+        return can.ThreadSafeBus(interface=parameters.interface_name)
+    raise TypeError(f"Invalid parameters: {parameters}")
+
+
+def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    raise TypeError(f"Interface not supported yet: {parameters.interface_name}")
+
+
+_CONSTRUCTORS: typing.DefaultDict[
+    str, typing.Callable[[_InterfaceParameters], can.ThreadSafeBus]
+] = collections.defaultdict(
+    lambda: _construct_any,
+    {
+        "socketcan": _construct_socketcan,
+        "kvaser": _construct_kvaser,
+        "slcan": _construct_slcan,
+        "pcan": _construct_pcan,
+        "virtual": _construct_virtual,
+    },
+)
