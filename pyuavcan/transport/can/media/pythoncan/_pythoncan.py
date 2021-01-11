@@ -33,7 +33,7 @@ class PythonCANMedia(Media):
     If accurate timestamping is desired, consider using the SocketCAN media driver instead.
     """
 
-    _MAXIMAL_TIMEOUT_SEC = 0.001
+    _MAXIMAL_TIMEOUT_SEC = 0.1
 
     def __init__(
         self,
@@ -52,11 +52,13 @@ class PythonCANMedia(Media):
             |Interface name| Description                                                         | Example             |
             +==============+=====================================================================+=====================+
             |``socketcan`` | :class:`can.interfaces.socketcan.SocketcanBus`                      |``socketcan:vcan0``  |
+            |              | The bit rate values are only used to select Classic/FD mode. It is  |                     |
+            |              | not possible to configure the actual CAN bit rate using this API.   |                     |
             +--------------+---------------------------------------------------------------------+---------------------+
-            |``kvaser``    | :class:`ccan.interfaces.kvaser.canlib.KvaserBus`                    |``kvaser:0``         |
+            |``kvaser``    | :class:`can.interfaces.kvaser.canlib.KvaserBus`                     |``kvaser:0``         |
             +--------------+---------------------------------------------------------------------+---------------------+
             |``slcan``     | :class:`can.interfaces.slcan.slcanBus`                              |``slcan:COM12``      |
-            |              | The serial port settings are fixed at 115200-8N1.                   |                     |
+            |              | The serial port settings are fixed at 115200-8N1. Classic mode only.|                     |
             +--------------+---------------------------------------------------------------------+---------------------+
             |``pcan``      | :class:`can.interfaces.pcan.PcanBus`                                |``pcan:PCAN_USBBUS1``|
             +--------------+---------------------------------------------------------------------+---------------------+
@@ -81,7 +83,8 @@ class PythonCANMedia(Media):
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
 
         :raises: :class:`InvalidMediaConfigurationError` if the specified media instance
-            could not be constructed, including the case where the underlying library raised a :class:`can.CanError`.
+            could not be constructed, the interface name is unknown,
+            or if the underlying library raised a :class:`can.CanError`.
 
         Use virtual bus with various bit rate and FD configurations:
 
@@ -110,11 +113,11 @@ class PythonCANMedia(Media):
             )
 
         single_bitrate = isinstance(bitrate, (int, float))
-        bitrate = (int(bitrate), int(bitrate)) if single_bitrate else (int(bitrate[0]), int(bitrate[1]))
+        bitrate = (int(bitrate), int(bitrate)) if single_bitrate else (int(bitrate[0]), int(bitrate[1]))  # type: ignore
 
         self._mtu = int(mtu) if mtu is not None else (min(self.VALID_MTU_SET) if single_bitrate else 64)
         if self._mtu not in self.VALID_MTU_SET:
-            raise RuntimeError(f"Wrong MTU value: {mtu}")
+            raise InvalidMediaConfigurationError(f"Wrong MTU value: {mtu}")
 
         self._is_fd = self._mtu > min(self.VALID_MTU_SET) or not single_bitrate
 
@@ -302,13 +305,16 @@ def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         return can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=False)
     if isinstance(parameters, _FDInterfaceParameters):
         return can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=True)
-    raise TypeError(f"Invalid parameters: {parameters}")
+    assert False, "Internal error"
 
 
 def _construct_kvaser(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return can.ThreadSafeBus(
-            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate, fd=False
+            interface=parameters.interface_name,
+            channel=parameters.channel_name,
+            bitrate=parameters.bitrate,
+            fd=False,
         )
     if isinstance(parameters, _FDInterfaceParameters):
         return can.ThreadSafeBus(
@@ -318,23 +324,27 @@ def _construct_kvaser(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
             fd=True,
             data_bitrate=parameters.bitrate[1],
         )
-    raise TypeError(f"Invalid parameters: {parameters}")
+    assert False, "Internal error"
 
 
 def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return can.ThreadSafeBus(
-            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
+            interface=parameters.interface_name,
+            channel=parameters.channel_name,
+            bitrate=parameters.bitrate,
         )
     if isinstance(parameters, _FDInterfaceParameters):
-        raise TypeError(f"Interface does not support CAN FD: {parameters.interface_name}")
-    raise TypeError(f"Invalid parameters: {parameters}")
+        raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
+    assert False, "Internal error"
 
 
 def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return can.ThreadSafeBus(
-            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
+            interface=parameters.interface_name,
+            channel=parameters.channel_name,
+            bitrate=parameters.bitrate,
         )
     if isinstance(parameters, _FDInterfaceParameters):
         # These magic numbers come from the settings of PCAN adapter.
@@ -364,7 +374,7 @@ def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
             fd=True,
         )
 
-    raise TypeError(f"Invalid parameters: {parameters}")
+    assert False, "Internal error"
 
 
 def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
@@ -372,11 +382,11 @@ def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         return can.ThreadSafeBus(interface=parameters.interface_name, bitrate=parameters.bitrate)
     if isinstance(parameters, _FDInterfaceParameters):
         return can.ThreadSafeBus(interface=parameters.interface_name)
-    raise TypeError(f"Invalid parameters: {parameters}")
+    assert False, "Internal error"
 
 
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    raise TypeError(f"Interface not supported yet: {parameters.interface_name}")
+    raise InvalidMediaConfigurationError(f"Interface not supported yet: {parameters.interface_name}")
 
 
 _CONSTRUCTORS: typing.DefaultDict[
