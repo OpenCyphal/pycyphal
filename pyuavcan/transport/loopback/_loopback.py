@@ -39,6 +39,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
         self._output_sessions: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, LoopbackOutputSession] = {}
         self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
+        self._spoof_result: typing.Union[bool, Exception] = True
         # Unlimited protocol capabilities by default.
         self._protocol_parameters = pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=2 ** 64,
@@ -64,6 +65,18 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     @property
     def local_node_id(self) -> typing.Optional[int]:
         return self._local_node_id
+
+    @property
+    def spoof_result(self) -> typing.Union[bool, Exception]:
+        """
+        Test rigging. If True, :meth:`spoof` will always succeed (this is the default).
+        If False, it will always time out. If :class:`Exception`, it will be raised.
+        """
+        return self._spoof_result
+
+    @spoof_result.setter
+    def spoof_result(self, value: typing.Union[bool, Exception]) -> None:
+        self._spoof_result = value
 
     def close(self) -> None:
         sessions = (*self._input_sessions.values(), *self._output_sessions.values())
@@ -171,7 +184,18 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         return LoopbackTracer()
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
-        raise NotImplementedError
+        """
+        Spoofed transfers can be observed using :meth:`begin_capture`. Also see :attr:`spoof_result`.
+        """
+        if isinstance(self._spoof_result, Exception):
+            raise self._spoof_result
+        if self._spoof_result:
+            pyuavcan.util.broadcast(self._capture_handlers)(
+                LoopbackCapture(pyuavcan.transport.Timestamp.now(), transfer)
+            )
+        else:
+            await asyncio.sleep(monotonic_deadline - asyncio.get_running_loop().time())
+        return self._spoof_result
 
     @property
     def capture_handlers(self) -> typing.Sequence[pyuavcan.transport.CaptureCallback]:

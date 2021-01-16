@@ -290,3 +290,35 @@ async def _unittest_loopback_tracer() -> None:
 
     # Unknown capture types should yield None.
     assert tr.update(pyuavcan.transport.Capture(ts)) is None
+
+
+@pytest.mark.asyncio  # type: ignore
+async def _unittest_loopback_spoofing() -> None:
+    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
+    from pyuavcan.transport import MessageDataSpecifier
+    from pyuavcan.transport.loopback import LoopbackCapture
+
+    tr = pyuavcan.transport.loopback.LoopbackTransport(None)
+
+    mon_events: typing.List[pyuavcan.transport.Capture] = []
+    tr.begin_capture(mon_events.append)
+
+    transfer = AlienTransfer(
+        AlienTransferMetadata(Priority.IMMEDIATE, 54321, AlienSessionSpecifier(1234, None, MessageDataSpecifier(7777))),
+        fragmented_payload=[],
+    )
+    assert tr.spoof_result  # Success is default.
+    assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_running_loop().time())
+    cap = mon_events.pop()
+    assert isinstance(cap, LoopbackCapture)
+    assert cap.transfer == transfer
+
+    tr.spoof_result = False
+    assert not await tr.spoof(transfer, monotonic_deadline=asyncio.get_running_loop().time() + 0.5)
+    assert not mon_events
+
+    tr.spoof_result = RuntimeError("Intended error")
+    assert isinstance(tr.spoof_result, RuntimeError)
+    with pytest.raises(RuntimeError, match="Intended error"):
+        await tr.spoof(transfer, monotonic_deadline=asyncio.get_running_loop().time() + 0.5)
+    assert not mon_events
