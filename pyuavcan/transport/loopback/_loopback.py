@@ -84,6 +84,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         self._output_sessions.clear()
         for s in sessions:
             s.close()
+        self.spoof_result = pyuavcan.transport.ResourceClosedError(f"The transport is closed: {self}")
 
     def get_input_session(
         self, specifier: pyuavcan.transport.InputSessionSpecifier, payload_metadata: pyuavcan.transport.PayloadMetadata
