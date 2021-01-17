@@ -1040,9 +1040,9 @@ async def _unittest_can_capture_trace() -> None:
     # Validate the captures.
     assert captures == captures_other
     assert len(captures) == 2  # One sent, one received.
-    assert captures[0].direction.name == "TX"
+    assert captures[0].own
     assert b"first" in captures[0].frame.data
-    assert captures[1].direction.name == "RX"
+    assert not captures[1].own
     assert b"second" in captures[1].frame.data
 
     # Check the loopback stats.

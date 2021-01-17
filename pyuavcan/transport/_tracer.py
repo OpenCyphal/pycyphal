@@ -20,21 +20,6 @@ class Capture:
     instance check.
     """
 
-    class Direction(enum.Enum):
-        """
-        Differentiates the initiator of the captured event: either the local node or an external entity.
-        """
-
-        RX = enum.auto()
-        """
-        Event is triggered by an external entity. When sniffing on a bus, all frames are marked as RX fragments.
-        """
-        TX = enum.auto()
-        """
-        This is rather uncommon, it represents the case where the capturing node is also engaged in network exchange.
-        Typically, a capturing unit would remain silent, so all captures would be RX captures.
-        """
-
     timestamp: pyuavcan.transport.Timestamp
 
 

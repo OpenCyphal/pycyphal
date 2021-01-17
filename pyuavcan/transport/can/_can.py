@@ -323,8 +323,7 @@ class CANTransport(pyuavcan.transport.Transport):
         if self._capture_handlers:  # When capture is enabled, we force loopback for all outgoing frames.
             broadcast = pyuavcan.util.broadcast(self._capture_handlers)
             for timestamp, envelope in frames:
-                direction = CANCapture.Direction.TX if envelope.loopback else CANCapture.Direction.RX
-                broadcast(CANCapture(timestamp, direction, envelope.frame))
+                broadcast(CANCapture(timestamp, envelope.frame, own=envelope.loopback))
 
     def _handle_any_frame(self, timestamp: Timestamp, can_id: CANID, frame: UAVCANFrame, loopback: bool) -> None:
         if not loopback:

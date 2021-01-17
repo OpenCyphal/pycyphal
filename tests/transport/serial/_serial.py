@@ -383,13 +383,13 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     # Send three, receive three.
     # Sorting is required because the ordering of the events in the middle is not defined: arrival events
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, c, d, e, f = sorted(events, key=lambda x: x.direction == SerialCapture.Direction.RX)
-    assert isinstance(a, SerialCapture) and a.direction == SerialCapture.Direction.TX
-    assert isinstance(b, SerialCapture) and b.direction == SerialCapture.Direction.TX
-    assert isinstance(c, SerialCapture) and c.direction == SerialCapture.Direction.TX
-    assert isinstance(d, SerialCapture) and d.direction == SerialCapture.Direction.RX
-    assert isinstance(e, SerialCapture) and e.direction == SerialCapture.Direction.RX
-    assert isinstance(f, SerialCapture) and f.direction == SerialCapture.Direction.RX
+    a, b, c, d, e, f = sorted(events, key=lambda x: not x.own)
+    assert isinstance(a, SerialCapture) and a.own
+    assert isinstance(b, SerialCapture) and b.own
+    assert isinstance(c, SerialCapture) and c.own
+    assert isinstance(d, SerialCapture) and not d.own
+    assert isinstance(e, SerialCapture) and not e.own
+    assert isinstance(f, SerialCapture) and not f.own
 
     def parse(x: SerialCapture) -> SerialFrame:
         out = SerialFrame.parse_from_cobs_image(x.fragment)
@@ -429,11 +429,11 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     # Send two, receive two.
     # Sorting is required because the order of the two events in the middle is not defined: the arrival event
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, c, d = sorted(events, key=lambda x: x.direction == SerialCapture.Direction.RX)
-    assert isinstance(a, SerialCapture) and a.direction == SerialCapture.Direction.TX
-    assert isinstance(b, SerialCapture) and b.direction == SerialCapture.Direction.TX
-    assert isinstance(c, SerialCapture) and c.direction == SerialCapture.Direction.RX
-    assert isinstance(d, SerialCapture) and d.direction == SerialCapture.Direction.RX
+    a, b, c, d = sorted(events, key=lambda x: not x.own)
+    assert isinstance(a, SerialCapture) and a.own
+    assert isinstance(b, SerialCapture) and b.own
+    assert isinstance(c, SerialCapture) and not c.own
+    assert isinstance(d, SerialCapture) and not d.own
 
     assert parse(a).transfer_id == 888
     assert parse(b).transfer_id == 888
@@ -461,7 +461,7 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     assert events == events2
     (oob,) = events
     assert isinstance(oob, SerialCapture)
-    assert oob.direction == SerialCapture.Direction.RX
+    assert not oob.own
     assert bytes(oob.fragment) == grownups
 
     events.clear()

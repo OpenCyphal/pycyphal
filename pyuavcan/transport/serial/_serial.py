@@ -350,7 +350,7 @@ class SerialTransport(pyuavcan.transport.Transport):
                             _logger.info("%s: Port write timed out in %.3fs on frame %r", self, timeout, fr)
                         else:
                             if self._capture_handlers:  # Create a copy to decouple data from the serialization buffer!
-                                cap = SerialCapture(tx_ts, SerialCapture.Direction.TX, memoryview(bytes(compiled)))
+                                cap = SerialCapture(tx_ts, memoryview(bytes(compiled)), own=True)
                                 pyuavcan.util.broadcast(self._capture_handlers)(cap)
                         self._statistics.out_bytes += num_written or 0
                     else:
@@ -382,7 +382,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             item = buf if frame is None else frame
             self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, ts, item, in_bytes_count)
             if self._capture_handlers:
-                pyuavcan.util.broadcast(self._capture_handlers)(SerialCapture(ts, SerialCapture.Direction.RX, buf))
+                pyuavcan.util.broadcast(self._capture_handlers)(SerialCapture(ts, buf, own=False))
 
         try:
             parser = StreamParser(callback, max(self.VALID_MTU_RANGE))

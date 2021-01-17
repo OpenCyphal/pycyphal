@@ -20,8 +20,13 @@ class CANCapture(Capture):
     See :meth:`pyuavcan.transport.can.CANTransport.begin_capture` for details.
     """
 
-    direction: Capture.Direction
     frame: DataFrame
+
+    own: bool
+    """
+    True if the captured frame was sent by the local transport instance.
+    False if it was received from the bus.
+    """
 
     def parse(self) -> typing.Optional[typing.Tuple[AlienSessionSpecifier, Priority, UAVCANFrame]]:
         uf = UAVCANFrame.parse(self.frame)
@@ -38,7 +43,8 @@ class CANCapture(Capture):
         return ss, ci.priority, uf
 
     def __repr__(self) -> str:
-        return pyuavcan.util.repr_attributes(self, self.timestamp, self.direction.name, self.frame)
+        direction = "tx" if self.own else "rx"
+        return pyuavcan.util.repr_attributes(self, self.timestamp, direction, self.frame)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -137,12 +143,12 @@ def _unittest_can_capture() -> None:
     payload = bytearray(b"123\x0A")
     cap = CANCapture(
         ts,
-        Capture.Direction.TX,
         DataFrame(
             FrameFormat.EXTENDED,
             MessageCANID(Priority.SLOW, 42, 3210).compile([memoryview(payload)]),
             payload,
         ),
+        own=True,
     )
     print(cap)
     parsed = cap.parse()
@@ -160,22 +166,15 @@ def _unittest_can_capture() -> None:
     assert not uf.toggle_bit
 
     # Invalid CAN ID
-    assert (
-        None
-        is CANCapture(
-            ts,
-            Capture.Direction.TX,
-            DataFrame(FrameFormat.BASE, 123, payload),
-        ).parse()
-    )
+    assert None is CANCapture(ts, DataFrame(FrameFormat.BASE, 123, payload), own=True).parse()
 
     # Invalid CAN payload
     assert (
         None
         is CANCapture(
             ts,
-            Capture.Direction.TX,
             DataFrame(FrameFormat.EXTENDED, MessageCANID(Priority.SLOW, 42, 3210).compile([]), bytearray()),
+            own=True,
         ).parse()
     )
 
@@ -260,12 +259,12 @@ def _unittest_can_tracer() -> None:
     # Valid transfers.
     cap = CANCapture(
         ts,
-        Capture.Direction.TX,
         DataFrame(
             FrameFormat.EXTENDED,
             MessageCANID(Priority.FAST, 42, 3210).compile([]),
             bytearray(b"123\xFF"),
         ),
+        own=True,
     )
     tr = tracer.update(cap)
     assert isinstance(tr, TransferTrace)
@@ -276,12 +275,12 @@ def _unittest_can_tracer() -> None:
 
     cap = CANCapture(
         ts,
-        Capture.Direction.RX,  # Direction is ignored.
         DataFrame(
             FrameFormat.EXTENDED,
             MessageCANID(Priority.SLOW, 42, 3210).compile([]),
             bytearray(b"123\xE0"),
         ),
+        own=False,  # Direction is ignored.
     )
     tr = tracer.update(cap)
     assert isinstance(tr, TransferTrace)
@@ -292,12 +291,12 @@ def _unittest_can_tracer() -> None:
 
     cap = CANCapture(
         ts,
-        Capture.Direction.RX,  # Direction is ignored.
         DataFrame(
             FrameFormat.EXTENDED,
             MessageCANID(Priority.SLOW, None, 3210).compile([]),
             bytearray(b"123\xE0"),
         ),
+        own=False,  # Direction is ignored.
     )
     tr = tracer.update(cap)
     assert isinstance(tr, TransferTrace)
@@ -307,4 +306,4 @@ def _unittest_can_tracer() -> None:
     assert tr.transfer.metadata.session_specifier.source_node_id is None
 
     # Invalid captured frame.
-    assert None is tracer.update(CANCapture(ts, Capture.Direction.RX, DataFrame(FrameFormat.BASE, 123, bytearray(b""))))
+    assert None is tracer.update(CANCapture(ts, DataFrame(FrameFormat.BASE, 123, bytearray(b"")), own=False))
