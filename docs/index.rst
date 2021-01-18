@@ -21,6 +21,7 @@ Contents
    pages/api
    pages/demo
    pages/faq
+   pages/changelog
    pages/dev
 
 
