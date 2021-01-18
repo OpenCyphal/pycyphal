@@ -232,6 +232,10 @@ Releasing
 
 PyUAVCAN is versioned by following `Semantic Versioning <https://semver.org>`_.
 
+Please update ``/CHANGELOG.rst`` whenever you introduce externally visible changes.
+Changes that only affect the internal structure of the library (like test rigging, internal refactorings, etc.)
+should not be mentioned in the changelog.
+
 CI/CD automation uploads a new release to PyPI and pushes a new tag upstream on every push to ``master``.
 It is therefore necessary to ensure that the library version (see ``pyuavcan/VERSION``) is bumped whenever
 a new commit is merged into ``master``;
