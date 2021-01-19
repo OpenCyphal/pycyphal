@@ -12,7 +12,7 @@ import pyuavcan
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
-from ._ip import SocketFactory, Sniffer, LinkLayerCapture, unicast_ip_to_node_id
+from ._ip import SocketFactory, Sniffer, LinkLayerCapture, unicast_ip_to_node_id, node_id_to_unicast_ip
 from ._socket_reader import SocketReader, SocketReaderStatistics
 from ._tracer import UDPTracer, UDPCapture
 
@@ -53,11 +53,12 @@ class UDPTransport(pyuavcan.transport.Transport):
     def __init__(
         self,
         local_ip_address: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
+        local_node_id: typing.Optional[int] = -1,
         *,
-        anonymous: bool = False,
         mtu: int = min(VALID_MTU_RANGE),
         service_transfer_multiplier: int = 1,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
+        anonymous: bool = False,
     ):
         """
         :param local_ip_address: Specifies which local IP address to use for this transport.
@@ -84,10 +85,34 @@ class UDPTransport(pyuavcan.transport.Transport):
             another node running locally on the same interface
             (because sockets are initialized with ``SO_REUSEADDR`` and ``SO_REUSEPORT``, when available).
 
-        :param anonymous: If True, the transport will reject any attempt to create an output session.
-            Additionally, it will report its own local node-ID as None, which is a convention in PyUAVCAN
-            to represent anonymous instances.
-            The UAVCAN/UDP transport does not support anonymous transfers.
+        :param local_node_id: As explained previously, the node-ID is part of the IP address,
+            but this parameter allows one to use the UDP transport in anonymous mode or easily build the
+            node IP address from a subnet address (like ``127.42.0.0``) and a node-ID.
+
+            - If the value is negative, the node-ID equals the 16 least significant bits of the ``local_ip_address``.
+              This is the default behavior.
+
+            - If the value is None, an anonymous instance will be constructed,
+              where the transport will reject any attempt to create an output session.
+              The transport instance will also report its own :attr:`local_node_id` as None.
+              The UAVCAN/UDP transport does not support anonymous transfers by design.
+
+            - If the value is a non-negative integer, the 16 least significant bits of the ``local_ip_address``
+              are replaced with this value.
+
+            Examples:
+
+            +-----------------------+-------------------+----------------------------+--------------------------+
+            | ``local_ip_address``  | ``local_node_id`` | Local IP address           | Local node-ID            |
+            +=======================+===================+============================+==========================+
+            | 127.42.1.200          | (default)         | 127.42.1.200               | 456 (from IP address)    |
+            +-----------------------+-------------------+----------------------------+--------------------------+
+            | 127.42.1.200          | 42                | 127.42.0.42                | 42                       |
+            +-----------------------+-------------------+----------------------------+--------------------------+
+            | 127.42.0.0            | 42                | 127.42.0.42                | 42                       |
+            +-----------------------+-------------------+----------------------------+--------------------------+
+            | 127.42.1.200          | None              | 127.42.1.200               | anonymous                |
+            +-----------------------+-------------------+----------------------------+--------------------------+
 
         :param mtu: The application-level MTU for outgoing packets.
             In other words, this is the maximum number of serialized bytes per UAVCAN/UDP frame.
@@ -103,12 +128,23 @@ class UDPTransport(pyuavcan.transport.Transport):
             This setting does not affect message transfers.
 
         :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+
+        :param anonymous: DEPRECATED and scheduled for removal; replace with ``local_node_id=None``.
         """
+        if anonymous:  # Backward compatibility. Will be removed.
+            import warnings
+
+            local_node_id = None
+            warnings.warn("Parameter 'anonymous' is deprecated. Use 'local_node_id=None' instead.", DeprecationWarning)
+
         if not isinstance(local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
             local_ip_address = ipaddress.ip_address(local_ip_address)
         assert not isinstance(local_ip_address, str)
+        if local_node_id is not None and local_node_id >= 0:
+            local_ip_address = node_id_to_unicast_ip(local_ip_address, local_node_id)
+
         self._sock_factory = SocketFactory.new(local_ip_address)
-        self._anonymous = bool(anonymous)
+        self._anonymous = local_node_id is None
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
         self._loop = loop if loop is not None else asyncio.get_event_loop()
@@ -131,6 +167,8 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._closed = False
         self._statistics = UDPTransportStatistics()
 
+        assert (self.local_node_id == local_node_id) or (local_node_id < 0)
+        assert 0 <= self.local_node_id <= 0xFFFF
         _logger.debug("%s: Initialized with local node-ID %s", self, self.local_node_id)
 
     @property
@@ -184,8 +222,7 @@ class UDPTransport(pyuavcan.transport.Transport):
                 # We add it artificially as an implementation detail of this library.
                 raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                     "Cannot create an output session instance because this UAVCAN/UDP transport instance is "
-                    "configured in the anonymous mode. "
-                    "If you need to emit a transfer, create a new instance with anonymous=False."
+                    "configured in the anonymous mode."
                 )
 
             def finalizer() -> None:

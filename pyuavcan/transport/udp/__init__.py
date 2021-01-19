@@ -291,7 +291,7 @@ Create two transport instances -- one with a node-ID, one anonymous:
 >>> tr_0 = pyuavcan.transport.udp.UDPTransport('127.9.1.42')
 >>> tr_0.local_node_id                                             # Derived from the IP address: (1 << 8) + 42 = 298.
 298
->>> tr_1 = pyuavcan.transport.udp.UDPTransport('127.9.15.254', anonymous=True)  # Anonymous is only for listening.
+>>> tr_1 = pyuavcan.transport.udp.UDPTransport('127.9.15.254', local_node_id=None)  # Anonymous is only for listening.
 >>> tr_1.local_node_id is None
 True
 
@@ -308,10 +308,10 @@ Send a transfer from one instance to the other:
 
 >>> await_ = tr_1.loop.run_until_complete
 >>> await_(pub.send(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
-...                                                   pyuavcan.transport.Priority.LOW,
-...                                                   1111,
-...                                                   fragmented_payload=[]),
-...                       tr_1.loop.time() + 1.0))
+...                                             pyuavcan.transport.Priority.LOW,
+...                                             1111,
+...                                             fragmented_payload=[]),
+...                 tr_1.loop.time() + 1.0))
 True
 >>> await_(sub.receive(tr_1.loop.time() + 1.0))
 TransferFrom(..., transfer_id=1111, ...)

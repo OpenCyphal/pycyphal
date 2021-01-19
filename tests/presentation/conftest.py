@@ -111,7 +111,7 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
         from pyuavcan.transport.udp import UDPTransport
 
         def one(nid: typing.Optional[int]) -> UDPTransport:
-            return UDPTransport(f"127.0.0.{nid}") if nid is not None else UDPTransport("127.0.0.1", anonymous=True)
+            return UDPTransport("127.0.0.1", local_node_id=nid)
 
         yield lambda nid_a, nid_b: (one(nid_a), one(nid_b), False)
 
@@ -125,10 +125,7 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
 
         def one(nid: typing.Optional[int]) -> RedundantTransport:
             red = RedundantTransport()
-            if nid is not None:
-                red.attach_inferior(UDPTransport(f"127.0.0.{nid}"))
-            else:
-                red.attach_inferior(UDPTransport("127.0.0.1", anonymous=True))
+            red.attach_inferior(UDPTransport("127.0.0.1", local_node_id=nid))
             red.attach_inferior(SerialTransport(VIRTUAL_BUS_URI, nid))
             print("UDP+SERIAL:", red)
             return red

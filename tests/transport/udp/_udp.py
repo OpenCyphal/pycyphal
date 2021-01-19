@@ -257,7 +257,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
-    tr_capture = UDPTransport("127.50.0.2", anonymous=True)
+    tr_capture = UDPTransport("127.50.0.2", local_node_id=None)
     captures: typing.List[UDPCapture] = []
 
     def inhale(s: Capture) -> None:
