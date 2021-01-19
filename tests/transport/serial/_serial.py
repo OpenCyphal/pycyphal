@@ -468,5 +468,40 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     events2.clear()
 
 
+@pytest.mark.asyncio  # type: ignore
+async def _unittest_serial_spoofing() -> None:
+    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
+    from pyuavcan.transport import MessageDataSpecifier
+
+    tr = pyuavcan.transport.serial.SerialTransport("loop://", None, mtu=1024)
+
+    mon_events: typing.List[pyuavcan.transport.Capture] = []
+    tr.begin_capture(mon_events.append)
+
+    transfer = AlienTransfer(
+        AlienTransferMetadata(
+            Priority.IMMEDIATE, 0xBADC0FFEE0DDF00D, AlienSessionSpecifier(1234, None, MessageDataSpecifier(7777))
+        ),
+        fragmented_payload=[],
+    )
+    assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_running_loop().time() + 5.0)
+    await asyncio.sleep(1.0)
+    cap = mon_events.pop()
+    assert isinstance(cap, SerialCapture)
+    assert cap.own
+    assert 0xBADC0FFEE0DDF00D .to_bytes(8, "little") in cap.fragment.tobytes()
+    assert 1234 .to_bytes(2, "little") in cap.fragment.tobytes()
+    assert 7777 .to_bytes(2, "little") in cap.fragment.tobytes()
+
+    with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError, match=r".*multi-frame.*"):
+        transfer = AlienTransfer(
+            AlienTransferMetadata(
+                Priority.IMMEDIATE, 0xBADC0FFEE0DDF00D, AlienSessionSpecifier(None, None, MessageDataSpecifier(7777))
+            ),
+            fragmented_payload=[memoryview(bytes(range(256)))] * 5,
+        )
+        assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_running_loop().time())
+
+
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
     return memoryview(data.encode() if isinstance(data, str) else data)

@@ -79,7 +79,6 @@ class SerialOutputSession(SerialSession, pyuavcan.transport.OutputSession):
                 raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                     f"Anonymous nodes cannot emit multi-frame transfers. Session specifier: {self._specifier}"
                 )
-
             return SerialFrame(
                 priority=transfer.priority,
                 transfer_id=transfer.transfer_id,

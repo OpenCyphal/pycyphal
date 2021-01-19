@@ -274,7 +274,34 @@ class SerialTransport(pyuavcan.transport.Transport):
         return SerialTracer()
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
-        raise NotImplementedError
+        """
+        Spoofing over the serial transport is easy and it does not involve reconfiguration of the media.
+        It can be invoked at no cost at any time (unlike, say, UAVCAN/UDP).
+        """
+
+        def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> SerialFrame:
+            if not end_of_transfer and transfer.metadata.session_specifier.source_node_id is None:
+                raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                    f"Anonymous nodes cannot emit multi-frame transfers. Spoof metadata: {transfer.metadata}"
+                )
+            return SerialFrame(
+                priority=transfer.metadata.priority,
+                transfer_id=transfer.metadata.transfer_id,
+                index=index,
+                end_of_transfer=end_of_transfer,
+                payload=payload,
+                source_node_id=transfer.metadata.session_specifier.source_node_id,
+                destination_node_id=transfer.metadata.session_specifier.destination_node_id,
+                data_specifier=transfer.metadata.session_specifier.data_specifier,
+            )
+
+        frames = list(
+            pyuavcan.transport.commons.high_overhead_transport.serialize_transfer(
+                transfer.fragmented_payload, self._mtu, construct_frame
+            )
+        )
+        _logger.debug("%s: Spoofing %s", self, frames)
+        return await self._send_transfer(frames, monotonic_deadline) is not None
 
     def _handle_received_frame(self, timestamp: Timestamp, frame: SerialFrame) -> None:
         self._statistics.in_frames += 1
