@@ -162,11 +162,11 @@ If you need to test a specific module or part thereof, consider invoking PyTest 
 If you want to run the full suite locally::
 
     pip install -U nox
-    nox --no-error-on-missing-interpreters
+    nox
 
 To abort on first error::
 
-    nox --no-error-on-missing-interpreters -x -- -x
+    nox -x -- -x
 
 When writing tests, aim to cover at least 90% of branches.
 Ensure that your tests do not emit any errors or warnings into stderr output upon successful execution,

@@ -26,7 +26,6 @@ assert EXTRAS_REQUIRE, "Config could not be read correctly"
 PYTHONS = ["3.7", "3.8", "3.9"]
 """The newest supported Python shall be listed last."""
 
-nox.options.error_on_missing_interpreters = True  # Override from CLI: --no-error-on-missing-interpreters
 nox.options.error_on_external_run = True
 
 
