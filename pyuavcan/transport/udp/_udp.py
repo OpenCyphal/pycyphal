@@ -167,7 +167,7 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._closed = False
         self._statistics = UDPTransportStatistics()
 
-        assert (self.local_node_id == local_node_id) or (local_node_id < 0)
+        assert (local_node_id is None) or (local_node_id < 0) or (self.local_node_id == local_node_id)
         assert (self.local_node_id is None) or (0 <= self.local_node_id <= 0xFFFF)
         _logger.debug("%s: Initialized with local node-ID %s", self, self.local_node_id)
 
