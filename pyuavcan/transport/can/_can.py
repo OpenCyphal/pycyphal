@@ -247,7 +247,56 @@ class CANTransport(pyuavcan.transport.Transport):
         return CANTracer()
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
-        raise NotImplementedError
+        """
+        Spoofing over the CAN transport is trivial and it does not involve reconfiguration of the media layer.
+        It can be invoked at no cost at any time (unlike, say, UAVCAN/UDP).
+        See the overridden method :meth:`pyuavcan.transport.Transport.spoof` for details.
+        """
+        from ._session import serialize_transfer
+        from ._identifier import MessageCANID, ServiceCANID
+
+        ss = transfer.metadata.session_specifier
+        src, dst = ss.source_node_id, ss.destination_node_id
+        can_id: CANID
+        if isinstance(ss.data_specifier, pyuavcan.transport.MessageDataSpecifier):
+            if dst is not None:
+                raise pyuavcan.transport.UnsupportedSessionConfigurationError(
+                    f"Unicast message transfers are not allowed. Spoof metadata: {transfer.metadata}"
+                )
+            can_id = MessageCANID(
+                priority=transfer.metadata.priority,
+                source_node_id=src,
+                subject_id=ss.data_specifier.subject_id,
+            )
+        elif isinstance(ss.data_specifier, pyuavcan.transport.ServiceDataSpecifier):
+            if src is None or dst is None:
+                raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                    f"Anonymous nodes cannot participate in service calls. Spoof metadata: {transfer.metadata}"
+                )
+            can_id = ServiceCANID(
+                priority=transfer.metadata.priority,
+                source_node_id=src,
+                destination_node_id=dst,
+                service_id=ss.data_specifier.service_id,
+                request_not_response=ss.data_specifier.role == pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST,
+            )
+        else:
+            assert False
+
+        frames = list(
+            serialize_transfer(
+                compiled_identifier=can_id.compile(transfer.fragmented_payload),
+                transfer_id=transfer.metadata.transfer_id % TRANSFER_ID_MODULO,
+                fragmented_payload=transfer.fragmented_payload,
+                max_frame_payload_bytes=self.protocol_parameters.mtu,
+            )
+        )
+        if len(frames) > 1 and src is None:
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                f"Anonymous nodes cannot emit multi-frame transfers. Spoof metadata: {transfer.metadata}"
+            )
+        transaction = SendTransaction(frames, loopback_first=False, monotonic_deadline=monotonic_deadline)
+        return await self._do_send(transaction)
 
     async def _do_send(self, t: SendTransaction) -> bool:
         """

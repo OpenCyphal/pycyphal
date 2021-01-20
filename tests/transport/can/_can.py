@@ -1061,6 +1061,128 @@ async def _unittest_can_capture_trace() -> None:
     assert b"second" in trc.transfer.fragmented_payload[0].tobytes()
 
 
+@pytest.mark.asyncio  # type: ignore
+async def _unittest_can_spoofing() -> None:
+    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, Transfer, Priority, Timestamp
+    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata
+    from pyuavcan.transport.can._identifier import CANID
+    from .media.mock import MockMedia
+
+    asyncio.get_running_loop().slow_callback_duration = 5.0
+
+    peers: typing.Set[MockMedia] = set()
+    peeper = MockMedia(peers, 64, 1)
+    tr = can.CANTransport(MockMedia(peers, 64, 1), None)
+
+    peeped: typing.List[can.media.DataFrame] = []
+
+    def on_peep(args: typing.Sequence[typing.Tuple[Timestamp, can.media.Envelope]]) -> None:
+        nonlocal peeped
+        peeped += [e.frame for _ts, e in args]
+
+    peeper.start(on_peep, no_automatic_retransmission=False)
+    peeper.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous(None)])
+
+    transfer = AlienTransfer(
+        AlienTransferMetadata(
+            priority=Priority.FAST,
+            transfer_id=13107,  # -> 19
+            session_specifier=AlienSessionSpecifier(
+                source_node_id=0x77,
+                destination_node_id=None,
+                data_specifier=MessageDataSpecifier(6666),
+            ),
+        ),
+        fragmented_payload=[_mem("123")],
+    )
+    assert await tr.spoof(transfer, tr.loop.time() + 1.0)
+    peep = peeped.pop()
+    assert not peeped
+    can_id = CANID.parse(peep.identifier)
+    assert can_id
+    assert can_id.data_specifier == MessageDataSpecifier(6666)
+    assert can_id.priority == Priority.FAST
+    assert can_id.source_node_id == 0x77
+    assert can_id.get_destination_node_id() is None
+    assert peep.data[:-1] == b"123"
+    assert peep.data[-1] == 0b1110_0000 | 19
+
+    transfer = AlienTransfer(
+        AlienTransferMetadata(
+            priority=Priority.SLOW,
+            transfer_id=1,
+            session_specifier=AlienSessionSpecifier(
+                source_node_id=0x77,
+                destination_node_id=0x66,
+                data_specifier=ServiceDataSpecifier(99, role=ServiceDataSpecifier.Role.REQUEST),
+            ),
+        ),
+        fragmented_payload=[_mem("321")],
+    )
+    assert await tr.spoof(transfer, tr.loop.time() + 1.0)
+    peep = peeped.pop()
+    assert not peeped
+    can_id = CANID.parse(peep.identifier)
+    assert can_id
+    assert can_id.data_specifier == transfer.metadata.session_specifier.data_specifier
+    assert can_id.priority == Priority.SLOW
+    assert can_id.source_node_id == 0x77
+    assert can_id.get_destination_node_id() == 0x66
+    assert peep.data[:-1] == b"321"
+    assert peep.data[-1] == 0b1110_0000 | 1
+
+    with pytest.raises(pyuavcan.transport.TransportError):
+        await tr.spoof(
+            AlienTransfer(
+                AlienTransferMetadata(
+                    priority=Priority.FAST,
+                    transfer_id=13107,
+                    session_specifier=AlienSessionSpecifier(
+                        source_node_id=123,
+                        destination_node_id=123,
+                        data_specifier=MessageDataSpecifier(6666),
+                    ),
+                ),
+                fragmented_payload=[],
+            ),
+            tr.loop.time() + 1.0,
+        )
+
+    with pytest.raises(pyuavcan.transport.TransportError):
+        await tr.spoof(
+            AlienTransfer(
+                AlienTransferMetadata(
+                    priority=Priority.FAST,
+                    transfer_id=13107,
+                    session_specifier=AlienSessionSpecifier(
+                        source_node_id=0x77,
+                        destination_node_id=None,
+                        data_specifier=ServiceDataSpecifier(99, role=ServiceDataSpecifier.Role.REQUEST),
+                    ),
+                ),
+                fragmented_payload=[],
+            ),
+            tr.loop.time() + 1.0,
+        )
+
+    with pytest.raises(pyuavcan.transport.TransportError):
+        await tr.spoof(
+            AlienTransfer(
+                AlienTransferMetadata(
+                    priority=Priority.FAST,
+                    transfer_id=13107,
+                    session_specifier=AlienSessionSpecifier(
+                        source_node_id=None,
+                        destination_node_id=None,
+                        data_specifier=MessageDataSpecifier(6666),
+                    ),
+                ),
+                fragmented_payload=[memoryview(bytes(range(256)))],
+            ),
+            tr.loop.time() + 1.0,
+        )
+
+
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
     return memoryview(data.encode() if isinstance(data, str) else data)
 
