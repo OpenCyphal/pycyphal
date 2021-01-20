@@ -1063,7 +1063,7 @@ async def _unittest_can_capture_trace() -> None:
 
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_can_spoofing() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, Transfer, Priority, Timestamp
+    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, Priority, Timestamp
     from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata
     from pyuavcan.transport.can._identifier import CANID
     from .media.mock import MockMedia
