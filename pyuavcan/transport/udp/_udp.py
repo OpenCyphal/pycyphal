@@ -298,6 +298,10 @@ class UDPTransport(pyuavcan.transport.Transport):
         return UDPTracer()
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
+        """
+        Not implemented yet. Always raises :class:`NotImplementedError`.
+        When implemented, this method will rely on libpcap to emit spoofed link-layer packets.
+        """
         raise NotImplementedError
 
     def _setup_input_session(

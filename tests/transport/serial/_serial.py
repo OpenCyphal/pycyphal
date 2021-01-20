@@ -486,12 +486,14 @@ async def _unittest_serial_spoofing() -> None:
     )
     assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_running_loop().time() + 5.0)
     await asyncio.sleep(1.0)
-    cap = mon_events.pop()
-    assert isinstance(cap, SerialCapture)
-    assert cap.own
-    assert 0xBADC0FFEE0DDF00D .to_bytes(8, "little") in cap.fragment.tobytes()
-    assert 1234 .to_bytes(2, "little") in cap.fragment.tobytes()
-    assert 7777 .to_bytes(2, "little") in cap.fragment.tobytes()
+    cap_rx, cap_tx = sorted(mon_events, key=lambda x: typing.cast(SerialCapture, x).own)
+    assert isinstance(cap_rx, SerialCapture)
+    assert isinstance(cap_tx, SerialCapture)
+    assert not cap_rx.own and cap_tx.own
+    assert cap_tx.fragment.tobytes() == cap_rx.fragment.tobytes()
+    assert 0xBADC0FFEE0DDF00D .to_bytes(8, "little") in cap_rx.fragment.tobytes()
+    assert 1234 .to_bytes(2, "little") in cap_rx.fragment.tobytes()
+    assert 7777 .to_bytes(2, "little") in cap_rx.fragment.tobytes()
 
     with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError, match=r".*multi-frame.*"):
         transfer = AlienTransfer(

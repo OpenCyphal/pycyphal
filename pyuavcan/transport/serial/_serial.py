@@ -275,12 +275,23 @@ class SerialTransport(pyuavcan.transport.Transport):
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
         """
-        Spoofing over the serial transport is easy and it does not involve reconfiguration of the media.
+        Spoofing over the serial transport is trivial and it does not involve reconfiguration of the media layer.
         It can be invoked at no cost at any time (unlike, say, UAVCAN/UDP).
+        See the overridden method :meth:`pyuavcan.transport.Transport.spoof` for details.
+
+        Notice that if the transport operates over the virtual loopback port ``loop://`` with capture enabled,
+        every spoofed frame will be captured twice: one TX, one RX. Same goes for regular transfers.
         """
 
+        ss = transfer.metadata.session_specifier
+        src, dst = ss.source_node_id, ss.destination_node_id
+        if isinstance(ss.data_specifier, pyuavcan.transport.ServiceDataSpecifier) and (src is None or dst is None):
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                f"Anonymous nodes cannot participate in service calls. Spoof metadata: {transfer.metadata}"
+            )
+
         def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> SerialFrame:
-            if not end_of_transfer and transfer.metadata.session_specifier.source_node_id is None:
+            if not end_of_transfer and src is None:
                 raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
                     f"Anonymous nodes cannot emit multi-frame transfers. Spoof metadata: {transfer.metadata}"
                 )
@@ -290,9 +301,9 @@ class SerialTransport(pyuavcan.transport.Transport):
                 index=index,
                 end_of_transfer=end_of_transfer,
                 payload=payload,
-                source_node_id=transfer.metadata.session_specifier.source_node_id,
-                destination_node_id=transfer.metadata.session_specifier.destination_node_id,
-                data_specifier=transfer.metadata.session_specifier.data_specifier,
+                source_node_id=src,
+                destination_node_id=dst,
+                data_specifier=ss.data_specifier,
             )
 
         frames = list(
