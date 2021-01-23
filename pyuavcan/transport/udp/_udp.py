@@ -388,7 +388,7 @@ class UDPTransport(pyuavcan.transport.Transport):
 
     def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
         return [repr(str(self.local_ip_address))], {
-            "anonymous": self._anonymous,
+            "local_node_id": self.local_node_id,
             "service_transfer_multiplier": self._srv_multiplier,
             "mtu": self._mtu,
         }
