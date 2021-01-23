@@ -73,10 +73,9 @@ class DiagnosticSubscriber:
         node_id = meta.source_node_id if meta.source_node_id is not None else "anonymous"
         diag_text = textwrap.indent(msg.text.tobytes().decode("utf8"), " " * 4)
         log_text = (
-            f"Received uavcan.diagnostic.Record from node {node_id}; "
-            f"severity {msg.severity.value}; "
-            f"remote ts {msg.timestamp.microsecond * 1e-6:0.6f} s, local ts {meta.timestamp}; "
-            f"text:\n" + diag_text
+            f"uavcan.diagnostic.Record: node={node_id} severity={msg.severity.value} "
+            + f"ts_sync={msg.timestamp.microsecond * 1e-6:0.6f} ts_local={meta.timestamp}:\n"
+            + diag_text
         )
         level = self._LEVEL_MAP.get(msg.severity.value, logging.CRITICAL)
         _logger.log(level, log_text)

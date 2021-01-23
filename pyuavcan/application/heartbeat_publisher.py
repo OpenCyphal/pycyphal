@@ -185,9 +185,9 @@ class HeartbeatPublisher:
         Subsequent invocations have no effect.
         """
         if self._maybe_task:
-            self._subscriber.close()
-            self._maybe_task.cancel()
+            self._maybe_task.cancel()  # Cancel first to avoid exceptions from being logged from the task.
             self._maybe_task = None
+            self._subscriber.close()
 
     async def _task_function(self) -> None:
         next_heartbeat_at = time.monotonic()
@@ -203,10 +203,13 @@ class HeartbeatPublisher:
                         pub.priority = self._priority
                         if not await pub.publish(self.make_message()):
                             _logger.error("%s heartbeat send timed out", self)
-                except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError) as ex:
-                    _logger.debug("%s publisher task will exit: %s", self, ex)
-                    break
                 except Exception as ex:  # pragma: no cover
+                    if (
+                        isinstance(ex, (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError))
+                        or not self._maybe_task
+                    ):
+                        _logger.debug("%s publisher task will exit: %s", self, ex)
+                        break
                     _logger.exception("%s publisher task exception: %s", self, ex)
 
                 next_heartbeat_at += self._period
