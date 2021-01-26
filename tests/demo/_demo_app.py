@@ -39,7 +39,7 @@ def _get_run_configs() -> typing.Iterable[RunConfig]:
     # UDP
     yield RunConfig(
         demo_env_vars={"DEMO_INTERFACE_KIND": "udp"},
-        local_transport_factory=lambda nid: UDPTransport(f"127.0.0.{1 if nid is None else nid}", anonymous=nid is None),
+        local_transport_factory=lambda nid: UDPTransport("127.0.0.1", local_node_id=nid),
     )
 
     # Serial
@@ -54,7 +54,7 @@ def _get_run_configs() -> typing.Iterable[RunConfig]:
         if nid is not None:
             tr.attach_inferior(UDPTransport(f"127.0.0.{nid}"))
         else:
-            tr.attach_inferior(UDPTransport(f"127.0.0.1", anonymous=True))
+            tr.attach_inferior(UDPTransport(f"127.0.0.1", local_node_id=None))
         tr.attach_inferior(SerialTransport("socket://localhost:50905", local_node_id=nid))
         return tr
 

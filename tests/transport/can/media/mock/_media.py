@@ -70,6 +70,10 @@ class MockMedia(Media):
     def automatic_retransmission_enabled(self) -> bool:
         return self._automatic_retransmission_enabled
 
+    @property
+    def acceptance_filters(self) -> typing.List[FilterConfiguration]:
+        return list(self._acceptance_filters)
+
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         del monotonic_deadline  # Unused
         if self._closed:

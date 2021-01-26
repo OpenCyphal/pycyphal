@@ -250,14 +250,14 @@ async def _unittest_udp_transport_ipv4() -> None:
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_udp_transport_ipv4_capture() -> None:
     import socket
-    from pyuavcan.transport.udp import UDPCapture
+    from pyuavcan.transport.udp import UDPCapture, IPPacket
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
     from pyuavcan.transport import Capture, AlienSessionSpecifier
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
-    tr_capture = UDPTransport("127.50.0.2", anonymous=True)
+    tr_capture = UDPTransport("127.50.0.2", local_node_id=None)
     captures: typing.List[UDPCapture] = []
 
     def inhale(s: Capture) -> None:
@@ -309,8 +309,9 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     assert isinstance(pkt, UDPCapture)
     assert (ts.monotonic - 1) <= pkt.timestamp.monotonic <= Timestamp.now().monotonic
     assert (ts.system - 1) <= pkt.timestamp.system <= Timestamp.now().system
-    assert str(pkt.packet.ip_header.source) == "127.50.0.111"
-    assert str(pkt.packet.ip_header.destination) == "239.50.0.190"
+    ip_pkt = IPPacket.parse(pkt.link_layer_packet)
+    assert ip_pkt is not None
+    assert [str(x) for x in ip_pkt.source_destination] == ["127.50.0.111", "239.50.0.190"]
     parsed = pkt.parse()
     assert parsed
     ses, frame = parsed

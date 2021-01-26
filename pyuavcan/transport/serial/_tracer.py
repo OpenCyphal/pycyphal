@@ -3,7 +3,6 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
-import enum
 import typing
 import logging
 import dataclasses
@@ -30,21 +29,13 @@ class SerialCapture(pyuavcan.transport.Capture):
     which are simply zero bytes.
     """
 
-    class Direction(enum.Enum):
-        RX = enum.auto()
-        """
-        Fragment received by the listening node.
-        When sniffing on a serial link, all fragments are marked as RX fragments.
-        """
-
-        TX = enum.auto()
-        """
-        This is rather uncommon, it represents the case where the capturing node is also engaged in network exchange.
-        Typically, a capturing unit would remain silent, so all captures would be RX captures.
-        """
-
-    direction: Direction
     fragment: memoryview
+
+    own: bool
+    """
+    True if the captured fragment was sent by the local transport instance.
+    False if it was received from the port.
+    """
 
     def __repr__(self) -> str:
         """
@@ -55,7 +46,8 @@ class SerialCapture(pyuavcan.transport.Capture):
             fragment = bytes(self.fragment[:limit]).hex() + f"...<+{len(self.fragment) - limit}B>..."
         else:
             fragment = bytes(self.fragment).hex()
-        return pyuavcan.util.repr_attributes(self, self.direction.name, fragment)
+        direction = "tx" if self.own else "rx"
+        return pyuavcan.util.repr_attributes(self, direction, fragment)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -90,10 +82,10 @@ class SerialTracer(pyuavcan.transport.Tracer):
     """Effectively unlimited."""
 
     def __init__(self) -> None:
-        self._parsers = {
-            SerialCapture.Direction.RX: StreamParser(self._on_parsed, self._MTU),
-            SerialCapture.Direction.TX: StreamParser(self._on_parsed, self._MTU),
-        }
+        self._parsers = [
+            StreamParser(self._on_parsed, self._MTU),
+            StreamParser(self._on_parsed, self._MTU),
+        ]
         self._parser_output: typing.Optional[typing.Tuple[Timestamp, typing.Union[SerialFrame, memoryview]]] = None
         self._sessions: typing.Dict[AlienSessionSpecifier, _AlienSession] = {}
 
@@ -108,7 +100,7 @@ class SerialTracer(pyuavcan.transport.Tracer):
         if not isinstance(cap, SerialCapture):
             return None
 
-        self._parsers[cap.direction].process_next_chunk(cap.fragment, cap.timestamp)
+        self._parsers[cap.own].process_next_chunk(cap.fragment, cap.timestamp)
         if self._parser_output is None:
             return None
 
@@ -194,10 +186,10 @@ def _unittest_serial_tracer() -> None:
     ts = Timestamp.now()
 
     def tx(x: typing.Union[bytes, bytearray, memoryview]) -> typing.Optional[Trace]:
-        return tr.update(SerialCapture(ts, SerialCapture.Direction.TX, memoryview(x)))
+        return tr.update(SerialCapture(ts, memoryview(x), own=True))
 
     def rx(x: typing.Union[bytes, bytearray, memoryview]) -> typing.Optional[Trace]:
-        return tr.update(SerialCapture(ts, SerialCapture.Direction.RX, memoryview(x)))
+        return tr.update(SerialCapture(ts, memoryview(x), own=False))
 
     buf = SerialFrame(
         priority=Priority.SLOW,
@@ -221,7 +213,7 @@ def _unittest_serial_tracer() -> None:
     trace = tx(tail)
     assert isinstance(trace, TransferTrace)
     assert trace.timestamp == ts
-    assert trace.transfer_id_timeout == approx(AlienTransferReassembler.MAX_TRANSFER_ID_TIMEOUT)  # Initial value.
+    assert trace.transfer_id_timeout == approx(2.0)  # Initial value.
     assert trace.transfer.metadata.transfer_id == 1234567890
     assert trace.transfer.metadata.priority == Priority.SLOW
     assert trace.transfer.metadata.session_specifier.source_node_id == 1111

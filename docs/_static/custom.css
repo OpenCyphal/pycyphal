@@ -14,7 +14,7 @@ p {
 }
 
 /* Desktop optimization. */
-@media (min-width: 1500px) {
+@media (min-width: 1200px) {
     .rst-content .toctree-wrapper ul li {
         margin-left: 48px;
     }
@@ -47,15 +47,10 @@ p {
     margin: 0;
 }
 
-.rst-content .section ol li > ol,
-.rst-content .section ol li > ul,
-.rst-content .section ul li > ol,
-.rst-content .section ul li > ul {
-    margin-bottom: 0;
-}
-.rst-content .section ol li > *,
-.rst-content .section ul li > * {
+.rst-content .section .toctree-wrapper ol li > *,
+.rst-content .section .toctree-wrapper ul li > * {
     margin-top: 0;
+    margin-bottom: 0;
 }
 
 .rst-content li.toctree-l1 > a {

@@ -42,7 +42,7 @@ def _configure_host_environment() -> None:
         return out.returncode, stdout, stderr
 
     if sys.platform.startswith("linux"):
-        import resource
+        import resource  # pylint: disable=import-error
 
         _logger.info("Limiting process memory usage to %.1f GiB", MEMORY_LIMIT / GIBIBYTE)
         resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT, MEMORY_LIMIT))

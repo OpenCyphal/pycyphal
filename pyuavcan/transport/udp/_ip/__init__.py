@@ -5,11 +5,6 @@
 from ._socket_factory import SocketFactory as SocketFactory
 from ._socket_factory import Sniffer as Sniffer
 
-from ._packet import MACHeader as MACHeader
-from ._packet import IPHeader as IPHeader
-from ._packet import UDPHeader as UDPHeader
-from ._packet import RawPacket as RawPacket
-
 from ._endpoint_mapping import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
 from ._endpoint_mapping import MULTICAST_GROUP_SUBJECT_ID_MASK as MULTICAST_GROUP_SUBJECT_ID_MASK
 from ._endpoint_mapping import SUBJECT_PORT as SUBJECT_PORT
@@ -19,3 +14,6 @@ from ._endpoint_mapping import message_data_specifier_to_multicast_group as mess
 from ._endpoint_mapping import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
 from ._endpoint_mapping import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
 from ._endpoint_mapping import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier
+
+from ._link_layer import LinkLayerPacket as LinkLayerPacket
+from ._link_layer import LinkLayerCapture as LinkLayerCapture

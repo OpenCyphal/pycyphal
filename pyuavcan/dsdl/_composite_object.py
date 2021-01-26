@@ -231,7 +231,7 @@ def get_fixed_port_id(
     """
     try:
         out = int(class_or_instance._FIXED_PORT_ID_)  # pylint: disable=protected-access
-    except TypeError:
+    except (TypeError, AttributeError):
         return None
     else:
         if (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)) or isinstance(

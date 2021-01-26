@@ -383,13 +383,13 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     # Send three, receive three.
     # Sorting is required because the ordering of the events in the middle is not defined: arrival events
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, c, d, e, f = sorted(events, key=lambda x: x.direction == SerialCapture.Direction.RX)
-    assert isinstance(a, SerialCapture) and a.direction == SerialCapture.Direction.TX
-    assert isinstance(b, SerialCapture) and b.direction == SerialCapture.Direction.TX
-    assert isinstance(c, SerialCapture) and c.direction == SerialCapture.Direction.TX
-    assert isinstance(d, SerialCapture) and d.direction == SerialCapture.Direction.RX
-    assert isinstance(e, SerialCapture) and e.direction == SerialCapture.Direction.RX
-    assert isinstance(f, SerialCapture) and f.direction == SerialCapture.Direction.RX
+    a, b, c, d, e, f = sorted(events, key=lambda x: not x.own)
+    assert isinstance(a, SerialCapture) and a.own
+    assert isinstance(b, SerialCapture) and b.own
+    assert isinstance(c, SerialCapture) and c.own
+    assert isinstance(d, SerialCapture) and not d.own
+    assert isinstance(e, SerialCapture) and not e.own
+    assert isinstance(f, SerialCapture) and not f.own
 
     def parse(x: SerialCapture) -> SerialFrame:
         out = SerialFrame.parse_from_cobs_image(x.fragment)
@@ -429,11 +429,11 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     # Send two, receive two.
     # Sorting is required because the order of the two events in the middle is not defined: the arrival event
     # may or may not be registered before the emission event depending on how the serial loopback is operating.
-    a, b, c, d = sorted(events, key=lambda x: x.direction == SerialCapture.Direction.RX)
-    assert isinstance(a, SerialCapture) and a.direction == SerialCapture.Direction.TX
-    assert isinstance(b, SerialCapture) and b.direction == SerialCapture.Direction.TX
-    assert isinstance(c, SerialCapture) and c.direction == SerialCapture.Direction.RX
-    assert isinstance(d, SerialCapture) and d.direction == SerialCapture.Direction.RX
+    a, b, c, d = sorted(events, key=lambda x: not x.own)
+    assert isinstance(a, SerialCapture) and a.own
+    assert isinstance(b, SerialCapture) and b.own
+    assert isinstance(c, SerialCapture) and not c.own
+    assert isinstance(d, SerialCapture) and not d.own
 
     assert parse(a).transfer_id == 888
     assert parse(b).transfer_id == 888
@@ -461,11 +461,48 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     assert events == events2
     (oob,) = events
     assert isinstance(oob, SerialCapture)
-    assert oob.direction == SerialCapture.Direction.RX
+    assert not oob.own
     assert bytes(oob.fragment) == grownups
 
     events.clear()
     events2.clear()
+
+
+@pytest.mark.asyncio  # type: ignore
+async def _unittest_serial_spoofing() -> None:
+    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
+    from pyuavcan.transport import MessageDataSpecifier
+
+    tr = pyuavcan.transport.serial.SerialTransport("loop://", None, mtu=1024)
+
+    mon_events: typing.List[pyuavcan.transport.Capture] = []
+    tr.begin_capture(mon_events.append)
+
+    transfer = AlienTransfer(
+        AlienTransferMetadata(
+            Priority.IMMEDIATE, 0xBADC0FFEE0DDF00D, AlienSessionSpecifier(1234, None, MessageDataSpecifier(7777))
+        ),
+        fragmented_payload=[],
+    )
+    assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_running_loop().time() + 5.0)
+    await asyncio.sleep(1.0)
+    cap_rx, cap_tx = sorted(mon_events, key=lambda x: typing.cast(SerialCapture, x).own)
+    assert isinstance(cap_rx, SerialCapture)
+    assert isinstance(cap_tx, SerialCapture)
+    assert not cap_rx.own and cap_tx.own
+    assert cap_tx.fragment.tobytes() == cap_rx.fragment.tobytes()
+    assert 0xBADC0FFEE0DDF00D .to_bytes(8, "little") in cap_rx.fragment.tobytes()
+    assert 1234 .to_bytes(2, "little") in cap_rx.fragment.tobytes()
+    assert 7777 .to_bytes(2, "little") in cap_rx.fragment.tobytes()
+
+    with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError, match=r".*multi-frame.*"):
+        transfer = AlienTransfer(
+            AlienTransferMetadata(
+                Priority.IMMEDIATE, 0xBADC0FFEE0DDF00D, AlienSessionSpecifier(None, None, MessageDataSpecifier(7777))
+            ),
+            fragmented_payload=[memoryview(bytes(range(256)))] * 5,
+        )
+        assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_running_loop().time())
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

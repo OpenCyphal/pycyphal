@@ -274,7 +274,45 @@ class SerialTransport(pyuavcan.transport.Transport):
         return SerialTracer()
 
     async def spoof(self, transfer: pyuavcan.transport.AlienTransfer, monotonic_deadline: float) -> bool:
-        raise NotImplementedError
+        """
+        Spoofing over the serial transport is trivial and it does not involve reconfiguration of the media layer.
+        It can be invoked at no cost at any time (unlike, say, UAVCAN/UDP).
+        See the overridden method :meth:`pyuavcan.transport.Transport.spoof` for details.
+
+        Notice that if the transport operates over the virtual loopback port ``loop://`` with capture enabled,
+        every spoofed frame will be captured twice: one TX, one RX. Same goes for regular transfers.
+        """
+
+        ss = transfer.metadata.session_specifier
+        src, dst = ss.source_node_id, ss.destination_node_id
+        if isinstance(ss.data_specifier, pyuavcan.transport.ServiceDataSpecifier) and (src is None or dst is None):
+            raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                f"Anonymous nodes cannot participate in service calls. Spoof metadata: {transfer.metadata}"
+            )
+
+        def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> SerialFrame:
+            if not end_of_transfer and src is None:
+                raise pyuavcan.transport.OperationNotDefinedForAnonymousNodeError(
+                    f"Anonymous nodes cannot emit multi-frame transfers. Spoof metadata: {transfer.metadata}"
+                )
+            return SerialFrame(
+                priority=transfer.metadata.priority,
+                transfer_id=transfer.metadata.transfer_id,
+                index=index,
+                end_of_transfer=end_of_transfer,
+                payload=payload,
+                source_node_id=src,
+                destination_node_id=dst,
+                data_specifier=ss.data_specifier,
+            )
+
+        frames = list(
+            pyuavcan.transport.commons.high_overhead_transport.serialize_transfer(
+                transfer.fragmented_payload, self._mtu, construct_frame
+            )
+        )
+        _logger.debug("%s: Spoofing %s", self, frames)
+        return await self._send_transfer(frames, monotonic_deadline) is not None
 
     def _handle_received_frame(self, timestamp: Timestamp, frame: SerialFrame) -> None:
         self._statistics.in_frames += 1
@@ -350,7 +388,7 @@ class SerialTransport(pyuavcan.transport.Transport):
                             _logger.info("%s: Port write timed out in %.3fs on frame %r", self, timeout, fr)
                         else:
                             if self._capture_handlers:  # Create a copy to decouple data from the serialization buffer!
-                                cap = SerialCapture(tx_ts, SerialCapture.Direction.TX, memoryview(bytes(compiled)))
+                                cap = SerialCapture(tx_ts, memoryview(bytes(compiled)), own=True)
                                 pyuavcan.util.broadcast(self._capture_handlers)(cap)
                         self._statistics.out_bytes += num_written or 0
                     else:
@@ -382,7 +420,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             item = buf if frame is None else frame
             self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, ts, item, in_bytes_count)
             if self._capture_handlers:
-                pyuavcan.util.broadcast(self._capture_handlers)(SerialCapture(ts, SerialCapture.Direction.RX, buf))
+                pyuavcan.util.broadcast(self._capture_handlers)(SerialCapture(ts, buf, own=False))
 
         try:
             parser = StreamParser(callback, max(self.VALID_MTU_RANGE))

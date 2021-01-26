@@ -1,7 +1,7 @@
 Full-featured UAVCAN stack in Python
 ====================================
 
-[![AppVeyor CI](https://ci.appveyor.com/api/projects/status/2vv83afj3dxqibi5?svg=true)](https://ci.appveyor.com/project/Zubax/pyuavcan)
+[![Build status](https://ci.appveyor.com/api/projects/status/2vv83afj3dxqibi5/branch/master?svg=true)](https://ci.appveyor.com/project/Zubax/pyuavcan/branch/master)
 [![RTFD](https://readthedocs.org/projects/pyuavcan/badge/)](https://pyuavcan.readthedocs.io/)
 [![Coverage Status](https://coveralls.io/repos/github/UAVCAN/pyuavcan/badge.svg)](https://coveralls.io/github/UAVCAN/pyuavcan)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=UAVCAN_pyuavcan&metric=alert_status)](https://sonarcloud.io/dashboard?id=UAVCAN_pyuavcan)

@@ -13,3 +13,6 @@ from ._output import UnicastCANOutputSession as UnicastCANOutputSession
 from ._output import SendTransaction as SendTransaction
 
 from ._transfer_reassembler import TransferReassemblyErrorID as TransferReassemblyErrorID
+from ._transfer_reassembler import TransferReassembler as TransferReassembler
+
+from ._transfer_sender import serialize_transfer as serialize_transfer

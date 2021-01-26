@@ -21,7 +21,7 @@ class Media(abc.ABC):
     needed for SLCAN). Python packages containing such media implementations shall be always importable.
     """
 
-    ReceivedFramesHandler = typing.Callable[[typing.Iterable[typing.Tuple[Timestamp, Envelope]]], None]
+    ReceivedFramesHandler = typing.Callable[[typing.Sequence[typing.Tuple[Timestamp, Envelope]]], None]
     """
     The frames handler is non-blocking and non-yielding; returns immediately.
     The timestamp is provided individually per frame.

@@ -26,7 +26,6 @@ assert EXTRAS_REQUIRE, "Config could not be read correctly"
 PYTHONS = ["3.7", "3.8", "3.9"]
 """The newest supported Python shall be listed last."""
 
-nox.options.error_on_missing_interpreters = True  # Override from CLI: --no-error-on-missing-interpreters
 nox.options.error_on_external_run = True
 
 
@@ -111,7 +110,7 @@ def test(session):
         "pylint == 2.6.0",
     )
     session.run("mypy", "--strict", *map(str, src_dirs), ".compiled")
-    session.run("pylint", "pyuavcan", "tests", env={"PYTHONPATH": ".compiled"})
+    session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": ".compiled"})
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
     if sys.platform.startswith("linux") and is_latest_python(session) and session.env.get("COVERALLS_REPO_TOKEN"):

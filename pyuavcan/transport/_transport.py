@@ -249,6 +249,7 @@ class Transport(abc.ABC):
         If the source node-ID is not provided, an anonymous transfer will be emitted.
         If anonymous transfers are not supported, :class:`pyuavcan.transport.OperationNotDefinedForAnonymousNodeError`
         will be raised.
+        Same will happen if one attempted to transmit a multi-frame anonymous transfer.
 
         If the destination node-ID is not provided, a broadcast transfer will be emitted.
         If the data specifier is that of a service, a :class:`UnsupportedSessionConfigurationError` will be raised.
@@ -256,7 +257,9 @@ class Transport(abc.ABC):
 
         Transports with cyclic transfer-ID will compute the modulo automatically.
 
-        The return value is True on success, False on timeout.
+        This method will update the appropriate statistical counters as usual.
+
+        :returns: True on success, False on timeout.
         """
         raise NotImplementedError
 

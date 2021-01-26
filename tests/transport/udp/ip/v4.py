@@ -12,9 +12,10 @@ import socket
 from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
 from pyuavcan.transport import InvalidMediaConfigurationError, Timestamp
 from pyuavcan.transport.udp._ip._socket_factory import SocketFactory
-from pyuavcan.transport.udp._ip._packet import RawPacket
 from pyuavcan.transport.udp._ip._endpoint_mapping import SUBJECT_PORT, service_data_specifier_to_udp_port
 from pyuavcan.transport.udp._ip._v4 import SnifferIPv4, IPv4SocketFactory
+from pyuavcan.transport.udp._ip import LinkLayerCapture
+from pyuavcan.transport.udp import IPPacket, LinkLayerPacket, UDPIPPacket
 
 
 def _unittest_socket_factory() -> None:
@@ -103,21 +104,33 @@ def _unittest_socket_factory() -> None:
 def _unittest_sniffer() -> None:
     from ipaddress import ip_address
 
+    def parse_ip(ll_pkt: LinkLayerPacket) -> IPPacket:
+        ip_pkt = IPPacket.parse(ll_pkt)
+        assert ip_pkt is not None
+        return ip_pkt
+
+    def parse_udp(ll_pkt: LinkLayerPacket) -> UDPIPPacket:
+        udp_pkt = UDPIPPacket.parse(parse_ip(ll_pkt))
+        assert udp_pkt is not None
+        return udp_pkt
+
     # The sniffer is expected to drop all traffic except from 127.66.0.0/16
     fac = SocketFactory.new(ip_address("127.66.1.200"))
 
     ts_last = Timestamp.now()
-    sniffs: typing.List[RawPacket] = []
+    sniffs: typing.List[LinkLayerCapture] = []
 
-    def sniff_sniff(ts: Timestamp, pack: RawPacket) -> None:
+    def sniff_sniff(cap: LinkLayerCapture) -> None:
         nonlocal ts_last
         now = Timestamp.now()
-        assert ts_last.monotonic_ns <= ts.monotonic_ns <= now.monotonic_ns
-        assert ts_last.system_ns <= ts.system_ns <= now.system_ns
-        ts_last = ts
+        assert ts_last.monotonic_ns <= cap.timestamp.monotonic_ns <= now.monotonic_ns
+        assert ts_last.system_ns <= cap.timestamp.system_ns <= now.system_ns
+        ts_last = cap.timestamp
         # Make sure that all traffic from foreign networks is filtered out by the sniffer.
-        assert (int(pack.ip_header.source) & 0x_FFFF_0000) == (int(fac.local_ip_address) & 0x_FFFF_0000)
-        sniffs.append(pack)
+        assert (int(parse_ip(cap.packet).source_destination[0]) & 0x_FFFF_0000) == (
+            int(fac.local_ip_address) & 0x_FFFF_0000
+        )
+        sniffs.append(cap)
 
     sniffer = fac.make_sniffer(sniff_sniff)
     assert isinstance(sniffer, SnifferIPv4)
@@ -165,25 +178,21 @@ def _unittest_sniffer() -> None:
     assert len(sniffs) == 3
 
     # The MAC address length may be either 6 bytes (Ethernet encapsulation) or 0 bytes (null/loopback encapsulation)
-    assert len(sniffs[0].mac_header.source) == len(sniffs[0].mac_header.destination)
-    assert len(sniffs[1].mac_header.source) == len(sniffs[1].mac_header.destination)
-    assert len(sniffs[2].mac_header.source) == len(sniffs[2].mac_header.destination)
+    assert len(sniffs[0].packet.source) == len(sniffs[0].packet.destination)
+    assert len(sniffs[1].packet.source) == len(sniffs[1].packet.destination)
+    assert len(sniffs[2].packet.source) == len(sniffs[2].packet.destination)
 
-    assert sniffs[0].ip_header.source == ip_address("127.66.33.44")
-    assert sniffs[1].ip_header.source == ip_address("127.66.33.44")
-    assert sniffs[2].ip_header.source == ip_address("127.66.33.44")
+    assert parse_ip(sniffs[0].packet).source_destination == (ip_address("127.66.33.44"), ip_address("127.66.1.200"))
+    assert parse_ip(sniffs[1].packet).source_destination == (ip_address("127.66.33.44"), ip_address("127.33.1.200"))
+    assert parse_ip(sniffs[2].packet).source_destination == (ip_address("127.66.33.44"), ip_address("239.66.1.200"))
 
-    assert sniffs[0].ip_header.destination == ip_address("127.66.1.200")
-    assert sniffs[1].ip_header.destination == ip_address("127.33.1.200")
-    assert sniffs[2].ip_header.destination == ip_address("239.66.1.200")
+    assert parse_udp(sniffs[0].packet).destination_port == 1234
+    assert parse_udp(sniffs[1].packet).destination_port == 5678
+    assert parse_udp(sniffs[2].packet).destination_port == 4444
 
-    assert sniffs[0].udp_header.destination_port == 1234
-    assert sniffs[1].udp_header.destination_port == 5678
-    assert sniffs[2].udp_header.destination_port == 4444
-
-    assert bytes(sniffs[0].udp_payload) == b"\xAA\xAA\xAA\xAA"
-    assert bytes(sniffs[1].udp_payload) == b"\xBB\xBB\xBB\xBB"
-    assert bytes(sniffs[2].udp_payload) == b"\xCC\xCC\xCC\xCC"
+    assert bytes(parse_udp(sniffs[0].packet).payload) == b"\xAA\xAA\xAA\xAA"
+    assert bytes(parse_udp(sniffs[1].packet).payload) == b"\xBB\xBB\xBB\xBB"
+    assert bytes(parse_udp(sniffs[2].packet).payload) == b"\xCC\xCC\xCC\xCC"
 
     sniffs.clear()
 
