@@ -40,7 +40,7 @@ async def _unittest_slow_diagnostic(
     for lr in caplog.records:
         print("   ", lr)
         assert isinstance(lr, logging.LogRecord)
-        pat = "uavcan.diagnostic.Record: node=2222 severity=2 ts_sync=123.456789 ts_local=[^:]+:\nHello world!"
+        pat = r"uavcan\.diagnostic\.Record: node=2222 severity=2 ts_sync=123\.456789 ts_local=\S+:\nHello world!"
         if lr.levelno == logging.INFO and re.match(pat, lr.message):
             break
     else:
