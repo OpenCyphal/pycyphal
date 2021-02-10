@@ -1,0 +1,5 @@
+cobs==1.1.4
+libpcap==1.10.0b15
+pyserial==3.5
+python-can==3.3.4
+pyuavcan==1.2.0b1
