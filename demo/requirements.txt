@@ -1,0 +1,1 @@
+pyuavcan[transport_can_pythoncan,transport_serial,transport_udp]
