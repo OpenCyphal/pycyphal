@@ -4,6 +4,7 @@
 
 import os as _os
 from . import dsdl as dsdl
+from .dsdl import DEMO_DIR as DEMO_DIR
 
 assert ("PYTHONASYNCIODEBUG" in _os.environ) or (
     _os.environ.get("IGNORE_PYTHONASYNCIODEBUG", False)

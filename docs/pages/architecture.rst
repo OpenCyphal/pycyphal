@@ -11,38 +11,38 @@ intended for non-embedded, user-facing applications such as GUI software, diagno
 automation scripts, prototypes, and various R&D cases.
 It is designed to support **GNU/Linux**, **MS Windows**, and **macOS** as first-class target platforms.
 
-The reader should understand the basics of `UAVCAN <https://uavcan.org/>`_ and be familiar with
-`asynchronous programming in Python <https://docs.python.org/3/library/asyncio-task.html>`_
+The reader should understand the basics of UAVCAN and be familiar with
+`asynchronous programming in Python <https://docs.python.org/3/library/asyncio.html>`_
 to understand this documentation.
 
 The library consists of several loosely coupled submodules,
-each implementing a well-segregated part of the protocol.
-Each of the submodules can be used separately depending on the level of abstraction required by the application.
+each implementing a well-segregated part of the protocol:
 
-- :mod:`pyuavcan.dsdl` -- DSDL language support: code generation and object serialization.
-  This module is a wrapper over `Nunavut <https://github.com/UAVCAN/nunavut/>`_.
+- :mod:`pyuavcan.dsdl` -- DSDL language support: transcompilation (code generation) and object serialization.
+  This module is a thin wrapper over `Nunavut <https://github.com/UAVCAN/nunavut/>`_.
 
 - :mod:`pyuavcan.transport` -- the abstract UAVCAN transport layer model and several
   concrete transport implementations (UAVCAN/CAN, UAVCAN/UDP, UAVCAN/serial, etc.).
   This submodule exposes a relatively low-level API where data is represented as serialized blocks of bytes.
   Users may build custom concrete transports based on this module as well.
+  *Typical applications are not expected to use this API directly.*
 
 - :mod:`pyuavcan.presentation` -- this layer binds the transport layer together with DSDL serialization logic,
   providing a high-level object-oriented API.
   At this layer, data is represented as instances of well-structured Python classes
   auto-generated from their DSDL source definitions.
+  *Typical applications are not expected to use this API directly.*
 
-- :mod:`pyuavcan.application` -- this is an optional layer containing high-level convenience
-  classes providing support for high-level protocol features such as node heartbeat broadcasting or monitoring.
-  This layer can be used to look up usage examples for the presentation and transport layer API.
+- :mod:`pyuavcan.application` -- this is the top-level API provided by this library that applications should rely on.
+  The factory :func:`pyuavcan.application.make_node` is the main entry point of the library.
 
 - :mod:`pyuavcan.util` -- this is just a loosely organized collection of various utility functions and classes
   that are used across the library. User applications may benefit from them also.
   Every other submodule depends on this one.
 
 .. note::
-   In order to use this library the user should at least
-   skim through the API docs for the first three of the listed modules.
+   In order to use this library the user should at least skim through the API docs for
+   :mod:`pyuavcan.application` and check out the :ref:`demo`.
 
 The overall structure of the library and its mapping onto the UAVCAN protocol is shown on the following diagram:
 
@@ -94,7 +94,7 @@ Whenever the API documentation refers to *monotonic time*, the time system of
 :meth:`asyncio.AbstractEventLoop.time` is implied.
 Per asyncio, it defaults to :func:`time.monotonic`,
 but it can be overridden by the user on a per-loop basis if necessary (read the asyncio docs for details).
-This principle is valid for all other components of the library; for example, the presentation layer.
+This principle is valid for all other components of the library.
 
 
 Media sub-layers
@@ -124,9 +124,6 @@ to be satisfied in all deployments;
 also, unnecessary submodules slow down package initialization and increase the memory footprint of the application,
 not to mention possible software reliability issues.
 
-Generally, what's been described can be seen as the transport layer model projected
-one level further down the protocol stack.
-
 Some transport implementations may be entirely monolithic, without a dedicated media sub-layer.
 For example, see :class:`pyuavcan.transport.serial.SerialTransport`.
 
@@ -142,7 +139,7 @@ Afterwards, the configured instance is used with the upper layers of the protoco
 
 .. image:: /_static/arch-redundant.svg
 
-The `UAVCAN Specification <https://uavcan.org/specification/>`_ adds the following remark on redundant transports:
+The `UAVCAN Specification <https://uavcan.org/specification>`_ adds the following remark on redundant transports:
 
     Reassembly of transfers from redundant interfaces may be implemented either on the per-transport-frame level
     or on the per-transfer level.
@@ -188,14 +185,14 @@ These capabilities are covered by the advanced network diagnostics API exposed b
   (possibly a non-existent one) or whose parameters are significantly altered (e.g., out-of-sequence transfer-ID).
 
 These advanced capabilities exist alongside the main communication logic using a separate set of API entities
-because their semantics are incompatible with regular communication.
+because their semantics are incompatible with regular applications.
 
 
 Virtualization
 ++++++++++++++
 
 Some transports support virtual interfaces that can be used for testing and experimentation
-instead of real physical connections.
+instead of physical connections.
 For example, the UAVCAN/CAN transport supports virtual CAN buses via SocketCAN,
 and the serial transport supports TCP/IP tunneling and local loopback mode.
 
@@ -215,7 +212,7 @@ either via the ``PYTHONPATH`` environment variable or via :data:`sys.path`.
 
 The main API entries are:
 
-- :func:`pyuavcan.dsdl.generate_package` -- generates a Python package from a DSDL namespace.
+- :func:`pyuavcan.dsdl.compile` -- transcompiles a DSDL namespace into a Python package.
 
 - :func:`pyuavcan.dsdl.serialize` and :func:`pyuavcan.dsdl.deserialize` -- serialize and deserialize
   an instance of an autogenerated class.
@@ -233,7 +230,7 @@ Presentation layer
 ------------------
 
 The presentation layer submodule :mod:`pyuavcan.presentation` is the first submodule among the reviewed so far that
-depends on other submodules (barring the utility submodule, which is an implicit dependency so it's not mentioned).
+depends on other submodules (aside from the utility submodule).
 The internal dependency relations can be visualized as follows:
 
 .. graphviz::
@@ -255,83 +252,43 @@ The internal dependency relations can be visualized as follows:
         application     -> {dsdl transport presentation util};
     }
 
-The function of the presentation layer is to build high-level object-oriented interface on top of the transport
-layer by invoking the DSDL serialization routines
+The only function of the presentation layer is to provide a high-level object-oriented interface on top of
+the transport layer by invoking the DSDL serialization routines
 (see :func:`pyuavcan.dsdl.serialize` and :func:`pyuavcan.dsdl.deserialize`).
-This is the highest level of abstraction presented to the user of the library.
-That is, when creating a new publisher or another network session, the calling code will interact
-directly with the presentation layer (the application layer, if used, serves as a thin proxy
-rather than adding any new abstraction on top).
-
-The main entity of the presentation layer is the controller class :class:`pyuavcan.presentation.Presentation`;
-specifically, the following methods are the core of the upper API:
-
-- :meth:`pyuavcan.presentation.Presentation.make_publisher` -- constructs :class:`pyuavcan.presentation.Publisher`.
-- :meth:`pyuavcan.presentation.Presentation.make_subscriber` -- constructs :class:`pyuavcan.presentation.Subscriber`.
-- :meth:`pyuavcan.presentation.Presentation.make_client` -- constructs :class:`pyuavcan.presentation.Client`.
-- :meth:`pyuavcan.presentation.Presentation.get_server` (sic!) -- constructs :class:`pyuavcan.presentation.Server`.
-  The name and semantics are slightly different because servers are unlike other session objects.
-
-The presentation layer is the main part of the library API.
+A typical application is not expected to invoke the presentation-layer API directly;
+instead, it should rely on the higher-level API entities provided by :mod:`pyuavcan.application`.
 
 
 Application layer
 -----------------
 
-The higher-level functions are implemented in the module :mod:`pyuavcan.application`.
-They operate directly on the presentation layer; there are no internal/private APIs used.
-Since the submodule relies exclusively on the public library API,
-it can be studied as a solid collection of usage examples and best practices.
+Submodule :mod:`pyuavcan.application` provides the top-level API for the application and implements certain
+standard application-layer functions defined by the UAVCAN Specification (chapter 5 *Application layer*).
+The **main entry point of the library** is :func:`pyuavcan.application.make_node`.
 
-The application layer submodule is the only top-level submodule that is not auto-imported.
-This is because it requires that the auto-generated Python package for the standard data types contained
-in the DSDL root namespace ``uavcan`` is available for importing; by default it is not.
-Another reason is that it is expected that some applications may choose to avoid reliance on the application
-layer, so in that case importing this submodule at initialization time would be counter-productive.
+This submodule requires the standard DSDL namespace ``uavcan`` to be compiled first (see :func:`pyuavcan.dsdl.compile`),
+so it is not auto-imported.
+A typical usage scenario is to either distribute compiled DSDL namespaces together with the application,
+or to generate them lazily before importing this submodule.
 
-As one might guess, if the submodule is imported before the ``uavcan`` root namespace package is generated,
-an :class:`ImportError` is raised (with ``name='uavcan'``).
-Applications may choose to catch that exception to implement lazy code generation.
-For a hands-on guide on how to do that read the :ref:`demo_app` chapter
-and the API documentation for :mod:`pyuavcan.dsdl`.
-
-
-Node class
-++++++++++
-
-The main entity of the application layer is the node class :class:`pyuavcan.application.Node`.
-This is essentially a helper class, it does not provide significant new abstractions.
+Chapter :ref:`demo` contains a complete usage example.
 
 
 High-level functions
 ++++++++++++++++++++
 
-There are several submodules containing implementations of various higher-level functions of the protocol,
-one submodule per function. Here is the full list of such modules:
+There are several submodules under this one that implement various application-layer functions of the protocol.
+Here is the full list them:
 
 .. computron-injection::
    :filename: synth/application_module_summary.py
 
-Normally, such modules are not pre-imported; the user should do that explicitly for required modules.
-This is done to avoid loading modules that may not be needed.
+Excepting some basic functions that are always initialized by default (like heartbeat or the register API),
+these modules are not auto-imported.
 
 
 Utilities
 ---------
 
-The utilities module contains a loosely organized collection of functions and classes that are
+Submodule :mod:`pyuavcan.util` contains a loosely organized collection of minor utilizies and helpers that are
 used by the library and are also available for reuse by the application.
-
-Functions :func:`pyuavcan.util.import_submodules` and :func:`pyuavcan.util.iter_descendants`
-may come useful if automatic discovery of available transport and/or media implementations is needed.
-
-For more information, read the API docs for :mod:`pyuavcan.util`.
-
-
-Command-line tool
------------------
-
-There is an independent but related project that is built on top of PyUAVCAN:
-`Yakut <https://github.com/UAVCAN/yakut>`_.
-It is a command-line interface utility for diagnostics and management of UAVCAN networks.
-Consider it as an extensive collection of practical usage examples for PyUAVCAN.

@@ -73,6 +73,7 @@
       <w>dsdlgp</w>
       <w>dsonar</w>
       <w>dtype</w>
+      <w>ebed</w>
       <w>edgeitems</w>
       <w>elif</w>
       <w>emptor</w>
@@ -225,6 +226,7 @@
       <w>sert</w>
       <w>serv</w>
       <w>setcap</w>
+      <w>setpoint</w>
       <w>setsockopt</w>
       <w>sheremet</w>
       <w>signedness</w>
@@ -239,6 +241,7 @@
       <w>ssssssss</w>
       <w>stdint</w>
       <w>strictification</w>
+      <w>strictify</w>
       <w>subcommand</w>
       <w>subcommands</w>
       <w>sublayers</w>
@@ -260,6 +263,7 @@
       <w>toctree</w>
       <w>todos</w>
       <w>tradeoff</w>
+      <w>transcompiled</w>
       <w>transcompiling</w>
       <w>typecheck</w>
       <w>uart</w>

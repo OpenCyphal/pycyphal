@@ -94,27 +94,26 @@ Example: ``start()`` -- do nothing if already started; ``close()`` -- do nothing
 If you intend to implement some form of RAII with the help of object finalizers ``__del__()``,
 beware that if the object is accidentally resurrected in the process, the finalizer may or may not be invoked
 again later, which breaks the RAII logic.
-A nasty pitfall I encountered is that if the object is referenced in a logging call from the finalizer,
-the logging library may retain the reference until the next GC cycle, causing the finalizer to be invoked again.
+This may happen, for instance, if the object is passed to a logging call.
 
 API functions and methods that contain the following parameters should adhere to the semantic naming conventions:
 
-+-----------------------------------------+-------------------------+-----------------------------------------------------------+
-|Type                                     | Name                    | Purpose                                                   |
-+=========================================+=========================+===========================================================+
-|``pydsdl.*Type``                         | ``model``               | PyDSDL type model (descriptor).                           |
-+-----------------------------------------+-------------------------+-----------------------------------------------------------+
-|``pyuavcan.dsdl.*Object``                | ``obj``                 | Instance of a generated class implementing a DSDL type.   |
-+-----------------------------------------+-------------------------+-----------------------------------------------------------+
-|``typing.Type[pyuavcan.dsdl.*Object]``   | ``dtype``               | Generated class implementing a DSDL type.                 |
-+-----------------------------------------+-------------------------+-----------------------------------------------------------+
-|``float``                                | ``monotonic_deadline``  | Abort operation if not completed **by** this time.        |
-|                                         |                         | Time system is ``AbstractEventLoop.time()``.              |
-+-----------------------------------------+-------------------------+-----------------------------------------------------------+
-|``float``                                | ``timeout``             | Abort operation if not completed **in** this time.        |
-+-----------------------------------------+-------------------------+-----------------------------------------------------------+
-|``int``                                  | ``node_id``             | A node identifier.                                        |
-+-----------------------------------------+-------------------------+-----------------------------------------------------------+
++--------------------------------------+-----------------------+-------------------------------------------------------+
+|Type                                  |Name                   |Purpose                                                |
++======================================+=======================+=======================================================+
+|``pydsdl.*Type``                      |``model``              |PyDSDL type model (descriptor).                        |
++--------------------------------------+-----------------------+-------------------------------------------------------+
+|``pyuavcan.dsdl.*Object``             |``obj``                |Instance of a generated class implementing DSDL type.  |
++--------------------------------------+-----------------------+-------------------------------------------------------+
+|``typing.Type[pyuavcan.dsdl.*Object]``|``dtype``              |Generated class implementing a DSDL type.              |
++--------------------------------------+-----------------------+-------------------------------------------------------+
+|``float``                             |``monotonic_deadline`` |Abort operation if not completed **by** this time.     |
+|                                      |                       |Time system is ``AbstractEventLoop.time()``.           |
++--------------------------------------+-----------------------+-------------------------------------------------------+
+|``float``                             |``timeout``            |Abort operation if not completed **in** this time.     |
++--------------------------------------+-----------------------+-------------------------------------------------------+
+|``int``                               |``node_id``            |A node identifier.                                     |
++--------------------------------------+-----------------------+-------------------------------------------------------+
 
 
 Documentation
@@ -173,8 +172,7 @@ Ensure that your tests do not emit any errors or warnings into stderr output upo
 because that may distract the developer from noticing true abnormalities
 (you may use ``caplog.at_level('CRITICAL')`` to suppress undesirable output).
 
-Write unit tests as functions without arguments prefixed with ``_unittest_``;
-optionally, for slow test functions use the prefix ``_unittest_slow_``.
+Write unit tests as functions without arguments prefixed with ``_unittest_``.
 Generally, simple test functions should be located as close as possible to the tested code,
 preferably at the end of the same Python module; exception applies to several directories listed in ``setup.cfg``,
 which are unconditionally excluded from unit test discovery because they rely on DSDL autogenerated code
@@ -251,7 +249,7 @@ with suppression comments.
 
 Configure a File Watcher to run Black on save (make sure to disable running it on external file changes though).
 
-The test suite stores compiled DSDL into `.compiled/` in the current working directory
+The test suite stores compiled DSDL into ``.compiled/`` in the current working directory
 (when using Nox, the current working directory may be under a virtualenv private directory).
 Make sure to mark it as a source directory to enable code completion and type analysis in the IDE
 (for PyCharm: right click -> Mark Directory As -> Sources Root).

@@ -120,6 +120,8 @@ class Publisher(MessagePort[MessageClass]):
         The send timeout is still in effect here -- if the operation cannot complete in the selected time,
         send will be cancelled and a low-severity log message will be emitted.
         """
+        if self._maybe_impl is None:  # Detect errors as early as possible, do not wait for the task to start.
+            raise PortClosedError(repr(self))
 
         async def executor() -> None:
             try:

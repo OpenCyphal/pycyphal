@@ -116,7 +116,7 @@ class Serializer(abc.ABC):
         Accepts an array of bools and encodes it into the destination using fast native serialization routine
         implemented in numpy. The current bit offset must be byte-aligned.
         """
-        assert x.dtype in (numpy.bool, numpy.bool_)
+        assert x.dtype in (bool, numpy.bool_)
         assert self._bit_offset % 8 == 0
         packed = numpy.packbits(x, bitorder="little")
         assert len(packed) * 8 >= len(x)
@@ -196,7 +196,7 @@ class Serializer(abc.ABC):
         raise NotImplementedError
 
     def add_unaligned_array_of_bits(self, x: numpy.ndarray) -> None:
-        assert x.dtype in (numpy.bool, numpy.bool_)
+        assert x.dtype in (bool, numpy.bool_)
         packed = numpy.packbits(x, bitorder="little")
         backtrack = len(packed) * 8 - len(x)
         assert backtrack >= 0
@@ -293,13 +293,13 @@ class _LittleEndianSerializer(Serializer):
         # We assume that the local platform uses IEEE 754-compliant floating point representation; otherwise,
         # the generated serialized representation may be incorrect. NumPy seems to only support IEEE-754 compliant
         # platforms though so I don't expect any compatibility issues.
-        assert x.dtype not in (numpy.bool, numpy.bool_, numpy.object)
+        assert x.dtype not in (bool, numpy.bool_, object)
         self.add_aligned_bytes(x.view(_Byte))
 
     def add_unaligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
         # This is much slower than the aligned version because we have to manually copy and shift each byte,
         # but still better than manual elementwise serialization.
-        assert x.dtype not in (numpy.bool, numpy.bool_, numpy.object)
+        assert x.dtype not in (bool, numpy.bool_, object)
         self.add_unaligned_bytes(x.view(_Byte))
 
 
@@ -419,7 +419,7 @@ def _unittest_serializer_aligned() -> None:
                 True,
                 False,  # 11100110
             ],
-            numpy.bool,
+            bool,
         )
     )
     expected += "11000101 01100111"
@@ -442,7 +442,7 @@ def _unittest_serializer_aligned() -> None:
                 True,
                 False,  # 11010
             ],
-            numpy.bool,
+            bool,
         )
     )
     expected += "11000101 xxx01011"
@@ -472,7 +472,7 @@ def _unittest_serializer_unaligned() -> None:  # Tricky cases with unaligned fie
                 True,
                 True,  # 111
             ],
-            numpy.bool,
+            bool,
         )
     )
     assert str(ser) == "11000101 xxxxx111"
@@ -491,7 +491,7 @@ def _unittest_serializer_unaligned() -> None:  # Tricky cases with unaligned fie
                 False,
                 True,  # 11101 (byte alignment lost, three bits short)
             ],
-            numpy.bool,
+            bool,
         )
     )
     assert str(ser) == "11000101 00101111 xxx10111"
@@ -500,7 +500,7 @@ def _unittest_serializer_unaligned() -> None:  # Tricky cases with unaligned fie
     ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=_Byte))
     assert str(ser) == "11000101 00101111 01010111 10000010 11000110 xxx01010"
 
-    ser.add_unaligned_array_of_bits(numpy.array([False, True, True], numpy.bool))
+    ser.add_unaligned_array_of_bits(numpy.array([False, True, True], bool))
     assert ser._bit_offset % 8 == 0, "Byte alignment is not restored"  # pylint: disable=protected-access
     assert str(ser) == "11000101 00101111 01010111 10000010 11000110 11001010"
 

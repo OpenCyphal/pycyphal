@@ -16,7 +16,7 @@ _logger = logging.getLogger(__name__)
 
 
 # noinspection PyUnusedLocal
-def _unittest_slow_builtin_form_manual(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_builtin_form_manual(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import uavcan.node
     import uavcan.register
     import uavcan.primitive.array
@@ -99,8 +99,8 @@ def _unittest_slow_builtin_form_manual(generated_packages: typing.List[pyuavcan.
         pyuavcan.dsdl.update_from_builtin(uavcan.register.Access_1_0.Response(), bi)
 
 
-def _unittest_slow_builtin_form_automatic(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    for info in generated_packages:
+def _unittest_slow_builtin_form_automatic(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+    for info in compiled:
         for model in _util.expand_service_types(info.models):
             if max(model.bit_length_set) / 8 > 1024 * 1024:
                 _logger.info("Automatic test of %s skipped because the type is too large", model)
@@ -126,7 +126,7 @@ def _unittest_slow_builtin_form_automatic(generated_packages: typing.List[pyuavc
 
 
 # noinspection PyUnusedLocal
-def _unittest_issue_116(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_issue_116(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     from uavcan.register import Access_1_0
 
     valid = pyuavcan.dsdl.update_from_builtin(Access_1_0.Request(), {"name": {"name": "uavcan.pub.measurement"}})

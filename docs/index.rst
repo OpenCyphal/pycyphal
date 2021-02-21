@@ -14,7 +14,7 @@ Contents
 --------
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
 
    pages/architecture
    pages/installation
@@ -31,6 +31,19 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
+See also
+--------
+
+Related projects built on top of PyUAVCAN:
+
+- `Yakut <https://github.com/UAVCAN/yakut>`_ ---
+  a command-line interface utility for diagnostics and management of UAVCAN networks.
+
+- `Yukon <https://github.com/UAVCAN/yukon>`_ ---
+  a rich integrated development environment for developing and maintaining UAVCAN-powered
+  vehicular computing systems.
 
 
 License

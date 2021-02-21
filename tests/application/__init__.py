@@ -9,4 +9,4 @@ import pyuavcan
 def get_transport(node_id: typing.Optional[int]) -> pyuavcan.transport.Transport:
     from pyuavcan.transport.udp import UDPTransport
 
-    return UDPTransport("127.0.0.1", local_node_id=node_id)
+    return UDPTransport("127.42.0.1", local_node_id=node_id)

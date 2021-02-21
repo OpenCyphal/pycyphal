@@ -4,22 +4,24 @@
 
 """
 Keeps track of online nodes by subscribing to ``uavcan.node.Heartbeat`` and requesting ``uavcan.node.GetInfo``
-when necessary; see :class:`NodeTracker`.
+when necessary; see :class:`pyuavcan.application.node_tracker.NodeTracker`.
 """
 
-import typing
+from __future__ import annotations
+from typing import NamedTuple, Callable, Optional, Dict, List
 import asyncio
 import logging
 from uavcan.node import Heartbeat_1_0 as Heartbeat
 from uavcan.node import GetInfo_1_0 as GetInfo
 import pyuavcan
+import pyuavcan.application
 
 
-Entry = typing.NamedTuple(
+Entry = NamedTuple(
     "Entry",
     [
         ("heartbeat", Heartbeat),
-        ("info", typing.Optional[GetInfo.Response]),
+        ("info", Optional[GetInfo.Response]),
     ],
 )
 """
@@ -29,7 +31,7 @@ The info is None until the node responds to the GetInfo request.
 """
 
 
-UpdateHandler = typing.Callable[[int, typing.Optional[Entry], typing.Optional[Entry]], None]
+UpdateHandler = Callable[[int, Optional[Entry], Optional[Entry]], None]
 """
 Arguments: node-ID, old entry, new entry. See :meth:`NodeTracker.add_update_handler` for details.
 """
@@ -78,18 +80,45 @@ class NodeTracker:
     The counter will resume from scratch if the node is restarted or a new node under that node-ID is detected.
     """
 
-    def __init__(self, presentation: pyuavcan.presentation.Presentation):
-        self._presentation = presentation
-        self._sub_heartbeat = self._presentation.make_subscriber_with_fixed_subject_id(Heartbeat)
+    def __init__(self, node: pyuavcan.application.Node):
+        self._node = node
+        self._sub_heartbeat = self.node.make_subscriber(Heartbeat)
 
-        self._registry: typing.Dict[int, Entry] = {}
-        self._offline_timers: typing.Dict[int, asyncio.TimerHandle] = {}
-        self._info_tasks: typing.Dict[int, asyncio.Task[None]] = {}
+        self._registry: Dict[int, Entry] = {}
+        self._offline_timers: Dict[int, asyncio.TimerHandle] = {}
+        self._info_tasks: Dict[int, asyncio.Task[None]] = {}
 
-        self._update_handlers: typing.List[UpdateHandler] = []
+        self._update_handlers: List[UpdateHandler] = []
 
         self._get_info_timeout = self.DEFAULT_GET_INFO_TIMEOUT
         self._get_info_attempts = self.DEFAULT_GET_INFO_ATTEMPTS
+
+        def close() -> None:
+            """
+            When closed the registry is emptied and all handlers are removed.
+            This is to avoid accidental reliance on obsolete data.
+            """
+            _logger.debug("Closing %s", self)
+            self._sub_heartbeat.close()
+            self._registry.clear()
+            self._update_handlers.clear()
+
+            for tm in self._offline_timers.values():
+                tm.cancel()
+            self._offline_timers.clear()
+
+            for tsk in self._info_tasks.values():
+                tsk.cancel()
+            self._info_tasks.clear()
+
+        node.add_lifetime_hooks(
+            lambda: self._sub_heartbeat.receive_in_background(self._on_heartbeat),
+            close,
+        )
+
+    @property
+    def node(self) -> pyuavcan.application.Node:
+        return self._node
 
     @property
     def get_info_timeout(self) -> float:
@@ -125,7 +154,7 @@ class NodeTracker:
             raise ValueError(f"Invalid attempt limit: {value}")
 
     @property
-    def registry(self) -> typing.Dict[int, Entry]:
+    def registry(self) -> Dict[int, Entry]:
         """
         Access the live online node registry. Keys are node-ID, values are :class:`Entry`.
         The returned value is a copy of the actual registry to prevent accidental mutation.
@@ -134,31 +163,6 @@ class NodeTracker:
         return {  # pylint: disable=unnecessary-comprehension
             k: v for k, v in sorted(self._registry.items(), key=lambda item: item[0])
         }
-
-    def start(self) -> None:
-        """
-        The registry is empty and hooks are not invoked until the instance is started.
-        """
-        _logger.debug("Starting %s", self)
-        self._sub_heartbeat.receive_in_background(self._on_heartbeat)  # Idempotent
-
-    def close(self) -> None:
-        """
-        When closed the registry is emptied and all handlers are removed.
-        This is to avoid accidental reliance on obsolete data.
-        """
-        _logger.debug("Closing %s", self)
-        self._sub_heartbeat.close()
-        self._registry.clear()
-        self._update_handlers.clear()
-
-        for tm in self._offline_timers.values():
-            tm.cancel()
-        self._offline_timers.clear()
-
-        for tsk in self._info_tasks.values():
-            tsk.cancel()
-        self._info_tasks.clear()
 
     def add_update_handler(self, handler: UpdateHandler) -> None:
         """
@@ -209,9 +213,7 @@ class NodeTracker:
             self._offline_timers[node_id].cancel()
         except LookupError:
             pass
-        self._offline_timers[node_id] = self._presentation.loop.call_later(
-            Heartbeat.OFFLINE_TIMEOUT, self._on_offline, node_id
-        )
+        self._offline_timers[node_id] = self.node.loop.call_later(Heartbeat.OFFLINE_TIMEOUT, self._on_offline, node_id)
 
         # Do the update unless this is just a regular heartbeat (no restart, known node).
         if update:
@@ -241,7 +243,7 @@ class NodeTracker:
 
     def _request_info(self, node_id: int) -> None:
         async def attempt() -> bool:
-            client = self._presentation.make_client_with_fixed_service_id(GetInfo, node_id)
+            client = self.node.make_client(GetInfo, node_id)
             try:
                 client.priority = self.GET_INFO_PRIORITY
                 client.response_timeout = self._get_info_timeout
@@ -290,9 +292,9 @@ class NodeTracker:
             del self._info_tasks[node_id]
 
         self._cancel_task(node_id)
-        self._info_tasks[node_id] = self._presentation.loop.create_task(worker())
+        self._info_tasks[node_id] = self.node.loop.create_task(worker())
 
-    def _notify(self, node_id: int, old_entry: typing.Optional[Entry], new_entry: typing.Optional[Entry]) -> None:
+    def _notify(self, node_id: int, old_entry: Optional[Entry], new_entry: Optional[Entry]) -> None:
         assert isinstance(old_entry, Entry) or old_entry is None
         assert isinstance(new_entry, Entry) or new_entry is None
         pyuavcan.util.broadcast(self._update_handlers)(node_id, old_entry, new_entry)

@@ -8,7 +8,7 @@ import pyuavcan.dsdl
 from . import _util
 
 
-def _unittest_slow_textual(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_textual(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     def validate(obj: pyuavcan.dsdl.CompositeObject, s: str) -> None:
         for f in model.fields_except_padding:  # pylint: disable=undefined-loop-variable
             field_present = (f"{f.name}=" in s) or (f"{f.name}_=" in s)
@@ -23,7 +23,7 @@ def _unittest_slow_textual(generated_packages: typing.List[pyuavcan.dsdl.Generat
                 # In structures all fields are printed always.
                 assert field_present, f"{f.name}: {s}"
 
-    for info in generated_packages:
+    for info in compiled:
         for model in _util.expand_service_types(info.models):
             for fn in [str, repr]:
                 assert callable(fn)
