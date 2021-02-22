@@ -85,6 +85,14 @@ class SQLiteBackend(Backend):
         res = self._execute(r"select name from register order by name limit 1 offset ?", index).fetchone()
         return res[0] if res else None
 
+    def setdefault(self, key: str, default: Optional[Union[Entry, Value]] = None) -> Entry:
+        # This override is necessary to support assignment of Value along with Entry.
+        if key not in self:
+            if default is None:
+                raise TypeError
+            self[key] = default
+        return self[key]
+
     def __getitem__(self, key: str) -> Entry:
         res = self._execute(r"select mutable, value from register where name = ?", key).fetchone()
         if res is None:
@@ -102,10 +110,14 @@ class SQLiteBackend(Backend):
     def __setitem__(self, key: str, value: Union[Entry, Value]) -> None:
         """
         If the register does not exist, it will be implicitly created.
-        If the value is an instance of :class:`Value`, the mutability flag defaults to True.
+        If the value is an instance of :class:`Value`, the mutability flag defaults to the old value or True if none.
         """
         if isinstance(value, Value):
-            e = Entry(value, mutable=True)
+            try:
+                mutable = self[key].mutable
+            except KeyError:
+                mutable = True
+            e = Entry(value, mutable=mutable)
         elif isinstance(value, Entry):
             e = value
         else:  # pragma: no cover

@@ -21,7 +21,10 @@ else:  # pragma: no cover
     from typing import Mapping  # pylint: disable=ungrouped-imports
 
 
+# Update the initialization logic when adding new entries here:
+REG_NODE_ID = "uavcan.node.id"
 REG_UNIQUE_ID = "uavcan.node.unique_id"
+REG_DESCRIPTION = "uavcan.node.description"
 REG_DIAGNOSTIC_SEVERITY = "uavcan.diagnostic.severity"
 REG_DIAGNOSTIC_TIMESTAMP = "uavcan.diagnostic.timestamp"
 
@@ -121,6 +124,7 @@ def make_node(
 
     Aside from the registers that encode the transport configuration (which are documented in :func:`make_transport`),
     the following registers are considered.
+    Generally, it is not possible to change their type --- automatic type conversion may take place to prevent that.
     They are split into groups by application-layer function they configure.
 
     ..  list-table:: General
@@ -138,6 +142,12 @@ def make_node(
             If not defined, a new random value is generated and stored as immutable
             (therefore, if no persistent register file is used, a new unique-ID is generated at every launch, which
             may be undesirable in some applications, particularly those that require PnP node-ID allocation).
+
+        * - ``uavcan.node.description``
+          - ``string``
+          - As defined by the UAVCAN Specification, this standard register is intended to store a human-friendly
+            description of the node.
+            It is not used by the implementation itself but created automatically if not present.
 
     ..  list-table:: :mod:`pyuavcan.application.diagnostic`
         :widths: 1 1 9
@@ -185,7 +195,7 @@ def make_node(
         These values will be checked before the environment variables are parsed (unless disabled)
         to make sure that every register specified here exists in the register file with the specified type.
 
-        Existing registers of matching type will be kept unchanged.
+        Existing registers of matching type will be kept unchanged (even if the value is different).
         Existing registers of a different type will be type-converted to the specified type.
         Missing registers will be created with the specified value.
 
@@ -253,14 +263,23 @@ def make_node(
 
     db = SQLiteBackend(register_file or "")
     try:
-        # Apply defaults first to ensure that new registers are created with the correct types before envs are applied.
+        # Apply defaults and schema first to ensure that new registers are created with the correct types
+        # before environment variables are applied.
         _apply_schema(db, schema or {})
+        _apply_schema(
+            db,
+            {
+                REG_NODE_ID: register.Value(natural16=register.Natural16([0xFFFF])),
+                REG_DESCRIPTION: register.Value(string=register.String()),
+                REG_DIAGNOSTIC_SEVERITY: register.Value(natural16=register.Natural16([8])),
+                REG_DIAGNOSTIC_TIMESTAMP: register.Value(bit=register.Bit([False])),
+            },
+        )
         if not ignore_environment_variables:
             _apply_env_vars(db)
 
         # Populate certain fields of the node info structure automatically.
         info.protocol_version.major, info.protocol_version.minor = pyuavcan.UAVCAN_SPECIFICATION_VERSION
-
         if info.unique_id.sum() == 0:
             if REG_UNIQUE_ID not in db:
                 uid_size_bytes = 16
