@@ -46,7 +46,7 @@ each implementing a well-segregated part of the protocol:
 
 The overall structure of the library and its mapping onto the UAVCAN protocol is shown on the following diagram:
 
-.. image:: /_static/arch-non-redundant.svg
+.. image:: /static/arch-non-redundant.svg
 
 Every submodule is imported automatically, excepting application layer and concrete transport implementation
 submodules -- those must be imported explicitly by the user::
@@ -137,7 +137,7 @@ In order to initialize it, the application should first initialize each of the p
 supply them to the redundant pseudo-transport instance.
 Afterwards, the configured instance is used with the upper layers of the protocol stack, as shown on the diagram.
 
-.. image:: /_static/arch-redundant.svg
+.. image:: /static/arch-redundant.svg
 
 The `UAVCAN Specification <https://uavcan.org/specification>`_ adds the following remark on redundant transports:
 
