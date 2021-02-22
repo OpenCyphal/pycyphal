@@ -3,7 +3,6 @@
 
 PointXY.1.0[<64] points
 
-@assert _offset_ % 8 == {0}
 @extent 1024 * 8
 
 ---

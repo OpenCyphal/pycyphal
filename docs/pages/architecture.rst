@@ -13,32 +13,31 @@ It is designed to support **GNU/Linux**, **MS Windows**, and **macOS** as first-
 
 The reader should understand the basics of UAVCAN and be familiar with
 `asynchronous programming in Python <https://docs.python.org/3/library/asyncio.html>`_
-to understand this documentation.
+to read this documentation.
 
 The library consists of several loosely coupled submodules,
 each implementing a well-segregated part of the protocol:
 
-- :mod:`pyuavcan.dsdl` -- DSDL language support: transcompilation (code generation) and object serialization.
+- :mod:`pyuavcan.dsdl` --- DSDL language support: transcompilation (code generation) and object serialization.
   This module is a thin wrapper over `Nunavut <https://github.com/UAVCAN/nunavut/>`_.
 
-- :mod:`pyuavcan.transport` -- the abstract UAVCAN transport layer model and several
+- :mod:`pyuavcan.transport` --- the abstract UAVCAN transport layer model and several
   concrete transport implementations (UAVCAN/CAN, UAVCAN/UDP, UAVCAN/serial, etc.).
   This submodule exposes a relatively low-level API where data is represented as serialized blocks of bytes.
   Users may build custom concrete transports based on this module as well.
   *Typical applications are not expected to use this API directly.*
 
-- :mod:`pyuavcan.presentation` -- this layer binds the transport layer together with DSDL serialization logic,
-  providing a high-level object-oriented API.
-  At this layer, data is represented as instances of well-structured Python classes
-  auto-generated from their DSDL source definitions.
+- :mod:`pyuavcan.presentation` --- this layer binds the transport layer together with DSDL serialization logic,
+  providing a higher-level object-oriented API.
+  At this layer, data is represented as instances of auto-generated Python classes
+  (code generation is managed by :mod:`pyuavcan.dsdl`).
   *Typical applications are not expected to use this API directly.*
 
-- :mod:`pyuavcan.application` -- this is the top-level API provided by this library that applications should rely on.
+- :mod:`pyuavcan.application` --- the top-level API for the application.
   The factory :func:`pyuavcan.application.make_node` is the main entry point of the library.
 
-- :mod:`pyuavcan.util` -- this is just a loosely organized collection of various utility functions and classes
+- :mod:`pyuavcan.util` --- a loosely organized collection of various utility functions and classes
   that are used across the library. User applications may benefit from them also.
-  Every other submodule depends on this one.
 
 .. note::
    In order to use this library the user should at least skim through the API docs for
@@ -48,8 +47,29 @@ The overall structure of the library and its mapping onto the UAVCAN protocol is
 
 .. image:: /static/arch-non-redundant.svg
 
-Every submodule is imported automatically, excepting application layer and concrete transport implementation
-submodules -- those must be imported explicitly by the user::
+The dependency relations of the submodules are as follows:
+
+.. graphviz::
+    :caption: Submodule interdependency
+
+    digraph submodule_interdependency {
+        graph   [bgcolor=transparent];
+        node    [shape=box, style=filled, fontname="monospace"];
+
+        dsdl            [fillcolor="#FF88FF", label="pyuavcan.dsdl"];
+        transport       [fillcolor="#FFF2CC", label="pyuavcan.transport"];
+        presentation    [fillcolor="#D9EAD3", label="pyuavcan.presentation"];
+        application     [fillcolor="#C9DAF8", label="pyuavcan.application"];
+        util            [fillcolor="#D3D3D3", label="pyuavcan.util"];
+
+        dsdl            -> util;
+        transport       -> util;
+        presentation    -> {dsdl transport util};
+        application     -> {dsdl transport presentation util};
+    }
+
+Every submodule is imported automatically except the application layer and concrete transport implementation
+submodules --- those must be imported explicitly by the user::
 
     >>> import pyuavcan
     >>> pyuavcan.dsdl.serialize         # OK, the DSDL submodule is auto-imported.
@@ -70,7 +90,7 @@ The UAVCAN protocol itself is designed to support different transports such as C
 UDP/IP (UAVCAN/UDP), raw serial links (UAVCAN/serial), and so on.
 Generally, a real-time safety-critical implementation of UAVCAN would support a limited subset of
 transports defined by the protocol (often just one) in order to reduce the validation & verification efforts.
-PyUAVCAN is different -- it is created for user-facing software rather than reliable deeply embedded systems;
+PyUAVCAN is different --- it is created for user-facing software rather than reliable deeply embedded systems;
 that is, PyUAVCAN can't be put onboard a vehicle, but it can be put onto the computer of an engineer or a researcher
 building said vehicle to help them implement, understand, validate, verify, and diagnose its onboard network.
 Hence, PyUAVCAN trades off simplicity and constrainedness (desirable for embedded systems)
@@ -88,12 +108,16 @@ here is the full list of them:
 .. computron-injection::
    :filename: synth/transport_summary.py
 
+..  important::
+
+    Typical applications are not expected to initialize their transport manually, or to access this module at all.
+    Initialization of low-level components is fully managed by :func:`pyuavcan.application.make_node`.
+
 Users can implement their own custom transports by subclassing :class:`pyuavcan.transport.Transport`.
 
 Whenever the API documentation refers to *monotonic time*, the time system of
 :meth:`asyncio.AbstractEventLoop.time` is implied.
-Per asyncio, it defaults to :func:`time.monotonic`,
-but it can be overridden by the user on a per-loop basis if necessary (read the asyncio docs for details).
+Per asyncio, it defaults to :func:`time.monotonic`; it is not recommended to change this.
 This principle is valid for all other components of the library.
 
 
@@ -163,24 +187,24 @@ are vital for advanced network diagnostics or debugging.
 While existing general-purpose solutions like Wireshark, libpcap, npcap, SocketCAN, etc. are adequate for
 low-level access, they are unsuitable for non-trivial use cases where comprehensive analysis is desired.
 
-Certain scenarios require emitting spoofed traffic where some of its parameters are intentionally distorted
+Certain scenarios require emission of spoofed traffic where some of its parameters are intentionally distorted
 (like fake source address).
 This may be useful for implementing complex end-to-end tests for UAVCAN-enabled equipment,
 running HITL/SITL simulation, or validating devices for compliance against the UAVCAN Specification.
 
 These capabilities are covered by the advanced network diagnostics API exposed by the transport layer:
 
-- :meth:`pyuavcan.transport.Transport.begin_capture` --
+- :meth:`pyuavcan.transport.Transport.begin_capture` ---
   **capturing** on a transport refers to monitoring low-level network events and packets exchanged over the
   network even if they neither originate nor terminate at the local node.
 
-- :meth:`pyuavcan.transport.Transport.make_tracer` --
+- :meth:`pyuavcan.transport.Transport.make_tracer` ---
   **tracing** refers to reconstructing high-level processes that transpire on the network from a sequence of
   captured low-level events.
   Tracing may take place in real-time (with PyUAVCAN connected to a live network) or offline
   (with events read from a black box recorder or from a log file).
 
-- :meth:`pyuavcan.transport.Transport.spoof` --
+- :meth:`pyuavcan.transport.Transport.spoof` ---
   **spoofing** refers to faking network transactions as if they were coming from a different node
   (possibly a non-existent one) or whose parameters are significantly altered (e.g., out-of-sequence transfer-ID).
 
@@ -212,15 +236,15 @@ either via the ``PYTHONPATH`` environment variable or via :data:`sys.path`.
 
 The main API entries are:
 
-- :func:`pyuavcan.dsdl.compile` -- transcompiles a DSDL namespace into a Python package.
+- :func:`pyuavcan.dsdl.compile` --- transcompiles a DSDL namespace into a Python package.
 
-- :func:`pyuavcan.dsdl.serialize` and :func:`pyuavcan.dsdl.deserialize` -- serialize and deserialize
+- :func:`pyuavcan.dsdl.serialize` and :func:`pyuavcan.dsdl.deserialize` --- serialize and deserialize
   an instance of an autogenerated class.
 
-- :class:`pyuavcan.dsdl.CompositeObject` and :class:`pyuavcan.dsdl.ServiceObject` -- base classes for
+- :class:`pyuavcan.dsdl.CompositeObject` and :class:`pyuavcan.dsdl.ServiceObject` --- base classes for
   Python classes generated from DSDL type definitions; message types and service types, respectively.
 
-- :func:`pyuavcan.dsdl.to_builtin` and :func:`pyuavcan.dsdl.update_from_builtin` -- used to convert
+- :func:`pyuavcan.dsdl.to_builtin` and :func:`pyuavcan.dsdl.update_from_builtin` --- used to convert
   a DSDL object instance to/from a simplified representation using only built-in types such as :class:`dict`,
   :class:`list`, :class:`int`, :class:`float`, :class:`str`, and so on. These can be used as an intermediate
   representation for conversion to/from JSON, YAML, and other commonly used serialization formats.
@@ -229,33 +253,11 @@ The main API entries are:
 Presentation layer
 ------------------
 
-The presentation layer submodule :mod:`pyuavcan.presentation` is the first submodule among the reviewed so far that
-depends on other submodules (aside from the utility submodule).
-The internal dependency relations can be visualized as follows:
+The role of the presentation layer submodule :mod:`pyuavcan.presentation` is to provide a
+high-level object-oriented interface and to route data between port instances
+(publishers, subscribers, RPC-clients, and RPC-servers) and their transport sessions.
 
-.. graphviz::
-    :caption: Submodule interdependency
-
-    digraph submodule_interdependency {
-        graph   [bgcolor=transparent];
-        node    [shape=box, style=filled, fontname="monospace"];
-
-        dsdl            [fillcolor="#FF88FF", label="pyuavcan.dsdl"];
-        transport       [fillcolor="#FFF2CC", label="pyuavcan.transport"];
-        presentation    [fillcolor="#D9EAD3", label="pyuavcan.presentation"];
-        application     [fillcolor="#C9DAF8", label="pyuavcan.application"];
-        util            [fillcolor="#D3D3D3", label="pyuavcan.util"];
-
-        dsdl            -> util;
-        transport       -> util;
-        presentation    -> {dsdl transport util};
-        application     -> {dsdl transport presentation util};
-    }
-
-The only function of the presentation layer is to provide a high-level object-oriented interface on top of
-the transport layer by invoking the DSDL serialization routines
-(see :func:`pyuavcan.dsdl.serialize` and :func:`pyuavcan.dsdl.deserialize`).
-A typical application is not expected to invoke the presentation-layer API directly;
+A typical application is not expected to access the presentation-layer API directly;
 instead, it should rely on the higher-level API entities provided by :mod:`pyuavcan.application`.
 
 

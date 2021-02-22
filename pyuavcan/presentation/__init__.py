@@ -40,7 +40,7 @@ Trivial types may be omitted from the diagram.
 Usage example
 +++++++++++++
 
-.. important::
+.. attention::
     A typical application should not instantiate presentation-layer entities directly;
     instead, use the higher-level API provided by :mod:`pyuavcan.application`.
 

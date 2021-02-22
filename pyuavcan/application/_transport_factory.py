@@ -112,7 +112,7 @@ def make_transport(
           - If True, a loopback transport will be constructed. This is intended for testing only.
 
     :param registers:
-        A mapping of :class:`str` to :class:`pyuavcan.application.register.ValueProxy`
+        A mapping of :class:`str` to :class:`pyuavcan.application.register.Value`
         (e.g., an instance of :class:`pyuavcan.application.register.Registry` or a regular dict).
 
     :param reconfigurable:
@@ -131,6 +131,11 @@ def make_transport(
         None if no transport is configured AND ``reconfigurable`` is False.
         Otherwise, a functional transport instance is returned.
 
+    :raises:
+        - :class:`pyuavcan.application.register.MissingRegisterError` if a register is expected but cannot be found.
+        - :class:`pyuavcan.application.register.ValueConversionError` if a register is found but its value
+          cannot be converted to the correct type.
+
     >>> from pyuavcan.application.register import Value, String, Natural16
     >>> reg = {
     ...     "uavcan.udp.ip": Value(string=String("127.99.0.0")),
@@ -140,7 +145,7 @@ def make_transport(
     >>> tr
     UDPTransport('127.99.1.1', local_node_id=257, ...)
     >>> tr.close()
-    >>> tr = make_transport(reg, reconfigurable=True)    # Same but reconfigurable.
+    >>> tr = make_transport(reg, reconfigurable=True)                   # Same but reconfigurable.
     >>> tr                                                              # Wrapped into RedundantTransport.
     RedundantTransport(UDPTransport('127.99.1.1', local_node_id=257, ...))
     >>> tr.close()
@@ -169,8 +174,8 @@ def make_transport(
     >>> tr.close()
 
     >>> reg = {
-    ...     "uavcan.udp.ip": Value(string=String("127.99.1.1")),    # Per the standard register specification,
-    ...     "uavcan.node.id": Value(natural16=Natural16([0xFFFF])), # value 0xFFFF also means unset/anonymous.
+    ...     "uavcan.udp.ip": Value(string=String("127.99.1.1")),        # Per the standard register specification,
+    ...     "uavcan.node.id": Value(natural16=Natural16([0xFFFF])),     # value 0xFFFF also means unset/anonymous.
     ... }
     >>> tr = make_transport(reg)
     >>> tr
@@ -181,7 +186,7 @@ def make_transport(
     >>> tr is None
     True
     >>> tr = make_transport({}, reconfigurable=True)
-    >>> tr                  # Redundant transport with no inferiors.
+    >>> tr                                                              # Redundant transport with no inferiors.
     RedundantTransport()
     """
 

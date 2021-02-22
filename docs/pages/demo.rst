@@ -3,7 +3,7 @@
 Demo
 ====
 
-The reader is assumed to have at least skimmed through *The UAVCAN Guide* beforehand.
+It is recommended to at least skim through the *UAVCAN Guide* beforehand.
 See `uavcan.org <https://uavcan.org>`_ for details.
 
 This demo has been tested against GNU/Linux and Windows; it is also expected to work with any other major OS.
@@ -77,7 +77,7 @@ We can resolve this by passing the correct register values via environment varia
 ..  code-block:: sh
 
     export UAVCAN__NODE__ID__NATURAL16=42                           # Set the local node-ID 42 (anonymous by default)
-    export UAVCAN__UDP__IP__STRING="127.9.0.0"                      # Use UAVCAN/UDP transport via 127.9.0.42 (sic!)
+    export UAVCAN__UDP__IP__STRING=127.9.0.0                        # Use UAVCAN/UDP transport via 127.9.0.42 (sic!)
     export UAVCAN__SUB__TEMPERATURE_SETPOINT__ID__NATURAL16=2345    # Subject "temperature_setpoint"    on ID 2345
     export UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID__NATURAL16=2346 # Subject "temperature_measurement" on ID 2346
     export UAVCAN__PUB__HEATER_VOLTAGE__ID__NATURAL16=2347          # Subject "heater_voltage"          on ID 2347
@@ -87,6 +87,7 @@ We can resolve this by passing the correct register values via environment varia
     python demo_app.py                                              # Run the application!
 
 The snippet is valid for sh/bash/zsh; if you are using PowerShell on Windows, replace ``export`` with ``$env:``.
+Further snippets will not include this remark.
 
 An environment variable named like ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID__NATURAL16``
 sets the register ``uavcan.sub.temperature_setpoint.id`` of type ``natural16``.
@@ -129,15 +130,12 @@ If you decided to change the working directory or move the compilation outputs,
 make sure to export the ``YAKUT_PATH`` environment variable pointing to the correct location.
 
 The commands shown later need to operate on the same network as the demo.
-In the above example we configured the demo to use UAVCAN/UDP via 127.9.0.42.
-We can specify any other address with prefix 127.9 for Yakut; for instance:
+Earlier we configured the demo to use UAVCAN/UDP via 127.9.0.42.
+So, for Yakut, we can export this configuration to let it run on the same network anonymously:
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IP__STRING=127.9.0.0
-
-Again, if you are using PowerShell on Windows, replace ``export`` with ``$env:``.
-Further snippets will not include this remark.
+    export UAVCAN__UDP__IP__STRING=127.9.0.0  # We don't export the node-ID, so it will remain anonymous.
 
 
 Interacting with the application
@@ -210,7 +208,8 @@ We will see the current value of the temperature error registered by the thermos
           - 10.0
 
 Field ``mutable: false`` says that this register cannot be modified and ``persistent: false`` says that
-it is not committed to any persistent storage. Together they mean that the value is computed at runtime dynamically.
+it is not committed to any persistent storage (like a register file).
+Together they mean that the value is computed at runtime dynamically.
 
 We can use the very same interface to query or modify the configuration parameters.
 For example, we can change the PID gains of the thermostat:
@@ -300,9 +299,9 @@ controlled by the thermostat.
 Writing the orc-file
 ++++++++++++++++++++
 
-The following orchestration file (orc-file) ``launch.orc.yaml`` does the following:
+The following orchestration file (orc-file) ``launch.orc.yaml`` does this:
 
-- Transpiles two DSDL namespaces: the standard ``uavcan`` and the custom ``sirius_cyber_corp``.
+- Compiles two DSDL namespaces: the standard ``uavcan`` and the custom ``sirius_cyber_corp``.
   If they are already compiled, this step is skipped.
 
 - When compilation is done, the two applications are launched.
@@ -310,8 +309,9 @@ The following orchestration file (orc-file) ``launch.orc.yaml`` does the followi
 - Aside from the applications, a couple of diagnostic processes are started as well.
   A setpoint publisher will command the thermostat to drive the plant to the specified temperature.
 
+The orchestrator runs everything concurrently, but *join statements* are used to enforce sequential execution as needed.
 The first process to fail (that is, exit with a non-zero code) will bring down the entire *composition*.
-Processes that run in the conditional/optional script ``?=`` are allowed to fail though.
+*Predicate* scripts ``?=`` are allowed to fail though --- this is used to implement conditional execution.
 
 The syntax allows the developer to define regular environment variables along with register names.
 The latter are translated into environment variables when starting a process.
@@ -350,9 +350,13 @@ indicating that the thermostat is working on bringing the plant to the specified
     {"2346":{"timestamp":{"microsecond":1613884105725577},"kelvin":300.9321594238281}}
     # And so on. Notice how the temperature is rising slowly towards the setpoint at 350 K!
 
-As an exercise, try running the same composition over CAN by changing the transport configuration registers
-at the top of the orc-file.
-The full set of transport-related registers is documented at :func:`pyuavcan.application.make_transport`.
+As an exercise, consider this:
 
-Use Wireshark (capture filter expression: ``(udp or igmp) and src net 127.9.0.0/16``)
-or candump (like ``candump -decaxta any``) to inspect the network exchange.
+- Run the same composition over CAN by changing the transport configuration registers at the top of the orc-file.
+  The full set of transport-related registers is documented at :func:`pyuavcan.application.make_transport`.
+
+- Implement saturation management by publishing the ``saturation`` flag over a dedicated subject
+  and subscribing to it from the thermostat node.
+
+- Use Wireshark (capture filter expression: ``(udp or igmp) and src net 127.9.0.0/16``)
+  or candump (like ``candump -decaxta any``) to inspect the network exchange.

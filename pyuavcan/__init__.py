@@ -9,12 +9,8 @@ Submodule import policy
 The following submodules are auto-imported when the root module ``pyuavcan`` is imported:
 
 - :mod:`pyuavcan.dsdl`
-
 - :mod:`pyuavcan.transport`, but not concrete transport implementation submodules.
-  For example, if you need the UDP transport, import :mod:`pyuavcan.transport.udp` manually.
-
 - :mod:`pyuavcan.presentation`
-
 - :mod:`pyuavcan.util`
 
 Submodule :mod:`pyuavcan.application` is not auto-imported because in order to have it imported

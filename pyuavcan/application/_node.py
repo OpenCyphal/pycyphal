@@ -33,11 +33,12 @@ class Node(abc.ABC):
     - Node info server (``uavcan.node.GetInfo``)
     - Port introspection publisher (``uavcan.port.List``)
 
-    If the provided transport is anonymous and it is unable to construct service ports in anonymous mode,
-    then RPC-services (like GetInfo, register API, etc.) are not initialized.
+    ..  attention::
+
+        If the provided transport is anonymous, some of these functions may not be available.
 
     Start the instance when initialization is finished by invoking :meth:`start`.
-    This will also automatically start all function implementation instances like the heartbeat publisher, etc.
+    This will also automatically start all function implementation instances.
     """
 
     def __init__(self) -> None:
@@ -114,8 +115,8 @@ class Node(abc.ABC):
         :param name: The name of the register.
 
         :param value_or_getter_or_getter_setter:
-            - If this is a :class:`register.Value` or `register.ValueProxy` (the latter is supported for convenience),
-              the value will be written into the registry file.
+            - If this is a :class:`register.Value` or :class:`register.ValueProxy`
+              (the latter is supported for convenience), the value will be written into the registry file.
 
             - If this is a callable, it will be invoked whenever this register is read.
               The return type of the callable is either :class:`register.Value` or :class:`register.ValueProxy`.
@@ -256,8 +257,9 @@ class Node(abc.ABC):
 
     def start(self) -> None:
         """
-        Starts all application-layer function implementations that are initialized on it (like the heartbeat publisher,
-        diagnostics, and basically anything that takes a node reference in its constructor).
+        Starts all application-layer function implementations that are initialized on this node
+        (like the heartbeat publisher, diagnostics, and basically anything that takes a node reference
+        in its constructor).
         These will be automatically terminated when the node is closed.
         This method is idempotent.
         """
@@ -271,6 +273,7 @@ class Node(abc.ABC):
         Closes the :attr:`presentation` (which includes the transport), the registry, the application-layer functions.
         The user does not have to close every port manually as it will be done automatically.
         This method is idempotent.
+        Calling :meth:`start` on a closed node may lead to unpredictable results.
         """
         pyuavcan.util.broadcast(self._on_close)()
         self.presentation.close()
@@ -280,7 +283,9 @@ class Node(abc.ABC):
         """
         The start hook will be invoked when this node is :meth:`start`-ed.
         If the node is already started when this method is invoked, the start hook is called immediately.
+
         The close hook is invoked when this node is :meth:`close`-d.
+        If the node is already closed, the close hook will never be invoked.
         """
         if start is not None:
             if self._started:

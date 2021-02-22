@@ -17,7 +17,7 @@ _logger = logging.getLogger(__name__)
 
 def parse_environment_variables(env: Optional[Dict[str, str]] = None) -> Dict[str, Value]:
     """
-    Given a list of environment variables, generates pairs of (name, :class:`Value`).
+    Given a list of environment variables, generates a mapping from register name to its :class:`Value`.
     A register name is mapped to the environment variable name as follows:
 
     >>> name = 'm.motor.flux_linkage'
@@ -32,8 +32,7 @@ def parse_environment_variables(env: Optional[Dict[str, str]] = None) -> Dict[st
     - ``string`` values are accepted as-is.
     - ``unstructured`` values are hex-decoded (e.g., ``68656c6c6f`` --> "hello").
     - ``bit``, ``integer*``, ``natural*``, ``real*`` are assumed to be in decimal notation.
-
-    Array items are space-separated.
+      Array items are space-separated.
 
     >>> parsed = parse_environment_variables({
     ...     "M__MOTOR__FLUX_LINKAGE__REAL32":    "1.23 4.56",                         # Space-separated.

@@ -1,7 +1,9 @@
 #!/usr/bin/env python
-# This is a simplified setup.py demo that shows how to distribute compiled DSDL definitions with Python packages.
 # Distributed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication.
 # type: ignore
+"""
+A simplified setup.py demo that shows how to distribute compiled DSDL definitions with Python packages.
+"""
 
 import setuptools
 import logging

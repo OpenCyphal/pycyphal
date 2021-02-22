@@ -12,7 +12,7 @@ import pyuavcan
 
 # Production applications are recommended to compile their DSDL namespaces as part of the build process. The enclosed
 # file "setup.py" provides an example of how to do that. The output path we specify here shall match that of "setup.py".
-# Here we use lazy generation to demonstrate an alternative.
+# Here we compile DSDL just-in-time to demonstrate an alternative.
 compiled_dsdl_dir = pathlib.Path(__file__).resolve().parent / ".demo_dsdl_compiled"
 
 # Make the compilation outputs importable. Let your IDE index this directory as sources to enable code completion.
@@ -43,7 +43,7 @@ import uavcan.si.unit.temperature  # noqa
 import uavcan.si.unit.voltage  # noqa
 
 
-class DemoApplication:
+class DemoApp:
     REGISTER_FILE = "demo_app.db"
     """
     The register file stores configuration parameters of the local application/node. The registers can be modified
@@ -61,12 +61,10 @@ class DemoApplication:
         # The Node class is basically the central part of the library -- it is the bridge between the application and
         # the UAVCAN network. Also, it implements certain standard application-layer functions, such as publishing
         # heartbeats and port introspection messages, responding to GetInfo, serving the register API, etc.
-        # The file "my_registers.db" stores the registers of our node (see DSDL namespace uavcan.register).
-        # This is optional though; if the application does not require persistent states, this parameter may be omitted,
-        # in which case the register file will be stored in-memory.
+        # The file "my_registers.db" stores the registers (configuration parameters) of our node.
         self._node = pyuavcan.application.make_node(
             node_info,
-            DemoApplication.REGISTER_FILE,
+            DemoApp.REGISTER_FILE,
             {  # Register types and defaults are defined at the initialization stage like this.
                 "thermostat.pid.gains": Value(real32=Real32([0.12, 0.18, 0.01])),
             },
@@ -80,7 +78,7 @@ class DemoApplication:
         # They can also be created or destroyed later at any point after initialization.
         # A port is created by specifying its data type and its name (similar to topic names in ROS or DDS).
         # The subject-ID is obtained from the standard register named "uavcan.sub.temperature_setpoint.id".
-        # The register can also be modified via environment variable "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID__NATURAL16".
+        # It can also be modified via environment variable "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID__NATURAL16".
         self._sub_t_sp = self._node.make_subscriber(uavcan.si.unit.temperature.Scalar_1_0, "temperature_setpoint")
 
         # As you may probably guess by looking at the port names, we are building a basic thermostat here.
@@ -130,7 +128,7 @@ class DemoApplication:
         logging.info("Execute command request %s from node %d", request, metadata.client_node_id)
         if request.command == uavcan.node.ExecuteCommand_1_1.Request.COMMAND_FACTORY_RESET:
             try:
-                os.unlink(DemoApplication.REGISTER_FILE)  # Reset to defaults by removing the register file.
+                os.unlink(DemoApp.REGISTER_FILE)  # Reset to defaults by removing the register file.
             except OSError:  # Do nothing if already removed.
                 pass
             return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS)
@@ -178,7 +176,7 @@ class DemoApplication:
 
 
 if __name__ == "__main__":
-    app = DemoApplication()
+    app = DemoApp()
     logging.root.setLevel(logging.INFO)
     try:
         asyncio.get_event_loop().run_until_complete(app.run())

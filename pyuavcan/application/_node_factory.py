@@ -123,7 +123,7 @@ def make_node(
     the following registers are considered.
     They are split into groups by application-layer function they configure.
 
-    ..  list-table:: :mod:`pyuavcan.application.diagnostic`
+    ..  list-table:: General
         :widths: 1 1 9
         :header-rows: 1
 
@@ -138,6 +138,14 @@ def make_node(
             If not defined, a new random value is generated and stored as immutable
             (therefore, if no persistent register file is used, a new unique-ID is generated at every launch, which
             may be undesirable in some applications, particularly those that require PnP node-ID allocation).
+
+    ..  list-table:: :mod:`pyuavcan.application.diagnostic`
+        :widths: 1 1 9
+        :header-rows: 1
+
+        * - Register name
+          - Register type
+          - Register semantics
 
         * - ``uavcan.diagnostic.severity``
           - ``natural16[1]``
@@ -206,11 +214,14 @@ def make_node(
         If the transport argument is given and it is not a redundant transport, it will be wrapped into one.
         Also see :func:`make_transport`.
 
-    :returns: The constructed node instance.
+    :raises:
+        - :class:`pyuavcan.application.register.MissingRegisterError` if a register is expected but cannot be found,
+          or if no transport is configured.
+        - :class:`pyuavcan.application.register.ValueConversionError` if a register is found but its value
+          cannot be converted to the correct type.
+        - Also see :func:`make_transport`.
 
-    :raises: See :func:`make_transport`.
-
-    ..  todo::
+    ..  note::
 
         Consider extending this factory with a capability to automatically run the node-ID allocation client
         :class:`pyuavcan.application.plug_and_play.Allocatee` if the available registers do not encode a non-anonymous

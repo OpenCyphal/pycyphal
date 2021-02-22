@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # Distributed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication.
-
 """
-This application simulates the plant controlled by the thermostat node: it takes a voltage command, runs a crude
-zero-dimensional thermodynamics simulation, and publishes the temperature (i.e., one subscription, one publication).
+This application simulates the plant controlled by the thermostat node: it takes a voltage command,
+runs a crude thermodynamics simulation, and publishes the temperature (i.e., one subscription, one publication).
 """
 
 import time
@@ -39,7 +38,7 @@ async def main() -> None:
     node = make_node(
         NodeInfo(name="org.uavcan.pyuavcan.demo.plant"),
         "plant.db",
-        schema={
+        {
             "model.environment.temperature": register.Value(real32=register.Real32([292.15])),  # [kelvin]
         },
     )
@@ -47,7 +46,7 @@ async def main() -> None:
         # Expose internal states for diagnostics.
         node.new_register("status.saturation", lambda: register.Value(bit=register.Bit([saturation])))
 
-        # Initialize the defaults from the registry.
+        # Initialize values from the registry.
         temp_environment = float(node.registry["model.environment.temperature"])
         temp_plant = temp_environment
 

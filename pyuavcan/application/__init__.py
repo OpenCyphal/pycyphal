@@ -11,26 +11,14 @@ The application module contains the application-layer API.
 This module is not imported automatically because it depends on the transpiled DSDL namespace ``uavcan``.
 The DSDL namespace can be either transpiled manually or lazily ad-hoc; see :mod:`pyuavcan.dsdl` for related docs.
 
-Classes contained here affect the state of the bus by publishing data, responding to service requests, or otherwise.
-It is expected that some applications may need to complete early initialization procedures before
-they are ready to begin interaction with the outside world.
-Hence, many classes in this module are equipped with a method ``start()``,
-which must be invoked once to bring the instance into a functional state.
-The instance will remain operational until ``close()`` is invoked on it.
-Both methods are idempotent.
-
-The main entity of this module is the class :class:`pyuavcan.application.Node`.
-There are several nested submodules,
-each dedicated to a particular *application-level function* of the UAVCAN protocol,
-such as :mod:`pyuavcan.application.heartbeat_publisher`;
-each such module shall be imported explicitly.
-
 
 Node class
 ++++++++++
 
-The class :class:`pyuavcan.application.Node` models a UAVCAN node --- it is one of the main entities of the library.
-The application uses it to interact with the network: create publications/subscriptions, invoke and serve RPC-services.
+The abstract class :class:`pyuavcan.application.Node` models a UAVCAN node ---
+it is one of the main entities of the library, along with its factory :meth:`make_node`.
+The application uses its Node instance to interact with the network:
+create publications/subscriptions, invoke and serve RPC-services.
 
 
 Constructing a node
@@ -55,11 +43,10 @@ Create a node using the factory :meth:`make_node` and start it:
 >>> import pyuavcan.application
 >>> import uavcan.node                                  # Transcompiled DSDL namespace (see pyuavcan.dsdl).
 >>> node_info = pyuavcan.application.NodeInfo(          # This is an alias for uavcan.node.GetInfo.Response.
-...     protocol_version=uavcan.node.Version_1_0(*pyuavcan.UAVCAN_SPECIFICATION_VERSION),
 ...     software_version=uavcan.node.Version_1_0(major=1, minor=0),
 ...     name="org.uavcan.pyuavcan.docs",
 ... )
->>> node = pyuavcan.application.make_node(node_info)
+>>> node = pyuavcan.application.make_node(node_info)    # Some of the fields in node_info are set automatically.
 >>> node.start()
 
 ..  doctest::
@@ -69,8 +56,8 @@ Create a node using the factory :meth:`make_node` and start it:
     ...     if "__" in k:
     ...         del os.environ[k]
 
-The node instance we just created will periodically publish ``uavcan.node.Heartbeat``,
-respond to ``uavcan.node.GetInfo``,
+The node instance we just started will periodically publish ``uavcan.node.Heartbeat`` and ``uavcan.node.port.List``,
+respond to ``uavcan.node.GetInfo`` and ``uavcan.register.Access``/``uavcan.register.List``,
 and do some other standard things -- read the docs for :class:`Node` for details.
 
 Now we can create ports --- that is, instances of
@@ -187,9 +174,10 @@ would circumvent the introspection services.
 
 The node instance also implements the register network service (``uavcan.register.Access``, ``uavcan.register.List``)
 so other network participants can access the registry of the local node and reconfigure it.
-The application can also do that locally, of course.
-New registers can be created in two ways: by passing defaults to :func:`make_node` (will be shown later),
-and via :meth:`Node.new_register` like so:
+
+Registers can be created in two ways:
+by passing defaults to :func:`make_node` (use this metod to define application-specific configs, more on this later),
+and via :meth:`Node.new_register` (use this to expose volatile states) like so:
 
 >>> from pyuavcan.application.register import Value, Real64  # Convenience aliases for uavcan.register.Value, etc.
 >>> import numpy as np
@@ -203,25 +191,12 @@ There are three places:
 
 - **The register file** which contains a simple key-value database table.
   If the file does not exist (like at the first run), it is automatically created.
-  Multiple processes can use the same time concurrently.
   If no file location is provided when invoking :meth:`make_node`,
   the registry is stored in memory so that all state is lost when the node is closed.
 
 - **The environment variables.**
-  The mapping between register names and environment variables is as follows,
-  where ``ty`` is the register type like ``string``, ``natural16``, etc.
-  (see :mod:`pyuavcan.application.register` for the full list):
-
-  >>> name = 'm.motor.flux_linkage'
-  >>> ty = 'real64'
-  >>> (name + "." + ty).upper().replace(".", "_" * 2)  # Register --> environment variable name mapping rule.
-  'M__MOTOR__FLUX_LINKAGE__REAL64'
-
-  String-typed register values are passed as-is, "unstructured" register values are hex-encoded (aka Base16),
-  and numerical values are passed as decimals. Array elements are space-separated.
-  For example, register ``m.motor.inductance_dq`` of type ``real64[2]`` and value (0.12, 0.13)
-  is passed as an environment variable named ``M__MOTOR__INDUCTANCE_DQ__REAL64`` assigned ``0.12 0.13``.
-
+  The mapping between register names and environment variables is documented in
+  :func:`pyuavcan.application.register.parse_environment_variables`.
   When the environment variables are parsed, the values stored in the register file are automatically updated.
 
 - **The schema definition (default values).**
@@ -231,7 +206,7 @@ There are three places:
   type defined by the application.
   Registers that already exist in the file under a wrong type are automatically converted to
   the correct type defined in the schema.
-  Do not use this feature for setting default node-ID or port-IDs.
+  *Do not use this feature for setting default node-ID or port-IDs.*
 
 ..  doctest::
     :hide:
@@ -272,11 +247,11 @@ RedundantTransport(UDPTransport('127.63.0.42', ...), SerialTransport('socket://l
 >>> pub_voltage.port_id
 6543
 >>> pub_voltage.close()
->>> list(node.registry["uavcan.diagnostic.severity"].value.natural16.value)     # Type automatically converted.
+>>> list(node.registry["uavcan.diagnostic.severity"].value.natural16.value)     # Type automatically converted!
 [3]
->>> node.registry["custom.register"].floats         # Default values.
+>>> node.registry["custom.register"].floats                                     # Default values.
 [1.23, -8.15]
->>> node.registry["m.motor.inductance_dq"].floats   # Application parameters.
+>>> node.registry["m.motor.inductance_dq"].floats                               # Application parameters.
 [0.12, 0.13]
 >>> node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "optional_port")  # doctest: +IGNORE_EXCEPTION_DETAIL
 Traceback (most recent call last):
@@ -284,7 +259,8 @@ Traceback (most recent call last):
 MissingRegisterError: 'uavcan.sub.optional_port.id'
 >>> node.close()
 
-As mentioned above, when the schema type is changed, existing values are type-converted automatlcally:
+As mentioned above, when the schema type is changed, existing values are type-converted and
+updated in the register file automatically:
 
 >>> node = pyuavcan.application.make_node(
 ...     node_info,
