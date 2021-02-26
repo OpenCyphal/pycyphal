@@ -89,7 +89,7 @@ class SQLiteBackend(Backend):
         # This override is necessary to support assignment of Value along with Entry.
         if key not in self:
             if default is None:
-                raise TypeError
+                raise TypeError  # pragma: no cover
             self[key] = default
         return self[key]
 

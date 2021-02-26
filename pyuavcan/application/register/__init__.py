@@ -34,4 +34,4 @@ from ._registry import Registry as Registry
 from ._registry import ValueProxyWithFlags as ValueProxyWithFlags
 from ._registry import MissingRegisterError as MissingRegisterError
 
-from ._env_var import parse_environment_variables as parse_environment_variables
+from ._env_var import update_from_environment as update_from_environment

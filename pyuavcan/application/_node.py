@@ -3,7 +3,7 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
-from typing import Union, Callable, Tuple, Type, TypeVar, Optional, List, Any
+from typing import Callable, Tuple, Type, TypeVar, Optional, List, Any
 import abc
 import asyncio
 import logging
@@ -95,43 +95,6 @@ class Node(abc.ABC):
         """
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def new_register(
-        self,
-        name: str,
-        value_or_getter_or_getter_setter: Union[
-            register.Value,
-            register.ValueProxy,
-            Callable[[], Union[register.Value, register.ValueProxy]],
-            Tuple[
-                Callable[[], Union[register.Value, register.ValueProxy]],
-                Callable[[register.Value], None],
-            ],
-        ],
-    ) -> None:
-        """
-        Create a new register, overwrite existing. See also: :func:`pyuavcan.application.make_node`.
-
-        :param name: The name of the register.
-
-        :param value_or_getter_or_getter_setter:
-            - If this is a :class:`register.Value` or :class:`register.ValueProxy`
-              (the latter is supported for convenience), the value will be written into the registry file.
-
-            - If this is a callable, it will be invoked whenever this register is read.
-              The return type of the callable is either :class:`register.Value` or :class:`register.ValueProxy`.
-              Such register will be reported as immutable.
-              The registry file is not affected and therefore this change is not persistent.
-
-            - If this is a tuple of two callables, then the first one is a getter that is invoked on read (see above),
-              and the second is setter that is invoked on write with a single argument of type :class:`register.Value`.
-              It is guaranteed that the type of the value passed into the setter is always the same as that which
-              is returned by the getter.
-              The type conversion is performed automatically by polling the getter beforehand to discover the type.
-              The registry file is not affected and therefore this change is not persistent.
-        """
-        raise NotImplementedError
-
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
         """Shortcut for ``self.presentation.loop``"""
@@ -219,17 +182,15 @@ class Node(abc.ABC):
         assert name, "Internal error"
         model = pyuavcan.dsdl.get_model(dtype)
 
-        # Read or create the port-ID register.
         id_register_name = f"uavcan.{kind}.{name}.id"
-        try:
-            port_id = int(self.registry[id_register_name])
-        except register.MissingRegisterError:
-            # Since we have a name, we want this port to be reconfigurable, so we ensure the register exists.
-            port_id = 0xFFFF  # Per Specification, this value stands for uninitialized/disabled port.
-            self.new_register(id_register_name, register.Value(natural16=register.Natural16([port_id])))
-
+        port_id = int(
+            self.registry.setdefault(
+                id_register_name,
+                register.Value(natural16=register.Natural16([0xFFFF])),  # 0xFFFF means unset
+            )
+        )
         # Expose the type information to other network participants as prescribed by the Specification.
-        self.new_register(f"uavcan.{kind}.{name}.type", lambda: register.Value(string=register.String(str(model))))
+        self.registry[f"uavcan.{kind}.{name}.type"] = lambda: register.Value(string=register.String(str(model)))
 
         # Check if the value stored in the register is actually valid.
         mask = {

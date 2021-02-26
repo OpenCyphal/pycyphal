@@ -5,14 +5,13 @@
 from __future__ import annotations
 import sys
 import random
-from typing import Callable, Tuple, Optional, Union
+from typing import Callable, Tuple, Optional, Union, List
 from pathlib import Path
 import logging
 import pyuavcan
 from ._node import Node, NodeInfo
 from . import register
 from .register.backend.sqlite import SQLiteBackend
-from .register.backend.dynamic import DynamicBackend
 from ._transport_factory import make_transport
 
 if sys.version_info >= (3, 9):
@@ -33,6 +32,31 @@ class MissingTransportConfigurationError(register.MissingRegisterError):
     pass
 
 
+class DefaultRegistry(register.Registry):
+    def __init__(self, sqlite: SQLiteBackend) -> None:
+        from .register.backend.dynamic import DynamicBackend
+
+        self._backend_sqlite = sqlite
+        self._backend_dynamic = DynamicBackend()
+        super().__init__()
+
+    def backends(self) -> List[register.backend.Backend]:
+        return [self._backend_sqlite, self._backend_dynamic]
+
+    def _create_persistent(self, name: str, value: register.Value) -> None:
+        _logger.debug("%r: Create persistent %r = %r", self, name, value)
+        self._backend_sqlite[name] = value
+
+    def _create_dynamic(
+        self,
+        name: str,
+        get: Callable[[], register.Value],
+        set: Optional[Callable[[register.Value], None]],
+    ) -> None:
+        _logger.debug("%r: Create dynamic %r from get=%r set=%r", self, name, get, set)
+        self._backend_dynamic[name] = get if set is None else (get, set)
+
+
 class DefaultNode(Node):
     """
     This is a Voldemort type, hence it doesn't need public docs.
@@ -43,15 +67,10 @@ class DefaultNode(Node):
         presentation: pyuavcan.presentation.Presentation,
         info: NodeInfo,
         backend_sqlite: SQLiteBackend,
-        backend_dynamic: DynamicBackend,
     ) -> None:
         self._presentation = presentation
         self._info = info
-
-        self._backend_sqlite = backend_sqlite
-        self._backend_dynamic = backend_dynamic
-        self._registry = register.Registry([self._backend_sqlite, self._backend_dynamic])
-
+        self._registry = DefaultRegistry(backend_sqlite)
         super().__init__()
 
     @property
@@ -65,36 +84,6 @@ class DefaultNode(Node):
     @property
     def registry(self) -> register.Registry:
         return self._registry
-
-    def new_register(
-        self,
-        name: str,
-        value_or_getter_or_getter_setter: Union[
-            register.Value,
-            register.ValueProxy,
-            Callable[[], Union[register.Value, register.ValueProxy]],
-            Tuple[
-                Callable[[], Union[register.Value, register.ValueProxy]],
-                Callable[[register.Value], None],
-            ],
-        ],
-    ) -> None:
-        def strictify(x: Union[register.Value, register.ValueProxy]) -> register.Value:
-            if isinstance(x, register.ValueProxy):
-                return x.value
-            return x
-
-        v = value_or_getter_or_getter_setter
-        _logger.debug("%r: Create register %r = %r", self, name, v)
-        if isinstance(v, (register.Value, register.ValueProxy)):
-            self._backend_sqlite[name] = strictify(v)
-        elif callable(v):
-            self._backend_dynamic[name] = lambda: strictify(v())  # type: ignore
-        elif isinstance(v, tuple) and len(v) == 2 and all(map(callable, v)):
-            g, s = v
-            self._backend_dynamic[name] = (lambda: strictify(g())), s
-        else:  # pragma: no cover
-            raise TypeError(f"Invalid type of register creation argument: {type(v).__name__}")
 
 
 def make_node(
@@ -298,12 +287,7 @@ def make_node(
 
         # Construct the node.
         presentation = pyuavcan.presentation.Presentation(init_transport())
-        node = DefaultNode(
-            presentation,
-            info,
-            db,
-            DynamicBackend(),
-        )
+        node = DefaultNode(presentation, info, db)
 
         # Check if any application-layer functions require instantiation.
         _make_diagnostic_publisher(node)

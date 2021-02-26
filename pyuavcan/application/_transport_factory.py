@@ -3,14 +3,20 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
-from typing import Mapping, Iterator, Type, Optional, TypeVar, Union, Sequence, Callable
+import sys
+from typing import Iterator, Type, Optional, TypeVar, Union, Sequence, Callable
 import itertools
 import pyuavcan
 from .register import ValueProxy, Value
 
+if sys.version_info >= (3, 9):
+    from collections.abc import MutableMapping
+else:  # pragma: no cover
+    from typing import MutableMapping  # pylint: disable=ungrouped-imports
+
 
 def make_transport(
-    registers: Mapping[str, Union[ValueProxy, Value]],
+    registers: MutableMapping[str, ValueProxy],
     *,
     reconfigurable: bool = False,
 ) -> Optional[pyuavcan.transport.Transport]:
@@ -216,10 +222,10 @@ def make_transport(
     return red
 
 
-class _Adapter(Mapping[str, ValueProxy]):
+class _Adapter(MutableMapping[str, ValueProxy]):
     _RegisterType = TypeVar("_RegisterType", int, float, bool, str, bytes)
 
-    def __init__(self, inner: Mapping[str, Union[ValueProxy, Value]]) -> None:
+    def __init__(self, inner: MutableMapping[str, Union[ValueProxy, Value]]) -> None:
         self._inner = inner
 
     def cast(self, name: str, ty: Type[_RegisterType]) -> Optional[_RegisterType]:
