@@ -5,7 +5,7 @@
 from __future__ import annotations
 import sys
 import random
-from typing import Callable, Tuple, Optional, Union, List
+from typing import Callable, Optional, Union, List
 from pathlib import Path
 import logging
 import pyuavcan
@@ -13,19 +13,6 @@ from ._node import Node, NodeInfo
 from . import register
 from .register.backend.sqlite import SQLiteBackend
 from ._transport_factory import make_transport
-
-if sys.version_info >= (3, 9):
-    from collections.abc import Mapping
-else:  # pragma: no cover
-    from typing import Mapping  # pylint: disable=ungrouped-imports
-
-
-# Update the initialization logic when adding new entries here:
-REG_NODE_ID = "uavcan.node.id"
-REG_UNIQUE_ID = "uavcan.node.unique_id"
-REG_DESCRIPTION = "uavcan.node.description"
-REG_DIAGNOSTIC_SEVERITY = "uavcan.diagnostic.severity"
-REG_DIAGNOSTIC_TIMESTAMP = "uavcan.diagnostic.timestamp"
 
 
 class MissingTransportConfigurationError(register.MissingRegisterError):
@@ -40,6 +27,7 @@ class DefaultRegistry(register.Registry):
         self._backend_dynamic = DynamicBackend()
         super().__init__()
 
+    @property
     def backends(self) -> List[register.backend.Backend]:
         return [self._backend_sqlite, self._backend_dynamic]
 
@@ -58,19 +46,15 @@ class DefaultRegistry(register.Registry):
 
 
 class DefaultNode(Node):
-    """
-    This is a Voldemort type, hence it doesn't need public docs.
-    """
-
     def __init__(
         self,
         presentation: pyuavcan.presentation.Presentation,
         info: NodeInfo,
-        backend_sqlite: SQLiteBackend,
+        registry: register.Registry,
     ) -> None:
         self._presentation = presentation
         self._info = info
-        self._registry = DefaultRegistry(backend_sqlite)
+        self._registry = registry
         super().__init__()
 
     @property
@@ -89,30 +73,26 @@ class DefaultNode(Node):
 def make_node(
     info: NodeInfo,
     register_file: Union[None, str, Path] = None,
-    schema: Optional[Mapping[str, Union[register.ValueProxy, register.Value]]] = None,
     *,
-    ignore_environment_variables: bool = False,
+    use_environment_variables: bool = True,
     transport: Optional[pyuavcan.transport.Transport] = None,
     reconfigurable_transport: bool = False,
 ) -> Node:
     """
     Initialize a new node by parsing the configuration encoded in the UAVCAN registers.
+    Missing standard registers will be automatically created.
 
     If ``transport`` is given, it will be used as-is (but see argument docs below).
     If not given, a new transport instance will be constructed using :func:`make_transport`.
 
     Prior to construction, the register file will be updated/extended based on the register values passed via the
     environment variables (if any) and the explicit ``schema``.
-    Environment variables and ``schema`` that encode empty-valued registers trigger removal of such registers
-    from the file (non-existent registers do not trigger an error).
-
-    Register removal is useful, in particular, when the node needs to be switched from one transport type to another
-    (e.g., from UDP to CAN):
-    without the ability to remove registers, it would not be possible to tell the node to stop using a previously
-    configured transport without editing or removing the register file.
+    Empty values in ``schema`` trigger removal of such registers from the register file
+    (non-existent registers do not trigger an error).
+    This is useful when the application needs to migrate its register file created by an earlier version.
 
     Aside from the registers that encode the transport configuration (which are documented in :func:`make_transport`),
-    the following registers are considered.
+    the following registers are considered (if they don't exist, they are automatically created).
     Generally, it is not possible to change their type --- automatic type conversion may take place to prevent that.
     They are split into groups by application-layer function they configure.
 
@@ -136,7 +116,6 @@ def make_node(
           - ``string``
           - As defined by the UAVCAN Specification, this standard register is intended to store a human-friendly
             description of the node.
-            It is not used by the implementation itself but created automatically if not present.
 
     ..  list-table:: :mod:`pyuavcan.application.diagnostic`
         :widths: 1 1 9
@@ -147,15 +126,15 @@ def make_node(
           - Register semantics
 
         * - ``uavcan.diagnostic.severity``
-          - ``natural16[1]``
-          - If defined and the value is a valid severity level as defined in ``uavcan.diagnostic.Severity``,
+          - ``natural8[1]``
+          - If the value is a valid severity level as defined in ``uavcan.diagnostic.Severity``,
             the node will publish its application log records of matching severity level to the standard subject
             ``uavcan.diagnostic.Record`` using :class:`pyuavcan.application.diagnostic.DiagnosticPublisher`.
             This is done by installing a root handler in :mod:`logging`.
 
         * - ``uavcan.diagnostic.timestamp``
           - ``bit[1]``
-          - If defined and true, the published log messages will initialize the synchronized ``timestamp`` field
+          - If true, the published log messages will initialize the synchronized ``timestamp`` field
             from the log record timestamp provided by the :mod:`logging` library.
             This is only safe if the UAVCAN network is known to be synchronized on the same time system as the
             wall clock of the local computer.
@@ -180,32 +159,21 @@ def make_node(
         If path is provided but the file does not exist, it will be created automatically.
         See :attr:`Node.registry`, :meth:`Node.new_register`.
 
-    :param schema:
-        These values will be checked before the environment variables are parsed (unless disabled)
-        to make sure that every register specified here exists in the register file with the specified type.
+    :param use_environment_variables:
+        If True (default), the registers will be updated based on the environment variables.
+        :attr:`register.Registry.use_defaults_from_environment` will be set to the same value
+        (it can be changed after the node is constructed).
 
-        Existing registers of matching type will be kept unchanged (even if the value is different).
-        Existing registers of a different type will be type-converted to the specified type.
-        Missing registers will be created with the specified value.
+        False can be passed if the application receives its register configuration at launch from some other source
+        (this is uncommon).
 
-        Empty values trigger removal of corresponding registers from the register file
-        (but note that they may be re-created from environment variables afterward).
-
-        Use this parameter to define the register schema of the node.
-        Do not use it for setting default node-ID or port-IDs.
-
-    :param ignore_environment_variables:
-        If False (default), the register values passed via environment variables will be automatically parsed
-        and for each register the respective entry in the register file will be updated/created.
-        The details are specified in :func:`register.parse_environment_variables`.
-        Empty values trigger removal of corresponding registers from the register file.
-
-        True can be passed if the application receives its register configuration at launch from some other source.
+        See also: :meth:`register.Registry.update_from_environment` and standard RPC-service ``uavcan.register.Access``.
 
     :param transport:
         If not provided (default), a new transport instance will be initialized based on the available registers using
         :func:`make_transport`.
         If provided, the node will be constructed with this transport instance and take its ownership.
+        In the latter case, transport-related registers will NOT be created, which may be undesirable.
 
     :param reconfigurable_transport:
         If True, the node will be constructed with :mod:`pyuavcan.transport.redundant`,
@@ -238,11 +206,11 @@ def make_node(
 
     def init_transport() -> pyuavcan.transport.Transport:
         if transport is None:
-            out = make_transport(register.Registry([db]), reconfigurable=reconfigurable_transport)
+            out = make_transport(registry, reconfigurable=reconfigurable_transport)
             if out is not None:
                 return out
             raise MissingTransportConfigurationError(
-                f"Available registers do not encode a valid transport configuration: {list(db)}"
+                f"Available registers do not encode a valid transport configuration: {list(registry)}"
             )
         if not isinstance(transport, RedundantTransport) and reconfigurable_transport:
             out = RedundantTransport()
@@ -250,109 +218,60 @@ def make_node(
             return out
         return transport
 
-    db = SQLiteBackend(register_file or "")
+    registry = DefaultRegistry(SQLiteBackend(register_file or ""))
     try:
-        # Apply defaults and schema first to ensure that new registers are created with the correct types
-        # before environment variables are applied.
-        _apply_schema(db, schema or {})
-        _apply_schema(
-            db,
-            {
-                REG_NODE_ID: register.Value(natural16=register.Natural16([0xFFFF])),
-                REG_DESCRIPTION: register.Value(string=register.String()),
-                REG_DIAGNOSTIC_SEVERITY: register.Value(natural16=register.Natural16([8])),
-                REG_DIAGNOSTIC_TIMESTAMP: register.Value(bit=register.Bit([False])),
-            },
-        )
-        if not ignore_environment_variables:
-            _apply_env_vars(db)
+        # Update all currently existing registers from environment variables early.
+        # New registers will be updated ad-hoc at creation time if "use_defaults_from_environment" is set.
+        registry.use_defaults_from_environment = use_environment_variables
+        if use_environment_variables:
+            for name in registry:
+                registry.update_from_environment(name)
 
-        # Populate certain fields of the node info structure automatically.
+        # Populate certain fields of the node info structure automatically and create standard registers.
         info.protocol_version.major, info.protocol_version.minor = pyuavcan.UAVCAN_SPECIFICATION_VERSION
         if info.unique_id.sum() == 0:
-            if REG_UNIQUE_ID not in db:
-                uid_size_bytes = 16
-                uid = random.getrandbits(8 * uid_size_bytes).to_bytes(uid_size_bytes, sys.byteorder)
-                _logger.info("New unique-ID generated: %s", uid.hex())
-                db[REG_UNIQUE_ID] = register.backend.Entry(
-                    register.Value(unstructured=register.Unstructured(uid)),
-                    mutable=False,
+            info.unique_id = bytes(
+                registry.setdefault(
+                    "uavcan.node.unique_id",
+                    register.Value(
+                        unstructured=register.Unstructured(random.getrandbits(128).to_bytes(16, sys.byteorder))
+                    ),
                 )
-            info.unique_id = bytes(register.ValueProxy(db[REG_UNIQUE_ID].value))
+            )
+        registry.setdefault("uavcan.node.description", register.Value(string=register.String()))
 
         if len(info.name) == 0:  # Do our best to decently support lazy instantiations that don't even give a name.
             name = "anonymous." + info.unique_id.tobytes().hex()
             _logger.info("Automatic name: %r", name)
             info.name = name
 
-        # Construct the node.
-        presentation = pyuavcan.presentation.Presentation(init_transport())
-        node = DefaultNode(presentation, info, db)
-
-        # Check if any application-layer functions require instantiation.
+        # Construct the node and its application-layer functions.
+        node = DefaultNode(pyuavcan.presentation.Presentation(init_transport()), info, registry)
         _make_diagnostic_publisher(node)
     except Exception:
-        db.close()  # We do not close the database at normal exit because it's handed over to the node.
+        registry.close()  # We do not close it at normal exit because it's handed over to the node.
         raise
     return node
 
 
-def _apply_schema(db: SQLiteBackend, schema: Mapping[str, Union[register.ValueProxy, register.Value]]) -> None:
-    for name, value in schema.items():
-        _logger.debug("Register init from schema: %r <-- %r", name, value)
-        value = register.ValueProxy(value)
-        if value.value.empty:  # Remove register under this name.
-            try:
-                del db[name]
-            except LookupError:
-                pass
-        else:
-            existing = db.get(name)
-            if existing is None or existing.value.empty:
-                mutable = True
-            else:
-                value.assign(existing.value)  # Perform type conversion to match expectations of the application.
-                mutable = existing.mutable
-            db[name] = register.backend.Entry(value.value, mutable=mutable)
-
-
-def _apply_env_vars(db: SQLiteBackend) -> None:
-    for name, value in register.parse_environment_variables().items():
-        _logger.debug("Register init from env var: %r <-- %r", name, value)
-        if value.empty:  # Remove register under this name.
-            try:
-                del db[name]
-            except LookupError:
-                pass
-        else:
-            try:
-                existing = db[name]
-            except LookupError:
-                db[name] = value
-            else:  # Force to the correct type.
-                converted = register.ValueProxy(existing.value)
-                converted.assign(value)
-                db[name] = register.backend.Entry(converted.value, mutable=existing.mutable)
-
-
 def _make_diagnostic_publisher(node: Node) -> None:
-    try:
-        uavcan_severity = int(node.registry[REG_DIAGNOSTIC_SEVERITY])
-    except KeyError:
-        return
-
     from .diagnostic import DiagnosticSubscriber, DiagnosticPublisher
+
+    uavcan_severity = int(
+        node.registry.setdefault("uavcan.diagnostic.severity", register.Value(natural8=register.Natural8([0xFF])))
+    )
+    timestamping_enabled = bool(
+        node.registry.setdefault("uavcan.diagnostic.timestamp", register.Value(bit=register.Bit([False])))
+    )
 
     try:
         level = DiagnosticSubscriber.SEVERITY_UAVCAN_TO_PYTHON[uavcan_severity]
-    except KeyError:
+    except LookupError:
         return
 
     diag_publisher = DiagnosticPublisher(node, level=level)
-    try:
-        diag_publisher.timestamping_enabled = bool(node.registry[REG_DIAGNOSTIC_TIMESTAMP])
-    except KeyError:
-        pass
+    diag_publisher.timestamping_enabled = timestamping_enabled
+
     logging.root.addHandler(diag_publisher)
     node.add_lifetime_hooks(None, lambda: logging.root.removeHandler(diag_publisher))
 

@@ -31,7 +31,7 @@ async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
             software_version=Version_1_0(*pyuavcan.__version_info__[:2]),
             name="org.uavcan.pyuavcan.test.node",
         )
-        node = make_node(info, transport=trans)
+        node = make_node(info, transport=trans, use_environment_variables=False)
         print("node:", node)
         assert node.presentation.transport is trans
         node.start()

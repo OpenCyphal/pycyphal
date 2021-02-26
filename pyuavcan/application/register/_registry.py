@@ -61,9 +61,10 @@ class Registry(MutableMapping[str, ValueProxy]):
 
         >>> from pyuavcan.application.register.backend.sqlite import SQLiteBackend
         >>> from pyuavcan.application.register.backend.dynamic import DynamicBackend
+        >>> import tempfile
         >>> class DocTestRegistry(Registry):
         ...     def __init__(self) -> None:
-        ...         self._sqlite = SQLiteBackend()
+        ...         self._sqlite = SQLiteBackend(tempfile.mktemp(".db", "pyuavcan_register_test"))
         ...         self._dynamic = DynamicBackend()
         ...         super().__init__()
         ...     @property
@@ -82,7 +83,7 @@ class Registry(MutableMapping[str, ValueProxy]):
     >>> registry.setdefault("p.b", Value(real32=Real32([12.34])))   # Update or create. # doctest: +NORMALIZE_WHITESPACE
     ValueProxyWithFlags(uavcan.register.Value...(real32=uavcan.primitive.array.Real32...(value=[12.34])),
                         mutable=True,
-                        persistent=False)
+                        persistent=True)
 
     Create dynamic registers (getter/setter invoked at every access; existing entries overwritten automatically):
 
@@ -273,6 +274,10 @@ class Registry(MutableMapping[str, ValueProxy]):
 
     def setdefault(self, name: str, default: Optional[CreationArgument] = None) -> ValueProxyWithFlags:
         """
+        **This is the preferred method for creating new registers.**
+
+        If the register exists, its value will be returned an no further action will be taken.
+
         If the register doesn't exist, it will be created; and, if :attr:`use_defaults_from_environment` is True,
         :meth:`update_from_environment` will be automatically invoked.
 
@@ -285,6 +290,7 @@ class Registry(MutableMapping[str, ValueProxy]):
         except KeyError as ex:
             if default is None:
                 raise TypeError from ex  # pragma: no cover
+            _logger.debug("%r: Create %r default %r", self, name, default)
             self._set(name, default, create_only=True)
             if self.use_defaults_from_environment:
                 self.update_from_environment(name)
@@ -311,7 +317,7 @@ class Registry(MutableMapping[str, ValueProxy]):
 
         If the register does not exist, and the value is of type :attr:`CreationArgument`,
         a new register will be created.
-        However, :meth:`update_from_environment` is NOT invoked in this case.
+        However, :meth:`update_from_environment` is NOT invoked in this case, as one might guess.
 
         Otherwise, :class:`MissingRegisterError` is raised.
 

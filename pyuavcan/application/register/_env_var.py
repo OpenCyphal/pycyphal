@@ -6,7 +6,7 @@ from __future__ import annotations
 import os
 import logging
 from typing import Union, List
-from . import ValueProxy
+from . import ValueProxy, ValueConversionError
 
 
 _logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def update_from_environment(value: ValueProxy, register_name: str) -> bool:
         - True if the environment variable exists and contains a valid value that has been applied.
         - False if no matching environment variable exists (the value is not updated).
 
-    :raises: :class:`ValueError` if the value cannot be converted.
+    :raises: :class:`ValueConversionError` if the value cannot be converted.
     """
     env_name = register_name.upper().replace(".", "__")
     try:
@@ -43,7 +43,12 @@ def update_from_environment(value: ValueProxy, register_name: str) -> bool:
             try:
                 numbers.append(int(nt))
             except ValueError:
-                numbers.append(float(nt))
+                try:
+                    numbers.append(float(nt))
+                except ValueError:
+                    raise ValueConversionError(
+                        f"Cannot update register {register_name!r} from environment value {env_val!r}"
+                    ) from None
         value.assign(numbers)
 
     return True

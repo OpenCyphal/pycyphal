@@ -28,13 +28,12 @@ Constructing a node
     :hide:
 
     >>> import os
-    >>> os.environ["UAVCAN__NODE__ID__NATURAL16"]                   = "42"
-    >>> os.environ["UAVCAN__PUB__MEASURED_VOLTAGE__ID__NATURAL16"]  = "6543"
-    >>> os.environ["UAVCAN__SUB__POSITION_SETPOINT__ID__NATURAL16"] = "6544"
-    >>> os.environ["UAVCAN__SRV__LEAST_SQUARES__ID__NATURAL16"]     = "123"
-    >>> os.environ["UAVCAN__CLN__LEAST_SQUARES__ID__NATURAL16"]     = "123"
-    >>> os.environ["UAVCAN__LOOPBACK__BIT"]                         = "1"
-
+    >>> os.environ["UAVCAN__NODE__ID"]                   = "42"
+    >>> os.environ["UAVCAN__PUB__MEASURED_VOLTAGE__ID"]  = "6543"
+    >>> os.environ["UAVCAN__SUB__POSITION_SETPOINT__ID"] = "6544"
+    >>> os.environ["UAVCAN__SRV__LEAST_SQUARES__ID"]     = "123"
+    >>> os.environ["UAVCAN__CLN__LEAST_SQUARES__ID"]     = "123"
+    >>> os.environ["UAVCAN__LOOPBACK"]                   = "1"
     >>> import asyncio
     >>> await_ = asyncio.get_event_loop().run_until_complete
 
@@ -48,13 +47,6 @@ Create a node using the factory :meth:`make_node` and start it:
 ... )
 >>> node = pyuavcan.application.make_node(node_info)    # Some of the fields in node_info are set automatically.
 >>> node.start()
-
-..  doctest::
-    :hide:
-
-    >>> for k in os.environ:
-    ...     if "__" in k:
-    ...         del os.environ[k]
 
 The node instance we just started will periodically publish ``uavcan.node.Heartbeat`` and ``uavcan.node.port.List``,
 respond to ``uavcan.node.GetInfo`` and ``uavcan.register.Access``/``uavcan.register.List``,
@@ -175,19 +167,17 @@ would circumvent the introspection services.
 The node instance also implements the register network service (``uavcan.register.Access``, ``uavcan.register.List``)
 so other network participants can access the registry of the local node and reconfigure it.
 
-Registers can be created in two ways:
-by passing defaults to :func:`make_node` (use this metod to define application-specific configs, more on this later),
-and via :meth:`Node.new_register` (use this to expose volatile states) like so:
+New registers (application-specific registers in particular) can be created using
+:meth:`pyuavcan.application.register.Registry.setdefault`:
 
 >>> from pyuavcan.application.register import Value, Real64  # Convenience aliases for uavcan.register.Value, etc.
 >>> import numpy as np
->>> node.new_register("my_application.estimator.state_vector",      # Not stored, but computed at every invocation
-...                   lambda: Value(real64=Real64(np.random.random((4, 1)).flatten())))
->>> node.registry["my_application.estimator.state_vector"].floats   # Some random things.
+>>> node.registry.setdefault("my_application.estimator.state_vector",  # Not stored, but computed at every invocation.
+...                          lambda: Value(real64=Real64(np.random.random((4, 1)).flatten()))).floats
 [..., ..., ..., ...]
 
 But the above does not explain where did the example get the register values from.
-There are three places:
+There are two places:
 
 - **The register file** which contains a simple key-value database table.
   If the file does not exist (like at the first run), it is automatically created.
@@ -195,50 +185,39 @@ There are three places:
   the registry is stored in memory so that all state is lost when the node is closed.
 
 - **The environment variables.**
-  The mapping between register names and environment variables is documented in
-  :func:`pyuavcan.application.register.parse_environment_variables`.
-  When the environment variables are parsed, the values stored in the register file are automatically updated.
-
-- **The schema definition (default values).**
-  The application can pass default register values to ensure that the register file contains them and that they are
-  of the correct type.
-  The defaults are created before the environment variables are parsed to ensure that the registers are of the
-  type defined by the application.
-  Registers that already exist in the file under a wrong type are automatically converted to
-  the correct type defined in the schema.
-  *Do not use this feature for setting default node-ID or port-IDs.*
+  A register like ``m.motor.inductance_dq`` can be assigned via environment variable ``M__MOTOR__INDUCTANCE_DQ``
+  (the mapping is documented in the standard RPC-service ``uavcan.register.Access``).
+  The value of an environment variable is a space-separated list of values (in case of arrays), or a plain string.
+  The environment variables are checked once when the node is constructed, and also whenever a new register is
+  created using :meth:`pyuavcan.application.register.Registry.setdefault`.
 
 ..  doctest::
     :hide:
 
     >>> import os
-    >>> os.environ["UAVCAN__NODE__ID__NATURAL16"]                   = "42"
-    >>> os.environ["UAVCAN__PUB__MEASURED_VOLTAGE__ID__NATURAL16"]  = "6543"
-    >>> os.environ["UAVCAN__SUB__OPTIONAL_PORT__ID__NATURAL16"]     = "65535"
-    >>> os.environ["UAVCAN__UDP__IP__STRING"]                       = "127.63.0.0"
-    >>> os.environ["UAVCAN__SERIAL__PORT__STRING"]                  = "socket://localhost:50905"
-    >>> os.environ["UAVCAN__DIAGNOSTIC__SEVERITY__REAL64"]          = "3.1"
-    >>> os.environ["M__MOTOR__INDUCTANCE_DQ__REAL64"]               = "0.12 0.13"
+    >>> for k in os.environ:
+    ...     if "__" in k:
+    ...         del os.environ[k]
+    >>> os.environ["UAVCAN__NODE__ID"]                   = "42"
+    >>> os.environ["UAVCAN__PUB__MEASURED_VOLTAGE__ID"]  = "6543"
+    >>> os.environ["UAVCAN__SUB__OPTIONAL_PORT__ID"]     = "65535"
+    >>> os.environ["UAVCAN__UDP__IP"]                    = "127.63.0.0"
+    >>> os.environ["UAVCAN__SERIAL__PORT"]               = "socket://localhost:50905"
+    >>> os.environ["UAVCAN__DIAGNOSTIC__SEVERITY"]       = "3.1"
+    >>> os.environ["M__MOTOR__INDUCTANCE_DQ"]            = "0.12 0.13"
 
 >>> import os
 >>> for k in os.environ:  # Suppose that the following environment variables were passed to our process:
 ...     if "__" in k:
-...         print(k.ljust(47), os.environ[k])
-UAVCAN__NODE__ID__NATURAL16                     42
-UAVCAN__PUB__MEASURED_VOLTAGE__ID__NATURAL16    6543
-UAVCAN__SUB__OPTIONAL_PORT__ID__NATURAL16       65535
-UAVCAN__UDP__IP__STRING                         127.63.0.0
-UAVCAN__SERIAL__PORT__STRING                    socket://localhost:50905
-UAVCAN__DIAGNOSTIC__SEVERITY__REAL64            3.1
-M__MOTOR__INDUCTANCE_DQ__REAL64                 0.12 0.13
->>> node = pyuavcan.application.make_node(
-...     node_info,
-...     "registers.db",     # The file will be created if doesn't exist.
-...     {                   # Configure default logging severity and a custom register.
-...         "uavcan.diagnostic.severity": Value(natural16=pyuavcan.application.register.Natural16([2])),
-...         "custom.register": Value(real64=pyuavcan.application.register.Real64([1.23, -8.15])),
-...     },
-... )
+...         print(k.ljust(40), os.environ[k])
+UAVCAN__NODE__ID                         42
+UAVCAN__PUB__MEASURED_VOLTAGE__ID        6543
+UAVCAN__SUB__OPTIONAL_PORT__ID           65535
+UAVCAN__UDP__IP                          127.63.0.0
+UAVCAN__SERIAL__PORT                     socket://localhost:50905
+UAVCAN__DIAGNOSTIC__SEVERITY             3.1
+M__MOTOR__INDUCTANCE_DQ                  0.12 0.13
+>>> node = pyuavcan.application.make_node(node_info, "registers.db")  # The file will be created if doesn't exist.
 >>> node.id
 42
 >>> node.presentation.transport     # Heterogeneously redundant transport: UDP+Serial, as specified in env vars.
@@ -247,30 +226,20 @@ RedundantTransport(UDPTransport('127.63.0.42', ...), SerialTransport('socket://l
 >>> pub_voltage.port_id
 6543
 >>> pub_voltage.close()
->>> list(node.registry["uavcan.diagnostic.severity"].value.natural16.value)     # Type automatically converted!
+>>> list(node.registry["uavcan.diagnostic.severity"].value.natural8.value)      # This is a standard register.
 [3]
->>> node.registry["custom.register"].floats                                     # Default values.
+>>> node.registry.setdefault("m.motor.flux_linkage_dq", Value(real64=Real64([1.23, -8.15]))).floats
 [1.23, -8.15]
->>> node.registry["m.motor.inductance_dq"].floats                               # Application parameters.
+>>> node.registry.setdefault("m.motor.inductance_dq", Value(real64=Real64([1.23, -8.15]))).floats
 [0.12, 0.13]
->>> node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "optional_port")  # doctest: +IGNORE_EXCEPTION_DETAIL
+>>> node.registry["m.motor.inductance_dq"] = [1.9, 6.3]  # Update -- full type not required because it is already known.
+>>> node.registry["m.motor.inductance_dq"]
+[1.9, 6.3]
+>>> node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "optional_port")    # doctest: +IGNORE_EXCEPTION_DETAIL
 Traceback (most recent call last):
 ...
 MissingRegisterError: 'uavcan.sub.optional_port.id'
 >>> node.close()
-
-As mentioned above, when the schema type is changed, existing values are type-converted and
-updated in the register file automatically:
-
->>> node = pyuavcan.application.make_node(
-...     node_info,
-...     "registers.db",     # The file was just created above.
-...     {                   # Notice that the type is now different!
-...         "custom.register": Value(integer8=pyuavcan.application.register.Integer8([99, -88])),
-...     },
-... )
->>> node.registry["custom.register"].floats     # The old values are used but the type is now integer8.
-[1.0, -8.0]
 
 ..  doctest::
     :hide:
@@ -278,10 +247,10 @@ updated in the register file automatically:
     >>> for k in os.environ:
     ...     if "__" in k:
     ...         del os.environ[k]
-    >>> node.close()
+    >>> node.close()        # Ensure idempotency.
 
 Naturally, in order to launch a node one would need to export the required environment variables.
-While this can be done trivially using a shell script or something similar,
+While this can be done trivially using standard tools,
 we recommend using the UAVCAN orchestrator implemented in the Yakut command-line tool
 (those familiar with ROS will find certain parallels with roslaunch).
 It allows one to define UAVCAN network configuration in YAML files with first-class support for passing

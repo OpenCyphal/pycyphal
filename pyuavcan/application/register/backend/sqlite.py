@@ -78,7 +78,6 @@ class SQLiteBackend(Backend):
         return self._loc.lower() != _LOCATION_VOLATILE
 
     def close(self) -> None:
-        _logger.debug("%r: Closing", self)
         self._db.close()
 
     def index(self, index: int) -> Optional[str]:
