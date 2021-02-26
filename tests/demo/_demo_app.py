@@ -53,40 +53,40 @@ def _get_run_configs() -> Iterable[RunConfig]:
 
     yield RunConfig(
         {
-            "UAVCAN__UDP__IP__STRING": "127.9.0.0",
-            "UAVCAN__SERIAL__PORT__EMPTY": "",
-            "UAVCAN__CAN__IFACE__EMPTY": "",
+            "UAVCAN__UDP__IFACE": "127.9.0.0",
+            "UAVCAN__SERIAL__IFACE": "",
+            "UAVCAN__CAN__IFACE": "",
         }
     )
     yield RunConfig(
         {
-            "UAVCAN__SERIAL__PORT__STRING": "socket://localhost:50905",
-            "UAVCAN__UDP__IP__EMPTY": "",
-            "UAVCAN__CAN__IFACE__EMPTY": "",
+            "UAVCAN__SERIAL__IFACE": "socket://localhost:50905",
+            "UAVCAN__UDP__IFACE": "",
+            "UAVCAN__CAN__IFACE": "",
         }
     )
     yield RunConfig(
         {
-            "UAVCAN__UDP__IP__STRING": "127.9.0.0",
-            "UAVCAN__SERIAL__PORT__STRING": "socket://localhost:50905",
-            "UAVCAN__CAN__IFACE__EMPTY": "",
+            "UAVCAN__UDP__IFACE": "127.9.0.0",
+            "UAVCAN__SERIAL__IFACE": "socket://localhost:50905",
+            "UAVCAN__CAN__IFACE": "",
         }
     )
     if sys.platform.startswith("linux"):
         yield RunConfig(
             {
-                "UAVCAN__CAN__IFACE__STRING": "socketcan:vcan0",
-                "UAVCAN__CAN__MTU__NATURAL16": "8",
-                "UAVCAN__SERIAL__PORT__EMPTY": "",
-                "UAVCAN__UDP__IP__EMPTY": "",
+                "UAVCAN__CAN__IFACE": "socketcan:vcan0",
+                "UAVCAN__CAN__MTU": "8",
+                "UAVCAN__SERIAL__IFACE": "",
+                "UAVCAN__UDP__IFACE": "",
             }
         )
         yield RunConfig(
             {
-                "UAVCAN__CAN__IFACE__STRING": " ".join(f"socketcan:vcan{i}" for i in range(3)),
-                "UAVCAN__CAN__MTU__NATURAL16": "64",
-                "UAVCAN__SERIAL__PORT__EMPTY": "",
-                "UAVCAN__UDP__IP__EMPTY": "",
+                "UAVCAN__CAN__IFACE": " ".join(f"socketcan:vcan{i}" for i in range(3)),
+                "UAVCAN__CAN__MTU": "64",
+                "UAVCAN__SERIAL__IFACE": "",
+                "UAVCAN__UDP__IFACE": "",
             }
         )
 
@@ -120,14 +120,14 @@ async def _unittest_slow_demo_app(
     env.update(
         {
             # Other registers beyond the transport settings:
-            "UAVCAN__NODE__ID__NATURAL16": str(DEMO_APP_NODE_ID),
-            "UAVCAN__DIAGNOSTIC__SEVERITY__NATURAL16": "2",
-            "UAVCAN__DIAGNOSTIC__TIMESTAMP__BIT": "1",
-            "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID__NATURAL16": "2345",
-            "UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID__NATURAL16": "2346",
-            "UAVCAN__PUB__HEATER_VOLTAGE__ID__NATURAL16": "2347",
-            "UAVCAN__SRV__LEAST_SQUARES__ID__NATURAL16": "123",
-            "THERMOSTAT__PID__GAINS__REAL32": "0.1 0.0 0.0",  # Gain 0.1
+            "UAVCAN__NODE__ID": str(DEMO_APP_NODE_ID),
+            "UAVCAN__DIAGNOSTIC__SEVERITY": "2",
+            "UAVCAN__DIAGNOSTIC__TIMESTAMP": "1",
+            "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID": "2345",
+            "UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID": "2346",
+            "UAVCAN__PUB__HEATER_VOLTAGE__ID": "2347",
+            "UAVCAN__SRV__LEAST_SQUARES__ID": "123",
+            "THERMOSTAT__PID__GAINS": "0.1 0.0 0.0",  # Gain 0.1
             # Various low-level items:
             "PYUAVCAN_LOGLEVEL": "INFO",
             "PATH": os.environ.get("PATH", ""),
@@ -151,7 +151,7 @@ async def _unittest_slow_demo_app(
             name="org.uavcan.pyuavcan.test.demo_app",
         )
         env = mirror(env)
-        env["UAVCAN__NODE__ID__NATURAL16"] = "123"
+        env["UAVCAN__NODE__ID"] = "123"
         registers = pyuavcan.application.register.parse_environment_variables(env)
         node = pyuavcan.application.make_node(local_node_info, schema=registers, ignore_environment_variables=True)
         node.start()

@@ -201,8 +201,8 @@ There are two places:
     >>> os.environ["UAVCAN__NODE__ID"]                   = "42"
     >>> os.environ["UAVCAN__PUB__MEASURED_VOLTAGE__ID"]  = "6543"
     >>> os.environ["UAVCAN__SUB__OPTIONAL_PORT__ID"]     = "65535"
-    >>> os.environ["UAVCAN__UDP__IP"]                    = "127.63.0.0"
-    >>> os.environ["UAVCAN__SERIAL__PORT"]               = "socket://localhost:50905"
+    >>> os.environ["UAVCAN__UDP__IFACE"]                 = "127.63.0.0"
+    >>> os.environ["UAVCAN__SERIAL__IFACE"]              = "socket://localhost:50905"
     >>> os.environ["UAVCAN__DIAGNOSTIC__SEVERITY"]       = "3.1"
     >>> os.environ["M__MOTOR__INDUCTANCE_DQ"]            = "0.12 0.13"
 
@@ -213,8 +213,8 @@ There are two places:
 UAVCAN__NODE__ID                         42
 UAVCAN__PUB__MEASURED_VOLTAGE__ID        6543
 UAVCAN__SUB__OPTIONAL_PORT__ID           65535
-UAVCAN__UDP__IP                          127.63.0.0
-UAVCAN__SERIAL__PORT                     socket://localhost:50905
+UAVCAN__UDP__IFACE                       127.63.0.0
+UAVCAN__SERIAL__IFACE                    socket://localhost:50905
 UAVCAN__DIAGNOSTIC__SEVERITY             3.1
 M__MOTOR__INDUCTANCE_DQ                  0.12 0.13
 >>> node = pyuavcan.application.make_node(node_info, "registers.db")  # The file will be created if doesn't exist.
@@ -233,7 +233,7 @@ RedundantTransport(UDPTransport('127.63.0.42', ...), SerialTransport('socket://l
 >>> node.registry.setdefault("m.motor.inductance_dq", Value(real64=Real64([1.23, -8.15]))).floats
 [0.12, 0.13]
 >>> node.registry["m.motor.inductance_dq"] = [1.9, 6.3]  # Update -- full type not required because it is already known.
->>> node.registry["m.motor.inductance_dq"]
+>>> node.registry["m.motor.inductance_dq"].floats
 [1.9, 6.3]
 >>> node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "optional_port")    # doctest: +IGNORE_EXCEPTION_DETAIL
 Traceback (most recent call last):

@@ -11,8 +11,8 @@ PYTHONPATH: .yakut_compiled
 # See the docs for pyuavcan.application.make_node() to see which registers can be used here.
 uavcan:
   # Redundant transport, UDP+Serial:
-  udp.ip: 127.9.0.0
-  serial.port: socket://localhost:50905
+  udp.iface: 127.9.0.0
+  serial.iface: socket://localhost:50905
   # It is recommended to set unused transports to 'empty' (by making them null-valued) explicitly to ensure that
   # previously stored transport configurations are not accidentally reused.
   # Null-valued registers passed via environment variables are removed from the register file.

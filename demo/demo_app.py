@@ -52,8 +52,6 @@ class DemoApp:
     """
 
     def __init__(self) -> None:
-        from pyuavcan.application.register import Value, Real32
-
         node_info = uavcan.node.GetInfo_1_0.Response(
             software_version=uavcan.node.Version_1_0(major=1, minor=0),
             name="org.uavcan.pyuavcan.demo.demo_app",
@@ -62,13 +60,7 @@ class DemoApp:
         # the UAVCAN network. Also, it implements certain standard application-layer functions, such as publishing
         # heartbeats and port introspection messages, responding to GetInfo, serving the register API, etc.
         # The file "my_registers.db" stores the registers (configuration parameters) of our node.
-        self._node = pyuavcan.application.make_node(
-            node_info,
-            DemoApp.REGISTER_FILE,
-            {  # Register types and defaults are defined at the initialization stage like this.
-                "thermostat.pid.gains": Value(real32=Real32([0.12, 0.18, 0.01])),
-            },
-        )
+        self._node = pyuavcan.application.make_node(node_info, DemoApp.REGISTER_FILE)
 
         # Published heartbeat fields can be configured as follows.
         self._node.heartbeat_publisher.mode = uavcan.node.Mode_1_0.OPERATIONAL  # type: ignore
@@ -144,19 +136,22 @@ class DemoApp:
         temperature_setpoint = 0.0
         temperature_error = 0.0
 
-        # Expose internal states to external observers for diagnostic purposes. Here, we define read-only registers.
-        # Since they are computed at every invocation, they are never stored in the register file.
-        self._node.new_register("thermostat.error", lambda: Value(real32=Real32([temperature_error])))
-        self._node.new_register("thermostat.setpoint", lambda: Value(real32=Real32([temperature_setpoint])))
-
         async def on_setpoint(msg: uavcan.si.unit.temperature.Scalar_1_0, _: pyuavcan.transport.TransferFrom) -> None:
             nonlocal temperature_setpoint
             temperature_setpoint = msg.kelvin
 
         self._sub_t_sp.receive_in_background(on_setpoint)  # IoC-style handler.
 
-        # Read the application settings from the registry.
-        gain_p, gain_i, gain_d = self._node.registry["thermostat.pid.gains"].floats
+        # Expose internal states to external observers for diagnostic purposes. Here, we define read-only registers.
+        # Since they are computed at every invocation, they are never stored in the register file.
+        self._node.registry["thermostat.error"] = lambda: Value(real32=Real32([temperature_error]))
+        self._node.registry["thermostat.setpoint"] = lambda: Value(real32=Real32([temperature_setpoint]))
+
+        # Read application settings from the registry.
+        gain_p, gain_i, gain_d = self._node.registry.setdefault(
+            "thermostat.pid.gains",  # Assignable via environment variable THERMOSTAT__PID__GAINS
+            Value(real32=Real32([0.12, 0.18, 0.01])),  # These defaults will be used at first run to init the register.
+        ).floats
 
         logging.info("Application started with PID gains: %.3f %.3f %.3f", gain_p, gain_i, gain_d)
 

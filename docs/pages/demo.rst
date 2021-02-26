@@ -76,23 +76,21 @@ We can resolve this by passing the correct register values via environment varia
 
 ..  code-block:: sh
 
-    export UAVCAN__NODE__ID__NATURAL16=42                           # Set the local node-ID 42 (anonymous by default)
-    export UAVCAN__UDP__IP__STRING=127.9.0.0                        # Use UAVCAN/UDP transport via 127.9.0.42 (sic!)
-    export UAVCAN__SUB__TEMPERATURE_SETPOINT__ID__NATURAL16=2345    # Subject "temperature_setpoint"    on ID 2345
-    export UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID__NATURAL16=2346 # Subject "temperature_measurement" on ID 2346
-    export UAVCAN__PUB__HEATER_VOLTAGE__ID__NATURAL16=2347          # Subject "heater_voltage"          on ID 2347
-    export UAVCAN__SRV__LEAST_SQUARES__ID__NATURAL16=123            # Service "least_squares"           on ID 123
-    export UAVCAN__DIAGNOSTIC__SEVERITY__NATURAL16=2                # This is optional to enable logging via UAVCAN
+    export UAVCAN__NODE__ID=42                           # Set the local node-ID 42 (anonymous by default)
+    export UAVCAN__UDP__IFACE=127.9.0.0                  # Use UAVCAN/UDP transport via 127.9.0.42 (sic!)
+    export UAVCAN__SUB__TEMPERATURE_SETPOINT__ID=2345    # Subject "temperature_setpoint"    on ID 2345
+    export UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID=2346 # Subject "temperature_measurement" on ID 2346
+    export UAVCAN__PUB__HEATER_VOLTAGE__ID=2347          # Subject "heater_voltage"          on ID 2347
+    export UAVCAN__SRV__LEAST_SQUARES__ID=123            # Service "least_squares"           on ID 123
+    export UAVCAN__DIAGNOSTIC__SEVERITY=2                # This is optional to enable logging via UAVCAN
 
-    python demo_app.py                                              # Run the application!
+    python demo_app.py                                   # Run the application!
 
 The snippet is valid for sh/bash/zsh; if you are using PowerShell on Windows, replace ``export`` with ``$env:``.
 Further snippets will not include this remark.
 
-An environment variable named like ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID__NATURAL16``
-sets the register ``uavcan.sub.temperature_setpoint.id`` of type ``natural16``.
-You can find the name/type mapping details documented in
-:func:`pyuavcan.application.register.parse_environment_variables`.
+An environment variable named like ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID`` sets the register
+``uavcan.sub.temperature_setpoint.id`` (upper-cased, full stop replaced with 2x low line).
 
 In PyUAVCAN, registers are normally stored in the *register file*, in our case it's ``my_registers.db``
 (the UAVCAN Specification does not regulate how the registers are to be stored, this is an implementation detail).
@@ -135,7 +133,7 @@ So, for Yakut, we can export this configuration to let it run on the same networ
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IP__STRING=127.9.0.0  # We don't export the node-ID, so it will remain anonymous.
+    export UAVCAN__UDP__IFACE=127.9.0.0  # We don't export the node-ID, so it will remain anonymous.
 
 
 Interacting with the application
@@ -145,12 +143,12 @@ To listen to the demo's heartbeat and diagnostics, run the following commands in
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IP__STRING=127.9.0.0
+    export UAVCAN__UDP__IFACE=127.9.0.0
     yakut sub uavcan.node.Heartbeat.1.0     # You should see heartbeats being printed continuously.
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IP__STRING=127.9.0.0
+    export UAVCAN__UDP__IFACE=127.9.0.0
     yakut sub uavcan.diagnostic.Record.1.1  # This one will not show anything yet -- read on.
 
 Now we can actually see how the simple thermostat node is operating.
@@ -158,15 +156,15 @@ Add another subscriber to see the published voltage command:
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IP__STRING=127.9.0.0
+    export UAVCAN__UDP__IFACE=127.9.0.0
     yakut sub -M 2347:uavcan.si.unit.voltage.Scalar.1.0
 
 And publish the setpoint along with measurement (process variable):
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IP__STRING=127.9.0.0
-    export UAVCAN__NODE__ID__NATURAL16=111    # We need a node-ID to publish messages
+    export UAVCAN__UDP__IFACE=127.9.0.0
+    export UAVCAN__NODE__ID=111         # We need a node-ID to publish messages
     yakut pub --count 10 2345:uavcan.si.unit.temperature.Scalar.1.0   'kelvin: 250' \
                          2346:uavcan.si.sample.temperature.Scalar.1.0 'kelvin: 240'
 

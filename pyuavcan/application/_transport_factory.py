@@ -46,7 +46,7 @@ def make_transport(
           - Register type
           - Register semantics
 
-        * - ``uavcan.udp.ip``
+        * - ``uavcan.udp.iface``
           - ``string``
           - Whitespace-separated list of /16 IP subnet addresses.
             16 least significant bits are replaced with the node-ID if configured, otherwise left unchanged.
@@ -69,7 +69,7 @@ def make_transport(
           - Register type
           - Register semantics
 
-        * - ``uavcan.serial.port``
+        * - ``uavcan.serial.iface``
           - ``string``
           - Whitespace-separated list of serial port names.
             E.g.: ``/dev/ttyACM0``, ``COM9``, ``socket://localhost:50905``.
@@ -148,7 +148,7 @@ def make_transport(
 
     >>> from pyuavcan.application.register import Value, ValueProxy, String, Natural16
     >>> reg = {
-    ...     "uavcan.udp.ip": ValueProxy(Value(string=String("127.99.0.0"))),
+    ...     "uavcan.udp.iface": ValueProxy(Value(string=String("127.99.0.0"))),
     ...     "uavcan.node.id": ValueProxy(Value(natural16=Natural16([257]))),
     ... }
     >>> tr = make_transport(reg)
@@ -168,8 +168,8 @@ def make_transport(
     [1000000, 4000000]
 
     >>> reg = {                                                         # Triply-redundant heterogeneous transport:
-    ...     "uavcan.udp.ip":      ValueProxy(Value(string=String("127.99.0.15 127.111.0.15"))),  # Double UDP transport
-    ...     "uavcan.serial.port": ValueProxy(Value(string=String("socket://localhost:50905"))),  # Serial transport
+    ...     "uavcan.udp.iface":    ValueProxy(Value(string=String("127.99.0.15 127.111.0.15"))),  # Double UDP transport
+    ...     "uavcan.serial.iface": ValueProxy(Value(string=String("socket://localhost:50905"))),  # Serial transport
     ... }
     >>> tr = make_transport(reg)     # The node-ID was not set, so the transport is anonymous.
     >>> tr                                          # doctest: +NORMALIZE_WHITESPACE
@@ -191,7 +191,7 @@ def make_transport(
     >>> tr.close()
 
     >>> reg = {
-    ...     "uavcan.udp.ip": ValueProxy(Value(string=String("127.99.1.1"))),    # Per the standard register specs,
+    ...     "uavcan.udp.iface": ValueProxy(Value(string=String("127.99.1.1"))), # Per the standard register specs,
     ...     "uavcan.node.id": ValueProxy(Value(natural16=Natural16([0xFFFF]))), # 0xFFFF means unset/anonymous.
     ... }
     >>> tr = make_transport(reg)
@@ -240,7 +240,7 @@ def _make_udp(
     def init(name: str, default: Value) -> ValueProxy:
         return registers.setdefault("uavcan.udp." + name, ValueProxy(default))
 
-    ip_list = str(init("ip", Value(string=String()))).split()
+    ip_list = str(init("iface", Value(string=String()))).split()
     mtu = int(init("mtu", Value(natural16=Natural16([1200]))))
     srv_mult = int(init("duplicate_service_transfers", Value(bit=Bit([False])))) + 1
 
@@ -257,7 +257,7 @@ def _make_serial(
     def init(name: str, default: Value) -> ValueProxy:
         return registers.setdefault("uavcan.serial." + name, ValueProxy(default))
 
-    port_list = str(init("port", Value(string=String()))).split()
+    port_list = str(init("iface", Value(string=String()))).split()
     srv_mult = int(init("duplicate_service_transfers", Value(bit=Bit([False])))) + 1
     baudrate = int(init("baudrate", Value(natural32=Natural32([0])))) or None
 

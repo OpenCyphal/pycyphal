@@ -317,7 +317,7 @@ class Registry(MutableMapping[str, ValueProxy]):
 
         If the register does not exist, and the value is of type :attr:`CreationArgument`,
         a new register will be created.
-        However, :meth:`update_from_environment` is NOT invoked in this case, as one might guess.
+        However, :meth:`update_from_environment` is NOT invoked in this case.
 
         Otherwise, :class:`MissingRegisterError` is raised.
 

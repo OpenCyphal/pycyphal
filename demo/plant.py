@@ -35,19 +35,14 @@ async def handle_command(msg: uavcan.si.unit.voltage.Scalar_1_0, _metadata: pyua
 
 
 async def main() -> None:
-    node = make_node(
-        NodeInfo(name="org.uavcan.pyuavcan.demo.plant"),
-        "plant.db",
-        {
-            "model.environment.temperature": register.Value(real32=register.Real32([292.15])),  # [kelvin]
-        },
-    )
-    with node:
+    with make_node(NodeInfo(name="org.uavcan.pyuavcan.demo.plant"), "plant.db") as node:
         # Expose internal states for diagnostics.
-        node.new_register("status.saturation", lambda: register.Value(bit=register.Bit([saturation])))
+        node.registry["status.saturation"] = lambda: register.Value(bit=register.Bit([saturation]))
 
         # Initialize values from the registry.
-        temp_environment = float(node.registry["model.environment.temperature"])
+        temp_environment = float(  # [kelvin]
+            node.registry.setdefault("model.environment.temperature", register.Value(real32=register.Real32([292.15])))
+        )
         temp_plant = temp_environment
 
         # Set up the ports.
