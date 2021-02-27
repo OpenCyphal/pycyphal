@@ -152,7 +152,8 @@ async def _unittest_slow_demo_app(
         )
         env = mirror(env)
         env["UAVCAN__NODE__ID"] = "123"
-        node = pyuavcan.application.make_node(local_node_info, environment_variables=env)
+        registry = pyuavcan.application.make_registry(None, env)
+        node = pyuavcan.application.make_node(local_node_info, registry)
         node.start()
         del node.registry["thermostat*"]
     except Exception:
@@ -383,7 +384,8 @@ async def _unittest_slow_demo_app_with_plant(
         env["UAVCAN__NODE__ID"] = "123"
         env["UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID"] = "2346"
         env["UAVCAN__PUB__TEMPERATURE_SETPOINT__ID"] = "2345"
-        node = pyuavcan.application.make_node(uavcan.node.GetInfo_1_0.Response(), environment_variables=env)
+        registry = pyuavcan.application.make_registry(None, env)
+        node = pyuavcan.application.make_node(uavcan.node.GetInfo_1_0.Response(), registry)
         node.start()
         del node.registry["model*"]
     except Exception:

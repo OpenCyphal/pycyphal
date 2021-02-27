@@ -278,4 +278,6 @@ from ._node_factory import make_node as make_node
 
 from ._transport_factory import make_transport as make_transport
 
+from ._registry_factory import make_registry as make_registry
+
 from . import register as register

@@ -119,11 +119,10 @@ def make_transport(
           - If True, a loopback transport will be constructed. This is intended for testing only.
 
     :param registers:
-        A mutable mapping of :class:`str` to :class:`pyuavcan.application.register.ValueProxy`,
-        normally it should be an instance of :class:`pyuavcan.application.register.Registry`.
+        A mutable mapping of :class:`str` to :class:`pyuavcan.application.register.ValueProxy`.
         The implementation will initialize registers with their defaults in the mapping using
         :meth:`MutableMapping.setdefault`.
-        The mapping instance is responsible for handling the environment variables.
+        See factory :func:`pyuavcan.application.make_registry`.
 
     :param reconfigurable:
         If False (default), the return value is:

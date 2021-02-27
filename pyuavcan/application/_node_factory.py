@@ -3,75 +3,28 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
-import os
 import sys
 import random
-from typing import Callable, Optional, Union, List, Dict
+from typing import Optional, Union
 from pathlib import Path
 import logging
 import pyuavcan
 from ._node import Node, NodeInfo
 from . import register
-from .register.backend.sqlite import SQLiteBackend
 from ._transport_factory import make_transport
-
-
-EnvironmentVariables = Union[Dict[str, bytes], Dict[str, str], Dict[bytes, bytes]]
+from ._registry_factory import make_registry
 
 
 class MissingTransportConfigurationError(register.MissingRegisterError):
     pass
 
 
-class DefaultRegistry(register.Registry):
-    def __init__(self, sqlite: SQLiteBackend, environment_variables: EnvironmentVariables) -> None:
-        from .register.backend.dynamic import DynamicBackend
-
-        self._backend_sqlite = sqlite
-        self._backend_dynamic = DynamicBackend()
-        self._environment_variables: Dict[str, bytes] = {
-            (k if isinstance(k, str) else k.decode()): (v if isinstance(v, bytes) else v.encode())
-            for k, v in environment_variables.items()
-        }
-        super().__init__()
-
-    @property
-    def backends(self) -> List[register.backend.Backend]:
-        return [self._backend_sqlite, self._backend_dynamic]
-
-    @property
-    def environment_variables(self) -> Dict[str, bytes]:
-        return self._environment_variables
-
-    def _create_persistent(self, name: str, value: register.Value) -> None:
-        _logger.debug("%r: Create persistent %r = %r", self, name, value)
-        self._backend_sqlite[name] = value
-
-    def _create_dynamic(
-        self,
-        name: str,
-        get: Callable[[], register.Value],
-        set: Optional[Callable[[register.Value], None]],
-    ) -> None:
-        _logger.debug("%r: Create dynamic %r from get=%r set=%r", self, name, get, set)
-        self._backend_dynamic[name] = get if set is None else (get, set)
-
-    def update_from_environment_variables(self) -> None:
-        for name in self:
-            env_val = self.environment_variables.get(register.get_environment_variable_name(name))
-            if env_val is not None:
-                _logger.debug("Updating register %r from env: %r", name, env_val)
-                reg_val = self[name]
-                reg_val.assign_from_environment_variable(env_val)
-                self[name] = reg_val
-
-
-class DefaultNode(Node):
+class SimpleNode(Node):
     def __init__(
         self,
         presentation: pyuavcan.presentation.Presentation,
         info: NodeInfo,
-        registry: DefaultRegistry,
+        registry: register.Registry,
     ) -> None:
         self._presentation = presentation
         self._info = info
@@ -87,14 +40,13 @@ class DefaultNode(Node):
         return self._info
 
     @property
-    def registry(self) -> DefaultRegistry:
+    def registry(self) -> register.Registry:
         return self._registry
 
 
 def make_node(
     info: NodeInfo,
-    register_file: Union[None, str, Path] = None,
-    environment_variables: Optional[EnvironmentVariables] = None,
+    registry: Union[None, register.Registry, str, Path] = None,
     *,
     transport: Optional[pyuavcan.transport.Transport] = None,
     reconfigurable_transport: bool = False,
@@ -102,9 +54,6 @@ def make_node(
     """
     Initialize a new node by parsing the configuration encoded in the UAVCAN registers.
     Missing standard registers will be automatically created.
-
-    If ``transport`` is given, it will be used as-is (but see argument docs below).
-    If not given, a new transport instance will be constructed using :func:`make_transport`.
 
     Prior to construction, the register file will be updated/extended based on the register values passed via the
     environment variables (if any) and the explicit ``schema``.
@@ -173,23 +122,13 @@ def make_node(
         - If not set by the caller: ``name`` is constructed from hex-encoded unique-ID like:
           ``anonymous.b0228a49c25ff23a3c39915f81294622``.
 
-    :param register_file:
-        Path to the SQLite file containing the register database; or, in other words,
-        the configuration file of this application/node.
-        If not provided (default), the registers of this instance will be stored in-memory (volatile configuration).
-        If path is provided but the file does not exist, it will be created automatically.
-        See :attr:`Node.registry`, :meth:`Node.new_register`.
-
-    :param environment_variables:
-        During initialization, all registers will be updated based on the environment variables passed here.
-        This dict is used to initialize :attr:`pyuavcan.application.register.Registry.environment_variables`.
-        Registers that are created later using :meth:`pyuavcan.application.register.Registry.setdefault`
-        will default to these values as well.
-
-        If None (which is default), the value is initialized by copying :attr:`os.environb`.
-        Pass an empty dict here to disable environment variable processing.
-
-        See also: standard RPC-service ``uavcan.register.Access``.
+    :param registry:
+        If this is an instance of :class:`pyuavcan.application.register.Registry`, it is used as-is
+        (ownership is taken).
+        Otherwise, this is a register file path (or None) that is passed over to
+        :func:`pyuavcan.application.make_registry`
+        to construct the registry instance for this node.
+        This instance will be available under :class:`pyuavcan.application.Node.registry`.
 
     :param transport:
         If not provided (default), a new transport instance will be initialized based on the available registers using
@@ -219,8 +158,9 @@ def make_node(
         node-ID value.
 
         Until this is implemented, to run the allocator one needs to construct the transport manually using
-        :func:`make_transport`, then run the allocation client, then invoke this factory again with something like
-        ``schema={"uavcan.node.id": Value(natural16=Natural16([your_allocated_node_id]))}``.
+        :func:`make_transport` and :func:`make_registry`,
+        then run the allocation client, then invoke this factory again with the above-obtained Registry instance,
+        having done ``registry["uavcan.node.id"] = allocated_node_id`` beforehand.
 
         While tedious, this is not that much of a problem because the PnP protocol is mostly intended for
         hardware nodes rather than software ones.
@@ -228,7 +168,12 @@ def make_node(
     """
     from pyuavcan.transport.redundant import RedundantTransport
 
+    if not isinstance(registry, register.Registry):
+        registry = make_registry(registry)
+    assert isinstance(registry, register.Registry)
+
     def init_transport() -> pyuavcan.transport.Transport:
+        assert isinstance(registry, register.Registry)
         if transport is None:
             out = make_transport(registry, reconfigurable=reconfigurable_transport)
             if out is not None:
@@ -242,35 +187,24 @@ def make_node(
             return out
         return transport
 
-    registry = DefaultRegistry(
-        SQLiteBackend(register_file or ""),
-        environment_variables if environment_variables is not None else os.environb,  # type: ignore
-    )
-    try:
-        registry.update_from_environment_variables()
-
-        # Populate certain fields of the node info structure automatically and create standard registers.
-        info.protocol_version.major, info.protocol_version.minor = pyuavcan.UAVCAN_SPECIFICATION_VERSION
-        if info.unique_id.sum() == 0:
-            info.unique_id = bytes(
-                registry.setdefault(
-                    "uavcan.node.unique_id",
-                    register.Value(
-                        unstructured=register.Unstructured(random.getrandbits(128).to_bytes(16, sys.byteorder))
-                    ),
-                )
+    # Populate certain fields of the node info structure automatically and create standard registers.
+    info.protocol_version.major, info.protocol_version.minor = pyuavcan.UAVCAN_SPECIFICATION_VERSION
+    if info.unique_id.sum() == 0:
+        info.unique_id = bytes(
+            registry.setdefault(
+                "uavcan.node.unique_id",
+                register.Value(unstructured=register.Unstructured(random.getrandbits(128).to_bytes(16, sys.byteorder))),
             )
-        registry.setdefault("uavcan.node.description", register.Value(string=register.String()))
+        )
+    registry.setdefault("uavcan.node.description", register.Value(string=register.String()))
 
-        if len(info.name) == 0:
-            info.name = "anonymous." + info.unique_id.tobytes().hex()
+    if len(info.name) == 0:
+        info.name = "anonymous." + info.unique_id.tobytes().hex()
 
-        # Construct the node and its application-layer functions.
-        node = DefaultNode(pyuavcan.presentation.Presentation(init_transport()), info, registry)
-        _make_diagnostic_publisher(node)
-    except Exception:
-        registry.close()  # We do not close it at normal exit because it's handed over to the node.
-        raise
+    # Construct the node and its application-layer functions.
+    node = SimpleNode(pyuavcan.presentation.Presentation(init_transport()), info, registry)
+    _make_diagnostic_publisher(node)
+
     return node
 
 

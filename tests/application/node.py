@@ -14,7 +14,7 @@ from pyuavcan.presentation import Presentation
 
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    from pyuavcan.application import make_node
+    from pyuavcan.application import make_node, make_registry
     import uavcan.primitive
     from uavcan.node import Version_1_0, Heartbeat_1_0, GetInfo_1_0, Mode_1_0, Health_1_0
 
@@ -32,7 +32,7 @@ async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
             software_version=Version_1_0(*pyuavcan.__version_info__[:2]),
             name="org.uavcan.pyuavcan.test.node",
         )
-        node = make_node(info, transport=trans, environment_variables=typing.cast(Dict[str, bytes], {}))
+        node = make_node(info, make_registry(None, typing.cast(Dict[str, bytes], {})), transport=trans)
         print("node:", node)
         assert node.presentation.transport is trans
         node.start()

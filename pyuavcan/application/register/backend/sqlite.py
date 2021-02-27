@@ -49,7 +49,7 @@ class SQLiteBackend(Backend):
     []
     """
 
-    def __init__(self, location: Union[str, Path] = ""):
+    def __init__(self, location: Union[None, str, Path] = None):
         """
         :param location: Either a path to the database file, or None. If None, the data will be stored in memory.
         """

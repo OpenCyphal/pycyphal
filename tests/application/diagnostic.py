@@ -16,7 +16,7 @@ from pyuavcan.transport.loopback import LoopbackTransport
 async def _unittest_slow_diagnostic_subscriber(
     compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
 ) -> None:
-    from pyuavcan.application import make_node, NodeInfo, diagnostic
+    from pyuavcan.application import make_node, NodeInfo, diagnostic, make_registry
     from uavcan.time import SynchronizedTimestamp_1_0
 
     assert compiled
@@ -24,8 +24,8 @@ async def _unittest_slow_diagnostic_subscriber(
 
     node = make_node(
         NodeInfo(),
+        make_registry(None, typing.cast(Dict[str, bytes], {})),
         transport=LoopbackTransport(2222),
-        environment_variables=typing.cast(Dict[str, bytes], {}),
     )
     node.start()
     pub = node.make_publisher(diagnostic.Record)

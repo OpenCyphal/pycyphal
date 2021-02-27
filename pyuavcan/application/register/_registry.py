@@ -54,40 +54,20 @@ class Registry(MutableMapping[str, ValueProxy]):
     Observe that it implements :class:`MutableMapping`.
 
     The user is not expected to instantiate this class manually;
-    instead, it is provided as a member of :class:`pyuavcan.application.Node`.
+    instead, it is provided as a member of :class:`pyuavcan.application.Node`,
+    or via :func:`pyuavcan.application.make_node`.
 
-    ..  doctest::
-        :hide:
+    >>> import pyuavcan.application
+    >>> registry = pyuavcan.application.make_registry(environment_variables={})
 
-        >>> from pyuavcan.application.register.backend.sqlite import SQLiteBackend
-        >>> from pyuavcan.application.register.backend.dynamic import DynamicBackend
-        >>> import tempfile
-        >>> class DocTestRegistry(Registry):
-        ...     def __init__(self) -> None:
-        ...         self._sqlite = SQLiteBackend(tempfile.mktemp(".db", "pyuavcan_register_test"))
-        ...         self._dynamic = DynamicBackend()
-        ...         self._env = {}
-        ...         super().__init__()
-        ...     @property
-        ...     def backends(self):
-        ...         return [self._sqlite, self._dynamic]
-        ...     @property
-        ...     def environment_variables(self):
-        ...         return self._env
-        ...     def _create_persistent(self, name: str, value: Value) -> None:
-        ...         self._sqlite[name] = value
-        ...     def _create_dynamic(self, name: str, get: Callable[[], Value], set: Optional[Callable[[Value], None]]):
-        ...         self._dynamic[name] = get if set is None else (get, set)
-        >>> registry = DocTestRegistry()
-
-    Create persistent registers (stored in the register file):
+    Create static registers (stored in the register file):
 
     >>> from pyuavcan.application.register import Natural16, Real32, Bit, String
     >>> registry["p.a"] = Value(natural16=Natural16([1234]))        # Assign or create.
     >>> registry.setdefault("p.b", Value(real32=Real32([12.34])))   # Update or create. # doctest: +NORMALIZE_WHITESPACE
     ValueProxyWithFlags(uavcan.register.Value...(real32=uavcan.primitive.array.Real32...(value=[12.34])),
                         mutable=True,
-                        persistent=True)
+                        persistent=False)
 
     Create dynamic registers (getter/setter invoked at every access; existing entries overwritten automatically):
 
@@ -179,7 +159,7 @@ class Registry(MutableMapping[str, ValueProxy]):
         ],
     ]
     """
-    - If :class:`Value` or :class:`ValueProxy`, a persistent register will be created and stored in the registry file.
+    - If :class:`Value` or :class:`ValueProxy`, a static register will be created and stored in the registry file.
 
     - If a single callable, it will be invoked whenever this register is read; such register is called "dynamic".
       Such register will be reported as immutable.
@@ -194,7 +174,7 @@ class Registry(MutableMapping[str, ValueProxy]):
       The registry file is not affected and therefore this change is not persistent.
 
     Dynamic registers (callables) overwrite existing entries unconditionally.
-    It is not recommended to create dynamic registers with same names as existing persistent registers,
+    It is not recommended to create dynamic registers with same names as existing static registers,
     as it may cause erratic behaviors.
     """
 
@@ -218,7 +198,7 @@ class Registry(MutableMapping[str, ValueProxy]):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _create_persistent(self, name: str, value: Value) -> None:
+    def _create_static(self, name: str, value: Value) -> None:
         """This is an abstract method because only the implementation knows which backend should be used."""
         raise NotImplementedError
 
@@ -362,7 +342,7 @@ class Registry(MutableMapping[str, ValueProxy]):
                     return
 
         if isinstance(value, (Value, ValueProxy)):
-            self._create_persistent(name, ValueProxy(value).value)
+            self._create_static(name, ValueProxy(value).value)
             return
 
         raise MissingRegisterError(

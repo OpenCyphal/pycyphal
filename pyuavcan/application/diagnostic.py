@@ -82,7 +82,7 @@ class DiagnosticPublisher(logging.Handler):
 
     >>> from asyncio import get_event_loop
     >>> from pyuavcan.transport.loopback import LoopbackTransport
-    >>> from pyuavcan.application import make_node, NodeInfo
+    >>> from pyuavcan.application import make_node, NodeInfo, make_registry
     >>> node = make_node(NodeInfo(), transport=LoopbackTransport(1))
     >>> node.start()
 
@@ -112,11 +112,8 @@ class DiagnosticPublisher(logging.Handler):
     The node factory :func:`pyuavcan.application.make_node` actually allows you to do this automatically,
     so that you don't have to hard-code behaviors in the application sources:
 
-    >>> node = make_node(
-    ...     NodeInfo(),
-    ...     environment_variables={"UAVCAN__DIAGNOSTIC__SEVERITY": "2", "UAVCAN__DIAGNOSTIC__TIMESTAMP": "1"},
-    ...     transport=LoopbackTransport(1),
-    ... )
+    >>> registry = make_registry(None, {"UAVCAN__DIAGNOSTIC__SEVERITY": "2", "UAVCAN__DIAGNOSTIC__TIMESTAMP": "1"})
+    >>> node = make_node(NodeInfo(), registry, transport=LoopbackTransport(1))
     >>> node.start()
     >>> sub = node.make_subscriber(Record)
     >>> logging.info('Test message')
