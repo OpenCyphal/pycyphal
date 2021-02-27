@@ -3,7 +3,7 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
-from typing import Callable, Tuple, Type, TypeVar, Optional, List, Any
+from typing import Callable, Type, TypeVar, Optional, List, Any
 import abc
 import asyncio
 import logging

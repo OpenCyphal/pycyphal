@@ -203,7 +203,12 @@ class Registry(MutableMapping[str, ValueProxy]):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def _create_dynamic(self, name: str, get: Callable[[], Value], set: Optional[Callable[[Value], None]]) -> None:
+    def _create_dynamic(
+        self,
+        name: str,
+        getter: Callable[[], Value],
+        setter: Optional[Callable[[Value], None]],
+    ) -> None:
         """This is an abstract method because only the implementation knows which backend should be used."""
         raise NotImplementedError
 

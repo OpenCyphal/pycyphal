@@ -50,11 +50,11 @@ class SimpleRegistry(register.Registry):
     def _create_dynamic(
         self,
         name: str,
-        get: Callable[[], register.Value],
-        set: Optional[Callable[[register.Value], None]],
+        getter: Callable[[], register.Value],
+        setter: Optional[Callable[[register.Value], None]],
     ) -> None:
-        _logger.debug("%r: Create dynamic %r from get=%r set=%r", self, name, get, set)
-        self._backend_dynamic[name] = get if set is None else (get, set)
+        _logger.debug("%r: Create dynamic %r from getter=%r setter=%r", self, name, getter, setter)
+        self._backend_dynamic[name] = getter if setter is None else (getter, setter)
 
     def _update_from_environment_variables(self) -> None:
         for name in self:
@@ -72,7 +72,10 @@ def make_registry(
 ) -> register.Registry:
     """
     Construct a new instance of :class:`pyuavcan.application.register.Registry`.
-    Complex applications may choose to implement Registry manually instead of using this factory.
+    Complex applications with uncommon requirements may choose to implement Registry manually
+    instead of using this factory.
+
+    See also: standard RPC-service ``uavcan.register.Access``.
 
     :param register_file:
         Path to the SQLite file containing the register database; or, in other words,
@@ -90,13 +93,11 @@ def make_registry(
         If None (which is default), the value is initialized by copying :attr:`os.environb`.
         Pass an empty dict here to disable environment variable processing.
 
-        See also: standard RPC-service ``uavcan.register.Access``.
-
     :raises:
         - :class:`pyuavcan.application.register.ValueConversionError` if a register is found but its value
           cannot be converted to the correct type, or if the value of an environment variable for a register
           is invalid or incompatible with the register's type
-          (e.g., an environment variable set to ``Hello world`` cannot initialize a register  of type ``real64[3]``).
+          (e.g., an environment variable set to ``Hello world`` cannot be assigned to register of type ``real64[3]``).
     """
     return SimpleRegistry(register_file, environment_variables)
 
