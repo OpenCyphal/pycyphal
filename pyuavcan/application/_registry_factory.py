@@ -25,7 +25,12 @@ class SimpleRegistry(register.Registry):
         self._backend_sqlite = SQLiteBackend(register_file)
         self._backend_dynamic = DynamicBackend()
 
-        environment_variables = os.environb if environment_variables is None else environment_variables  # type: ignore
+        if environment_variables is None:
+            try:
+                environment_variables = os.environb  # type: ignore
+            except AttributeError:  # pragma: no cover
+                environment_variables = os.environ  # type: ignore
+
         assert environment_variables is not None
         self._environment_variables: Dict[str, bytes] = {
             (k if isinstance(k, str) else k.decode()): (v if isinstance(v, bytes) else v.encode())
