@@ -16,7 +16,7 @@ from .register.backend.sqlite import SQLiteBackend
 from ._transport_factory import make_transport
 
 
-EnvironmentVariables = Dict[Union[str, bytes], Union[str, bytes]]
+EnvironmentVariables = Union[Dict[str, bytes], Dict[str, str], Dict[bytes, bytes]]
 
 
 class MissingTransportConfigurationError(register.MissingRegisterError):
@@ -244,7 +244,7 @@ def make_node(
 
     registry = DefaultRegistry(
         SQLiteBackend(register_file or ""),
-        environment_variables if environment_variables is not None else os.environb,
+        environment_variables if environment_variables is not None else os.environb,  # type: ignore
     )
     try:
         registry.update_from_environment_variables()

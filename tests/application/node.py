@@ -3,6 +3,7 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
+from typing import Dict
 import asyncio
 import pytest
 import pyuavcan
@@ -31,7 +32,7 @@ async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
             software_version=Version_1_0(*pyuavcan.__version_info__[:2]),
             name="org.uavcan.pyuavcan.test.node",
         )
-        node = make_node(info, transport=trans, environment_variables={})
+        node = make_node(info, transport=trans, environment_variables=typing.cast(Dict[str, bytes], {}))
         print("node:", node)
         assert node.presentation.transport is trans
         node.start()

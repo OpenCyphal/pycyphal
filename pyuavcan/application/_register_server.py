@@ -3,6 +3,7 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
+from typing import Optional
 import logging
 import pyuavcan
 import pyuavcan.application
@@ -10,7 +11,7 @@ from pyuavcan.presentation import ServiceRequestMetadata
 from uavcan.register import Access_1_0 as Access
 from uavcan.register import List_1_0 as List
 from uavcan.register import Name_1_0 as Name
-from .register import ValueConversionError, MissingRegisterError
+from .register import ValueConversionError, ValueProxyWithFlags
 
 
 class RegisterServer:
@@ -116,16 +117,23 @@ class RegisterServer:
 
     async def _handle_access(self, request: Access.Request, metadata: ServiceRequestMetadata) -> Access.Response:
         name = request.name.name.tobytes().decode("utf8", "ignore")
-        v = self.node.registry.get(name)
+        try:
+            v: Optional[ValueProxyWithFlags] = self.node.registry[name]
+        except KeyError:
+            v = None
+
         if v is not None and v.mutable and not request.value.empty:
             try:
                 v.assign(request.value)
                 self.node.registry[name] = v
             except ValueConversionError as ex:
                 _logger.debug("%r: Conversion from %r to %r is not possible: %s", self, request.value, v.value, ex)
-            except MissingRegisterError as ex:  # pragma: no cover
-                _logger.warning("%r: The register has gone away: %s", self, ex)
-            v = self.node.registry.get(name)  # Read back one more time just in case to confirm write.
+            # Read back one more time just in case to confirm write.
+            try:
+                v = self.node.registry[name]
+            except KeyError:
+                v = None
+
         if v is not None:
             response = Access.Response(
                 mutable=v.mutable,

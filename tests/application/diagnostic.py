@@ -4,6 +4,7 @@
 
 import re
 import typing
+from typing import Dict
 import asyncio
 import logging
 import pytest
@@ -21,7 +22,11 @@ async def _unittest_slow_diagnostic_subscriber(
     assert compiled
     asyncio.get_running_loop().slow_callback_duration = 1.0
 
-    node = make_node(NodeInfo(), transport=LoopbackTransport(2222), environment_variables={})
+    node = make_node(
+        NodeInfo(),
+        transport=LoopbackTransport(2222),
+        environment_variables=typing.cast(Dict[str, bytes], {}),
+    )
     node.start()
     pub = node.make_publisher(diagnostic.Record)
     diagnostic.DiagnosticSubscriber(node)
