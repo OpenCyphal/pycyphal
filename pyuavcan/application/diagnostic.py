@@ -112,10 +112,11 @@ class DiagnosticPublisher(logging.Handler):
     The node factory :func:`pyuavcan.application.make_node` actually allows you to do this automatically,
     so that you don't have to hard-code behaviors in the application sources:
 
-    >>> import os
-    >>> os.environ["UAVCAN__DIAGNOSTIC__SEVERITY"]  = "2"
-    >>> os.environ["UAVCAN__DIAGNOSTIC__TIMESTAMP"] = "1"
-    >>> node = make_node(NodeInfo(), transport=LoopbackTransport(1))
+    >>> node = make_node(
+    ...     NodeInfo(),
+    ...     environment_variables={"UAVCAN__DIAGNOSTIC__SEVERITY": "2", "UAVCAN__DIAGNOSTIC__TIMESTAMP": "1"},
+    ...     transport=LoopbackTransport(1),
+    ... )
     >>> node.start()
     >>> sub = node.make_subscriber(Record)
     >>> logging.info('Test message')
@@ -125,13 +126,6 @@ class DiagnosticPublisher(logging.Handler):
     >>> msg.severity.value == Severity.INFO
     True
     >>> node.close()
-
-    ..  doctest::
-        :hide:
-
-        >>> for k in os.environ:
-        ...     if "__" in k:
-        ...         del os.environ[k]
     """
 
     def __init__(self, node: pyuavcan.application.Node, level: int = logging.WARNING) -> None:

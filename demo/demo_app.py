@@ -147,10 +147,9 @@ class DemoApp:
         self._node.registry["thermostat.error"] = lambda: Value(real32=Real32([temperature_error]))
         self._node.registry["thermostat.setpoint"] = lambda: Value(real32=Real32([temperature_setpoint]))
 
-        # Read application settings from the registry.
+        # Read application settings from the registry. The defaults will be used only if a new register file is created.
         gain_p, gain_i, gain_d = self._node.registry.setdefault(
-            "thermostat.pid.gains",  # Assignable via environment variable THERMOSTAT__PID__GAINS
-            Value(real32=Real32([0.12, 0.18, 0.01])),  # These defaults will be used at first run to init the register.
+            "thermostat.pid.gains", Value(real32=Real32([0.12, 0.18, 0.01]))
         ).floats
 
         logging.info("Application started with PID gains: %.3f %.3f %.3f", gain_p, gain_i, gain_d)

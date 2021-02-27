@@ -152,8 +152,7 @@ async def _unittest_slow_demo_app(
         )
         env = mirror(env)
         env["UAVCAN__NODE__ID"] = "123"
-        registers = pyuavcan.application.register.parse_environment_variables(env)
-        node = pyuavcan.application.make_node(local_node_info, schema=registers, ignore_environment_variables=True)
+        node = pyuavcan.application.make_node(local_node_info, environment_variables=env)
         node.start()
         del node.registry["thermostat*"]
     except Exception:
@@ -340,12 +339,12 @@ async def _unittest_slow_demo_app_with_plant(
     env.update(
         {
             # Other registers beyond the transport settings:
-            "UAVCAN__NODE__ID__NATURAL16": str(DEMO_APP_NODE_ID),
-            "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID__NATURAL16": "2345",
-            "UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID__NATURAL16": "2346",
-            "UAVCAN__PUB__HEATER_VOLTAGE__ID__NATURAL16": "2347",
-            "UAVCAN__SRV__LEAST_SQUARES__ID__NATURAL16": "123",
-            "THERMOSTAT__PID__GAINS__REAL32": "0.1 0.0 0.0",  # Gain 0.1
+            "UAVCAN__NODE__ID": str(DEMO_APP_NODE_ID),
+            "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID": "2345",
+            "UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID": "2346",
+            "UAVCAN__PUB__HEATER_VOLTAGE__ID": "2347",
+            "UAVCAN__SRV__LEAST_SQUARES__ID": "123",
+            "THERMOSTAT__PID__GAINS": "0.1 0.0 0.0",  # Gain 0.1
             # Various low-level items:
             "PYUAVCAN_LOGLEVEL": "INFO",
             "PATH": os.environ.get("PATH", ""),
@@ -364,10 +363,10 @@ async def _unittest_slow_demo_app_with_plant(
     assert demo_proc.alive
     print("DEMO APP STARTED WITH PID", demo_proc.pid, "FROM", Path.cwd())
 
-    env["UAVCAN__NODE__ID__NATURAL16"] = str(DEMO_APP_NODE_ID + 1)
-    env["UAVCAN__PUB__TEMPERATURE__ID__NATURAL16"] = "2346"
-    env["UAVCAN__SUB__VOLTAGE__ID__NATURAL16"] = "2347"
-    env["MODEL__ENVIRONMENT__TEMPERATURE__REAL32"] = "300.0"  # [kelvin]
+    env["UAVCAN__NODE__ID"] = str(DEMO_APP_NODE_ID + 1)
+    env["UAVCAN__PUB__TEMPERATURE__ID"] = "2346"
+    env["UAVCAN__SUB__VOLTAGE__ID"] = "2347"
+    env["MODEL__ENVIRONMENT__TEMPERATURE"] = "300.0"  # [kelvin]
     plant_proc = BackgroundChildProcess(
         "python",
         "-m",
@@ -380,19 +379,11 @@ async def _unittest_slow_demo_app_with_plant(
     print("PLANT APP STARTED WITH PID", plant_proc.pid, "FROM", Path.cwd())
 
     try:
-        registers = pyuavcan.application.register.parse_environment_variables(run_config.env.copy())
-        registers["uavcan.node.id"] = pyuavcan.application.register.Value(
-            natural16=pyuavcan.application.register.Natural16([123])
-        )
-        registers["uavcan.sub.temperature_measurement.id"] = pyuavcan.application.register.Value(
-            natural16=pyuavcan.application.register.Natural16([2346])
-        )
-        registers["uavcan.pub.temperature_setpoint.id"] = pyuavcan.application.register.Value(
-            natural16=pyuavcan.application.register.Natural16([2345])
-        )
-        node = pyuavcan.application.make_node(
-            uavcan.node.GetInfo_1_0.Response(), schema=registers, ignore_environment_variables=True
-        )
+        env = run_config.env.copy()
+        env["UAVCAN__NODE__ID"] = "123"
+        env["UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID"] = "2346"
+        env["UAVCAN__PUB__TEMPERATURE_SETPOINT__ID"] = "2345"
+        node = pyuavcan.application.make_node(uavcan.node.GetInfo_1_0.Response(), environment_variables=env)
         node.start()
         del node.registry["model*"]
     except Exception:

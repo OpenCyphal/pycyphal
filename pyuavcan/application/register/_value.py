@@ -97,7 +97,8 @@ class ValueProxy:
     def assign(self, source: RelaxedValue) -> None:
         """
         Converts the value from the source into the type of the current instance, and updates this instance.
-        If such conversion is not possible, :class:`ValueConversionError` is raised.
+
+        :raises: :class:`ValueConversionError` if the source value cannot be converted to the register's type.
         """
         opt_to = _get_option_name(self._value)
         res = _do_convert(self._value, _strictify(source))
@@ -105,6 +106,31 @@ class ValueProxy:
             raise ValueConversionError(f"Source {source!r} cannot be assigned to {self!r}")
         assert _get_option_name(res) == opt_to
         self._value = res
+
+    def assign_from_environment_variable(self, environment_variable_value: bytes) -> None:
+        """
+        This is like :meth:`assign`, but the argument is the value of an environment variable.
+        The conversion rules are documented in the standard RPC-service specification ``uavcan.register.Access``.
+        See also: :func:`pyuavcan.application.register.get_environment_variable_name`.
+
+        :param environment_variable_value: E.g., ``1 2 3``.
+        :raises: :class:`ValueConversionError` if the value cannot be converted.
+        """
+        if self.value.empty or self.value.string or self.value.unstructured:
+            self.assign(environment_variable_value)
+        else:
+            numbers: List[Union[int, float]] = []
+            for nt in environment_variable_value.split():
+                try:
+                    numbers.append(int(nt))
+                except ValueError:
+                    try:
+                        numbers.append(float(nt))
+                    except ValueError:
+                        raise ValueConversionError(
+                            f"Cannot update {self!r} from environment value {environment_variable_value!r}"
+                        ) from None
+            self.assign(numbers)
 
     @property
     def floats(self) -> List[float]:

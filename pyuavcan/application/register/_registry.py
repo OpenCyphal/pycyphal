@@ -6,7 +6,7 @@ from __future__ import annotations
 import sys
 import abc
 from fnmatch import fnmatchcase
-from typing import Optional, Iterator, Union, Callable, Tuple, Sequence
+from typing import Optional, Iterator, Union, Callable, Tuple, Sequence, Dict
 import logging
 import pyuavcan
 from . import backend
@@ -66,10 +66,14 @@ class Registry(MutableMapping[str, ValueProxy]):
         ...     def __init__(self) -> None:
         ...         self._sqlite = SQLiteBackend(tempfile.mktemp(".db", "pyuavcan_register_test"))
         ...         self._dynamic = DynamicBackend()
+        ...         self._env = {}
         ...         super().__init__()
         ...     @property
         ...     def backends(self):
         ...         return [self._sqlite, self._dynamic]
+        ...     @property
+        ...     def environment_variables(self):
+        ...         return self._env
         ...     def _create_persistent(self, name: str, value: Value) -> None:
         ...         self._sqlite[name] = value
         ...     def _create_dynamic(self, name: str, get: Callable[[], Value], set: Optional[Callable[[Value], None]]):
@@ -128,12 +132,11 @@ class Registry(MutableMapping[str, ValueProxy]):
     >>> registry["d.b"].value.bit           # doctest: +NORMALIZE_WHITESPACE
     uavcan.primitive.array.Bit...(value=[ True, True,False])
 
-    By default, registers created by :meth:`setdefault` are initialized from environment variables:
+    Registers created by :meth:`setdefault` are always initialized from environment variables:
 
-    >>> import os
-    >>> os.environ["P__C"] = "999 +888.3"
-    >>> os.environ["D__C"] = "Hello world!"
-    >>> registry.setdefault("p.c", Value(natural16=Natural16([111, 222]))).ints  # Value from env is used!
+    >>> registry.environment_variables["P__C"] = b"999 +888.3"
+    >>> registry.environment_variables["D__C"] = b"Hello world!"
+    >>> registry.setdefault("p.c", Value(natural16=Natural16([111, 222]))).ints  # Value from environment is used here!
     [999, 888]
     >>> registry.setdefault("p.d", Value(natural16=Natural16([111, 222]))).ints  # No environment variable for this one.
     [111, 222]
@@ -149,27 +152,19 @@ class Registry(MutableMapping[str, ValueProxy]):
     >>> str(registry.setdefault("d.c", lambda: Value(string=String(d_c))))  # Environment var ignored because no setter.
     'New text'
 
-    In rare circumstances this behavior may be undesirable, so it can be disabled:
+    If such behavior is undesirable, one can either clear the environment variable dict or remove specific entries.
+    See also: :func:`pyuavcan.application.make_node`.
 
-    >>> registry.use_defaults_from_environment = False
-    >>> del registry["*.c"]                                                 # Drop the registers we created above.
-    >>> registry.setdefault("p.c", Value(natural16=Natural16([111, 222]))).ints  # Environment variables ignored now!
-    [111, 222]
-
-    Notice that variables created by direct assignment are never overridden from environment variables:
+    Variables created by direct assignment are (obviously) not affected by environment variables:
 
     >>> registry.use_defaults_from_environment = True
     >>> registry["p.c"] = Value(natural16=Natural16([111, 222]))            # Direct assignment instead of setdefault().
     >>> registry["p.c"].ints                                                # Environment variables ignored!
     [111, 222]
 
-    ..  doctest::
-        :hide:
+    Closing the registry will also close all underlying backends.
 
-        >>> for k in os.environ:
-        ...     if "__" in k:
-        ...         del os.environ[k]
-        >>> registry.close()
+    >>> registry.close()
 
     TODO: Add modification callbacks to allow applications implement hot reloading.
     """
@@ -184,13 +179,12 @@ class Registry(MutableMapping[str, ValueProxy]):
         ],
     ]
     """
-    - If :class:`Value` or :class:`ValueProxy`,
-      a persistent register will be created and stored in the registry file.
+    - If :class:`Value` or :class:`ValueProxy`, a persistent register will be created and stored in the registry file.
 
-    - If a single callable, it will be invoked whenever this register is read.
+    - If a single callable, it will be invoked whenever this register is read; such register is called "dynamic".
       Such register will be reported as immutable.
       The registry file is not affected and therefore this change is not persistent.
-      :attr:`use_environment_variables` is ignored in this case since the register cannot be written.
+      :attr:`environment_variables` are always ignored in this case since the register cannot be written.
 
     - If a tuple of two callables, then the first one is a getter that is invoked on read (see above),
       and the second is a setter that is invoked on write with a single argument of type :class:`Value`.
@@ -199,22 +193,10 @@ class Registry(MutableMapping[str, ValueProxy]):
       The type conversion is performed automatically by polling the getter beforehand to discover the type.
       The registry file is not affected and therefore this change is not persistent.
 
-    Callables overwrite existing entries unconditionally.
+    Dynamic registers (callables) overwrite existing entries unconditionally.
+    It is not recommended to create dynamic registers with same names as existing persistent registers,
+    as it may cause erratic behaviors.
     """
-
-    def __init__(self) -> None:
-        self._use_environment_variables = True
-
-    @property
-    def use_defaults_from_environment(self) -> bool:
-        """
-        See :meth:`update_from_environment`, :meth:`setdefault`.
-        """
-        return self._use_environment_variables
-
-    @use_defaults_from_environment.setter
-    def use_defaults_from_environment(self, value: bool) -> None:
-        self._use_environment_variables = bool(value)
 
     @property
     @abc.abstractmethod
@@ -222,6 +204,16 @@ class Registry(MutableMapping[str, ValueProxy]):
         """
         If a register exists in more than one registry, only the first copy will be used;
         however, the count will include all redundant registers.
+        """
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def environment_variables(self) -> Dict[str, bytes]:
+        """
+        When a new register is created using :meth:`setdefault`, its default value will be overridden from this dict.
+        This is done to let the registry use values passed over to this node via environment variables or a similar
+        mechanism.
         """
         raise NotImplementedError
 
@@ -253,48 +245,38 @@ class Registry(MutableMapping[str, ValueProxy]):
                 return key
         return None
 
-    def update_from_environment(self, register_name: str) -> None:
-        """
-        Invoke :func:`pyuavcan.application.register.update_from_environment` for the specified register.
-        This should be done for all registers shortly after initialization to accept values passed to this node
-        by the launcher.
-        Registers that are created later will pick up their environment variables by virtue of
-        :attr:`use_defaults_from_environment`.
-
-        :raises:
-            :class:`ValueError` if the value of an environment variable is invalid.
-            :class:`MissingRegisterError` if there is no register under this name.
-        """
-        from . import update_from_environment as upd
-
-        v = self[register_name]
-        if upd(v, register_name):
-            _logger.debug("%r: Updated %r from env: %r", self, register_name, v)
-            self[register_name] = v
-
     def setdefault(self, name: str, default: Optional[CreationArgument] = None) -> ValueProxyWithFlags:
         """
         **This is the preferred method for creating new registers.**
 
         If the register exists, its value will be returned an no further action will be taken.
 
-        If the register doesn't exist, it will be created; and, if :attr:`use_defaults_from_environment` is True,
-        :meth:`update_from_environment` will be automatically invoked.
+        If the register doesn't exist, it will be created and immediately updated from :attr:`environment_variables`
+        (using :meth:`ValueProxy.assign_from_environment_variable`).
 
         :param name:    Register name.
         :param default: If exists, this value is ignored; otherwise created as described in :attr:`CreationArgument`.
         :return:        Resulting value.
+        :raises:        See :meth:`ValueProxy.assign_from_environment_variable`.
         """
         try:
             return self[name]
-        except KeyError as ex:
-            if default is None:
-                raise TypeError from ex  # pragma: no cover
-            _logger.debug("%r: Create %r default %r", self, name, default)
-            self._set(name, default, create_only=True)
-            if self.use_defaults_from_environment:
-                self.update_from_environment(name)
-            return self[name]
+        except KeyError:
+            pass
+        if default is None:
+            raise TypeError  # pragma: no cover
+        from . import get_environment_variable_name
+
+        _logger.debug("%r: Create %r <- %r", self, name, default)
+        self._set(name, default, create_only=True)
+        env_val = self.environment_variables.get(get_environment_variable_name(name))
+        if env_val is not None:
+            _logger.debug("%r: Update from env: %r <- %r", self, name, env_val)
+            reg = self[name]
+            reg.assign_from_environment_variable(env_val)
+            self[name] = reg
+
+        return self[name]
 
     def __getitem__(self, name: str) -> ValueProxyWithFlags:
         """
@@ -317,14 +299,15 @@ class Registry(MutableMapping[str, ValueProxy]):
 
         If the register does not exist, and the value is of type :attr:`CreationArgument`,
         a new register will be created.
-        However, :meth:`update_from_environment` is NOT invoked in this case.
+        However, unlike :meth:`setdefault`, :meth:`ValueProxy.assign_from_environment_variable` is NOT invoked.
 
         Otherwise, :class:`MissingRegisterError` is raised.
 
         :raises:
             :class:`MissingRegisterError` (subclass of :class:`KeyError`) if the register does not exist
             and cannot be created.
-            :class:`ValueConversionError` if the register exists but the value cannot be converted to its type.
+            :class:`ValueConversionError` if the register exists but the value cannot be converted to its type
+            or (in case of creation) the environment variable contains an invalid value.
         """
         self._set(name, value)
 

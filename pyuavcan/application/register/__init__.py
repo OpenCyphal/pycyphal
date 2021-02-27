@@ -34,4 +34,12 @@ from ._registry import Registry as Registry
 from ._registry import ValueProxyWithFlags as ValueProxyWithFlags
 from ._registry import MissingRegisterError as MissingRegisterError
 
-from ._env_var import update_from_environment as update_from_environment
+
+def get_environment_variable_name(register_name: str) -> str:
+    """
+    Convert the name of the register to the name of the environment variable that assigns it.
+
+    >>> get_environment_variable_name("m.motor.inductance_dq")
+    'M__MOTOR__INDUCTANCE_DQ'
+    """
+    return register_name.upper().replace(".", "__")

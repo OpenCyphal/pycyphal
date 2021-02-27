@@ -3,9 +3,10 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
+import os
 import sys
 import random
-from typing import Callable, Optional, Union, List
+from typing import Callable, Optional, Union, List, Dict
 from pathlib import Path
 import logging
 import pyuavcan
@@ -15,21 +16,32 @@ from .register.backend.sqlite import SQLiteBackend
 from ._transport_factory import make_transport
 
 
+EnvironmentVariables = Dict[Union[str, bytes], Union[str, bytes]]
+
+
 class MissingTransportConfigurationError(register.MissingRegisterError):
     pass
 
 
 class DefaultRegistry(register.Registry):
-    def __init__(self, sqlite: SQLiteBackend) -> None:
+    def __init__(self, sqlite: SQLiteBackend, environment_variables: EnvironmentVariables) -> None:
         from .register.backend.dynamic import DynamicBackend
 
         self._backend_sqlite = sqlite
         self._backend_dynamic = DynamicBackend()
+        self._environment_variables: Dict[str, bytes] = {
+            (k if isinstance(k, str) else k.decode()): (v if isinstance(v, bytes) else v.encode())
+            for k, v in environment_variables.items()
+        }
         super().__init__()
 
     @property
     def backends(self) -> List[register.backend.Backend]:
         return [self._backend_sqlite, self._backend_dynamic]
+
+    @property
+    def environment_variables(self) -> Dict[str, bytes]:
+        return self._environment_variables
 
     def _create_persistent(self, name: str, value: register.Value) -> None:
         _logger.debug("%r: Create persistent %r = %r", self, name, value)
@@ -44,13 +56,22 @@ class DefaultRegistry(register.Registry):
         _logger.debug("%r: Create dynamic %r from get=%r set=%r", self, name, get, set)
         self._backend_dynamic[name] = get if set is None else (get, set)
 
+    def update_from_environment_variables(self) -> None:
+        for name in self:
+            env_val = self.environment_variables.get(register.get_environment_variable_name(name))
+            if env_val is not None:
+                _logger.debug("Updating register %r from env: %r", name, env_val)
+                reg_val = self[name]
+                reg_val.assign_from_environment_variable(env_val)
+                self[name] = reg_val
+
 
 class DefaultNode(Node):
     def __init__(
         self,
         presentation: pyuavcan.presentation.Presentation,
         info: NodeInfo,
-        registry: register.Registry,
+        registry: DefaultRegistry,
     ) -> None:
         self._presentation = presentation
         self._info = info
@@ -66,15 +87,15 @@ class DefaultNode(Node):
         return self._info
 
     @property
-    def registry(self) -> register.Registry:
+    def registry(self) -> DefaultRegistry:
         return self._registry
 
 
 def make_node(
     info: NodeInfo,
     register_file: Union[None, str, Path] = None,
+    environment_variables: Optional[EnvironmentVariables] = None,
     *,
-    use_environment_variables: bool = True,
     transport: Optional[pyuavcan.transport.Transport] = None,
     reconfigurable_transport: bool = False,
 ) -> Node:
@@ -159,15 +180,16 @@ def make_node(
         If path is provided but the file does not exist, it will be created automatically.
         See :attr:`Node.registry`, :meth:`Node.new_register`.
 
-    :param use_environment_variables:
-        If True (default), the registers will be updated based on the environment variables.
-        :attr:`register.Registry.use_defaults_from_environment` will be set to the same value
-        (it can be changed after the node is constructed).
+    :param environment_variables:
+        During initialization, all registers will be updated based on the environment variables passed here.
+        This dict is used to initialize :attr:`pyuavcan.application.register.Registry.environment_variables`.
+        Registers that are created later using :meth:`pyuavcan.application.register.Registry.setdefault`
+        will default to these values as well.
 
-        False can be passed if the application receives its register configuration at launch from some other source
-        (this is uncommon).
+        If None (which is default), the value is initialized by copying :attr:`os.environb`.
+        Pass an empty dict here to disable environment variable processing.
 
-        See also: :meth:`register.Registry.update_from_environment` and standard RPC-service ``uavcan.register.Access``.
+        See also: standard RPC-service ``uavcan.register.Access``.
 
     :param transport:
         If not provided (default), a new transport instance will be initialized based on the available registers using
@@ -185,7 +207,9 @@ def make_node(
         - :class:`pyuavcan.application.register.MissingRegisterError` if a register is expected but cannot be found,
           or if no transport is configured.
         - :class:`pyuavcan.application.register.ValueConversionError` if a register is found but its value
-          cannot be converted to the correct type.
+          cannot be converted to the correct type, or if the value of an environment variable for a register
+          is invalid or incompatible with the register's type
+          (e.g., an environment variable set to ``Hello world`` cannot initialize a register  of type ``real64[3]``).
         - Also see :func:`make_transport`.
 
     ..  note::
@@ -218,14 +242,12 @@ def make_node(
             return out
         return transport
 
-    registry = DefaultRegistry(SQLiteBackend(register_file or ""))
+    registry = DefaultRegistry(
+        SQLiteBackend(register_file or ""),
+        environment_variables if environment_variables is not None else os.environb,
+    )
     try:
-        # Update all currently existing registers from environment variables early.
-        # New registers will be updated ad-hoc at creation time if "use_defaults_from_environment" is set.
-        registry.use_defaults_from_environment = use_environment_variables
-        if use_environment_variables:
-            for name in registry:
-                registry.update_from_environment(name)
+        registry.update_from_environment_variables()
 
         # Populate certain fields of the node info structure automatically and create standard registers.
         info.protocol_version.major, info.protocol_version.minor = pyuavcan.UAVCAN_SPECIFICATION_VERSION
@@ -240,10 +262,8 @@ def make_node(
             )
         registry.setdefault("uavcan.node.description", register.Value(string=register.String()))
 
-        if len(info.name) == 0:  # Do our best to decently support lazy instantiations that don't even give a name.
-            name = "anonymous." + info.unique_id.tobytes().hex()
-            _logger.info("Automatic name: %r", name)
-            info.name = name
+        if len(info.name) == 0:
+            info.name = "anonymous." + info.unique_id.tobytes().hex()
 
         # Construct the node and its application-layer functions.
         node = DefaultNode(pyuavcan.presentation.Presentation(init_transport()), info, registry)
