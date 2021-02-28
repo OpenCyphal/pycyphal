@@ -169,8 +169,8 @@ New registers (application-specific registers in particular) can be created usin
 >>> gains.floats
 [1.3, 0.8, 0.05]
 >>> import numpy as np
->>> node.registry.setdefault("my_app.estimator.state_vector",           # Not stored, but computed at every invocation.
-...                          lambda: np.random.random((4, 1)).flatten()).floats     # Deduced type: real64.
+>>> node.registry.setdefault("my_app.estimator.state_vector",       # Not stored, but computed at every invocation.
+...                          lambda: np.random.random(4)).floats    # Deduced type: real64.
 [..., ..., ..., ...]
 
 But the above does not explain where did the example get the register values from.
@@ -223,20 +223,19 @@ RedundantTransport(UDPTransport('127.63.0.42', ...), SerialTransport('socket://l
 >>> pub_voltage = node.make_publisher(uavcan.si.unit.voltage.Scalar_1_0, "measured_voltage")
 >>> pub_voltage.port_id
 6543
->>> pub_voltage.close()
->>> list(node.registry["uavcan.diagnostic.severity"].value.natural8.value)      # This is a standard register.
-[3]
->>> node.registry.setdefault("m.motor.flux_linkage_dq", [1.23, -8.15]).floats
-[1.23, -8.15]
->>> node.registry.setdefault("m.motor.inductance_dq", [1.23, -8.15]).floats
+>>> int(node.registry["uavcan.diagnostic.severity"])                            # This is a standard register.
+3
+>>> node.registry.setdefault("m.motor.inductance_dq", [1.23, -8.15]).floats     # The value is taken from environment!
 [0.12, 0.13]
->>> node.registry["m.motor.inductance_dq"] = [1.9, 6.3]                         # Update
+>>> node.registry.setdefault("m.motor.flux_linkage_dq", [1.23, -8.15]).floats   # No environment variable for this one.
+[1.23, -8.15]
+>>> node.registry["m.motor.inductance_dq"] = [1.9, 6]                           # Assign new value.
 >>> node.registry["m.motor.inductance_dq"].floats
-[1.9, 6.3]
+[1.9, 6.0]
 >>> node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "optional_port")    # doctest: +IGNORE_EXCEPTION_DETAIL
 Traceback (most recent call last):
 ...
-MissingRegisterError: 'uavcan.sub.optional_port.id'
+PortNotConfiguredError: 'uavcan.sub.optional_port.id'
 >>> node.close()
 
 ..  doctest::
@@ -246,13 +245,6 @@ MissingRegisterError: 'uavcan.sub.optional_port.id'
     ...     if "__" in k:
     ...         del os.environ[k]
     >>> node.close()        # Ensure idempotency.
-
-Naturally, in order to launch a node one would need to export the required environment variables.
-While this can be done trivially using standard tools,
-we recommend using the UAVCAN orchestrator implemented in the Yakut command-line tool
-(those familiar with ROS will find certain parallels with roslaunch).
-It allows one to define UAVCAN network configuration in YAML files with first-class support for passing
-registers via environment variables.
 
 
 Application-layer function implementations
@@ -279,7 +271,7 @@ More complex capabilities are to be set up by the user as needed; some of them a
     would circumvent the introspection services.
 """
 
-from ._node import Node as Node, NodeInfo as NodeInfo
+from ._node import Node as Node, NodeInfo as NodeInfo, PortNotConfiguredError as PortNotConfiguredError
 
 from ._node_factory import make_node as make_node
 

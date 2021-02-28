@@ -7,7 +7,7 @@ Plug-and-play node-ID allocation logic. See the class documentation for usage in
 
 Remember that a network that contains static nodes alongside PnP nodes may encounter node-ID conflicts
 when a static node appears online after its node-ID is already granted to a PnP node.
-To avoid this, the Specification requires that PnP nodes and static nodes are not to be mixed on the same network
+To avoid this, the Specification recommends that PnP nodes and static nodes are not to be mixed on the same network
 (excepting the allocators themselves -- they are always static, naturally).
 """
 

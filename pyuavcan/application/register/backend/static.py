@@ -11,7 +11,7 @@ import pyuavcan
 from . import Entry, BackendError, Backend, Value
 
 
-__all__ = ["SQLiteBackend"]
+__all__ = ["StaticBackend"]
 
 
 _TIMEOUT = 0.5
@@ -19,18 +19,18 @@ _LOCATION_VOLATILE = ":memory:"
 
 
 # noinspection SqlNoDataSourceInspection,SqlResolve
-class SQLiteBackend(Backend):
+class StaticBackend(Backend):
     """
     Register storage backend implementation based on SQLite.
     Supports either persistent on-disk single-file storage or volatile in-memory storage.
 
-    >>> b = SQLiteBackend("my_register_file.db")
+    >>> b = StaticBackend("my_register_file.db")
     >>> b.persistent    # If a file is specified, the storage is persistent.
     True
     >>> b.location
     'my_register_file.db'
     >>> b.close()
-    >>> b = SQLiteBackend()
+    >>> b = StaticBackend()
     >>> b.persistent    # If no file is specified, the data is kept in-memory.
     False
     >>> from pyuavcan.application.register import Bit
@@ -157,7 +157,7 @@ _logger = logging.getLogger(__name__)
 def _unittest_memory() -> None:
     from uavcan.primitive import String_1_0 as String, Unstructured_1_0 as Unstructured
 
-    st = SQLiteBackend()
+    st = StaticBackend()
     print(st)
     assert not st.keys()
     assert not st.index(0)
@@ -200,7 +200,7 @@ def _unittest_file() -> None:
     # First, populate the database with registers.
     db_file = tempfile.mktemp(".db")
     print("DB file:", db_file)
-    st = SQLiteBackend(db_file)
+    st = StaticBackend(db_file)
     print(st)
     st["a"] = Value(unstructured=Unstructured([1, 2, 3]))
     st["b"] = Value(unstructured=Unstructured([4, 5, 6]))
@@ -208,7 +208,7 @@ def _unittest_file() -> None:
     st.close()
 
     # Then re-open it in writeable mode and ensure correctness.
-    st = SQLiteBackend(db_file)
+    st = StaticBackend(db_file)
     print(st)
     assert len(st) == 2
     e = st.get("a")

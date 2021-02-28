@@ -29,8 +29,12 @@ class ValueProxy:
     with convenience accessors added that enable automatic conversion (with implicit casting)
     between native Python types and DSDL types.
 
+    It is possible to create a new instance from native types,
+    in which case the most suitable regiter type will be deduced automatically.
+    Do not rely on this behavior if a specific register type needs to be ensured.
+
     >>> from pyuavcan.application.register import Real64, Bit, String, Unstructured
-    >>> p = ValueProxy(Value(bit=Bit([True, False])))
+    >>> p = ValueProxy(Value(bit=Bit([True, False])))   # Specify explicit type.
     >>> p.bools
     [True, False]
     >>> p.ints
@@ -41,18 +45,18 @@ class ValueProxy:
     >>> p.bools
     [False, True]
 
-    >>> p = ValueProxy(Value(real64=Real64([0, 1.5, 2.3, -9])))
+    >>> p = ValueProxy([0, 1.5, 2.3, -9])               # Use deduction.
     >>> p.floats
     [0.0, 1.5, 2.3, -9.0]
     >>> p.ints
     [0, 2, 2, -9]
     >>> p.bools
     [False, True, True, True]
-    >>> p.assign(Value(bit=Bit([False, True, False, True])))
+    >>> p.assign([False, True, False, True])
     >>> p.floats
     [0.0, 1.0, 0.0, 1.0]
 
-    >>> p = ValueProxy(Value(bit=Bit([False])))
+    >>> p = ValueProxy(False)
     >>> bool(p)
     False
     >>> int(p)
@@ -63,7 +67,7 @@ class ValueProxy:
     >>> bool(p), int(p), float(p)
     (True, 1, 1.0)
 
-    >>> p = ValueProxy(Value(string=String("Hello world!")))
+    >>> p = ValueProxy("Hello world!")                  # Create string-typed register value.
     >>> str(p)
     'Hello world!'
     >>> bytes(p)
@@ -74,7 +78,7 @@ class ValueProxy:
     >>> bytes(p)
     b'Another string'
 
-    >>> p = ValueProxy(Value(unstructured=Unstructured(b"ab01")))
+    >>> p = ValueProxy(b"ab01")                         # Create unstructured-typed register value.
     >>> str(p)
     'ab01'
     >>> bytes(p)
@@ -84,36 +88,32 @@ class ValueProxy:
     b'String implicitly converted to bytes'
     """
 
-    def __init__(self, v: Union[Value, ValueProxy]) -> None:
-        from copy import copy
-
-        self._value = copy(v if isinstance(v, Value) else v.value)
-
-    @staticmethod
-    def new(r: RelaxedValue) -> ValueProxy:
+    def __init__(self, v: RelaxedValue) -> None:
         """
-        Constructs a new instance from a wide set of native and generated types.
+        Accepts a wide set of native and generated types.
         Passing native values is not recommended because the type deduction logic may be changed in the future.
         To ensure stability, pass only values of ``uavcan.primitive.*``, or :class:`Value`, or :class:`ValueProxy`.
 
-        >>> list(ValueProxy.new(Value(natural16=Natural16([123, 456]))).value.natural16.value)  # Explicit Value.
+        >>> list(ValueProxy(Value(natural16=Natural16([123, 456]))).value.natural16.value)  # Explicit Value.
         [123, 456]
-        >>> list(ValueProxy.new(Natural16([123, 456])).value.natural16.value)                   # Same as above.
+        >>> list(ValueProxy(Natural16([123, 456])).value.natural16.value)                   # Same as above.
         [123, 456]
-        >>> ValueProxy.new(-123).value.integer64.value[0]               # Integers default to 64-bit.
+        >>> ValueProxy(-123).value.integer64.value[0]               # Integers default to 64-bit.
         -123
-        >>> list(ValueProxy.new([-1.23, False]).value.real64.value)     # Floats also default to 64-bit.
+        >>> list(ValueProxy([-1.23, False]).value.real64.value)     # Floats also default to 64-bit.
         [-1.23, 0.0]
-        >>> list(ValueProxy.new([True, False]).value.bit.value)         # Booleans default to bits.
+        >>> list(ValueProxy([True, False]).value.bit.value)         # Booleans default to bits.
         [True, False]
-        >>> ValueProxy.new(b"Hello unstructured!").value.unstructured.value.tobytes()   # Bytes to unstructured.
+        >>> ValueProxy(b"Hello unstructured!").value.unstructured.value.tobytes()   # Bytes to unstructured.
         b'Hello unstructured!'
 
         And so on...
 
         :raises: :class:`ValueConversionError` if the conversion is impossible or ambiguous.
         """
-        return ValueProxy(_strictify(r))
+        from copy import copy
+
+        self._value = copy(_strictify(v))
 
     @property
     def value(self) -> Value:

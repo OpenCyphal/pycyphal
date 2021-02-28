@@ -20,6 +20,17 @@ MessageClass = TypeVar("MessageClass", bound=pyuavcan.dsdl.CompositeObject)
 ServiceClass = TypeVar("ServiceClass", bound=pyuavcan.dsdl.ServiceObject)
 
 
+class PortNotConfiguredError(register.MissingRegisterError):
+    """
+    Raised from :meth:`Node.make_publisher`, :meth:`Node.make_subscriber`, :meth:`Node.make_client`,
+    :meth:`Node.get_server` if the application requested a port for which there is no configuration register
+    and whose data type does not have a fixed port-ID.
+
+    Applications may catch this exception to implement optional ports,
+    where the port is not enabled until explicitly configured while other components of the application are functional.
+    """
+
+
 class Node(abc.ABC):
     """
     This is the top-level abstraction representing a UAVCAN node on the bus.
@@ -68,28 +79,25 @@ class Node(abc.ABC):
     @property
     @abc.abstractmethod
     def presentation(self) -> Presentation:
-        """Provides access to the underlying instance of :class:`Presentation`."""
+        """Provides access to the underlying instance of :class:`pyuavcan.presentation.Presentation`."""
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
     def info(self) -> NodeInfo:
-        """Provides access to the local node info structure. See :class:`NodeInfo`."""
+        """Provides access to the local node info structure. See :class:`pyuavcan.application.NodeInfo`."""
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
     def registry(self) -> register.Registry:
         """
-        Provides access to the local registry instance (see :class:`register.Registry`).
+        Provides access to the local registry instance (see :class:`pyuavcan.application.register.Registry`).
         The registry manages UAVCAN registers as defined by the standard network service ``uavcan.register``.
 
         The registers store the configuration parameters of the current application, both standard
         (like subject-IDs, service-IDs, transport configuration, the local node-ID, etc.)
         and application-specific ones.
-
-        Note that it is not possible to create new registers using this interface;
-        for that, see :func:`pyuavcan.application.make_node` and :meth:`new_register`.
 
         See also :meth:`make_publisher`, :meth:`make_subscriber`, :meth:`make_client`, :meth:`get_server`.
         """
@@ -119,7 +127,7 @@ class Node(abc.ABC):
         For details on the standard registers see Specification.
 
         :raises:
-            :class:`register.MissingRegisterError` if the register is missing and no fixed port-ID is defined.
+            :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
         if port_name:
@@ -135,7 +143,7 @@ class Node(abc.ABC):
         For details on the standard registers see Specification.
 
         :raises:
-            :class:`register.MissingRegisterError` if the register is missing and no fixed port-ID is defined.
+            :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
         if port_name:
@@ -151,7 +159,7 @@ class Node(abc.ABC):
         For details on the standard registers see Specification.
 
         :raises:
-            :class:`register.MissingRegisterError` if the register is missing and no fixed port-ID is defined.
+            :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
         if port_name:
@@ -171,7 +179,7 @@ class Node(abc.ABC):
         For details on the standard registers see Specification.
 
         :raises:
-            :class:`register.MissingRegisterError` if the register is missing and no fixed port-ID is defined.
+            :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
         if port_name:
@@ -208,7 +216,7 @@ class Node(abc.ABC):
             assert isinstance(model.fixed_port_id, int)
             return model.fixed_port_id
 
-        raise register.MissingRegisterError(
+        raise PortNotConfiguredError(
             id_register_name,
             f"Cannot initialize {kind}-port {name!r} because the register "
             f"does not define a valid port-ID and no fixed port-ID is defined for {model}. "

@@ -250,8 +250,8 @@ async def _unittest_slow_demo_app(
         assert isinstance(access_resp, uavcan.register.Access_1_0.Response)
         assert not access_resp.mutable
         assert not access_resp.persistent
-        assert access_resp.value.real32
-        assert access_resp.value.real32.value[0] == pytest.approx(315.0)
+        assert access_resp.value.real64
+        assert access_resp.value.real64.value[0] == pytest.approx(315.0)
 
         rx_access = await cln_register.call(
             uavcan.register.Access_1_0.Request(uavcan.register.Name_1_0("thermostat.error"))
@@ -261,8 +261,8 @@ async def _unittest_slow_demo_app(
         assert isinstance(access_resp, uavcan.register.Access_1_0.Response)
         assert not access_resp.mutable
         assert not access_resp.persistent
-        assert access_resp.value.real32
-        assert access_resp.value.real32.value[0] == pytest.approx(15.0)
+        assert access_resp.value.real64
+        assert access_resp.value.real64.value[0] == pytest.approx(15.0)
 
         # Test the command execution service.
         # Bad command.

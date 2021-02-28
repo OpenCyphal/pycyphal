@@ -57,15 +57,21 @@ p {
 }
 
 .rst-content a {
-    color: #2980b9;
+    color: #1700b3;
 }
 .rst-content a:visited {
-    color: #2980b9;
+    color: #1700b3;
 }
 
 .rst-content code.literal,
 .rst-content tt.literal {
-    color: #800;
+    color: #007E87;
+    font-weight: bold;
+}
+
+.rst-content code.xref,
+.rst-content tt.xref {
+    color: #1700b3;
 }
 
 /* This is needed to make transparent images have the same background color.

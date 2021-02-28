@@ -20,9 +20,9 @@ class SimpleRegistry(register.Registry):
         environment_variables: Optional[EnvironmentVariables] = None,
     ) -> None:
         from .register.backend.dynamic import DynamicBackend
-        from .register.backend.sqlite import SQLiteBackend
+        from .register.backend.static import StaticBackend
 
-        self._backend_sqlite = SQLiteBackend(register_file)
+        self._backend_static = StaticBackend(register_file)
         self._backend_dynamic = DynamicBackend()
 
         if environment_variables is None:
@@ -42,7 +42,7 @@ class SimpleRegistry(register.Registry):
 
     @property
     def backends(self) -> List[register.backend.Backend]:
-        return [self._backend_sqlite, self._backend_dynamic]
+        return [self._backend_static, self._backend_dynamic]
 
     @property
     def environment_variables(self) -> Dict[str, bytes]:
@@ -50,7 +50,7 @@ class SimpleRegistry(register.Registry):
 
     def _create_static(self, name: str, value: register.Value) -> None:
         _logger.debug("%r: Create static %r = %r", self, name, value)
-        self._backend_sqlite[name] = value
+        self._backend_static[name] = value
 
     def _create_dynamic(
         self,
@@ -95,7 +95,7 @@ def make_registry(
         Registers that are created later using :meth:`pyuavcan.application.register.Registry.setdefault`
         will default to these values as well.
 
-        If None (which is default), the value is initialized by copying :attr:`os.environb`.
+        If None (which is default), the value is initialized by copying :data:`os.environb`.
         Pass an empty dict here to disable environment variable processing.
 
     :raises:

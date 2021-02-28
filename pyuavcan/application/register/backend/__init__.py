@@ -16,6 +16,9 @@ else:  # pragma: no cover
     from typing import MutableMapping  # pylint: disable=ungrouped-imports
 
 
+__all__ = ["Value", "Backend", "Entry", "BackendError"]
+
+
 class BackendError(RuntimeError):
     """
     Unsuccessful storage transaction. This is a very low-level error representing a system configuration issue.

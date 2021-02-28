@@ -53,17 +53,9 @@ def make_node(
 ) -> Node:
     """
     Initialize a new node by parsing the configuration encoded in the UAVCAN registers.
-    Missing standard registers will be automatically created.
-
-    Prior to construction, the register file will be updated/extended based on the register values passed via the
-    environment variables (if any) and the explicit ``schema``.
-    Empty values in ``schema`` trigger removal of such registers from the register file
-    (non-existent registers do not trigger an error).
-    This is useful when the application needs to migrate its register file created by an earlier version.
 
     Aside from the registers that encode the transport configuration (which are documented in :func:`make_transport`),
     the following registers are considered (if they don't exist, they are automatically created).
-    Generally, it is not possible to change their type --- automatic type conversion may take place to prevent that.
     They are split into groups by application-layer function they configure.
 
     ..  list-table:: General
@@ -86,6 +78,7 @@ def make_node(
           - ``string``
           - As defined by the UAVCAN Specification, this standard register is intended to store a human-friendly
             description of the node.
+            Empty by default and never accessed by the library, since it is intended mostly for remote use.
 
     ..  list-table:: :mod:`pyuavcan.application.diagnostic`
         :widths: 1 1 9
@@ -101,6 +94,7 @@ def make_node(
             the node will publish its application log records of matching severity level to the standard subject
             ``uavcan.diagnostic.Record`` using :class:`pyuavcan.application.diagnostic.DiagnosticPublisher`.
             This is done by installing a root handler in :mod:`logging`.
+            Disabled by default.
 
         * - ``uavcan.diagnostic.timestamp``
           - ``bit[1]``
@@ -109,6 +103,7 @@ def make_node(
             This is only safe if the UAVCAN network is known to be synchronized on the same time system as the
             wall clock of the local computer.
             Otherwise, the timestamp is left at zero (which means "unknown" per Specification).
+            Disabled by default.
 
     Additional application-layer functions and their respective registers may be added later.
 
@@ -134,7 +129,7 @@ def make_node(
         If not provided (default), a new transport instance will be initialized based on the available registers using
         :func:`make_transport`.
         If provided, the node will be constructed with this transport instance and take its ownership.
-        In the latter case, transport-related registers will NOT be created, which may be undesirable.
+        In the latter case, existence of transport-related registers will NOT be ensured.
 
     :param reconfigurable_transport:
         If True, the node will be constructed with :mod:`pyuavcan.transport.redundant`,

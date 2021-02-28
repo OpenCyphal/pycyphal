@@ -154,14 +154,14 @@ class Registry(MutableMapping[str, ValueProxy]):
         ],
     ]
     """
-    An instance of this type can be used to assign or create a register.
+    An instance of any type from this union can be used to assign or create a register.
     Creation is handled depending on the type:
-    
+
     - If a single callable, it will be invoked whenever this register is read; such register is called "dynamic".
       Such register will be reported as immutable.
       The registry file is not affected and therefore this change is not persistent.
       :attr:`environment_variables` are always ignored in this case since the register cannot be written.
-      The result of the callable is converted to the register value using :meth:`ValueProxy.new`.
+      The result of the callable is converted to the register value using :class:`ValueProxy`.
 
     - If a tuple of two callables, then the first one is a getter that is invoked on read (see above),
       and the second is a setter that is invoked on write with a single argument of type :class:`Value`.
@@ -172,7 +172,7 @@ class Registry(MutableMapping[str, ValueProxy]):
 
     - Any other type (e.g., :class:`Value`, ``Natural16``, native, etc.):
       a static register will be created and stored in the registry file.
-      Conversion logic is implemented by :class:`ValueProxy.new`.
+      Conversion logic is implemented by :class:`ValueProxy`.
     
     Dynamic registers (callables) overwrite existing entries unconditionally.
     It is not recommended to create dynamic registers with same names as existing static registers,
@@ -236,12 +236,12 @@ class Registry(MutableMapping[str, ValueProxy]):
         If the register exists, its value will be returned an no further action will be taken.
         If the register doesn't exist, it will be created and immediately updated from :attr:`environment_variables`
         (using :meth:`ValueProxy.assign_environment_variable`).
-        The register value instance is created using :meth:`ValueProxy.new`.
+        The register value instance is created using :class:`ValueProxy`.
 
         :param name:    Register name.
         :param default: If exists, this value is ignored; otherwise created as described in :attr:`Assignable`.
         :return:        Resulting value.
-        :raises:        See :meth:`ValueProxy.assign_environment_variable` and :meth:`ValueProxy.new`.
+        :raises:        See :meth:`ValueProxy.assign_environment_variable` and :meth:`ValueProxy`.
         """
         try:
             return self[name]
@@ -283,11 +283,9 @@ class Registry(MutableMapping[str, ValueProxy]):
 
         If the register does not exist, a new one will be created.
         However, unlike :meth:`setdefault`, :meth:`ValueProxy.assign_environment_variable` is not invoked.
-        The register value instance is created using :meth:`ValueProxy.new`.
+        The register value instance is created using :class:`ValueProxy`.
 
         :raises:
-            :class:`MissingRegisterError` (subclass of :class:`KeyError`) if the register does not exist
-            and cannot be created.
             :class:`ValueConversionError` if the register exists but the value cannot be converted to its type
             or (in case of creation) the environment variable contains an invalid value.
         """
@@ -322,11 +320,11 @@ class Registry(MutableMapping[str, ValueProxy]):
         _ensure_name(name)
 
         if callable(value):
-            self._create_dynamic(name, lambda: ValueProxy.new(value()).value, None)  # type: ignore
+            self._create_dynamic(name, lambda: ValueProxy(value()).value, None)  # type: ignore
             return
         if isinstance(value, tuple) and len(value) == 2 and all(map(callable, value)):
             g, s = value
-            self._create_dynamic(name, (lambda: ValueProxy.new(g()).value), s)
+            self._create_dynamic(name, (lambda: ValueProxy(g()).value), s)
             return
 
         if not create_only:
@@ -338,7 +336,7 @@ class Registry(MutableMapping[str, ValueProxy]):
                     b[name] = c.value
                     return
 
-        self._create_static(name, ValueProxy.new(value).value)
+        self._create_static(name, ValueProxy(value).value)
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, self.backends)
@@ -346,7 +344,7 @@ class Registry(MutableMapping[str, ValueProxy]):
 
 def _ensure_name(name: str) -> None:
     if not isinstance(name, str):
-        raise TypeError(f"Register names are strings, not {type(name)}")
+        raise TypeError(f"Register names are strings, not {type(name).__name__}")
 
 
 _logger = logging.getLogger(__name__)

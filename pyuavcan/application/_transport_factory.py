@@ -7,7 +7,7 @@ import sys
 from typing import Iterator, Optional, Sequence, Callable
 import itertools
 import pyuavcan
-from .register import ValueProxy, Value, Natural16, Natural32, String, Bit
+from .register import ValueProxy, Natural16, Natural32, RelaxedValue
 
 if sys.version_info >= (3, 9):
     from collections.abc import MutableMapping
@@ -34,7 +34,7 @@ def make_transport(
     +-------------------+-------------------+-----------------------------------------------------------------------+
     | Register name     | Register type     | Semantics                                                             |
     +===================+===================+=======================================================================+
-    | ``uavcan.node.id``| ``natural16[1]``  | The node-ID to use. If not provided or the value exceeds the valid    |
+    | ``uavcan.node.id``| ``natural16[1]``  | The node-ID to use. If the value exceeds the valid                    |
     |                   |                   | range, the constructed node will be anonymous.                        |
     +-------------------+-------------------+-----------------------------------------------------------------------+
 
@@ -50,8 +50,8 @@ def make_transport(
           - ``string``
           - Whitespace-separated list of /16 IP subnet addresses.
             16 least significant bits are replaced with the node-ID if configured, otherwise left unchanged.
-            E.g.: ``127.42.0.42``, node-ID 257, result ``127.42.1.1``.
-            E.g.: ``127.42.0.42``, anonymous, result ``127.42.0.42``.
+            E.g.: ``127.42.0.42``: node-ID 257, result ``127.42.1.1``;
+            ``127.42.0.42``: anonymous, result ``127.42.0.42``.
 
         * - ``uavcan.udp.duplicate_service_transfers``
           - ``bit[1]``
@@ -145,10 +145,10 @@ def make_transport(
         - :class:`pyuavcan.application.register.ValueConversionError` if a register is found but its value
           cannot be converted to the correct type.
 
-    >>> from pyuavcan.application.register import Value, ValueProxy, String, Natural16
+    >>> from pyuavcan.application.register import ValueProxy, Natural16, Natural32
     >>> reg = {
-    ...     "uavcan.udp.iface": ValueProxy(Value(string=String("127.99.0.0"))),
-    ...     "uavcan.node.id": ValueProxy(Value(natural16=Natural16([257]))),
+    ...     "uavcan.udp.iface": ValueProxy("127.99.0.0"),
+    ...     "uavcan.node.id": ValueProxy(Natural16([257])),
     ... }
     >>> tr = make_transport(reg)
     >>> tr
@@ -166,11 +166,11 @@ def make_transport(
     >>> reg["uavcan.can.bitrate"].ints
     [1000000, 4000000]
 
-    >>> reg = {                                                         # Triply-redundant heterogeneous transport:
-    ...     "uavcan.udp.iface":    ValueProxy(Value(string=String("127.99.0.15 127.111.0.15"))),  # Double UDP transport
-    ...     "uavcan.serial.iface": ValueProxy(Value(string=String("socket://localhost:50905"))),  # Serial transport
+    >>> reg = {                                             # Triply-redundant heterogeneous transport:
+    ...     "uavcan.udp.iface":    ValueProxy("127.99.0.15 127.111.0.15"),  # Double UDP transport
+    ...     "uavcan.serial.iface": ValueProxy("socket://localhost:50905"),  # Serial transport
     ... }
-    >>> tr = make_transport(reg)     # The node-ID was not set, so the transport is anonymous.
+    >>> tr = make_transport(reg)                            # The node-ID was not set, so the transport is anonymous.
     >>> tr                                          # doctest: +NORMALIZE_WHITESPACE
     RedundantTransport(UDPTransport('127.99.0.15',  local_node_id=None, ...),
                        UDPTransport('127.111.0.15', local_node_id=None, ...),
@@ -178,10 +178,10 @@ def make_transport(
     >>> tr.close()
 
     >>> reg = {
-    ...     "uavcan.can.iface":   ValueProxy(Value(string=String("virtual: virtual:"))),    # Doubly-redundant CAN
-    ...     "uavcan.can.mtu":     ValueProxy(Value(natural16=Natural16([32]))),
-    ...     "uavcan.can.bitrate": ValueProxy(Value(natural16=Natural16([500_000, 2_000_000]))),
-    ...     "uavcan.node.id":     ValueProxy(Value(natural16=Natural16([123]))),
+    ...     "uavcan.can.iface":   ValueProxy("virtual: virtual:"),    # Doubly-redundant CAN
+    ...     "uavcan.can.mtu":     ValueProxy(Natural16([32])),
+    ...     "uavcan.can.bitrate": ValueProxy(Natural32([500_000, 2_000_000])),
+    ...     "uavcan.node.id":     ValueProxy(Natural16([123])),
     ... }
     >>> tr = make_transport(reg)
     >>> tr                                          # doctest: +NORMALIZE_WHITESPACE
@@ -190,8 +190,8 @@ def make_transport(
     >>> tr.close()
 
     >>> reg = {
-    ...     "uavcan.udp.iface": ValueProxy(Value(string=String("127.99.1.1"))), # Per the standard register specs,
-    ...     "uavcan.node.id": ValueProxy(Value(natural16=Natural16([0xFFFF]))), # 0xFFFF means unset/anonymous.
+    ...     "uavcan.udp.iface": ValueProxy("127.99.1.1"),       # Per the standard register specs,
+    ...     "uavcan.node.id": ValueProxy(Natural16([0xFFFF])),  # 0xFFFF means unset/anonymous.
     ... }
     >>> tr = make_transport(reg)
     >>> tr
@@ -202,15 +202,15 @@ def make_transport(
     >>> tr is None
     True
     >>> tr = make_transport({}, reconfigurable=True)
-    >>> tr                                                              # Redundant transport with no inferiors.
+    >>> tr                                                          # Redundant transport with no inferiors.
     RedundantTransport()
     """
 
-    def init(name: str, default: Value) -> ValueProxy:
+    def init(name: str, default: RelaxedValue) -> ValueProxy:
         return registers.setdefault("uavcan." + name, ValueProxy(default))
 
     # Per Specification, if uavcan.node.id = 65535, the node-ID is unspecified.
-    node_id: Optional[int] = int(init("node.id", Value(natural16=Natural16([0xFFFF]))))
+    node_id: Optional[int] = int(init("node.id", Natural16([0xFFFF])))
     # TODO: currently, we raise an error if the node-ID setting exceeds the maximum allowed value for the current
     # transport, but the spec recommends that we should handle this as if the node-ID was not set at all.
     if node_id is not None and not (0 <= node_id < 0xFFFF):
@@ -236,12 +236,12 @@ def make_transport(
 def _make_udp(
     registers: MutableMapping[str, ValueProxy], node_id: Optional[int]
 ) -> Iterator[pyuavcan.transport.Transport]:
-    def init(name: str, default: Value) -> ValueProxy:
+    def init(name: str, default: RelaxedValue) -> ValueProxy:
         return registers.setdefault("uavcan.udp." + name, ValueProxy(default))
 
-    ip_list = str(init("iface", Value(string=String()))).split()
-    mtu = int(init("mtu", Value(natural16=Natural16([1200]))))
-    srv_mult = int(init("duplicate_service_transfers", Value(bit=Bit([False])))) + 1
+    ip_list = str(init("iface", "")).split()
+    mtu = int(init("mtu", Natural16([1200])))
+    srv_mult = int(init("duplicate_service_transfers", False)) + 1
 
     if ip_list:
         from pyuavcan.transport.udp import UDPTransport
@@ -253,12 +253,12 @@ def _make_udp(
 def _make_serial(
     registers: MutableMapping[str, ValueProxy], node_id: Optional[int]
 ) -> Iterator[pyuavcan.transport.Transport]:
-    def init(name: str, default: Value) -> ValueProxy:
+    def init(name: str, default: RelaxedValue) -> ValueProxy:
         return registers.setdefault("uavcan.serial." + name, ValueProxy(default))
 
-    port_list = str(init("iface", Value(string=String()))).split()
-    srv_mult = int(init("duplicate_service_transfers", Value(bit=Bit([False])))) + 1
-    baudrate = int(init("baudrate", Value(natural32=Natural32([0])))) or None
+    port_list = str(init("iface", "")).split()
+    srv_mult = int(init("duplicate_service_transfers", False)) + 1
+    baudrate = int(init("baudrate", Natural32([0]))) or None
 
     if port_list:
         from pyuavcan.transport.serial import SerialTransport
@@ -270,12 +270,12 @@ def _make_serial(
 def _make_can(
     registers: MutableMapping[str, ValueProxy], node_id: Optional[int]
 ) -> Iterator[pyuavcan.transport.Transport]:
-    def init(name: str, default: Value) -> ValueProxy:
+    def init(name: str, default: RelaxedValue) -> ValueProxy:
         return registers.setdefault("uavcan.can." + name, ValueProxy(default))
 
-    iface_list = str(init("iface", Value(string=String()))).split()
-    mtu = int(init("mtu", Value(natural16=Natural16([64]))))
-    br_arb, br_data = init("bitrate", Value(natural32=Natural32([1_000_000, 4_000_000]))).ints
+    iface_list = str(init("iface", "")).split()
+    mtu = int(init("mtu", Natural16([64])))
+    br_arb, br_data = init("bitrate", Natural32([1_000_000, 4_000_000])).ints
 
     if iface_list:
         from pyuavcan.transport.can import CANTransport
@@ -297,7 +297,7 @@ def _make_loopback(
     registers: MutableMapping[str, ValueProxy], node_id: Optional[int]
 ) -> Iterator[pyuavcan.transport.Transport]:
     # Not sure if exposing this is a good idea because the loopback transport is hardly useful outside of test envs.
-    if registers.setdefault("uavcan.loopback", ValueProxy(Value(bit=Bit([False])))):
+    if registers.setdefault("uavcan.loopback", ValueProxy(False)):
         from pyuavcan.transport.loopback import LoopbackTransport
 
         yield LoopbackTransport(node_id)
