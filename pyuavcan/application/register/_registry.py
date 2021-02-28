@@ -173,7 +173,7 @@ class Registry(MutableMapping[str, ValueProxy]):
     - Any other type (e.g., :class:`Value`, ``Natural16``, native, etc.):
       a static register will be created and stored in the registry file.
       Conversion logic is implemented by :class:`ValueProxy`.
-    
+
     Dynamic registers (callables) overwrite existing entries unconditionally.
     It is not recommended to create dynamic registers with same names as existing static registers,
     as it may cause erratic behaviors.

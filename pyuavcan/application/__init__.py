@@ -135,8 +135,6 @@ Where did these values come from?
 
 They were read from from the *registry* --- a key-value configuration parameter storage [#parameter_server]_
 defined in the UAVCAN Specification, chapter *Application layer*, section *Register interface*.
-
-The registers are named values that keep various settings and parameters of the node.
 The factory :meth:`make_node` we used above just reads the registers and figures out how to construct
 the node from that: which transport to use, the node-ID, the subject-IDs, and so on.
 Any UAVCAN application is also expected to keep its own configuration parameters in the registers so that

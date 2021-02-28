@@ -59,7 +59,7 @@ class DemoApp:
         # The Node class is basically the central part of the library -- it is the bridge between the application and
         # the UAVCAN network. Also, it implements certain standard application-layer functions, such as publishing
         # heartbeats and port introspection messages, responding to GetInfo, serving the register API, etc.
-        # The file "my_registers.db" stores the registers (configuration parameters) of our node.
+        # The register file stores the configuration parameters of our node (you can inspect it using SQLite Browser).
         self._node = pyuavcan.application.make_node(node_info, DemoApp.REGISTER_FILE)
 
         # Published heartbeat fields can be configured as follows.

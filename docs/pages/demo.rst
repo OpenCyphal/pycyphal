@@ -89,8 +89,8 @@ We can resolve this by passing the correct register values via environment varia
 The snippet is valid for sh/bash/zsh; if you are using PowerShell on Windows, replace ``export`` with ``$env:``.
 Further snippets will not include this remark.
 
-An environment variable named like ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID`` sets the register
-``uavcan.sub.temperature_setpoint.id`` (upper-cased, full stop replaced with 2x low line).
+An environment variable ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID`` sets register ``uavcan.sub.temperature_setpoint.id``,
+and so on.
 
 In PyUAVCAN, registers are normally stored in the *register file*, in our case it's ``my_registers.db``
 (the UAVCAN Specification does not regulate how the registers are to be stored, this is an implementation detail).
@@ -101,7 +101,7 @@ The registers of any UAVCAN node are exposed to other network participants via t
 defined in the standard DSDL namespace ``uavcan.register``.
 This means that other nodes on the network can reconfigure our demo application via UAVCAN directly,
 without the need to resort to any secondary management interfaces.
-This is equally true for software nodes like our demo application and hardware nodes like embedded devices.
+This is equally true for software nodes like our demo application and deeply embedded hardware nodes.
 
 
 Poking the application using Yakut
@@ -227,13 +227,13 @@ Which results in:
       mutable: true
       persistent: true
       value:
-        real32:
+        real64:
           value:
           - 2.0
           - 0.0
           - 0.0
 
-A careful reader would notice that the assigned value was of type ``integer8``, whereas the result is ``real32``.
+An attentive reader would notice that the assigned value was of type ``integer8``, whereas the result is ``real64``.
 This is because the register server does implicit type conversion to the type specified by the application.
 The UAVCAN Specification does not require this behavior, though, so some simpler nodes (embedded systems in particular)
 may just reject mis-typed requests.
@@ -261,11 +261,11 @@ And the diagnostic subscriber we started in the beginning should print a log rec
 Orchestration
 -------------
 
-..  important::
+..  attention::
 
     Yakut Orchestrator is in the alpha stage.
     Breaking changes may be introduced between minor versions until Yakut v1.0 is released.
-    Freeze the minor version number to avoid application breakage.
+    Freeze the minor version number to avoid unexpected changes.
 
     Yakut Orchestrator does not support Windows at the moment.
 
@@ -321,7 +321,7 @@ The latter are translated into environment variables when starting a process.
 The orc-file can be executed as ``yakut orc launch.orc.yaml``, or simply ``./launch.orc.yaml``
 (use ``--verbose`` to see which environment variables are passed to each launched process).
 Having started it, you should see roughly the following output appear in the terminal,
-indicating that the thermostat is working on bringing the plant to the specified temperature:
+indicating that the thermostat is driving the plant towards the setpoint:
 
 ..  code-block:: yaml
 
@@ -329,24 +329,23 @@ indicating that the thermostat is working on bringing the plant to the specified
     8184:
       _metadata_:
         timestamp:
-          system: 1613884102.739300
-          monotonic: 1436479.063671
+          system: 1614489567.052270
+          monotonic: 4864.397568
         priority: optional
         transfer_id: 0
         source_node_id: 42
       timestamp:
-        microsecond: 1613884102737854
+        microsecond: 1614489567047461
       severity:
         value: 2
       text: 'root: Application started with PID gains: 0.100 0.000 0.000'
 
-    {"2346":{"timestamp":{"microsecond":1613884103226177},"kelvin":300.0}}
-    {"2346":{"timestamp":{"microsecond":1613884103726658},"kelvin":300.0}}
-    {"2346":{"timestamp":{"microsecond":1613884104227063},"kelvin":300.2437438964844}}
-    {"2346":{"timestamp":{"microsecond":1613884104725558},"kelvin":300.480224609375}}
-    {"2346":{"timestamp":{"microsecond":1613884105226489},"kelvin":300.7096252441406}}
-    {"2346":{"timestamp":{"microsecond":1613884105725577},"kelvin":300.9321594238281}}
-    # And so on. Notice how the temperature is rising slowly towards the setpoint at 350 K!
+    {"2346":{"timestamp":{"microsecond":1614489568025004},"kelvin":300.0}}
+    {"2346":{"timestamp":{"microsecond":1614489568524508},"kelvin":300.7312622070312}}
+    {"2346":{"timestamp":{"microsecond":1614489569024634},"kelvin":301.4406433105469}}
+    {"2346":{"timestamp":{"microsecond":1614489569526189},"kelvin":302.1288757324219}}
+
+    # And so on. Notice how the temperature is rising slowly towards the setpoint at 450 K!
 
 As an exercise, consider this:
 
