@@ -165,12 +165,12 @@ New registers (application-specific registers in particular) can be created usin
 :meth:`pyuavcan.application.register.Registry.setdefault`:
 
 >>> from pyuavcan.application.register import Value, Real64  # Convenience aliases for uavcan.register.Value, etc.
->>> import numpy as np
->>> gains = node.registry.setdefault("my_app.controller.pid_gains", Value(real64=Real64([1.3, 0.8, 0.05])))
+>>> gains = node.registry.setdefault("my_app.controller.pid_gains", Real64([1.3, 0.8, 0.05]))   # Explicit real64 here.
 >>> gains.floats
 [1.3, 0.8, 0.05]
->>> node.registry.setdefault("my_app.estimator.state_vector",  # Not stored, but computed at every invocation.
-...                          lambda: Value(real64=Real64(np.random.random((4, 1)).flatten()))).floats
+>>> import numpy as np
+>>> node.registry.setdefault("my_app.estimator.state_vector",           # Not stored, but computed at every invocation.
+...                          lambda: np.random.random((4, 1)).flatten()).floats     # Deduced type: real64.
 [..., ..., ..., ...]
 
 But the above does not explain where did the example get the register values from.
@@ -226,11 +226,11 @@ RedundantTransport(UDPTransport('127.63.0.42', ...), SerialTransport('socket://l
 >>> pub_voltage.close()
 >>> list(node.registry["uavcan.diagnostic.severity"].value.natural8.value)      # This is a standard register.
 [3]
->>> node.registry.setdefault("m.motor.flux_linkage_dq", Value(real64=Real64([1.23, -8.15]))).floats
+>>> node.registry.setdefault("m.motor.flux_linkage_dq", [1.23, -8.15]).floats
 [1.23, -8.15]
->>> node.registry.setdefault("m.motor.inductance_dq", Value(real64=Real64([1.23, -8.15]))).floats
+>>> node.registry.setdefault("m.motor.inductance_dq", [1.23, -8.15]).floats
 [0.12, 0.13]
->>> node.registry["m.motor.inductance_dq"] = [1.9, 6.3]  # Update -- full type not required because it is already known.
+>>> node.registry["m.motor.inductance_dq"] = [1.9, 6.3]                         # Update
 >>> node.registry["m.motor.inductance_dq"].floats
 [1.9, 6.3]
 >>> node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "optional_port")    # doctest: +IGNORE_EXCEPTION_DETAIL

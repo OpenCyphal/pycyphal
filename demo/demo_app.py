@@ -131,8 +131,6 @@ class DemoApp:
         The main method that runs the business logic. It is also possible to use the library in an IoC-style
         by using receive_in_background() for all subscriptions if desired.
         """
-        from pyuavcan.application.register import Value, Real32
-
         temperature_setpoint = 0.0
         temperature_error = 0.0
 
@@ -144,13 +142,11 @@ class DemoApp:
 
         # Expose internal states to external observers for diagnostic purposes. Here, we define read-only registers.
         # Since they are computed at every invocation, they are never stored in the register file.
-        self._node.registry["thermostat.error"] = lambda: Value(real32=Real32([temperature_error]))
-        self._node.registry["thermostat.setpoint"] = lambda: Value(real32=Real32([temperature_setpoint]))
+        self._node.registry["thermostat.error"] = lambda: temperature_error
+        self._node.registry["thermostat.setpoint"] = lambda: temperature_setpoint
 
         # Read application settings from the registry. The defaults will be used only if a new register file is created.
-        gain_p, gain_i, gain_d = self._node.registry.setdefault(
-            "thermostat.pid.gains", Value(real32=Real32([0.12, 0.18, 0.01]))
-        ).floats
+        gain_p, gain_i, gain_d = self._node.registry.setdefault("thermostat.pid.gains", [0.12, 0.18, 0.01]).floats
 
         logging.info("Application started with PID gains: %.3f %.3f %.3f", gain_p, gain_i, gain_d)
 

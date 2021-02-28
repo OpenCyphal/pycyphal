@@ -37,12 +37,11 @@ async def handle_command(msg: uavcan.si.unit.voltage.Scalar_1_0, _metadata: pyua
 async def main() -> None:
     with make_node(NodeInfo(name="org.uavcan.pyuavcan.demo.plant"), "plant.db") as node:
         # Expose internal states for diagnostics.
-        node.registry["status.saturation"] = lambda: register.Value(bit=register.Bit([saturation]))
+        node.registry["status.saturation"] = lambda: saturation  # The register type will be deduced as "bit[1]".
 
-        # Initialize values from the registry.
-        temp_environment = float(  # [kelvin]
-            node.registry.setdefault("model.environment.temperature", register.Value(real32=register.Real32([292.15])))
-        )
+        # Initialize values from the registry. The temperature is in kelvin because in UAVCAN everything follows SI.
+        # Here, we specify the type explicitly as "real32[1]". If we pass a native float, it would be "real64[1]".
+        temp_environment = float(node.registry.setdefault("model.environment.temperature", register.Real32([292.15])))
         temp_plant = temp_environment
 
         # Set up the ports.

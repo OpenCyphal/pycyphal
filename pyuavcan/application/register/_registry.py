@@ -62,29 +62,26 @@ class Registry(MutableMapping[str, ValueProxy]):
 
     Create static registers (stored in the register file):
 
-    >>> from pyuavcan.application.register import Natural16, Real32, Bit, String
-    >>> registry["p.a"] = Value(natural16=Natural16([1234]))        # Assign or create.
-    >>> registry.setdefault("p.b", Value(real32=Real32([12.34])))   # Update or create. # doctest: +NORMALIZE_WHITESPACE
+    >>> from pyuavcan.application.register import Natural16, Real32
+    >>> registry["p.a"] = Natural16([1234])                 # Assign or create.
+    >>> registry.setdefault("p.b", Real32([12.34]))         # Update or create. # doctest: +NORMALIZE_WHITESPACE
     ValueProxyWithFlags(uavcan.register.Value...(real32=uavcan.primitive.array.Real32...(value=[12.34])),
                         mutable=True,
                         persistent=False)
 
     Create dynamic registers (getter/setter invoked at every access; existing entries overwritten automatically):
 
-    >>> registry["d.a"] = lambda: Value(real32=Real32([1, 2, 3]))   # Immutable (read-only).
-    >>> d_b = [True, False, True]
-    >>> def set_d_b(v: Value):
+    >>> registry["d.a"] = lambda: [1.0, 2.0, 3.0]           # Immutable (read-only), deduced type: real64[3].
+    >>> list(registry["d.a"].value.real64.value)            # Yup, deduced as expected, real64.
+    [1.0, 2.0, 3.0]
+    >>> registry["d.a"] = lambda: Real32([1.0, 2.0, 3.0])   # Like above, but now it is "real32[3]".
+    >>> list(registry["d.a"].value.real32.value)
+    [1.0, 2.0, 3.0]
+    >>> d_b = [True, False, True]                   # Suppose we have some internal object.
+    >>> def set_d_b(v: Value):                      # Define a setter for it.
     ...     global d_b
     ...     d_b = ValueProxy(v).bools
-    >>> registry["d.b"] = (lambda: Value(bit=Bit(d_b))), set_d_b     # Mutable.
-
-    Only a small set of types can be used to create new registers (listed in :attr:`CreationArgument`),
-    otherwise you get a :class:`MissingRegisterError`:
-
-    >>> registry["n.a"] = "Cannot create register from argument of this type"   # doctest: +IGNORE_EXCEPTION_DETAIL
-    Traceback (most recent call last):
-    ...
-    MissingRegisterError: 'n.a'
+    >>> registry["d.b"] = (lambda: d_b), set_d_b    # Expose the object via mutable register with deduced type "bit[3]".
 
     Read/write/delete using the same dict-like API:
 
@@ -94,42 +91,42 @@ class Registry(MutableMapping[str, ValueProxy]):
     4
     >>> int(registry["p.a"])
     1234
-    >>> registry["p.a"] = 88
+    >>> registry["p.a"] = 88                        # Automatic type conversion to "natural16[1]" (defined above).
     >>> int(registry["p.a"])
     88
     >>> registry["d.b"].bools
     [True, False, True]
-    >>> registry["d.b"] = [-1, 5, 0.0]      # Automatic type conversion.
+    >>> registry["d.b"] = [-1, 5, 0.0]              # Automatic type conversion to "bit[3]".
     >>> registry["d.b"].bools
     [True, True, False]
-    >>> del registry["*.a"]                 # Use wildcards to remove multiple at the same time.
+    >>> del registry["*.a"]                         # Use wildcards to remove multiple at the same time.
     >>> list(registry)
     ['p.b', 'd.b']
-    >>> registry["d.b"].ints                # Type conversion by ValueProxy.
+    >>> registry["d.b"].ints                        # Type conversion by ValueProxy.
     [1, 1, 0]
     >>> registry["d.b"].floats
     [1.0, 1.0, 0.0]
-    >>> registry["d.b"].value.bit           # doctest: +NORMALIZE_WHITESPACE
+    >>> registry["d.b"].value.bit                   # doctest: +NORMALIZE_WHITESPACE
     uavcan.primitive.array.Bit...(value=[ True, True,False])
 
     Registers created by :meth:`setdefault` are always initialized from environment variables:
 
     >>> registry.environment_variables["P__C"] = b"999 +888.3"
     >>> registry.environment_variables["D__C"] = b"Hello world!"
-    >>> registry.setdefault("p.c", Value(natural16=Natural16([111, 222]))).ints  # Value from environment is used here!
+    >>> registry.setdefault("p.c", Natural16([111, 222])).ints  # Value from environment is used here!
     [999, 888]
-    >>> registry.setdefault("p.d", Value(natural16=Natural16([111, 222]))).ints  # No environment variable for this one.
+    >>> registry.setdefault("p.d", Natural16([111, 222])).ints  # No environment variable for this one.
     [111, 222]
     >>> d_c = 'Coffee'
     >>> def set_d_c(v: Value):
     ...     global d_c
     ...     d_c = str(ValueProxy(v))
-    >>> str(registry.setdefault("d.c", (lambda: Value(string=String(d_c)), set_d_c)))   # Setter is invoked immediately.
+    >>> str(registry.setdefault("d.c", (lambda: d_c, set_d_c))) # Setter is invoked immediately.
     'Hello world!'
-    >>> registry["d.c"] = "New text"                                        # Change the value again.
-    >>> d_c                                                                 # Yup, changed.
+    >>> registry["d.c"] = "New text"                            # Change the value again.
+    >>> d_c                                                     # Yup, changed.
     'New text'
-    >>> str(registry.setdefault("d.c", lambda: Value(string=String(d_c))))  # Environment var ignored because no setter.
+    >>> str(registry.setdefault("d.c", lambda: d_c))            # Environment var ignored because no setter.
     'New text'
 
     If such behavior is undesirable, one can either clear the environment variable dict or remove specific entries.
@@ -137,34 +134,34 @@ class Registry(MutableMapping[str, ValueProxy]):
 
     Variables created by direct assignment are (obviously) not affected by environment variables:
 
-    >>> registry.use_defaults_from_environment = True
-    >>> registry["p.c"] = Value(natural16=Natural16([111, 222]))            # Direct assignment instead of setdefault().
-    >>> registry["p.c"].ints                                                # Environment variables ignored!
+    >>> registry["p.c"] = [111, 222]                            # Direct assignment instead of setdefault().
+    >>> registry["p.c"].ints                                    # Environment variables ignored!
     [111, 222]
 
-    Closing the registry will also close all underlying backends.
+    Closing the registry will close all underlying backends.
 
     >>> registry.close()
 
     TODO: Add modification notification callbacks to allow applications implement hot reloading.
     """
 
-    CreationArgument = Union[
-        Value,
-        ValueProxy,
-        Callable[[], Union[Value, ValueProxy]],
+    Assignable = Union[
+        RelaxedValue,
+        Callable[[], RelaxedValue],
         Tuple[
-            Callable[[], Union[Value, ValueProxy]],
+            Callable[[], RelaxedValue],
             Callable[[Value], None],
         ],
     ]
     """
-    - If :class:`Value` or :class:`ValueProxy`, a static register will be created and stored in the registry file.
-
+    An instance of this type can be used to assign or create a register.
+    Creation is handled depending on the type:
+    
     - If a single callable, it will be invoked whenever this register is read; such register is called "dynamic".
       Such register will be reported as immutable.
       The registry file is not affected and therefore this change is not persistent.
       :attr:`environment_variables` are always ignored in this case since the register cannot be written.
+      The result of the callable is converted to the register value using :meth:`ValueProxy.new`.
 
     - If a tuple of two callables, then the first one is a getter that is invoked on read (see above),
       and the second is a setter that is invoked on write with a single argument of type :class:`Value`.
@@ -173,6 +170,10 @@ class Registry(MutableMapping[str, ValueProxy]):
       The type conversion is performed automatically by polling the getter beforehand to discover the type.
       The registry file is not affected and therefore this change is not persistent.
 
+    - Any other type (e.g., :class:`Value`, ``Natural16``, native, etc.):
+      a static register will be created and stored in the registry file.
+      Conversion logic is implemented by :class:`ValueProxy.new`.
+    
     Dynamic registers (callables) overwrite existing entries unconditionally.
     It is not recommended to create dynamic registers with same names as existing static registers,
     as it may cause erratic behaviors.
@@ -228,19 +229,19 @@ class Registry(MutableMapping[str, ValueProxy]):
                 return key
         return None
 
-    def setdefault(self, name: str, default: Optional[CreationArgument] = None) -> ValueProxyWithFlags:
+    def setdefault(self, name: str, default: Optional[Assignable] = None) -> ValueProxyWithFlags:
         """
         **This is the preferred method for creating new registers.**
 
         If the register exists, its value will be returned an no further action will be taken.
-
         If the register doesn't exist, it will be created and immediately updated from :attr:`environment_variables`
         (using :meth:`ValueProxy.assign_environment_variable`).
+        The register value instance is created using :meth:`ValueProxy.new`.
 
         :param name:    Register name.
-        :param default: If exists, this value is ignored; otherwise created as described in :attr:`CreationArgument`.
+        :param default: If exists, this value is ignored; otherwise created as described in :attr:`Assignable`.
         :return:        Resulting value.
-        :raises:        See :meth:`ValueProxy.assign_environment_variable`.
+        :raises:        See :meth:`ValueProxy.assign_environment_variable` and :meth:`ValueProxy.new`.
         """
         try:
             return self[name]
@@ -273,16 +274,16 @@ class Registry(MutableMapping[str, ValueProxy]):
                 return ValueProxyWithFlags(ent.value, mutable=ent.mutable, persistent=b.persistent)
         raise MissingRegisterError(name)
 
-    def __setitem__(self, name: str, value: Union[RelaxedValue, CreationArgument]) -> None:
+    def __setitem__(self, name: str, value: Assignable) -> None:
         """
         Assign a new value to the register if it exists and the type of the value is matching or can be
         converted to the register's type.
         The mutability flag may be ignored depending on which backend the register is stored at.
         The conversion is implemented by :meth:`ValueProxy.assign`.
 
-        If the register does not exist, and the value is of type :attr:`CreationArgument`,
-        a new register will be created.
-        However, unlike :meth:`setdefault`, :meth:`ValueProxy.assign_environment_variable` is NOT invoked.
+        If the register does not exist, a new one will be created.
+        However, unlike :meth:`setdefault`, :meth:`ValueProxy.assign_environment_variable` is not invoked.
+        The register value instance is created using :meth:`ValueProxy.new`.
 
         :raises:
             :class:`MissingRegisterError` (subclass of :class:`KeyError`) if the register does not exist
@@ -317,20 +318,15 @@ class Registry(MutableMapping[str, ValueProxy]):
         """
         return sum(map(len, self.backends))
 
-    def _set(self, name: str, value: Union[RelaxedValue, CreationArgument], *, create_only: bool = False) -> None:
+    def _set(self, name: str, value: Assignable, *, create_only: bool = False) -> None:
         _ensure_name(name)
 
-        def strictify(x: Union[Value, ValueProxy]) -> Value:
-            if isinstance(x, ValueProxy):
-                return x.value
-            return x
-
         if callable(value):
-            self._create_dynamic(name, lambda: strictify(value()), None)  # type: ignore
+            self._create_dynamic(name, lambda: ValueProxy.new(value()).value, None)  # type: ignore
             return
         if isinstance(value, tuple) and len(value) == 2 and all(map(callable, value)):
             g, s = value
-            self._create_dynamic(name, (lambda: strictify(g())), s)
+            self._create_dynamic(name, (lambda: ValueProxy.new(g()).value), s)
             return
 
         if not create_only:
@@ -342,15 +338,7 @@ class Registry(MutableMapping[str, ValueProxy]):
                     b[name] = c.value
                     return
 
-        if isinstance(value, (Value, ValueProxy)):
-            self._create_static(name, ValueProxy(value).value)
-            return
-
-        raise MissingRegisterError(
-            name,
-            f"Cannot create register from argument of type {type(value).__name__}. "
-            f"New registers can only be constructed from: {Registry.CreationArgument}",
-        )
+        self._create_static(name, ValueProxy.new(value).value)
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, self.backends)

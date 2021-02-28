@@ -89,6 +89,32 @@ class ValueProxy:
 
         self._value = copy(v if isinstance(v, Value) else v.value)
 
+    @staticmethod
+    def new(r: RelaxedValue) -> ValueProxy:
+        """
+        Constructs a new instance from a wide set of native and generated types.
+        Passing native values is not recommended because the type deduction logic may be changed in the future.
+        To ensure stability, pass only values of ``uavcan.primitive.*``, or :class:`Value`, or :class:`ValueProxy`.
+
+        >>> list(ValueProxy.new(Value(natural16=Natural16([123, 456]))).value.natural16.value)  # Explicit Value.
+        [123, 456]
+        >>> list(ValueProxy.new(Natural16([123, 456])).value.natural16.value)                   # Same as above.
+        [123, 456]
+        >>> ValueProxy.new(-123).value.integer64.value[0]               # Integers default to 64-bit.
+        -123
+        >>> list(ValueProxy.new([-1.23, False]).value.real64.value)     # Floats also default to 64-bit.
+        [-1.23, 0.0]
+        >>> list(ValueProxy.new([True, False]).value.bit.value)         # Booleans default to bits.
+        [True, False]
+        >>> ValueProxy.new(b"Hello unstructured!").value.unstructured.value.tobytes()   # Bytes to unstructured.
+        b'Hello unstructured!'
+
+        And so on...
+
+        :raises: :class:`ValueConversionError` if the conversion is impossible or ambiguous.
+        """
+        return ValueProxy(_strictify(r))
+
     @property
     def value(self) -> Value:
         """Access to the underlying standard DSDL type ``uavcan.register.Value``."""
