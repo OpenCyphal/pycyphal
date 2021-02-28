@@ -3,7 +3,7 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 """
-Implementation of the UAVCAN Register API as defined in the UAVCAN Specification
+Implementation of the UAVCAN register interface as defined in the UAVCAN Specification
 (section 5.3 *Application-layer functions*).
 """
 

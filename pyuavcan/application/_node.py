@@ -35,7 +35,7 @@ class Node(abc.ABC):
 
     ..  attention::
 
-        If the provided transport is anonymous, some of these functions may not be available.
+        If the underlying transport is anonymous, some of these functions may not be available.
 
     Start the instance when initialization is finished by invoking :meth:`start`.
     This will also automatically start all function implementation instances.

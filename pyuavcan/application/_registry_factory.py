@@ -67,7 +67,7 @@ class SimpleRegistry(register.Registry):
             if env_val is not None:
                 _logger.debug("Updating register %r from env: %r", name, env_val)
                 reg_val = self[name]
-                reg_val.assign_from_environment_variable(env_val)
+                reg_val.assign_environment_variable(env_val)
                 self[name] = reg_val
 
 

@@ -146,7 +146,7 @@ class Registry(MutableMapping[str, ValueProxy]):
 
     >>> registry.close()
 
-    TODO: Add modification callbacks to allow applications implement hot reloading.
+    TODO: Add modification notification callbacks to allow applications implement hot reloading.
     """
 
     CreationArgument = Union[
@@ -221,9 +221,7 @@ class Registry(MutableMapping[str, ValueProxy]):
 
     def index(self, index: int) -> Optional[str]:
         """
-        This is mostly intended for implementing ``uavcan.register.List``.
-        Returns None if index is out of range.
-        The ordering is like :meth:`__iter__` and :meth:`keys` (invalidated by :meth:`bind` and :meth:`delete`).
+        Get register name by index. The ordering is like :meth:`__iter__`. Returns None if index is out of range.
         """
         for i, key in enumerate(self):
             if i == index:
@@ -237,12 +235,12 @@ class Registry(MutableMapping[str, ValueProxy]):
         If the register exists, its value will be returned an no further action will be taken.
 
         If the register doesn't exist, it will be created and immediately updated from :attr:`environment_variables`
-        (using :meth:`ValueProxy.assign_from_environment_variable`).
+        (using :meth:`ValueProxy.assign_environment_variable`).
 
         :param name:    Register name.
         :param default: If exists, this value is ignored; otherwise created as described in :attr:`CreationArgument`.
         :return:        Resulting value.
-        :raises:        See :meth:`ValueProxy.assign_from_environment_variable`.
+        :raises:        See :meth:`ValueProxy.assign_environment_variable`.
         """
         try:
             return self[name]
@@ -258,7 +256,7 @@ class Registry(MutableMapping[str, ValueProxy]):
         if env_val is not None:
             _logger.debug("%r: Update from env: %r <- %r", self, name, env_val)
             reg = self[name]
-            reg.assign_from_environment_variable(env_val)
+            reg.assign_environment_variable(env_val)
             self[name] = reg
 
         return self[name]
@@ -284,9 +282,7 @@ class Registry(MutableMapping[str, ValueProxy]):
 
         If the register does not exist, and the value is of type :attr:`CreationArgument`,
         a new register will be created.
-        However, unlike :meth:`setdefault`, :meth:`ValueProxy.assign_from_environment_variable` is NOT invoked.
-
-        Otherwise, :class:`MissingRegisterError` is raised.
+        However, unlike :meth:`setdefault`, :meth:`ValueProxy.assign_environment_variable` is NOT invoked.
 
         :raises:
             :class:`MissingRegisterError` (subclass of :class:`KeyError`) if the register does not exist

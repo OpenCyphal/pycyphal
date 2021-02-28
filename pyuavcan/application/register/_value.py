@@ -107,7 +107,7 @@ class ValueProxy:
         assert _get_option_name(res) == opt_to
         self._value = res
 
-    def assign_from_environment_variable(self, environment_variable_value: bytes) -> None:
+    def assign_environment_variable(self, environment_variable_value: Union[str, bytes]) -> None:
         """
         This is like :meth:`assign`, but the argument is the value of an environment variable.
         The conversion rules are documented in the standard RPC-service specification ``uavcan.register.Access``.

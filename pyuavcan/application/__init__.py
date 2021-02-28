@@ -65,7 +65,7 @@ To create a new port you need to specify its type and name
 Publishers and subscribers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Create a publisher and publish a message:
+Create a publisher and publish a message (here and below, ``await_`` substitutes for the ``await`` statement):
 
 >>> import uavcan.si.unit.voltage
 >>> pub_voltage = node.make_publisher(uavcan.si.unit.voltage.Scalar_1_0, "measured_voltage")
@@ -97,7 +97,7 @@ RPC-service clients and servers
 Define an RPC-service of an application-specific type:
 
 >>> from sirius_cyber_corp import PerformLinearLeastSquaresFit_1_0  # An application-specific DSDL definition.
->>> async def solve_linear_least_squares(
+>>> async def solve_linear_least_squares(                           # Refer to the Demo chapter for the DSDL sources.
 ...     request: PerformLinearLeastSquaresFit_1_0.Request,
 ...     metadata: pyuavcan.presentation.ServiceRequestMetadata,
 ... ) -> PerformLinearLeastSquaresFit_1_0.Response:                 # Business logic.
@@ -129,13 +129,12 @@ uavcan.node.Version.1.0(major=1, minor=0)
 Registers and application settings
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Now, you are probably wondering, how come we just created a node without specifying which transport it should use,
+You are probably wondering, how come we just created a node without specifying which transport it should use,
 its node-ID, or even the subject-IDs and service-IDs?
 Where did these values come from?
 
-These values were read from from the *registers*, as defined in the UAVCAN Specification
-(chapter "Application layer", section "Register interface").
-Those familiar with ROS will find similarities with the *ROS Parameter Server*.
+They were read from from the *registry* --- a key-value configuration parameter storage [#parameter_server]_
+defined in the UAVCAN Specification, chapter *Application layer*, section *Register interface*.
 
 The registers are named values that keep various settings and parameters of the node.
 The factory :meth:`make_node` we used above just reads the registers and figures out how to construct
@@ -143,7 +142,7 @@ the node from that: which transport to use, the node-ID, the subject-IDs, and so
 Any UAVCAN application is also expected to keep its own configuration parameters in the registers so that
 it can be reconfigured and controlled at runtime via UAVCAN.
 
-The registry of the node instance can be accessed via :attr:`Node.registry` which is an instance of
+The registry of the local node can be accessed via :attr:`Node.registry` which is an instance of class
 :class:`pyuavcan.application.register.Registry`:
 
 >>> int(node.registry["uavcan.node.id"])        # Standard registers defined by UAVCAN are named like "uavcan.*"
@@ -156,23 +155,21 @@ The registry of the node instance can be accessed via :attr:`Node.registry` whic
 6543
 >>> int(node.registry["uavcan.sub.position_setpoint.id"])   # And so on.
 6544
->>> str(node.registry["uavcan.sub.position_setpoint.type"]) # Subscription type is automatically exposed via registry.
+>>> str(node.registry["uavcan.sub.position_setpoint.type"]) # Port types are automatically exposed via registry, too.
 'uavcan.si.unit.length.Vector3.1.0'
 
 Every port created by the application (publisher, subscriber, etc.) is automatically exposed via the register
-interface to uphold the logic of the register-based UAVCAN introspection API.
-The application therefore should not attempt to create new ports using the presentation-layer API because that
-would circumvent the introspection services.
-
-The node instance also implements the register network service (``uavcan.register.Access``, ``uavcan.register.List``)
-so other network participants can access the registry of the local node and reconfigure it.
+interface as prescribed by the Specification [#avoid_presentation_layer]_.
 
 New registers (application-specific registers in particular) can be created using
 :meth:`pyuavcan.application.register.Registry.setdefault`:
 
 >>> from pyuavcan.application.register import Value, Real64  # Convenience aliases for uavcan.register.Value, etc.
 >>> import numpy as np
->>> node.registry.setdefault("my_application.estimator.state_vector",  # Not stored, but computed at every invocation.
+>>> gains = node.registry.setdefault("my_app.controller.pid_gains", Value(real64=Real64([1.3, 0.8, 0.05])))
+>>> gains.floats
+[1.3, 0.8, 0.05]
+>>> node.registry.setdefault("my_app.estimator.state_vector",  # Not stored, but computed at every invocation.
 ...                          lambda: Value(real64=Real64(np.random.random((4, 1)).flatten()))).floats
 [..., ..., ..., ...]
 
@@ -194,6 +191,7 @@ There are two places:
 ..  doctest::
     :hide:
 
+    >>> node.close()
     >>> import os
     >>> for k in os.environ:
     ...     if "__" in k:
@@ -270,6 +268,15 @@ More complex capabilities are to be set up by the user as needed; some of them a
    pyuavcan.application.node_tracker.NodeTracker
    pyuavcan.application.plug_and_play.Allocatee
    pyuavcan.application.plug_and_play.Allocator
+
+
+..  [#parameter_server]
+    Those familiar with ROS may find similarities with the *ROS Parameter Server*,
+    except that each node keeps its own registers locally instead of relying on a remote centralized provider.
+
+..  [#avoid_presentation_layer]
+    The application therefore should not attempt to create new ports using the presentation-layer API because that
+    would circumvent the introspection services.
 """
 
 from ._node import Node as Node, NodeInfo as NodeInfo

@@ -285,12 +285,12 @@ Here is the full list them:
 .. computron-injection::
    :filename: synth/application_module_summary.py
 
-Excepting some basic functions that are always initialized by default (like heartbeat or the register API),
+Excepting some basic functions that are always initialized by default (like heartbeat or the register interface),
 these modules are not auto-imported.
 
 
 Utilities
 ---------
 
-Submodule :mod:`pyuavcan.util` contains a loosely organized collection of minor utilizies and helpers that are
+Submodule :mod:`pyuavcan.util` contains a loosely organized collection of minor utilities and helpers that are
 used by the library and are also available for reuse by the application.
