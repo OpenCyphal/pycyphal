@@ -149,8 +149,7 @@ def make_node(
     ..  note::
 
         Consider extending this factory with a capability to automatically run the node-ID allocation client
-        :class:`pyuavcan.application.plug_and_play.Allocatee` if the available registers do not encode a non-anonymous
-        node-ID value.
+        :class:`pyuavcan.application.plug_and_play.Allocatee` if ``uavcan.node.id`` is not set.
 
         Until this is implemented, to run the allocator one needs to construct the transport manually using
         :func:`make_transport` and :func:`make_registry`,

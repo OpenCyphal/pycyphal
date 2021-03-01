@@ -83,8 +83,7 @@ def make_registry(
     See also: standard RPC-service ``uavcan.register.Access``.
 
     :param register_file:
-        Path to the SQLite file containing the register database; or, in other words,
-        the configuration file of this application/node.
+        Path to the registry file; or, in other words, the configuration file of this application/node.
         If not provided (default), the registers of this instance will be stored in-memory (volatile configuration).
         If path is provided but the file does not exist, it will be created automatically.
         See :attr:`Node.registry`.
@@ -93,7 +92,7 @@ def make_registry(
         During initialization, all registers will be updated based on the environment variables passed here.
         This dict is used to initialize :attr:`pyuavcan.application.register.Registry.environment_variables`.
         Registers that are created later using :meth:`pyuavcan.application.register.Registry.setdefault`
-        will default to these values as well.
+        will use these values as well.
 
         If None (which is default), the value is initialized by copying :data:`os.environb`.
         Pass an empty dict here to disable environment variable processing.

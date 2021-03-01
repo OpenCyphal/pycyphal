@@ -145,7 +145,7 @@ The registry of the local node can be accessed via :attr:`Node.registry` which i
 
 >>> int(node.registry["uavcan.node.id"])        # Standard registers defined by UAVCAN are named like "uavcan.*"
 42
->>> node.presentation.transport.local_node_id   # Yup, indeed, the node-ID is picked up from the register.
+>>> node.id                                     # Yup, indeed, the node-ID is picked up from the register.
 42
 >>> int(node.registry["uavcan.pub.measured_voltage.id"])    # This is where we got the subject-ID from.
 6543
@@ -244,6 +244,9 @@ PortNotConfiguredError: 'uavcan.sub.optional_port.id'
     ...         del os.environ[k]
     >>> node.close()        # Ensure idempotency.
 
+Per the Specification, a port-ID of 65535 (0xFFFF) represents an unconfigured port,
+as illustrated in the above snippet.
+
 
 Application-layer function implementations
 ++++++++++++++++++++++++++++++++++++++++++
@@ -252,12 +255,11 @@ As mentioned in the description of the Node class, it provides certain bare-minu
 functionality like publishing heartbeats, responding to GetInfo, serving the register API, etc.
 More complex capabilities are to be set up by the user as needed; some of them are:
 
-.. autosummary::
-   pyuavcan.application.diagnostic.DiagnosticSubscriber
-   pyuavcan.application.diagnostic.DiagnosticPublisher
-   pyuavcan.application.node_tracker.NodeTracker
-   pyuavcan.application.plug_and_play.Allocatee
-   pyuavcan.application.plug_and_play.Allocator
+..  autosummary::
+    pyuavcan.application.diagnostic.DiagnosticSubscriber
+    pyuavcan.application.node_tracker.NodeTracker
+    pyuavcan.application.plug_and_play.Allocatee
+    pyuavcan.application.plug_and_play.Allocator
 
 
 ..  [#parameter_server]

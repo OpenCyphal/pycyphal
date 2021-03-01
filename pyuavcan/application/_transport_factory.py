@@ -22,9 +22,6 @@ def make_transport(
 ) -> Optional[pyuavcan.transport.Transport]:
     """
     Constructs a transport instance based on the configuration encoded in the supplied registers.
-    Initializes missing registers with defaults using :meth:`MutableMapping.setdefault`
-    (the implementation is expected to apply values passed via environment variables).
-
     If more than one transport is defined, a redundant instance will be constructed.
 
     The register schema is documented below per transport class
@@ -120,9 +117,7 @@ def make_transport(
 
     :param registers:
         A mutable mapping of :class:`str` to :class:`pyuavcan.application.register.ValueProxy`.
-        The implementation will initialize registers with their defaults in the mapping using
-        :meth:`MutableMapping.setdefault`.
-        See factory :func:`pyuavcan.application.make_registry`.
+        Normally, it should be constructed by :func:`pyuavcan.application.make_registry`.
 
     :param reconfigurable:
         If False (default), the return value is:
