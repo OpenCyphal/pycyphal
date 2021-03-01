@@ -238,7 +238,7 @@ This is because the register server does implicit type conversion to the type sp
 The UAVCAN Specification does not require this behavior, though, so some simpler nodes (embedded systems in particular)
 may just reject mis-typed requests.
 
-If you restart the application now, you will see it use the the updated PID gains.
+If you restart the application now, you will see it use the updated PID gains.
 
 Now let's try the linear regression service:
 
@@ -276,11 +276,8 @@ dedicated hardware.
 
 One solution to this is Yakut Orchestrator --- an interpreter of a simple YAML-based domain-specific language
 that allows one to define process groups and conveniently manage them as a single entity.
-The language has first-class support for registers --- instead of relying on environment variables,
-one can define registers using a human-friendly syntax without the need to explicitly specify their types
-(the tool will deduce the correct types automatically in most cases).
-
-Those familiar with ROS may find the tooling described here somewhat similar to *roslaunch*.
+The language comes with a user-friendly syntax for managing UAVCAN registers.
+Those familiar with ROS may find it somewhat similar to *roslaunch*.
 
 
 Second application
