@@ -36,7 +36,8 @@ Application source code
 -----------------------
 
 The demo relies on the custom data types presented above.
-To run it, copy-paste its source code into a file on your computer and update the DSDL paths to match your environment.
+To run it, copy-paste its source code into a file on your computer (name it ``demo_app.py``)
+and update the DSDL paths to match your environment.
 The public regulated data types can be cloned from https://github.com/UAVCAN/public_regulated_data_types .
 
 .. literalinclude:: /../demo/demo_app.py
