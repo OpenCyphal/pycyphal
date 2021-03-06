@@ -69,7 +69,7 @@ def make_transport(
         * - ``uavcan.serial.iface``
           - ``string``
           - Whitespace-separated list of serial port names.
-            E.g.: ``/dev/ttyACM0``, ``COM9``, ``socket://localhost:50905``.
+            E.g.: ``/dev/ttyACM0``, ``COM9``, ``socket://127.0.0.1:50905``.
 
         * - ``uavcan.serial.duplicate_service_transfers``
           - ``bit[1]``
@@ -163,13 +163,13 @@ def make_transport(
 
     >>> reg = {                                             # Triply-redundant heterogeneous transport:
     ...     "uavcan.udp.iface":    ValueProxy("127.99.0.15 127.111.0.15"),  # Double UDP transport
-    ...     "uavcan.serial.iface": ValueProxy("socket://localhost:50905"),  # Serial transport
+    ...     "uavcan.serial.iface": ValueProxy("socket://127.0.0.1:50905"),  # Serial transport
     ... }
     >>> tr = make_transport(reg)                            # The node-ID was not set, so the transport is anonymous.
     >>> tr                                          # doctest: +NORMALIZE_WHITESPACE
     RedundantTransport(UDPTransport('127.99.0.15',  local_node_id=None, ...),
                        UDPTransport('127.111.0.15', local_node_id=None, ...),
-                       SerialTransport('socket://localhost:50905', local_node_id=None, ...))
+                       SerialTransport('socket://127.0.0.1:50905', local_node_id=None, ...))
     >>> tr.close()
 
     >>> reg = {

@@ -12,7 +12,7 @@ PYTHONPATH: .yakut_compiled
 uavcan:
   # Redundant transport, UDP+Serial:
   udp.iface: 127.9.0.0
-  serial.iface: socket://localhost:50905
+  serial.iface: socket://127.0.0.1:50905
   # It is recommended to explicitly assign unused transports (by making them null-valued or "") to ensure that
   # previously stored transport configurations are not accidentally reused:
   can.iface:
@@ -65,7 +65,7 @@ $=:
 - yakut subscribe uavcan.diagnostic.Record.1.1
 - yakut --format=json subscribe --no-metadata 2346:uavcan.si.sample.temperature.Scalar.1.0
 
-# Above you can see that the serial transport is configured in the TCP tunnel mode via endpoint 'localhost:50905'.
+# Above you can see that the serial transport is configured in the TCP tunnel mode via endpoint '127.0.0.1:50905'.
 # The transport will fail to initialize unless a broker is available there, so we launch it. If you don't have ncat
 # installed, you can just remove this line and replace the serial port config above with an empty value.
 - ncat --broker --listen --source-port 50905

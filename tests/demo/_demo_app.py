@@ -60,7 +60,7 @@ def _get_run_configs() -> Iterable[RunConfig]:
     )
     yield RunConfig(
         {
-            "UAVCAN__SERIAL__IFACE": "socket://localhost:50905",
+            "UAVCAN__SERIAL__IFACE": "socket://127.0.0.1:50905",
             "UAVCAN__UDP__IFACE": "",
             "UAVCAN__CAN__IFACE": "",
         }
@@ -68,7 +68,7 @@ def _get_run_configs() -> Iterable[RunConfig]:
     yield RunConfig(
         {
             "UAVCAN__UDP__IFACE": "127.9.0.0",
-            "UAVCAN__SERIAL__IFACE": "socket://localhost:50905",
+            "UAVCAN__SERIAL__IFACE": "socket://127.0.0.1:50905",
             "UAVCAN__CAN__IFACE": "",
         }
     )
