@@ -14,10 +14,10 @@ uavcan:
   udp.iface: 127.9.0.0
   # If you have Ncat or some other TCP broker, you can use UAVCAN/serial tunneled over TCP (in a heterogeneous
   # redundant configuration with UDP or standalone). Ncat launch example: ncat --broker --listen --source-port 50905
-  serial.iface: # socket://127.0.0.1:50905
-  # It is recommended to explicitly assign unused transports (by making them null-valued or "") to ensure that
-  # previously stored transport configurations are not accidentally reused:
-  can.iface:
+  serial.iface: "" # socket://127.0.0.1:50905
+  # It is recommended to explicitly assign unused transports to ensure that previously stored transport
+  # configurations are not accidentally reused:
+  can.iface: ""
   # Configure diagnostic publishing, too:
   diagnostic:
     severity: 2
