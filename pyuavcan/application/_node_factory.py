@@ -173,7 +173,7 @@ def make_node(
             if out is not None:
                 return out
             raise MissingTransportConfigurationError(
-                f"Available registers do not encode a valid transport configuration: {list(registry)}"
+                "Available registers do not encode a valid transport configuration"
             )
         if not isinstance(transport, RedundantTransport) and reconfigurable_transport:
             out = RedundantTransport()

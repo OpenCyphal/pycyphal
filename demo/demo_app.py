@@ -70,7 +70,7 @@ class DemoApp:
         # They can also be created or destroyed later at any point after initialization.
         # A port is created by specifying its data type and its name (similar to topic names in ROS or DDS).
         # The subject-ID is obtained from the standard register named "uavcan.sub.temperature_setpoint.id".
-        # It can also be modified via environment variable "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID__NATURAL16".
+        # It can also be modified via environment variable "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID".
         self._sub_t_sp = self._node.make_subscriber(uavcan.si.unit.temperature.Scalar_1_0, "temperature_setpoint")
 
         # As you may probably guess by looking at the port names, we are building a basic thermostat here.
@@ -149,6 +149,7 @@ class DemoApp:
         gain_p, gain_i, gain_d = self._node.registry.setdefault("thermostat.pid.gains", [0.12, 0.18, 0.01]).floats
 
         logging.info("Application started with PID gains: %.3f %.3f %.3f", gain_p, gain_i, gain_d)
+        print("Running. Press Ctrl+C to stop.", file=sys.stderr)
 
         # This loop will exit automatically when the node is close()d. It is also possible to use receive() instead.
         async for m, _metadata in self._sub_t_pv:
