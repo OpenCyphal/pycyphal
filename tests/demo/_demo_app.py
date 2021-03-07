@@ -453,7 +453,7 @@ async def _unittest_slow_demo_app_with_plant(
         assert 9 <= last_hb_plant.uptime <= 20
         assert last_hb_plant.health.value == uavcan.node.Health_1_0.ADVISORY  # Because saturation
         assert int((time.time() - 3.0) * 1e6) <= last_meas.timestamp.microsecond <= int(time.time() * 1e6)
-        assert 300.0 < last_meas.kelvin < (peak_temp - 0.5), "Temperature did not decrease"
+        assert 300.0 < last_meas.kelvin < (peak_temp - 0.4), "Temperature did not decrease"
 
         demo_proc.wait(10.0, interrupt=True)
         plant_proc.wait(10.0, interrupt=True)
