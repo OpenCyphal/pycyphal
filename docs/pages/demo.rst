@@ -198,8 +198,7 @@ You should see the voltage subscriber that we just started print something along
 ..  code-block:: yaml
 
     ---
-    2347:
-      volt: 1.1999999284744263
+    2347: {volt: 1.1999999284744263}
 
     # And so on...
 
@@ -221,14 +220,12 @@ We will see the current value of the temperature error registered by the thermos
 
     ---
     384:
-      timestamp:
-        microsecond: 0
+      timestamp: {microsecond: 0}
       mutable: false
       persistent: false
       value:
         real32:
-          value:
-          - 10.0
+          value: [10.0]
 
 Field ``mutable: false`` says that this register cannot be modified and ``persistent: false`` says that
 it is not committed to any persistent storage (like a register file).
@@ -247,16 +244,12 @@ Which results in:
 
     ---
     384:
-      timestamp:
-        microsecond: 0
+      timestamp: {microsecond: 0}
       mutable: true
       persistent: true
       value:
         real64:
-          value:
-          - 2.0
-          - 0.0
-          - 0.0
+          value: [2.0, 0.0, 0.0]
 
 An attentive reader would notice that the assigned value was of type ``integer8``, whereas the result is ``real64``.
 This is because the register server does implicit type conversion to the type specified by the application.
@@ -355,16 +348,12 @@ indicating that the thermostat is driving the plant towards the setpoint:
     ---
     8184:
       _metadata_:
-        timestamp:
-          system: 1614489567.052270
-          monotonic: 4864.397568
+        timestamp: {system: 1614489567.052270, monotonic: 4864.397568}
         priority: optional
         transfer_id: 0
         source_node_id: 42
-      timestamp:
-        microsecond: 1614489567047461
-      severity:
-        value: 2
+      timestamp: {microsecond: 1614489567047461}
+      severity: {value: 2}
       text: 'root: Application started with PID gains: 0.100 0.000 0.000'
 
     {"2346":{"timestamp":{"microsecond":1614489568025004},"kelvin":300.0}}
