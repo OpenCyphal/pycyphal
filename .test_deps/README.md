@@ -38,6 +38,6 @@ Npcap is needed for testing the network sniffer of the UAVCAN/UDP transport impl
 Npcap is distributed under the terms of Nmap Public Source License: https://nmap.org/npsl/.
 
 
-### SonarQube scanner
+## SonarQube scanner
 
 New versions can be obtained from https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/.

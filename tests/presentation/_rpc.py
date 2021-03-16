@@ -11,9 +11,9 @@ from .conftest import TransportFactory
 
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_presentation_rpc(
-    generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
+    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:
-    assert generated_packages
+    assert compiled
     import uavcan.register
     import uavcan.primitive
     import uavcan.time

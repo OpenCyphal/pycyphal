@@ -3,6 +3,7 @@
 # This file only contains a selection of the most common options. For a full
 # list see the documentation:
 # http://www.sphinx-doc.org/en/master/config
+# type: ignore
 
 # -- Path setup --------------------------------------------------------------
 
@@ -24,7 +25,7 @@ DESCRIPTION = "A full-featured implementation of the UAVCAN protocol stack in Py
 
 GIT_HASH = subprocess.check_output("git rev-parse HEAD", shell=True).decode().strip()
 
-APIDOC_GENERATED_ROOT = pathlib.Path(".apidoc_generated")
+APIDOC_GENERATED_ROOT = pathlib.Path("api")
 DOC_ROOT = pathlib.Path(__file__).absolute().parent
 REPOSITORY_ROOT = DOC_ROOT.parent
 
@@ -42,7 +43,7 @@ try:
 except (ImportError, AttributeError) as ex:
     print("Generating DSDL packages because:", ex)
     DSDL_GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
-    pyuavcan.dsdl.generate_package(PUBLIC_REGULATED_DATA_TYPES_ROOT / "uavcan", [], DSDL_GENERATED_ROOT)
+    pyuavcan.dsdl.compile(PUBLIC_REGULATED_DATA_TYPES_ROOT / "uavcan", [], DSDL_GENERATED_ROOT)
     importlib.invalidate_caches()
     import pyuavcan.application
 
@@ -141,7 +142,7 @@ pygments_style = "monokai"
 
 # -- Options for HTML output -------------------------------------------------
 
-html_favicon = "_static/favicon.ico"
+html_favicon = "static/favicon.ico"
 
 html_theme = "sphinx_rtd_theme"
 
@@ -157,7 +158,7 @@ html_context = {}
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+html_static_path = ["static"]
 
 html_css_files = [
     "custom.css",

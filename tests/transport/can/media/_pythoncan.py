@@ -102,11 +102,10 @@ async def _unittest_can_pythoncan() -> None:
     media_b.close()
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="SocketCAN test requires GNU/Linux")  # type: ignore
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_can_pythoncan_socketcan() -> None:
     asyncio.get_running_loop().slow_callback_duration = 5.0
-    if sys.platform != "linux":  # pragma: no cover
-        pytest.skip("Python-CAN over SocketCAN test skipped because the system is not GNU/Linux")
 
     media_a = PythonCANMedia("socketcan:vcan2", 0, 8)
     media_b = PythonCANMedia("socketcan:vcan2", 0, 64)

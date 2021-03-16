@@ -1,6 +1,7 @@
 # Copyright (c) 2020 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
+# type: ignore
 
 import os
 import sys
@@ -81,16 +82,23 @@ def test(session):
 
     # Run the test suite (takes about 10-30 minutes per virtualenv).
     try:
+        compiled_dir = Path.cwd().resolve() / ".compiled"
         src_dirs = [
             ROOT_DIR / "pyuavcan",
             ROOT_DIR / "tests",
         ]
+        postponed = ROOT_DIR / "pyuavcan" / "application"
         env = {
             "PYTHONASYNCIODEBUG": "1",
+            "PYTHONPATH": str(compiled_dir),
         }
-        session.run("coverage", "run", "-m", "pytest", *map(str, src_dirs), *session.posargs, env=env)
+        pytest = partial(session.run, "coverage", "run", "-m", "pytest", *session.posargs, env=env)
+        # Application-layer tests are run separately after the main test suite because they require DSDL for
+        # "uavcan" to be transpiled first. That namespace is transpiled as a side-effect of running the main suite.
+        pytest("--ignore", str(postponed), *map(str, src_dirs))
+        pytest(str(postponed))
     finally:
-        broker_process.kill()
+        broker_process.terminate()
 
     # Coverage analysis and report.
     fail_under = 0 if session.posargs else 90
@@ -106,11 +114,11 @@ def test(session):
     #   2. At least MyPy has to be run separately per Python version we support.
     # If the interpreter is not CPython, this may need to be conditionally disabled.
     session.install(
-        "mypy   == 0.790",
+        "mypy   == 0.812",
         "pylint == 2.6.0",
     )
-    session.run("mypy", "--strict", *map(str, src_dirs), ".compiled")
-    session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": ".compiled"})
+    session.run("mypy", "--strict", *map(str, src_dirs), str(compiled_dir))
+    session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
     if sys.platform.startswith("linux") and is_latest_python(session) and session.env.get("COVERALLS_REPO_TOKEN"):
@@ -132,6 +140,36 @@ def test(session):
         session.run("sonar-scanner", f"-Dsonar.login={sonarcloud_token}", external=True)
     else:
         session.log("SonarQube scan skipped")
+
+
+@nox.session()
+def demo(session):
+    """
+    Test the demo app orchestration example.
+    This is a separate session because it is dependent on Yakut.
+    """
+    if sys.platform.startswith("win"):
+        session.log("This session cannot be run on Windows")
+        return 0
+
+    session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
+    session.install("git+https://github.com/UAVCAN/yakut@orc")  # TODO: use stable version from PyPI when deployed.
+
+    demo_dir = ROOT_DIR / "demo"
+    tmp_dir = Path(session.create_tmp()).resolve()
+    session.cd(tmp_dir)
+
+    for s in demo_dir.iterdir():
+        if s.name.startswith("."):
+            continue
+        session.log("Copy: %s", s)
+        if s.is_dir():
+            shutil.copytree(s, tmp_dir / s.name)
+        else:
+            shutil.copy(s, tmp_dir)
+
+    session.env["STOP_AFTER"] = "10"
+    session.run("yakut", "orc", "launch.orc.yaml", success_codes=[111])
 
 
 @nox.session(python=PYTHONS)

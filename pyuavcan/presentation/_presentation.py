@@ -427,8 +427,8 @@ class Presentation:
         return pyuavcan.util.repr_attributes(
             self,
             self.transport,
-            num_publishers=sum(1 for t, _ in self._registry if isinstance(t, Publisher)),
-            num_subscribers=sum(1 for t, _ in self._registry if isinstance(t, Subscriber)),
-            num_clients=sum(1 for t, _ in self._registry if isinstance(t, Client)),
-            num_servers=sum(1 for t, _ in self._registry if isinstance(t, Server)),
+            num_publishers=sum(1 for t, _ in self._registry if issubclass(t, Publisher)),
+            num_subscribers=sum(1 for t, _ in self._registry if issubclass(t, Subscriber)),
+            num_clients=sum(1 for t, _ in self._registry if issubclass(t, Client)),
+            num_servers=sum(1 for t, _ in self._registry if issubclass(t, Server)),
         )

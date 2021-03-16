@@ -21,8 +21,12 @@ def to_builtin(obj: CompositeObject) -> typing.Dict[str, typing.Any]:
 
     This is intended for use with JSON, YAML, and other serialization formats.
 
-    >>> import tests; tests.dsdl.generate_packages()  # DSDL package generation not shown in this example.
-    [...]
+    ..  doctest::
+        :hide:
+
+        >>> import tests
+        >>> _ = tests.dsdl.compile()
+
     >>> import json
     >>> import uavcan.primitive.array
     >>> json.dumps(to_builtin(uavcan.primitive.array.Integer32_1_0([-123, 456, 0])))
@@ -100,7 +104,7 @@ def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any)
         or if the source contains fields that are not present in the destination object.
         :class:`TypeError` if an entity of the source cannot be converted into the type expected by the destination.
 
-    >>> import tests; tests.dsdl.generate_packages()  # DSDL package generation not shown in this example.
+    >>> import tests; tests.dsdl.compile()  # DSDL package generation not shown in this example.
     [...]
     >>> import json
     >>> import uavcan.primitive.array

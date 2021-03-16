@@ -14,9 +14,9 @@ _RX_TIMEOUT = 1.0
 
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_presentation_pub_sub_anon(
-    generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
+    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:
-    assert generated_packages
+    assert compiled
     import uavcan.node
     from pyuavcan.transport import Priority
 
@@ -116,9 +116,9 @@ async def _unittest_slow_presentation_pub_sub_anon(
 
 @pytest.mark.asyncio  # type: ignore
 async def _unittest_slow_presentation_pub_sub(
-    generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
+    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:
-    assert generated_packages
+    assert compiled
     import uavcan.node
     from test_dsdl_namespace.numpy import Complex_254_255
     from pyuavcan.transport import Priority

@@ -4,28 +4,32 @@
 
 import re
 import typing
+from typing import Dict
 import asyncio
 import logging
 import pytest
 import pyuavcan
 from pyuavcan.transport.loopback import LoopbackTransport
-from pyuavcan.presentation import Presentation
 
 
 @pytest.mark.asyncio  # type: ignore
-async def _unittest_slow_diagnostic(
-    generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
+async def _unittest_slow_diagnostic_subscriber(
+    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
 ) -> None:
-    from pyuavcan.application import diagnostic
+    from pyuavcan.application import make_node, NodeInfo, diagnostic, make_registry
     from uavcan.time import SynchronizedTimestamp_1_0
 
-    assert generated_packages
+    assert compiled
+    asyncio.get_running_loop().slow_callback_duration = 1.0
 
-    pres = Presentation(LoopbackTransport(2222))
-    pub = pres.make_publisher_with_fixed_subject_id(diagnostic.Record)
-    diag = diagnostic.DiagnosticSubscriber(pres)
-
-    diag.start()
+    node = make_node(
+        NodeInfo(),
+        make_registry(None, typing.cast(Dict[str, bytes], {})),
+        transport=LoopbackTransport(2222),
+    )
+    node.start()
+    pub = node.make_publisher(diagnostic.Record)
+    diagnostic.DiagnosticSubscriber(node)
 
     caplog.clear()
     await pub.publish(
@@ -46,7 +50,6 @@ async def _unittest_slow_diagnostic(
     else:
         assert False, "Expected log message not captured"
 
-    diag.close()
     pub.close()
-    pres.close()
+    node.close()
     await asyncio.sleep(1.0)  # Let the background tasks terminate.

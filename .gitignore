@@ -31,6 +31,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *,cover
+.*mypy.json
 
 .project
 .pydevproject
@@ -45,6 +46,7 @@ coverage.xml
 .*generated
 .*compiled
 *.cache
+*.db
 
 .scannerwork
 

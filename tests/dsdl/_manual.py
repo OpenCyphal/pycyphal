@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 
 
 # noinspection PyUnusedLocal
-def _unittest_slow_manual_del(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_manual_del(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import test_dsdl_namespace.if_
 
     # Implicit zero extension
@@ -73,7 +73,7 @@ def _unittest_slow_manual_del(generated_packages: typing.List[pyuavcan.dsdl.Gene
 
 
 # noinspection PyUnusedLocal
-def _unittest_slow_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_manual_heartbeat(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import uavcan.node
 
     # Implicit zero extension
@@ -106,8 +106,8 @@ def _unittest_slow_manual_heartbeat(generated_packages: typing.List[pyuavcan.dsd
 
 
 # noinspection PyUnusedLocal
-def _unittest_slow_delimited(generated_packages: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    del generated_packages
+def _unittest_slow_delimited(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+    del compiled
 
     from test_dsdl_namespace.delimited import A_1_0, A_1_1, BDelimited_1_0, BDelimited_1_1
     from test_dsdl_namespace.delimited import CFixed_1_0, CFixed_1_1, CVariable_1_0, CVariable_1_1

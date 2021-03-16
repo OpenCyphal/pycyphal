@@ -1,0 +1,72 @@
+#!/usr/bin/env -S yakut --verbose orchestrate
+# Read the docs about the orc-file syntax: yakut orchestrate --help
+
+# Shared environment variables for all nodes/processes (can be overridden or selectively removed in local scopes).
+YAKUT_COMPILE_OUTPUT: .yakut_compiled
+YAKUT_PATH: .yakut_compiled
+# Here we use Yakut for compiling DSDL. Normally one should use Nunavut though: https://github.com/UAVCAN/nunavut
+PYTHONPATH: .yakut_compiled
+
+# Shared registers for all nodes/processes (can be overridden or selectively removed in local scopes).
+# See the docs for pyuavcan.application.make_node() to see which registers can be used here.
+uavcan:
+  # Use UAVCAN/UDP:
+  udp.iface: 127.9.0.0
+  # If you have Ncat or some other TCP broker, you can use UAVCAN/serial tunneled over TCP (in a heterogeneous
+  # redundant configuration with UDP or standalone). Ncat launch example: ncat --broker --listen --source-port 50905
+  serial.iface: "" # socket://127.0.0.1:50905
+  # It is recommended to explicitly assign unused transports to ensure that previously stored transport
+  # configurations are not accidentally reused:
+  can.iface: ""
+  # Configure diagnostic publishing, too:
+  diagnostic:
+    severity: 2
+    timestamp: true
+
+# Keys with "=" define imperatives rather than registers or environment variables.
+$=:
+- ?=: '[ ! -d $YAKUT_COMPILE_OUTPUT ]'  # If the output directory does not exist, run the Yakut DSDL compiler.
+  $=:                                   # All script statements run concurrently.
+  - echo "Compiling DSDL, this may take a while"
+  - yakut compile custom_data_types/sirius_cyber_corp public_regulated_data_types/uavcan
+
+- # An empty statement is a join statement -- wait for the previously launched processes to exit before continuing.
+
+- $=:
+  # Wait a bit to let the diagnostic subscribers get ready (they are launched below).
+  - sleep 1
+  - # Remember, everything runs concurrently by default, but this join statement waits for the sleep to exit.
+
+  # Launch the demo app that implements the thermostat.
+  - $=: python demo_app.py
+    uavcan:
+      node.id: 42
+      sub.temperature_setpoint.id:    2345
+      sub.temperature_measurement.id: 2346
+      pub.heater_voltage.id:          2347
+      srv.least_squares.id:           0xFFFF    # We don't need this service. Disable by setting an invalid port-ID.
+    thermostat:
+      pid.gains: [0.1, 0, 0]
+
+  # Launch the controlled plant simulator.
+  - $=: python plant.py
+    uavcan:
+      node.id: 43
+      sub.voltage.id:     2347
+      pub.temperature.id: 2346
+    model.environment.temperature: 300.0    # In UAVCAN everything follows SI, so this temperature is in kelvin.
+
+  # Publish the setpoint a few times to show how the thermostat drives the plant to the correct temperature.
+  # You can publish a different setpoint by running this command in a separate terminal to see how the system responds:
+  #   $ yakut -i "UDP('127.9.0.0', 100)" pub 2345:uavcan.si.unit.temperature.Scalar.1.0 "kelvin: 200"
+  - $=: |
+      yakut pub 2345:uavcan.si.unit.temperature.Scalar.1.0 "kelvin: 450.0" -N3
+    uavcan.node.id: 100
+
+# Launch diagnostic subscribers to print messages in the terminal that runs the orchestrator.
+- yakut subscribe uavcan.diagnostic.Record.1.1
+- yakut --format=json subscribe --no-metadata 2346:uavcan.si.sample.temperature.Scalar.1.0
+
+# Exit automatically if STOP_AFTER is defined (frankly, this is just a testing aid, feel free to ignore).
+- ?=: test -n "$STOP_AFTER"
+  $=: sleep $STOP_AFTER && exit 111

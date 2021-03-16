@@ -1,227 +1,105 @@
 #!/usr/bin/env python3
-#
-# PyUAVCAN demo application.
-#
-# Distributed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication. To the extent possible under law, the
-# UAVCAN Consortium has waived all copyright and related or neighboring rights to this work.
+# Distributed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication.
+# pylint: disable=ungrouped-imports,wrong-import-position
 
 import os
 import sys
-import typing
 import pathlib
 import asyncio
-import tempfile
+import logging
 import importlib
 import pyuavcan
 
-# Explicitly import transports and media sub-layers that we may need here.
-import pyuavcan.transport.can
-import pyuavcan.transport.can.media.socketcan
-import pyuavcan.transport.serial
-import pyuavcan.transport.udp
-import pyuavcan.transport.redundant
+# Production applications are recommended to compile their DSDL namespaces as part of the build process. The enclosed
+# file "setup.py" provides an example of how to do that. The output path we specify here shall match that of "setup.py".
+# Here we compile DSDL just-in-time to demonstrate an alternative.
+compiled_dsdl_dir = pathlib.Path(__file__).resolve().parent / ".demo_dsdl_compiled"
 
-# We will need a directory to store the generated Python packages in.
-#
-# It is perfectly acceptable to just use a random temp directory at every run, but the disadvantage of that approach
-# is that the packages will be re-generated from scratch every time the program is started, which may be undesirable.
-#
-# So in this example we select a fixed temp dir name (make sure it's unique enough) and shard its contents by the
-# library version. The sharding helps us ensure that we won't attempt to use a package generated for an older library
-# version with a newer one, as they may be incompatible.
-#
-# Another sensible location for the generated package directory is somewhere in the application data directory,
-# like "~/.my-app/dsdl/{pyuavcan.__version__}/"; or, for Windows: "%APPDATA%/my-app/dsdl/{pyuavcan.__version__}/".
-dsdl_generated_dir = pathlib.Path(tempfile.gettempdir(), "dsdl-for-my-program", f"pyuavcan-v{pyuavcan.__version__}")
-dsdl_generated_dir.mkdir(parents=True, exist_ok=True)
-print("Generated DSDL packages will be stored in:", dsdl_generated_dir, file=sys.stderr)
+# Make the compilation outputs importable. Let your IDE index this directory as sources to enable code completion.
+sys.path.insert(0, str(compiled_dsdl_dir))
 
-# We will need to import the packages once they are generated, so we should update the module import look-up path set.
-# If you're using an IDE for development, add this path to its look-up set as well for code completion to work.
-sys.path.insert(0, str(dsdl_generated_dir))
-
-# Now we can import our packages. If import fails, invoke the code generator, then import again.
 try:
     import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
-    import pyuavcan.application  # This module requires the root namespace "uavcan". # pylint: disable=ungrouped-imports
-except (ImportError, AttributeError):
+    import pyuavcan.application  # This module requires the root namespace "uavcan" to be transcompiled.
+except (ImportError, AttributeError):  # Redistributable applications typically don't need this section.
+    logging.warning("Transcompiling DSDL, this may take a while")
     src_dir = pathlib.Path(__file__).resolve().parent
-    # Generate our application-specific namespace. It may make use of the standard data types (most namespaces do,
-    # because the standard root namespace contains important basic types), so we include it in the lookup path set.
-    # The paths are hard-coded here for the sake of conciseness.
-    pyuavcan.dsdl.generate_package(
-        root_namespace_directory=src_dir / "custom_data_types/sirius_cyber_corp",
-        lookup_directories=[src_dir / "public_regulated_data_types/uavcan/"],
-        output_directory=dsdl_generated_dir,
+    pyuavcan.dsdl.compile_all(
+        [
+            src_dir / "custom_data_types/sirius_cyber_corp",
+            src_dir / "public_regulated_data_types/uavcan/",
+        ],
+        output_directory=compiled_dsdl_dir,
     )
-    # Generate the standard namespace. The order actually doesn't matter.
-    pyuavcan.dsdl.generate_package(
-        root_namespace_directory=src_dir / "public_regulated_data_types/uavcan/",
-        output_directory=dsdl_generated_dir,
-    )
-    # Okay, we can try importing again. We need to clear the import cache first because Python's import machinery
-    # requires that; see the docs for importlib.invalidate_caches() for more info.
-    importlib.invalidate_caches()
-    import sirius_cyber_corp  # pylint: disable=ungrouped-imports
-    import pyuavcan.application  # pylint: disable=ungrouped-imports
+    importlib.invalidate_caches()  # Python runtime requires this.
+    import sirius_cyber_corp
+    import pyuavcan.application
 
 # Import other namespaces we're planning to use. Nested namespaces are not auto-imported, so in order to reach,
-# say, "uavcan.node.Heartbeat", you have to do "import uavcan.node".
-import uavcan.node  # noqa E402  # pylint: disable=wrong-import-position
-import uavcan.diagnostic  # noqa E402  # pylint: disable=wrong-import-position
-import uavcan.si.sample.temperature  # noqa E402  # pylint: disable=wrong-import-position
+# say, "uavcan.node.Heartbeat", you have to "import uavcan.node".
+import uavcan.node  # noqa
+import uavcan.si.sample.temperature  # noqa
+import uavcan.si.unit.temperature  # noqa
+import uavcan.si.unit.voltage  # noqa
 
 
-class DemoApplication:
+class DemoApp:
+    REGISTER_FILE = "demo_app.db"
+    """
+    The register file stores configuration parameters of the local application/node. The registers can be modified
+    at launch via environment variables and at runtime via RPC-service "uavcan.register.Access".
+    The file will be created automatically if it doesn't exist.
+    """
+
     def __init__(self) -> None:
-        # The interface to run the demo against is selected via the environment variable with a default option provided.
-        # Virtual CAN bus is supported only on GNU/Linux, but other interfaces used here should be compatible
-        # with at least Windows as well.
-        # Frankly, the main reason we need this here is to simplify automatic testing of this demo application.
-        # Feel free to remove the selection logic and just hard-code whatever interface you need.
-        interface_kind = os.environ.get("DEMO_INTERFACE_KIND", "").lower()
-        # The node-ID is configured per transport instance.
-        # Some transports (e.g., UDP/IP) derive the node-ID value from the configuration of the underlying layers.
-        # Other transports (e.g., CAN or serial) must be provided with the node-ID value explicitly during
-        # initialization, or None can be used to select the anonymous mode.
-        # Some of the protocol features are unavailable in the anonymous mode (read Specification for more info).
-        # For example, anonymous node cannot be a server, since without an ID it cannot be addressed.
-        # Here, we assign a node-ID statically, because this is a simplified demo.
-        # Most applications would need this to be configurable, some may support the PnP node-ID allocation protocol.
-        transport: pyuavcan.transport.Transport
-        if interface_kind == "udp" or not interface_kind:  # This is the default.
-            # The UDP/IP transport in this example runs on the local loopback interface, so no setup is needed.
-            # The UDP transport requires us to specify the IP address; the node-ID equals the value of several least
-            # significant bits of its IP address. For more info, please read the API documentation.
-            transport = pyuavcan.transport.udp.UDPTransport("127.0.0.42")
-
-        elif interface_kind == "serial":
-            # For demo purposes we're using not an actual serial port (which could have been specified like "COM9"
-            # for example) but a virtualized TCP/IP tunnel. The background is explained in the API documentation
-            # for the serial transport, please read that. For a quick start, just install Ncat (part of Nmap) and run:
-            #   ncat --broker --listen -p 50905
-            transport = pyuavcan.transport.serial.SerialTransport("socket://localhost:50905", local_node_id=42)
-
-        elif interface_kind == "can":
-            # Make sure to initialize the virtual CAN interface. For example (run as root):
-            #   modprobe vcan
-            #   ip link add dev vcan0 type vcan
-            #   ip link set vcan0 mtu 72
-            #   ip link set up vcan0
-            # CAN interfaces can me monitored using can-utils:
-            #   candump -decaxta any
-            # Here we select Classic CAN by setting MTU=8 bytes. We can switch to CAN FD by simply increasing the MTU.
-            media = pyuavcan.transport.can.media.socketcan.SocketCANMedia("vcan0", mtu=8)
-            transport = pyuavcan.transport.can.CANTransport(media, local_node_id=42)
-
-        elif interface_kind == "can_can_can":
-            # One of the selling points of UAVCAN is the built-in support for modular redundancy.
-            # In this section, we set up a triply modular redundant (TMR) CAN bus.
-            transport = pyuavcan.transport.redundant.RedundantTransport()
-            # Like vcan0, this case requires vcan1 and vcan2 to be available as well.
-            media_0 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f"vcan0", mtu=8)
-            media_1 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f"vcan1", mtu=32)
-            media_2 = pyuavcan.transport.can.media.socketcan.SocketCANMedia(f"vcan2", mtu=64)
-            # All transports in a redundant group MUST share the same node-ID.
-            assert isinstance(transport, pyuavcan.transport.redundant.RedundantTransport)
-            transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_0, local_node_id=42))
-            transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_1, local_node_id=42))
-            transport.attach_inferior(pyuavcan.transport.can.CANTransport(media_2, local_node_id=42))
-            assert len(transport.inferiors) == 3  # Yup, it's a triply redundant transport.
-
-        elif interface_kind == "udp_serial":
-            # UAVCAN supports dissimilar transport redundancy for safety-critical/high-reliability systems.
-            # In this example, we set up a transport that operates over UDP and serial concurrently.
-            # This is just an example, however. Major advantages of dissimilar redundant architectures
-            # may be observed with wired+wireless links used concurrently; see https://forum.uavcan.org/t/557.
-            # All transports in a redundant group MUST share the same node-ID.
-            transport = pyuavcan.transport.redundant.RedundantTransport()
-            assert isinstance(transport, pyuavcan.transport.redundant.RedundantTransport)
-            transport.attach_inferior(pyuavcan.transport.udp.UDPTransport("127.0.0.42"))
-            transport.attach_inferior(
-                pyuavcan.transport.serial.SerialTransport("socket://localhost:50905", local_node_id=42)
-            )
-
-        else:
-            raise RuntimeError(f"Unrecognized interface kind: {interface_kind}")  # pragma: no cover
-
-        assert transport.local_node_id == 42  # Yup, the node-ID is configured.
-
-        # Populate the node info for use with the Node class. Please see the DSDL definition of uavcan.node.GetInfo.
         node_info = uavcan.node.GetInfo_1_0.Response(
-            # Version of the protocol supported by the library, and hence by our node.
-            protocol_version=uavcan.node.Version_1_0(*pyuavcan.UAVCAN_SPECIFICATION_VERSION),
-            # There is a similar field for hardware version, but we don't populate it because it's a software-only node.
             software_version=uavcan.node.Version_1_0(major=1, minor=0),
-            # The name of the local node. Should be a reversed Internet domain name, like a Java package.
             name="org.uavcan.pyuavcan.demo.demo_app",
-            # We've left the optional fields default-initialized here.
         )
+        # The Node class is basically the central part of the library -- it is the bridge between the application and
+        # the UAVCAN network. Also, it implements certain standard application-layer functions, such as publishing
+        # heartbeats and port introspection messages, responding to GetInfo, serving the register API, etc.
+        # The register file stores the configuration parameters of our node (you can inspect it using SQLite Browser).
+        self._node = pyuavcan.application.make_node(node_info, DemoApp.REGISTER_FILE)
 
-        # The transport layer is ready; next layer up the protocol stack is the presentation layer. Construct it here.
-        presentation = pyuavcan.presentation.Presentation(transport)
-
-        # The application layer is next -- construct the node instance. It will serve GetInfo requests and publish its
-        # heartbeat automatically (unless it's anonymous). Read the source code of the Node class for more details.
-        self._node = pyuavcan.application.Node(presentation, node_info)
-
-        # Published heartbeat fields can be configured trivially by assigning them on the heartbeat publisher instance.
+        # Published heartbeat fields can be configured as follows.
         self._node.heartbeat_publisher.mode = uavcan.node.Mode_1_0.OPERATIONAL  # type: ignore
-        # The vendor-specific status code is the two least significant decimal digits of the local process' PID.
         self._node.heartbeat_publisher.vendor_specific_status_code = os.getpid() % 100
 
-        # Now we can create our session objects as necessary. They can be created or destroyed later at any point
-        # after initialization. It's not necessary to set everything up during the initialization.
-        srv_least_squares = self._node.presentation.get_server(sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0, 123)
-        # Will run until self._node is close()d:
-        srv_least_squares.serve_in_background(self._serve_linear_least_squares_request)
+        # Now we can create ports to interact with the network.
+        # They can also be created or destroyed later at any point after initialization.
+        # A port is created by specifying its data type and its name (similar to topic names in ROS or DDS).
+        # The subject-ID is obtained from the standard register named "uavcan.sub.temperature_setpoint.id".
+        # It can also be modified via environment variable "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID".
+        self._sub_t_sp = self._node.make_subscriber(uavcan.si.unit.temperature.Scalar_1_0, "temperature_setpoint")
 
-        # Create another server using shorthand for fixed port ID. We could also use it with an application-specific
-        # service-ID as well, of course:
-        #   get_server(uavcan.node.ExecuteCommand_1_1, 42).serve_in_background(self._serve_execute_command)
-        # If the transport does not yet have a node-ID, the server will stay idle until a node-ID is assigned
-        # because the node won't be able to receive unicast transfers carrying service requests.
-        self._node.presentation.get_server_with_fixed_service_id(uavcan.node.ExecuteCommand_1_1).serve_in_background(
-            self._serve_execute_command
-        )
+        # As you may probably guess by looking at the port names, we are building a basic thermostat here.
+        # We subscribe to the temperature setpoint, temperature measurement (process variable), and publish voltage.
+        # The corresponding registers are "uavcan.sub.temperature_measurement.id" and "uavcan.pub.heater_voltage.id".
+        self._sub_t_pv = self._node.make_subscriber(uavcan.si.sample.temperature.Scalar_1_0, "temperature_measurement")
+        self._pub_v_cmd = self._node.make_publisher(uavcan.si.unit.voltage.Scalar_1_0, "heater_voltage")
 
-        # We'll be publishing diagnostic messages using this publisher instance. The method we use is a shortcut for:
-        #   make_publisher(uavcan.diagnostic.Record_1_1, pyuavcan.dsdl.get_fixed_port_id(uavcan.diagnostic.Record_1_1))
-        self._pub_diagnostic_record = self._node.presentation.make_publisher_with_fixed_subject_id(
-            uavcan.diagnostic.Record_1_1
-        )
-        self._pub_diagnostic_record.priority = pyuavcan.transport.Priority.OPTIONAL
-        self._pub_diagnostic_record.send_timeout = 2.0
+        # Create an RPC-server. The service-ID is read from standard register "uavcan.srv.least_squares.id".
+        # This service is optional: if the service-ID is not specified, we simply don't provide it.
+        try:
+            srv_least_sq = self._node.get_server(sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0, "least_squares")
+            srv_least_sq.serve_in_background(self._serve_linear_least_squares)
+        except pyuavcan.application.register.MissingRegisterError:
+            logging.info("The least squares service is disabled by configuration")
 
-        # A message subscription.
-        self._sub_temperature = self._node.presentation.make_subscriber(uavcan.si.sample.temperature.Scalar_1_0, 2345)
-        self._sub_temperature.receive_in_background(self._handle_temperature)
+        # Create another RPC-server using a standard service type for which a fixed service-ID is defined.
+        # We don't specify the port name so the service-ID defaults to the fixed port-ID.
+        # We could, of course, use it with a different service-ID as well, if needed.
+        self._node.get_server(uavcan.node.ExecuteCommand_1_1).serve_in_background(self._serve_execute_command)
 
-        # When all is initialized, don't forget to start the node!
-        self._node.start()
+        self._node.start()  # Don't forget to start the node!
 
-    async def _serve_linear_least_squares_request(
-        self,
+    @staticmethod
+    async def _serve_linear_least_squares(
         request: sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request,
         metadata: pyuavcan.presentation.ServiceRequestMetadata,
-    ) -> typing.Optional[sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response]:
-        """
-        This is the request handler for the linear least squares service. The request is passed in along with its
-        metadata (the second argument); the response is returned back. We can also return None to instruct the library
-        that this request need not be answered (as if the request was never received).
-        If this handler raises an exception, it will be suppressed and logged, and no response will be sent back.
-        Notice that this is an async function.
-        """
-        # Publish the message asynchronously using publish_soon() because we don't want to block the service handler.
-        diagnostic_msg = uavcan.diagnostic.Record_1_1(
-            severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.DEBUG),
-            text=f"Least squares request from {metadata.client_node_id} time={metadata.timestamp.system} "
-            f"tid={metadata.transfer_id} prio={metadata.priority}",
-        )
-        print("Least squares request:", request, file=sys.stderr)
-        self._pub_diagnostic_record.publish_soon(diagnostic_msg)
-
-        # This is just the business logic.
+    ) -> sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response:
+        logging.info("Least squares request %s from node %d", request, metadata.client_node_id)
         sum_x = sum(map(lambda p: p.x, request.points))  # type: ignore
         sum_y = sum(map(lambda p: p.y, request.points))  # type: ignore
         a = sum_x * sum_y - len(request.points) * sum(map(lambda p: p.x * p.y, request.points))  # type: ignore
@@ -230,97 +108,70 @@ class DemoApplication:
             slope = a / b
             y_intercept = (sum_y - slope * sum_x) / len(request.points)
         except ZeroDivisionError:
-            # The method "publish_soon()" launches a background task instead of waiting for the operation to complete.
-            self._pub_diagnostic_record.publish_soon(
-                uavcan.diagnostic.Record_1_1(
-                    severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.WARNING),
-                    text=f"There is no solution for input set: {request.points}",
-                )
-            )
-            # We return None, no response will be sent back. This practice is actually discouraged; we do it here
-            # only to demonstrate the library capabilities.
-            return None
-        else:
-            self._pub_diagnostic_record.publish_soon(
-                uavcan.diagnostic.Record_1_1(
-                    severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
-                    text=f"Solution for {','.join(f'({p.x},{p.y})' for p in request.points)}: {slope}, {y_intercept}",
-                )
-            )
-            return sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response(slope=slope, y_intercept=y_intercept)
+            slope = float("nan")
+            y_intercept = float("nan")
+        return sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response(slope=slope, y_intercept=y_intercept)
 
+    @staticmethod
     async def _serve_execute_command(
-        self, request: uavcan.node.ExecuteCommand_1_1.Request, metadata: pyuavcan.presentation.ServiceRequestMetadata
+        request: uavcan.node.ExecuteCommand_1_1.Request,
+        metadata: pyuavcan.presentation.ServiceRequestMetadata,
     ) -> uavcan.node.ExecuteCommand_1_1.Response:
-        """
-        This is another service handler, like the other one.
-        """
-        print(f"EXECUTE COMMAND REQUEST {request} (with metadata {metadata})")
-
-        if request.command == uavcan.node.ExecuteCommand_1_1.Request.COMMAND_POWER_OFF:
-
-            async def do_delayed_shutdown() -> None:
-                await asyncio.sleep(1.0)
-                # This will close the underlying presentation, transport, and media layer resources.
-                # All pending tasks such as serve_in_background() will notice this and exit automatically.
-                # This is convenient as it relieves the application from having to keep track of all objects.
-                self._node.close()
-
-            asyncio.ensure_future(do_delayed_shutdown())  # Delay shutdown to let the transport emit the response.
+        logging.info("Execute command request %s from node %d", request, metadata.client_node_id)
+        if request.command == uavcan.node.ExecuteCommand_1_1.Request.COMMAND_FACTORY_RESET:
+            try:
+                os.unlink(DemoApp.REGISTER_FILE)  # Reset to defaults by removing the register file.
+            except OSError:  # Do nothing if already removed.
+                pass
             return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS)
-
-        if request.command == 23456:
-            # This is a custom application-specific command. Just print the string parameter and do nothing.
-            parameter_text = request.parameter.tobytes().decode(errors="replace")
-            print("CUSTOM COMMAND PARAMETER:", parameter_text)
-            return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS)
-
-        # Command not supported.
         return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND)
 
-    async def _handle_temperature(
-        self, msg: uavcan.si.sample.temperature.Scalar_1_0, metadata: pyuavcan.transport.TransferFrom
-    ) -> None:
+    async def run(self) -> None:
         """
-        A subscription message handler. This is also an async function, so we can block inside if necessary.
-        The received message object is passed in along with the information about the transfer that delivered it.
+        The main method that runs the business logic. It is also possible to use the library in an IoC-style
+        by using receive_in_background() for all subscriptions if desired.
         """
-        print("TEMPERATURE", msg.kelvin - 273.15, "C")
+        temperature_setpoint = 0.0
+        temperature_error = 0.0
 
-        # Publish the message synchronously, using await, blocking this task until the message is pushed down to
-        # the media layer.
-        if not await self._pub_diagnostic_record.publish(
-            uavcan.diagnostic.Record_1_1(
-                severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.TRACE),
-                text=f"Temperature {msg.kelvin:0.3f} K from {metadata.source_node_id} "
-                f"time={metadata.timestamp.system} tid={metadata.transfer_id} prio={metadata.priority}",
-            )
-        ):
-            print(
-                f"Diagnostic publication timed out in {self._pub_diagnostic_record.send_timeout} seconds",
-                file=sys.stderr,
-            )
+        async def on_setpoint(msg: uavcan.si.unit.temperature.Scalar_1_0, _: pyuavcan.transport.TransferFrom) -> None:
+            nonlocal temperature_setpoint
+            temperature_setpoint = msg.kelvin
+
+        self._sub_t_sp.receive_in_background(on_setpoint)  # IoC-style handler.
+
+        # Expose internal states to external observers for diagnostic purposes. Here, we define read-only registers.
+        # Since they are computed at every invocation, they are never stored in the register file.
+        self._node.registry["thermostat.error"] = lambda: temperature_error
+        self._node.registry["thermostat.setpoint"] = lambda: temperature_setpoint
+
+        # Read application settings from the registry. The defaults will be used only if a new register file is created.
+        gain_p, gain_i, gain_d = self._node.registry.setdefault("thermostat.pid.gains", [0.12, 0.18, 0.01]).floats
+
+        logging.info("Application started with PID gains: %.3f %.3f %.3f", gain_p, gain_i, gain_d)
+        print("Running. Press Ctrl+C to stop.", file=sys.stderr)
+
+        # This loop will exit automatically when the node is close()d. It is also possible to use receive() instead.
+        async for m, _metadata in self._sub_t_pv:
+            assert isinstance(m, uavcan.si.sample.temperature.Scalar_1_0)
+            temperature_error = temperature_setpoint - m.kelvin
+            voltage_output = temperature_error * gain_p  # Suppose this is a basic P-controller.
+            await self._pub_v_cmd.publish(uavcan.si.unit.voltage.Scalar_1_0(voltage_output))
+
+    def close(self) -> None:
+        """
+        This will close all the underlying resources down to the transport interface and all publishers/servers/etc.
+        All pending tasks such as serve_in_background()/receive_in_background() will notice this and exit automatically.
+        """
+        self._node.close()
 
 
 if __name__ == "__main__":
-    app = DemoApplication()
-    app_tasks = asyncio.all_tasks(loop=asyncio.get_event_loop())
-
-    async def list_tasks_periodically() -> None:
-        """Print active tasks periodically for demo purposes."""
-        while True:
-            if sys.version_info >= (3, 8):  # The task introspection API we use is not available before Python 3.8
-                print(
-                    "\nRunning tasks:\n"
-                    + "\n".join(f"{i:4}: {t.get_coro()}" for i, t in enumerate(asyncio.all_tasks())),
-                    file=sys.stderr,
-                )
-            else:
-                print(f"\nRunning {len(asyncio.all_tasks())} tasks")
-            await asyncio.sleep(10)
-
-    asyncio.get_event_loop().create_task(list_tasks_periodically())
-
-    # The node and PyUAVCAN objects have created internal tasks, which we need to run now.
-    # In this case we want to automatically stop and exit when no tasks are left to run.
-    asyncio.get_event_loop().run_until_complete(asyncio.gather(*app_tasks))
+    app = DemoApp()
+    logging.root.setLevel(logging.INFO)
+    try:
+        asyncio.get_event_loop().run_until_complete(app.run())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        app.close()

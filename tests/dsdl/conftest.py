@@ -23,21 +23,8 @@ DESTINATION_DIR = Path.cwd().resolve() / ".compiled"
 _CACHE_FILE_NAME = "pydsdl_cache.pickle.tmp"
 
 
-@pytest.fixture(scope="session")  # type: ignore
-def generated_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
-    """
-    https://docs.pytest.org/en/latest/fixture.html#conftest-py-sharing-fixture-functions
-
-    The implicitness of test fixtures and lack of type information makes the IDE emit bogus usage warnings,
-    leads MyPy into emitting false positives, prevents developers from tracing the origins of used entities,
-    and generally goes against one of the Python's core principles about explicit vs. implicit.
-    I am not a big fan of this feature.
-    """
-    return generate_packages()
-
-
 @functools.lru_cache()
-def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
+def compile() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:  # pylint: disable=redefined-builtin
     """
     Runs the DSDL package generator against the standard and test namespaces, emits a list of GeneratedPackageInfo.
     Automatically adds the path to the generated packages to sys path to make them importable.
@@ -45,7 +32,8 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
     Nunavut are outside of the scope of responsibilities of this test suite, yet generation takes a long time.
     To force regeneration, remove the generated package directories.
     """
-    sys.path.insert(0, str(DESTINATION_DIR))
+    if str(DESTINATION_DIR) not in sys.path:  # pragma: no cover
+        sys.path.insert(0, str(DESTINATION_DIR))
     importlib.invalidate_caches()
     cache_file = DESTINATION_DIR / _CACHE_FILE_NAME
 
@@ -64,23 +52,14 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
     pydsdl_logging_level = pydsdl_logger.level
     try:
         pydsdl_logger.setLevel(logging.INFO)
-        out = [
-            pyuavcan.dsdl.generate_package(
+        out = pyuavcan.dsdl.compile_all(
+            [
                 DEMO_DIR / "public_regulated_data_types" / "uavcan",
-                [],
-                DESTINATION_DIR,
-            ),
-            pyuavcan.dsdl.generate_package(
                 DEMO_DIR / "custom_data_types" / "sirius_cyber_corp",
-                [],
-                DESTINATION_DIR,
-            ),
-            pyuavcan.dsdl.generate_package(
                 SELF_DIR / "test_dsdl_namespace",
-                [DEMO_DIR / "public_regulated_data_types" / "uavcan"],
-                DESTINATION_DIR,
-            ),
-        ]
+            ],
+            DESTINATION_DIR,
+        )
     finally:
         pydsdl_logger.setLevel(pydsdl_logging_level)
 
@@ -90,3 +69,6 @@ def generate_packages() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:
     assert out and isinstance(out, list)
     assert all(map(lambda x: isinstance(x, pyuavcan.dsdl.GeneratedPackageInfo), out))
     return out
+
+
+compiled = pytest.fixture(scope="session")(compile)

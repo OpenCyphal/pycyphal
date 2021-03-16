@@ -74,7 +74,7 @@ for:
       - '[[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]] || unset SONARCLOUD_TOKEN'
     test_script:
       - 'nox --non-interactive --error-on-missing-interpreters --session test pristine --python $PYTHON'
-      - 'nox --non-interactive --error-on-missing-interpreters --session check_style docs'
+      - 'nox --non-interactive --session demo check_style docs'
 
   - # DEPLOYMENT
     matrix:

@@ -172,13 +172,14 @@ For example, one could set up the TCP broker as follows
 
     ncat --broker --listen -p 50905
 
-And then use a serial transport with ``socket://localhost:50905``.
+And then use a serial transport with ``socket://127.0.0.1:50905``
+(N.B.: using ``localhost`` may significantly increase initialization latency on Windows due to slow DNS lookup).
 All nodes whose transports are configured like that will be able to communicate with each other,
 as if they were connected to the same bus.
 Essentially, this can be seen as a virtualized RS-485 bus,
 where same concerns regarding medium access coordination apply.
 
-The location of the URI doesn't have to be ``localhost``, of course --
+The location of the URI doesn't have to be local, of course --
 one can use this approach to link UAVCAN nodes via conventional IP networks.
 
 The exchange over the virtual bus can be dumped trivially for analysis::

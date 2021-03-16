@@ -23,8 +23,8 @@ Submodules
 
 .. toctree::
 
-   /.apidoc_generated/pyuavcan.dsdl
-   /.apidoc_generated/pyuavcan.transport
-   /.apidoc_generated/pyuavcan.presentation
-   /.apidoc_generated/pyuavcan.application
-   /.apidoc_generated/pyuavcan.util
+   /api/pyuavcan.dsdl
+   /api/pyuavcan.application
+   /api/pyuavcan.presentation
+   /api/pyuavcan.transport
+   /api/pyuavcan.util

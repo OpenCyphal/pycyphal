@@ -22,10 +22,13 @@ It is designed to support **GNU/Linux**, **MS Windows**, and **macOS** as first-
 However, the library does not rely on any platform-specific capabilities,
 so it should be usable with other systems as well.
 
-[UAVCAN](https://uavcan.org) is an open lightweight data bus standard designed for reliable intravehicular
-communication in aerospace and robotic applications via
-CAN bus, Ethernet, RS-485, IEEE 802.15.4, and other robust transports.
+[UAVCAN](https://uavcan.org) is an open technology for real-time intravehicular distributed computing
+and communication based on modern networking standards (Ethernet, CAN FD, etc.).
 The acronym *UAVCAN* stands for ***Uncomplicated Application-level Vehicular Computing And Networking***.
+
+<p align="center">
+  <a href="https://pyuavcan.readthedocs.io/"><img src="/docs/static/arch-non-redundant.svg" width="400px"></a>
+</p>
 
 **READ THE DOCS: [pyuavcan.readthedocs.io](https://pyuavcan.readthedocs.io/)**
 

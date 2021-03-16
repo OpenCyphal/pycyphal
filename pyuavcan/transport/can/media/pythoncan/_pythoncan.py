@@ -132,7 +132,8 @@ class PythonCANMedia(Media):
         single_bitrate = isinstance(bitrate, (int, float))
         bitrate = (int(bitrate), int(bitrate)) if single_bitrate else (int(bitrate[0]), int(bitrate[1]))  # type: ignore
 
-        self._mtu = int(mtu) if mtu is not None else (min(self.VALID_MTU_SET) if single_bitrate else 64)
+        default_mtu = min(self.VALID_MTU_SET) if single_bitrate else 64
+        self._mtu = int(mtu) if mtu is not None else default_mtu
         if self._mtu not in self.VALID_MTU_SET:
             raise InvalidMediaConfigurationError(f"Wrong MTU value: {mtu}")
 

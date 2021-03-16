@@ -314,8 +314,8 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
                             rx.push(message, transfer)
                     else:
                         self.deserialization_failure_count += 1
-        except asyncio.CancelledError:
-            _logger.debug("Cancelling the subscriber task of %s", self)
+        except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError) as ex:
+            _logger.debug("Cancelling the subscriber task of %s because: %r", self, ex)
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger

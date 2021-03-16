@@ -76,7 +76,7 @@ class SerialTransport(pyuavcan.transport.Transport):
             - ``/dev/serial/by-id/usb-Black_Sphere_Technologies_Black_Magic_Probe_B5DCABF5-if02`` -- a regular
               USB CDC ACM port referenced by the device name and ID (GNU/Linux).
             - ``hwgrep:///dev/serial/by-id/*Black_Magic_Probe*-if02`` -- glob instead of exact name.
-            - ``socket://localhost:50905`` -- a TCP/IP tunnel instead of a physical port.
+            - ``socket://127.0.0.1:50905`` -- a TCP/IP tunnel instead of a physical port.
             - ``spy://COM3?file=dump.txt`` -- open a regular port and dump all data exchange into a text file.
 
             Read the PySerial docs for more info.

@@ -21,7 +21,11 @@ def broadcast(
 
     This function is mostly intended for invoking various handlers.
 
-    >>> _logger.setLevel(100)  # This is to suppress the error output from this demo.
+    ..  doctest::
+        :hide:
+
+        >>> _logger.setLevel(100)  # Suppress error reports from the following doctest.
+
     >>> def add(a, b):
     ...     return a + b
     >>> def fail(a, b):

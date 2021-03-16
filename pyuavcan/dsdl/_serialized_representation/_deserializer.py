@@ -121,7 +121,7 @@ class Deserializer(abc.ABC):
         """
         Quickly decodes an aligned array of bits using the numpy's fast bit unpacking routine.
         A new array is always created (the memory cannot be shared with the buffer due to the layout transformation).
-        The returned array is of dtype :class:`numpy.bool`.
+        The returned array is of dtype :class:`bool`.
         """
         _ensure_cardinal(count)
         assert self._bit_offset % 8 == 0
@@ -129,7 +129,7 @@ class Deserializer(abc.ABC):
         out = numpy.unpackbits(bs, bitorder="little")[:count]
         self._bit_offset += count
         assert len(out) == count
-        return out.astype(dtype=numpy.bool)
+        return out.astype(dtype=bool)
 
     def fetch_aligned_bytes(self, count: int) -> numpy.ndarray:
         _ensure_cardinal(count)
@@ -230,7 +230,7 @@ class Deserializer(abc.ABC):
         backtrack = byte_count * 8 - count
         assert 0 <= backtrack < 8
         self._bit_offset -= backtrack
-        out: numpy.ndarray = numpy.unpackbits(bs, bitorder="little")[:count].astype(dtype=numpy.bool)
+        out: numpy.ndarray = numpy.unpackbits(bs, bitorder="little")[:count].astype(dtype=bool)
         assert len(out) == count
         return out
 
@@ -332,7 +332,7 @@ class Deserializer(abc.ABC):
 
 class _LittleEndianDeserializer(Deserializer):
     def fetch_aligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) -> numpy.ndarray:
-        assert dtype not in (numpy.bool, numpy.bool_, numpy.object), "Invalid usage"
+        assert dtype not in (bool, numpy.bool_, object), "Invalid usage"
         assert self._bit_offset % 8 == 0
         bo = self._byte_offset
         # Interestingly, numpy doesn't care about alignment. If the source buffer is not properly aligned, it will
@@ -347,7 +347,7 @@ class _LittleEndianDeserializer(Deserializer):
     def fetch_unaligned_array_of_standard_bit_length_primitives(
         self, dtype: _PrimitiveType, count: int
     ) -> numpy.ndarray:
-        assert dtype not in (numpy.bool, numpy.bool_, numpy.object), "Invalid usage"
+        assert dtype not in (bool, numpy.bool_, object), "Invalid usage"
         bs = self.fetch_unaligned_bytes(numpy.dtype(dtype).itemsize * count)
         assert len(bs) >= count
         return numpy.frombuffer(bs, dtype=dtype, count=count)
