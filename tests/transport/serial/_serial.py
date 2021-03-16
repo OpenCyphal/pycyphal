@@ -476,7 +476,9 @@ async def _unittest_serial_spoofing() -> None:
     tr = pyuavcan.transport.serial.SerialTransport("loop://", None, mtu=1024)
 
     mon_events: typing.List[pyuavcan.transport.Capture] = []
+    assert not tr.capture_active
     tr.begin_capture(mon_events.append)
+    assert tr.capture_active
 
     transfer = AlienTransfer(
         AlienTransferMetadata(

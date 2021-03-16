@@ -7,6 +7,7 @@ import typing
 import logging
 import dataclasses
 import pyuavcan
+import pyuavcan.transport.serial
 from pyuavcan.transport import Trace, TransferTrace, Capture, AlienSessionSpecifier, AlienTransferMetadata
 from pyuavcan.transport import AlienTransfer, TransferFrom, Timestamp
 from pyuavcan.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
@@ -48,6 +49,10 @@ class SerialCapture(pyuavcan.transport.Capture):
             fragment = bytes(self.fragment).hex()
         direction = "tx" if self.own else "rx"
         return pyuavcan.util.repr_attributes(self, direction, fragment)
+
+    @staticmethod
+    def get_transport_type() -> typing.Type[pyuavcan.transport.serial.SerialTransport]:
+        return pyuavcan.transport.serial.SerialTransport
 
 
 @dataclasses.dataclass(frozen=True)

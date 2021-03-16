@@ -302,6 +302,7 @@ async def _unittest_loopback_spoofing() -> None:
 
     mon_events: typing.List[pyuavcan.transport.Capture] = []
     tr.begin_capture(mon_events.append)
+    assert tr.capture_active
 
     transfer = AlienTransfer(
         AlienTransferMetadata(Priority.IMMEDIATE, 54321, AlienSessionSpecifier(1234, None, MessageDataSpecifier(7777))),

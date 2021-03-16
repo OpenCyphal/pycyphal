@@ -14,6 +14,7 @@ from pyuavcan.transport.redundant import InconsistentInferiorConfigurationError
 from pyuavcan.transport.loopback import LoopbackTransport
 from pyuavcan.transport.serial import SerialTransport
 from pyuavcan.transport.udp import UDPTransport
+from pyuavcan.transport.can import CANTransport
 from tests.transport.serial import VIRTUAL_BUS_URI as SERIAL_URI
 
 
@@ -301,22 +302,159 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-def _unittest_redundant_transport_capture() -> None:
-    def mon(_x: object) -> None:
-        return None
+@pytest.mark.asyncio  # type: ignore
+async def _unittest_redundant_transport_capture() -> None:
+    from threading import Lock
+    from pyuavcan.transport import Capture, Trace, TransferTrace, Priority, ServiceDataSpecifier
+    from pyuavcan.transport import AlienTransfer, AlienTransferMetadata, AlienSessionSpecifier
+    from pyuavcan.transport.redundant import RedundantDuplicateTransferTrace, RedundantCapture
+    from tests.transport.can.media.mock import MockMedia as CANMockMedia
 
+    asyncio.get_event_loop().slow_callback_duration = 5.0
+
+    tracer = RedundantTransport.make_tracer()
+    traces: typing.List[typing.Optional[Trace]] = []
+    lock = Lock()
+
+    def handle_capture(cap: Capture) -> None:
+        with lock:
+            # Drop TX frames, they are not interesting for this test.
+            assert isinstance(cap, RedundantCapture)
+            if isinstance(cap.inferior, pyuavcan.transport.serial.SerialCapture) and cap.inferior.own:
+                return
+            if isinstance(cap.inferior, pyuavcan.transport.can.CANCapture) and cap.inferior.own:
+                return
+            print("CAPTURE:", cap)
+            traces.append(tracer.update(cap))
+
+    async def wait(how_many: int) -> None:
+        for _ in range(10):
+            await asyncio.sleep(0.1)
+            with lock:
+                if len(traces) >= 2:
+                    return
+        assert False, "No traces received"
+
+    # Setup capture -- one is added before capture started, the other is added later.
+    # Make sure they are treated identically.
     tr = RedundantTransport()
-    inf_a = LoopbackTransport(1234)
-    inf_b = LoopbackTransport(1234)
-    tr.begin_capture(mon)
-    assert inf_a.capture_handlers == []
-    assert inf_b.capture_handlers == []
+    inf_a: pyuavcan.transport.Transport = SerialTransport(SERIAL_URI, 1234)
+    inf_b: pyuavcan.transport.Transport = SerialTransport(SERIAL_URI, 1234)
     tr.attach_inferior(inf_a)
-    assert inf_a.capture_handlers == [mon]
-    assert inf_b.capture_handlers == []
+    assert not tr.capture_active
+    assert not inf_a.capture_active
+    assert not inf_b.capture_active
+    tr.begin_capture(handle_capture)
+    assert tr.capture_active
+    assert inf_a.capture_active
+    assert not inf_b.capture_active
     tr.attach_inferior(inf_b)
-    assert inf_a.capture_handlers == [mon]
-    assert inf_b.capture_handlers == [mon]
+    assert tr.capture_active
+    assert inf_a.capture_active
+    assert inf_b.capture_active
+
+    # Send a transfer and make sure it is handled and deduplicated correctly.
+    transfer = AlienTransfer(
+        AlienTransferMetadata(
+            priority=Priority.IMMEDIATE,
+            transfer_id=1234,
+            session_specifier=AlienSessionSpecifier(
+                source_node_id=321,
+                destination_node_id=222,
+                data_specifier=ServiceDataSpecifier(77, ServiceDataSpecifier.Role.REQUEST),
+            ),
+        ),
+        [memoryview(b"hello")],
+    )
+    assert await tr.spoof(transfer, monotonic_deadline=tr.loop.time() + 1.0)
+    await wait(2)
+    with lock:
+        # Check the status of the deduplication process. We should get two: one transfer, one duplicate.
+        assert len(traces) == 2
+        trace = traces.pop(0)
+        assert isinstance(trace, TransferTrace)
+        assert trace.transfer == transfer
+        # This is the duplicate.
+        assert isinstance(traces.pop(0), RedundantDuplicateTransferTrace)
+        assert not traces
+
+    # Spoof the same thing again, get nothing out: transfers discarded by the inferior's own reassemblers.
+    # WARNING: this will fail if too much time has passed since the previous transfer due to TID timeout.
+    assert await tr.spoof(transfer, monotonic_deadline=tr.loop.time() + 1.0)
+    await wait(2)
+    with lock:
+        assert None is traces.pop(0)
+        assert None is traces.pop(0)
+        assert not traces
+
+    # But if we change ONLY destination, deduplication will not take place.
+    transfer = AlienTransfer(
+        AlienTransferMetadata(
+            priority=Priority.IMMEDIATE,
+            transfer_id=1234,
+            session_specifier=AlienSessionSpecifier(
+                source_node_id=321,
+                destination_node_id=333,
+                data_specifier=ServiceDataSpecifier(77, ServiceDataSpecifier.Role.REQUEST),
+            ),
+        ),
+        [memoryview(b"hello")],
+    )
+    assert await tr.spoof(transfer, monotonic_deadline=tr.loop.time() + 1.0)
+    await wait(2)
+    with lock:
+        # Check the status of the deduplication process. We should get two: one transfer, one duplicate.
+        assert len(traces) == 2
+        trace = traces.pop(0)
+        assert isinstance(trace, TransferTrace)
+        assert trace.transfer == transfer
+        # This is the duplicate.
+        assert isinstance(traces.pop(0), RedundantDuplicateTransferTrace)
+        assert not traces
+
+    # Change the inferior configuration and make sure it is handled properly.
+    tr.detach_inferior(inf_a)
+    tr.detach_inferior(inf_b)
+    inf_a.close()
+    inf_b.close()
+    # The new inferiors use cyclic transfer-ID; the tracer should reconfigure itself automatically!
+    can_peers: typing.Set[CANMockMedia] = set()
+    inf_a = CANTransport(CANMockMedia(can_peers, 64, 2), 111)
+    inf_b = CANTransport(CANMockMedia(can_peers, 64, 2), 111)
+    tr.attach_inferior(inf_a)
+    tr.attach_inferior(inf_b)
+    # Capture should have been launched automatically.
+    assert inf_a.capture_active
+    assert inf_b.capture_active
+
+    # Send transfer over CAN and observe that it is handled well.
+    transfer = AlienTransfer(
+        AlienTransferMetadata(
+            priority=Priority.IMMEDIATE,
+            transfer_id=19,
+            session_specifier=AlienSessionSpecifier(
+                source_node_id=111,
+                destination_node_id=22,
+                data_specifier=ServiceDataSpecifier(77, ServiceDataSpecifier.Role.REQUEST),
+            ),
+        ),
+        [memoryview(b"hello")],
+    )
+    assert await tr.spoof(transfer, monotonic_deadline=tr.loop.time() + 1.0)
+    await wait(2)
+    with lock:
+        # Check the status of the deduplication process. We should get two: one transfer, one duplicate.
+        assert len(traces) == 2
+        trace = traces.pop(0)
+        assert isinstance(trace, TransferTrace)
+        assert trace.transfer == transfer
+        # This is the duplicate.
+        assert isinstance(traces.pop(0), RedundantDuplicateTransferTrace)
+        assert not traces
+
+    # Dispose of everything.
+    tr.close()
+    await asyncio.sleep(1.0)
 
 
 def _unittest_redundant_transport_reconfiguration() -> None:

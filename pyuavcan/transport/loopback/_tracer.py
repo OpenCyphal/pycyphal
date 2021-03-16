@@ -2,9 +2,10 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
+from __future__ import annotations
 import typing
 import dataclasses
-import pyuavcan.transport
+import pyuavcan.transport.loopback
 from pyuavcan.transport import Trace, TransferTrace, Capture
 
 
@@ -15,6 +16,10 @@ class LoopbackCapture(pyuavcan.transport.Capture):
     """
 
     transfer: pyuavcan.transport.AlienTransfer
+
+    @staticmethod
+    def get_transport_type() -> typing.Type[pyuavcan.transport.loopback.LoopbackTransport]:
+        return pyuavcan.transport.loopback.LoopbackTransport
 
 
 class LoopbackTracer(pyuavcan.transport.Tracer):

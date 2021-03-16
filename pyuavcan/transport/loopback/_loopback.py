@@ -177,6 +177,10 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     def begin_capture(self, handler: pyuavcan.transport.CaptureCallback) -> None:
         self._capture_handlers.append(handler)
 
+    @property
+    def capture_active(self) -> bool:
+        return len(self._capture_handlers) > 0
+
     @staticmethod
     def make_tracer() -> LoopbackTracer:
         """

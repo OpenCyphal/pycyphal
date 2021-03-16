@@ -1005,8 +1005,10 @@ async def _unittest_can_capture_trace() -> None:
         assert isinstance(cap, CANCapture)
         captures_other.append(cap)
 
+    assert not tr.capture_active
     tr.begin_capture(add_capture)
     tr.begin_capture(add_capture_other)
+    assert tr.capture_active
     assert media.acceptance_filters == [
         FilterConfiguration.new_promiscuous(FrameFormat.BASE),
         FilterConfiguration.new_promiscuous(FrameFormat.EXTENDED),

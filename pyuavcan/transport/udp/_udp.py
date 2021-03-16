@@ -37,6 +37,8 @@ class UDPTransport(pyuavcan.transport.Transport):
     Please read the module documentation for details.
     """
 
+    TRANSFER_ID_MODULO = UDPFrame.TRANSFER_ID_MASK + 1
+
     VALID_MTU_RANGE = 1200, 9000
     """
     The minimum is based on the IPv6 specification, which guarantees that the path MTU is at least 1280 bytes large.
@@ -178,7 +180,7 @@ class UDPTransport(pyuavcan.transport.Transport):
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
-            transfer_id_modulo=UDPFrame.TRANSFER_ID_MASK + 1,
+            transfer_id_modulo=self.TRANSFER_ID_MODULO,
             max_nodes=self._sock_factory.max_nodes,
             mtu=self._mtu,
         )
@@ -289,6 +291,10 @@ class UDPTransport(pyuavcan.transport.Transport):
             _logger.debug("%s: Starting UDP/IP packet capture (hope you have permissions)", self)
             self._sniffer = self._sock_factory.make_sniffer(self._process_capture)
         self._capture_handlers.append(handler)
+
+    @property
+    def capture_active(self) -> bool:
+        return self._sniffer is not None
 
     @staticmethod
     def make_tracer() -> UDPTracer:

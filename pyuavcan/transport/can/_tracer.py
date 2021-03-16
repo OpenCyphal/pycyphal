@@ -6,6 +6,7 @@ from __future__ import annotations
 import typing
 import dataclasses
 import pyuavcan
+import pyuavcan.transport.can
 from pyuavcan.transport import Trace, TransferTrace, AlienSessionSpecifier, AlienTransferMetadata, Capture
 from pyuavcan.transport import AlienTransfer, TransferFrom, Timestamp, Priority
 from ._session import TransferReassemblyErrorID, TransferReassembler
@@ -45,6 +46,10 @@ class CANCapture(Capture):
     def __repr__(self) -> str:
         direction = "tx" if self.own else "rx"
         return pyuavcan.util.repr_attributes(self, self.timestamp, direction, self.frame)
+
+    @staticmethod
+    def get_transport_type() -> typing.Type[pyuavcan.transport.can.CANTransport]:
+        return pyuavcan.transport.can.CANTransport
 
 
 @dataclasses.dataclass(frozen=True)

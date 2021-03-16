@@ -372,3 +372,7 @@ from ._session import RedundantSessionStatistics as RedundantSessionStatistics
 from ._session import RedundantFeedback as RedundantFeedback
 
 from ._error import InconsistentInferiorConfigurationError as InconsistentInferiorConfigurationError
+
+from ._tracer import RedundantCapture as RedundantCapture
+from ._tracer import RedundantDuplicateTransferTrace as RedundantDuplicateTransferTrace
+from ._tracer import RedundantTracer as RedundantTracer

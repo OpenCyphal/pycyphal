@@ -43,6 +43,8 @@ class SerialTransport(pyuavcan.transport.Transport):
     Please read the module documentation for details.
     """
 
+    TRANSFER_ID_MODULO = SerialFrame.TRANSFER_ID_MASK + 1
+
     VALID_MTU_RANGE = (1024, 1024 ** 3)
     """
     The maximum MTU is practically unlimited, and it is also the default MTU.
@@ -163,7 +165,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
         return pyuavcan.transport.ProtocolParameters(
-            transfer_id_modulo=SerialFrame.TRANSFER_ID_MASK + 1,
+            transfer_id_modulo=self.TRANSFER_ID_MODULO,
             max_nodes=len(SerialFrame.NODE_ID_RANGE),
             mtu=self._mtu,
         )
@@ -265,6 +267,10 @@ class SerialTransport(pyuavcan.transport.Transport):
         The events may be reported from a different thread (use locks).
         """
         self._capture_handlers.append(handler)
+
+    @property
+    def capture_active(self) -> bool:
+        return len(self._capture_handlers) > 0
 
     @staticmethod
     def make_tracer() -> SerialTracer:

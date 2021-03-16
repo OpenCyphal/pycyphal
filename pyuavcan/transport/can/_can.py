@@ -70,6 +70,8 @@ class CANTransport(pyuavcan.transport.Transport):
     Please read the module documentation for details.
     """
 
+    TRANSFER_ID_MODULO = TRANSFER_ID_MODULO
+
     def __init__(
         self,
         media: Media,
@@ -238,6 +240,10 @@ class CANTransport(pyuavcan.transport.Transport):
         """
         self._capture_handlers.append(handler)
         self._reconfigure_acceptance_filters()
+
+    @property
+    def capture_active(self) -> bool:
+        return len(self._capture_handlers) > 0
 
     @staticmethod
     def make_tracer() -> CANTracer:
