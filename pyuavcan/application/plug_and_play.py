@@ -260,7 +260,16 @@ class CentralizedAllocator(Allocator):
         local_node_id = self.node.id
         if local_node_id is None:
             raise ValueError("The allocator cannot run on an anonymous node")
-        self._alloc = _AllocationTable(sqlite3.connect(str(database_file or _DB_DEFAULT_LOCATION), timeout=_DB_TIMEOUT))
+        # The database is initialized with ``check_same_thread=False`` to enable delegating its initialization
+        # to a thread pool from an async context. This is important for this library because if one needs to
+        # initialize a new instance from an async function, running the initialization directly may be unacceptable
+        # due to its blocking behavior, so one is likely to rely on :meth:`asyncio.loop.run_in_executor`.
+        # The executor will initialize the instance in a worker thread and then hand it over to the main thread,
+        # which is perfectly safe, but it would trigger a false error from the SQLite engine complaining about
+        # the possibility of concurrency-related bugs.
+        self._alloc = _AllocationTable(
+            sqlite3.connect(str(database_file or _DB_DEFAULT_LOCATION), timeout=_DB_TIMEOUT, check_same_thread=False)
+        )
         self._alloc.register(local_node_id, self.node.info.unique_id.tobytes())
         self._sub1 = self.node.make_subscriber(NodeIDAllocationData_1)
         self._sub2 = self.node.make_subscriber(NodeIDAllocationData_2)

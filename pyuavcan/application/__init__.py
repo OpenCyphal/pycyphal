@@ -260,6 +260,8 @@ More complex capabilities are to be set up by the user as needed; some of them a
     pyuavcan.application.node_tracker.NodeTracker
     pyuavcan.application.plug_and_play.Allocatee
     pyuavcan.application.plug_and_play.Allocator
+    pyuavcan.application.file.FileServer
+    pyuavcan.application.file.FileClient
 
 
 ..  [#parameter_server]
@@ -280,3 +282,10 @@ from ._transport_factory import make_transport as make_transport
 from ._registry_factory import make_registry as make_registry
 
 from . import register as register
+
+
+class NetworkTimeoutError(TimeoutError):
+    """
+    API calls below the application layer return None on timeout.
+    Some of the application-layer API calls raise this exception instead.
+    """

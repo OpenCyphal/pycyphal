@@ -9,12 +9,14 @@ v1.2
 - ``pyuavcan.transport.can``: Add Python-CAN media driver.
   The corresponding installation extra is ``transport_can_pythoncan``.
 
-- Support packet capture and tracing for UAVCAN/CAN.
+- Support packet capture and tracing for all transports (spoofing is implemented for all transports except UAVCAN/UDP).
   Refactor the unstable capture/tracing API to model the underlying protocols more accurately.
+
+- Add ``pyuavcan.application.file.FileServer``/``FileClient`` implementing the standard file service ``uavcan.file``.
 
 - Constructor parameter ``anonymous`` for ``UDPTransport`` has been deprecated in favor of ``local_node_id``.
 
-- Refactor the Node API:
+- Refactor the Node API (`#154 <https://github.com/UAVCAN/pyuavcan/pull/154>`_):
 
   - Add factory function ``make_node()``.
 
@@ -25,9 +27,7 @@ v1.2
 
   - Support context manager API (``__enter__``, ``__leave__``).
 
-  - Rework the documentation accordingly.
-
-- Fix minor issues with logging throughout.
+  - Rework the demo accordingly.
 
 - In ``pyuavcan.dsdl``: rename ``generate_package`` into ``compile``, add ``compile_all``.
 

@@ -52,9 +52,18 @@ class StaticBackend(Backend):
     def __init__(self, location: Union[None, str, Path] = None):
         """
         :param location: Either a path to the database file, or None. If None, the data will be stored in memory.
+
+        The database is always initialized with ``check_same_thread=False`` to enable delegating its initialization
+        to a thread pool from an async context.
+        This is important for this library because if one needs to initialize a new node from an async function,
+        calling the factories directly may be unacceptable due to their blocking behavior,
+        so one is likely to rely on :meth:`asyncio.loop.run_in_executor`.
+        The executor will initialize the instance in a worker thread and then hand it over to the main thread,
+        which is perfectly safe, but it would trigger a false error from the SQLite engine complaining about
+        the possibility of concurrency-related bugs.
         """
         self._loc = str(location or _LOCATION_VOLATILE).strip()
-        self._db = sqlite3.connect(self._loc, timeout=_TIMEOUT)
+        self._db = sqlite3.connect(self._loc, timeout=_TIMEOUT, check_same_thread=False)
         self._execute(
             r"""
             create table if not exists `register` (
