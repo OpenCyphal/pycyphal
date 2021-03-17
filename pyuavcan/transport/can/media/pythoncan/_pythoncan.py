@@ -83,7 +83,7 @@ class PythonCANMedia(Media):
               The channel name should be empty.
               Example: ``virtual:``
 
-            - Interface ``usb2can`` is implemented by :class:`can.interfaces.usb2can.usb2canInterface.Usb2canBus`.
+            - Interface ``usb2can`` is described in https://python-can.readthedocs.io/en/stable/interfaces/usb2can.html.
               Example: ``usb2can:ED000100``
 
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
