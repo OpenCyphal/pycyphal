@@ -81,12 +81,13 @@ class PortListPublisher:
         if publisher is None:
             return
 
-        input_ds = [x.specifier.data_specifier for x in self.node.presentation.transport.input_sessions]
+        trans = self.node.presentation.transport
+        input_ds = [x.specifier.data_specifier for x in trans.input_sessions]
         srv_in_ds = [x for x in input_ds if isinstance(x, ServiceDataSpecifier)]
         state = _State(
             pub={
                 x.specifier.data_specifier.subject_id
-                for x in self.node.presentation.transport.output_sessions
+                for x in trans.output_sessions
                 if isinstance(x.specifier.data_specifier, MessageDataSpecifier)
             },
             sub={x.subject_id for x in input_ds if isinstance(x, MessageDataSpecifier)},
@@ -99,8 +100,8 @@ class PortListPublisher:
         if state_changed or time_expired:
             _logger.debug("%r: Publishing: state_changed=%r, state=%r", self, state_changed, state)
             self._state = state
-            self._updates_since_pub = 0
-            publisher.publish_soon(_make_port_list(self._state))  # Should we handle ResourceClosedError here?
+            self._updates_since_pub = 0  # Should we handle ResourceClosedError here?
+            publisher.publish_soon(_make_port_list(self._state, trans.capture_active))
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, self.node)
@@ -109,10 +110,12 @@ class PortListPublisher:
 _logger = logging.getLogger(__name__)
 
 
-def _make_port_list(state: _State) -> List:
+def _make_port_list(state: _State, packet_capture_mode: bool) -> List:
+    from uavcan.primitive import Empty_1_0 as Empty
+
     return List(
         publishers=_make_subject_id_list(state.pub),
-        subscribers=_make_subject_id_list(state.sub),
+        subscribers=_make_subject_id_list(state.sub) if not packet_capture_mode else SubjectIDList(total=Empty()),
         clients=_make_service_id_list(state.cln),
         servers=_make_service_id_list(state.srv),
     )
@@ -150,7 +153,7 @@ def _unittest_make_port_list() -> None:
         srv=set(range(512)),
     )
 
-    msg = _make_port_list(state)
+    msg = _make_port_list(state, False)
 
     assert msg.publishers.sparse_list is not None
     pubs = [x.value for x in msg.publishers.sparse_list]

@@ -265,7 +265,9 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
         assert isinstance(s, UDPCapture)
         captures.append(s)
 
+    assert not tr_capture.capture_active
     tr_capture.begin_capture(inhale)
+    assert tr_capture.capture_active
     await asyncio.sleep(1.0)
 
     tr = UDPTransport("127.50.0.111")

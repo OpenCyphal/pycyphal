@@ -153,7 +153,7 @@ def demo(session):
         return 0
 
     session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
-    session.install("git+https://github.com/UAVCAN/yakut@orc")  # TODO: use stable version from PyPI when deployed.
+    session.install("git+https://github.com/UAVCAN/yakut@af4a4fc0ca6fa0b62b3ec266d3f8cddeceb27446")  # TODO: use PyPI
 
     demo_dir = ROOT_DIR / "demo"
     tmp_dir = Path(session.create_tmp()).resolve()

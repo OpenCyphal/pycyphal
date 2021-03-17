@@ -10,7 +10,7 @@ import dataclasses
 import pyuavcan.transport
 import pyuavcan.util
 from ._base import RedundantSession, RedundantSessionStatistics
-from .._deduplicator import Deduplicator, MonotonicDeduplicator, CyclicDeduplicator
+from .._deduplicator import Deduplicator
 
 
 _logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         self,
         specifier: pyuavcan.transport.InputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        tid_modulo_provider: typing.Callable[[], typing.Optional[int]],
+        tid_modulo_provider: typing.Callable[[], int],
         loop: asyncio.AbstractEventLoop,
         finalizer: typing.Callable[[], None],
     ):
@@ -92,12 +92,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
 
         # Ensure that the deduplicator is constructed when the first inferior is launched.
         if self._deduplicator is None:
-            tid_modulo = self._get_tid_modulo()
-            if tid_modulo is None:
-                self._deduplicator = MonotonicDeduplicator()
-            else:
-                assert 0 < tid_modulo <= 2 ** 56, "Sanity check"
-                self._deduplicator = CyclicDeduplicator(tid_modulo)
+            self._deduplicator = Deduplicator.new(self._get_tid_modulo())
             _logger.debug("%s: Constructed new deduplicator: %s", self, self._deduplicator)
 
         # Synchronize the settings for the newly added inferior with its siblings.
@@ -239,7 +234,13 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
     ) -> None:
         assert self._deduplicator is not None
         iface_id = id(session)
-        if self._deduplicator.should_accept_transfer(iface_id, self.transfer_id_timeout, transfer):
+        if self._deduplicator.should_accept_transfer(
+            iface_id=iface_id,
+            transfer_id_timeout=self.transfer_id_timeout,
+            timestamp=transfer.timestamp,
+            source_node_id=transfer.source_node_id,
+            transfer_id=transfer.transfer_id,
+        ):
             _logger.debug("%s: Accepting %s from %016x", self, transfer, iface_id)
             self._stat_transfers += 1
             self._stat_payload_bytes += sum(map(len, transfer.fragmented_payload))
@@ -509,7 +510,7 @@ def _unittest_redundant_input_monotonic() -> None:
     ses = RedundantInputSession(
         spec,
         meta,
-        tid_modulo_provider=lambda: None,  # Like UDP or serial - infinite modulo.
+        tid_modulo_provider=lambda: 2 ** 56,  # Like UDP or serial - infinite modulo.
         loop=loop,
         finalizer=lambda: None,
     )

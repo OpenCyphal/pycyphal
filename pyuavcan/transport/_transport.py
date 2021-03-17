@@ -215,6 +215,14 @@ class Transport(abc.ABC):
         """
         raise NotImplementedError
 
+    @property
+    @abc.abstractmethod
+    def capture_active(self) -> bool:
+        """
+        Whether :meth:`begin_capture` was invoked and packet capture is being performed on this transport.
+        """
+        raise NotImplementedError
+
     @staticmethod
     @abc.abstractmethod
     def make_tracer() -> Tracer:

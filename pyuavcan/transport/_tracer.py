@@ -21,6 +21,15 @@ class Capture:
 
     timestamp: pyuavcan.transport.Timestamp
 
+    @staticmethod
+    def get_transport_type() -> typing.Type[pyuavcan.transport.Transport]:
+        """
+        Static reference to the type of transport that can emit captures of this type.
+        For example, for UAVCAN/serial it would be :class:`pyuavcan.transport.serial.SerialTransport`.
+        Although the method is static, it shall be overridden by all inheritors.
+        """
+        raise NotImplementedError
+
 
 CaptureCallback = typing.Callable[[Capture], None]
 
@@ -179,7 +188,5 @@ class Tracer(abc.ABC):
         Reconstructed multi-frame transfers are reported as a single event when the last frame is received.
 
         Capture instances that are not supported by the current transport are silently ignored and None is returned.
-        This is to simplify tracing over heterogeneous transports where there are several tracer instances used
-        concurrently, one per transport type.
         """
         raise NotImplementedError

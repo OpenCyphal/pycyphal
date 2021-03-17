@@ -8,6 +8,7 @@ import struct
 import dataclasses
 from ipaddress import IPv4Address, IPv6Address
 import pyuavcan
+import pyuavcan.transport.udp
 from pyuavcan.transport import Trace, TransferTrace, Capture, AlienSessionSpecifier, AlienTransferMetadata
 from pyuavcan.transport import AlienTransfer, TransferFrom, Timestamp
 from pyuavcan.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
@@ -171,6 +172,10 @@ class UDPCapture(Capture):
             source_node_id=src_nid, destination_node_id=dst_nid, data_specifier=data_spec
         )
         return ses_spec, frame
+
+    @staticmethod
+    def get_transport_type() -> typing.Type[pyuavcan.transport.udp.UDPTransport]:
+        return pyuavcan.transport.udp.UDPTransport
 
 
 @dataclasses.dataclass(frozen=True)
