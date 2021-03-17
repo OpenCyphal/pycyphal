@@ -83,6 +83,9 @@ class PythonCANMedia(Media):
               The channel name should be empty.
               Example: ``virtual:``
 
+            - Interface ``usb2can`` is described in https://python-can.readthedocs.io/en/stable/interfaces/usb2can.html.
+              Example: ``usb2can:ED000100``
+
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
             - A single integer selects Classic CAN.
@@ -403,6 +406,18 @@ def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     assert False, "Internal error"
 
 
+def _construct_usb2can(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name,
+            channel=parameters.channel_name,
+            bitrate=parameters.bitrate,
+        )
+    if isinstance(parameters, _FDInterfaceParameters):
+        raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
+    assert False, "Internal error"
+
+
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     raise InvalidMediaConfigurationError(f"Interface not supported yet: {parameters.interface_name}")
 
@@ -417,5 +432,6 @@ _CONSTRUCTORS: typing.DefaultDict[
         "slcan": _construct_slcan,
         "pcan": _construct_pcan,
         "virtual": _construct_virtual,
+        "usb2can": _construct_usb2can,
     },
 )
