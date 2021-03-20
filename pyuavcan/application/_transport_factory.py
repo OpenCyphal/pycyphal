@@ -94,8 +94,9 @@ def make_transport(
             E.g.: ``socketcan:vcan0``.
 
         * - ``uavcan.can.mtu``
-          - ``bit[1]``
+          - ``natural16[1]``
           - The MTU value to use with all constructed CAN transports.
+            Values other than 8 and 64 should not be used.
 
         * - ``uavcan.can.bitrate``
           - ``natural32[2]``
