@@ -285,14 +285,18 @@ def _do_convert(to: Value, s: Value) -> Optional[Value]:
     if to.unstructured and s.string:
         return Value(unstructured=Unstructured(s.string.value))
 
-    opt_to, opt_s = _get_option_name(to), _get_option_name(s)
-    val_to: numpy.ndarray = get_attribute(to, opt_to).value
-    val_s: numpy.ndarray = get_attribute(s, opt_s).value
-    if len(val_to) != len(val_s):
-        return None  # Dimensionality mismatch.
+    if s.string or s.unstructured:
+        return None
+
+    val_s: numpy.ndarray = get_attribute(
+        s,
+        _get_option_name(s),
+    ).value.copy()
+    val_s.resize(
+        get_attribute(to, _get_option_name(to)).value.size,
+        refcheck=False,
+    )
     # At this point it is known that both values are of the same dimension.
-    if opt_to == opt_s:  # Also same scalar type -- no further checks needed.
-        return s
     # fmt: off
     if to.bit:    return Value(bit=Bit([x != 0 for x in val_s]))
     if to.real16: return Value(real16=Real16(val_s))
@@ -394,10 +398,6 @@ def _unittest_convert() -> None:
     assert _once(q(string=String("A")), String("B")).string.value.tobytes().decode() == "B"
     assert _once(q(string=String("A")), Unstructured(b"B")).string.value.tobytes().decode() == "B"
     assert list(_once(q(natural16=Natural16([1, 2])), Natural64([1, 2])).natural16.value) == [1, 2]
-
-    # Dimensionality mismatch.
-    with pytest.raises(ValueConversionError):
-        _once(q(integer16=Integer16([1, 2, 3])), Integer16([1, 2]))
 
     assert list(_once(q(bit=Bit([False, False])), Integer32([-1, 0])).bit.value) == [True, False]
     assert list(_once(q(integer8=Integer8([0, 1])), Real64([3.3, 6.4])).integer8.value) == [3, 6]
