@@ -102,7 +102,7 @@ def _unittest_slow_builtin_form_manual(compiled: typing.List[pyuavcan.dsdl.Gener
 def _unittest_slow_builtin_form_automatic(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     for info in compiled:
         for model in _util.expand_service_types(info.models):
-            if max(model.bit_length_set) / 8 > 1024 * 1024:
+            if model.bit_length_set.max / 8 > 1024 * 1024:
                 _logger.info("Automatic test of %s skipped because the type is too large", model)
                 continue  # Skip large objects because they take forever to convert and test
 

@@ -27,10 +27,10 @@ import pyuavcan.application
 
 
 _PSEUDO_UNIQUE_ID_MASK = (
-    2 ** list(pyuavcan.dsdl.get_model(NodeIDAllocationData_1)["unique_id_hash"].data_type.bit_length_set)[0] - 1
+    2 ** pyuavcan.dsdl.get_model(NodeIDAllocationData_1)["unique_id_hash"].data_type.bit_length_set.max - 1
 )
 
-_NODE_ID_MASK = 2 ** max(pyuavcan.dsdl.get_model(ID)["value"].data_type.bit_length_set) - 1
+_NODE_ID_MASK = 2 ** pyuavcan.dsdl.get_model(ID)["value"].data_type.bit_length_set.max - 1
 
 _UNIQUE_ID_SIZE_BYTES = pyuavcan.application.NodeInfo().unique_id.size
 
@@ -63,7 +63,7 @@ class Allocatee:
 
     DEFAULT_PRIORITY = pyuavcan.transport.Priority.SLOW
 
-    _MTU_THRESHOLD = max(pyuavcan.dsdl.get_model(NodeIDAllocationData_2).bit_length_set) // 8
+    _MTU_THRESHOLD = pyuavcan.dsdl.get_model(NodeIDAllocationData_2).bit_length_set.max // 8
 
     def __init__(
         self,

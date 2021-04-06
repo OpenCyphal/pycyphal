@@ -9,11 +9,11 @@
     _base_offset_ = _ser_.current_bit_length
     {% set t = self.inner_type %}
 {% if t is StructureType %}
-    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
     {{ _serialize_any(f.data_type, 'self.' + (f|id), offset) }}
     {% endfor %}
 {% elif t is UnionType %}
-    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
         {% set field_ref = 'self.' + (f|id) %}
     {{ 'if' if loop.first else 'elif' }} {{ field_ref }} is not None:  # Union tag {{ loop.index0 }}
         {{ _serialize_integer(t.tag_field_type, loop.index0|string, 0|bit_length_set)|indent }}
@@ -24,7 +24,7 @@
 {% else %}{% assert False %}{# Delimited type is not expected in this context. #}
 {% endif %}
     _ser_.pad_to_alignment({{ self.alignment_requirement }})
-    assert {{ t.bit_length_set|min }} <= (_ser_.current_bit_length - _base_offset_) <= {{ t.bit_length_set|max }}, \
+    assert {{ t.bit_length_set.min }} <= (_ser_.current_bit_length - _base_offset_) <= {{ t.bit_length_set.max }}, \
         'Bad serialization of {{ self }}'
 {%- endmacro %}
 
@@ -120,7 +120,7 @@
     {%- elif t is VariableLengthArrayType -%}   {{ _serialize_variable_length_array(t, ref, offset) }}
     {%- elif t is CompositeType -%}
         {% if t is DelimitedType %}
-            {% if (t.inner_type.bit_length_set | length) > 1 %}
+            {% if not t.inner_type.bit_length_set.fixed_length %}
                 {# Instead of the outer extent, we use the inner extent, which equals the max bit length and is a
                  # tighter bound than the user-defined extent.
                  # This is safe because when serializing we always know the concrete type.
@@ -136,14 +136,14 @@
     {{ ref }}._serialize_(_nested_)
     _nested_length_ = _nested_.current_bit_length - {{ t.delimiter_header_type.bit_length }}
     del _nested_
-    assert {{ t.inner_type.bit_length_set|min }} <= _nested_length_ <= {{ t.inner_type.bit_length_set|max }}
+    assert {{ t.inner_type.bit_length_set.min }} <= _nested_length_ <= {{ t.inner_type.bit_length_set.max }}
     assert _nested_length_ % 8 == 0
     _ser_.add_aligned_u32(_nested_length_ // 8)  # Jump back and serialize the delimiter header.
     _ser_.skip_bits(_nested_length_)             # Return to the current offset.
             {% else %}
                 {# Optional optimization: if the nested object is fixed-length, no need to fork the serializer. #}
-                {% set length_bits = t.inner_type.bit_length_set | first %}
-                {% assert [length_bits] == t.inner_type.bit_length_set | list %}
+                {% set length_bits = t.inner_type.bit_length_set.max %}
+                {% assert length_bits == t.inner_type.bit_length_set.min %}
                 {% assert length_bits % 8 == 0 %}
                 {% set length_bytes = length_bits // 8 %}
     # Delimited serialization of {{ t }}, fixed bit length {{ length_bits }} ({{ length_bytes }} bytes)

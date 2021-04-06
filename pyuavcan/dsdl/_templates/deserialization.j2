@@ -10,7 +10,7 @@
     {% set t = self.inner_type %}
 {% if t is StructureType %}
     {% set field_ref_map = {} %}
-    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
     {% if f is not padding %}
     {% set field_ref = 'f'|to_template_unique_name %}
     {% do field_ref_map.update({f: field_ref}) %}
@@ -33,7 +33,7 @@
 {% elif t is UnionType %}
     {% set tag_ref = 'tag'|to_template_unique_name %}
     {{ _deserialize_integer(t.tag_field_type, tag_ref, 0|bit_length_set) }}
-    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
     {# We generate new temporary for each variant to prevent MyPy from complaining. #}
     {% set field_ref = 'uni'|to_template_unique_name %}
     {{ 'if' if loop.first else 'elif' }} {{ tag_ref }} == {{ loop.index0 }}:
@@ -45,7 +45,7 @@
 {% else %}{% assert False %}{# Delimited type is not expected in this context. #}
 {% endif %}
     _des_.pad_to_alignment({{ self.alignment_requirement }})
-    assert {{ t.bit_length_set|min }} <= (_des_.consumed_bit_length - _base_offset_) <= {{ t.bit_length_set|max }}, \
+    assert {{ t.bit_length_set.min }} <= (_des_.consumed_bit_length - _base_offset_) <= {{ t.bit_length_set.max }}, \
         'Bad deserialization of {{ self }}'
 {%- endmacro %}
 
