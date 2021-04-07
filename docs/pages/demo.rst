@@ -103,7 +103,8 @@ We can resolve this by passing the correct register values via environment varia
 
     python demo_app.py                                   # Run the application!
 
-The snippet is valid for sh/bash/zsh; if you are using PowerShell on Windows, replace ``export`` with ``$env:``.
+The snippet is valid for sh/bash/zsh; if you are using PowerShell on Windows, replace ``export`` with ``$env:``
+and take values into double quotes.
 Further snippets will not include this remark.
 
 An environment variable ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID`` sets register ``uavcan.sub.temperature_setpoint.id``,
