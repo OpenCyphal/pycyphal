@@ -79,10 +79,15 @@
 {% elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
     _ser_.add_{{ offset|alignment_prefix -}}_array_of_standard_bit_length_primitives({{ ref }})
 {% else %}
-    # Unrolled fixed-length array: {{ t }}
-    {% for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
-    {{ _serialize_any(t.element_type, '%s[%d]'|format(ref, index), element_offset) }}
-    {% endfor %}
+    {# Element offset is the superposition of each individual element offsets plus the array's own offset.
+     # For example, an array like uint8[3] offset by 16 bits would have its element_offset = {16, 24, 32}.
+     # We can also unroll element serialization for small arrays (e.g., below ~10 elements) to take advantage of
+     # spurious alignment of elements but the benefit of such optimization is believed to be negligible. #}
+    {% set element_offset = offset + t.element_type.bit_length_set.repeat_range(t.capacity - 1) %}
+    {% set element_ref = 'elem'|to_template_unique_name %}
+    # Element offset: {{ element_offset }}
+    for {{ element_ref }} in {{ ref }}:
+        {{ _serialize_any(t.element_type, element_ref, element_offset)|indent }}
 {% endif %}
 {% endmacro %}
 
