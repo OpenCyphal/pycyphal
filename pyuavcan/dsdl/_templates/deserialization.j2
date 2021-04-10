@@ -10,7 +10,7 @@
     {% set t = self.inner_type %}
 {% if t is StructureType %}
     {% set field_ref_map = {} %}
-    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
     {% if f is not padding %}
     {% set field_ref = 'f'|to_template_unique_name %}
     {% do field_ref_map.update({f: field_ref}) %}
@@ -33,7 +33,7 @@
 {% elif t is UnionType %}
     {% set tag_ref = 'tag'|to_template_unique_name %}
     {{ _deserialize_integer(t.tag_field_type, tag_ref, 0|bit_length_set) }}
-    {% for f, offset in t.iterate_fields_with_offsets(0|bit_length_set) %}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
     {# We generate new temporary for each variant to prevent MyPy from complaining. #}
     {% set field_ref = 'uni'|to_template_unique_name %}
     {{ 'if' if loop.first else 'elif' }} {{ tag_ref }} == {{ loop.index0 }}:
@@ -45,7 +45,7 @@
 {% else %}{% assert False %}{# Delimited type is not expected in this context. #}
 {% endif %}
     _des_.pad_to_alignment({{ self.alignment_requirement }})
-    assert {{ t.bit_length_set|min }} <= (_des_.consumed_bit_length - _base_offset_) <= {{ t.bit_length_set|max }}, \
+    assert {{ t.bit_length_set.min }} <= (_des_.consumed_bit_length - _base_offset_) <= {{ t.bit_length_set.max }}, \
         'Bad deserialization of {{ self }}'
 {%- endmacro %}
 
@@ -67,13 +67,17 @@
     {{ ref }} = _des_.fetch_{{ offset|alignment_prefix -}}
                       _array_of_standard_bit_length_primitives({{ t.element_type|numpy_scalar_type }}, {{ t.capacity }})
 {% else %}
+    {# Element offset is the superposition of each individual element offsets plus the array's own offset.
+     # For example, an array like uint8[3] offset by 16 bits would have its element_offset = {16, 24, 32}.
+     # We can also unroll element deserialization for small arrays (e.g., below ~10 elements) to take advantage of
+     # spurious alignment of elements but the benefit of such optimization is believed to be negligible. #}
+    {% set element_offset = offset + t.element_type.bit_length_set.repeat_range(t.capacity - 1) %}
     {% set element_ref = 'e'|to_template_unique_name %}
-    # Unrolled fixed-length array: {{ t }}; the temporary {{ element_ref }} is used for element storage.
+    {% set index_ref = 'i'|to_template_unique_name %}
     {{ ref }} = _np_.empty({{ t.capacity }}, {{ t.element_type|numpy_scalar_type }})
-    {% for index, element_offset in t.enumerate_elements_with_offsets(offset) %}
-    {{ _deserialize_any(t.element_type, element_ref, element_offset) }}
-    {{ ref }}[{{ index }}] = {{ element_ref }}
-    {% endfor %}
+    for {{ index_ref }} in range({{ t.capacity }}):
+        {{ _deserialize_any(t.element_type, element_ref, element_offset)|indent }}
+        {{ ref }}[{{ index_ref }}] = {{ element_ref }}
 {% endif %}
     assert len({{ ref }}) == {{ t.capacity }}, '{{ t }}'
 {% endmacro %}

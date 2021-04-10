@@ -162,8 +162,12 @@ def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[f
 
 
 def _make_random_fragmented_serialized_representation(bls: pydsdl.BitLengthSet) -> typing.Sequence[memoryview]:
-    bit_length = random.choice(list(bls))
-    byte_length = (bit_length + 7) // 8
+    if bls.max < 8 * 1024:  # If the BLS appears small, perform numerical expansion and pick a random value.
+        bit_length = random.choice(list(bls))
+        byte_length = (bit_length + 7) // 8
+    else:  # Otherwise, just use the smallest value because expansion is slow.
+        bit_length = bls.min
+        byte_length = (bit_length + 7) // 8
     return _fragment_randomly(numpy.random.randint(0, 256, size=byte_length, dtype=numpy.uint8).data)
 
 

@@ -44,7 +44,7 @@ class Mode(enum.IntEnum):
 
 
 VENDOR_SPECIFIC_STATUS_CODE_MASK = (
-    2 ** list(pyuavcan.dsdl.get_model(Heartbeat)["vendor_specific_status_code"].data_type.bit_length_set)[0] - 1
+    2 ** pyuavcan.dsdl.get_model(Heartbeat)["vendor_specific_status_code"].data_type.bit_length_set.max - 1
 )
 
 

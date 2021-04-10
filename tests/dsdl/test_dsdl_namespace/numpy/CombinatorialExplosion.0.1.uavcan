@@ -1,0 +1,8 @@
+# This data type is crafted to trigger the combinatorial explosion problem: https://github.com/UAVCAN/pydsdl/issues/23
+# The problem is now fixed so we introduce this type to shield us against regressions.
+# If DSDL compilation takes over a few minutes, you have a combinatorial problem somewhere in the compiler.
+
+uavcan.primitive.String.1.0[<=1024] foo
+uavcan.primitive.String.1.0[256] bar
+
+@extent 100 * (1024 ** 2) * 8  # One hundred megabytes should be about right.
