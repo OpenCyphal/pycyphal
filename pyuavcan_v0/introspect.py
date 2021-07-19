@@ -9,8 +9,8 @@
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os
-import uavcan
-from uavcan.transport import CompoundValue, PrimitiveValue, ArrayValue, VoidValue
+import pyuavcan_v0
+from pyuavcan_v0.transport import CompoundValue, PrimitiveValue, ArrayValue, VoidValue
 try:
     from io import StringIO
 except ImportError:
@@ -26,8 +26,8 @@ def _to_json_compatible_object_impl(obj):
     # CompoundValue
     if isinstance(obj, CompoundValue):
         output = dict()
-        for field_name, field in uavcan.get_fields(obj).items():
-            if uavcan.is_union(obj) and uavcan.get_active_union_field(obj) != field_name:
+        for field_name, field in pyuavcan_v0.get_fields(obj).items():
+            if pyuavcan_v0.is_union(obj) and pyuavcan_v0.get_active_union_field(obj) != field_name:
                 continue
             if isinstance(field, VoidValue):
                 continue
@@ -37,7 +37,7 @@ def _to_json_compatible_object_impl(obj):
 
     # ArrayValue
     elif isinstance(obj, ArrayValue):
-        t = uavcan.get_uavcan_data_type(obj)
+        t = pyuavcan_v0.get_uavcan_data_type(obj)
         if t.value_type.category == t.value_type.CATEGORY_PRIMITIVE:
             def is_nice_character(ch):
                 if ch.is_printable() or ch.isspace():
@@ -122,7 +122,7 @@ def _to_yaml_impl(obj, indent_level=0, parent=None, name=None, uavcan_type=None)
 
     # Decomposing PrimitiveValue to value and type. This is ugly but it's by design...
     if isinstance(obj, PrimitiveValue):
-        uavcan_type = uavcan.get_uavcan_data_type(obj)
+        uavcan_type = pyuavcan_v0.get_uavcan_data_type(obj)
         obj = obj.value
 
     # CompoundValue
@@ -130,8 +130,8 @@ def _to_yaml_impl(obj, indent_level=0, parent=None, name=None, uavcan_type=None)
         first_field = True
 
         # Rendering all fields than can be rendered
-        for field_name, field in uavcan.get_fields(obj).items():
-            if uavcan.is_union(obj) and uavcan.get_active_union_field(obj) != field_name:
+        for field_name, field in pyuavcan_v0.get_fields(obj).items():
+            if pyuavcan_v0.is_union(obj) and pyuavcan_v0.get_active_union_field(obj) != field_name:
                 continue
             if isinstance(field, VoidValue):
                 continue
@@ -142,14 +142,14 @@ def _to_yaml_impl(obj, indent_level=0, parent=None, name=None, uavcan_type=None)
             write('%s: %s', field_name, rendered_field)
 
         # Special case - empty non-union struct is rendered as empty map
-        if first_field and not uavcan.is_union(obj):
+        if first_field and not pyuavcan_v0.is_union(obj):
             if indent_level > 0:
                 indent_newline()
             write('{}')
 
     # ArrayValue
     elif isinstance(obj, ArrayValue):
-        t = uavcan.get_uavcan_data_type(obj)
+        t = pyuavcan_v0.get_uavcan_data_type(obj)
         if t.value_type.category == t.value_type.CATEGORY_PRIMITIVE:
             def is_nice_character(ch):
                 if 32 <= ch <= 126:
@@ -246,11 +246,11 @@ def value_to_constant_name(struct, field_name, keep_literal=False):
     Returns: Name of the constant or flags if match could be detected, otherwise integer as is.
     """
     # Extracting constants
-    uavcan_type = uavcan.get_uavcan_data_type(struct)
-    if uavcan.is_request(struct):
+    uavcan_type = pyuavcan_v0.get_uavcan_data_type(struct)
+    if pyuavcan_v0.is_request(struct):
         consts = uavcan_type.request_constants
         fields = uavcan_type.request_fields
-    elif uavcan.is_response(struct):
+    elif pyuavcan_v0.is_response(struct):
         consts = uavcan_type.response_constants
         fields = uavcan_type.response_fields
     else:
@@ -328,14 +328,14 @@ def value_to_constant_name(struct, field_name, keep_literal=False):
 
 if __name__ == '__main__':
     # to_yaml()
-    print(to_yaml(uavcan.protocol.NodeStatus()))
+    print(to_yaml(pyuavcan_v0.protocol.NodeStatus()))
 
-    info = uavcan.protocol.GetNodeInfo.Response(name='legion')
+    info = pyuavcan_v0.protocol.GetNodeInfo.Response(name='legion')
     info.hardware_version.certificate_of_authenticity = b'\x01\x02\x03\xff'
     print(to_yaml(info))
 
-    lights = uavcan.equipment.indication.LightsCommand()
-    lcmd = uavcan.equipment.indication.SingleLightCommand(light_id=123)
+    lights = pyuavcan_v0.equipment.indication.LightsCommand()
+    lcmd = pyuavcan_v0.equipment.indication.SingleLightCommand(light_id=123)
     lcmd.color.red = 1
     lcmd.color.green = 2
     lcmd.color.blue = 3
@@ -344,58 +344,58 @@ if __name__ == '__main__':
     lights.commands.append(lcmd)
     print(to_yaml(lights))
 
-    print(to_yaml(uavcan.equipment.power.BatteryInfo()))
-    print(to_yaml(uavcan.protocol.param.Empty()))
+    print(to_yaml(pyuavcan_v0.equipment.power.BatteryInfo()))
+    print(to_yaml(pyuavcan_v0.protocol.param.Empty()))
 
-    getset = uavcan.protocol.param.GetSet.Response()
+    getset = pyuavcan_v0.protocol.param.GetSet.Response()
     print(to_yaml(getset))
-    uavcan.switch_union_field(getset.value, 'empty')
+    pyuavcan_v0.switch_union_field(getset.value, 'empty')
     print(to_yaml(getset))
 
     # value_to_constant_name()
     print(value_to_constant_name(
-        uavcan.protocol.NodeStatus(mode=uavcan.protocol.NodeStatus().MODE_OPERATIONAL),
+        pyuavcan_v0.protocol.NodeStatus(mode=pyuavcan_v0.protocol.NodeStatus().MODE_OPERATIONAL),
         'mode'
     ))
     print(value_to_constant_name(
-        uavcan.protocol.NodeStatus(mode=uavcan.protocol.NodeStatus().HEALTH_OK),
+        pyuavcan_v0.protocol.NodeStatus(mode=pyuavcan_v0.protocol.NodeStatus().HEALTH_OK),
         'health'
     ))
     print(value_to_constant_name(
-        uavcan.equipment.range_sensor.Measurement(reading_type=uavcan.equipment.range_sensor.Measurement()
+        pyuavcan_v0.equipment.range_sensor.Measurement(reading_type=pyuavcan_v0.equipment.range_sensor.Measurement()
                                                   .READING_TYPE_TOO_FAR),
         'reading_type'
     ))
     print(value_to_constant_name(
-        uavcan.protocol.param.ExecuteOpcode.Request(opcode=uavcan.protocol.param.ExecuteOpcode.Request().OPCODE_ERASE),
+        pyuavcan_v0.protocol.param.ExecuteOpcode.Request(opcode=pyuavcan_v0.protocol.param.ExecuteOpcode.Request().OPCODE_ERASE),
         'opcode'
     ))
     print(value_to_constant_name(
-        uavcan.protocol.file.Error(value=uavcan.protocol.file.Error().ACCESS_DENIED),
+        pyuavcan_v0.protocol.file.Error(value=pyuavcan_v0.protocol.file.Error().ACCESS_DENIED),
         'value'
     ))
     print(value_to_constant_name(
-        uavcan.equipment.power.BatteryInfo(status_flags=
-                                           uavcan.equipment.power.BatteryInfo().STATUS_FLAG_NEED_SERVICE),
+        pyuavcan_v0.equipment.power.BatteryInfo(status_flags=
+                                           pyuavcan_v0.equipment.power.BatteryInfo().STATUS_FLAG_NEED_SERVICE),
         'status_flags'
     ))
     print(value_to_constant_name(
-        uavcan.equipment.power.BatteryInfo(status_flags=
-                                           uavcan.equipment.power.BatteryInfo().STATUS_FLAG_NEED_SERVICE |
-                                           uavcan.equipment.power.BatteryInfo().STATUS_FLAG_TEMP_HOT |
-                                           uavcan.equipment.power.BatteryInfo().STATUS_FLAG_CHARGED),
+        pyuavcan_v0.equipment.power.BatteryInfo(status_flags=
+                                           pyuavcan_v0.equipment.power.BatteryInfo().STATUS_FLAG_NEED_SERVICE |
+                                           pyuavcan_v0.equipment.power.BatteryInfo().STATUS_FLAG_TEMP_HOT |
+                                           pyuavcan_v0.equipment.power.BatteryInfo().STATUS_FLAG_CHARGED),
         'status_flags'
     ))
     print(value_to_constant_name(
-        uavcan.protocol.AccessCommandShell.Response(flags=
-                                                    uavcan.protocol.AccessCommandShell.Response().FLAG_SHELL_ERROR |
-                                                    uavcan.protocol.AccessCommandShell.Response().
+        pyuavcan_v0.protocol.AccessCommandShell.Response(flags=
+                                                    pyuavcan_v0.protocol.AccessCommandShell.Response().FLAG_SHELL_ERROR |
+                                                    pyuavcan_v0.protocol.AccessCommandShell.Response().
                                                     FLAG_HAS_PENDING_STDOUT),
         'flags'
     ))
 
     # Printing transfers
-    node = uavcan.make_node('vcan0', node_id=42)
-    node.request(uavcan.protocol.GetNodeInfo.Request(), 100, lambda e: print(to_yaml(e)))
-    node.add_handler(uavcan.protocol.NodeStatus, lambda e: print(to_yaml(e)))
+    node = pyuavcan_v0.make_node('vcan0', node_id=42)
+    node.request(pyuavcan_v0.protocol.GetNodeInfo.Request(), 100, lambda e: print(to_yaml(e)))
+    node.add_handler(pyuavcan_v0.protocol.NodeStatus, lambda e: print(to_yaml(e)))
     node.spin()

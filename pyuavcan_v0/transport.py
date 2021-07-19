@@ -22,9 +22,9 @@ except ImportError:
     import collections  # Python 2
     MutableSequence = collections.MutableSequence
 
-import uavcan
-import uavcan.dsdl as dsdl
-import uavcan.dsdl.common as common
+import pyuavcan_v0
+import pyuavcan_v0.dsdl as dsdl
+import pyuavcan_v0.dsdl.common as common
 
 
 try:
@@ -646,7 +646,7 @@ class Frame(object):
         return bool(self.bytes[-1] & 0x80) if self.bytes else False
 
 
-class TransferError(uavcan.UAVCANException):
+class TransferError(pyuavcan_v0.UAVCANException):
     pass
 
 
@@ -797,7 +797,7 @@ class Transfer(object):
             kind = dsdl.CompoundType.KIND_SERVICE
         else:
             kind = dsdl.CompoundType.KIND_MESSAGE
-        datatype = uavcan.DATATYPES.get((self.data_type_id, kind))
+        datatype = pyuavcan_v0.DATATYPES.get((self.data_type_id, kind))
         if not datatype:
             raise TransferError("Unrecognised {0} type ID {1}"
                                 .format("service" if self.service_not_message else "message", self.data_type_id))

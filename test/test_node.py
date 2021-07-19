@@ -13,10 +13,10 @@ try:
 except ImportError:
     from mock import Mock, ANY
 
-import uavcan
-from uavcan.node import Node
-import uavcan.transport as transport
-from uavcan.driver.common import CANFrame
+import pyuavcan_v0
+from pyuavcan_v0.node import Node
+import pyuavcan_v0.transport as transport
+from pyuavcan_v0.driver.common import CANFrame
 
 import os.path
 
@@ -28,7 +28,7 @@ class TestException(RuntimeError):
 
 class HandlerExceptionHandling(unittest.TestCase):
     def setUp(self):
-        msg = uavcan.protocol.debug.KeyValue()
+        msg = pyuavcan_v0.protocol.debug.KeyValue()
         msg.key = 'foo'
         msg.value = 42
 
@@ -57,14 +57,14 @@ class HandlerExceptionHandling(unittest.TestCase):
 
     def test_exceptions_are_caught_by_spin(self):
         self.node = Node(self.driver)
-        self.node.add_handler(uavcan.protocol.debug.KeyValue,
+        self.node.add_handler(pyuavcan_v0.protocol.debug.KeyValue,
                               self._raise_callback)
 
         self._spin()
 
     def test_exceptions_are_not_caught_by_spin(self):
         self.node = Node(self.driver, catch_handler_exceptions=False)
-        self.node.add_handler(uavcan.protocol.debug.KeyValue,
+        self.node.add_handler(pyuavcan_v0.protocol.debug.KeyValue,
                               self._raise_callback)
 
         with self.assertRaises(RuntimeError):
@@ -73,9 +73,9 @@ class HandlerExceptionHandling(unittest.TestCase):
     def test_second_handler_is_called_after_first_one_raises(self):
         mock_cb = Mock(return_value=None)
         self.node = Node(self.driver)
-        self.node.add_handler(uavcan.protocol.debug.KeyValue,
+        self.node.add_handler(pyuavcan_v0.protocol.debug.KeyValue,
                               self._raise_callback)
-        self.node.add_handler(uavcan.protocol.debug.KeyValue,
+        self.node.add_handler(pyuavcan_v0.protocol.debug.KeyValue,
                               mock_cb)
 
         self._spin()

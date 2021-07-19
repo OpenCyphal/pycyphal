@@ -15,11 +15,11 @@ import sys
 import inspect
 from logging import getLogger
 
-import uavcan
-import uavcan.driver as driver
-import uavcan.transport as transport
-from uavcan.transport import get_uavcan_data_type
-from uavcan import UAVCANException
+import pyuavcan_v0
+import pyuavcan_v0.driver as driver
+import pyuavcan_v0.transport as transport
+from pyuavcan_v0.transport import get_uavcan_data_type
+from pyuavcan_v0 import UAVCANException
 
 
 DEFAULT_NODE_STATUS_INTERVAL = 1.0
@@ -44,7 +44,7 @@ class Scheduler(object):
             self._run_scheduler = lambda: self._scheduler.run(blocking=False) + self._scheduler.timefunc()
         else:
             # Nightmare inducing hacks
-            class SayNoToBlockingSchedulingException(uavcan.UAVCANException):
+            class SayNoToBlockingSchedulingException(pyuavcan_v0.UAVCANException):
                 pass
 
             def delayfunc_impostor(duration):
@@ -238,7 +238,7 @@ class Node(Scheduler):
 
         :param mode: Initial operating mode (INITIALIZATION, OPERATIONAL, etc.); defaults to INITIALIZATION.
 
-        :param node_info: Structure of type uavcan.protocol.GetNodeInfo.Response, responded with when the local
+        :param node_info: Structure of type pyuavcan_v0.protocol.GetNodeInfo.Response, responded with when the local
                           node is queried for its node info.
         :param catch_handler_exceptions: If true, exceptions raised from message
                                          handlers will be caught and logged. If
@@ -263,8 +263,8 @@ class Node(Scheduler):
         self._transfer_hook_dispatcher = TransferHookDispatcher()
 
         # NodeStatus publisher
-        self.health = uavcan.protocol.NodeStatus().HEALTH_OK                                    # @UndefinedVariable
-        self.mode = uavcan.protocol.NodeStatus().MODE_INITIALIZATION if mode is None else mode  # @UndefinedVariable
+        self.health = pyuavcan_v0.protocol.NodeStatus().HEALTH_OK                                    # @UndefinedVariable
+        self.mode = pyuavcan_v0.protocol.NodeStatus().MODE_INITIALIZATION if mode is None else mode  # @UndefinedVariable
         self.vendor_specific_status_code = 0
 
         node_status_interval = node_status_interval or DEFAULT_NODE_STATUS_INTERVAL
@@ -275,8 +275,8 @@ class Node(Scheduler):
             logger.debug('GetNodeInfo request from %r', e.transfer.source_node_id)
             self._fill_node_status(self.node_info.status)
             return self.node_info
-        self.node_info = node_info or uavcan.protocol.GetNodeInfo.Response()     # @UndefinedVariable
-        self.add_handler(uavcan.protocol.GetNodeInfo, on_get_node_info)          # @UndefinedVariable
+        self.node_info = node_info or pyuavcan_v0.protocol.GetNodeInfo.Response()     # @UndefinedVariable
+        self.add_handler(pyuavcan_v0.protocol.GetNodeInfo, on_get_node_info)          # @UndefinedVariable
 
     @property
     def is_anonymous(self):
@@ -338,7 +338,7 @@ class Node(Scheduler):
 
     def _throw_if_anonymous(self):
         if not self._node_id:
-            raise uavcan.UAVCANException('The local node is configured in anonymous mode')
+            raise pyuavcan_v0.UAVCANException('The local node is configured in anonymous mode')
 
     def _fill_node_status(self, msg):
         msg.uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
@@ -350,7 +350,7 @@ class Node(Scheduler):
         self._fill_node_status(self.node_info.status)
         if self._node_id:
             # TODO: transmit self.node_info.status instead of creating a new object
-            msg = uavcan.protocol.NodeStatus()  # @UndefinedVariable
+            msg = pyuavcan_v0.protocol.NodeStatus()  # @UndefinedVariable
             self._fill_node_status(msg)
             self.broadcast(msg)
 

@@ -47,16 +47,16 @@ class UAVCANException(Exception):
 
 
 from .version import __version__
-import uavcan.node as node
-from uavcan.node import make_node
-from uavcan.driver import make_driver
-import uavcan.dsdl as dsdl
-import uavcan.transport as transport
-from uavcan.transport import get_uavcan_data_type, \
+import pyuavcan_v0.node as node
+from pyuavcan_v0.node import make_node
+from pyuavcan_v0.driver import make_driver
+import pyuavcan_v0.dsdl as dsdl
+import pyuavcan_v0.transport as transport
+from pyuavcan_v0.transport import get_uavcan_data_type, \
     get_active_union_field, switch_union_field, is_union, \
     get_constants, get_fields, \
     is_request, is_response
-from uavcan.introspect import value_to_constant_name, to_yaml
+from pyuavcan_v0.introspect import value_to_constant_name, to_yaml
 
 
 TRANSFER_PRIORITY_LOWEST = 31
@@ -189,4 +189,4 @@ load_dsdl()
 
 
 # Importing modules that may be dependent on the standard DSDL types
-import uavcan.app as app
+import pyuavcan_v0.app as app

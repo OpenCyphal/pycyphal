@@ -8,8 +8,8 @@
 #
 
 import unittest
-from uavcan import transport
-from uavcan.dsdl import parser
+from pyuavcan_v0 import transport
+from pyuavcan_v0.dsdl import parser
 
 
 class TestBitsFromBytes(unittest.TestCase):
@@ -582,18 +582,18 @@ class TestMessageUnion(unittest.TestCase):
 
 class TestAssignment(unittest.TestCase):
     def setUp(self):
-        import uavcan
-        self.a = uavcan.protocol.GetNodeInfo.Response()
+        import pyuavcan_v0
+        self.a = pyuavcan_v0.protocol.GetNodeInfo.Response()
 
     def test_compound_assignment(self):
-        import uavcan
+        import pyuavcan_v0
 
         orig_status = self.a.status
         print(orig_status)
         self.assertEqual(orig_status.mode, 0)
         self.assertEqual(orig_status.uptime_sec, 0)
 
-        self.a.status = uavcan.protocol.NodeStatus(mode=3, uptime_sec=12345)
+        self.a.status = pyuavcan_v0.protocol.NodeStatus(mode=3, uptime_sec=12345)
 
         new_status = self.a.status
         print(new_status)

@@ -8,7 +8,7 @@
 #
 
 import unittest
-from uavcan.dsdl import signature
+from pyuavcan_v0.dsdl import signature
 
 
 class TestSignature(unittest.TestCase):

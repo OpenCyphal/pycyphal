@@ -41,7 +41,7 @@ class Type:
     """
     Common type description. The specialized type description classes inherit from this one.
     Fields:
-        full_name    Full type name string, e.g. "uavcan.protocol.NodeStatus"
+        full_name    Full type name string, e.g. "pyuavcan_v0.protocol.NodeStatus"
         category     Any CATEGORY_*
     """
     CATEGORY_PRIMITIVE = 0
@@ -178,7 +178,7 @@ class ArrayType(Type):
 # noinspection PyAbstractClass
 class CompoundType(Type):
     """
-    Compound type description, e.g. uavcan.protocol.NodeStatus.
+    Compound type description, e.g. pyuavcan_v0.protocol.NodeStatus.
     Fields:
         source_file         Path to the DSDL definition file for this type
         default_dtid        Default Data Type ID, if specified, None otherwise
@@ -301,7 +301,7 @@ class CompoundType(Type):
         return compute_signature(self.get_dsdl_signature_source_definition())
 
     def get_normalized_definition(self):
-        """Returns full type name string, e.g. 'uavcan.protocol.NodeStatus'"""
+        """Returns full type name string, e.g. 'pyuavcan_v0.protocol.NodeStatus'"""
         return self.full_name
 
     def get_data_type_signature(self):
@@ -819,12 +819,12 @@ def parse_namespaces(source_dirs, search_dirs=None):
         search_dirs:   List of root namespace directories with referenced types (optional). This list is
                        automatically extended with source_dirs.
     Example:
-        >>> import uavcan
-        >>> a = uavcan.dsdl.parse_namespaces(['../dsdl/uavcan'])
+        >>> import pyuavcan_v0
+        >>> a = pyuavcan_v0.dsdl.parse_namespaces(['../dsdl/uavcan'])
         >>> len(a)
         77
         >>> a[0]
-        uavcan.Timestamp
+        pyuavcan_v0.Timestamp
         >>> a[0].fields
         [truncated uint48 husec]
         >>> a[0].constants

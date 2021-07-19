@@ -11,7 +11,7 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 import os
 from collections import defaultdict
 from logging import getLogger
-import uavcan
+import pyuavcan_v0
 import errno
 
 
@@ -33,7 +33,7 @@ def _try_resolve_relative_path(search_in, rel_path):
 class FileServer(object):
     def __init__(self, node, lookup_paths=None):
         if node.is_anonymous:
-            raise uavcan.UAVCANException('File server cannot be launched on an anonymous node')
+            raise pyuavcan_v0.UAVCANException('File server cannot be launched on an anonymous node')
 
         self.lookup_paths = lookup_paths or []
 
@@ -43,8 +43,8 @@ class FileServer(object):
         def add_handler(datatype, callback):
             self._handles.append(node.add_handler(datatype, callback))
 
-        add_handler(uavcan.protocol.file.GetInfo, self._get_info)
-        add_handler(uavcan.protocol.file.Read, self._read)
+        add_handler(pyuavcan_v0.protocol.file.GetInfo, self._get_info)
+        add_handler(pyuavcan_v0.protocol.file.Read, self._read)
         # TODO: support all file services
 
     def close(self):
@@ -65,36 +65,36 @@ class FileServer(object):
         return out
 
     def _get_info(self, e):
-        logger.debug("[#{0:03d}:uavcan.protocol.file.GetInfo] {1!r}"
+        logger.debug("[#{0:03d}:pyuavcan_v0.protocol.file.GetInfo] {1!r}"
                      .format(e.transfer.source_node_id, e.request.path.path.decode()))
         try:
             with open(self._resolve_path(e.request.path), "rb") as f:
                 data = f.read()
-                resp = uavcan.protocol.file.GetInfo.Response()
+                resp = pyuavcan_v0.protocol.file.GetInfo.Response()
                 resp.error.value = resp.error.OK
                 resp.size = len(data)
                 resp.entry_type.flags = resp.entry_type.FLAG_FILE | resp.entry_type.FLAG_READABLE
         except Exception:
             # TODO: Convert OSError codes to the error codes defined in DSDL
-            logger.exception("[#{0:03d}:uavcan.protocol.file.GetInfo] error", exc_info=True)
-            resp = uavcan.protocol.file.GetInfo.Response()
+            logger.exception("[#{0:03d}:pyuavcan_v0.protocol.file.GetInfo] error", exc_info=True)
+            resp = pyuavcan_v0.protocol.file.GetInfo.Response()
             resp.error.value = resp.error.UNKNOWN_ERROR
 
         return resp
 
     def _read(self, e):
-        logger.debug("[#{0:03d}:uavcan.protocol.file.Read] {1!r} @ offset {2:d}"
+        logger.debug("[#{0:03d}:pyuavcan_v0.protocol.file.Read] {1!r} @ offset {2:d}"
                      .format(e.transfer.source_node_id, e.request.path.path.decode(), e.request.offset))
         try:
             with open(self._resolve_path(e.request.path), "rb") as f:
                 f.seek(e.request.offset)
-                resp = uavcan.protocol.file.Read.Response()
-                read_size = uavcan.get_uavcan_data_type(uavcan.get_fields(resp)['data']).max_size
+                resp = pyuavcan_v0.protocol.file.Read.Response()
+                read_size = pyuavcan_v0.get_uavcan_data_type(pyuavcan_v0.get_fields(resp)['data']).max_size
                 resp.data = bytearray(f.read(read_size))
                 resp.error.value = resp.error.OK
         except Exception:
-            logger.exception("[#{0:03d}:uavcan.protocol.file.Read] error")
-            resp = uavcan.protocol.file.Read.Response()
+            logger.exception("[#{0:03d}:pyuavcan_v0.protocol.file.Read] error")
+            resp = pyuavcan_v0.protocol.file.Read.Response()
             resp.error.value = resp.error.UNKNOWN_ERROR
 
         return resp

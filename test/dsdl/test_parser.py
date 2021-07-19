@@ -9,9 +9,9 @@
 
 import os
 import unittest
-from uavcan.dsdl import parser
-from uavcan.dsdl import parser, parse_namespaces
-from uavcan.dsdl.common import DsdlException
+from pyuavcan_v0.dsdl import parser
+from pyuavcan_v0.dsdl import parser, parse_namespaces
+from pyuavcan_v0.dsdl.common import DsdlException
 
 
 class TestParseNamespaces(unittest.TestCase):
@@ -23,7 +23,7 @@ class TestParseNamespaces(unittest.TestCase):
         '''
         Test the ability to load all the UAVCAN v0 messages
         '''
-        built_in_dir = '{}/../../uavcan/dsdl_files/uavcan'.format(os.path.dirname(__file__))
+        built_in_dir = '{}/../../pyuavcan_v0/dsdl_files/uavcan'.format(os.path.dirname(__file__))
         parse_namespaces([built_in_dir])
 
     def test_duplicate_in_search_dir(self):
