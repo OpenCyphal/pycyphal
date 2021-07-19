@@ -76,7 +76,7 @@ def make_transport(
           - Apply deterministic data loss mitigation to RPC-service transfers by setting multiplication factor = 2.
 
         * - ``uavcan.serial.baudrate``
-          - ``natural16[1]``
+          - ``natural32[1]``
           - The baudrate to set for all specified serial ports. Leave unchanged if zero.
 
     ..  list-table:: :mod:`pyuavcan.transport.can`
