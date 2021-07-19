@@ -10,15 +10,15 @@
 from __future__ import division, absolute_import, print_function, unicode_literals
 import time
 from logging import getLogger
-import uavcan
+import pyuavcan_v0
 
 
 logger = getLogger(__name__)
 
 
 class NodeMonitor(object):
-    TIMEOUT = uavcan.protocol.NodeStatus().OFFLINE_TIMEOUT_MS / 1000  # @UndefinedVariable
-    TRANSFER_PRIORITY = uavcan.TRANSFER_PRIORITY_LOWEST - 1
+    TIMEOUT = pyuavcan_v0.protocol.NodeStatus().OFFLINE_TIMEOUT_MS / 1000  # @UndefinedVariable
+    TRANSFER_PRIORITY = pyuavcan_v0.TRANSFER_PRIORITY_LOWEST - 1
     MIN_RETRY_INTERVAL = 0.5
     MAX_RETRIES = 10
 
@@ -89,7 +89,7 @@ class NodeMonitor(object):
 
     def __init__(self, node):
         self._update_callbacks = []
-        self._handle = node.add_handler(uavcan.protocol.NodeStatus, self._on_node_status)  # @UndefinedVariable
+        self._handle = node.add_handler(pyuavcan_v0.protocol.NodeStatus, self._on_node_status)  # @UndefinedVariable
         self._registry = {}  # {node_id: Entry}
         self._timer = node.periodic(1, self._remove_stale)
 
@@ -180,7 +180,7 @@ class NodeMonitor(object):
             entry._info_requested_at = entry.monotonic_timestamp
             # noinspection PyProtectedMember
             entry._register_retry()
-            e.node.request(uavcan.protocol.GetNodeInfo.Request(), node_id,  # @UndefinedVariable
+            e.node.request(pyuavcan_v0.protocol.GetNodeInfo.Request(), node_id,  # @UndefinedVariable
                            priority=self.TRANSFER_PRIORITY, callback=self._on_info_response)
 
     def _on_info_response(self, e):
@@ -198,7 +198,7 @@ class NodeMonitor(object):
 
         hw_unique_id = "".join(format(c, "02X") for c in e.response.hardware_version.unique_id)
         msg = (
-            "[#{0:03d}:uavcan.protocol.GetNodeInfo] " +
+            "[#{0:03d}:pyuavcan_v0.protocol.GetNodeInfo] " +
             "software_version.major={1:d} " +
             "software_version.minor={2:d} " +
             "software_version.vcs_commit={3:08x} " +

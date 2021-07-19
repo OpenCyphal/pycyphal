@@ -11,8 +11,8 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 import time
 import sqlite3
 from logging import getLogger
-import uavcan
-from uavcan import UAVCANException
+import pyuavcan_v0
+from pyuavcan_v0 import UAVCANException
 
 
 logger = getLogger(__name__)
@@ -23,7 +23,7 @@ def _unique_id_to_string(uid):
 
 
 class CentralizedServer(object):
-    QUERY_TIMEOUT = uavcan.protocol.dynamic_node_id.Allocation().FOLLOWUP_TIMEOUT_MS / 1000  # @UndefinedVariable
+    QUERY_TIMEOUT = pyuavcan_v0.protocol.dynamic_node_id.Allocation().FOLLOWUP_TIMEOUT_MS / 1000  # @UndefinedVariable
     DEFAULT_NODE_ID_RANGE = 1, 125
     DATABASE_STORAGE_MEMORY = ':memory:'
 
@@ -103,7 +103,7 @@ class CentralizedServer(object):
         self._node_monitor_event_handle = node_monitor.add_update_handler(self._handle_monitor_event)
 
         self._dynamic_node_id_range = dynamic_node_id_range or CentralizedServer.DEFAULT_NODE_ID_RANGE
-        self._handle = node.add_handler(uavcan.protocol.dynamic_node_id.Allocation,  # @UndefinedVariable
+        self._handle = node.add_handler(pyuavcan_v0.protocol.dynamic_node_id.Allocation,  # @UndefinedVariable
                                         self._on_allocation_message)
 
         self._allocation_table.set(node.node_info.hardware_version.unique_id.to_bytes(), node.node_id)
@@ -151,7 +151,7 @@ class CentralizedServer(object):
             self._query = e.message.unique_id.to_bytes()
             self._query_timestamp = e.transfer.ts_monotonic
 
-            response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
+            response = pyuavcan_v0.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
             response.first_part_of_unique_id = 0
             response.node_id = 0
             response.unique_id.from_bytes(self._query)
@@ -165,7 +165,7 @@ class CentralizedServer(object):
             self._query += e.message.unique_id.to_bytes()
             self._query_timestamp = e.transfer.ts_monotonic
 
-            response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
+            response = pyuavcan_v0.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
             response.first_part_of_unique_id = 0
             response.node_id = 0
             response.unique_id.from_bytes(self._query)
@@ -203,7 +203,7 @@ class CentralizedServer(object):
             if node_allocated_id:
                 self._allocation_table.set(self._query, node_allocated_id)
 
-                response = uavcan.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
+                response = pyuavcan_v0.protocol.dynamic_node_id.Allocation()  # @UndefinedVariable
                 response.first_part_of_unique_id = 0
                 response.node_id = node_allocated_id
                 response.unique_id.from_bytes(self._query)

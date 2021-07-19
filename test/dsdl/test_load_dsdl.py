@@ -10,9 +10,9 @@
 
 import unittest
 import os
-from uavcan.dsdl import signature
-from uavcan.dsdl.common import DsdlException
-from uavcan import load_dsdl
+from pyuavcan_v0.dsdl import signature
+from pyuavcan_v0.dsdl.common import DsdlException
+from pyuavcan_v0 import load_dsdl
 
 
 class TestLoadDsdl(unittest.TestCase):
@@ -26,8 +26,8 @@ class TestLoadDsdl(unittest.TestCase):
         '''
         ns0_dir = '{}/fake_dsdl/ns0_base/ns0'.format(os.path.dirname(__file__))
         load_dsdl(ns0_dir, exclude_dist=True)
-        import uavcan
-        test_type = uavcan.thirdparty.ns0.Type0()
+        import pyuavcan_v0
+        test_type = pyuavcan_v0.thirdparty.ns0.Type0()
         self.assertEqual(test_type.field0, 0)
 
     def test_reload_with_redefinition(self):
