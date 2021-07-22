@@ -2,7 +2,7 @@ Legacy UAVCAN/CAN v0 in Python
 ==============================
 
 This is the (legacy) implementation of UAVCAN/CAN v0 in Python. It is maintained under the `pyuavcan_v0` package name
-to prevent conflict with the new version of the protocol, UAVCAN/CAN v1.
+to prevent conflict with the stable version of the protocol, UAVCAN v1.
 
 This package is currently maintained for migration and backwards compatibility purposes. v0 is not recommended for
 new designs; new users should adopt pyuavcan v1. Please consult with [uavcan.org](https://uavcan.org) for details.

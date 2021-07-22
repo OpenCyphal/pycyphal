@@ -8,6 +8,8 @@ on:
 
 jobs:
   lint:
+    name: Lint and Test
+
     runs-on: ubuntu-latest
 
     strategy:
@@ -33,3 +35,34 @@ jobs:
 
       - name: Test
         run: python -m unittest discover test
+
+  pypi:
+    name: Publish to PyPI
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.7
+          architecture: x64
+
+      - name: Install pypa/build
+        run: python -m pip install build --user
+
+      - name: Build binary wheel and source tarball
+        run: python -m build --sdist --wheel --outdir dist/
+
+      - name: Publish to Test PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: pypi-AgENdGVzdC5weXBpLm9yZwIkYmQxYTI3ZWQtZGFhYi00MTZhLTg4ZGQtN2IyYWQ4Mjc2MjJhAAIleyJwZXJtaXNzaW9ucyI6ICJ1c2VyIiwgInZlcnNpb24iOiAxfQAABiDIPXa7dAXpKrsS5q04TEHEg5X8u0iVYcdMLEb_PSHBDw
+          repository_url: https://test.pypi.org/legacy/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: pypi-AgEIcHlwaS5vcmcCJDUyMDFmZDUyLTllY2QtNDE1YS04YTg5LTRjZWM0ODJmODEzNAACJXsicGVybWlzc2lvbnMiOiAidXNlciIsICJ2ZXJzaW9uIjogMX0AAAYgiPmhyPUYJfatOKiuWwfHWR7OiDgL5x0hk6d1ePRLmLk
