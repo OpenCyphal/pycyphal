@@ -43,7 +43,7 @@ class TestParseNamespaces(unittest.TestCase):
         ns0_dir_with_redefinition = '{}/fake_dsdl/ns0_redefined/ns0'.format(os.path.dirname(__file__))
         try:
             parse_namespaces([ns0_dir], [ns0_dir_with_redefinition])
-            self.assertTrue(false) # parse_namespaces should raise an exception, shouldn't get here
+            self.assertTrue(False) # parse_namespaces should raise an exception, shouldn't get here
         except DsdlException as e:
             self.assertTrue(e.args[0].startswith("Redefinition of data type ID"))
 
