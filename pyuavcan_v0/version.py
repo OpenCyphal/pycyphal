@@ -7,4 +7,4 @@
 #         Ben Dyer <ben_dyer@mac.com>
 #
 
-__version__ = '1.0.0.dev33'
+__version__ = '1.0.0.dev34'
