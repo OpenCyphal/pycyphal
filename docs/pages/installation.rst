@@ -40,18 +40,3 @@ and make sure to include at least its core dependencies, which are:
     cp.read('../setup.cfg')
     print('.. code-block::\n')
     print(textwrap.indent(cp['options']['install_requires'].strip(), ' '))
-
-Legacy considerations
----------------------
-
-A legacy library titled ``uavcan`` (note the lack of the ``py`` prefix) is also available from PyPI,
-which implements an early experimental version of the protocol known as UAVCAN v0
-that is no longer recommended for new designs.
-It should not be confused with this library which implements the long-term stable version
-of the protocol known as UAVCAN v1.
-
-Having both ``pyuavcan`` and the old ``uavcan`` libraries installed in the same environment is not recommended,
-because PyUAVCAN generates Python packages from DSDL namespaces,
-and since the standard DSDL types are stored in the root namespace named ``uavcan``,
-it would conflict with the old library.
-Hence, when installing PyUAVCAN, make sure you don't have the legacy library around: ``pip uninstall -y uavcan``.
