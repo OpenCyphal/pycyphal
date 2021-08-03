@@ -85,6 +85,9 @@ class PythonCANMedia(Media):
 
             - Interface ``usb2can`` is described in https://python-can.readthedocs.io/en/stable/interfaces/usb2can.html.
               Example: ``usb2can:ED000100``
+              
+            - Interface ``seeedstudio`` is described in https://python-can.readthedocs.io/en/3.3.2/interfaces/seeedstudio.html.
+              Example: ``seeedstudio:/dev/ttyUSB0``
 
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
