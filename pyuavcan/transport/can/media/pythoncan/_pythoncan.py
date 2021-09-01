@@ -86,6 +86,10 @@ class PythonCANMedia(Media):
             - Interface ``usb2can`` is described in https://python-can.readthedocs.io/en/stable/interfaces/usb2can.html.
               Example: ``usb2can:ED000100``
 
+            - Interface ``canalystii`` is described in
+              https://python-can.readthedocs.io/en/stable/interfaces/canalystii.html.
+              Example: ``canalystii:0``
+
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
             - A single integer selects Classic CAN.
@@ -125,6 +129,11 @@ class PythonCANMedia(Media):
         Use Kvaser channel 0 in classic mode with bitrate 500k::
 
             PythonCANMedia('kvaser:0', 500_000)
+
+        Use CANalyst-II channel 0 in classic mode with bitrate 500k::
+
+            PythonCANMedia('canalystii:0', 500_000)
+
         """
         self._conn_name = str(iface_name).split(":")
         if len(self._conn_name) != 2:
@@ -418,6 +427,16 @@ def _construct_usb2can(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     assert False, "Internal error"
 
 
+def _construct_canalystii(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
+        )
+    if isinstance(parameters, _FDInterfaceParameters):
+        raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
+    assert False, "Internal error"
+
+
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     raise InvalidMediaConfigurationError(f"Interface not supported yet: {parameters.interface_name}")
 
@@ -433,5 +452,6 @@ _CONSTRUCTORS: typing.DefaultDict[
         "pcan": _construct_pcan,
         "virtual": _construct_virtual,
         "usb2can": _construct_usb2can,
+        "canalystii": _construct_canalystii,
     },
 )
