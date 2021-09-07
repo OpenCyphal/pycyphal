@@ -35,14 +35,10 @@ else:
         def __init__(self, channel, **_extras):
             super(PythonCAN, self).__init__()
 
-            try:
-                if channel is None:
-                    self._bus = can.interface.Bus() # get bus from environment's config file
-                else:
-                    self._bus = can.interface.Bus(channel=channel, bustype=_extras['bustype'], bitrate=_extras['bitrate'])
-            except Exception as ex:
-                logger.exception("Could not instantiate a python-can driver")
-                raise
+            if channel is None:
+                self._bus = can.interface.Bus() # get bus from environment's config file
+            else:
+                self._bus = can.interface.Bus(channel=channel, **_extras)
 
             self._writer_thread_should_stop = False
             self._write_queue = queue.Queue(self.TX_QUEUE_SIZE)
