@@ -88,6 +88,9 @@ class PythonCANMedia(Media):
 
             - Interface ``canalystii`` is described in
               https://python-can.readthedocs.io/en/stable/interfaces/canalystii.html.
+              You need to download CANalyst library for python-can package or you can install python-can by:
+              ``pip3 install git+https://github.com/Cherish-Gww/python-can.git@add_canalystii_so``
+              More info: https://github.com/UAVCAN/pyuavcan/issues/178#issuecomment-912497882
               Example: ``canalystii:0``
 
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
