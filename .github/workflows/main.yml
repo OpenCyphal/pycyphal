@@ -2,8 +2,6 @@ name: Main Workflow
 
 on:
   push:
-    branches: [legacy-v0, republish]
-  pull_request:
     branches: [legacy-v0]
 
 jobs:
