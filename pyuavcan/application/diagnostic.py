@@ -177,7 +177,8 @@ class DiagnosticPublisher(logging.Handler):
         if self._fut is None:
             self._fut = asyncio.ensure_future(self._publish(dcs_rec))
         else:
-            print(self, "DROPPED", dcs_rec, file=sys.stderr)  # pragma: no cover
+            # DROPPED
+            pass
 
     async def _publish(self, record: Record) -> None:
         try:
