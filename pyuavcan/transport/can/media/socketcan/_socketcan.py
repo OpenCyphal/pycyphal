@@ -129,6 +129,14 @@ class SocketCANMedia(Media):
                     self._loop.sock_sendall(self._sock, self._compile_native_frame(f.frame)),
                     timeout=monotonic_deadline - self._loop.time(),
                 )
+            except OSError as err:
+                if err.errno == errno.EINVAL and self._is_fd:
+                    raise pyuavcan.transport.InvalidMediaConfigurationError(
+                        "Invalid socketcan configuration: "
+                        "the device probably doesn't support CAN-FD. "
+                        "Try setting MTU to 8 (Classic CAN)"
+                    ) from err
+                raise err
             except asyncio.TimeoutError:
                 break
             else:
