@@ -99,6 +99,7 @@ class PythonCANMedia(Media):
             - A tuple of two selects CAN FD, where the first integer defines the arbitration (nominal) bit rate
               and the second one defines the data phase bit rate.
             - If MTU (see below) is given and is greater than 8 bytes, CAN FD is used regardless of the above.
+            - An MTU of 8 bytes and a tuple of two identical bit rates selects Classic CAN.
 
         :param mtu: The maximum CAN data field size in bytes.
             If provided, this value must belong to :attr:`Media.VALID_MTU_SET`.
@@ -152,7 +153,9 @@ class PythonCANMedia(Media):
         if self._mtu not in self.VALID_MTU_SET:
             raise InvalidMediaConfigurationError(f"Wrong MTU value: {mtu}")
 
-        self._is_fd = self._mtu > min(self.VALID_MTU_SET) or not single_bitrate
+        self._is_fd = (self._mtu > min(self.VALID_MTU_SET) or not single_bitrate) and not (
+            self._mtu == min(self.VALID_MTU_SET) and bitrate[0] == bitrate[1]
+        )
 
         self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._closed = False
