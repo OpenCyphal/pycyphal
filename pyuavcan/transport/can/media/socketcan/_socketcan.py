@@ -14,7 +14,7 @@ import logging
 import threading
 import contextlib
 import pyuavcan.transport
-from pyuavcan.transport import Timestamp
+from pyuavcan.transport import Timestamp, InvalidMediaConfigurationError
 from pyuavcan.transport.can.media import Media, Envelope, FilterConfiguration, FrameFormat
 from pyuavcan.transport.can.media import DataFrame
 
@@ -131,6 +131,8 @@ class SocketCANMedia(Media):
                 )
             except asyncio.TimeoutError:
                 break
+            except OSError as e:
+                raise InvalidMediaConfigurationError()
             else:
                 num_sent += 1
         return num_sent
