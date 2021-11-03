@@ -131,7 +131,10 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
             unescaped_image = cobs.decode(bytearray(image))  # TODO: PERFORMANCE WARNING: AVOID THE COPY
         except cobs.DecodeError:
             return None
-        return SerialFrame.parse_from_unescaped_image(memoryview(unescaped_image))
+        try:
+            SerialFrame.parse_from_unescaped_image(memoryview(unescaped_image))
+        except ValueError:
+            return None
 
     @staticmethod
     def parse_from_unescaped_image(header_payload_crc_image: memoryview) -> typing.Optional[SerialFrame]:
