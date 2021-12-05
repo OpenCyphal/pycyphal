@@ -482,6 +482,7 @@ def _capture_single_device(
                 list(data_link_hints),
                 pcap.geterr(pd).decode(),
             )
+            return None
 
         # https://www.tcpdump.org/manpages/pcap_compile.3pcap.html
         code = pcap.bpf_program()  # This memory needs to be freed when closed. Fix it later.
