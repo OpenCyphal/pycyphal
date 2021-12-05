@@ -142,7 +142,10 @@ class DiagnosticPublisher(logging.Handler):
             self._started = False
             self._pub.close()
             if self._fut is not None:
-                self._fut.result()
+                try:
+                    self._fut.result()
+                except asyncio.InvalidStateError:
+                    pass  # May be unset https://github.com/UAVCAN/pyuavcan/issues/192
 
         node.add_lifetime_hooks(start, close)
 
