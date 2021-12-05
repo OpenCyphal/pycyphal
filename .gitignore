@@ -32,6 +32,7 @@ nosetests.xml
 coverage.xml
 *,cover
 .*mypy.json
+.python-version
 
 .project
 .pydevproject
