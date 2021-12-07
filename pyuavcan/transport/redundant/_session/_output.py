@@ -207,7 +207,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                 return False  # Still nothing.
 
             results = await asyncio.gather(
-                *[ses.send(transfer, monotonic_deadline) for ses in inferiors], loop=self._loop, return_exceptions=True
+                *[ses.send(transfer, monotonic_deadline) for ses in inferiors], return_exceptions=True
             )
             assert results and len(results) == len(inferiors)
             _logger.debug("%s send results: %s", self, results)
