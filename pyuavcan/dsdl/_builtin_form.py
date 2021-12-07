@@ -5,6 +5,7 @@
 import typing
 
 import numpy
+from numpy.typing import NDArray
 import pydsdl
 
 from ._composite_object import CompositeObject, get_model, get_attribute, set_attribute, get_class
@@ -48,7 +49,7 @@ def to_builtin(obj: CompositeObject) -> typing.Dict[str, typing.Any]:
 
 
 def _to_builtin_impl(
-    obj: typing.Union[CompositeObject, numpy.ndarray, str, bool, int, float], model: pydsdl.SerializableType
+    obj: typing.Union[CompositeObject, NDArray[typing.Any], str, bool, int, float], model: pydsdl.SerializableType
 ) -> typing.Union[typing.Dict[str, typing.Any], typing.List[typing.Any], str, bool, int, float]:
     if isinstance(model, pydsdl.CompositeType):
         assert isinstance(obj, CompositeObject)

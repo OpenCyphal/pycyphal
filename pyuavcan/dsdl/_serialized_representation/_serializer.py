@@ -9,11 +9,8 @@ import typing
 import struct
 
 import numpy
-
-_Byte = numpy.uint8
-"""
-We must use uint8 instead of ubyte because uint8 is platform-invariant whereas (u)byte is platform-dependent.
-"""
+from numpy.typing import NDArray
+from ._common import StdPrimitive, Byte
 
 _EXTRA_BUFFER_CAPACITY_BYTES = 1
 """
@@ -30,7 +27,7 @@ class Serializer(abc.ABC):
     Methods that expect an unsigned integer will raise ValueError if the supplied integer is negative.
     """
 
-    def __init__(self, buffer: numpy.ndarray):
+    def __init__(self, buffer: NDArray[Byte]):
         """
         Do not call this directly. Use :meth:`new` to instantiate.
         """
@@ -40,7 +37,7 @@ class Serializer(abc.ABC):
     @staticmethod
     def new(buffer_size_in_bytes: int) -> Serializer:
         buffer_size_in_bytes = int(buffer_size_in_bytes) + _EXTRA_BUFFER_CAPACITY_BYTES
-        buf: numpy.ndarray = numpy.zeros(buffer_size_in_bytes, dtype=_Byte)
+        buf = numpy.zeros(buffer_size_in_bytes, dtype=Byte)
         return _PlatformSpecificSerializer(buf)
 
     @property
@@ -48,9 +45,9 @@ class Serializer(abc.ABC):
         return self._bit_offset
 
     @property
-    def buffer(self) -> numpy.ndarray:
+    def buffer(self) -> NDArray[Byte]:
         """Returns a properly sized read-only slice of the destination buffer zero-bit-padded to byte."""
-        out = self._buf[: (self._bit_offset + 7) // 8]
+        out: NDArray[Byte] = self._buf[: (self._bit_offset + 7) // 8]
         out.flags.writeable = False
         # Here we used to check if out.base is self._buf to make sure we're not creating a copy because that might
         # be costly. We no longer do that because it doesn't work with forked serializers: forks don't own their
@@ -103,7 +100,7 @@ class Serializer(abc.ABC):
     # The most specialized methods must be used whenever possible for best performance.
     #
     @abc.abstractmethod
-    def add_aligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
+    def add_aligned_array_of_standard_bit_length_primitives(self, x: NDArray[StdPrimitive]) -> None:
         """
         Accepts an array of ``(u?int|float)(8|16|32|64)`` and encodes it into the destination.
         On little-endian platforms this may be implemented virtually through ``memcpy()``.
@@ -111,22 +108,20 @@ class Serializer(abc.ABC):
         """
         raise NotImplementedError
 
-    def add_aligned_array_of_bits(self, x: numpy.ndarray) -> None:
+    def add_aligned_array_of_bits(self, x: NDArray[numpy.bool_]) -> None:
         """
         Accepts an array of bools and encodes it into the destination using fast native serialization routine
         implemented in numpy. The current bit offset must be byte-aligned.
         """
-        assert x.dtype in (bool, numpy.bool_)
         assert self._bit_offset % 8 == 0
         packed = numpy.packbits(x, bitorder="little")
         assert len(packed) * 8 >= len(x)
         self._buf[self._byte_offset : self._byte_offset + len(packed)] = packed
         self._bit_offset += len(x)
 
-    def add_aligned_bytes(self, x: numpy.ndarray) -> None:
+    def add_aligned_bytes(self, x: NDArray[Byte]) -> None:
         """Simply adds a sequence of bytes; the current bit offset must be byte-aligned."""
         assert self._bit_offset % 8 == 0
-        assert x.dtype == _Byte
         self._buf[self._byte_offset : self._byte_offset + len(x)] = x
         self._bit_offset += len(x) * 8
 
@@ -191,20 +186,18 @@ class Serializer(abc.ABC):
     # These are the slowest and may be used only if none of the above (specialized) methods are suitable.
     #
     @abc.abstractmethod
-    def add_unaligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
+    def add_unaligned_array_of_standard_bit_length_primitives(self, x: NDArray[StdPrimitive]) -> None:
         """See the aligned counterpart."""
         raise NotImplementedError
 
-    def add_unaligned_array_of_bits(self, x: numpy.ndarray) -> None:
-        assert x.dtype in (bool, numpy.bool_)
+    def add_unaligned_array_of_bits(self, x: NDArray[numpy.bool_]) -> None:
         packed = numpy.packbits(x, bitorder="little")
         backtrack = len(packed) * 8 - len(x)
         assert backtrack >= 0
         self.add_unaligned_bytes(packed)
         self._bit_offset -= backtrack
 
-    def add_unaligned_bytes(self, value: numpy.ndarray) -> None:
-        assert value.dtype == _Byte
+    def add_unaligned_bytes(self, value: NDArray[Byte]) -> None:
         # This is a faster variant of Ben Dyer's unaligned bit copy algorithm:
         # https://github.com/UAVCAN/libuavcan/blob/fd8ba19bc9c09c05a/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12
         # It is faster because here we are aware that the source is always aligned, which we take advantage of.
@@ -244,25 +237,26 @@ class Serializer(abc.ABC):
     # Private methods.
     #
     @staticmethod
-    def _unsigned_to_bytes(value: int, bit_length: int) -> numpy.ndarray:
+    def _unsigned_to_bytes(value: int, bit_length: int) -> NDArray[Byte]:
         assert bit_length >= 1
         assert value >= 0, "This operation is undefined for negative integers"
         value &= 2 ** bit_length - 1
         num_bytes = (bit_length + 7) // 8
-        out = numpy.zeros(num_bytes, dtype=_Byte)
+        out = numpy.zeros(num_bytes, dtype=Byte)
         for i in range(num_bytes):  # Oh, why is my life like this?
             out[i] = value & 0xFF
             value >>= 8
         return out
 
     @staticmethod
-    def _float_to_bytes(format_char: str, x: float) -> numpy.ndarray:
+    def _float_to_bytes(format_char: str, x: float) -> NDArray[Byte]:
         f = "<" + format_char
         try:
             out = struct.pack(f, x)
         except OverflowError:  # Oops, let's truncate (saturation must be implemented by the caller if needed)
             out = struct.pack(f, numpy.inf if x > 0 else -numpy.inf)
-        return numpy.frombuffer(out, dtype=_Byte)  # Note: this operation does not copy the underlying bytes
+        # Note: this operation does not copy the underlying bytes
+        return numpy.frombuffer(out, dtype=Byte)  # type: ignore
 
     @staticmethod
     def _ensure_not_negative(x: int) -> None:
@@ -288,27 +282,25 @@ class Serializer(abc.ABC):
 
 class _LittleEndianSerializer(Serializer):
     # noinspection PyUnresolvedReferences
-    def add_aligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
+    def add_aligned_array_of_standard_bit_length_primitives(self, x: NDArray[StdPrimitive]) -> None:
         # This is close to direct memcpy() from the source memory into the destination memory, which is very fast.
         # We assume that the local platform uses IEEE 754-compliant floating point representation; otherwise,
         # the generated serialized representation may be incorrect. NumPy seems to only support IEEE-754 compliant
         # platforms though so I don't expect any compatibility issues.
-        assert x.dtype not in (bool, numpy.bool_, object)
-        self.add_aligned_bytes(x.view(_Byte))
+        self.add_aligned_bytes(x.view(Byte))
 
-    def add_unaligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
+    def add_unaligned_array_of_standard_bit_length_primitives(self, x: NDArray[StdPrimitive]) -> None:
         # This is much slower than the aligned version because we have to manually copy and shift each byte,
         # but still better than manual elementwise serialization.
-        assert x.dtype not in (bool, numpy.bool_, object)
-        self.add_unaligned_bytes(x.view(_Byte))
+        self.add_unaligned_bytes(x.view(Byte))
 
 
 class _BigEndianSerializer(Serializer):
-    def add_aligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:  # pragma: no cover
-        raise NotImplementedError("Pull requests are welcome")
+    def add_aligned_array_of_standard_bit_length_primitives(self, x: NDArray[StdPrimitive]) -> None:
+        raise NotImplementedError("Pull requests are welcome")  # pragma: no cover
 
-    def add_unaligned_array_of_standard_bit_length_primitives(self, x: numpy.ndarray) -> None:
-        raise NotImplementedError("Pull requests are welcome")
+    def add_unaligned_array_of_standard_bit_length_primitives(self, x: NDArray[StdPrimitive]) -> None:
+        raise NotImplementedError("Pull requests are welcome")  # pragma: no cover
 
 
 _PlatformSpecificSerializer = {
@@ -497,14 +489,14 @@ def _unittest_serializer_unaligned() -> None:  # Tricky cases with unaligned fie
     assert str(ser) == "11000101 00101111 xxx10111"
 
     # Adding '00010010 00110100 01010110'
-    ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=_Byte))
+    ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=Byte))
     assert str(ser) == "11000101 00101111 01010111 10000010 11000110 xxx01010"
 
     ser.add_unaligned_array_of_bits(numpy.array([False, True, True], bool))
     assert ser._bit_offset % 8 == 0, "Byte alignment is not restored"  # pylint: disable=protected-access
     assert str(ser) == "11000101 00101111 01010111 10000010 11000110 11001010"
 
-    ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=_Byte))  # We're actually aligned here
+    ser.add_unaligned_bytes(numpy.array([0x12, 0x34, 0x56], dtype=Byte))  # We're actually aligned here
     assert str(ser) == "11000101 00101111 01010111 10000010 11000110 11001010 00010010 00110100 01010110"
 
     ser.add_unaligned_bit(True)

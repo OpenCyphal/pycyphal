@@ -159,6 +159,7 @@
       <w>noxfile</w>
       <w>npcap</w>
       <w>ntdll</w>
+      <w>numpy's</w>
       <w>octothorp</w>
       <w>onboard</w>
       <w>overgeneral</w>
@@ -176,6 +177,7 @@
       <w>prio</w>
       <w>prog</w>
       <w>protip</w>
+      <w>py's</w>
       <w>pycodestyle</w>
       <w>pydev</w>
       <w>pydsdl</w>

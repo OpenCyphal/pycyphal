@@ -5,17 +5,16 @@
 from __future__ import annotations
 import abc
 import sys
-import typing
+from typing import TypeVar, Type, Sequence, Union, cast
 import struct
 import base64
 
 import numpy
+from numpy.typing import NDArray
+from ._common import StdPrimitive, Byte
 
-# We must use uint8 instead of ubyte because uint8 is platform-invariant whereas (u)byte is platform-dependent.
-_Byte = numpy.uint8
 # noinspection PyShadowingBuiltins
-_T = typing.TypeVar("_T")
-_PrimitiveType = typing.Union[typing.Type[numpy.integer], typing.Type[numpy.inexact]]
+_T = TypeVar("_T")
 
 
 class Deserializer(abc.ABC):
@@ -34,7 +33,7 @@ class Deserializer(abc.ABC):
         which then returns None instead of a valid instance, indicating that the serialized representation is invalid.
         """
 
-    def __init__(self, fragmented_buffer: typing.Sequence[memoryview]):
+    def __init__(self, fragmented_buffer: Sequence[memoryview]):
         """
         Do not call this directly. Use :meth:`new` to instantiate.
         """
@@ -43,7 +42,7 @@ class Deserializer(abc.ABC):
         assert self.consumed_bit_length + self.remaining_bit_length == self._buf.bit_length
 
     @staticmethod
-    def new(fragmented_buffer: typing.Sequence[memoryview]) -> Deserializer:
+    def new(fragmented_buffer: Sequence[memoryview]) -> Deserializer:
         """
         :param fragmented_buffer: The source serialized representation. The deserializer will attempt to avoid copying
             any data from the serialized representation, establishing direct references to its memory instead.
@@ -110,14 +109,16 @@ class Deserializer(abc.ABC):
     # The most specialized methods must be used whenever possible for best performance.
     #
     @abc.abstractmethod
-    def fetch_aligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) -> numpy.ndarray:
+    def fetch_aligned_array_of_standard_bit_length_primitives(
+        self, dtype: Type[StdPrimitive], count: int
+    ) -> NDArray[StdPrimitive]:
         """
         Returns a new array which may directly refer to the underlying memory.
         The returned array may be read-only if the source buffer is read-only.
         """
         raise NotImplementedError
 
-    def fetch_aligned_array_of_bits(self, count: int) -> numpy.ndarray:
+    def fetch_aligned_array_of_bits(self, count: int) -> NDArray[numpy.bool_]:
         """
         Quickly decodes an aligned array of bits using the numpy's fast bit unpacking routine.
         A new array is always created (the memory cannot be shared with the buffer due to the layout transformation).
@@ -129,9 +130,9 @@ class Deserializer(abc.ABC):
         out = numpy.unpackbits(bs, bitorder="little")[:count]
         self._bit_offset += count
         assert len(out) == count
-        return out.astype(dtype=bool)
+        return cast(NDArray[numpy.bool_], out.astype(dtype=bool))
 
-    def fetch_aligned_bytes(self, count: int) -> numpy.ndarray:
+    def fetch_aligned_bytes(self, count: int) -> NDArray[Byte]:
         _ensure_cardinal(count)
         assert self._bit_offset % 8 == 0
         out = self._buf.get_unsigned_slice(self._byte_offset, self._byte_offset + count)
@@ -178,17 +179,17 @@ class Deserializer(abc.ABC):
         return int(x - 2 ** 64) if x >= 2 ** 63 else x  # wrapped in int() to appease MyPy
 
     def fetch_aligned_f16(self) -> float:  # noinspection PyTypeChecker
-        (out,) = struct.unpack("<e", self.fetch_aligned_bytes(2))
+        (out,) = struct.unpack("<e", self.fetch_aligned_bytes(2))  # type: ignore
         assert isinstance(out, float)
         return out
 
     def fetch_aligned_f32(self) -> float:  # noinspection PyTypeChecker
-        (out,) = struct.unpack("<f", self.fetch_aligned_bytes(4))
+        (out,) = struct.unpack("<f", self.fetch_aligned_bytes(4))  # type: ignore
         assert isinstance(out, float)
         return out
 
     def fetch_aligned_f64(self) -> float:  # noinspection PyTypeChecker
-        (out,) = struct.unpack("<d", self.fetch_aligned_bytes(8))
+        (out,) = struct.unpack("<d", self.fetch_aligned_bytes(8))  # type: ignore
         assert isinstance(out, float)
         return out
 
@@ -217,12 +218,12 @@ class Deserializer(abc.ABC):
     #
     @abc.abstractmethod
     def fetch_unaligned_array_of_standard_bit_length_primitives(
-        self, dtype: _PrimitiveType, count: int
-    ) -> numpy.ndarray:
+        self, dtype: Type[StdPrimitive], count: int
+    ) -> NDArray[StdPrimitive]:
         """See the aligned counterpart."""
         raise NotImplementedError
 
-    def fetch_unaligned_array_of_bits(self, count: int) -> numpy.ndarray:
+    def fetch_unaligned_array_of_bits(self, count: int) -> NDArray[numpy.bool_]:
         _ensure_cardinal(count)
         byte_count = (count + 7) // 8
         bs = self.fetch_unaligned_bytes(byte_count)
@@ -230,11 +231,11 @@ class Deserializer(abc.ABC):
         backtrack = byte_count * 8 - count
         assert 0 <= backtrack < 8
         self._bit_offset -= backtrack
-        out: numpy.ndarray = numpy.unpackbits(bs, bitorder="little")[:count].astype(dtype=bool)
+        out: NDArray[numpy.bool_] = numpy.unpackbits(bs, bitorder="little")[:count].astype(dtype=bool)
         assert len(out) == count
         return out
 
-    def fetch_unaligned_bytes(self, count: int) -> numpy.ndarray:
+    def fetch_unaligned_bytes(self, count: int) -> NDArray[Byte]:
         if count > 0:
             if self._bit_offset % 8 != 0:
                 # This is a faster variant of Ben Dyer's unaligned bit copy algorithm:
@@ -242,7 +243,7 @@ class Deserializer(abc.ABC):
                 # It is faster because here we are aware that the destination is always aligned, which we take
                 # advantage of. This algorithm breaks for byte-aligned offset, so we have to delegate the aligned
                 # case to the aligned copy method (which is also much faster).
-                out = numpy.empty(count, dtype=_Byte)
+                out = numpy.empty(count, dtype=Byte)
                 right = self._bit_offset % 8
                 left = 8 - right
                 assert (1 <= right <= 7) and (1 <= left <= 7)
@@ -257,7 +258,7 @@ class Deserializer(abc.ABC):
                 assert len(out) == count
                 return out
             return self.fetch_aligned_bytes(count)
-        return numpy.zeros(0, dtype=_Byte)
+        return numpy.zeros(0, dtype=Byte)
 
     def fetch_unaligned_unsigned(self, bit_length: int) -> int:
         _ensure_cardinal(bit_length)
@@ -277,17 +278,17 @@ class Deserializer(abc.ABC):
         return out
 
     def fetch_unaligned_f16(self) -> float:  # noinspection PyTypeChecker
-        (out,) = struct.unpack("<e", self.fetch_unaligned_bytes(2))
+        (out,) = struct.unpack("<e", self.fetch_unaligned_bytes(2))  # type: ignore
         assert isinstance(out, float)
         return out
 
     def fetch_unaligned_f32(self) -> float:  # noinspection PyTypeChecker
-        (out,) = struct.unpack("<f", self.fetch_unaligned_bytes(4))
+        (out,) = struct.unpack("<f", self.fetch_unaligned_bytes(4))  # type: ignore
         assert isinstance(out, float)
         return out
 
     def fetch_unaligned_f64(self) -> float:  # noinspection PyTypeChecker
-        (out,) = struct.unpack("<d", self.fetch_unaligned_bytes(8))
+        (out,) = struct.unpack("<d", self.fetch_unaligned_bytes(8))  # type: ignore
         assert isinstance(out, float)
         return out
 
@@ -302,7 +303,7 @@ class Deserializer(abc.ABC):
     # Private methods.
     #
     @staticmethod
-    def _unsigned_from_bytes(x: numpy.ndarray, bit_length: int) -> int:
+    def _unsigned_from_bytes(x: NDArray[Byte], bit_length: int) -> int:
         assert bit_length >= 1
         num_bytes = (bit_length + 7) // 8
         assert num_bytes > 0
@@ -331,13 +332,15 @@ class Deserializer(abc.ABC):
 
 
 class _LittleEndianDeserializer(Deserializer):
-    def fetch_aligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) -> numpy.ndarray:
+    def fetch_aligned_array_of_standard_bit_length_primitives(
+        self, dtype: Type[StdPrimitive], count: int
+    ) -> NDArray[StdPrimitive]:
         assert dtype not in (bool, numpy.bool_, object), "Invalid usage"
         assert self._bit_offset % 8 == 0
         bo = self._byte_offset
         # Interestingly, numpy doesn't care about alignment. If the source buffer is not properly aligned, it will
         # work anyway but slower.
-        out: numpy.ndarray = numpy.frombuffer(
+        out: NDArray[StdPrimitive] = numpy.frombuffer(  # type: ignore
             self._buf.get_unsigned_slice(bo, bo + count * numpy.dtype(dtype).itemsize), dtype=dtype
         )
         assert len(out) == count
@@ -345,21 +348,23 @@ class _LittleEndianDeserializer(Deserializer):
         return out
 
     def fetch_unaligned_array_of_standard_bit_length_primitives(
-        self, dtype: _PrimitiveType, count: int
-    ) -> numpy.ndarray:
+        self, dtype: Type[StdPrimitive], count: int
+    ) -> NDArray[StdPrimitive]:
         assert dtype not in (bool, numpy.bool_, object), "Invalid usage"
         bs = self.fetch_unaligned_bytes(numpy.dtype(dtype).itemsize * count)
         assert len(bs) >= count
-        return numpy.frombuffer(bs, dtype=dtype, count=count)
+        return numpy.frombuffer(bs, dtype=dtype, count=count)  # type: ignore
 
 
 class _BigEndianDeserializer(Deserializer):
-    def fetch_aligned_array_of_standard_bit_length_primitives(self, dtype: _PrimitiveType, count: int) -> numpy.ndarray:
+    def fetch_aligned_array_of_standard_bit_length_primitives(
+        self, dtype: Type[StdPrimitive], count: int
+    ) -> NDArray[StdPrimitive]:
         raise NotImplementedError("Pull requests are welcome")
 
     def fetch_unaligned_array_of_standard_bit_length_primitives(
-        self, dtype: _PrimitiveType, count: int
-    ) -> numpy.ndarray:
+        self, dtype: Type[StdPrimitive], count: int
+    ) -> NDArray[StdPrimitive]:
         raise NotImplementedError("Pull requests are welcome")
 
 
@@ -375,15 +380,15 @@ class ZeroExtendingBuffer:
     A read beyond the end of the buffer returns zero bytes.
     """
 
-    def __init__(self, fragmented_buffer: typing.Sequence[memoryview]):
+    def __init__(self, fragmented_buffer: Sequence[memoryview]):
         # TODO: Concatenation is a tentative measure. Add proper support for fragmented buffers for speed.
         if len(fragmented_buffer) == 1:
-            contiguous: typing.Union[bytearray, memoryview] = fragmented_buffer[0]  # Fast path.
+            contiguous: Union[bytearray, memoryview] = fragmented_buffer[0]  # Fast path.
         else:
             contiguous = bytearray().join(fragmented_buffer)
 
-        self._buf = numpy.frombuffer(contiguous, dtype=_Byte)
-        assert isinstance(self._buf, numpy.ndarray) and self._buf.dtype == _Byte and self._buf.ndim == 1
+        self._buf: NDArray[Byte] = numpy.frombuffer(contiguous, dtype=Byte)  # type: ignore
+        assert self._buf.dtype == Byte and self._buf.ndim == 1  # type: ignore
 
     @property
     def bit_length(self) -> int:
@@ -400,7 +405,7 @@ class ZeroExtendingBuffer:
         except IndexError:
             return 0  # Implicit zero extension rule
 
-    def get_unsigned_slice(self, left: int, right: int) -> numpy.ndarray:
+    def get_unsigned_slice(self, left: int, right: int) -> NDArray[Byte]:
         """
         Like the standard ``x[left:right]`` except that neither index may be negative,
         left may not exceed right (otherwise it's a :class:`ValueError`),
@@ -410,13 +415,13 @@ class ZeroExtendingBuffer:
             raise ValueError(f"Invalid slice boundary specification: [{left}:{right}]")
         count = int(right - left)
         assert count >= 0
-        out = self._buf[left:right]  # Slicing never raises an IndexError.
+        out: NDArray[Byte] = self._buf[left:right]  # Slicing never raises an IndexError.
         if len(out) < count:  # Implicit zero extension rule
-            out = numpy.concatenate((out, numpy.zeros(count - len(out), dtype=_Byte)))
+            out = numpy.concatenate((out, numpy.zeros(count - len(out), dtype=Byte)))  # type: ignore
         assert len(out) == count
         return out
 
-    def fork_bytes(self, offset_bytes: int, length_bytes: int) -> typing.Sequence[memoryview]:
+    def fork_bytes(self, offset_bytes: int, length_bytes: int) -> Sequence[memoryview]:
         """
         This is intended for use with :meth:`Deserializer.fork_bytes`.
         Given an offset from the beginning and length (both in bytes), yields a list of compliant memory fragments
@@ -541,7 +546,7 @@ def _unittest_deserializer_aligned() -> None:
     des.skip_bits(3 * 8)
     assert des.remaining_bit_length == 0
 
-    assert all([False] * 100 == des.fetch_aligned_array_of_bits(100))
+    assert all([False] * 100 == des.fetch_aligned_array_of_bits(100))  # type: ignore
     assert des.remaining_bit_length == -100
     des.skip_bits(4)
     assert des.remaining_bit_length == -104
@@ -570,7 +575,7 @@ def _unittest_deserializer_unaligned() -> None:
     assert des.consumed_bit_length == 27
     assert des.consumed_bit_length % 8 == 3
     assert des.remaining_bit_length == 5
-    assert all(numpy.array([0b00010010, 0], dtype=_Byte) == des.fetch_unaligned_bytes(2))
+    assert all(numpy.array([0b00010010, 0], dtype=Byte) == des.fetch_unaligned_bytes(2))
     assert des.consumed_bit_length == 43
     assert des.remaining_bit_length == -11
 
