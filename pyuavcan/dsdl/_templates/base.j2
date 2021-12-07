@@ -117,7 +117,7 @@ import {{ n }}
 -#}
 {%- macro printable_field_representation(f) -%}
     {%- if f.data_type is ArrayType -%}
-        {%- if f.data_type.string_like and f.data_type.capacity <= ARRAY_PRINT_SUMMARIZATION_THRESHOLD -%}
+        {%- if f.data_type.string_like -%}
             repr(bytes(self.{{ f|id }}))[1:]
         {%- else -%}
             _np_.array2string(self.{{ f|id }}, separator=',', edgeitems=10, {#  -#}
