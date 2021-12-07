@@ -15,10 +15,12 @@
 # Version:       {{ T.version.major }}.{{ T.version.minor }}
 #
 # pylint: skip-file
+# mypy: warn_unused_ignores=False
 
 from __future__ import annotations
 import numpy as _np_
-import typing as _ty_
+from numpy.typing import NDArray as _NDArray_
+from typing import Optional as _Opt_
 import pydsdl as _pydsdl_
 import pyuavcan.dsdl as _dsdl_
 {%- if T.deprecated %}
@@ -30,7 +32,7 @@ import {{ n }}
 
 {#- How many elements in the array trigger summarization rather than full output.
  #- Summarization replaces middle elements with an ellipsis. -#}
-{%- set ARRAY_PRINT_SUMMARIZATION_THRESHOLD = 1024 -%}
+{%- set ARRAY_PRINT_SUMMARIZATION_THRESHOLD = 100 -%}
 
 {%- from 'serialization.j2' import serialize -%}
 {%- from 'deserialization.j2' import deserialize -%}
@@ -43,7 +45,7 @@ import {{ n }}
     {%-   if t is BooleanType   -%} bool
     {%- elif t is IntegerType   -%} int
     {%- elif t is FloatType     -%} float
-    {%- elif t is ArrayType     -%} _np_.ndarray
+    {%- elif t is ArrayType     -%} _NDArray_[{{ t.element_type|numpy_scalar_type }}]
     {%- elif t is CompositeType -%} {{ t|full_reference_name }}
     {%- else -%}{% assert False %}
     {%- endif -%}
@@ -51,14 +53,14 @@ import {{ n }}
 
 {%- macro relaxed_type_annotation(t) -%}
     {%-   if t is BooleanType   -%} bool
-    {%- elif t is IntegerType   -%} _ty_.Union[int, {{ t|numpy_scalar_type }}]
-    {%- elif t is FloatType     -%} _ty_.Union[int, float, {{ t|numpy_scalar_type }}]
+    {%- elif t is IntegerType   -%} int | {{ t|numpy_scalar_type }}
+    {%- elif t is FloatType     -%} int | float | {{ t|numpy_scalar_type }}
     {%- elif t is CompositeType -%} {{ t|full_reference_name }}
     {%- elif t is ArrayType -%}
         {%- if (t.element_type is UnsignedIntegerType) and t.element_type.bit_length <= 8 -%}
-            _ty_.Union[_np_.ndarray, _ty_.List[int], bytes, bytearray{%- if t.string_like -%}, str{%- endif -%}]
+            _NDArray_[{{ t.element_type|numpy_scalar_type }}] | list[int] | memoryview | bytes | bytearray{%- if t.string_like -%} | str{%- endif -%}
         {%- else -%}
-            _ty_.Union[_np_.ndarray, _ty_.List[{{ strict_type_annotation(t.element_type) }}]]
+            _NDArray_[{{ t.element_type|numpy_scalar_type }}] | list[{{ strict_type_annotation(t.element_type) }}]
         {%- endif -%}
     {%- else -%}{% assert False %}
     {%- endif -%}
@@ -85,14 +87,14 @@ import {{ n }}
     if isinstance({{ src }}, (bytes, bytearray)) and len({{ src }}) {{ cmp }} {{ t.capacity }}:
         # Fast zero-copy initialization from buffer. Necessary when dealing with images, point clouds, etc.
         # Mutability will be inherited; e.g., bytes - immutable, bytearray - mutable.
-        self._{{ f|id }} = _np_.frombuffer({{ src }}, {{ t.element_type|numpy_scalar_type }})
+        self._{{ f|id }} = _np_.frombuffer({{ src }}, {{ t.element_type|numpy_scalar_type }})  # type: ignore
     el  {#- Concatenated with the "if" below -#}
     {% endif -%}
 
     if isinstance({{ src }}, _np_.ndarray)
     {#- #} and {{ src }}.dtype == {{ t.element_type|numpy_scalar_type }}
     {#- #} and {{ src }}.ndim == 1
-    {#- #} and {{ src }}.size {{ cmp }} {{ t.capacity }}:
+    {#- #} and {{ src }}.size {{ cmp }} {{ t.capacity }}:  # type: ignore
         # Fast binding if the source array has the same type and dimensionality. Beware of the shared reference.
         self._{{ f|id }} = {{ src }}
     else:
@@ -102,7 +104,7 @@ import {{ n }}
             raise ValueError(f'{{ f.name }}: invalid array length: not { {{- src }}.size} {{ cmp }} {{ t.capacity }}')
         self._{{ f|id }} = {{ src }}
     assert isinstance(self._{{ f|id }}, _np_.ndarray)
-    assert self._{{ f|id }}.dtype == {{ t.element_type|numpy_scalar_type }}
+    assert self._{{ f|id }}.dtype == {{ t.element_type|numpy_scalar_type }}  # type: ignore
     assert self._{{ f|id }}.ndim == 1
     assert len(self._{{ f|id }}) {{ cmp }} {{ t.capacity }}
 {%- endmacro -%}
@@ -173,7 +175,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
                  {%- for f in type.fields_except_padding -%}
                  ,
                  {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
-                     _ty_.Optional[{{ relaxed_type_annotation(f.data_type) }}] = None
+                     _Opt_[{{ relaxed_type_annotation(f.data_type) }}] = None
                  {%- endfor -%}
     ) -> None:
         """
@@ -206,10 +208,10 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
         self.{{ f|id }} = {{ f|id }} if {{ f|id }} is not None else False
 
         {%- elif f.data_type is IntegerType %}
-        self.{{ f|id }} = {{ f|id }} if {{ f|id }} is not None else 0
+        self.{{ f|id }} = {{ f|id }} if {{ f|id }} is not None else 0  # type: ignore
 
         {%- elif f.data_type is FloatType %}
-        self.{{ f|id }} = {{ f|id }} if {{ f|id }} is not None else 0.0
+        self.{{ f|id }} = {{ f|id }} if {{ f|id }} is not None else 0.0  # type: ignore
 
         {%- elif f.data_type is FixedLengthArrayType %}
         if {{ f|id }} is None:
@@ -248,13 +250,13 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 {%- else %}  {#- IS UNION (guaranteed to contain at least 2 fields none of which are padding) #}
     {%- for f in type.fields %}
         self._{{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
-            _ty_.Optional[{{ strict_type_annotation(f.data_type) }}] = None
+            _Opt_[{{ strict_type_annotation(f.data_type) }}] = None
     {%- endfor %}
         _init_cnt_: int = 0
     {% for f in type.fields %}
         if {{ f|id }} is not None:
             _init_cnt_ += 1
-            self.{{ f|id }} = {{ f|id }}
+            self.{{ f|id }} = {{ f|id }}  # type: ignore
     {% endfor %}
         if _init_cnt_ == 0:
     {%- set f = type.fields[0] -%}
@@ -298,7 +300,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     @property
     def {{ f|id }}(self) -> {# #}
     {%- if type.inner_type is UnionType -%}
-        _ty_.Optional[
+        _Opt_[
     {%- endif -%}
         {{ strict_type_annotation(f.data_type) }}
     {%- if type.inner_type is UnionType -%}

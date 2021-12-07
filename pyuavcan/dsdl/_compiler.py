@@ -324,7 +324,7 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
         raise ValueError(f"Invalid bit width: {w}")  # pragma: no cover
 
     if isinstance(t, pydsdl.BooleanType):
-        return "bool"  # numpy.bool is deprecated in v1.20
+        return "_np_.bool_"
     if isinstance(t, pydsdl.SignedIntegerType):
         return f"_np_.int{pick_width(t.bit_length)}"
     if isinstance(t, pydsdl.UnsignedIntegerType):
@@ -332,4 +332,4 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
     if isinstance(t, pydsdl.FloatType):
         return f"_np_.float{pick_width(t.bit_length)}"
     assert not isinstance(t, pydsdl.PrimitiveType), "Forgot to handle some primitive types"
-    return "object"  # numpy.object is deprecated in v1.20
+    return "_np_.object_"
