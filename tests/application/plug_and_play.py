@@ -15,9 +15,10 @@ _TABLE = pathlib.Path("allocation_table.db")
 
 _logger = logging.getLogger(__name__)
 
+pytestmark = pytest.mark.asyncio
 
-@pytest.mark.parametrize("mtu", [8, 16, 20, 64])
-@pytest.mark.asyncio
+
+@pytest.mark.parametrize("mtu", [8, 16, 20, 64])  # type: ignore
 async def _unittest_slow_plug_and_play_centralized(
     compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], mtu: int
 ) -> None:
@@ -96,7 +97,6 @@ async def _unittest_slow_plug_and_play_centralized(
     await asyncio.sleep(1.0)  # Let the tasks finalize properly.
 
 
-@pytest.mark.asyncio
 async def _unittest_slow_plug_and_play_allocatee(
     compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
 ) -> None:

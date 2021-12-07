@@ -13,7 +13,7 @@ from pyuavcan.transport.can.media import Envelope, DataFrame, FrameFormat
 from pyuavcan.transport.can.media.pythoncan import PythonCANMedia
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_can_pythoncan() -> None:
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
@@ -102,8 +102,8 @@ async def _unittest_can_pythoncan() -> None:
     media_b.close()
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="SocketCAN test requires GNU/Linux")
-@pytest.mark.asyncio
+@pytest.mark.skipif(sys.platform != "linux", reason="SocketCAN test requires GNU/Linux")  # type: ignore
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_can_pythoncan_socketcan() -> None:
     asyncio.get_running_loop().slow_callback_duration = 5.0
 

@@ -12,7 +12,9 @@ import pyuavcan.transport
 import pyuavcan.transport.loopback
 
 
-@pytest.mark.asyncio
+pytestmark = pytest.mark.asyncio
+
+
 async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     tr = pyuavcan.transport.loopback.LoopbackTransport(None)
     protocol_params = pyuavcan.transport.ProtocolParameters(
@@ -192,7 +194,6 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio
 async def _unittest_loopback_transport_service() -> None:
     from pyuavcan.transport import ServiceDataSpecifier, InputSessionSpecifier, OutputSessionSpecifier
 
@@ -221,7 +222,6 @@ async def _unittest_loopback_transport_service() -> None:
     assert None is not await inp.receive(0)
 
 
-@pytest.mark.asyncio
 async def _unittest_loopback_tracer() -> None:
     from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Timestamp, Priority
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, TransferTrace
@@ -292,7 +292,6 @@ async def _unittest_loopback_tracer() -> None:
     assert tr.update(pyuavcan.transport.Capture(ts)) is None
 
 
-@pytest.mark.asyncio
 async def _unittest_loopback_spoofing() -> None:
     from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
     from pyuavcan.transport import MessageDataSpecifier

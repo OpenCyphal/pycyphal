@@ -13,8 +13,9 @@ import pyuavcan.transport
 from pyuavcan.transport.serial import SerialTransport, SerialTransportStatistics, SerialFrame
 from pyuavcan.transport.serial import SerialCapture
 
+pytestmark = pytest.mark.asyncio
 
-@pytest.mark.asyncio
+
 async def _unittest_serial_transport(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
@@ -335,7 +336,6 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio
 async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
@@ -468,7 +468,6 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     events2.clear()
 
 
-@pytest.mark.asyncio
 async def _unittest_serial_spoofing() -> None:
     from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
     from pyuavcan.transport import MessageDataSpecifier

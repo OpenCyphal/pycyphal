@@ -11,8 +11,9 @@ from pyuavcan.transport.udp import UDPTransport
 from pyuavcan.transport.redundant import RedundantTransport
 from pyuavcan.presentation import Presentation
 
+pytestmark = pytest.mark.asyncio
 
-@pytest.mark.asyncio
+
 async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     from pyuavcan.application import make_node, make_registry
     import uavcan.primitive

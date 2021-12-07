@@ -187,6 +187,7 @@
       <w>pylint</w>
       <w>pyserial</w>
       <w>pytest</w>
+      <w>pytestmark</w>
       <w>pythonasynciodebug</w>
       <w>pythoncan</w>
       <w>pythonic</w>

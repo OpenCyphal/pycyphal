@@ -18,7 +18,7 @@ from pyuavcan.transport.can import CANTransport
 from tests.transport.serial import VIRTUAL_BUS_URI as SERIAL_URI
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
@@ -302,7 +302,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio
+@pytest.mark.asyncio  # type: ignore
 async def _unittest_redundant_transport_capture() -> None:
     from threading import Lock
     from pyuavcan.transport import Capture, Trace, TransferTrace, Priority, ServiceDataSpecifier

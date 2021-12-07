@@ -135,7 +135,7 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
     yield heterogeneous_udp_serial
 
 
-@pytest.fixture(params=list(_generate()))
+@pytest.fixture(params=list(_generate()))  # type: ignore
 def transport_factory(request: typing.Any) -> typing.Iterable[TransportFactory]:
     """
     This parametrized fixture generates multiple transport factories to run the test against different transports.

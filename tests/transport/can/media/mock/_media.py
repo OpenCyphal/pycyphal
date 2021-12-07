@@ -10,6 +10,8 @@ import pyuavcan.transport
 from pyuavcan.transport import Timestamp
 from pyuavcan.transport.can.media import Media, Envelope, FilterConfiguration, DataFrame, FrameFormat
 
+pytestmark = pytest.mark.asyncio
+
 
 class MockMedia(Media):
     def __init__(self, peers: typing.Set[MockMedia], mtu: int, number_of_acceptance_filters: int):
@@ -147,7 +149,6 @@ class MockMedia(Media):
         return FilterConfiguration(0, 2 ** int(fmt) - 1, fmt)
 
 
-@pytest.mark.asyncio
 async def _unittest_can_mock_media() -> None:
     peers: typing.Set[MockMedia] = set()
 
