@@ -323,7 +323,7 @@ class SerialTransport(pyuavcan.transport.Transport):
     def _handle_received_frame(self, timestamp: Timestamp, frame: SerialFrame) -> None:
         self._statistics.in_frames += 1
         if frame.destination_node_id in (self._local_node_id, None):
-            for source_node_id in {None, frame.source_node_id}:
+            for source_node_id in {None, frame.source_node_id}:  # pylint: disable=use-sequence-for-iteration
                 ss = pyuavcan.transport.InputSessionSpecifier(frame.data_specifier, source_node_id)
                 try:
                     session = self._input_registry[ss]

@@ -139,7 +139,8 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                         ),
                     )
                 )
-                for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
+                # Multicast to both: selective and promiscuous.
+                for remote_node_id in {self.local_node_id, None}:  # pylint: disable=use-sequence-for-iteration
                     try:
                         destination_session = self._input_sessions[
                             pyuavcan.transport.InputSessionSpecifier(specifier.data_specifier, remote_node_id)

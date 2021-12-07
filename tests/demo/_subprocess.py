@@ -44,7 +44,7 @@ class BackgroundChildProcess:
 
         # Buffering must be DISABLED, otherwise we can't read data on Windows after the process is interrupted.
         # For some reason stdout is not flushed at exit there.
-        self._inferior = subprocess.Popen(
+        self._inferior = subprocess.Popen(  # pylint: disable=consider-using-with
             cmd,
             stdout=subprocess.PIPE,
             stderr=sys.stderr,

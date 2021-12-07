@@ -3,7 +3,7 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 from __future__ import annotations
-from typing import Union, Iterable, List, Any, Optional, no_type_check, Any
+from typing import Union, Iterable, List, Any, Optional, no_type_check
 from numpy.typing import NDArray
 import pyuavcan
 from pyuavcan.dsdl import get_attribute

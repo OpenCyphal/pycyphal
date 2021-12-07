@@ -256,7 +256,7 @@ class SocketCANMedia(Media):
             _logger.debug(
                 "Could not scrape the output of `ip link show`, using the fallback method: %s", ex, exc_info=True
             )
-            with open("/proc/net/dev") as f:
+            with open("/proc/net/dev") as f:  # pylint: disable=unspecified-encoding
                 out = [line.split(":")[0].strip() for line in f if ":" in line and "can" in line]
             return sorted(out, key=lambda x: "can" in x, reverse=True)
 

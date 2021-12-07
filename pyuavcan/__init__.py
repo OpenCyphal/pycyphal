@@ -35,7 +35,7 @@ import os as _os
 import sys as _sys
 
 
-with open(_os.path.join(_os.path.dirname(__file__), "VERSION")) as _version:
+with open(_os.path.join(_os.path.dirname(__file__), "VERSION"), encoding="utf8") as _version:
     __version__ = _version.read().strip()
 __version_info__ = tuple(map(int, __version__.split(".")[:3]))
 __author__ = "UAVCAN Consortium"
@@ -68,7 +68,7 @@ if _log_level_from_env is not None:
 
 
 # The sub-packages are imported in the order of their interdependency.
-import pyuavcan.util as util  # pylint: disable=wrong-import-position  # noqa
-import pyuavcan.dsdl as dsdl  # pylint: disable=wrong-import-position  # noqa
-import pyuavcan.transport as transport  # pylint: disable=wrong-import-position  # noqa
-import pyuavcan.presentation as presentation  # pylint: disable=wrong-import-position  # noqa
+import pyuavcan.util as util  # pylint: disable=R0402,C0413  # noqa
+import pyuavcan.dsdl as dsdl  # pylint: disable=R0402,C0413  # noqa
+import pyuavcan.transport as transport  # pylint: disable=R0402,C0413  # noqa
+import pyuavcan.presentation as presentation  # pylint: disable=R0402,C0413  # noqa

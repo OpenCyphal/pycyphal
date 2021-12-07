@@ -19,7 +19,7 @@ def _unittest_bad_usage() -> None:
 
 def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
     caplog.set_level(logging.INFO)
-    output_directory = tempfile.TemporaryDirectory()
+    output_directory = tempfile.TemporaryDirectory()  # pylint: disable=consider-using-with
     output_directory_name = pathlib.Path(output_directory.name).resolve()
     caplog.clear()
     pyuavcan.dsdl.compile(DEMO_DIR / "public_regulated_data_types" / "uavcan", output_directory=output_directory.name)

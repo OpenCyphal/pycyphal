@@ -29,7 +29,7 @@ def mirror(env: Dict[str, str]) -> Dict[str, str]:
 
     def impl() -> Iterator[Tuple[str, str]]:
         for k, v in env.items():
-            for m in maps:
+            for m in maps:  # pylint: disable=consider-using-dict-items
                 if m in k:
                     k = k.replace(m, maps[m])
                     break
