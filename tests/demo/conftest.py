@@ -8,7 +8,7 @@ import pytest
 from .. import DEMO_DIR
 
 
-@pytest.fixture()  # type: ignore
+@pytest.fixture()
 def cd_to_demo() -> Iterator[None]:
     restore_to = os.getcwd()
     os.chdir(DEMO_DIR)

@@ -12,7 +12,7 @@ import pyuavcan.transport
 from pyuavcan.transport.udp import UDPTransport, UDPTransportStatistics
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_udp_transport_ipv4() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
@@ -247,7 +247,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_udp_transport_ipv4_capture() -> None:
     import socket
     from pyuavcan.transport.udp import UDPCapture, IPPacket

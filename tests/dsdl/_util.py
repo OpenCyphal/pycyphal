@@ -136,6 +136,6 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
             32: numpy.float32,
             64: numpy.float64,
         }[model.bit_length]
-        return bool(numpy.allclose(t(a), t(b), equal_nan=True))
+        return bool(numpy.allclose(t(a), t(b), equal_nan=True))  # type: ignore
 
     return bool(numpy.allclose(a, b))

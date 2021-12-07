@@ -12,7 +12,7 @@ from .conftest import TransportFactory
 _RX_TIMEOUT = 1.0
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_slow_presentation_pub_sub_anon(
     compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:
@@ -114,7 +114,7 @@ async def _unittest_slow_presentation_pub_sub_anon(
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_slow_presentation_pub_sub(
     compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:

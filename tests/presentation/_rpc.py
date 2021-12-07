@@ -9,7 +9,7 @@ import pyuavcan
 from .conftest import TransportFactory
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_slow_presentation_rpc(
     compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:

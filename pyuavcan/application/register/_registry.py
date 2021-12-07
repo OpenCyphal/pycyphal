@@ -332,11 +332,11 @@ class Registry(MutableMapping[str, ValueProxy]):
                 e = b.get(name)
                 if e is not None:
                     c = ValueProxy(e.value)
-                    c.assign(value)
+                    c.assign(value)  # type: ignore
                     b[name] = c.value
                     return
 
-        self._create_static(name, ValueProxy(value).value)
+        self._create_static(name, ValueProxy(value).value)  # type: ignore
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, self.backends)

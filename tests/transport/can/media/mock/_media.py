@@ -147,7 +147,7 @@ class MockMedia(Media):
         return FilterConfiguration(0, 2 ** int(fmt) - 1, fmt)
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_can_mock_media() -> None:
     peers: typing.Set[MockMedia] = set()
 

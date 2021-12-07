@@ -91,8 +91,8 @@ def _get_run_configs() -> Iterable[RunConfig]:
         )
 
 
-@pytest.mark.parametrize("parameters", [(idx == 0, rc) for idx, rc in enumerate(_get_run_configs())])  # type: ignore
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.parametrize("parameters", [(idx == 0, rc) for idx, rc in enumerate(_get_run_configs())])
+@pytest.mark.asyncio
 async def _unittest_slow_demo_app(
     compiled: Iterator[List[pyuavcan.dsdl.GeneratedPackageInfo]],
     parameters: Tuple[bool, RunConfig],
@@ -321,8 +321,8 @@ async def _unittest_slow_demo_app(
         await asyncio.sleep(2.0)  # Let coroutines terminate properly to avoid resource usage warnings.
 
 
-@pytest.mark.parametrize("run_config", _get_run_configs())  # type: ignore
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.parametrize("run_config", _get_run_configs())
+@pytest.mark.asyncio
 async def _unittest_slow_demo_app_with_plant(
     compiled: Iterator[List[pyuavcan.dsdl.GeneratedPackageInfo]],
     run_config: RunConfig,

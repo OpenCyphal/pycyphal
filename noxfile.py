@@ -58,7 +58,7 @@ def test(session):
     session.install(
         "pytest         ~= 4.6",  # Update when https://github.com/UAVCAN/nunavut/issues/144 is fixed
         "pytest-asyncio == 0.10",  # Update when https://github.com/UAVCAN/nunavut/issues/144 is fixed
-        "coverage       ~= 5.3",
+        "coverage       ~= 6.2",
     )
 
     # The test suite generates a lot of temporary files, so we change the working directory.
@@ -114,8 +114,8 @@ def test(session):
     #   2. At least MyPy has to be run separately per Python version we support.
     # If the interpreter is not CPython, this may need to be conditionally disabled.
     session.install(
-        "mypy   == 0.812",
-        "pylint == 2.6.0",
+        "mypy   == 0.910",
+        "pylint == 2.12.*",
     )
     session.run("mypy", "--strict", *map(str, src_dirs), str(compiled_dir))
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
@@ -193,7 +193,7 @@ def pristine(session):
 
 @nox.session(reuse_venv=True)
 def check_style(session):
-    session.install("black == 20.8b1")
+    session.install("black == 21.12b0")
     session.run("black", "--check", ".")
 
 

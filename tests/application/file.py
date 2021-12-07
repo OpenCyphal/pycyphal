@@ -12,7 +12,7 @@ import pytest
 import pyuavcan
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_file(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     from pyuavcan.application import make_node, NodeInfo
     from pyuavcan.transport.udp import UDPTransport

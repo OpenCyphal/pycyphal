@@ -14,7 +14,7 @@ from pyuavcan.transport import can
 _RX_TIMEOUT = 10e-3
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_can_transport_anon() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
@@ -231,7 +231,7 @@ async def _unittest_can_transport_anon() -> None:
     tr2.close()
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
@@ -933,7 +933,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_issue_120() -> None:
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
@@ -975,7 +975,7 @@ async def _unittest_issue_120() -> None:
     assert 0 == tr.sample_statistics().lost_loopback_frames
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_can_capture_trace() -> None:
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer, Priority, Timestamp
     from pyuavcan.transport import InputSessionSpecifier, OutputSessionSpecifier, TransferTrace
@@ -1063,7 +1063,7 @@ async def _unittest_can_capture_trace() -> None:
     assert b"second" in trc.transfer.fragmented_payload[0].tobytes()
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_can_spoofing() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, Priority, Timestamp
     from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata
