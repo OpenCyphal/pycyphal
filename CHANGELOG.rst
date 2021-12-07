@@ -3,6 +3,19 @@
 Changelog
 =========
 
+v1.3
+----
+
+- Remove the NumPy <= 0.17 version constraint. This change addressed Python 3.10 compatibility issues.
+
+- Improve type annotations in generated code thanks to the new NumPy typing support.
+
+- Improve logging and error reporting.
+
+- Fix issues related to UDP packet capture.
+
+- Support assignment of ``memoryview`` to ``uint8``-typed arrays.
+
 v1.2
 ----
 
