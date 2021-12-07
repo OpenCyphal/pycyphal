@@ -14,6 +14,18 @@ import pyuavcan.dsdl
 _logger = logging.getLogger(__name__)
 
 
+def _unittest_slow_manual_assignment(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+    from uavcan.primitive import Unstructured_1_0 as Un, String_1_0 as St
+
+    _ = compiled
+
+    ob1 = Un(memoryview(b"Hello world"))
+    assert ob1.value.tobytes().decode() == "Hello world"
+
+    ob2 = St(memoryview(b"Hello world"))
+    assert ob2.value.tobytes().decode() == "Hello world"
+
+
 # noinspection PyUnusedLocal
 def _unittest_slow_manual_del(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     import test_dsdl_namespace.if_
