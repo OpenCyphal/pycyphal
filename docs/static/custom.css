@@ -9,9 +9,6 @@ h2 {
     border-bottom: 1px solid #ddd;
     padding-bottom: 0.2em;
 }
-p {
-    margin-bottom: 16px;
-}
 
 /* Desktop optimization. */
 @media (min-width: 1200px) {
@@ -33,15 +30,6 @@ p {
 }
 .rst-content table.docutils thead th {
     border: solid 1px #555 !important;
-}
-.rst-content table.docutils thead th p {
-    margin: 0;
-}
-
-.rst-content .section .toctree-wrapper ol li > *,
-.rst-content .section .toctree-wrapper ul li > * {
-    margin-top: 0;
-    margin-bottom: 0;
 }
 
 .rst-content li.toctree-l1 > a {
