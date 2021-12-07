@@ -58,7 +58,7 @@ import {{ n }}
     {%- elif t is CompositeType -%} {{ t|full_reference_name }}
     {%- elif t is ArrayType -%}
         {%- if (t.element_type is UnsignedIntegerType) and t.element_type.bit_length <= 8 -%}
-            _NDArray_[{{ t.element_type|numpy_scalar_type }}] | list[int] | memoryview | bytes | bytearray{%- if t.string_like -%} | str{%- endif -%}
+            _NDArray_[{{ t.element_type|numpy_scalar_type }}] | list[int] | memoryview | bytes | bytearray {% if t.string_like -%}| str{%- endif -%}
         {%- else -%}
             _NDArray_[{{ t.element_type|numpy_scalar_type }}] | list[{{ strict_type_annotation(t.element_type) }}]
         {%- endif -%}
