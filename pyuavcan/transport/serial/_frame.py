@@ -166,18 +166,18 @@ class SerialFrame(pyuavcan.transport.commons.high_overhead_transport.Frame):
         src_nid = None if src_nid == _ANONYMOUS_NODE_ID else src_nid
         dst_nid = None if dst_nid == _ANONYMOUS_NODE_ID else dst_nid
 
-        data_specifier: pyuavcan.transport.DataSpecifier
-        if int_data_spec & (1 << 15) == 0:
-            data_specifier = pyuavcan.transport.MessageDataSpecifier(int_data_spec)
-        else:
-            if int_data_spec & (1 << 14):
-                role = pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE
+        try:  # https://github.com/UAVCAN/pyuavcan/issues/176
+            data_specifier: pyuavcan.transport.DataSpecifier
+            if int_data_spec & (1 << 15) == 0:
+                data_specifier = pyuavcan.transport.MessageDataSpecifier(int_data_spec)
             else:
-                role = pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
-            service_id = int_data_spec & pyuavcan.transport.ServiceDataSpecifier.SERVICE_ID_MASK
-            data_specifier = pyuavcan.transport.ServiceDataSpecifier(service_id, role)
+                if int_data_spec & (1 << 14):
+                    role = pyuavcan.transport.ServiceDataSpecifier.Role.RESPONSE
+                else:
+                    role = pyuavcan.transport.ServiceDataSpecifier.Role.REQUEST
+                service_id = int_data_spec & pyuavcan.transport.ServiceDataSpecifier.SERVICE_ID_MASK
+                data_specifier = pyuavcan.transport.ServiceDataSpecifier(service_id, role)
 
-        try:
             # noinspection PyArgumentList
             return SerialFrame(
                 priority=pyuavcan.transport.Priority(int_priority),
