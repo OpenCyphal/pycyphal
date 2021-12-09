@@ -95,7 +95,6 @@ class Server(ServicePort[ServiceClass]):
         input_transport_session: pyuavcan.transport.InputSession,
         output_transport_session_factory: OutputTransportSessionFactory,
         finalizer: PortFinalizer,
-        loop: asyncio.AbstractEventLoop,
     ):
         """
         Do not call this directly! Use :meth:`Presentation.get_server`.
@@ -104,7 +103,6 @@ class Server(ServicePort[ServiceClass]):
         self._input_transport_session = input_transport_session
         self._output_transport_session_factory = output_transport_session_factory
         self._finalizer = finalizer
-        self._loop = loop
 
         self._output_transport_sessions: typing.Dict[int, pyuavcan.transport.OutputSession] = {}
         self._maybe_task: typing.Optional[asyncio.Task[None]] = None
@@ -127,13 +125,14 @@ class Server(ServicePort[ServiceClass]):
         The deadline value is compared against :meth:`asyncio.AbstractEventLoop.time`.
         If no deadline is provided, it is assumed to be infinite.
         """
+        loop = asyncio.get_running_loop()
         # Observe that if we aggregate redundant transports with different non-monotonic transfer ID modulo values,
         # it might be that the transfer ID that we obtained from the request may be invalid for some of the transports.
         # This is why we can't reliably aggregate redundant transports with different transfer-ID overflow parameters.
         while not self._closed:
             out: typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, ServiceRequestMetadata]]
             if monotonic_deadline is None:
-                out = await self._receive(self._loop.time() + _LISTEN_FOREVER_TIMEOUT)
+                out = await self._receive(loop.time() + _LISTEN_FOREVER_TIMEOUT)
                 if out is None:
                     continue
             else:
@@ -164,7 +163,7 @@ class Server(ServicePort[ServiceClass]):
             # Send the response unless the application has opted out, in which case do nothing.
             if response is not None:
                 # TODO: make the send timeout configurable.
-                await self._do_send(response, meta, response_transport_session, self._loop.time() + self._send_timeout)
+                await self._do_send(response, meta, response_transport_session, loop.time() + self._send_timeout)
 
     async def serve_for(
         self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass], timeout: float
@@ -177,7 +176,8 @@ class Server(ServicePort[ServiceClass]):
         The handler shall return the response or None. If None is returned, the server will not send any response back
         (this practice is discouraged). If the handler throws an exception, it will be suppressed and logged.
         """
-        return await self.serve(handler, monotonic_deadline=self._loop.time() + timeout)
+        loop = asyncio.get_running_loop()
+        return await self.serve(handler, monotonic_deadline=loop.time() + timeout)
 
     def serve_in_background(self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass]) -> None:
         """
@@ -211,7 +211,7 @@ class Server(ServicePort[ServiceClass]):
             self._maybe_task.cancel()
 
         self._raise_if_closed()
-        self._maybe_task = self._loop.create_task(task_function())
+        self._maybe_task = asyncio.create_task(task_function())
 
     # ----------------------------------------  AUXILIARY  ----------------------------------------
 

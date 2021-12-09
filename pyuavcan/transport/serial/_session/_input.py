@@ -38,7 +38,6 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         self,
         specifier: pyuavcan.transport.InputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        loop: asyncio.AbstractEventLoop,
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -47,14 +46,10 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
         """
         self._specifier = specifier
         self._payload_metadata = payload_metadata
-        self._loop = loop
-        assert self._loop is not None
-
         self._statistics = SerialInputSessionStatistics()
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
         self._reassemblers: typing.Dict[int, TransferReassembler] = {}
-
         super().__init__(finalizer)
 
     def _process_frame(self, timestamp: Timestamp, frame: SerialFrame) -> None:
@@ -88,7 +83,8 @@ class SerialInputSession(SerialSession, pyuavcan.transport.InputSession):
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
         try:
-            timeout = monotonic_deadline - self._loop.time()
+            loop = asyncio.get_running_loop()
+            timeout = monotonic_deadline - loop.time()
             if timeout > 0:
                 transfer = await asyncio.wait_for(self._queue.get(), timeout)
             else:

@@ -104,8 +104,11 @@ class Node(abc.ABC):
         raise NotImplementedError
 
     @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        """Shortcut for ``self.presentation.loop``"""
+    def loop(self) -> asyncio.AbstractEventLoop:  # pragma: no cover
+        """Deprecated; use ``asyncio.get_event_loop()`` instead."""
+        import warnings
+
+        warnings.warn("The loop property is deprecated; use asyncio.get_event_loop() instead.", DeprecationWarning)
         return self.presentation.loop
 
     @property

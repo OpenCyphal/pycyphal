@@ -6,6 +6,7 @@ import copy
 import typing
 import asyncio
 import logging
+import warnings
 import threading
 import dataclasses
 import concurrent.futures
@@ -105,11 +106,12 @@ class SerialTransport(pyuavcan.transport.Transport):
         :param baudrate: If not None, the specified baud rate will be configured on the serial port.
             Otherwise, the baudrate will be left unchanged.
 
-        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+        :param loop: Deprecated.
         """
         self._service_transfer_multiplier = int(service_transfer_multiplier)
         self._mtu = int(mtu)
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
+        if loop:
+            warnings.warn("The loop argument is deprecated.", DeprecationWarning)
 
         low, high = self.VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE
         if not (low <= self._service_transfer_multiplier <= high):
@@ -155,12 +157,10 @@ class SerialTransport(pyuavcan.transport.Transport):
 
         self._background_executor = concurrent.futures.ThreadPoolExecutor()
 
-        self._reader_thread = threading.Thread(target=self._reader_thread_func, daemon=True)
+        self._reader_thread = threading.Thread(
+            target=self._reader_thread_func, args=(asyncio.get_event_loop(),), daemon=True
+        )
         self._reader_thread.start()
-
-    @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        return self._loop
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -195,9 +195,7 @@ class SerialTransport(pyuavcan.transport.Transport):
         try:
             out = self._input_registry[specifier]
         except LookupError:
-            out = SerialInputSession(
-                specifier=specifier, payload_metadata=payload_metadata, loop=self._loop, finalizer=finalizer
-            )
+            out = SerialInputSession(specifier=specifier, payload_metadata=payload_metadata, finalizer=finalizer)
             self._input_registry[specifier] = out
 
         assert isinstance(out, SerialInputSession)
@@ -367,11 +365,12 @@ class SerialTransport(pyuavcan.transport.Transport):
         """
         tx_ts: typing.Optional[Timestamp] = None
         self._ensure_not_closed()
+        loop = asyncio.get_running_loop()
         try:  # Jeez this is getting complex
             num_sent = 0
             for fr in frames:
                 async with self._port_lock:  # TODO: the lock acquisition should be prioritized by frame priority!
-                    min_buffer_size = len(fr.payload) * 3
+                    min_buffer_size = len(fr.payload) * 2
                     if len(self._serialization_buffer) < min_buffer_size:
                         _logger.debug(
                             "%s: The serialization buffer is being enlarged from %d to %d bytes",
@@ -381,11 +380,11 @@ class SerialTransport(pyuavcan.transport.Transport):
                         )
                         self._serialization_buffer = bytearray(0 for _ in range(min_buffer_size))
                     compiled = fr.compile_into(self._serialization_buffer)
-                    timeout = monotonic_deadline - self._loop.time()
+                    timeout = monotonic_deadline - loop.time()
                     if timeout > 0:
                         self._serial_port.write_timeout = timeout
                         try:
-                            num_written = await self._loop.run_in_executor(
+                            num_written = await loop.run_in_executor(
                                 self._background_executor, self._serial_port.write, compiled
                             )
                             tx_ts = tx_ts or Timestamp.now()
@@ -419,12 +418,12 @@ class SerialTransport(pyuavcan.transport.Transport):
                 self._statistics.out_incomplete += 1
             return tx_ts
 
-    def _reader_thread_func(self) -> None:
+    def _reader_thread_func(self, loop: asyncio.AbstractEventLoop) -> None:
         in_bytes_count = 0
 
         def callback(ts: Timestamp, buf: memoryview, frame: typing.Optional[SerialFrame]) -> None:
             item = buf if frame is None else frame
-            self._loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, ts, item, in_bytes_count)
+            loop.call_soon_threadsafe(self._handle_received_item_and_update_stats, ts, item, in_bytes_count)
             if self._capture_handlers:
                 pyuavcan.util.broadcast(self._capture_handlers)(SerialCapture(ts, buf, own=False))
 

@@ -57,9 +57,7 @@ class Subscriber(MessagePort[MessageClass]):
     the user code cannot access it and generally shouldn't care.
     """
 
-    def __init__(
-        self, impl: SubscriberImpl[MessageClass], loop: asyncio.AbstractEventLoop, queue_capacity: typing.Optional[int]
-    ):
+    def __init__(self, impl: SubscriberImpl[MessageClass], queue_capacity: typing.Optional[int]):
         """
         Do not call this directly! Use :meth:`Presentation.make_subscriber`.
         """
@@ -73,7 +71,6 @@ class Subscriber(MessagePort[MessageClass]):
 
         self._closed = False
         self._impl = impl
-        self._loop = loop
         self._maybe_task: typing.Optional[asyncio.Task[None]] = None
         self._rx: _Listener[MessageClass] = _Listener(asyncio.Queue(maxsize=queue_capacity))
         impl.add_listener(self._rx)
@@ -118,7 +115,7 @@ class Subscriber(MessagePort[MessageClass]):
         if self._maybe_task is not None:
             self._maybe_task.cancel()
 
-        self._maybe_task = self._loop.create_task(task_function())
+        self._maybe_task = asyncio.create_task(task_function())
 
     # ----------------------------------------  DIRECT RECEIVE  ----------------------------------------
 
@@ -140,7 +137,8 @@ class Subscriber(MessagePort[MessageClass]):
 
         If an infinite deadline is desired, consider using :meth:`__aiter__`/:meth:`__anext__`.
         """
-        return await self.receive_for(timeout=monotonic_deadline - self._loop.time())
+        loop = asyncio.get_running_loop()
+        return await self.receive_for(timeout=monotonic_deadline - loop.time())
 
     async def receive_for(
         self, timeout: float

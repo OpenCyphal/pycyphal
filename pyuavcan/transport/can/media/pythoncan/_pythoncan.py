@@ -12,6 +12,8 @@ import functools
 import dataclasses
 import collections
 import concurrent.futures
+import warnings
+
 import can  # type: ignore
 from pyuavcan.transport import Timestamp, ResourceClosedError, InvalidMediaConfigurationError
 from pyuavcan.transport.can.media import Media, FilterConfiguration, Envelope, FrameFormat, DataFrame
@@ -108,7 +110,7 @@ class PythonCANMedia(Media):
             - If `bitrate` is a single integer: classic CAN is assumed, MTU defaults to 8 bytes.
             - If `bitrate` is two integers: CAN FD is assumed, MTU defaults to 64 bytes.
 
-        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+        :param loop: Deprecated.
 
         :raises: :class:`InvalidMediaConfigurationError` if the specified media instance
             could not be constructed, the interface name is unknown,
@@ -144,6 +146,8 @@ class PythonCANMedia(Media):
             raise InvalidMediaConfigurationError(
                 f"Interface name {iface_name!r} does not match the format 'interface:channel'"
             )
+        if loop:
+            warnings.warn("The loop argument is deprecated", DeprecationWarning)
 
         single_bitrate = isinstance(bitrate, (int, float))
         bitrate = (int(bitrate), int(bitrate)) if single_bitrate else (int(bitrate[0]), int(bitrate[1]))  # type: ignore
@@ -157,7 +161,6 @@ class PythonCANMedia(Media):
             self._mtu == min(self.VALID_MTU_SET) and bitrate[0] == bitrate[1]
         )
 
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
@@ -177,10 +180,6 @@ class PythonCANMedia(Media):
         except can.CanError as ex:
             raise InvalidMediaConfigurationError(f"Could not initialize PythonCAN: {ex}") from ex
         super().__init__()
-
-    @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        return self._loop
 
     @property
     def interface_name(self) -> str:
@@ -208,7 +207,9 @@ class PythonCANMedia(Media):
     def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._maybe_thread is None:
             self._rx_handler = handler
-            self._maybe_thread = threading.Thread(target=self._thread_function, name=str(self), daemon=True)
+            self._maybe_thread = threading.Thread(
+                target=self._thread_function, args=(asyncio.get_event_loop(),), name=str(self), daemon=True
+            )
             self._maybe_thread.start()
             if no_automatic_retransmission:
                 _logger.info("%s non-automatic retransmission is not supported", self)
@@ -230,6 +231,7 @@ class PythonCANMedia(Media):
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         num_sent = 0
         loopback: typing.List[typing.Tuple[Timestamp, Envelope]] = []
+        loop = asyncio.get_running_loop()
         for f in frames:
             if self._closed:
                 raise ResourceClosedError(repr(self))
@@ -240,9 +242,9 @@ class PythonCANMedia(Media):
                 is_fd=self._is_fd,
             )
             try:
-                await self._loop.run_in_executor(
+                await loop.run_in_executor(
                     self._background_executor,
-                    functools.partial(self._bus.send, message, timeout=monotonic_deadline - self._loop.time()),
+                    functools.partial(self._bus.send, message, timeout=monotonic_deadline - loop.time()),
                 )
             except (asyncio.TimeoutError, can.CanError):  # CanError is also used to report timeouts (weird).
                 break
@@ -251,7 +253,7 @@ class PythonCANMedia(Media):
                 if f.loopback:
                     loopback.append((Timestamp.now(), f))
         if loopback:
-            self.loop.call_soon(self._invoke_rx_handler, loopback)
+            loop.call_soon(self._invoke_rx_handler, loopback)
         return num_sent
 
     def close(self) -> None:
@@ -279,12 +281,12 @@ class PythonCANMedia(Media):
         except Exception as exc:
             _logger.exception("%s unhandled exception in the receive handler: %s; lost frames: %s", self, exc, frs)
 
-    def _thread_function(self) -> None:
+    def _thread_function(self, loop: asyncio.AbstractEventLoop) -> None:
         while not self._closed:
             try:
                 batch = self._read_batch()
                 if batch:
-                    self._loop.call_soon_threadsafe(self._invoke_rx_handler, batch)
+                    loop.call_soon_threadsafe(self._invoke_rx_handler, batch)
             except OSError as ex:
                 if not self._closed:
                     _logger.exception("%s thread input/output error; stopping: %s", self, ex)

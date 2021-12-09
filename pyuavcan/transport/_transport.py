@@ -6,6 +6,7 @@ from __future__ import annotations
 import abc
 import typing
 import asyncio
+import warnings
 import dataclasses
 import pyuavcan.util
 from ._session import InputSession, OutputSession, InputSessionSpecifier, OutputSessionSpecifier
@@ -65,12 +66,12 @@ class Transport(abc.ABC):
     """
 
     @property
-    @abc.abstractmethod
-    def loop(self) -> asyncio.AbstractEventLoop:
+    def loop(self) -> asyncio.AbstractEventLoop:  # pragma: no cover
         """
-        The asyncio event loop used to operate the transport instance.
+        Deprecated.
         """
-        raise NotImplementedError
+        warnings.warn("The loop property is deprecated; use asyncio.get_running_loop() instead.", DeprecationWarning)
+        return asyncio.get_event_loop()
 
     @property
     @abc.abstractmethod

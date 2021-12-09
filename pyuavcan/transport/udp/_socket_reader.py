@@ -78,14 +78,12 @@ class SocketReader:
         local_ip_address: _IPAddress,
         anonymous: bool,
         statistics: SocketReaderStatistics,
-        loop: asyncio.AbstractEventLoop,
     ):
         """
         :param sock: The instance takes ownership of the socket; it will be closed when the instance is closed.
         :param local_ip_address: Needed for node-ID mapping.
         :param anonymous: If True, then packets originating from the local IP address will not be discarded.
         :param statistics: A reference to the external statistics object that will be updated by the instance.
-        :param loop: The event loop. You know the drill.
         """
         self._sock = sock
         self._sock.setblocking(False)
@@ -93,17 +91,18 @@ class SocketReader:
         self._local_ip_address = local_ip_address
         self._anonymous = anonymous
         self._statistics = statistics
-        self._loop = loop
 
         assert isinstance(self._local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address))
         assert isinstance(self._anonymous, bool)
         assert isinstance(self._statistics, SocketReaderStatistics)
-        assert isinstance(self._loop, asyncio.AbstractEventLoop)
 
         self._listeners: typing.Dict[typing.Optional[int], SocketReader.Listener] = {}
         self._ctl_worker, self._ctl_main = socket.socketpair()  # For communicating with the worker thread.
         self._thread = threading.Thread(
-            target=self._thread_entry_point, name=f"socket_reader_fd_{self._original_file_desc}", daemon=True
+            target=self._thread_entry_point,
+            args=(asyncio.get_event_loop(),),
+            name=f"socket_reader_fd_{self._original_file_desc}",
+            daemon=True,
         )
         self._thread.start()
 
@@ -223,7 +222,7 @@ class SocketReader:
             except LookupError:
                 self._statistics.accepted_datagrams[source_node_id] = 1
 
-    def _thread_entry_point(self) -> None:
+    def _thread_entry_point(self, loop: asyncio.AbstractEventLoop) -> None:
         while self._sock.fileno() >= 0:
             try:
                 read_ready, _, _ = select.select([self._ctl_worker, self._sock], [], [], _READ_TIMEOUT)
@@ -247,7 +246,7 @@ class SocketReader:
                         endpoint,
                         frame,
                     )
-                    self._loop.call_soon_threadsafe(self._dispatch_frame, ts, source_ip, frame)
+                    loop.call_soon_threadsafe(self._dispatch_frame, ts, source_ip, frame)
 
                 if self._ctl_worker in read_ready:
                     cmd = self._ctl_worker.recv(_READ_SIZE)
@@ -303,7 +302,7 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
 
     stats = SocketReaderStatistics()
     srd = SocketReader(
-        sock=sock_rx, local_ip_address=ip_address("127.100.4.210"), anonymous=False, statistics=stats, loop=loop  # 1234
+        sock=sock_rx, local_ip_address=ip_address("127.100.4.210"), anonymous=False, statistics=stats  # 1234
     )
     assert not srd.has_listeners
     with raises(LookupError):
@@ -501,7 +500,6 @@ def _unittest_socket_reader(caplog: typing.Any) -> None:
             local_ip_address=ip_address("127.100.4.210"),  # 1234
             anonymous=False,
             statistics=stats,
-            loop=loop,
         )
         srd._sock.close()  # pylint: disable=protected-access
         run_until_complete(asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
@@ -564,7 +562,6 @@ def _unittest_socket_reader_endpoint_reuse() -> None:
             local_ip_address=ip_address(destination_endpoint[0]),
             anonymous=False,
             statistics=stats,
-            loop=loop,
         )
         out.add_listener(listener_node_id, lambda *args: destination.append(args))  # type: ignore
         return out

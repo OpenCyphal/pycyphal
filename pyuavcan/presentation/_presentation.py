@@ -92,9 +92,9 @@ class Presentation:
         return self._transport
 
     @property
-    def loop(self) -> asyncio.AbstractEventLoop:
+    def loop(self) -> asyncio.AbstractEventLoop:  # pragma: no cover
         """
-        A wrapper for :attr:`pyuavcan.transport.Transport.loop`.
+        Deprecated.
         """
         return self._transport.loop
 
@@ -134,12 +134,11 @@ class Presentation:
                 transport_session=transport_session,
                 transfer_id_counter=transfer_id_counter,
                 finalizer=self._make_finalizer(Publisher, session_specifier),
-                loop=self.loop,
             )
             self._registry[Publisher, session_specifier] = impl
 
         assert isinstance(impl, PublisherImpl)
-        return Publisher(impl, self.loop)
+        return Publisher(impl)
 
     def make_subscriber(
         self, dtype: typing.Type[MessageClass], subject_id: int, queue_capacity: typing.Optional[int] = None
@@ -183,12 +182,11 @@ class Presentation:
                 dtype=dtype,
                 transport_session=transport_session,
                 finalizer=self._make_finalizer(Subscriber, session_specifier),
-                loop=self.loop,
             )
             self._registry[Subscriber, session_specifier] = impl
 
         assert isinstance(impl, SubscriberImpl)
-        return Subscriber(impl=impl, loop=self.loop, queue_capacity=queue_capacity)
+        return Subscriber(impl=impl, queue_capacity=queue_capacity)
 
     def make_client(
         self, dtype: typing.Type[ServiceClass], service_id: int, server_node_id: int
@@ -252,12 +250,11 @@ class Presentation:
                 transfer_id_counter=transfer_id_counter,
                 transfer_id_modulo_factory=transfer_id_modulo_factory,
                 finalizer=self._make_finalizer(Client, input_session_specifier),
-                loop=self.loop,
             )
             self._registry[Client, input_session_specifier] = impl
 
         assert isinstance(impl, ClientImpl)
-        return Client(impl=impl, loop=self.loop)
+        return Client(impl=impl)
 
     def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) -> Server[ServiceClass]:
         """
@@ -306,7 +303,6 @@ class Presentation:
                 input_transport_session=input_transport_session,
                 output_transport_session_factory=output_transport_session_factory,
                 finalizer=self._make_finalizer(Server, input_session_specifier),
-                loop=self.loop,
             )
             self._registry[Server, input_session_specifier] = impl
 

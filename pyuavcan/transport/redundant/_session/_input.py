@@ -53,7 +53,6 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         specifier: pyuavcan.transport.InputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
         tid_modulo_provider: typing.Callable[[], int],
-        loop: asyncio.AbstractEventLoop,
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -62,12 +61,10 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
         self._specifier = specifier
         self._payload_metadata = payload_metadata
         self._get_tid_modulo = tid_modulo_provider
-        self._loop = loop
         self._finalizer: typing.Optional[typing.Callable[[], None]] = finalizer
         assert isinstance(self._specifier, pyuavcan.transport.InputSessionSpecifier)
         assert isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata)
         assert isinstance(self._get_tid_modulo(), (type(None), int))
-        assert isinstance(self._loop, asyncio.AbstractEventLoop)
         assert callable(self._finalizer)
 
         self._inferiors: typing.List[_Inferior] = []
@@ -101,7 +98,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
             session.transfer_id_timeout = self.transfer_id_timeout
 
         # Launch the inferior's worker task in the last order and add that to the registry.
-        task = self._loop.create_task(self._inferior_worker_task(session))
+        task = asyncio.create_task(self._inferior_worker_task(session))
         self._inferiors.append(_Inferior(session=session, worker=task))
 
     def _close_inferior(self, session_index: int) -> None:
@@ -148,8 +145,9 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
             assert not isinstance(exc, (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError))
             raise exc
         # Check the read queue only if there are no pending errors.
+        loop = asyncio.get_running_loop()
         try:
-            timeout = monotonic_deadline - self._loop.time()
+            timeout = monotonic_deadline - loop.time()
             if timeout > 0:
                 tr = await asyncio.wait_for(self._read_queue.get(), timeout)
             else:
@@ -259,11 +257,12 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
 
     async def _inferior_worker_task(self, session: pyuavcan.transport.InputSession) -> None:
         iface_id = id(session)
+        loop = asyncio.get_running_loop()
         try:
             _logger.debug("%s: Task for inferior %016x is starting", self, iface_id)
             while self._deduplicator is not None:
                 try:
-                    deadline = self._loop.time() + RedundantInputSession._READ_TIMEOUT
+                    deadline = loop.time() + RedundantInputSession._READ_TIMEOUT
                     tr = await session.receive(deadline)
                     if tr is not None:
                         await self._process_transfer(session, tr)
@@ -313,9 +312,7 @@ def _unittest_redundant_input_cyclic() -> None:
         nonlocal is_retired
         is_retired = True
 
-    ses = RedundantInputSession(
-        spec, meta, tid_modulo_provider=lambda: 32, loop=loop, finalizer=retire  # Like CAN, for example.
-    )
+    ses = RedundantInputSession(spec, meta, tid_modulo_provider=lambda: 32, finalizer=retire)  # Like CAN, for example.
     assert not is_retired
     assert ses.specifier is spec
     assert ses.payload_metadata is meta
@@ -511,7 +508,6 @@ def _unittest_redundant_input_monotonic() -> None:
         spec,
         meta,
         tid_modulo_provider=lambda: 2 ** 56,  # Like UDP or serial - infinite modulo.
-        loop=loop,
         finalizer=lambda: None,
     )
     assert ses.specifier is spec

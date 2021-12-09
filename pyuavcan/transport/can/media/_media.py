@@ -6,6 +6,7 @@ from __future__ import annotations
 import abc
 import typing
 import asyncio
+import warnings
 import pyuavcan.util
 from pyuavcan.transport import Timestamp
 from ._frame import Envelope
@@ -31,13 +32,12 @@ class Media(abc.ABC):
     """Valid MTU values for Classic CAN and CAN FD."""
 
     @property
-    @abc.abstractmethod
     def loop(self) -> asyncio.AbstractEventLoop:
         """
-        The asyncio event loop used to operate the media instance.
-        Shall be the same one as that of the parent transport.
+        Deprecated.
         """
-        raise NotImplementedError
+        warnings.warn("The loop property is deprecated; use asyncio.get_running_loop() instead.", DeprecationWarning)
+        return asyncio.get_event_loop()
 
     @property
     @abc.abstractmethod

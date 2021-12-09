@@ -56,7 +56,7 @@ class Client(ServicePort[ServiceClass]):
         in MyPy, this should be switched back to proper implementation.
     """
 
-    def __init__(self, impl: ClientImpl[ServiceClass], loop: asyncio.AbstractEventLoop):
+    def __init__(self, impl: ClientImpl[ServiceClass]):
         """
         Do not call this directly! Use :meth:`Presentation.make_client`.
         """
@@ -64,7 +64,6 @@ class Client(ServicePort[ServiceClass]):
         self._maybe_impl: typing.Optional[ClientImpl[ServiceClass]] = impl
         impl.register_proxy()  # Register ASAP to ensure correct finalization.
 
-        self._loop = loop
         self._dtype = impl.dtype  # Permit usage after close()
         self._input_transport_session = impl.input_transport_session  # Same
         self._output_transport_session = impl.output_transport_session  # Same
@@ -198,7 +197,6 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         transfer_id_counter: OutgoingTransferIDCounter,
         transfer_id_modulo_factory: typing.Callable[[], int],
         finalizer: PortFinalizer,
-        loop: asyncio.AbstractEventLoop,
     ):
         self.dtype = dtype
         self.input_transport_session = input_transport_session
@@ -215,7 +213,6 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         # diagnostic and inspection tools.
         self._transfer_id_modulo_factory = transfer_id_modulo_factory
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
-        self._loop = loop
 
         self._lock = asyncio.Lock()
         self._proxy_count = 0
@@ -223,7 +220,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
             int, asyncio.Future[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]
         ] = {}
 
-        self._task = loop.create_task(self._task_function())
+        self._task = asyncio.create_task(self._task_function())
 
     @property
     def is_closed(self) -> bool:
@@ -232,6 +229,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
     async def call(
         self, request: pyuavcan.dsdl.CompositeObject, priority: pyuavcan.transport.Priority, response_timeout: float
     ) -> typing.Optional[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]:
+        loop = asyncio.get_running_loop()
         async with self._lock:
             if self.is_closed:
                 raise PortClosedError(repr(self))
@@ -243,14 +241,14 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
                 raise RequestTransferIDVariabilityExhaustedError(repr(self))
 
             try:
-                future = self._loop.create_future()
+                future = loop.create_future()
                 self._response_futures_by_transfer_id[transfer_id] = future
                 # The lock is still taken, this is intentional. Serialize access to the transport.
                 send_result = await self._do_send(
                     request=request,
                     transfer_id=transfer_id,
                     priority=priority,
-                    monotonic_deadline=self._loop.time() + response_timeout,
+                    monotonic_deadline=loop.time() + response_timeout,
                 )
             except BaseException:
                 self._forget_future(transfer_id)
@@ -322,9 +320,10 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
     async def _task_function(self) -> None:
         exception: typing.Optional[Exception] = None
+        loop = asyncio.get_running_loop()
         try:
             while not self.is_closed:
-                transfer = await self.input_transport_session.receive(self._loop.time() + _RECEIVE_TIMEOUT)
+                transfer = await self.input_transport_session.receive(loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is None:
                     continue
 

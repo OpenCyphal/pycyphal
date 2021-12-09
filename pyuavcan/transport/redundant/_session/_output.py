@@ -65,7 +65,6 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         self,
         specifier: pyuavcan.transport.OutputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        loop: asyncio.AbstractEventLoop,
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -73,11 +72,9 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         """
         self._specifier = specifier
         self._payload_metadata = payload_metadata
-        self._loop = loop
         self._finalizer: typing.Optional[typing.Callable[[], None]] = finalizer
         assert isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier)
         assert isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata)
-        assert isinstance(self._loop, asyncio.AbstractEventLoop)
         assert callable(self._finalizer)
 
         self._inferiors: typing.List[pyuavcan.transport.OutputSession] = []
@@ -171,6 +168,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         if self._finalizer is None:
             raise pyuavcan.transport.ResourceClosedError(f"{self} is closed")
 
+        loop = asyncio.get_running_loop()
         async with self._lock:  # Serialize access to the inferiors and the idle future.
             # It is required to create a local copy to prevent disruption of the logic when
             # the set of inferiors is changed in the background. Oh, Rust, where art thou.
@@ -180,12 +178,12 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             # Instead of returning immediately, we hang out here until the deadline is expired hoping that
             # an inferior is added while we're waiting here.
             assert not self._idle_send_future
-            if not inferiors and monotonic_deadline > self._loop.time():
+            if not inferiors and monotonic_deadline > loop.time():
                 try:
                     _logger.debug("%s has no inferiors; suspending the send method...", self)
-                    self._idle_send_future = self._loop.create_future()
+                    self._idle_send_future = loop.create_future()
                     try:
-                        await asyncio.wait_for(self._idle_send_future, timeout=monotonic_deadline - self._loop.time())
+                        await asyncio.wait_for(self._idle_send_future, timeout=monotonic_deadline - loop.time())
                     except asyncio.TimeoutError:
                         pass
                     else:
@@ -196,7 +194,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                         "%s send method unsuspended; available inferiors: %r; remaining time: %f",
                         self,
                         inferiors,
-                        monotonic_deadline - self._loop.time(),
+                        monotonic_deadline - loop.time(),
                     )
                 finally:
                     self._idle_send_future = None
@@ -332,7 +330,7 @@ def _unittest_redundant_output() -> None:
         nonlocal is_retired
         is_retired = True
 
-    ses = RedundantOutputSession(spec, meta, loop=loop, finalizer=retire)
+    ses = RedundantOutputSession(spec, meta, finalizer=retire)
     assert not is_retired
     assert ses.specifier is spec
     assert ses.payload_metadata is meta
@@ -645,7 +643,7 @@ def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
         nonlocal is_retired
         is_retired = True
 
-    ses = RedundantOutputSession(spec, meta, loop=loop, finalizer=retire)
+    ses = RedundantOutputSession(spec, meta, finalizer=retire)
     assert not is_retired
     assert ses.specifier is spec
     assert ses.payload_metadata is meta

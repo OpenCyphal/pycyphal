@@ -7,6 +7,7 @@ import copy
 import typing
 import asyncio
 import logging
+import warnings
 import dataclasses
 import pyuavcan.transport
 from pyuavcan.transport import Timestamp
@@ -82,12 +83,13 @@ class CANTransport(pyuavcan.transport.Transport):
         """
         :param media:         The media implementation.
         :param local_node_id: The node-ID to use. Can't be changed. None means anonymous (useful for PnP allocation).
-        :param loop:          The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+        :param loop:          Deprecated.
         """
         self._maybe_media: typing.Optional[Media] = media
         self._local_node_id = int(local_node_id) if local_node_id is not None else None
         self._media_lock = asyncio.Lock()
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
+        if loop:
+            warnings.warn("The loop argument is deprecated", DeprecationWarning)
 
         # Lookup performance for the output registry is not important because it's only used for loopback frames.
         # Hence we don't trade-off memory for speed here.
@@ -117,16 +119,7 @@ class CANTransport(pyuavcan.transport.Transport):
                 f"The number of acceptance filters is too low: {media.number_of_acceptance_filters}"
             )
 
-        if media.loop is not self._loop:
-            raise pyuavcan.transport.InvalidMediaConfigurationError(
-                f"The media instance cannot use a different event loop: {media.loop} is not {self._loop}"
-            )
-
         media.start(self._on_frames_received, no_automatic_retransmission=self._local_node_id is None)
-
-    @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        return self._loop
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -183,9 +176,7 @@ class CANTransport(pyuavcan.transport.Transport):
 
         session = self._input_dispatch_table.get(specifier)
         if session is None:
-            session = CANInputSession(
-                specifier=specifier, payload_metadata=payload_metadata, loop=self._loop, finalizer=finalizer
-            )
+            session = CANInputSession(specifier=specifier, payload_metadata=payload_metadata, finalizer=finalizer)
             self._input_dispatch_table.add(session)
             self._reconfigure_acceptance_filters()
         return session
@@ -308,13 +299,14 @@ class CANTransport(pyuavcan.transport.Transport):
         """
         All frames shall share the same CAN ID value.
         """
+        loop = asyncio.get_running_loop()
         force_loopback = bool(self._capture_handlers)
         async with self._media_lock:
             if self._maybe_media is None:
                 raise pyuavcan.transport.ResourceClosedError(f"{self} is closed")
 
             if _logger.isEnabledFor(logging.DEBUG):
-                timeout = t.monotonic_deadline - self._loop.time()
+                timeout = t.monotonic_deadline - loop.time()
                 _logger.debug(
                     "%s: Sending %d frames; 1st loopback: %s; deadline in %.3f s:\n%s",
                     self,

@@ -11,6 +11,7 @@ import struct
 import select
 import asyncio
 import logging
+import warnings
 import threading
 import contextlib
 import pyuavcan.transport
@@ -47,15 +48,15 @@ class SocketCANMedia(Media):
         :param mtu: The maximum data field size in bytes. CAN FD is used if this value > 8, Classic CAN otherwise.
             This value must belong to Media.VALID_MTU_SET.
 
-        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+        :param loop: Deprecated.
         """
         self._mtu = int(mtu)
         if self._mtu not in self.VALID_MTU_SET:
             raise ValueError(f"Invalid MTU: {self._mtu} not in {self.VALID_MTU_SET}")
+        if loop:
+            warnings.warn("The loop argument is deprecated", DeprecationWarning)
 
         self._iface_name = str(iface_name)
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
-
         self._is_fd = self._mtu > _NativeFrameDataCapacity.CAN_CLASSIC
         self._native_frame_data_capacity = int(
             {
@@ -74,10 +75,6 @@ class SocketCANMedia(Media):
         self._ancillary_data_buffer_size = socket.CMSG_SPACE(_TIMEVAL_STRUCT.size)  # Used for recvmsg()
 
         super().__init__()
-
-    @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        return self._loop
 
     @property
     def interface_name(self) -> str:
@@ -100,7 +97,7 @@ class SocketCANMedia(Media):
     def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._maybe_thread is None:
             self._maybe_thread = threading.Thread(
-                target=self._thread_function, name=str(self), args=(handler,), daemon=True
+                target=self._thread_function, name=str(self), args=(handler, asyncio.get_event_loop()), daemon=True
             )
             self._maybe_thread.start()
             if no_automatic_retransmission:
@@ -125,9 +122,10 @@ class SocketCANMedia(Media):
                 raise pyuavcan.transport.ResourceClosedError(repr(self))
             self._set_loopback_enabled(f.loopback)
             try:
+                loop = asyncio.get_running_loop()
                 await asyncio.wait_for(
-                    self._loop.sock_sendall(self._sock, self._compile_native_frame(f.frame)),
-                    timeout=monotonic_deadline - self._loop.time(),
+                    loop.sock_sendall(self._sock, self._compile_native_frame(f.frame)),
+                    timeout=monotonic_deadline - loop.time(),
                 )
             except OSError as err:
                 if err.errno == errno.EINVAL and self._is_fd:
@@ -156,7 +154,7 @@ class SocketCANMedia(Media):
             self._ctl_worker.close()
             self._ctl_main.close()
 
-    def _thread_function(self, handler: Media.ReceivedFramesHandler) -> None:
+    def _thread_function(self, handler: Media.ReceivedFramesHandler, loop: asyncio.AbstractEventLoop) -> None:
         def handler_wrapper(frs: typing.Sequence[typing.Tuple[Timestamp, Envelope]]) -> None:
             try:
                 if not self._closed:  # Don't call after closure to prevent race conditions and use-after-close.
@@ -181,7 +179,7 @@ class SocketCANMedia(Media):
                     except OSError as ex:
                         if ex.errno != errno.EAGAIN:
                             raise
-                    self._loop.call_soon_threadsafe(handler_wrapper, frames)
+                    loop.call_soon_threadsafe(handler_wrapper, frames)
 
                 if self._ctl_worker in read_ready:
                     if self._ctl_worker.recv(1):  # pragma: no branch

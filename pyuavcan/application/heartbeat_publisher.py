@@ -82,7 +82,7 @@ class HeartbeatPublisher:
             if not self._maybe_task:
                 self._started_at = time.monotonic()
                 self._subscriber.receive_in_background(self._handle_received_heartbeat)
-                self._maybe_task = self.node.loop.create_task(self._task_function())
+                self._maybe_task = asyncio.create_task(self._task_function())
 
         def close() -> None:
             if self._maybe_task:

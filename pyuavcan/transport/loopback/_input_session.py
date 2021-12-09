@@ -15,12 +15,10 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
         self,
         specifier: pyuavcan.transport.InputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        loop: asyncio.AbstractEventLoop,
         closer: typing.Callable[[], None],
     ):
         self._specifier = specifier
         self._payload_metadata = payload_metadata
-        self._loop = loop
         self._closer = closer
         self._transfer_id_timeout = float(self.DEFAULT_TRANSFER_ID_TIMEOUT)
         self._stats = pyuavcan.transport.SessionStatistics()
@@ -28,7 +26,7 @@ class LoopbackInputSession(pyuavcan.transport.InputSession):
         super().__init__()
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
-        timeout = monotonic_deadline - self._loop.time()
+        timeout = monotonic_deadline - asyncio.get_running_loop().time()
         try:
             if timeout > 0:
                 out = await asyncio.wait_for(self._queue.get(), timeout)
@@ -91,9 +89,7 @@ def _unittest_session() -> None:
         nonlocal closed
         closed = True
 
-    ses = LoopbackInputSession(
-        specifier=specifier, payload_metadata=payload_metadata, loop=asyncio.get_event_loop(), closer=do_close
-    )
+    ses = LoopbackInputSession(specifier=specifier, payload_metadata=payload_metadata, closer=do_close)
 
     ses.transfer_id_timeout = 123.456
     with pytest.raises(ValueError):

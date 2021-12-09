@@ -43,8 +43,9 @@ class PortListPublisher:
         self._state = _State(set(), set(), set(), set())
 
         def start() -> None:
-            self._next_update_at = self.node.loop.time() + PortListPublisher._UPDATE_PERIOD
-            self._timer = self.node.loop.call_at(self._next_update_at, self._update)
+            loop = asyncio.get_event_loop()
+            self._next_update_at = loop.time() + PortListPublisher._UPDATE_PERIOD
+            self._timer = loop.call_at(self._next_update_at, self._update)
 
         def close() -> None:
             if self._pub is not None:
@@ -71,9 +72,10 @@ class PortListPublisher:
         return self._pub
 
     def _update(self) -> None:
+        loop = asyncio.get_event_loop()
         self._updates_since_pub += 1
         self._next_update_at += PortListPublisher._UPDATE_PERIOD
-        self._timer = self.node.loop.call_at(self._next_update_at, self._update)
+        self._timer = loop.call_at(self._next_update_at, self._update)
 
         if self.node.id is None:
             return

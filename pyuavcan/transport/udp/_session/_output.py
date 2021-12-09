@@ -65,7 +65,6 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         mtu: int,
         multiplier: int,
         sock: socket_.socket,
-        loop: asyncio.AbstractEventLoop,
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -78,13 +77,11 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         self._mtu = int(mtu)
         self._multiplier = int(multiplier)
         self._sock = sock
-        self._loop = loop
         self._finalizer = finalizer
         self._feedback_handler: typing.Optional[typing.Callable[[pyuavcan.transport.Feedback], None]] = None
         self._statistics = pyuavcan.transport.SessionStatistics()
         if self._multiplier < 1:  # pragma: no cover
             raise ValueError(f"Invalid transfer multiplier: {self._multiplier}")
-
         assert (
             specifier.remote_node_id is None
             if isinstance(specifier.data_specifier, pyuavcan.transport.MessageDataSpecifier)
@@ -180,12 +177,13 @@ class UDPOutputSession(pyuavcan.transport.OutputSession):
         Returns None if at least one frame could not be transmitted.
         """
         ts: typing.Optional[Timestamp] = None
+        loop = asyncio.get_running_loop()
         for index, (header, payload) in enumerate(header_payload_pairs):
             try:
                 # TODO: concatenation is inefficient. Use vectorized IO via sendmsg() instead!
                 await asyncio.wait_for(
-                    self._loop.sock_sendall(self._sock, b"".join((header, payload))),
-                    timeout=monotonic_deadline - self._loop.time(),
+                    loop.sock_sendall(self._sock, b"".join((header, payload))),
+                    timeout=monotonic_deadline - loop.time(),
                 )
 
                 # TODO: use socket timestamping when running on Linux (Windows does not support timestamping).
@@ -259,7 +257,6 @@ def _unittest_output_session() -> None:
         mtu=11,
         multiplier=1,
         sock=make_sock(),
-        loop=asyncio.get_event_loop(),
         finalizer=do_finalize,
     )
 
@@ -334,7 +331,6 @@ def _unittest_output_session() -> None:
         mtu=10,
         multiplier=2,
         sock=make_sock(),
-        loop=asyncio.get_event_loop(),
         finalizer=do_finalize,
     )
     assert run_until_complete(
@@ -385,7 +381,6 @@ def _unittest_output_session() -> None:
         mtu=10,
         multiplier=1,
         sock=make_sock(),
-        loop=asyncio.get_event_loop(),
         finalizer=do_finalize,
     )
 
@@ -469,7 +464,6 @@ def _unittest_output_session_no_listener() -> None:
         mtu=11,
         multiplier=1,
         sock=make_sock(),
-        loop=asyncio.get_event_loop(),
         finalizer=lambda: None,
     )
     assert run_until_complete(
@@ -499,7 +493,6 @@ def _unittest_output_session_no_listener() -> None:
         mtu=10,
         multiplier=2,
         sock=make_sock(),
-        loop=asyncio.get_event_loop(),
         finalizer=lambda: None,
     )
     sos.enable_feedback(feedback_handler)
