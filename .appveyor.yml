@@ -2,7 +2,7 @@ environment:
   matrix:
     -
       job_group: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
       PYTHON: 'C:\Python310-x64'  # YAML treats '\\' and "\\" differently.
     -
       job_group: tests

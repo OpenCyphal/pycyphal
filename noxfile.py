@@ -56,8 +56,8 @@ def test(session):
     session.log("Using the newest supported Python: %s", is_latest_python(session))
     session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
     session.install(
-        "pytest         ~= 4.6",  # Update when https://github.com/UAVCAN/nunavut/issues/144 is fixed
-        "pytest-asyncio == 0.10",  # Update when https://github.com/UAVCAN/nunavut/issues/144 is fixed
+        "pytest         ~= 6.2",
+        "pytest-asyncio == 0.16",
         "coverage       ~= 6.2",
     )
 
