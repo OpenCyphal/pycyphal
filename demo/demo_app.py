@@ -170,7 +170,7 @@ if __name__ == "__main__":
     app = DemoApp()
     logging.root.setLevel(logging.INFO)
     try:
-        asyncio.get_event_loop().run_until_complete(app.run())
+        asyncio.run(app.run())
     except KeyboardInterrupt:
         pass
     finally:
