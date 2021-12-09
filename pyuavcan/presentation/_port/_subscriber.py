@@ -286,14 +286,12 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         dtype: typing.Type[MessageClass],
         transport_session: pyuavcan.transport.InputSession,
         finalizer: PortFinalizer,
-        loop: asyncio.AbstractEventLoop,
     ):
         self.dtype = dtype
         self.transport_session = transport_session
         self.deserialization_failure_count = 0
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
-        self._loop = loop
-        self._task = loop.create_task(self._task_function())
+        self._task = asyncio.create_task(self._task_function())
         self._listeners: typing.List[_Listener[MessageClass]] = []
 
     @property
@@ -302,9 +300,10 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
 
     async def _task_function(self) -> None:
         exception: typing.Optional[Exception] = None
+        loop = asyncio.get_running_loop()
         try:  # pylint: disable=too-many-nested-blocks
             while not self.is_closed:
-                transfer = await self.transport_session.receive(self._loop.time() + _RECEIVE_TIMEOUT)
+                transfer = await self.transport_session.receive(loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is not None:
                     message = pyuavcan.dsdl.deserialize(self.dtype, transfer.fragmented_payload)
                     if message is not None:

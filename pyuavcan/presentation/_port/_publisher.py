@@ -160,13 +160,11 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         transport_session: pyuavcan.transport.OutputSession,
         transfer_id_counter: OutgoingTransferIDCounter,
         finalizer: PortFinalizer,
-        loop: asyncio.AbstractEventLoop,
     ):
         self.dtype = dtype
         self.transport_session = transport_session
         self.transfer_id_counter = transfer_id_counter
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
-        self._loop = loop
         self._lock = asyncio.Lock()
         self._proxy_count = 0
 
