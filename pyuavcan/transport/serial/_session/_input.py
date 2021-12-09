@@ -168,9 +168,7 @@ def _unittest_input_session() -> None:
     session_spec = InputSessionSpecifier(MessageDataSpecifier(2345), None)
     payload_meta = PayloadMetadata(100)
 
-    sis = SerialInputSession(
-        specifier=session_spec, payload_metadata=payload_meta, loop=asyncio.get_event_loop(), finalizer=do_finalize
-    )
+    sis = SerialInputSession(specifier=session_spec, payload_metadata=payload_meta, finalizer=do_finalize)
     assert sis.specifier == session_spec
     assert sis.payload_metadata == payload_meta
     assert sis.sample_statistics() == SerialInputSessionStatistics()

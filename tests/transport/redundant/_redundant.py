@@ -83,8 +83,6 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     # Adding inferiors - loopback, transport A only.
     #
-    with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*loop.*"):
-        tr_a.attach_inferior(LoopbackTransport(111, loop=asyncio.new_event_loop()))  # Wrong event loop.
     assert len(pub_a.inferiors) == 0
     assert len(sub_any_a.inferiors) == 0
 
