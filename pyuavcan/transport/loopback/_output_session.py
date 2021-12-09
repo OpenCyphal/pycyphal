@@ -3,7 +3,6 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
-import asyncio
 
 import pyuavcan.transport
 
