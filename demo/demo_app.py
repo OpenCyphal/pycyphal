@@ -166,12 +166,16 @@ class DemoApp:
         self._node.close()
 
 
-if __name__ == "__main__":
-    app = DemoApp()
+async def main() -> None:
     logging.root.setLevel(logging.INFO)
+    app = DemoApp()
     try:
-        asyncio.run(app.run())
+        await app.run()
     except KeyboardInterrupt:
         pass
     finally:
         app.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
