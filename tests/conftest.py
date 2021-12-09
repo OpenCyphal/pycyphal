@@ -23,7 +23,7 @@ should a test go crazy and eat all memory.
 _logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="session", autouse=True)  # type: ignore
+@pytest.fixture(scope="session", autouse=True)
 def _configure_host_environment() -> None:
     def execute(*cmd: typing.Any, ensure_success: bool = True) -> typing.Tuple[int, str, str]:
         cmd = tuple(map(str, cmd))

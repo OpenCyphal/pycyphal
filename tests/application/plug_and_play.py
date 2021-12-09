@@ -18,7 +18,7 @@ _logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.asyncio
 
 
-@pytest.mark.parametrize("mtu", [8, 16, 20, 64])  # type: ignore
+@pytest.mark.parametrize("mtu", [8, 16, 20, 64])
 async def _unittest_slow_plug_and_play_centralized(
     compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], mtu: int
 ) -> None:
