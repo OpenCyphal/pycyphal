@@ -101,7 +101,7 @@ def test(session):
             # #0  0x00007fd9c0fa0702 in raise () from /usr/lib/libpthread.so.0
             # #1  <signal handler called>
             # #2  PyVectorcall_Function (callable=0x0) at ./Include/cpython/abstract.h:69
-            pytest(str(postponed), success_codes=[-11])
+            pytest(str(postponed), success_codes=[0, -11])
         else:
             pytest(str(postponed))
     finally:
