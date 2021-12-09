@@ -98,7 +98,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
             session.transfer_id_timeout = self.transfer_id_timeout
 
         # Launch the inferior's worker task in the last order and add that to the registry.
-        task = asyncio.create_task(self._inferior_worker_task(session))
+        task = asyncio.get_event_loop().create_task(self._inferior_worker_task(session))
         self._inferiors.append(_Inferior(session=session, worker=task))
 
     def _close_inferior(self, session_index: int) -> None:

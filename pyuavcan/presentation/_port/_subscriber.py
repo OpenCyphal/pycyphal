@@ -115,7 +115,7 @@ class Subscriber(MessagePort[MessageClass]):
         if self._maybe_task is not None:
             self._maybe_task.cancel()
 
-        self._maybe_task = asyncio.create_task(task_function())
+        self._maybe_task = asyncio.get_event_loop().create_task(task_function())
 
     # ----------------------------------------  DIRECT RECEIVE  ----------------------------------------
 
@@ -291,7 +291,7 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         self.transport_session = transport_session
         self.deserialization_failure_count = 0
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
-        self._task = asyncio.create_task(self._task_function())
+        self._task = asyncio.get_event_loop().create_task(self._task_function())
         self._listeners: typing.List[_Listener[MessageClass]] = []
 
     @property

@@ -211,7 +211,7 @@ class Server(ServicePort[ServiceClass]):
             self._maybe_task.cancel()
 
         self._raise_if_closed()
-        self._maybe_task = asyncio.create_task(task_function())
+        self._maybe_task = asyncio.get_event_loop().create_task(task_function())
 
     # ----------------------------------------  AUXILIARY  ----------------------------------------
 

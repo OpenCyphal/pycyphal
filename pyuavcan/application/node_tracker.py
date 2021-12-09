@@ -296,7 +296,7 @@ class NodeTracker:
             del self._info_tasks[node_id]
 
         self._cancel_task(node_id)
-        self._info_tasks[node_id] = asyncio.create_task(worker())
+        self._info_tasks[node_id] = asyncio.get_event_loop().create_task(worker())
 
     def _notify(self, node_id: int, old_entry: Optional[Entry], new_entry: Optional[Entry]) -> None:
         assert isinstance(old_entry, Entry) or old_entry is None

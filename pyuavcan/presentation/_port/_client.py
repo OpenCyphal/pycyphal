@@ -220,7 +220,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
             int, asyncio.Future[typing.Tuple[pyuavcan.dsdl.CompositeObject, pyuavcan.transport.TransferFrom]]
         ] = {}
 
-        self._task = asyncio.create_task(self._task_function())
+        self._task = asyncio.get_event_loop().create_task(self._task_function())
 
     @property
     def is_closed(self) -> bool:
