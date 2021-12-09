@@ -32,11 +32,10 @@ the library log level:
 """
 
 import os as _os
-import sys as _sys
+from importlib.resources import read_text as _read_text
 
 
-with open(_os.path.join(_os.path.dirname(__file__), "VERSION"), encoding="utf8") as _version:
-    __version__ = _version.read().strip()
+__version__ = _read_text(__name__, "VERSION", encoding="utf8").strip()
 __version_info__ = tuple(map(int, __version__.split(".")[:3]))
 __author__ = "UAVCAN Consortium"
 __copyright__ = "Copyright (c) 2019 UAVCAN Consortium"
@@ -50,10 +49,6 @@ Version of the UAVCAN protocol implemented by this library, major and minor.
 The corresponding field in ``uavcan.node.GetInfo.Response`` is initialized from this value,
 see :func:`pyuavcan.application.make_node`.
 """
-
-
-if _sys.version_info[:2] < (3, 7):  # pragma: no cover
-    raise RuntimeError("A newer version of Python is required")
 
 
 _log_level_from_env = _os.environ.get("PYUAVCAN_LOGLEVEL")

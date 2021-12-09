@@ -144,6 +144,11 @@ For example, here we create a client for a nonexistent service; the call times o
 >>> bad_client.response_timeout = 0.1                           # Override the default.
 >>> bad_client.priority = pyuavcan.transport.Priority.HIGH      # Override the default.
 >>> run_until_complete(bad_client.call(request_object))         # Times out and returns None.
+
+..  doctest::
+    :hide:
+
+    >>> presentation.close()  # Close explicitly to avoid warnings in the test logs.
 """
 
 from ._presentation import Presentation as Presentation
