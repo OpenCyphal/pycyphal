@@ -171,7 +171,7 @@ class Allocatee:
 
     def _restart_timer(self) -> None:
         t_request = random.random()
-        self._timer = self.presentation.loop.call_later(t_request, self._on_timer)
+        self._timer = asyncio.get_event_loop().call_later(t_request, self._on_timer)
 
     async def _on_response(
         self, msg: Union[NodeIDAllocationData_1, NodeIDAllocationData_2], meta: pyuavcan.transport.TransferFrom

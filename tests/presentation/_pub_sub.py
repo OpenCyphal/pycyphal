@@ -21,7 +21,8 @@ async def _unittest_slow_presentation_pub_sub_anon(
     import uavcan.node
     from pyuavcan.transport import Priority
 
-    asyncio.get_running_loop().slow_callback_duration = 5.0
+    loop = asyncio.get_running_loop()
+    loop.slow_callback_duration = 5.0
 
     tran_a, tran_b, transmits_anon = transport_factory(None, None)
     assert tran_a.local_node_id is None
@@ -123,7 +124,8 @@ async def _unittest_slow_presentation_pub_sub(
     from test_dsdl_namespace.numpy import Complex_254_255
     from pyuavcan.transport import Priority
 
-    asyncio.get_running_loop().slow_callback_duration = 5.0
+    loop = asyncio.get_running_loop()
+    loop.slow_callback_duration = 5.0
 
     tran_a, tran_b, _ = transport_factory(123, 42)
     assert tran_a.local_node_id == 123
@@ -221,7 +223,7 @@ async def _unittest_slow_presentation_pub_sub(
             transfer_id=12,
             fragmented_payload=[memoryview(b"\xFF" * 15)],  # Invalid union tag.
         ),
-        tran_a.loop.time() + 1.0,
+        loop.time() + 1.0,
     )
     assert (await sub_record.receive(asyncio.get_event_loop().time() + _RX_TIMEOUT)) is None
 

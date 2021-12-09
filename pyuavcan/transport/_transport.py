@@ -70,7 +70,11 @@ class Transport(abc.ABC):
         """
         Deprecated.
         """
-        warnings.warn("The loop property is deprecated; use asyncio.get_running_loop() instead.", DeprecationWarning)
+        warnings.warn(
+            "The Transport.loop property is deprecated; use asyncio.get_running_loop() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return asyncio.get_event_loop()
 
     @property

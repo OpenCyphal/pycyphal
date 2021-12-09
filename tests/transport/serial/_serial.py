@@ -36,7 +36,6 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 
     tr = SerialTransport(serial_port="loop://", local_node_id=None, mtu=1024)
 
-    assert tr.loop is asyncio.get_event_loop()
     assert tr.local_node_id is None
     assert tr.serial_port.is_open
 
