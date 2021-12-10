@@ -284,6 +284,13 @@ Other implementations of UAVCAN/UDP (particularly those for embedded systems) ma
 Usage
 +++++
 
+..  doctest::
+    :hide:
+
+    >>> import tests
+    >>> tests.asyncio_allow_event_loop_access_from_top_level()
+    >>> from tests import doctest_await
+
 Create two transport instances -- one with a node-ID, one anonymous:
 
 >>> import asyncio
@@ -307,14 +314,13 @@ Create an output and an input session:
 
 Send a transfer from one instance to the other:
 
->>> await_ = asyncio.get_event_loop().run_until_complete
->>> await_(pub.send(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
-...                                             pyuavcan.transport.Priority.LOW,
-...                                             1111,
-...                                             fragmented_payload=[]),
-...                 asyncio.get_event_loop().time() + 1.0))
+>>> doctest_await(pub.send(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
+...                                                    pyuavcan.transport.Priority.LOW,
+...                                                    1111,
+...                                                    fragmented_payload=[]),
+...                        asyncio.get_event_loop().time() + 1.0))
 True
->>> await_(sub.receive(asyncio.get_event_loop().time() + 1.0))
+>>> doctest_await(sub.receive(asyncio.get_event_loop().time() + 1.0))
 TransferFrom(..., transfer_id=1111, ...)
 >>> tr_0.close()
 >>> tr_1.close()

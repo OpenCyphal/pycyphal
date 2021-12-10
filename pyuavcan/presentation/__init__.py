@@ -54,6 +54,8 @@ This example is based on a simple loopback transport that does not interact with
 
     >>> import tests
     >>> _ = tests.dsdl.compile()
+    >>> tests.asyncio_allow_event_loop_access_from_top_level()
+    >>> from tests import doctest_await
 
 >>> import uavcan.node, uavcan.diagnostic         # Import what we need from DSDL-generated packages.
 >>> import pyuavcan.transport.loopback            # Import the demo transport implementation.
@@ -69,14 +71,12 @@ Let's start with a publisher and a subscriber:
 
 Publish a message and receive it also (the loopback transport just returns all outgoing transfers back):
 
->>> import asyncio
->>> run_until_complete = asyncio.get_event_loop().run_until_complete
 >>> record = uavcan.diagnostic.Record_1_1(
 ...     severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
 ...     text='Neither man nor animal can be influenced by anything but suggestion.')
->>> run_until_complete(pub_record.publish(record))  # publish() returns False on timeout.
+>>> doctest_await(pub_record.publish(record))  # publish() returns False on timeout.
 True
->>> message, metadata = run_until_complete(sub_record.receive_for(timeout=0.5))
+>>> message, metadata = doctest_await(sub_record.receive_for(timeout=0.5))
 >>> message.text.tobytes().decode()  # Calling .tobytes().decode() won't be needed when DSDL supports strings natively.
 'Neither man nor animal can be influenced by anything but suggestion.'
 >>> metadata.transfer_id, metadata.source_node_id, metadata.timestamp
@@ -87,7 +87,7 @@ We can use custom subject-ID with any data type, even if there is a fixed subjec
 Here is an example; we also show here that when a receive call times out, it returns None:
 
 >>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_1, subject_id=2345)
->>> run_until_complete(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
+>>> doctest_await(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
 
 You can see above that the node-ID of the received transfer metadata is None,
 that's because it is actually an anonymous transfer, and it is so because our node is an anonymous node;
@@ -130,7 +130,7 @@ Having configured the node-ID, let's set up a service and invoke it:
 >>> request_object = uavcan.node.ExecuteCommand_1_1.Request(
 ...     uavcan.node.ExecuteCommand_1_1.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
 ...     '/path/to/the/firmware/image.bin')
->>> received_response, response_transfer = run_until_complete(client_exec_command.call(request_object))
+>>> received_response, response_transfer = doctest_await(client_exec_command.call(request_object))
 Received command 65533 from node 1234
 >>> received_response
 uavcan.node.ExecuteCommand.Response.1.1(status=3)
@@ -143,7 +143,7 @@ For example, here we create a client for a nonexistent service; the call times o
 ...                                       server_node_id=321)   # There is no such server.
 >>> bad_client.response_timeout = 0.1                           # Override the default.
 >>> bad_client.priority = pyuavcan.transport.Priority.HIGH      # Override the default.
->>> run_until_complete(bad_client.call(request_object))         # Times out and returns None.
+>>> doctest_await(bad_client.call(request_object))              # Times out and returns None.
 
 ..  doctest::
     :hide:

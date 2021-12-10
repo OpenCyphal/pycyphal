@@ -79,8 +79,9 @@ class DiagnosticPublisher(logging.Handler):
 
         >>> import tests
         >>> _ = tests.dsdl.compile()
+        >>> tests.asyncio_allow_event_loop_access_from_top_level()
+        >>> from tests import doctest_await
 
-    >>> from asyncio import get_event_loop
     >>> from pyuavcan.transport.loopback import LoopbackTransport
     >>> from pyuavcan.application import make_node, NodeInfo, make_registry
     >>> node = make_node(NodeInfo(), transport=LoopbackTransport(1))
@@ -98,7 +99,7 @@ class DiagnosticPublisher(logging.Handler):
 
     >>> sub = node.make_subscriber(Record)
     >>> logging.info('Test message')
-    >>> msg, _ = get_event_loop().run_until_complete(sub.receive_for(1.0))
+    >>> msg, _ = doctest_await(sub.receive_for(1.0))
     >>> msg.text.tobytes().decode()
     'root: Test message'
     >>> msg.severity.value == Severity.INFO     # The log level is mapped automatically.
@@ -117,7 +118,7 @@ class DiagnosticPublisher(logging.Handler):
     >>> node.start()
     >>> sub = node.make_subscriber(Record)
     >>> logging.info('Test message')
-    >>> msg, _ = get_event_loop().run_until_complete(sub.receive_for(1.0))
+    >>> msg, _ = doctest_await(sub.receive_for(1.0))
     >>> msg.text.tobytes().decode()
     'root: Test message'
     >>> msg.severity.value == Severity.INFO

@@ -34,8 +34,9 @@ Constructing a node
     >>> os.environ["UAVCAN__SRV__LEAST_SQUARES__ID"]     = "123"
     >>> os.environ["UAVCAN__CLN__LEAST_SQUARES__ID"]     = "123"
     >>> os.environ["UAVCAN__LOOPBACK"]                   = "1"
-    >>> import asyncio
-    >>> await_ = asyncio.get_event_loop().run_until_complete
+    >>> import tests
+    >>> tests.asyncio_allow_event_loop_access_from_top_level()
+    >>> from tests import doctest_await
 
 Create a node using the factory :meth:`make_node` and start it:
 
@@ -65,12 +66,12 @@ To create a new port you need to specify its type and name
 Publishers and subscribers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Create a publisher and publish a message (here and below, ``await_`` substitutes for the ``await`` statement):
+Create a publisher and publish a message (here and below, ``doctest_await`` substitutes for the ``await`` statement):
 
 >>> import uavcan.si.unit.voltage
 >>> pub_voltage = node.make_publisher(uavcan.si.unit.voltage.Scalar_1_0, "measured_voltage")
->>> pub_voltage.publish_soon(uavcan.si.unit.voltage.Scalar_1_0(402.15))     # Publish message asynchronously.
->>> await_(pub_voltage.publish(uavcan.si.unit.voltage.Scalar_1_0(402.15)))  # Or synchronously.
+>>> pub_voltage.publish_soon(uavcan.si.unit.voltage.Scalar_1_0(402.15))            # Publish message asynchronously.
+>>> doctest_await(pub_voltage.publish(uavcan.si.unit.voltage.Scalar_1_0(402.15)))  # Or synchronously.
 True
 
 Create a subscription and receive a message from it:
@@ -84,7 +85,7 @@ Create a subscription and receive a message from it:
 
 >>> import uavcan.si.unit.length
 >>> sub_position = node.make_subscriber(uavcan.si.unit.length.Vector3_1_0, "position_setpoint")
->>> msg, metadata = await_(sub_position.receive_for(timeout=0.5))
+>>> msg, metadata = doctest_await(sub_position.receive_for(timeout=0.5))
 >>> msg.meter[0], msg.meter[1], msg.meter[2]                            # Some payload in the message we received.
 (42.0, 15.4, -8.7)
 >>> metadata.source_node_id, metadata.priority, metadata.transfer_id    # Metadata for the message.
@@ -114,14 +115,14 @@ Invoke the service we defined above assuming that it is served by node 42:
 >>> from sirius_cyber_corp import PointXY_1_0
 >>> cln_least_sq = node.make_client(PerformLinearLeastSquaresFit_1_0, 42, "least_squares")
 >>> req = PerformLinearLeastSquaresFit_1_0.Request([PointXY_1_0(10, 1), PointXY_1_0(20, 2)])
->>> response, metadata = await_(cln_least_sq.call(req))
+>>> response, metadata = doctest_await(cln_least_sq.call(req))
 >>> round(response.slope, 1), round(response.y_intercept, 1)
 (0.1, 0.0)
 
 Here is another example showcasing the use of a standard service with a fixed port-ID:
 
 >>> client_node_info = node.make_client(uavcan.node.GetInfo_1_0, 42)    # Port name is not required.
->>> response, metadata = await_(client_node_info.call(uavcan.node.GetInfo_1_0.Request()))
+>>> response, metadata = doctest_await(client_node_info.call(uavcan.node.GetInfo_1_0.Request()))
 >>> response.software_version
 uavcan.node.Version.1.0(major=1, minor=0)
 

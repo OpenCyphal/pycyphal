@@ -93,7 +93,7 @@ class SocketFactory(abc.ABC):
             s.sendto(b'\xaa\xbb\xcc', ('239.1.2.3', 1234))          # OSError
             # OSError: [WinError 10051] A socket operation was attempted to an unreachable network
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(loop.sock_sendall(s, b'abc'))   # OSError
+            await  loop.sock_sendall(s, b'abc')                     # OSError
             # OSError: [WinError 1231] The network location cannot be reached
         """
         raise NotImplementedError

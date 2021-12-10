@@ -243,6 +243,13 @@ Inheritance diagram
 Usage
 +++++
 
+..  doctest::
+    :hide:
+
+    >>> import tests
+    >>> tests.asyncio_allow_event_loop_access_from_top_level()
+    >>> from tests import doctest_await
+
 A freshly constructed redundant transport is empty.
 Redundant transport instances are intentionally designed to be very mutable,
 allowing one to reconfigure them freely on-the-fly to support the needs of highly dynamic applications.
@@ -295,11 +302,10 @@ Add another inferior and another session:
 A simple exchange test (remember this is a loopback, so we get back whatever we send):
 
 >>> import asyncio
->>> await_ = asyncio.get_event_loop().run_until_complete
->>> await_(s0.send(Transfer(Timestamp.now(), Priority.LOW, 1111, fragmented_payload=[]),
-...                asyncio.get_event_loop().time() + 1.0))
+>>> doctest_await(s0.send(Transfer(Timestamp.now(), Priority.LOW, 1111, fragmented_payload=[]),
+...                       asyncio.get_event_loop().time() + 1.0))
 True
->>> await_(s1.receive(asyncio.get_event_loop().time() + 1.0))
+>>> doctest_await(s1.receive(asyncio.get_event_loop().time() + 1.0))
 RedundantTransferFrom(..., transfer_id=1111, fragmented_payload=[], ...)
 
 Inject a failure into one inferior.
@@ -311,10 +317,10 @@ The redundant transport will continue to function with the other inferior; an er
 .. When that is fixed (I suppose it should be by PyTest v6?), please, remove this comment and the 'doctest: +SKIP'.
 
 >>> lo_0.output_sessions[0].exception = RuntimeError('Injected failure')  # doctest: +SKIP
->>> await_(s0.send(Transfer(Timestamp.now(), Priority.LOW, 1112, fragmented_payload=[]),
-...                asyncio.get_event_loop().time() + 1.0))
+>>> doctest_await(s0.send(Transfer(Timestamp.now(), Priority.LOW, 1112, fragmented_payload=[]),
+...                       asyncio.get_event_loop().time() + 1.0))
 True
->>> await_(s1.receive(asyncio.get_event_loop().time() + 1.0))   # Still works.
+>>> doctest_await(s1.receive(asyncio.get_event_loop().time() + 1.0))   # Still works.
 RedundantTransferFrom(..., transfer_id=1112, fragmented_payload=[], ...)
 
 Inferiors that are no longer needed can be detached.
