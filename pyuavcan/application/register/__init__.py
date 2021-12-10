@@ -1,6 +1,9 @@
 # Copyright (C) 2021  UAVCAN Consortium  <uavcan.org>
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
+#
+# Workaround for the odd behavior of MyPy https://github.com/python/mypy/issues/11706
+# mypy: implicit_reexport=True
 
 """
 Implementation of the UAVCAN register interface as defined in the UAVCAN Specification

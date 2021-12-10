@@ -1,6 +1,9 @@
 # Copyright (c) 2020 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
+#
+# Workaround for the odd behavior of MyPy https://github.com/python/mypy/issues/11706
+# mypy: implicit_reexport=True
 
 """
 Plug-and-play node-ID allocation logic. See the class documentation for usage info.
