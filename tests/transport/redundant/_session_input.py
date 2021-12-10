@@ -214,6 +214,7 @@ async def _unittest_redundant_input_cyclic() -> None:
     tr_b.close()
     inf_a.close()
     inf_b.close()
+    await asyncio.sleep(2.0)
 
 
 async def _unittest_redundant_input_monotonic() -> None:
@@ -336,3 +337,4 @@ async def _unittest_redundant_input_monotonic() -> None:
     tr_b.close()
     inf_a.close()
     inf_b.close()
+    await asyncio.sleep(2.0)

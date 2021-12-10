@@ -71,7 +71,7 @@ async def _unittest_can_socketcan() -> None:
         ],
         asyncio.get_event_loop().time() + 1.0,
     )
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     ts_end = Timestamp.now()
 
     print("rx_a:", rx_a)
