@@ -20,7 +20,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_socket_reader(caplog: typing.Any) -> None:
-    destination_endpoint = "127.100.0.100", 58724
+    destination_address = "127.100.0.100"
 
     ts = Timestamp.now()
 
@@ -31,7 +31,9 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         return s and m
 
     sock_rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock_rx.bind(destination_endpoint)
+    sock_rx.bind((destination_address, 0))  # Choose ephemeral port
+    destination_endpoint = sock_rx.getsockname()
+    print("Ephemeral destination endpoint:", destination_endpoint)
 
     def make_sock_tx(source_ip_address: str) -> socket.socket:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
