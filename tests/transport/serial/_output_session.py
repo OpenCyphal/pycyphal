@@ -2,18 +2,20 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
+import typing
+import asyncio
 import pytest
-from pyuavcan.transport.serial._session._output import *
+from pytest import raises, approx
+import pyuavcan
+from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority, ServiceDataSpecifier
+from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback, Transfer
+from pyuavcan.transport.serial._session._output import SerialOutputSession
+from pyuavcan.transport.serial import SerialFrame
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_output_session() -> None:
-    import asyncio
-    from pytest import raises, approx
-    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
-    from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback, Transfer
-
     ts = Timestamp.now()
     loop = asyncio.get_event_loop()
 

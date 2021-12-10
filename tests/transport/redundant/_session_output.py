@@ -2,20 +2,23 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
-
+import time
+import typing
+import logging
+import asyncio
 import pytest
-from pyuavcan.transport.redundant._session._output import *
+import pyuavcan
+from pyuavcan.transport import ResourceClosedError
+from pyuavcan.transport import Transfer, Timestamp, Priority, SessionStatistics
+from pyuavcan.transport import TransferFrom
+from pyuavcan.transport.loopback import LoopbackTransport, LoopbackFeedback
+from pyuavcan.transport.redundant._session._output import RedundantOutputSession
+from pyuavcan.transport.redundant import RedundantSessionStatistics, RedundantFeedback
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_redundant_output() -> None:
-    import time
-    import pytest
-    from pyuavcan.transport import Transfer, Timestamp, Priority, SessionStatistics, ResourceClosedError
-    from pyuavcan.transport import TransferFrom
-    from pyuavcan.transport.loopback import LoopbackTransport, LoopbackFeedback
-
     loop = asyncio.get_event_loop()
 
     spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
@@ -323,11 +326,6 @@ async def _unittest_redundant_output() -> None:
 
 
 async def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
-    import pytest
-    from pyuavcan.transport import Transfer, Timestamp, Priority, SessionStatistics
-    from pyuavcan.transport import TransferFrom
-    from pyuavcan.transport.loopback import LoopbackTransport
-
     loop = asyncio.get_event_loop()
 
     spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)

@@ -2,18 +2,20 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
+import time
+import asyncio
 import pytest
-from pyuavcan.transport.redundant._session._input import *
+import pyuavcan
+from pyuavcan.transport import Transfer, Timestamp, Priority, ResourceClosedError
+from pyuavcan.transport.loopback import LoopbackTransport
+from pyuavcan.transport.redundant._session._base import RedundantSessionStatistics
+from pyuavcan.transport.redundant._session._input import RedundantInputSession
+from pyuavcan.transport.redundant._session._input import RedundantTransferFrom
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_redundant_input_cyclic() -> None:
-    import time
-    import pytest
-    from pyuavcan.transport import Transfer, Timestamp, Priority, ResourceClosedError
-    from pyuavcan.transport.loopback import LoopbackTransport
-
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
     spec = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
@@ -211,10 +213,6 @@ async def _unittest_redundant_input_cyclic() -> None:
 
 
 async def _unittest_redundant_input_monotonic() -> None:
-    import pytest
-    from pyuavcan.transport import Transfer, Timestamp, Priority
-    from pyuavcan.transport.loopback import LoopbackTransport
-
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
     spec = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)

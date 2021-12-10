@@ -3,11 +3,17 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import sys
+import typing
+import asyncio
+import socket
+import logging
+from ipaddress import ip_address
 import pytest
 from pytest import raises
-from ipaddress import ip_address
-from pyuavcan.transport.udp._socket_reader import *
-from pyuavcan.transport.udp._socket_reader import _READ_TIMEOUT
+import pyuavcan
+from pyuavcan.transport import Timestamp
+from pyuavcan.transport.udp import UDPFrame
+from pyuavcan.transport.udp._socket_reader import SocketReader, SocketReaderStatistics, _READ_TIMEOUT
 from pyuavcan.transport import Priority
 
 pytestmark = pytest.mark.asyncio
@@ -17,7 +23,6 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     destination_endpoint = "127.100.0.100", 58724
 
     ts = Timestamp.now()
-    loop = asyncio.get_event_loop()
 
     def check_timestamp(t: pyuavcan.transport.Timestamp) -> bool:
         now = pyuavcan.transport.Timestamp.now()
@@ -255,8 +260,6 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
     - https://stackoverflow.com/questions/3589723
     """
     destination_endpoint = "127.30.0.30", 9999
-
-    loop = asyncio.get_event_loop()
 
     sock_tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_tx.bind(("127.30.0.10", 0))

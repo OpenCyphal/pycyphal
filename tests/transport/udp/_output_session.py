@@ -2,8 +2,13 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
+import asyncio
+import socket as socket_
+import typing
 import pytest
-from pyuavcan.transport.udp._session._output import *
+import pyuavcan
+from pyuavcan.transport import Timestamp, ServiceDataSpecifier
+from pyuavcan.transport.udp._session._output import UDPOutputSession, UDPFeedback
 
 
 pytestmark = pytest.mark.asyncio
