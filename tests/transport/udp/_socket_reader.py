@@ -263,7 +263,7 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
     sock_tx.connect(destination_endpoint)
     listener_node_id = 10  # from 127.30.0.10
 
-    def send_and_wait() -> None:
+    async def send_and_wait() -> None:
         ts = Timestamp.now()
         sock_tx.send(
             b"".join(
@@ -299,7 +299,7 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
     rxf_a: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]] = []
     srd_a = make_reader(rxf_a)
     assert len(rxf_a) == 0
-    send_and_wait()
+    await send_and_wait()
     assert len(rxf_a) == 1, rxf_a
 
     # Destroy the old instance and QUICKLY create the next one. Make sure the old one does not piggyback on the old FD.
@@ -309,7 +309,7 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
     srd_b = make_reader(rxf_b)
     assert len(rxf_a) == 1
     assert len(rxf_b) == 0
-    send_and_wait()
+    await send_and_wait()
     assert len(rxf_a) == 1, rxf_a
     assert len(rxf_b) == 1, rxf_b
 
@@ -321,7 +321,7 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
     assert len(rxf_a) == 1
     assert len(rxf_b) == 1
     assert len(rxf_c) == 0
-    send_and_wait()
+    await send_and_wait()
     assert len(rxf_a) == 1, rxf_a
     assert len(rxf_b) == 1, rxf_b
     assert len(rxf_c) == 1, rxf_c

@@ -322,7 +322,7 @@ async def _unittest_redundant_output() -> None:
     assert None is await (rx_b.receive(loop.time() + 1))
 
 
-def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
+async def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     import pytest
     from pyuavcan.transport import Transfer, Timestamp, Priority, SessionStatistics
     from pyuavcan.transport import TransferFrom
