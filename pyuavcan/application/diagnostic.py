@@ -72,27 +72,19 @@ class DiagnosticPublisher(logging.Handler):
     Log messages that are too long to fit into a UAVCAN Record object are truncated.
     Log messages emitted by PyUAVCAN itself may be dropped to avoid infinite recursion.
 
-    Here is a demo, where items wrapped in ``run()`` should be executed with an active asyncio event loop
-    (i.e., :func:`asyncio.get_running_loop` should be valid).
+    Here's a usage example. Set up test rigging:
 
     ..  doctest::
         :hide:
 
         >>> import tests
         >>> _ = tests.dsdl.compile()
-        >>> import asyncio
-        >>> loop = asyncio.get_event_loop_policy().get_event_loop()
-        >>> asyncio.set_event_loop(loop)
-        >>> await_ = loop.run_until_complete
-        >>> def run(what):
-        ...     async def wrapper():
-        ...         return what()
-        ...     return await_(wrapper())
 
+    >>> from asyncio import get_event_loop
     >>> from pyuavcan.transport.loopback import LoopbackTransport
     >>> from pyuavcan.application import make_node, NodeInfo, make_registry
-    >>> node = run(lambda: make_node(NodeInfo(), transport=LoopbackTransport(1)))
-    >>> run(lambda: node.start())
+    >>> node = make_node(NodeInfo(), transport=LoopbackTransport(1))
+    >>> node.start()
 
     Instantiate publisher and install it with the logging system:
 
@@ -104,9 +96,9 @@ class DiagnosticPublisher(logging.Handler):
 
     Test it:
 
-    >>> sub = run(lambda: node.make_subscriber(Record))
-    >>> run(lambda: logging.info('Test message'))
-    >>> msg, _ = await_(sub.receive_for(1.0))
+    >>> sub = node.make_subscriber(Record)
+    >>> logging.info('Test message')
+    >>> msg, _ = get_event_loop().run_until_complete(sub.receive_for(1.0))
     >>> msg.text.tobytes().decode()
     'root: Test message'
     >>> msg.severity.value == Severity.INFO     # The log level is mapped automatically.
@@ -121,11 +113,11 @@ class DiagnosticPublisher(logging.Handler):
     so that you don't have to hard-code behaviors in the application sources:
 
     >>> registry = make_registry(None, {"UAVCAN__DIAGNOSTIC__SEVERITY": "2", "UAVCAN__DIAGNOSTIC__TIMESTAMP": "1"})
-    >>> node = run(lambda: make_node(NodeInfo(), registry, transport=LoopbackTransport(1)))
-    >>> run(lambda: node.start())
-    >>> sub = run(lambda: node.make_subscriber(Record))
-    >>> run(lambda: logging.info('Test message'))
-    >>> msg, _ = await_(sub.receive_for(1.0))
+    >>> node = make_node(NodeInfo(), registry, transport=LoopbackTransport(1))
+    >>> node.start()
+    >>> sub = node.make_subscriber(Record)
+    >>> logging.info('Test message')
+    >>> msg, _ = get_event_loop().run_until_complete(sub.receive_for(1.0))
     >>> msg.text.tobytes().decode()
     'root: Test message'
     >>> msg.severity.value == Severity.INFO

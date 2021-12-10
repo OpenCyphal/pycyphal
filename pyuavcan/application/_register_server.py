@@ -24,49 +24,34 @@ class RegisterServer:
     This means that, for example, one can successfully modify a register of type
     ``bool[x]`` by sending a set request of type ``real64[x]``, or ``string`` with ``unstructured``, etc.
 
-    Here is a demo, where items wrapped in ``run()`` should be executed with an active asyncio event loop
-    (i.e., :func:`asyncio.get_running_loop` should be valid).
-
-    Set up a node -- it will instantiate a register server automatically:
-
-    ..  doctest::
-        :hide:
-
-        >>> import asyncio
-        >>> loop = asyncio.get_event_loop_policy().get_event_loop()
-        >>> asyncio.set_event_loop(loop)
-        >>> await_ = loop.run_until_complete
-        >>> def run(what):
-        ...     async def wrapper():
-        ...         return what()
-        ...     return await_(wrapper())
+    Here is a demo. Set up a node -- it will instantiate a register server automatically:
 
     >>> import pyuavcan
     >>> from pyuavcan.transport.loopback import LoopbackTransport
     >>> from pyuavcan.application.register import Registry, Value, ValueProxy, Integer64, Real16, Unstructured
-    >>> node = run(lambda: pyuavcan.application.make_node(pyuavcan.application.NodeInfo(),
-    ...                                                   transport=LoopbackTransport(1)))
+    >>> node = pyuavcan.application.make_node(pyuavcan.application.NodeInfo(), transport=LoopbackTransport(1))
     >>> node.registry.setdefault("foo", Value(integer64=Integer64([1, 20, -100]))).ints
     [1, 20, -100]
-    >>> run(lambda: node.start())
+    >>> node.start()
 
     List registers:
 
     >>> import uavcan.register
-    >>> cln_list = run(lambda: node.make_client(uavcan.register.List_1_0, server_node_id=1))
-    >>> response, _ = await_(cln_list.call(uavcan.register.List_1_0.Request(index=0)))
+    >>> from asyncio import get_event_loop
+    >>> cln_list = node.make_client(uavcan.register.List_1_0, server_node_id=1)
+    >>> response, _ = get_event_loop().run_until_complete(cln_list.call(uavcan.register.List_1_0.Request(index=0)))
     >>> response.name.name.tobytes().decode()   # The dummy register we created above.
     'foo'
-    >>> response, _ = await_(cln_list.call(uavcan.register.List_1_0.Request(index=99)))
+    >>> response, _ = get_event_loop().run_until_complete(cln_list.call(uavcan.register.List_1_0.Request(index=99)))
     >>> response.name.name.tobytes().decode()   # Out of range -- empty string returned to indicate that.
     ''
 
     Get the dummy register created above:
 
-    >>> cln_access = run(lambda: node.make_client(uavcan.register.Access_1_0, server_node_id=1))
+    >>> cln_access = node.make_client(uavcan.register.Access_1_0, server_node_id=1)
     >>> request = uavcan.register.Access_1_0.Request()
     >>> request.name.name = "foo"
-    >>> response, _ = await_(cln_access.call(request))
+    >>> response, _ = get_event_loop().run_until_complete(cln_access.call(request))
     >>> response.mutable, response.persistent
     (True, False)
     >>> ValueProxy(response.value).ints
@@ -76,7 +61,7 @@ class RegisterServer:
     Notice that the type does not match but it is automatically converted by the server.
 
     >>> request.value.real16 = Real16([3.14159, 2.71828, -500])  # <-- the type is different but it's okay.
-    >>> response, _ = await_(cln_access.call(request))
+    >>> response, _ = get_event_loop().run_until_complete(cln_access.call(request))
     >>> ValueProxy(response.value).ints     # Automatically converted.
     [3, 3, -500]
     >>> node.registry["foo"].ints           # Yup, the register is, indeed, updated by the server.
@@ -86,14 +71,14 @@ class RegisterServer:
     as prescribed by the register network service definition:
 
     >>> request.value.unstructured = Unstructured(b'Hello world!')
-    >>> response, _ = await_(cln_access.call(request))
+    >>> response, _ = get_event_loop().run_until_complete(cln_access.call(request))
     >>> ValueProxy(response.value).ints  # Conversion is not possible, same value retained.
     [3, 3, -500]
 
     An attempt to access a non-existent register returns an empty value:
 
     >>> request.name.name = 'bar'
-    >>> response, _ = await_(cln_access.call(request))
+    >>> response, _ = get_event_loop().run_until_complete(cln_access.call(request))
     >>> response.value.empty is not None
     True
 
