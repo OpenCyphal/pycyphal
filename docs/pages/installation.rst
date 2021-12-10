@@ -13,11 +13,11 @@ Installation options
 Most of the installation options enable a particular transport or a particular media sublayer implementation
 for a transport.
 Those options are named uniformly following the pattern
-``transport_<transport-name>_<media-name>``, for example: ``transport_can_pythoncan``.
+``transport-<transport-name>-<media-name>``, for example: ``transport-can-pythoncan``.
 If there is no media sub-layer, or the media dependencies are shared, or there is a common
 installation option for all media types of the transport, the media part is omitted from the key;
-for example: ``transport_serial``.
-Installation options whose names do not begin with ``transport_`` enable other optional features.
+for example: ``transport-serial``.
+Installation options whose names do not begin with ``transport-`` enable other optional features.
 
 .. computron-injection::
    :filename: synth/installation_option_matrix.py

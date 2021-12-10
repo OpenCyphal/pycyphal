@@ -6,7 +6,9 @@ Changelog
 v1.3
 ----
 
-- Remove the NumPy <= 0.17 version constraint. This change addressed Python 3.10 compatibility issues.
+- Support Python 3.10.
+
+- Remove the NumPy <= 0.17 version constraint.
 
 - Improve type annotations in generated code thanks to the new NumPy typing support.
 
@@ -15,6 +17,9 @@ v1.3
 - Fix issues related to UDP packet capture.
 
 - Support assignment of ``memoryview`` to ``uint8``-typed arrays.
+
+- Rename installation extras by replacing underscores with the minus character;
+  e.g., ``transport_can_pythoncan`` --> ``transport-can-pythoncan``.
 
 v1.2
 ----
