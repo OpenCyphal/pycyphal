@@ -8,6 +8,9 @@ v1.3
 
 - Support Python 3.10.
 
+- Deprecate property ``pyuavcan.transport.Transport.loop`` and the corresponding constructor argument.
+  The constructor argument is now ignored and the aforementioned property is an alias of ``asyncio.get_event_loop()``.
+
 - Remove the NumPy <= 0.17 version constraint.
 
 - Improve type annotations in generated code thanks to the new NumPy typing support.

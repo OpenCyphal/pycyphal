@@ -197,7 +197,7 @@ def pristine(session):
     exe("import pyuavcan.transport.udp")
     exe("import pyuavcan.transport.loopback")
 
-    session.install(f"{ROOT_DIR}[transport_serial]")
+    session.install(f"{ROOT_DIR}[transport-serial]")
     exe("import pyuavcan.transport.serial")
 
 
