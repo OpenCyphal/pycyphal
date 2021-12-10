@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import NamedTuple, Callable, Optional, Dict, List
 import asyncio
 import logging
-from uavcan.node import Heartbeat_1_0 as Heartbeat
-from uavcan.node import GetInfo_1_0 as GetInfo
+from uavcan.node import Heartbeat_1 as Heartbeat
+from uavcan.node import GetInfo_1 as GetInfo
 import pyuavcan
 import pyuavcan.application
 
@@ -192,6 +192,7 @@ class NodeTracker:
         self._update_handlers.remove(handler)
 
     async def _on_heartbeat(self, msg: Heartbeat, metadata: pyuavcan.transport.TransferFrom) -> None:
+        loop = asyncio.get_running_loop()
         node_id = metadata.source_node_id
         if node_id is None:
             _logger.warning("Anonymous nodes shall not publish Heartbeat. Message: %s. Metadata: %s", msg, metadata)
@@ -216,7 +217,7 @@ class NodeTracker:
             self._offline_timers[node_id].cancel()
         except LookupError:
             pass
-        self._offline_timers[node_id] = self.node.loop.call_later(Heartbeat.OFFLINE_TIMEOUT, self._on_offline, node_id)
+        self._offline_timers[node_id] = loop.call_later(Heartbeat.OFFLINE_TIMEOUT, self._on_offline, node_id)
 
         # Do the update unless this is just a regular heartbeat (no restart, known node).
         if update:
@@ -295,7 +296,7 @@ class NodeTracker:
             del self._info_tasks[node_id]
 
         self._cancel_task(node_id)
-        self._info_tasks[node_id] = self.node.loop.create_task(worker())
+        self._info_tasks[node_id] = asyncio.get_event_loop().create_task(worker())
 
     def _notify(self, node_id: int, old_entry: Optional[Entry], new_entry: Optional[Entry]) -> None:
         assert isinstance(old_entry, Entry) or old_entry is None

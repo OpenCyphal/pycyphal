@@ -8,9 +8,9 @@ import logging
 import pyuavcan
 import pyuavcan.application
 from pyuavcan.presentation import ServiceRequestMetadata
-from uavcan.register import Access_1_0 as Access
-from uavcan.register import List_1_0 as List
-from uavcan.register import Name_1_0 as Name
+from uavcan.register import Access_1 as Access
+from uavcan.register import List_1 as List
+from uavcan.register import Name_1 as Name
 from .register import ValueConversionError, ValueProxyWithFlags
 
 
@@ -26,6 +26,13 @@ class RegisterServer:
 
     Here is a demo. Set up a node -- it will instantiate a register server automatically:
 
+    ..  doctest::
+        :hide:
+
+        >>> import tests
+        >>> tests.asyncio_allow_event_loop_access_from_top_level()
+        >>> from tests import doctest_await
+
     >>> import pyuavcan
     >>> from pyuavcan.transport.loopback import LoopbackTransport
     >>> from pyuavcan.application.register import Registry, Value, ValueProxy, Integer64, Real16, Unstructured
@@ -37,21 +44,20 @@ class RegisterServer:
     List registers:
 
     >>> import uavcan.register
-    >>> from asyncio import get_event_loop
-    >>> cln_list = node.make_client(uavcan.register.List_1_0, server_node_id=1)
-    >>> response, _ = get_event_loop().run_until_complete(cln_list.call(uavcan.register.List_1_0.Request(index=0)))
+    >>> cln_list = node.make_client(uavcan.register.List_1, server_node_id=1)
+    >>> response, _ = doctest_await(cln_list.call(uavcan.register.List_1.Request(index=0)))
     >>> response.name.name.tobytes().decode()   # The dummy register we created above.
     'foo'
-    >>> response, _ = get_event_loop().run_until_complete(cln_list.call(uavcan.register.List_1_0.Request(index=99)))
+    >>> response, _ = doctest_await(cln_list.call(uavcan.register.List_1.Request(index=99)))
     >>> response.name.name.tobytes().decode()   # Out of range -- empty string returned to indicate that.
     ''
 
     Get the dummy register created above:
 
-    >>> cln_access = node.make_client(uavcan.register.Access_1_0, server_node_id=1)
-    >>> request = uavcan.register.Access_1_0.Request()
+    >>> cln_access = node.make_client(uavcan.register.Access_1, server_node_id=1)
+    >>> request = uavcan.register.Access_1.Request()
     >>> request.name.name = "foo"
-    >>> response, _ = get_event_loop().run_until_complete(cln_access.call(request))
+    >>> response, _ = doctest_await(cln_access.call(request))
     >>> response.mutable, response.persistent
     (True, False)
     >>> ValueProxy(response.value).ints
@@ -61,7 +67,7 @@ class RegisterServer:
     Notice that the type does not match but it is automatically converted by the server.
 
     >>> request.value.real16 = Real16([3.14159, 2.71828, -500])  # <-- the type is different but it's okay.
-    >>> response, _ = get_event_loop().run_until_complete(cln_access.call(request))
+    >>> response, _ = doctest_await(cln_access.call(request))
     >>> ValueProxy(response.value).ints     # Automatically converted.
     [3, 3, -500]
     >>> node.registry["foo"].ints           # Yup, the register is, indeed, updated by the server.
@@ -71,14 +77,14 @@ class RegisterServer:
     as prescribed by the register network service definition:
 
     >>> request.value.unstructured = Unstructured(b'Hello world!')
-    >>> response, _ = get_event_loop().run_until_complete(cln_access.call(request))
+    >>> response, _ = doctest_await(cln_access.call(request))
     >>> ValueProxy(response.value).ints  # Conversion is not possible, same value retained.
     [3, 3, -500]
 
     An attempt to access a non-existent register returns an empty value:
 
     >>> request.name.name = 'bar'
-    >>> response, _ = get_event_loop().run_until_complete(cln_access.call(request))
+    >>> response, _ = doctest_await(cln_access.call(request))
     >>> response.value.empty is not None
     True
 

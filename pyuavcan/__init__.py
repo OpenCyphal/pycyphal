@@ -32,11 +32,10 @@ the library log level:
 """
 
 import os as _os
-import sys as _sys
+from importlib.resources import read_text as _read_text
 
 
-with open(_os.path.join(_os.path.dirname(__file__), "VERSION")) as _version:
-    __version__ = _version.read().strip()
+__version__ = _read_text(__name__, "VERSION", encoding="utf8").strip()
 __version_info__ = tuple(map(int, __version__.split(".")[:3]))
 __author__ = "UAVCAN Consortium"
 __copyright__ = "Copyright (c) 2019 UAVCAN Consortium"
@@ -52,10 +51,6 @@ see :func:`pyuavcan.application.make_node`.
 """
 
 
-if _sys.version_info[:2] < (3, 7):  # pragma: no cover
-    raise RuntimeError("A newer version of Python is required")
-
-
 _log_level_from_env = _os.environ.get("PYUAVCAN_LOGLEVEL")
 if _log_level_from_env is not None:
     import logging as _logging
@@ -68,7 +63,7 @@ if _log_level_from_env is not None:
 
 
 # The sub-packages are imported in the order of their interdependency.
-import pyuavcan.util as util  # pylint: disable=wrong-import-position  # noqa
-import pyuavcan.dsdl as dsdl  # pylint: disable=wrong-import-position  # noqa
-import pyuavcan.transport as transport  # pylint: disable=wrong-import-position  # noqa
-import pyuavcan.presentation as presentation  # pylint: disable=wrong-import-position  # noqa
+import pyuavcan.util as util  # pylint: disable=R0402,C0413  # noqa
+import pyuavcan.dsdl as dsdl  # pylint: disable=R0402,C0413  # noqa
+import pyuavcan.transport as transport  # pylint: disable=R0402,C0413  # noqa
+import pyuavcan.presentation as presentation  # pylint: disable=R0402,C0413  # noqa

@@ -52,8 +52,8 @@ class DemoApp:
     """
 
     def __init__(self) -> None:
-        node_info = uavcan.node.GetInfo_1_0.Response(
-            software_version=uavcan.node.Version_1_0(major=1, minor=0),
+        node_info = uavcan.node.GetInfo_1.Response(
+            software_version=uavcan.node.Version_1(major=1, minor=0),
             name="org.uavcan.pyuavcan.demo.demo_app",
         )
         # The Node class is basically the central part of the library -- it is the bridge between the application and
@@ -63,7 +63,7 @@ class DemoApp:
         self._node = pyuavcan.application.make_node(node_info, DemoApp.REGISTER_FILE)
 
         # Published heartbeat fields can be configured as follows.
-        self._node.heartbeat_publisher.mode = uavcan.node.Mode_1_0.OPERATIONAL  # type: ignore
+        self._node.heartbeat_publisher.mode = uavcan.node.Mode_1.OPERATIONAL  # type: ignore
         self._node.heartbeat_publisher.vendor_specific_status_code = os.getpid() % 100
 
         # Now we can create ports to interact with the network.
@@ -71,18 +71,18 @@ class DemoApp:
         # A port is created by specifying its data type and its name (similar to topic names in ROS or DDS).
         # The subject-ID is obtained from the standard register named "uavcan.sub.temperature_setpoint.id".
         # It can also be modified via environment variable "UAVCAN__SUB__TEMPERATURE_SETPOINT__ID".
-        self._sub_t_sp = self._node.make_subscriber(uavcan.si.unit.temperature.Scalar_1_0, "temperature_setpoint")
+        self._sub_t_sp = self._node.make_subscriber(uavcan.si.unit.temperature.Scalar_1, "temperature_setpoint")
 
         # As you may probably guess by looking at the port names, we are building a basic thermostat here.
         # We subscribe to the temperature setpoint, temperature measurement (process variable), and publish voltage.
         # The corresponding registers are "uavcan.sub.temperature_measurement.id" and "uavcan.pub.heater_voltage.id".
-        self._sub_t_pv = self._node.make_subscriber(uavcan.si.sample.temperature.Scalar_1_0, "temperature_measurement")
-        self._pub_v_cmd = self._node.make_publisher(uavcan.si.unit.voltage.Scalar_1_0, "heater_voltage")
+        self._sub_t_pv = self._node.make_subscriber(uavcan.si.sample.temperature.Scalar_1, "temperature_measurement")
+        self._pub_v_cmd = self._node.make_publisher(uavcan.si.unit.voltage.Scalar_1, "heater_voltage")
 
         # Create an RPC-server. The service-ID is read from standard register "uavcan.srv.least_squares.id".
         # This service is optional: if the service-ID is not specified, we simply don't provide it.
         try:
-            srv_least_sq = self._node.get_server(sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0, "least_squares")
+            srv_least_sq = self._node.get_server(sirius_cyber_corp.PerformLinearLeastSquaresFit_1, "least_squares")
             srv_least_sq.serve_in_background(self._serve_linear_least_squares)
         except pyuavcan.application.register.MissingRegisterError:
             logging.info("The least squares service is disabled by configuration")
@@ -90,15 +90,15 @@ class DemoApp:
         # Create another RPC-server using a standard service type for which a fixed service-ID is defined.
         # We don't specify the port name so the service-ID defaults to the fixed port-ID.
         # We could, of course, use it with a different service-ID as well, if needed.
-        self._node.get_server(uavcan.node.ExecuteCommand_1_1).serve_in_background(self._serve_execute_command)
+        self._node.get_server(uavcan.node.ExecuteCommand_1).serve_in_background(self._serve_execute_command)
 
         self._node.start()  # Don't forget to start the node!
 
     @staticmethod
     async def _serve_linear_least_squares(
-        request: sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request,
+        request: sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request,
         metadata: pyuavcan.presentation.ServiceRequestMetadata,
-    ) -> sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response:
+    ) -> sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response:
         logging.info("Least squares request %s from node %d", request, metadata.client_node_id)
         sum_x = sum(map(lambda p: p.x, request.points))  # type: ignore
         sum_y = sum(map(lambda p: p.y, request.points))  # type: ignore
@@ -110,21 +110,21 @@ class DemoApp:
         except ZeroDivisionError:
             slope = float("nan")
             y_intercept = float("nan")
-        return sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response(slope=slope, y_intercept=y_intercept)
+        return sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response(slope=slope, y_intercept=y_intercept)
 
     @staticmethod
     async def _serve_execute_command(
-        request: uavcan.node.ExecuteCommand_1_1.Request,
+        request: uavcan.node.ExecuteCommand_1.Request,
         metadata: pyuavcan.presentation.ServiceRequestMetadata,
-    ) -> uavcan.node.ExecuteCommand_1_1.Response:
+    ) -> uavcan.node.ExecuteCommand_1.Response:
         logging.info("Execute command request %s from node %d", request, metadata.client_node_id)
-        if request.command == uavcan.node.ExecuteCommand_1_1.Request.COMMAND_FACTORY_RESET:
+        if request.command == uavcan.node.ExecuteCommand_1.Request.COMMAND_FACTORY_RESET:
             try:
                 os.unlink(DemoApp.REGISTER_FILE)  # Reset to defaults by removing the register file.
             except OSError:  # Do nothing if already removed.
                 pass
-            return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_SUCCESS)
-        return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND)
+            return uavcan.node.ExecuteCommand_1.Response(uavcan.node.ExecuteCommand_1.Response.STATUS_SUCCESS)
+        return uavcan.node.ExecuteCommand_1.Response(uavcan.node.ExecuteCommand_1.Response.STATUS_BAD_COMMAND)
 
     async def run(self) -> None:
         """
@@ -134,7 +134,7 @@ class DemoApp:
         temperature_setpoint = 0.0
         temperature_error = 0.0
 
-        async def on_setpoint(msg: uavcan.si.unit.temperature.Scalar_1_0, _: pyuavcan.transport.TransferFrom) -> None:
+        async def on_setpoint(msg: uavcan.si.unit.temperature.Scalar_1, _: pyuavcan.transport.TransferFrom) -> None:
             nonlocal temperature_setpoint
             temperature_setpoint = msg.kelvin
 
@@ -153,10 +153,10 @@ class DemoApp:
 
         # This loop will exit automatically when the node is close()d. It is also possible to use receive() instead.
         async for m, _metadata in self._sub_t_pv:
-            assert isinstance(m, uavcan.si.sample.temperature.Scalar_1_0)
+            assert isinstance(m, uavcan.si.sample.temperature.Scalar_1)
             temperature_error = temperature_setpoint - m.kelvin
             voltage_output = temperature_error * gain_p  # Suppose this is a basic P-controller.
-            await self._pub_v_cmd.publish(uavcan.si.unit.voltage.Scalar_1_0(voltage_output))
+            await self._pub_v_cmd.publish(uavcan.si.unit.voltage.Scalar_1(voltage_output))
 
     def close(self) -> None:
         """
@@ -166,12 +166,16 @@ class DemoApp:
         self._node.close()
 
 
-if __name__ == "__main__":
-    app = DemoApp()
+async def main() -> None:
     logging.root.setLevel(logging.INFO)
+    app = DemoApp()
     try:
-        asyncio.get_event_loop().run_until_complete(app.run())
+        await app.run()
     except KeyboardInterrupt:
         pass
     finally:
         app.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

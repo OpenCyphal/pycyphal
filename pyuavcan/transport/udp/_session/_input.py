@@ -97,18 +97,14 @@ class UDPInputSession(pyuavcan.transport.InputSession):
         self,
         specifier: pyuavcan.transport.InputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        loop: asyncio.AbstractEventLoop,
         finalizer: typing.Callable[[], None],
     ):
         self._specifier = specifier
         self._payload_metadata = payload_metadata
-        self._loop = loop
         self._maybe_finalizer: typing.Optional[typing.Callable[[], None]] = finalizer
         assert isinstance(self._specifier, pyuavcan.transport.InputSessionSpecifier)
         assert isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata)
-        assert isinstance(self._loop, asyncio.AbstractEventLoop)
         assert callable(self._maybe_finalizer)
-
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._queue: asyncio.Queue[pyuavcan.transport.TransferFrom] = asyncio.Queue()
 
@@ -140,8 +136,9 @@ class UDPInputSession(pyuavcan.transport.InputSession):
                 self._statistics.drops += len(transfer.fragmented_payload)
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+        loop = asyncio.get_running_loop()
         try:
-            timeout = monotonic_deadline - self._loop.time()
+            timeout = monotonic_deadline - loop.time()
             if timeout > 0:
                 transfer = await asyncio.wait_for(self._queue.get(), timeout)
             else:
@@ -205,7 +202,6 @@ class PromiscuousUDPInputSession(UDPInputSession):
         self,
         specifier: pyuavcan.transport.InputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        loop: asyncio.AbstractEventLoop,
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -213,7 +209,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         """
         self._statistics_impl = PromiscuousUDPInputSessionStatistics()
         self._reassemblers: typing.Dict[int, TransferReassembler] = {}
-        super().__init__(specifier=specifier, payload_metadata=payload_metadata, loop=loop, finalizer=finalizer)
+        super().__init__(specifier=specifier, payload_metadata=payload_metadata, finalizer=finalizer)
 
     def sample_statistics(self) -> PromiscuousUDPInputSessionStatistics:
         return copy.copy(self._statistics)
@@ -260,7 +256,6 @@ class SelectiveUDPInputSession(UDPInputSession):
         self,
         specifier: pyuavcan.transport.InputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        loop: asyncio.AbstractEventLoop,
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -284,7 +279,7 @@ class SelectiveUDPInputSession(UDPInputSession):
             on_error_callback=on_reassembly_error,
         )
 
-        super().__init__(specifier=specifier, payload_metadata=payload_metadata, loop=loop, finalizer=finalizer)
+        super().__init__(specifier=specifier, payload_metadata=payload_metadata, finalizer=finalizer)
 
     def sample_statistics(self) -> SelectiveUDPInputSessionStatistics:
         return copy.copy(self._statistics)

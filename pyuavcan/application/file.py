@@ -1,6 +1,9 @@
 # Copyright (c) 2021 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
+#
+# Workaround for the odd behavior of MyPy https://github.com/python/mypy/issues/11706
+# mypy: implicit_reexport=True
 
 from __future__ import annotations
 import os
@@ -13,14 +16,14 @@ import itertools
 import numpy as np
 import pyuavcan
 import pyuavcan.application
-from uavcan.file import Path_2_0 as Path
-from uavcan.file import Error_1_0 as Error
-from uavcan.file import Read_1_1 as Read
-from uavcan.file import Write_1_1 as Write
-from uavcan.file import List_0_2 as List
-from uavcan.file import GetInfo_0_2 as GetInfo
-from uavcan.file import Modify_1_1 as Modify
-from uavcan.primitive import Unstructured_1_0 as Unstructured
+from uavcan.file import Path_2 as Path
+from uavcan.file import Error_1 as Error
+from uavcan.file import Read_1 as Read
+from uavcan.file import Write_1 as Write
+from uavcan.file import List_0 as List
+from uavcan.file import GetInfo_0 as GetInfo
+from uavcan.file import Modify_1 as Modify
+from uavcan.primitive import Unstructured_1 as Unstructured
 
 
 class FileServer:
@@ -232,7 +235,7 @@ class FileServer:
                 if request.offset != 0:  # Do not seek unless necessary to support non-seekable files.
                     f.seek(request.offset)
                 data = f.read(self._data_transfer_capacity)
-            return Read.Response(data=Unstructured(np.frombuffer(data, np.uint8)))
+            return Read.Response(data=Unstructured(np.frombuffer(data, np.uint8)))  # type: ignore
         except Exception as ex:
             _logger.info("%r: Error: %r", self, ex, exc_info=True)
             return Read.Response(self.convert_error(ex))
@@ -460,7 +463,8 @@ class FileClient:
 
         async def once(d: typing.Union[memoryview, bytes]) -> int:
             res = await self._call(
-                Write, Write.Request(offset, path=Path(path), data=Unstructured(np.frombuffer(d, np.uint8)))
+                Write,
+                Write.Request(offset, path=Path(path), data=Unstructured(np.frombuffer(d, np.uint8))),  # type: ignore
             )
             assert isinstance(res, Write.Response)
             return res.error.value

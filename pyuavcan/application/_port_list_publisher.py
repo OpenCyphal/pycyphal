@@ -10,10 +10,10 @@ from typing import Optional, Set, Any
 import pydsdl
 import pyuavcan.application
 from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier
-from uavcan.node.port import List_0_1 as List
-from uavcan.node.port import SubjectIDList_0_1 as SubjectIDList
-from uavcan.node.port import ServiceIDList_0_1 as ServiceIDList
-from uavcan.node.port import SubjectID_1_0 as SubjectID
+from uavcan.node.port import List_0 as List
+from uavcan.node.port import SubjectIDList_0 as SubjectIDList
+from uavcan.node.port import ServiceIDList_0 as ServiceIDList
+from uavcan.node.port import SubjectID_1 as SubjectID
 
 
 @dataclasses.dataclass(frozen=True)
@@ -43,8 +43,9 @@ class PortListPublisher:
         self._state = _State(set(), set(), set(), set())
 
         def start() -> None:
-            self._next_update_at = self.node.loop.time() + PortListPublisher._UPDATE_PERIOD
-            self._timer = self.node.loop.call_at(self._next_update_at, self._update)
+            loop = asyncio.get_event_loop()
+            self._next_update_at = loop.time() + PortListPublisher._UPDATE_PERIOD
+            self._timer = loop.call_at(self._next_update_at, self._update)
 
         def close() -> None:
             if self._pub is not None:
@@ -71,9 +72,10 @@ class PortListPublisher:
         return self._pub
 
     def _update(self) -> None:
+        loop = asyncio.get_event_loop()
         self._updates_since_pub += 1
         self._next_update_at += PortListPublisher._UPDATE_PERIOD
-        self._timer = self.node.loop.call_at(self._next_update_at, self._update)
+        self._timer = loop.call_at(self._next_update_at, self._update)
 
         if self.node.id is None:
             return
@@ -111,7 +113,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _make_port_list(state: _State, packet_capture_mode: bool) -> List:
-    from uavcan.primitive import Empty_1_0 as Empty
+    from uavcan.primitive import Empty_1 as Empty
 
     return List(
         publishers=_make_subject_id_list(state.pub),

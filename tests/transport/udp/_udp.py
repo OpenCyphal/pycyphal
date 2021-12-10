@@ -12,7 +12,9 @@ import pyuavcan.transport
 from pyuavcan.transport.udp import UDPTransport, UDPTransportStatistics
 
 
-@pytest.mark.asyncio  # type: ignore
+pytestmark = pytest.mark.asyncio
+
+
 async def _unittest_udp_transport_ipv4() -> None:
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
@@ -34,7 +36,6 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.local_ip_address == ipaddress.ip_address("127.0.0.111")
     assert tr2.local_ip_address == ipaddress.ip_address("127.0.0.222")
 
-    assert tr.loop is asyncio.get_event_loop()
     assert tr.local_node_id == 111
     assert tr2.local_node_id == 222
 
@@ -247,7 +248,6 @@ async def _unittest_udp_transport_ipv4() -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio  # type: ignore
 async def _unittest_udp_transport_ipv4_capture() -> None:
     import socket
     from pyuavcan.transport.udp import UDPCapture, IPPacket
@@ -293,14 +293,14 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
             transfer_id=9876543210,
             fragmented_payload=[_mem(bytes(range(256)))] * 4,
         ),
-        monotonic_deadline=tr.loop.time() + 2.0,
+        monotonic_deadline=asyncio.get_running_loop().time() + 2.0,
     )
     await asyncio.sleep(1.0)  # Let the packet propagate.
     assert len(captures) == 1  # Ensure the packet is captured.
     tr_capture.close()  # Ensure the capture is stopped after the capturing transport is closed.
     await broadcaster.send(  # This one shall be ignored.
         Transfer(timestamp=Timestamp.now(), priority=Priority.HIGH, transfer_id=54321, fragmented_payload=[_mem(b"")]),
-        monotonic_deadline=tr.loop.time() + 2.0,
+        monotonic_deadline=asyncio.get_running_loop().time() + 2.0,
     )
     await asyncio.sleep(1.0)
     assert len(captures) == 1  # Ignored?

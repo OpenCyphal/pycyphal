@@ -36,7 +36,7 @@ class Publisher(MessagePort[MessageClass]):
     Default value for :attr:`send_timeout`. The value is an implementation detail, not required by Specification.
     """
 
-    def __init__(self, impl: PublisherImpl[MessageClass], loop: asyncio.AbstractEventLoop):
+    def __init__(self, impl: PublisherImpl[MessageClass]):
         """
         Do not call this directly! Use :meth:`Presentation.make_publisher`.
         """
@@ -46,7 +46,6 @@ class Publisher(MessagePort[MessageClass]):
         self._dtype = impl.dtype  # Permit usage after close()
         self._transport_session = impl.transport_session  # Same
         self._transfer_id_counter = impl.transfer_id_counter  # Same
-        self._loop = loop
         self._priority: pyuavcan.transport.Priority = DEFAULT_PRIORITY
         self._send_timeout = self.DEFAULT_SEND_TIMEOUT
 
@@ -110,7 +109,8 @@ class Publisher(MessagePort[MessageClass]):
         """
         if self._maybe_impl is None:
             raise PortClosedError(repr(self))
-        return await self._maybe_impl.publish(message, self._priority, self._loop.time() + self._send_timeout)
+        loop = asyncio.get_running_loop()
+        return await self._maybe_impl.publish(message, self._priority, loop.time() + self._send_timeout)
 
     def publish_soon(self, message: MessageClass) -> None:
         """
@@ -130,7 +130,7 @@ class Publisher(MessagePort[MessageClass]):
             except Exception as ex:
                 _logger.exception("%s deferred publication has failed: %s", self, ex)
 
-        asyncio.ensure_future(executor(), loop=self._loop)
+        asyncio.ensure_future(executor())
 
     def close(self) -> None:
         impl, self._maybe_impl = self._maybe_impl, None
@@ -160,13 +160,11 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         transport_session: pyuavcan.transport.OutputSession,
         transfer_id_counter: OutgoingTransferIDCounter,
         finalizer: PortFinalizer,
-        loop: asyncio.AbstractEventLoop,
     ):
         self.dtype = dtype
         self.transport_session = transport_session
         self.transfer_id_counter = transfer_id_counter
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
-        self._loop = loop
         self._lock = asyncio.Lock()
         self._proxy_count = 0
 

@@ -18,7 +18,7 @@ from pyuavcan.transport.can import CANTransport
 from tests.transport.serial import VIRTUAL_BUS_URI as SERIAL_URI
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
     from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
@@ -28,12 +28,11 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     loop.slow_callback_duration = 5.0
 
     tr_a = RedundantTransport()
-    tr_b = RedundantTransport(loop=loop)
+    tr_b = RedundantTransport()
     assert tr_a.sample_statistics() == RedundantTransportStatistics([])
     assert tr_a.inferiors == []
     assert tr_a.local_node_id is None
-    assert tr_a.loop is asyncio.get_event_loop()
-    assert tr_a.local_node_id is None
+    assert tr_b.local_node_id is None
     assert tr_a.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=0,
         max_nodes=0,
@@ -41,8 +40,6 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     )
     assert tr_a.input_sessions == []
     assert tr_a.output_sessions == []
-
-    assert tr_a.loop == tr_b.loop
 
     #
     # Instantiate session objects.
@@ -83,8 +80,6 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     # Adding inferiors - loopback, transport A only.
     #
-    with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*loop.*"):
-        tr_a.attach_inferior(LoopbackTransport(111, loop=asyncio.new_event_loop()))  # Wrong event loop.
     assert len(pub_a.inferiors) == 0
     assert len(sub_any_a.inferiors) == 0
 
@@ -302,7 +297,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio  # type: ignore
+@pytest.mark.asyncio
 async def _unittest_redundant_transport_capture() -> None:
     from threading import Lock
     from pyuavcan.transport import Capture, Trace, TransferTrace, Priority, ServiceDataSpecifier
@@ -331,7 +326,7 @@ async def _unittest_redundant_transport_capture() -> None:
         for _ in range(10):
             await asyncio.sleep(0.1)
             with lock:
-                if len(traces) >= 2:
+                if len(traces) >= how_many:
                     return
         assert False, "No traces received"
 
@@ -366,7 +361,7 @@ async def _unittest_redundant_transport_capture() -> None:
         ),
         [memoryview(b"hello")],
     )
-    assert await tr.spoof(transfer, monotonic_deadline=tr.loop.time() + 1.0)
+    assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_event_loop().time() + 1.0)
     await wait(2)
     with lock:
         # Check the status of the deduplication process. We should get two: one transfer, one duplicate.
@@ -380,7 +375,7 @@ async def _unittest_redundant_transport_capture() -> None:
 
     # Spoof the same thing again, get nothing out: transfers discarded by the inferior's own reassemblers.
     # WARNING: this will fail if too much time has passed since the previous transfer due to TID timeout.
-    assert await tr.spoof(transfer, monotonic_deadline=tr.loop.time() + 1.0)
+    assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_event_loop().time() + 1.0)
     await wait(2)
     with lock:
         assert None is traces.pop(0)
@@ -400,7 +395,7 @@ async def _unittest_redundant_transport_capture() -> None:
         ),
         [memoryview(b"hello")],
     )
-    assert await tr.spoof(transfer, monotonic_deadline=tr.loop.time() + 1.0)
+    assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_event_loop().time() + 1.0)
     await wait(2)
     with lock:
         # Check the status of the deduplication process. We should get two: one transfer, one duplicate.
@@ -440,7 +435,7 @@ async def _unittest_redundant_transport_capture() -> None:
         ),
         [memoryview(b"hello")],
     )
-    assert await tr.spoof(transfer, monotonic_deadline=tr.loop.time() + 1.0)
+    assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_event_loop().time() + 1.0)
     await wait(2)
     with lock:
         # Check the status of the deduplication process. We should get two: one transfer, one duplicate.

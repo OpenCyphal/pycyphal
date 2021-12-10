@@ -39,7 +39,6 @@ class CANInputSession(CANSession, pyuavcan.transport.InputSession):
         self,
         specifier: pyuavcan.transport.InputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        loop: asyncio.AbstractEventLoop,
         finalizer: SessionFinalizer,
     ):
         """Use the factory method."""
@@ -47,8 +46,6 @@ class CANInputSession(CANSession, pyuavcan.transport.InputSession):
         self._payload_metadata = payload_metadata
 
         self._queue: asyncio.Queue[CANInputSession._QueueItem] = asyncio.Queue()
-        assert loop is not None
-        self._loop = loop
         self._transfer_id_timeout_ns = int(CANInputSession.DEFAULT_TRANSFER_ID_TIMEOUT / _NANO)
 
         self._receivers = [TransferReassembler(nid, payload_metadata.extent_bytes) for nid in _node_id_range()]
@@ -134,10 +131,11 @@ class CANInputSession(CANSession, pyuavcan.transport.InputSession):
         super().close()
 
     async def _do_receive(self, monotonic_deadline: float) -> typing.Optional[pyuavcan.transport.TransferFrom]:
+        loop = asyncio.get_running_loop()
         while True:
             try:
                 # Continue reading past the deadline until the queue is empty or a transfer is received.
-                timeout = monotonic_deadline - self._loop.time()
+                timeout = monotonic_deadline - loop.time()
                 if timeout > 0:
                     timestamp, canid, frame = await asyncio.wait_for(self._queue.get(), timeout)
                 else:

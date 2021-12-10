@@ -3,7 +3,6 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
-import asyncio
 
 import pyuavcan.transport
 
@@ -29,13 +28,11 @@ class LoopbackOutputSession(pyuavcan.transport.OutputSession):
         self,
         specifier: pyuavcan.transport.OutputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        loop: asyncio.AbstractEventLoop,
         closer: typing.Callable[[], None],
         router: TransferRouter,
     ):
         self._specifier = specifier
         self._payload_metadata = payload_metadata
-        self._loop = loop
         self._closer = closer
         self._router = router
         self._stats = pyuavcan.transport.SessionStatistics()
@@ -120,11 +117,7 @@ def _unittest_session() -> None:
         raise NotImplementedError
 
     ses = LoopbackOutputSession(
-        specifier=specifier,
-        payload_metadata=payload_metadata,
-        loop=asyncio.get_event_loop(),
-        closer=do_close,
-        router=do_route,
+        specifier=specifier, payload_metadata=payload_metadata, closer=do_close, router=do_route
     )
 
     assert specifier == ses.specifier

@@ -90,6 +90,13 @@ The order (whether selective or promiscuous is served first) is implementation-d
 Sniffing/snooping and tracing
 +++++++++++++++++++++++++++++
 
+..  doctest::
+    :hide:
+
+    >>> import tests
+    >>> tests.asyncio_allow_event_loop_access_from_top_level()
+    >>> from tests import doctest_await
+
 Set up live capture on a transport using :meth:`Transport.begin_capture`.
 We are using the loopback transport here for demonstration but other transports follow the same interface:
 
@@ -110,10 +117,9 @@ Emit a random transfer and see it captured:
 >>> from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, OutputSessionSpecifier, Transfer
 >>> from pyuavcan.transport import Timestamp, Priority
 >>> import asyncio
->>> await_ = asyncio.get_event_loop().run_until_complete
 >>> ses = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(1234), None), PayloadMetadata(1024))
->>> await_(ses.send(Transfer(Timestamp.now(), Priority.LOW, 1234567890, [memoryview(b'abc')]),
-...                 monotonic_deadline=asyncio.get_event_loop().time() + 1.0))
+>>> doctest_await(ses.send(Transfer(Timestamp.now(), Priority.LOW, 1234567890, [memoryview(b'abc')]),
+...                        monotonic_deadline=asyncio.get_event_loop().time() + 1.0))
 True
 >>> captured_events
 [LoopbackCapture(...priority=LOW, transfer_id=1234567890...)]

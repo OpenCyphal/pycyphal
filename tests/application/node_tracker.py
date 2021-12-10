@@ -13,8 +13,9 @@ if typing.TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+pytestmark = pytest.mark.asyncio
 
-@pytest.mark.asyncio  # type: ignore
+
 async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     from . import get_transport
     from uavcan.node import GetInfo_1_0

@@ -14,7 +14,7 @@ from . import heartbeat_publisher
 from . import register
 
 
-NodeInfo = uavcan.node.GetInfo_1_0.Response
+NodeInfo = uavcan.node.GetInfo_1.Response
 
 MessageClass = TypeVar("MessageClass", bound=pyuavcan.dsdl.CompositeObject)
 ServiceClass = TypeVar("ServiceClass", bound=pyuavcan.dsdl.ServiceObject)
@@ -65,12 +65,12 @@ class Node(abc.ABC):
 
         PortListPublisher(self)
 
-        async def handle_get_info(_req: uavcan.node.GetInfo_1_0.Request, _meta: ServiceRequestMetadata) -> NodeInfo:
+        async def handle_get_info(_req: uavcan.node.GetInfo_1.Request, _meta: ServiceRequestMetadata) -> NodeInfo:
             return self.info
 
         try:
             RegisterServer(self)
-            srv_info = self.get_server(uavcan.node.GetInfo_1_0)
+            srv_info = self.get_server(uavcan.node.GetInfo_1)
         except pyuavcan.transport.OperationNotDefinedForAnonymousNodeError as ex:
             _logger.info("%r: RPC-servers not launched because the transport is anonymous: %s", self, ex)
         else:
@@ -104,8 +104,11 @@ class Node(abc.ABC):
         raise NotImplementedError
 
     @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        """Shortcut for ``self.presentation.loop``"""
+    def loop(self) -> asyncio.AbstractEventLoop:  # pragma: no cover
+        """Deprecated; use ``asyncio.get_event_loop()`` instead."""
+        import warnings
+
+        warnings.warn("The loop property is deprecated; use asyncio.get_event_loop() instead.", DeprecationWarning)
         return self.presentation.loop
 
     @property

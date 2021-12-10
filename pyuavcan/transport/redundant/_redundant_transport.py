@@ -5,6 +5,7 @@
 import typing
 import asyncio
 import logging
+import warnings
 import dataclasses
 import pyuavcan.transport
 from ._session import RedundantInputSession, RedundantOutputSession, RedundantSession
@@ -37,14 +38,13 @@ class RedundantTransport(pyuavcan.transport.Transport):
 
     def __init__(self, *, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
         """
-        :param loop: All inferiors shall run on the same event loop,
-            which is configured once here and cannot be changed after the instance is constructed.
-            If not provided, defaults to :func:`asyncio.get_event_loop`.
+        :param loop: Deprecated.
         """
+        if loop:
+            warnings.warn("The loop argument is deprecated.", DeprecationWarning)
         self._cols: typing.List[pyuavcan.transport.Transport] = []
         self._rows: typing.Dict[pyuavcan.transport.SessionSpecifier, RedundantSession] = {}
         self._unwrapped_capture_handlers: typing.List[typing.Callable[[RedundantCapture], None]] = []
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
         self._check_matrix_consistency()
 
     @property
@@ -74,15 +74,6 @@ class RedundantTransport(pyuavcan.transport.Transport):
         )
 
     @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        """
-        All inferiors run on the same event loop, which is configured statically once when the redundant transport
-        is instantiated.
-        The loop cannot be reassigned after instantiation.
-        """
-        return self._loop
-
-    @property
     def local_node_id(self) -> typing.Optional[int]:
         """
         All inferiors share the same local node-ID.
@@ -106,7 +97,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
         out = self._get_session(
             specifier,
             lambda fin: RedundantInputSession(
-                specifier, payload_metadata, lambda: self.protocol_parameters.transfer_id_modulo, self._loop, fin
+                specifier, payload_metadata, lambda: self.protocol_parameters.transfer_id_modulo, fin
             ),
         )
         assert isinstance(out, RedundantInputSession)
@@ -116,9 +107,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
     def get_output_session(
         self, specifier: pyuavcan.transport.OutputSessionSpecifier, payload_metadata: pyuavcan.transport.PayloadMetadata
     ) -> RedundantOutputSession:
-        out = self._get_session(
-            specifier, lambda fin: RedundantOutputSession(specifier, payload_metadata, self._loop, fin)
-        )
+        out = self._get_session(specifier, lambda fin: RedundantOutputSession(specifier, payload_metadata, fin))
         assert isinstance(out, RedundantOutputSession)
         self._check_matrix_consistency()
         return out
@@ -278,12 +267,6 @@ class RedundantTransport(pyuavcan.transport.Transport):
         return all(results)
 
     def _validate_inferior(self, transport: pyuavcan.transport.Transport) -> None:
-        # Ensure all inferiors run on the same event loop.
-        if self.loop is not transport.loop:
-            raise InconsistentInferiorConfigurationError(
-                f"The inferior operates on a different event loop {transport.loop}, expected {self.loop}"
-            )
-
         # Prevent double-add.
         if transport in self._cols:
             raise ValueError(f"{transport} is already an inferior of {self}")

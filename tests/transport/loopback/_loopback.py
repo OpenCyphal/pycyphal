@@ -12,8 +12,12 @@ import pyuavcan.transport
 import pyuavcan.transport.loopback
 
 
-@pytest.mark.asyncio  # type: ignore
+pytestmark = pytest.mark.asyncio
+
+
 async def _unittest_loopback_transport(caplog: typing.Any) -> None:
+    loop = asyncio.get_running_loop()
+
     tr = pyuavcan.transport.loopback.LoopbackTransport(None)
     protocol_params = pyuavcan.transport.ProtocolParameters(
         transfer_id_modulo=32,
@@ -22,7 +26,6 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     )
     tr.protocol_parameters = protocol_params
     assert tr.protocol_parameters == protocol_params
-    assert tr.loop is asyncio.get_event_loop()
     assert tr.local_node_id is None
 
     tr = pyuavcan.transport.loopback.LoopbackTransport(42)
@@ -55,7 +58,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
             transfer_id=123,  # mod 32 = 27
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
-        tr.loop.time() + 1.0,
+        loop.time() + 1.0,
     )
     out_123.disable_feedback()
 
@@ -88,7 +91,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     del old_inp
 
     assert None is await inp_123.receive(0)
-    assert None is await inp_123.receive(tr.loop.time() + 1.0)
+    assert None is await inp_123.receive(loop.time() + 1.0)
 
     # This one will be dropped because wrong target node 123 != 42
     assert await out_123.send(
@@ -98,10 +101,10 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
             transfer_id=123,  # mod 32 = 27
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
-        tr.loop.time() + 1.0,
+        loop.time() + 1.0,
     )
     assert None is await inp_123.receive(0)
-    assert None is await inp_123.receive(tr.loop.time() + 1.0)
+    assert None is await inp_123.receive(loop.time() + 1.0)
 
     out_bc = tr.get_output_session(specifier=message_spec_any_out, payload_metadata=payload_metadata)
     assert out_123 is not out_bc
@@ -116,10 +119,10 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
             transfer_id=123,  # mod 32 = 27
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
-        tr.loop.time() + 1.0,
+        loop.time() + 1.0,
     )
     assert None is await inp_123.receive(0)
-    assert None is await inp_123.receive(tr.loop.time() + 1.0)
+    assert None is await inp_123.receive(loop.time() + 1.0)
 
     rx = await inp_42.receive(0)
     assert rx is not None
@@ -149,7 +152,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
                     transfer_id=123,  # mod 32 = 27
                     fragmented_payload=[memoryview(b"Hello world!")],
                 ),
-                tr.loop.time() + 1.0,
+                loop.time() + 1.0,
             )
         assert isinstance(out_bc.exception, RuntimeError)
         out_bc.exception = None
@@ -171,7 +174,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
             transfer_id=200,
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
-        tr.loop.time() + 1.0,
+        loop.time() + 1.0,
     )
     rx = await inp_42.receive(0)
     assert rx is not None
@@ -192,12 +195,11 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
-@pytest.mark.asyncio  # type: ignore
 async def _unittest_loopback_transport_service() -> None:
     from pyuavcan.transport import ServiceDataSpecifier, InputSessionSpecifier, OutputSessionSpecifier
 
+    loop = asyncio.get_running_loop()
     payload_metadata = pyuavcan.transport.PayloadMetadata(1234)
-
     tr = pyuavcan.transport.loopback.LoopbackTransport(1234)
 
     inp = tr.get_input_session(
@@ -215,13 +217,12 @@ async def _unittest_loopback_transport_service() -> None:
             transfer_id=123,  # mod 32 = 27
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
-        tr.loop.time() + 1.0,
+        loop.time() + 1.0,
     )
 
     assert None is not await inp.receive(0)
 
 
-@pytest.mark.asyncio  # type: ignore
 async def _unittest_loopback_tracer() -> None:
     from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Timestamp, Priority
     from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, TransferTrace
@@ -292,7 +293,6 @@ async def _unittest_loopback_tracer() -> None:
     assert tr.update(pyuavcan.transport.Capture(ts)) is None
 
 
-@pytest.mark.asyncio  # type: ignore
 async def _unittest_loopback_spoofing() -> None:
     from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
     from pyuavcan.transport import MessageDataSpecifier

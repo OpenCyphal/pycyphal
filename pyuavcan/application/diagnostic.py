@@ -12,8 +12,8 @@ import sys
 import asyncio
 import logging
 from typing import Optional
-from uavcan.diagnostic import Record_1_1 as Record
-from uavcan.diagnostic import Severity_1_0 as Severity
+from uavcan.diagnostic import Record_1 as Record
+from uavcan.diagnostic import Severity_1 as Severity
 import pyuavcan
 import pyuavcan.application
 
@@ -79,8 +79,9 @@ class DiagnosticPublisher(logging.Handler):
 
         >>> import tests
         >>> _ = tests.dsdl.compile()
+        >>> tests.asyncio_allow_event_loop_access_from_top_level()
+        >>> from tests import doctest_await
 
-    >>> from asyncio import get_event_loop
     >>> from pyuavcan.transport.loopback import LoopbackTransport
     >>> from pyuavcan.application import make_node, NodeInfo, make_registry
     >>> node = make_node(NodeInfo(), transport=LoopbackTransport(1))
@@ -98,7 +99,7 @@ class DiagnosticPublisher(logging.Handler):
 
     >>> sub = node.make_subscriber(Record)
     >>> logging.info('Test message')
-    >>> msg, _ = get_event_loop().run_until_complete(sub.receive_for(1.0))
+    >>> msg, _ = doctest_await(sub.receive_for(1.0))
     >>> msg.text.tobytes().decode()
     'root: Test message'
     >>> msg.severity.value == Severity.INFO     # The log level is mapped automatically.
@@ -117,7 +118,7 @@ class DiagnosticPublisher(logging.Handler):
     >>> node.start()
     >>> sub = node.make_subscriber(Record)
     >>> logging.info('Test message')
-    >>> msg, _ = get_event_loop().run_until_complete(sub.receive_for(1.0))
+    >>> msg, _ = doctest_await(sub.receive_for(1.0))
     >>> msg.text.tobytes().decode()
     'root: Test message'
     >>> msg.severity.value == Severity.INFO
@@ -142,7 +143,10 @@ class DiagnosticPublisher(logging.Handler):
             self._started = False
             self._pub.close()
             if self._fut is not None:
-                self._fut.result()
+                try:
+                    self._fut.result()
+                except asyncio.InvalidStateError:
+                    pass  # May be unset https://github.com/UAVCAN/pyuavcan/issues/192
 
         node.add_lifetime_hooks(start, close)
 
@@ -177,7 +181,8 @@ class DiagnosticPublisher(logging.Handler):
         if self._fut is None:
             self._fut = asyncio.ensure_future(self._publish(dcs_rec))
         else:
-            print(self, "DROPPED", dcs_rec, file=sys.stderr)  # pragma: no cover
+            # DROPPED
+            pass
 
     async def _publish(self, record: Record) -> None:
         try:
@@ -190,7 +195,7 @@ class DiagnosticPublisher(logging.Handler):
 
     @staticmethod
     def log_record_to_diagnostic_message(record: logging.LogRecord, use_timestamp: bool) -> Record:
-        from uavcan.time import SynchronizedTimestamp_1_0 as SynchronizedTimestamp
+        from uavcan.time import SynchronizedTimestamp_1 as SynchronizedTimestamp
 
         ts: Optional[SynchronizedTimestamp] = None
         if use_timestamp:

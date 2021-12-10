@@ -4,6 +4,7 @@
 
 import typing
 import asyncio
+import warnings
 import dataclasses
 import pyuavcan.transport
 import pyuavcan.util
@@ -33,7 +34,8 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         allow_anonymous_transfers: bool = True,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
     ):
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
+        if loop:
+            warnings.warn("The loop argument is deprecated", DeprecationWarning)
         self._local_node_id = int(local_node_id) if local_node_id is not None else None
         self._allow_anonymous_transfers = allow_anonymous_transfers
         self._input_sessions: typing.Dict[pyuavcan.transport.InputSessionSpecifier, LoopbackInputSession] = {}
@@ -46,10 +48,6 @@ class LoopbackTransport(pyuavcan.transport.Transport):
             max_nodes=2 ** 64,
             mtu=2 ** 64 - 1,
         )
-
-    @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        return self._loop
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -98,9 +96,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         try:
             sess = self._input_sessions[specifier]
         except KeyError:
-            sess = LoopbackInputSession(
-                specifier=specifier, payload_metadata=payload_metadata, loop=self.loop, closer=do_close
-            )
+            sess = LoopbackInputSession(specifier=specifier, payload_metadata=payload_metadata, closer=do_close)
             self._input_sessions[specifier] = sess
         return sess
 
@@ -114,7 +110,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                 pass
 
         async def do_route(tr: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
-            del monotonic_deadline  # Unused, all operations always successful and instantaneous.
+            _ = monotonic_deadline  # Unused, all operations always successful and instantaneous.
             if specifier.remote_node_id in {self.local_node_id, None}:  # Otherwise drop the transfer.
                 tr_from = pyuavcan.transport.TransferFrom(
                     timestamp=tr.timestamp,
@@ -139,7 +135,8 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                         ),
                     )
                 )
-                for remote_node_id in {self.local_node_id, None}:  # Multicast to both: selective and promiscuous.
+                # Multicast to both: selective and promiscuous.
+                for remote_node_id in {self.local_node_id, None}:  # pylint: disable=use-sequence-for-iteration
                     try:
                         destination_session = self._input_sessions[
                             pyuavcan.transport.InputSessionSpecifier(specifier.data_specifier, remote_node_id)
@@ -158,7 +155,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                     f"Anonymous transfers are not enabled for {self}"
                 ) from None
             sess = LoopbackOutputSession(
-                specifier=specifier, payload_metadata=payload_metadata, loop=self.loop, closer=do_close, router=do_route
+                specifier=specifier, payload_metadata=payload_metadata, closer=do_close, router=do_route
             )
             self._output_sessions[specifier] = sess
         return sess

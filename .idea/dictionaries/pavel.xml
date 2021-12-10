@@ -27,6 +27,7 @@
       <w>baudrate</w>
       <w>bgcolor</w>
       <w>blin</w>
+      <w>booleaness</w>
       <w>bools</w>
       <w>bufferless</w>
       <w>byref</w>
@@ -125,6 +126,7 @@
       <w>levelname</w>
       <w>libcanard</w>
       <w>libpcap</w>
+      <w>libpthread</w>
       <w>libuavcan</w>
       <w>linkcode</w>
       <w>lnid</w>
@@ -159,6 +161,7 @@
       <w>noxfile</w>
       <w>npcap</w>
       <w>ntdll</w>
+      <w>numpy's</w>
       <w>octothorp</w>
       <w>onboard</w>
       <w>overgeneral</w>
@@ -176,6 +179,7 @@
       <w>prio</w>
       <w>prog</w>
       <w>protip</w>
+      <w>py's</w>
       <w>pycodestyle</w>
       <w>pydev</w>
       <w>pydsdl</w>
@@ -184,6 +188,7 @@
       <w>pylint</w>
       <w>pyserial</w>
       <w>pytest</w>
+      <w>pytestmark</w>
       <w>pythonasynciodebug</w>
       <w>pythoncan</w>
       <w>pythonic</w>

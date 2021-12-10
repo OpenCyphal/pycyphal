@@ -11,8 +11,9 @@ import pytest
 import pyuavcan
 from pyuavcan.transport.loopback import LoopbackTransport
 
+pytestmark = pytest.mark.asyncio
 
-@pytest.mark.asyncio  # type: ignore
+
 async def _unittest_slow_diagnostic_subscriber(
     compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
 ) -> None:

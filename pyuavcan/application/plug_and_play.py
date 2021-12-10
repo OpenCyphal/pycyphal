@@ -1,6 +1,9 @@
 # Copyright (c) 2020 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
+#
+# Workaround for the odd behavior of MyPy https://github.com/python/mypy/issues/11706
+# mypy: implicit_reexport=True
 
 """
 Plug-and-play node-ID allocation logic. See the class documentation for usage info.
@@ -19,9 +22,9 @@ import asyncio
 import pathlib
 import logging
 import sqlite3
-from uavcan.pnp import NodeIDAllocationData_1_0 as NodeIDAllocationData_1
-from uavcan.pnp import NodeIDAllocationData_2_0 as NodeIDAllocationData_2
-from uavcan.node import ID_1_0 as ID
+from uavcan.pnp import NodeIDAllocationData_1 as NodeIDAllocationData_1
+from uavcan.pnp import NodeIDAllocationData_2 as NodeIDAllocationData_2
+from uavcan.node import ID_1 as ID
 import pyuavcan
 import pyuavcan.application
 
@@ -171,7 +174,7 @@ class Allocatee:
 
     def _restart_timer(self) -> None:
         t_request = random.random()
-        self._timer = self.presentation.loop.call_later(t_request, self._on_timer)
+        self._timer = asyncio.get_event_loop().call_later(t_request, self._on_timer)
 
     async def _on_response(
         self, msg: Union[NodeIDAllocationData_1, NodeIDAllocationData_2], meta: pyuavcan.transport.TransferFrom

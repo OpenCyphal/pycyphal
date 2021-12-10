@@ -57,9 +57,7 @@ class Subscriber(MessagePort[MessageClass]):
     the user code cannot access it and generally shouldn't care.
     """
 
-    def __init__(
-        self, impl: SubscriberImpl[MessageClass], loop: asyncio.AbstractEventLoop, queue_capacity: typing.Optional[int]
-    ):
+    def __init__(self, impl: SubscriberImpl[MessageClass], queue_capacity: typing.Optional[int]):
         """
         Do not call this directly! Use :meth:`Presentation.make_subscriber`.
         """
@@ -73,7 +71,6 @@ class Subscriber(MessagePort[MessageClass]):
 
         self._closed = False
         self._impl = impl
-        self._loop = loop
         self._maybe_task: typing.Optional[asyncio.Task[None]] = None
         self._rx: _Listener[MessageClass] = _Listener(asyncio.Queue(maxsize=queue_capacity))
         impl.add_listener(self._rx)
@@ -118,7 +115,7 @@ class Subscriber(MessagePort[MessageClass]):
         if self._maybe_task is not None:
             self._maybe_task.cancel()
 
-        self._maybe_task = self._loop.create_task(task_function())
+        self._maybe_task = asyncio.get_event_loop().create_task(task_function())
 
     # ----------------------------------------  DIRECT RECEIVE  ----------------------------------------
 
@@ -140,7 +137,8 @@ class Subscriber(MessagePort[MessageClass]):
 
         If an infinite deadline is desired, consider using :meth:`__aiter__`/:meth:`__anext__`.
         """
-        return await self.receive_for(timeout=monotonic_deadline - self._loop.time())
+        loop = asyncio.get_running_loop()
+        return await self.receive_for(timeout=monotonic_deadline - loop.time())
 
     async def receive_for(
         self, timeout: float
@@ -288,14 +286,12 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
         dtype: typing.Type[MessageClass],
         transport_session: pyuavcan.transport.InputSession,
         finalizer: PortFinalizer,
-        loop: asyncio.AbstractEventLoop,
     ):
         self.dtype = dtype
         self.transport_session = transport_session
         self.deserialization_failure_count = 0
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
-        self._loop = loop
-        self._task = loop.create_task(self._task_function())
+        self._task = asyncio.get_event_loop().create_task(self._task_function())
         self._listeners: typing.List[_Listener[MessageClass]] = []
 
     @property
@@ -304,9 +300,10 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
 
     async def _task_function(self) -> None:
         exception: typing.Optional[Exception] = None
+        loop = asyncio.get_running_loop()
         try:  # pylint: disable=too-many-nested-blocks
             while not self.is_closed:
-                transfer = await self.transport_session.receive(self._loop.time() + _RECEIVE_TIMEOUT)
+                transfer = await self.transport_session.receive(loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is not None:
                     message = pyuavcan.dsdl.deserialize(self.dtype, transfer.fragmented_payload)
                     if message is not None:

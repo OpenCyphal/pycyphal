@@ -229,7 +229,7 @@ class Registry(MutableMapping[str, ValueProxy]):
                 return key
         return None
 
-    def setdefault(self, name: str, default: Optional[Assignable] = None) -> ValueProxyWithFlags:
+    def setdefault(self, key: str, default: Optional[Assignable] = None) -> ValueProxyWithFlags:
         """
         **This is the preferred method for creating new registers.**
 
@@ -238,29 +238,29 @@ class Registry(MutableMapping[str, ValueProxy]):
         (using :meth:`ValueProxy.assign_environment_variable`).
         The register value instance is created using :class:`ValueProxy`.
 
-        :param name:    Register name.
+        :param key:     Register name.
         :param default: If exists, this value is ignored; otherwise created as described in :attr:`Assignable`.
         :return:        Resulting value.
         :raises:        See :meth:`ValueProxy.assign_environment_variable` and :meth:`ValueProxy`.
         """
         try:
-            return self[name]
+            return self[key]
         except KeyError:
             pass
         if default is None:
             raise TypeError  # pragma: no cover
         from . import get_environment_variable_name
 
-        _logger.debug("%r: Create %r <- %r", self, name, default)
-        self._set(name, default, create_only=True)
-        env_val = self.environment_variables.get(get_environment_variable_name(name))
+        _logger.debug("%r: Create %r <- %r", self, key, default)
+        self._set(key, default, create_only=True)
+        env_val = self.environment_variables.get(get_environment_variable_name(key))
         if env_val is not None:
-            _logger.debug("%r: Update from env: %r <- %r", self, name, env_val)
-            reg = self[name]
+            _logger.debug("%r: Update from env: %r <- %r", self, key, env_val)
+            reg = self[key]
             reg.assign_environment_variable(env_val)
-            self[name] = reg
+            self[key] = reg
 
-        return self[name]
+        return self[key]
 
     def __getitem__(self, name: str) -> ValueProxyWithFlags:
         """
@@ -332,11 +332,11 @@ class Registry(MutableMapping[str, ValueProxy]):
                 e = b.get(name)
                 if e is not None:
                     c = ValueProxy(e.value)
-                    c.assign(value)
+                    c.assign(value)  # type: ignore
                     b[name] = c.value
                     return
 
-        self._create_static(name, ValueProxy(value).value)
+        self._create_static(name, ValueProxy(value).value)  # type: ignore
 
     def __repr__(self) -> str:
         return pyuavcan.util.repr_attributes(self, self.backends)

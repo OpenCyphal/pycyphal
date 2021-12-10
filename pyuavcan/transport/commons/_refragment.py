@@ -109,7 +109,7 @@ def _unittest_slow_util_refragment_automatic() -> None:
         assert _to_bytes(out) == reference
         if expected_frags > 0:
             sizes = list(map(len, out))
-            assert all([x == output_fragment_size for x in sizes[:-1]])
+            assert all(x == output_fragment_size for x in sizes[:-1])
             assert 0 < sizes[-1] <= output_fragment_size
 
     def once_all(input_fragments: typing.List[memoryview]) -> None:

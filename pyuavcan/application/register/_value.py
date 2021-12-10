@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 from typing import Union, Iterable, List, Any, Optional, no_type_check
-import numpy
+from numpy.typing import NDArray
 import pyuavcan
 from pyuavcan.dsdl import get_attribute
 from .backend import Value as Value
@@ -264,7 +264,7 @@ RelaxedValue = Union[
     Iterable[bool],
     Iterable[int],
     Iterable[float],
-    numpy.ndarray,
+    NDArray[Any],
 ]
 """
 These types can be automatically converted to :class:`Value` with a particular option selected.
@@ -288,7 +288,7 @@ def _do_convert(to: Value, s: Value) -> Optional[Value]:
     if s.string or s.unstructured:
         return None
 
-    val_s: numpy.ndarray = get_attribute(
+    val_s: NDArray[Any] = get_attribute(
         s,
         _get_option_name(s),
     ).value.copy()
@@ -348,9 +348,9 @@ def _strictify(s: RelaxedValue) -> Value:
     if not s:
         return Value()  # Empty list generalized into Value.empty.
     if all(isinstance(x, bool) for x in s):
-        return _strictify(Bit(s))
+        return _strictify(Bit(s))  # type: ignore
     if all(isinstance(x, (int, bool)) for x in s):
-        return _strictify(Natural64(s)) if all(x >= 0 for x in s) else _strictify(Integer64(s))
+        return _strictify(Natural64(s)) if all(x >= 0 for x in s) else _strictify(Integer64(s))  # type: ignore
     if all(isinstance(x, (float, int, bool)) for x in s):
         return _strictify(Real64(s))
 

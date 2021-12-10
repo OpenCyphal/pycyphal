@@ -14,7 +14,7 @@ import typing
 import logging
 import asyncio
 import uavcan.node
-from uavcan.node import Heartbeat_1_0 as Heartbeat
+from uavcan.node import Heartbeat_1 as Heartbeat
 import pyuavcan
 import pyuavcan.application
 
@@ -25,10 +25,10 @@ class Health(enum.IntEnum):
     When enumerations are natively supported in DSDL, this will be replaced with an alias.
     """
 
-    NOMINAL = uavcan.node.Health_1_0.NOMINAL
-    ADVISORY = uavcan.node.Health_1_0.ADVISORY
-    CAUTION = uavcan.node.Health_1_0.CAUTION
-    WARNING = uavcan.node.Health_1_0.WARNING
+    NOMINAL = uavcan.node.Health_1.NOMINAL
+    ADVISORY = uavcan.node.Health_1.ADVISORY
+    CAUTION = uavcan.node.Health_1.CAUTION
+    WARNING = uavcan.node.Health_1.WARNING
 
 
 class Mode(enum.IntEnum):
@@ -37,10 +37,10 @@ class Mode(enum.IntEnum):
     When enumerations are natively supported in DSDL, this will be replaced with an alias.
     """
 
-    OPERATIONAL = uavcan.node.Mode_1_0.OPERATIONAL
-    INITIALIZATION = uavcan.node.Mode_1_0.INITIALIZATION
-    MAINTENANCE = uavcan.node.Mode_1_0.MAINTENANCE
-    SOFTWARE_UPDATE = uavcan.node.Mode_1_0.SOFTWARE_UPDATE
+    OPERATIONAL = uavcan.node.Mode_1.OPERATIONAL
+    INITIALIZATION = uavcan.node.Mode_1.INITIALIZATION
+    MAINTENANCE = uavcan.node.Mode_1.MAINTENANCE
+    SOFTWARE_UPDATE = uavcan.node.Mode_1.SOFTWARE_UPDATE
 
 
 VENDOR_SPECIFIC_STATUS_CODE_MASK = (
@@ -82,7 +82,7 @@ class HeartbeatPublisher:
             if not self._maybe_task:
                 self._started_at = time.monotonic()
                 self._subscriber.receive_in_background(self._handle_received_heartbeat)
-                self._maybe_task = self.node.loop.create_task(self._task_function())
+                self._maybe_task = asyncio.get_event_loop().create_task(self._task_function())
 
         def close() -> None:
             if self._maybe_task:
@@ -183,8 +183,8 @@ class HeartbeatPublisher:
         """Constructs a new heartbeat message from the object's state."""
         return Heartbeat(
             uptime=int(self.uptime),  # must floor
-            health=uavcan.node.Health_1_0(self.health),
-            mode=uavcan.node.Mode_1_0(self.mode),
+            health=uavcan.node.Health_1(self.health),
+            mode=uavcan.node.Mode_1(self.mode),
             vendor_specific_status_code=self.vendor_specific_status_code,
         )
 

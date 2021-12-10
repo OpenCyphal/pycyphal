@@ -34,15 +34,16 @@ Constructing a node
     >>> os.environ["UAVCAN__SRV__LEAST_SQUARES__ID"]     = "123"
     >>> os.environ["UAVCAN__CLN__LEAST_SQUARES__ID"]     = "123"
     >>> os.environ["UAVCAN__LOOPBACK"]                   = "1"
-    >>> import asyncio
-    >>> await_ = asyncio.get_event_loop().run_until_complete
+    >>> import tests
+    >>> tests.asyncio_allow_event_loop_access_from_top_level()
+    >>> from tests import doctest_await
 
 Create a node using the factory :meth:`make_node` and start it:
 
 >>> import pyuavcan.application
 >>> import uavcan.node                                  # Transcompiled DSDL namespace (see pyuavcan.dsdl).
 >>> node_info = pyuavcan.application.NodeInfo(          # This is an alias for uavcan.node.GetInfo.Response.
-...     software_version=uavcan.node.Version_1_0(major=1, minor=0),
+...     software_version=uavcan.node.Version_1(major=1, minor=0),
 ...     name="org.uavcan.pyuavcan.docs",
 ... )
 >>> node = pyuavcan.application.make_node(node_info)    # Some of the fields in node_info are set automatically.
@@ -65,12 +66,12 @@ To create a new port you need to specify its type and name
 Publishers and subscribers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Create a publisher and publish a message (here and below, ``await_`` substitutes for the ``await`` statement):
+Create a publisher and publish a message (here and below, ``doctest_await`` substitutes for the ``await`` statement):
 
 >>> import uavcan.si.unit.voltage
->>> pub_voltage = node.make_publisher(uavcan.si.unit.voltage.Scalar_1_0, "measured_voltage")
->>> pub_voltage.publish_soon(uavcan.si.unit.voltage.Scalar_1_0(402.15))     # Publish message asynchronously.
->>> await_(pub_voltage.publish(uavcan.si.unit.voltage.Scalar_1_0(402.15)))  # Or synchronously.
+>>> pub_voltage = node.make_publisher(uavcan.si.unit.voltage.Scalar_1, "measured_voltage")
+>>> pub_voltage.publish_soon(uavcan.si.unit.voltage.Scalar_1(402.15))            # Publish message asynchronously.
+>>> doctest_await(pub_voltage.publish(uavcan.si.unit.voltage.Scalar_1(402.15)))  # Or synchronously.
 True
 
 Create a subscription and receive a message from it:
@@ -79,12 +80,12 @@ Create a subscription and receive a message from it:
     :hide:
 
     >>> import uavcan.si.unit.length
-    >>> pub = node.presentation.make_publisher(uavcan.si.unit.length.Vector3_1_0, 6544)
-    >>> pub.publish_soon(uavcan.si.unit.length.Vector3_1_0([42.0, 15.4, -8.7]))
+    >>> pub = node.presentation.make_publisher(uavcan.si.unit.length.Vector3_1, 6544)
+    >>> pub.publish_soon(uavcan.si.unit.length.Vector3_1([42.0, 15.4, -8.7]))
 
 >>> import uavcan.si.unit.length
->>> sub_position = node.make_subscriber(uavcan.si.unit.length.Vector3_1_0, "position_setpoint")
->>> msg, metadata = await_(sub_position.receive_for(timeout=0.5))
+>>> sub_position = node.make_subscriber(uavcan.si.unit.length.Vector3_1, "position_setpoint")
+>>> msg, metadata = doctest_await(sub_position.receive_for(timeout=0.5))
 >>> msg.meter[0], msg.meter[1], msg.meter[2]                            # Some payload in the message we received.
 (42.0, 15.4, -8.7)
 >>> metadata.source_node_id, metadata.priority, metadata.transfer_id    # Metadata for the message.
@@ -96,32 +97,32 @@ RPC-service clients and servers
 
 Define an RPC-service of an application-specific type:
 
->>> from sirius_cyber_corp import PerformLinearLeastSquaresFit_1_0  # An application-specific DSDL definition.
+>>> from sirius_cyber_corp import PerformLinearLeastSquaresFit_1    # An application-specific DSDL definition.
 >>> async def solve_linear_least_squares(                           # Refer to the Demo chapter for the DSDL sources.
-...     request: PerformLinearLeastSquaresFit_1_0.Request,
+...     request: PerformLinearLeastSquaresFit_1.Request,
 ...     metadata: pyuavcan.presentation.ServiceRequestMetadata,
-... ) -> PerformLinearLeastSquaresFit_1_0.Response:                 # Business logic.
+... ) -> PerformLinearLeastSquaresFit_1.Response:                   # Business logic.
 ...     import numpy as np
 ...     x = np.array([p.x for p in request.points])
 ...     y = np.array([p.y for p in request.points])
 ...     s, *_ = np.linalg.lstsq(np.vstack([x, np.ones(len(x))]).T, y, rcond=None)
-...     return PerformLinearLeastSquaresFit_1_0.Response(slope=s[0], y_intercept=s[1])
->>> srv_least_squares = node.get_server(PerformLinearLeastSquaresFit_1_0, "least_squares")
+...     return PerformLinearLeastSquaresFit_1.Response(slope=s[0], y_intercept=s[1])
+>>> srv_least_squares = node.get_server(PerformLinearLeastSquaresFit_1, "least_squares")
 >>> srv_least_squares.serve_in_background(solve_linear_least_squares)  # Run the server in a background task.
 
 Invoke the service we defined above assuming that it is served by node 42:
 
->>> from sirius_cyber_corp import PointXY_1_0
->>> cln_least_sq = node.make_client(PerformLinearLeastSquaresFit_1_0, 42, "least_squares")
->>> req = PerformLinearLeastSquaresFit_1_0.Request([PointXY_1_0(10, 1), PointXY_1_0(20, 2)])
->>> response, metadata = await_(cln_least_sq.call(req))
+>>> from sirius_cyber_corp import PointXY_1
+>>> cln_least_sq = node.make_client(PerformLinearLeastSquaresFit_1, 42, "least_squares")
+>>> req = PerformLinearLeastSquaresFit_1.Request([PointXY_1(10, 1), PointXY_1(20, 2)])
+>>> response, metadata = doctest_await(cln_least_sq.call(req))
 >>> round(response.slope, 1), round(response.y_intercept, 1)
 (0.1, 0.0)
 
 Here is another example showcasing the use of a standard service with a fixed port-ID:
 
->>> client_node_info = node.make_client(uavcan.node.GetInfo_1_0, 42)    # Port name is not required.
->>> response, metadata = await_(client_node_info.call(uavcan.node.GetInfo_1_0.Request()))
+>>> client_node_info = node.make_client(uavcan.node.GetInfo_1, 42)    # Port name is not required.
+>>> response, metadata = doctest_await(client_node_info.call(uavcan.node.GetInfo_1.Request()))
 >>> response.software_version
 uavcan.node.Version.1.0(major=1, minor=0)
 
@@ -218,7 +219,7 @@ M__MOTOR__INDUCTANCE_DQ                  0.12 0.13
 42
 >>> node.presentation.transport     # Heterogeneously redundant transport: UDP+Serial, as specified in env vars.
 RedundantTransport(UDPTransport('127.63.0.42', ...), SerialTransport('socket://127.0.0.1:50905', ...))
->>> pub_voltage = node.make_publisher(uavcan.si.unit.voltage.Scalar_1_0, "measured_voltage")
+>>> pub_voltage = node.make_publisher(uavcan.si.unit.voltage.Scalar_1, "measured_voltage")
 >>> pub_voltage.port_id
 6543
 >>> int(node.registry["uavcan.diagnostic.severity"])                            # This is a standard register.
@@ -230,7 +231,7 @@ RedundantTransport(UDPTransport('127.63.0.42', ...), SerialTransport('socket://1
 >>> node.registry["m.motor.inductance_dq"] = [1.9, 6]                           # Assign new value.
 >>> node.registry["m.motor.inductance_dq"].floats
 [1.9, 6.0]
->>> node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "optional_port")    # doctest: +IGNORE_EXCEPTION_DETAIL
+>>> node.make_subscriber(uavcan.si.unit.voltage.Scalar_1, "optional_port")      # doctest: +IGNORE_EXCEPTION_DETAIL
 Traceback (most recent call last):
 ...
 PortNotConfiguredError: 'uavcan.sub.optional_port.id'

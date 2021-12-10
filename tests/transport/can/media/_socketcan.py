@@ -11,8 +11,9 @@ import pytest
 if sys.platform != "linux":  # pragma: no cover
     pytest.skip("SocketCAN test skipped because the system is not GNU/Linux", allow_module_level=True)
 
+pytestmark = pytest.mark.asyncio
 
-@pytest.mark.asyncio  # type: ignore
+
 async def _unittest_can_socketcan() -> None:
     from pyuavcan.transport import Timestamp
     from pyuavcan.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
@@ -64,13 +65,13 @@ async def _unittest_can_socketcan() -> None:
     ts_begin = Timestamp.now()
     await media_a.send(
         [
-            Envelope(DataFrame(FrameFormat.EXTENDED, 0xBADC0FE, bytearray(range(8))), loopback=True),
-            Envelope(DataFrame(FrameFormat.EXTENDED, 0x12345678, bytearray(range(0))), loopback=False),
             Envelope(DataFrame(FrameFormat.BASE, 0x123, bytearray(range(6))), loopback=True),
+            Envelope(DataFrame(FrameFormat.EXTENDED, 0x1BADC0FE, bytearray(range(8))), loopback=True),
+            Envelope(DataFrame(FrameFormat.EXTENDED, 0x1FF45678, bytearray(range(0))), loopback=False),
         ],
         asyncio.get_event_loop().time() + 1.0,
     )
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     ts_end = Timestamp.now()
 
     print("rx_a:", rx_a)
@@ -84,25 +85,25 @@ async def _unittest_can_socketcan() -> None:
     rx_external = [e.frame for t, e in rx_a if not e.loopback]
     assert len(rx_loopback) == 2 and len(rx_external) == 3
 
-    assert rx_loopback[0].identifier == 0xBADC0FE
-    assert rx_loopback[0].data == bytearray(range(8))
-    assert rx_loopback[0].format == FrameFormat.EXTENDED
+    assert rx_loopback[0].identifier == 0x123
+    assert rx_loopback[0].data == bytearray(range(6))
+    assert rx_loopback[0].format == FrameFormat.BASE
 
-    assert rx_loopback[1].identifier == 0x123
-    assert rx_loopback[1].data == bytearray(range(6))
-    assert rx_loopback[1].format == FrameFormat.BASE
+    assert rx_loopback[1].identifier == 0x1BADC0FE
+    assert rx_loopback[1].data == bytearray(range(8))
+    assert rx_loopback[1].format == FrameFormat.EXTENDED
 
-    assert rx_external[0].identifier == 0xBADC0FE
-    assert rx_external[0].data == bytearray(range(8))
-    assert rx_external[0].format == FrameFormat.EXTENDED
+    assert rx_external[0].identifier == 0x123
+    assert rx_external[0].data == bytearray(range(6))
+    assert rx_external[0].format == FrameFormat.BASE
 
-    assert rx_external[1].identifier == 0x12345678
-    assert rx_external[1].data == bytearray(range(0))
+    assert rx_external[1].identifier == 0x1BADC0FE
+    assert rx_external[1].data == bytearray(range(8))
     assert rx_external[1].format == FrameFormat.EXTENDED
 
-    assert rx_external[2].identifier == 0x123
-    assert rx_external[2].data == bytearray(range(6))
-    assert rx_external[2].format == FrameFormat.BASE
+    assert rx_external[2].identifier == 0x1FF45678
+    assert rx_external[2].data == bytearray(range(0))
+    assert rx_external[2].format == FrameFormat.EXTENDED
 
     media_a.close()
     media_b.close()

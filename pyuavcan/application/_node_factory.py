@@ -184,7 +184,7 @@ def make_node(
     # Populate certain fields of the node info structure automatically and create standard registers.
     info.protocol_version.major, info.protocol_version.minor = pyuavcan.UAVCAN_SPECIFICATION_VERSION
     if info.unique_id.sum() == 0:
-        info.unique_id = bytes(
+        info.unique_id = bytes(  # type: ignore
             registry.setdefault(
                 "uavcan.node.unique_id",
                 register.Value(unstructured=register.Unstructured(random.getrandbits(128).to_bytes(16, sys.byteorder))),
@@ -193,7 +193,7 @@ def make_node(
     registry.setdefault("uavcan.node.description", register.Value(string=register.String()))
 
     if len(info.name) == 0:
-        info.name = "anonymous." + info.unique_id.tobytes().hex()
+        info.name = "anonymous." + info.unique_id.tobytes().hex()  # type: ignore
 
     # Construct the node and its application-layer functions.
     node = SimpleNode(pyuavcan.presentation.Presentation(init_transport()), info, registry)

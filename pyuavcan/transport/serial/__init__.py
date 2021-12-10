@@ -117,6 +117,14 @@ This feature is discussed in detail in the documentation for the UDP transport :
 Usage
 +++++
 
+..  doctest::
+    :hide:
+
+    >>> import tests
+    >>> tests.asyncio_allow_event_loop_access_from_top_level()
+    >>> from tests import doctest_await
+
+>>> import asyncio
 >>> import pyuavcan
 >>> import pyuavcan.transport.serial
 >>> tr = pyuavcan.transport.serial.SerialTransport('loop://', local_node_id=1234, baudrate=115200)
@@ -128,14 +136,13 @@ Usage
 >>> ds = pyuavcan.transport.MessageDataSpecifier(2345)
 >>> pub = tr.get_output_session(pyuavcan.transport.OutputSessionSpecifier(ds, None), pm)
 >>> sub = tr.get_input_session(pyuavcan.transport.InputSessionSpecifier(ds, None), pm)
->>> await_ = tr.loop.run_until_complete
->>> await_(pub.send(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
-...                                                   pyuavcan.transport.Priority.LOW,
-...                                                   1111,
-...                                                   fragmented_payload=[]),
-...                       tr.loop.time() + 1.0))
+>>> doctest_await(pub.send(pyuavcan.transport.Transfer(pyuavcan.transport.Timestamp.now(),
+...                                                    pyuavcan.transport.Priority.LOW,
+...                                                    1111,
+...                                                    fragmented_payload=[]),
+...                        asyncio.get_event_loop().time() + 1.0))
 True
->>> await_(sub.receive(tr.loop.time() + 1.0))
+>>> doctest_await(sub.receive(asyncio.get_event_loop().time() + 1.0))
 TransferFrom(..., transfer_id=1111, ...)
 >>> tr.close()
 

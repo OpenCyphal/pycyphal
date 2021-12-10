@@ -6,6 +6,7 @@ import copy
 import typing
 import asyncio
 import logging
+import warnings
 import ipaddress
 import dataclasses
 import pyuavcan
@@ -129,15 +130,15 @@ class UDPTransport(pyuavcan.transport.Transport):
             This parameter specifies the number of times each outgoing service transfer will be repeated.
             This setting does not affect message transfers.
 
-        :param loop: The event loop to use. Defaults to :func:`asyncio.get_event_loop`.
+        :param loop: Deprecated.
 
         :param anonymous: DEPRECATED and scheduled for removal; replace with ``local_node_id=None``.
         """
         if anonymous:  # Backward compatibility. Will be removed.
-            import warnings
-
             local_node_id = None
             warnings.warn("Parameter 'anonymous' is deprecated. Use 'local_node_id=None' instead.", DeprecationWarning)
+        if loop:
+            warnings.warn("The loop parameter is deprecated.", DeprecationWarning)
 
         if not isinstance(local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
             local_ip_address = ipaddress.ip_address(local_ip_address)
@@ -149,7 +150,6 @@ class UDPTransport(pyuavcan.transport.Transport):
         self._anonymous = local_node_id is None
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
-        self._loop = loop if loop is not None else asyncio.get_event_loop()
 
         low, high = self.VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE
         if not (low <= self._srv_multiplier <= high):
@@ -172,10 +172,6 @@ class UDPTransport(pyuavcan.transport.Transport):
         assert (local_node_id is None) or (local_node_id < 0) or (self.local_node_id == local_node_id)
         assert (self.local_node_id is None) or (0 <= self.local_node_id <= 0xFFFF)
         _logger.debug("%s: Initialized with local node-ID %s", self, self.local_node_id)
-
-    @property
-    def loop(self) -> asyncio.AbstractEventLoop:
-        return self._loop
 
     @property
     def protocol_parameters(self) -> pyuavcan.transport.ProtocolParameters:
@@ -242,7 +238,6 @@ class UDPTransport(pyuavcan.transport.Transport):
                 mtu=self._mtu,
                 multiplier=multiplier,
                 sock=sock,
-                loop=self._loop,
                 finalizer=finalizer,
             )
 
@@ -333,17 +328,13 @@ class UDPTransport(pyuavcan.transport.Transport):
                     statistics=self._statistics.received_datagrams.setdefault(
                         specifier.data_specifier, SocketReaderStatistics()
                     ),
-                    loop=self.loop,
                 )
-
             cls: typing.Union[typing.Type[PromiscuousUDPInputSession], typing.Type[SelectiveUDPInputSession]] = (
                 PromiscuousUDPInputSession if specifier.is_promiscuous else SelectiveUDPInputSession
             )
-
             session = cls(
                 specifier=specifier,
                 payload_metadata=payload_metadata,
-                loop=self.loop,
                 finalizer=lambda: self._teardown_input_session(specifier),
             )
             self._socket_reader_registry[specifier.data_specifier].add_listener(

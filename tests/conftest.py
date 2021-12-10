@@ -23,7 +23,7 @@ should a test go crazy and eat all memory.
 _logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope="session", autouse=True)  # type: ignore
+@pytest.fixture(scope="session", autouse=True)
 def _configure_host_environment() -> None:
     def execute(*cmd: typing.Any, ensure_success: bool = True) -> typing.Tuple[int, str, str]:
         cmd = tuple(map(str, cmd))
@@ -64,3 +64,13 @@ def _configure_host_environment() -> None:
         t = ctypes.c_ulong()
         ctypes.WinDLL("NTDLL.DLL").NtSetTimerResolution(5000, 1, ctypes.byref(t))
         _logger.info("System timer resolution: %.3f ms", t.value / 10e3)
+
+
+@pytest.fixture(autouse=True)
+def _revert_asyncio_monkeypatch() -> None:
+    """
+    Ensures that every test is executed with the original, unpatched asyncio, unless explicitly requested otherwise.
+    """
+    from . import asyncio_restore
+
+    asyncio_restore()

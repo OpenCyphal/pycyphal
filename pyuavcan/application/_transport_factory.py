@@ -141,6 +141,12 @@ def make_transport(
         - :class:`pyuavcan.application.register.ValueConversionError` if a register is found but its value
           cannot be converted to the correct type.
 
+    ..  doctest::
+        :hide:
+
+        >>> import tests
+        >>> tests.asyncio_allow_event_loop_access_from_top_level()
+
     >>> from pyuavcan.application.register import ValueProxy, Natural16, Natural32
     >>> reg = {
     ...     "uavcan.udp.iface": ValueProxy("127.99.0.0"),

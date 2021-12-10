@@ -3,7 +3,11 @@ environment:
     -
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-      PYTHON: 'C:\Python39-x64'  # YAML treats '\\' and "\\" differently.
+      PYTHON: 'C:\Python310-x64'  # YAML treats '\\' and "\\" differently.
+    -
+      job_group: tests
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      PYTHON: '3.10'
     -
       job_group: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
@@ -20,7 +24,7 @@ environment:
       job_name: deploy
       job_depends_on: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
-      PYTHON: '3.9'
+      PYTHON: '3.10'
 
   GIT_TOKEN:
     secure: +jQhxLpePj6hdDryfET/XpLo7VL9fhDXVHlwLOPp/nRDYe97TJAfd0XCTuPz1qkT
@@ -57,7 +61,9 @@ for:
       - 'git submodule update --init --recursive'
       - 'python -m pip install --upgrade pip setuptools nox'
     test_script:
-      - 'nox --forcecolor --non-interactive --error-on-missing-interpreters --session test pristine'
+      # FIXME on Windows we only test against the OLDEST and the NEWEST version of Python because we run out of time.
+      # FIXME restructure the workflow or migrate to GitHub Actions.
+      - 'nox --forcecolor --non-interactive --error-on-missing-interpreters --pythons 3.7 3.10 --session test pristine'
 
   - # GNU/LINUX TEST
     matrix:
