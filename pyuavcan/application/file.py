@@ -1,9 +1,6 @@
 # Copyright (c) 2021 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
-#
-# Workaround for the odd behavior of MyPy https://github.com/python/mypy/issues/11706
-# mypy: implicit_reexport=True
 
 from __future__ import annotations
 import os
@@ -16,14 +13,18 @@ import itertools
 import numpy as np
 import pyuavcan
 import pyuavcan.application
-from uavcan.file import Path_2 as Path
-from uavcan.file import Error_1 as Error
-from uavcan.file import Read_1 as Read
-from uavcan.file import Write_1 as Write
-from uavcan.file import List_0 as List
-from uavcan.file import GetInfo_0 as GetInfo
-from uavcan.file import Modify_1 as Modify
-from uavcan.primitive import Unstructured_1 as Unstructured
+import uavcan.file
+import uavcan.primitive
+
+# import X as Y is not an accepted form; see https://github.com/python/mypy/issues/11706
+Path = uavcan.file.Path_2
+Error = uavcan.file.Error_1
+Read = uavcan.file.Read_1
+Write = uavcan.file.Write_1
+List = uavcan.file.List_0
+GetInfo = uavcan.file.GetInfo_0
+Modify = uavcan.file.Modify_1
+Unstructured = uavcan.primitive.Unstructured_1
 
 
 class FileServer:

@@ -1,30 +1,31 @@
 # Copyright (C) 2021  UAVCAN Consortium  <uavcan.org>
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
-#
-# Workaround for the odd behavior of MyPy https://github.com/python/mypy/issues/11706
-# mypy: implicit_reexport=True
 
 """
 Implementation of the UAVCAN register interface as defined in the UAVCAN Specification
 (section 5.3 *Application-layer functions*).
 """
 
-from uavcan.primitive import Empty_1 as Empty
-from uavcan.primitive import String_1 as String
-from uavcan.primitive import Unstructured_1 as Unstructured
-from uavcan.primitive.array import Bit_1 as Bit
-from uavcan.primitive.array import Integer64_1 as Integer64
-from uavcan.primitive.array import Integer32_1 as Integer32
-from uavcan.primitive.array import Integer16_1 as Integer16
-from uavcan.primitive.array import Integer8_1 as Integer8
-from uavcan.primitive.array import Natural64_1 as Natural64
-from uavcan.primitive.array import Natural32_1 as Natural32
-from uavcan.primitive.array import Natural16_1 as Natural16
-from uavcan.primitive.array import Natural8_1 as Natural8
-from uavcan.primitive.array import Real64_1 as Real64
-from uavcan.primitive.array import Real32_1 as Real32
-from uavcan.primitive.array import Real16_1 as Real16
+import uavcan.primitive
+import uavcan.primitive.array
+
+# import X as Y is not an accepted form; see https://github.com/python/mypy/issues/11706
+Empty = uavcan.primitive.Empty_1
+String = uavcan.primitive.String_1
+Unstructured = uavcan.primitive.Unstructured_1
+Bit = uavcan.primitive.array.Bit_1
+Integer64 = uavcan.primitive.array.Integer64_1
+Integer32 = uavcan.primitive.array.Integer32_1
+Integer16 = uavcan.primitive.array.Integer16_1
+Integer8 = uavcan.primitive.array.Integer8_1
+Natural64 = uavcan.primitive.array.Natural64_1
+Natural32 = uavcan.primitive.array.Natural32_1
+Natural16 = uavcan.primitive.array.Natural16_1
+Natural8 = uavcan.primitive.array.Natural8_1
+Real64 = uavcan.primitive.array.Real64_1
+Real32 = uavcan.primitive.array.Real32_1
+Real16 = uavcan.primitive.array.Real16_1
 
 from ._value import Value as Value
 from ._value import ValueProxy as ValueProxy

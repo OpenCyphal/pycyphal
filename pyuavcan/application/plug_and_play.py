@@ -1,9 +1,6 @@
 # Copyright (c) 2020 UAVCAN Consortium
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
-#
-# Workaround for the odd behavior of MyPy https://github.com/python/mypy/issues/11706
-# mypy: implicit_reexport=True
 
 """
 Plug-and-play node-ID allocation logic. See the class documentation for usage info.
@@ -22,12 +19,14 @@ import asyncio
 import pathlib
 import logging
 import sqlite3
+import uavcan.node
 from uavcan.pnp import NodeIDAllocationData_1 as NodeIDAllocationData_1
 from uavcan.pnp import NodeIDAllocationData_2 as NodeIDAllocationData_2
-from uavcan.node import ID_1 as ID
 import pyuavcan
 import pyuavcan.application
 
+# import X as Y is not an accepted form; see https://github.com/python/mypy/issues/11706
+ID = uavcan.node.ID_1
 
 _PSEUDO_UNIQUE_ID_MASK = (
     2 ** pyuavcan.dsdl.get_model(NodeIDAllocationData_1)["unique_id_hash"].data_type.bit_length_set.max - 1
