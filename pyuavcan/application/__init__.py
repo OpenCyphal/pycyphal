@@ -35,8 +35,13 @@ Constructing a node
     >>> os.environ["UAVCAN__CLN__LEAST_SQUARES__ID"]     = "123"
     >>> os.environ["UAVCAN__LOOPBACK"]                   = "1"
     >>> import asyncio
-    >>> await_ = asyncio.get_event_loop().run_until_complete
+    >>> loop = asyncio.get_event_loop_policy().get_event_loop()
+    >>> asyncio.set_event_loop(loop)
+    >>> loop.slow_callback_duration = 5.0
+    >>> await_ = loop.run_until_complete
 
+Here and below, ``await_`` substitutes for the ``await`` statement
+(see motivation at https://github.com/Erotemic/xdoctest/issues/115).
 Create a node using the factory :meth:`make_node` and start it:
 
 >>> import pyuavcan.application
@@ -45,8 +50,11 @@ Create a node using the factory :meth:`make_node` and start it:
 ...     software_version=uavcan.node.Version_1_0(major=1, minor=0),
 ...     name="org.uavcan.pyuavcan.docs",
 ... )
->>> node = pyuavcan.application.make_node(node_info)    # Some of the fields in node_info are set automatically.
->>> node.start()
+>>> async def mk_node():
+...     node = pyuavcan.application.make_node(node_info)  # Some of the fields in node_info are set automatically.
+...     node.start()
+...     return node
+>>> node = await_(mk_node())
 
 The node instance we just started will periodically publish ``uavcan.node.Heartbeat`` and ``uavcan.node.port.List``,
 respond to ``uavcan.node.GetInfo`` and ``uavcan.register.Access``/``uavcan.register.List``,
@@ -65,12 +73,11 @@ To create a new port you need to specify its type and name
 Publishers and subscribers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Create a publisher and publish a message (here and below, ``await_`` substitutes for the ``await`` statement):
+Create a publisher and publish a message:
 
 >>> import uavcan.si.unit.voltage
 >>> pub_voltage = node.make_publisher(uavcan.si.unit.voltage.Scalar_1_0, "measured_voltage")
->>> pub_voltage.publish_soon(uavcan.si.unit.voltage.Scalar_1_0(402.15))     # Publish message asynchronously.
->>> await_(pub_voltage.publish(uavcan.si.unit.voltage.Scalar_1_0(402.15)))  # Or synchronously.
+>>> await_(pub_voltage.publish(uavcan.si.unit.voltage.Scalar_1_0(402.15)))
 True
 
 Create a subscription and receive a message from it:
@@ -79,12 +86,17 @@ Create a subscription and receive a message from it:
     :hide:
 
     >>> import uavcan.si.unit.length
-    >>> pub = node.presentation.make_publisher(uavcan.si.unit.length.Vector3_1_0, 6544)
-    >>> pub.publish_soon(uavcan.si.unit.length.Vector3_1_0([42.0, 15.4, -8.7]))
+    >>> async def _aux():
+    ...     pub = node.presentation.make_publisher(uavcan.si.unit.length.Vector3_1_0, 6544)
+    ...     asyncio.get_running_loop().call_later(0.5,
+    ...         lambda: pub.publish_soon(uavcan.si.unit.length.Vector3_1_0([42.0, 15.4, -8.7])))
+    >>> await_(_aux())
 
 >>> import uavcan.si.unit.length
->>> sub_position = node.make_subscriber(uavcan.si.unit.length.Vector3_1_0, "position_setpoint")
->>> msg, metadata = await_(sub_position.receive_for(timeout=0.5))
+>>> async def mk_sub_position():
+...     return node.make_subscriber(uavcan.si.unit.length.Vector3_1_0, "position_setpoint")
+>>> sub_position = await_(mk_sub_position())
+>>> msg, metadata = await_(sub_position.receive_for(timeout=1.0))
 >>> msg.meter[0], msg.meter[1], msg.meter[2]                            # Some payload in the message we received.
 (42.0, 15.4, -8.7)
 >>> metadata.source_node_id, metadata.priority, metadata.transfer_id    # Metadata for the message.
@@ -106,13 +118,18 @@ Define an RPC-service of an application-specific type:
 ...     y = np.array([p.y for p in request.points])
 ...     s, *_ = np.linalg.lstsq(np.vstack([x, np.ones(len(x))]).T, y, rcond=None)
 ...     return PerformLinearLeastSquaresFit_1_0.Response(slope=s[0], y_intercept=s[1])
->>> srv_least_squares = node.get_server(PerformLinearLeastSquaresFit_1_0, "least_squares")
->>> srv_least_squares.serve_in_background(solve_linear_least_squares)  # Run the server in a background task.
+>>> async def mk_server_least_squares():
+...     srv = node.get_server(PerformLinearLeastSquaresFit_1_0, "least_squares")
+...     srv.serve_in_background(solve_linear_least_squares)         # Run the server in a background task.
+...     return srv
+>>> srv_least_squares = await_(mk_server_least_squares())           # Runs in background.
 
 Invoke the service we defined above assuming that it is served by node 42:
 
 >>> from sirius_cyber_corp import PointXY_1_0
->>> cln_least_sq = node.make_client(PerformLinearLeastSquaresFit_1_0, 42, "least_squares")
+>>> async def mk_client_least_squares():
+...     return node.make_client(PerformLinearLeastSquaresFit_1_0, 42, "least_squares")
+>>> cln_least_sq = await_(mk_client_least_squares())
 >>> req = PerformLinearLeastSquaresFit_1_0.Request([PointXY_1_0(10, 1), PointXY_1_0(20, 2)])
 >>> response, metadata = await_(cln_least_sq.call(req))
 >>> round(response.slope, 1), round(response.y_intercept, 1)
@@ -120,7 +137,9 @@ Invoke the service we defined above assuming that it is served by node 42:
 
 Here is another example showcasing the use of a standard service with a fixed port-ID:
 
->>> client_node_info = node.make_client(uavcan.node.GetInfo_1_0, 42)    # Port name is not required.
+>>> async def mk_client_node_info():
+...     return node.make_client(uavcan.node.GetInfo_1_0, 42)    # Port name is not required.
+>>> client_node_info = await_(mk_client_node_info())
 >>> response, metadata = await_(client_node_info.call(uavcan.node.GetInfo_1_0.Request()))
 >>> response.software_version
 uavcan.node.Version.1.0(major=1, minor=0)
@@ -213,7 +232,10 @@ UAVCAN__UDP__IFACE                       127.63.0.0
 UAVCAN__SERIAL__IFACE                    socket://127.0.0.1:50905
 UAVCAN__DIAGNOSTIC__SEVERITY             3.1
 M__MOTOR__INDUCTANCE_DQ                  0.12 0.13
->>> node = pyuavcan.application.make_node(node_info, "registers.db")  # The file will be created if doesn't exist.
+>>> async def mk_node():
+...     node = pyuavcan.application.make_node(node_info, "registers.db")  # The file will be created if doesn't exist.
+...     return node
+>>> node = await_(mk_node())
 >>> node.id
 42
 >>> node.presentation.transport     # Heterogeneously redundant transport: UDP+Serial, as specified in env vars.

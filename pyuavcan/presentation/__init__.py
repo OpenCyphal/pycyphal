@@ -54,6 +54,15 @@ This example is based on a simple loopback transport that does not interact with
 
     >>> import tests
     >>> _ = tests.dsdl.compile()
+    >>> import asyncio
+    >>> loop = asyncio.get_event_loop_policy().get_event_loop()
+    >>> asyncio.set_event_loop(loop)
+    >>> loop.slow_callback_duration = 5.0
+    >>> await_ = loop.run_until_complete
+    >>> def run(what):
+    ...     async def wrapper():
+    ...         return what()
+    ...     return await_(wrapper())
 
 >>> import uavcan.node, uavcan.diagnostic         # Import what we need from DSDL-generated packages.
 >>> import pyuavcan.transport.loopback            # Import the demo transport implementation.
@@ -64,19 +73,17 @@ Having prepared a presentation layer controller, we can create *ports*.
 They are the main points of network access for the application.
 Let's start with a publisher and a subscriber:
 
->>> pub_record = presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
->>> sub_record = presentation.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_1)
+>>> pub_record = run(lambda: presentation.make_publisher_with_fixed_subject_id(uavcan.diagnostic.Record_1_1))
+>>> sub_record = run(lambda: presentation.make_subscriber_with_fixed_subject_id(uavcan.diagnostic.Record_1_1))
 
 Publish a message and receive it also (the loopback transport just returns all outgoing transfers back):
 
->>> import asyncio
->>> run_until_complete = asyncio.get_event_loop().run_until_complete
 >>> record = uavcan.diagnostic.Record_1_1(
 ...     severity=uavcan.diagnostic.Severity_1_0(uavcan.diagnostic.Severity_1_0.INFO),
 ...     text='Neither man nor animal can be influenced by anything but suggestion.')
->>> run_until_complete(pub_record.publish(record))  # publish() returns False on timeout.
+>>> await_(pub_record.publish(record))  # publish() returns False on timeout.
 True
->>> message, metadata = run_until_complete(sub_record.receive_for(timeout=0.5))
+>>> message, metadata = await_(sub_record.receive_for(timeout=0.5))
 >>> message.text.tobytes().decode()  # Calling .tobytes().decode() won't be needed when DSDL supports strings natively.
 'Neither man nor animal can be influenced by anything but suggestion.'
 >>> metadata.transfer_id, metadata.source_node_id, metadata.timestamp
@@ -86,8 +93,8 @@ We can use custom subject-ID with any data type, even if there is a fixed subjec
 (the background is explained in Specification, please read it).
 Here is an example; we also show here that when a receive call times out, it returns None:
 
->>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_1, subject_id=2345)
->>> run_until_complete(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
+>>> sub_record_custom = run(lambda: presentation.make_subscriber(uavcan.diagnostic.Record_1_1, subject_id=2345))
+>>> await_(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
 
 You can see above that the node-ID of the received transfer metadata is None,
 that's because it is actually an anonymous transfer, and it is so because our node is an anonymous node;
@@ -123,14 +130,14 @@ Having configured the node-ID, let's set up a service and invoke it:
 ...         -> uavcan.node.ExecuteCommand_1_1.Response:
 ...     print(f'Received command {request.command} from node {metadata.client_node_id}')
 ...     return uavcan.node.ExecuteCommand_1_1.Response(uavcan.node.ExecuteCommand_1_1.Response.STATUS_BAD_COMMAND)
->>> srv_exec_command = presentation.get_server_with_fixed_service_id(uavcan.node.ExecuteCommand_1_1)
->>> srv_exec_command.serve_in_background(on_request)
->>> client_exec_command = presentation.make_client_with_fixed_service_id(uavcan.node.ExecuteCommand_1_1,
-...                                                                      server_node_id=1234)
+>>> srv_exec_command = run(lambda: presentation.get_server_with_fixed_service_id(uavcan.node.ExecuteCommand_1_1))
+>>> run(lambda: srv_exec_command.serve_in_background(on_request))
+>>> client_exec_command = run(lambda: presentation.make_client_with_fixed_service_id(uavcan.node.ExecuteCommand_1_1,
+...                                                                                  server_node_id=1234))
 >>> request_object = uavcan.node.ExecuteCommand_1_1.Request(
 ...     uavcan.node.ExecuteCommand_1_1.Request.COMMAND_BEGIN_SOFTWARE_UPDATE,
 ...     '/path/to/the/firmware/image.bin')
->>> received_response, response_transfer = run_until_complete(client_exec_command.call(request_object))
+>>> received_response, response_transfer = await_(client_exec_command.call(request_object))
 Received command 65533 from node 1234
 >>> received_response
 uavcan.node.ExecuteCommand.Response.1.1(status=3)
@@ -138,12 +145,12 @@ uavcan.node.ExecuteCommand.Response.1.1(status=3)
 Methods that receive data from the network return None on timeout.
 For example, here we create a client for a nonexistent service; the call times out and returns None:
 
->>> bad_client = presentation.make_client(uavcan.node.ExecuteCommand_1_1,
-...                                       service_id=234,       # There is no such service.
-...                                       server_node_id=321)   # There is no such server.
->>> bad_client.response_timeout = 0.1                           # Override the default.
->>> bad_client.priority = pyuavcan.transport.Priority.HIGH      # Override the default.
->>> run_until_complete(bad_client.call(request_object))         # Times out and returns None.
+>>> bad_client = run(lambda: presentation.make_client(uavcan.node.ExecuteCommand_1_1,
+...                                                   service_id=234,           # There is no such service.
+...                                                   server_node_id=321))      # There is no such server.
+>>> bad_client.response_timeout = 0.1                                           # Override the default.
+>>> bad_client.priority = pyuavcan.transport.Priority.HIGH                      # Override the default.
+>>> await_(bad_client.call(request_object))                                     # Times out and returns None.
 
 ..  doctest::
     :hide:

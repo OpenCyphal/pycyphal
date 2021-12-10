@@ -141,16 +141,30 @@ def make_transport(
         - :class:`pyuavcan.application.register.ValueConversionError` if a register is found but its value
           cannot be converted to the correct type.
 
+    Here is a demo, where items wrapped in ``run()`` should be executed with an active asyncio event loop
+    (i.e., :func:`asyncio.get_running_loop` should be valid).
+
+    ..  doctest::
+        :hide:
+
+        >>> import asyncio
+        >>> loop = asyncio.get_event_loop_policy().get_event_loop()
+        >>> asyncio.set_event_loop(loop)
+        >>> def run(what):
+        ...     async def wrapper():
+        ...         return what()
+        ...     return loop.run_until_complete(wrapper())
+
     >>> from pyuavcan.application.register import ValueProxy, Natural16, Natural32
     >>> reg = {
     ...     "uavcan.udp.iface": ValueProxy("127.99.0.0"),
     ...     "uavcan.node.id": ValueProxy(Natural16([257])),
     ... }
-    >>> tr = make_transport(reg)
+    >>> tr = run(lambda: make_transport(reg))
     >>> tr
     UDPTransport('127.99.1.1', local_node_id=257, ...)
     >>> tr.close()
-    >>> tr = make_transport(reg, reconfigurable=True)                   # Same but reconfigurable.
+    >>> tr = run(lambda: make_transport(reg, reconfigurable=True))      # Same but reconfigurable.
     >>> tr                                                              # Wrapped into RedundantTransport.
     RedundantTransport(UDPTransport('127.99.1.1', local_node_id=257, ...))
     >>> tr.close()
@@ -166,7 +180,7 @@ def make_transport(
     ...     "uavcan.udp.iface":    ValueProxy("127.99.0.15 127.111.0.15"),  # Double UDP transport
     ...     "uavcan.serial.iface": ValueProxy("socket://127.0.0.1:50905"),  # Serial transport
     ... }
-    >>> tr = make_transport(reg)                            # The node-ID was not set, so the transport is anonymous.
+    >>> tr = run(lambda: make_transport(reg))       # The node-ID was not set, so the transport is anonymous.
     >>> tr                                          # doctest: +NORMALIZE_WHITESPACE
     RedundantTransport(UDPTransport('127.99.0.15',  local_node_id=None, ...),
                        UDPTransport('127.111.0.15', local_node_id=None, ...),
@@ -179,7 +193,7 @@ def make_transport(
     ...     "uavcan.can.bitrate": ValueProxy(Natural32([500_000, 2_000_000])),
     ...     "uavcan.node.id":     ValueProxy(Natural16([123])),
     ... }
-    >>> tr = make_transport(reg)
+    >>> tr = run(lambda: make_transport(reg))
     >>> tr                                          # doctest: +NORMALIZE_WHITESPACE
     RedundantTransport(CANTransport(PythonCANMedia('virtual:', mtu=32), local_node_id=123),
                        CANTransport(PythonCANMedia('virtual:', mtu=32), local_node_id=123))
@@ -189,15 +203,15 @@ def make_transport(
     ...     "uavcan.udp.iface": ValueProxy("127.99.1.1"),       # Per the standard register specs,
     ...     "uavcan.node.id": ValueProxy(Natural16([0xFFFF])),  # 0xFFFF means unset/anonymous.
     ... }
-    >>> tr = make_transport(reg)
+    >>> tr = run(lambda: make_transport(reg))
     >>> tr
     UDPTransport('127.99.1.1', local_node_id=None, ...)
     >>> tr.close()
 
-    >>> tr = make_transport({})
+    >>> tr = run(lambda: make_transport({}))
     >>> tr is None
     True
-    >>> tr = make_transport({}, reconfigurable=True)
+    >>> tr = run(lambda: make_transport({}, reconfigurable=True))
     >>> tr                                                          # Redundant transport with no inferiors.
     RedundantTransport()
     """
