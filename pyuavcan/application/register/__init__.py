@@ -2,6 +2,8 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
+# pylint: disable=wrong-import-position
+
 """
 Implementation of the UAVCAN register interface as defined in the UAVCAN Specification
 (section 5.3 *Application-layer functions*).
