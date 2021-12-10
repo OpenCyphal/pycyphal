@@ -11,18 +11,21 @@ v1.3
 - Deprecate property ``pyuavcan.transport.Transport.loop`` and the corresponding constructor argument.
   The constructor argument is now ignored and the aforementioned property is an alias of ``asyncio.get_event_loop()``.
 
+- Generated classes include convenience aliases of the newest minor version per major version
+  (`Nunavut #193 <https://github.com/UAVCAN/nunavut/issues/193>`_).
+
 - Remove the NumPy <= 0.17 version constraint.
 
 - Improve type annotations in generated code thanks to the new NumPy typing support.
-
-- Improve logging and error reporting.
-
-- Fix issues related to UDP packet capture.
 
 - Support assignment of ``memoryview`` to ``uint8``-typed arrays.
 
 - Rename installation extras by replacing underscores with the minus character;
   e.g., ``transport_can_pythoncan`` --> ``transport-can-pythoncan``.
+
+- Improve logging and error reporting.
+
+- Fix issues related to UDP packet capture.
 
 v1.2
 ----

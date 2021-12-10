@@ -21,7 +21,7 @@ heater_voltage = 0.0
 saturation = False
 
 
-async def handle_command(msg: uavcan.si.unit.voltage.Scalar_1_0, _metadata: pyuavcan.transport.TransferFrom) -> None:
+async def handle_command(msg: uavcan.si.unit.voltage.Scalar_1, _metadata: pyuavcan.transport.TransferFrom) -> None:
     global heater_voltage, saturation
     if msg.volt < 0.0:
         heater_voltage = 0.0
@@ -45,18 +45,18 @@ async def main() -> None:
         temp_plant = temp_environment
 
         # Set up the ports.
-        pub_meas = node.make_publisher(uavcan.si.sample.temperature.Scalar_1_0, "temperature")
+        pub_meas = node.make_publisher(uavcan.si.sample.temperature.Scalar_1, "temperature")
         pub_meas.priority = pyuavcan.transport.Priority.HIGH
-        sub_volt = node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "voltage")
+        sub_volt = node.make_subscriber(uavcan.si.unit.voltage.Scalar_1, "voltage")
         sub_volt.receive_in_background(handle_command)
 
         # Run the main loop forever.
-        next_update_at = node.loop.time()
+        next_update_at = asyncio.get_running_loop().time()
         while True:
             # Publish new measurement and update node health.
             await pub_meas.publish(
-                uavcan.si.sample.temperature.Scalar_1_0(
-                    timestamp=uavcan.time.SynchronizedTimestamp_1_0(microsecond=int(time.time() * 1e6)),
+                uavcan.si.sample.temperature.Scalar_1(
+                    timestamp=uavcan.time.SynchronizedTimestamp_1(microsecond=int(time.time() * 1e6)),
                     kelvin=temp_plant,
                 )
             )
@@ -64,7 +64,7 @@ async def main() -> None:
 
             # Sleep until the next iteration.
             next_update_at += UPDATE_PERIOD
-            await asyncio.sleep(next_update_at - node.loop.time())
+            await asyncio.sleep(next_update_at - asyncio.get_running_loop().time())
 
             # Update the simulation.
             temp_plant += heater_voltage * 0.1 * UPDATE_PERIOD  # Energy input from the heater.

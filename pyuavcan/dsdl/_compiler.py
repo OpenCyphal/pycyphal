@@ -2,11 +2,13 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
+from __future__ import annotations
 import os
 import sys
 import time
 import gzip
 import typing
+from typing import Sequence, Iterable, Optional, Union
 import pickle
 import base64
 import pathlib
@@ -20,7 +22,7 @@ import nunavut.jinja
 import nunavut.postprocessors
 
 
-_AnyPath = typing.Union[str, pathlib.Path]
+_AnyPath = Union[str, pathlib.Path]
 
 _TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).absolute().parent / pathlib.Path("_templates")
 
@@ -39,7 +41,7 @@ class GeneratedPackageInfo:
     Path to the directory that contains the top-level ``__init__.py``.
     """
 
-    models: typing.Sequence[pydsdl.CompositeType]
+    models: Sequence[pydsdl.CompositeType]
     """
     List of PyDSDL objects describing the source DSDL definitions.
     This can be used for arbitrarily complex introspection and reflection.
@@ -54,10 +56,10 @@ class GeneratedPackageInfo:
 
 def compile(  # pylint: disable=redefined-builtin
     root_namespace_directory: _AnyPath,
-    lookup_directories: typing.Optional[typing.List[_AnyPath]] = None,
-    output_directory: typing.Optional[_AnyPath] = None,
+    lookup_directories: Optional[list[_AnyPath]] = None,
+    output_directory: Optional[_AnyPath] = None,
     allow_unregulated_fixed_port_id: bool = False,
-) -> typing.Optional[GeneratedPackageInfo]:
+) -> Optional[GeneratedPackageInfo]:
     """
     This function runs the DSDL compiler, converting a specified DSDL root namespace into a Python package.
     In the generated package, nested DSDL namespaces are represented as Python subpackages,
@@ -180,6 +182,7 @@ def compile(  # pylint: disable=redefined-builtin
     filters = {
         "pickle": _pickle_object,
         "numpy_scalar_type": _numpy_scalar_type,
+        "newest_minor_version_aliases": _newest_minor_version_aliases,
     }
 
     # Generate code
@@ -237,11 +240,11 @@ def compile(  # pylint: disable=redefined-builtin
 
 
 def compile_all(
-    root_namespace_directories: typing.Iterable[_AnyPath],
-    output_directory: typing.Optional[_AnyPath] = None,
+    root_namespace_directories: Iterable[_AnyPath],
+    output_directory: Optional[_AnyPath] = None,
     *,
     allow_unregulated_fixed_port_id: bool = False,
-) -> typing.List[GeneratedPackageInfo]:
+) -> list[GeneratedPackageInfo]:
     """
     This is a simple convenience wrapper over :func:`compile` that addresses a very common use case
     where the application needs to compile multiple inter-dependent namespaces.
@@ -296,7 +299,7 @@ def compile_all(
 
         >>> sys.path = original_sys_path
     """
-    out: typing.List[GeneratedPackageInfo] = []
+    out: list[GeneratedPackageInfo] = []
     root_namespace_directories = list(root_namespace_directories)
     for nsd in root_namespace_directories:
         gpi = compile(
@@ -333,3 +336,22 @@ def _numpy_scalar_type(t: pydsdl.Any) -> str:
         return f"_np_.float{pick_width(t.bit_length)}"
     assert not isinstance(t, pydsdl.PrimitiveType), "Forgot to handle some primitive types"
     return "_np_.object_"
+
+
+def _newest_minor_version_aliases(
+    tys: Iterable[pydsdl.CompositeType],
+) -> Sequence[tuple[str, pydsdl.CompositeType]]:
+    """
+    Implementation of https://github.com/UAVCAN/nunavut/issues/193
+    """
+    tys = list(tys)
+    return [
+        (
+            f"{name}_{major}",
+            max(
+                (t for t in tys if t.short_name == name and t.version.major == major),
+                key=lambda x: x.version.minor,
+            ),
+        )
+        for name, major in sorted({(x.short_name, x.version.major) for x in tys})
+    ]

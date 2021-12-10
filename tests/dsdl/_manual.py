@@ -117,6 +117,15 @@ def _unittest_slow_manual_heartbeat(compiled: typing.List[pyuavcan.dsdl.Generate
         pyuavcan.dsdl.set_attribute(obj, "nonexistent", 123)
 
 
+def _unittest_minor_alias(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+    _ = compiled
+
+    from test_dsdl_namespace.delimited import BDelimited_1, BDelimited_1_1, BDelimited_1_0
+
+    assert BDelimited_1 is not BDelimited_1_0
+    assert BDelimited_1 is BDelimited_1_1
+
+
 # noinspection PyUnusedLocal
 def _unittest_slow_delimited(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     del compiled
