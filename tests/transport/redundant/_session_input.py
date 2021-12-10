@@ -210,6 +210,10 @@ async def _unittest_redundant_input_cyclic() -> None:
     assert not ses.inferiors
     with pytest.raises(ResourceClosedError):
         await (ses.receive(0))
+    tr_a.close()
+    tr_b.close()
+    inf_a.close()
+    inf_b.close()
 
 
 async def _unittest_redundant_input_monotonic() -> None:
@@ -328,3 +332,7 @@ async def _unittest_redundant_input_monotonic() -> None:
     )
 
     ses.close()
+    tr_a.close()
+    tr_b.close()
+    inf_a.close()
+    inf_b.close()

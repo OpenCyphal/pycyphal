@@ -6,7 +6,10 @@ import asyncio
 import socket as socket_
 import typing
 import pytest
+from pytest import raises
 import pyuavcan
+from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
+from pyuavcan.transport import PayloadMetadata, SessionStatistics, Feedback, Transfer
 from pyuavcan.transport import Timestamp, ServiceDataSpecifier
 from pyuavcan.transport.udp._session._output import UDPOutputSession, UDPFeedback
 
@@ -15,12 +18,9 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_output_session() -> None:
-    from pytest import raises
-    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
-    from pyuavcan.transport import PayloadMetadata, SessionStatistics, Feedback, Transfer
-
     ts = Timestamp.now()
     loop = asyncio.get_event_loop()
+    loop.slow_callback_duration = 5.0  # TODO use asyncio socket read and remove this thing.
     finalized = False
 
     def do_finalize() -> None:
@@ -238,11 +238,9 @@ async def _unittest_output_session_no_listener() -> None:
     """
     Test the Windows-specific corner case. Should be handled identically on all platforms.
     """
-    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
-    from pyuavcan.transport import PayloadMetadata, Feedback, Transfer
-
     ts = Timestamp.now()
     loop = asyncio.get_event_loop()
+    loop.slow_callback_duration = 5.0
 
     def make_sock() -> socket_.socket:
         sock = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
