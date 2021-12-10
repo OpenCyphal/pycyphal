@@ -8,9 +8,9 @@ import logging
 import pyuavcan
 import pyuavcan.application
 from pyuavcan.presentation import ServiceRequestMetadata
-from uavcan.register import Access_1_0 as Access
-from uavcan.register import List_1_0 as List
-from uavcan.register import Name_1_0 as Name
+from uavcan.register import Access_1 as Access
+from uavcan.register import List_1 as List
+from uavcan.register import Name_1 as Name
 from .register import ValueConversionError, ValueProxyWithFlags
 
 
@@ -44,18 +44,18 @@ class RegisterServer:
     List registers:
 
     >>> import uavcan.register
-    >>> cln_list = node.make_client(uavcan.register.List_1_0, server_node_id=1)
-    >>> response, _ = doctest_await(cln_list.call(uavcan.register.List_1_0.Request(index=0)))
+    >>> cln_list = node.make_client(uavcan.register.List_1, server_node_id=1)
+    >>> response, _ = doctest_await(cln_list.call(uavcan.register.List_1.Request(index=0)))
     >>> response.name.name.tobytes().decode()   # The dummy register we created above.
     'foo'
-    >>> response, _ = doctest_await(cln_list.call(uavcan.register.List_1_0.Request(index=99)))
+    >>> response, _ = doctest_await(cln_list.call(uavcan.register.List_1.Request(index=99)))
     >>> response.name.name.tobytes().decode()   # Out of range -- empty string returned to indicate that.
     ''
 
     Get the dummy register created above:
 
-    >>> cln_access = node.make_client(uavcan.register.Access_1_0, server_node_id=1)
-    >>> request = uavcan.register.Access_1_0.Request()
+    >>> cln_access = node.make_client(uavcan.register.Access_1, server_node_id=1)
+    >>> request = uavcan.register.Access_1.Request()
     >>> request.name.name = "foo"
     >>> response, _ = doctest_await(cln_access.call(request))
     >>> response.mutable, response.persistent

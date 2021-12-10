@@ -182,7 +182,7 @@ def make_transport(
     >>> reg = {
     ...     "uavcan.can.iface":   ValueProxy("virtual: virtual:"),    # Doubly-redundant CAN
     ...     "uavcan.can.mtu":     ValueProxy(Natural16([32])),
-    ...     "uavcan.can.bitrate": ValueProxy(Natural32([500_000, 2_000_000])),
+    ...     "uavcan.can.bitrate": ValueProxy(Natural32([500_000, 2_000])),
     ...     "uavcan.node.id":     ValueProxy(Natural16([123])),
     ... }
     >>> tr = make_transport(reg)
@@ -277,7 +277,7 @@ def _make_can(
 
     iface_list = str(init("iface", "")).split()
     mtu = int(init("mtu", Natural16([64])))
-    br_arb, br_data = init("bitrate", Natural32([1_000_000, 4_000_000])).ints
+    br_arb, br_data = init("bitrate", Natural32([1_000, 4_000])).ints
 
     if iface_list:
         from pyuavcan.transport.can import CANTransport

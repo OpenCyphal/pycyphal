@@ -19,9 +19,9 @@ import asyncio
 import pathlib
 import logging
 import sqlite3
-from uavcan.pnp import NodeIDAllocationData_1_0 as NodeIDAllocationData_1
-from uavcan.pnp import NodeIDAllocationData_2_0 as NodeIDAllocationData_2
-from uavcan.node import ID_1_0 as ID
+from uavcan.pnp import NodeIDAllocationData_1 as NodeIDAllocationData_1
+from uavcan.pnp import NodeIDAllocationData_2 as NodeIDAllocationData_2
+from uavcan.node import ID_1 as ID
 import pyuavcan
 import pyuavcan.application
 

@@ -8,7 +8,7 @@ import abc
 from typing import Optional, Union
 import dataclasses
 import pyuavcan
-from uavcan.register import Value_1_0 as Value
+from uavcan.register import Value_1 as Value
 
 if sys.version_info >= (3, 9):
     from collections.abc import MutableMapping

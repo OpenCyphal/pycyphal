@@ -164,7 +164,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _unittest_memory() -> None:
-    from uavcan.primitive import String_1_0 as String, Unstructured_1_0 as Unstructured
+    from uavcan.primitive import String_1 as String, Unstructured_1 as Unstructured
 
     st = StaticBackend()
     print(st)
@@ -204,7 +204,7 @@ def _unittest_memory() -> None:
 
 def _unittest_file() -> None:
     import tempfile
-    from uavcan.primitive import Unstructured_1_0 as Unstructured
+    from uavcan.primitive import Unstructured_1 as Unstructured
 
     # First, populate the database with registers.
     db_file = tempfile.mktemp(".db")

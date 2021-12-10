@@ -13,14 +13,14 @@ import itertools
 import numpy as np
 import pyuavcan
 import pyuavcan.application
-from uavcan.file import Path_2_0 as Path
-from uavcan.file import Error_1_0 as Error
-from uavcan.file import Read_1_1 as Read
-from uavcan.file import Write_1_1 as Write
-from uavcan.file import List_0_2 as List
-from uavcan.file import GetInfo_0_2 as GetInfo
-from uavcan.file import Modify_1_1 as Modify
-from uavcan.primitive import Unstructured_1_0 as Unstructured
+from uavcan.file import Path_2 as Path
+from uavcan.file import Error_1 as Error
+from uavcan.file import Read_1 as Read
+from uavcan.file import Write_1 as Write
+from uavcan.file import List_0 as List
+from uavcan.file import GetInfo_0 as GetInfo
+from uavcan.file import Modify_1 as Modify
+from uavcan.primitive import Unstructured_1 as Unstructured
 
 
 class FileServer:

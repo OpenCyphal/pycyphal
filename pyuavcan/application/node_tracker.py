@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import NamedTuple, Callable, Optional, Dict, List
 import asyncio
 import logging
-from uavcan.node import Heartbeat_1_0 as Heartbeat
-from uavcan.node import GetInfo_1_0 as GetInfo
+from uavcan.node import Heartbeat_1 as Heartbeat
+from uavcan.node import GetInfo_1 as GetInfo
 import pyuavcan
 import pyuavcan.application
 

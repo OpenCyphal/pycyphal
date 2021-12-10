@@ -10,10 +10,10 @@ from typing import Optional, Set, Any
 import pydsdl
 import pyuavcan.application
 from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier
-from uavcan.node.port import List_0_1 as List
-from uavcan.node.port import SubjectIDList_0_1 as SubjectIDList
-from uavcan.node.port import ServiceIDList_0_1 as ServiceIDList
-from uavcan.node.port import SubjectID_1_0 as SubjectID
+from uavcan.node.port import List_0 as List
+from uavcan.node.port import SubjectIDList_0 as SubjectIDList
+from uavcan.node.port import ServiceIDList_0 as ServiceIDList
+from uavcan.node.port import SubjectID_1 as SubjectID
 
 
 @dataclasses.dataclass(frozen=True)
@@ -113,7 +113,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _make_port_list(state: _State, packet_capture_mode: bool) -> List:
-    from uavcan.primitive import Empty_1_0 as Empty
+    from uavcan.primitive import Empty_1 as Empty
 
     return List(
         publishers=_make_subject_id_list(state.pub),

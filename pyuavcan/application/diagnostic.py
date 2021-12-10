@@ -12,8 +12,8 @@ import sys
 import asyncio
 import logging
 from typing import Optional
-from uavcan.diagnostic import Record_1_1 as Record
-from uavcan.diagnostic import Severity_1_0 as Severity
+from uavcan.diagnostic import Record_1 as Record
+from uavcan.diagnostic import Severity_1 as Severity
 import pyuavcan
 import pyuavcan.application
 
@@ -195,7 +195,7 @@ class DiagnosticPublisher(logging.Handler):
 
     @staticmethod
     def log_record_to_diagnostic_message(record: logging.LogRecord, use_timestamp: bool) -> Record:
-        from uavcan.time import SynchronizedTimestamp_1_0 as SynchronizedTimestamp
+        from uavcan.time import SynchronizedTimestamp_1 as SynchronizedTimestamp
 
         ts: Optional[SynchronizedTimestamp] = None
         if use_timestamp:

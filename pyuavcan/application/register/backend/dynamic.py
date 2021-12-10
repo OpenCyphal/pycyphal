@@ -155,7 +155,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _unittest_dyn() -> None:
-    from uavcan.primitive import String_1_0 as String
+    from uavcan.primitive import String_1 as String
 
     b = DynamicBackend()
     assert not b.persistent
