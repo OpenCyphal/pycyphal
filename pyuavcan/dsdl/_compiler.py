@@ -350,7 +350,7 @@ def _newest_minor_version_aliases(
             f"{name}_{major}",
             max(
                 (t for t in tys if t.short_name == name and t.version.major == major),
-                key=lambda x: x.version.minor,
+                key=lambda x: int(x.version.minor),
             ),
         )
         for name, major in sorted({(x.short_name, x.version.major) for x in tys})

@@ -122,7 +122,7 @@ def _unittest_minor_alias(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageIn
 
     from test_dsdl_namespace.delimited import BDelimited_1, BDelimited_1_1, BDelimited_1_0
 
-    assert BDelimited_1 is not BDelimited_1_0
+    assert BDelimited_1 is not BDelimited_1_0  # type: ignore
     assert BDelimited_1 is BDelimited_1_1
 
 
