@@ -19,6 +19,10 @@ import struct
 import pkg_resources
 import time
 from logging import getLogger
+from abc import ABCMeta
+
+CAN_2_DATAFIELD_LEN = 8
+CAN_FD_DATAFIELD_LEN = 64
 
 try:
     # noinspection PyStatementEffect
@@ -45,6 +49,20 @@ In order to fix this problem, consider either option:
 class UAVCANException(Exception):
     pass
 
+class CanBus(object):
+    __metaclass__ = ABCMeta
+
+class CanBusFD(CanBus):
+    def __init__(self):
+        super(CanBusFD,self).__init__()
+        self.max_payload_len = CAN_FD_DATAFIELD_LEN
+        self.supports_tao = False
+
+class CanBus2(CanBus):
+    def __init__(self):
+        super(CanBus2,self).__init__()
+        self.max_payload_len = CAN_2_DATAFIELD_LEN
+        self.supports_tao = True
 
 from .version import __version__
 import pyuavcan_v0_5.node as node

@@ -1,5 +1,6 @@
 #
-# Copyright (C) 2014-2018  UAVCAN Development Team  <uavcan.org>
+# Copyright (C) 2014-2021  UAVCAN Development Team  <uavcan.org>
+#
 #
 # This software is distributed under the terms of the MIT License.
 #
@@ -7,4 +8,4 @@
 #         Ben Dyer <ben_dyer@mac.com>
 #
 
-__version__ = '1.0.0.dev35'
+__version__ = '0.5.0.dev36'

@@ -10,7 +10,7 @@
 import unittest
 from pyuavcan_v0_5 import transport
 from pyuavcan_v0_5.dsdl import parser
-
+from pyuavcan_v0_5 import CanBusFD
 
 class TestBitsFromBytes(unittest.TestCase):
     def test_empty(self):
@@ -614,6 +614,50 @@ class TestAssignment(unittest.TestCase):
         print(repr(self.a.name))
         print(str(self.a.name))
 
+class TestUnsignedIntegers(unittest.TestCase):
+    def test_basic(self):
+        def make_uint(bitlen):
+            return parser.PrimitiveType(parser.PrimitiveType.KIND_UNSIGNED_INT, bitlen,
+                                        parser.PrimitiveType.CAST_MODE_TRUNCATED)
+
+        a = transport.PrimitiveValue(make_uint(9))
+        self.assertEqual(0, a.value)
+        a.value = 256
+        payload_bits = a._pack(False)
+        self.assertEqual('000000001', payload_bits)
+
+class TestDynamicArraySize(unittest.TestCase):
+    array_type = parser.ArrayType(
+        parser.PrimitiveType(
+            parser.PrimitiveType.KIND_UNSIGNED_INT,
+            8,
+            parser.PrimitiveType.CAST_MODE_TRUNCATED
+        ),
+        parser.ArrayType.MODE_DYNAMIC,
+        256
+    )
+
+    def _create_expected_payload(self):
+        return '000000001' + '1' * 8 * 256
+
+    def test_encode(self):
+        a = transport.ArrayValue(self.array_type)
+        # Fill array with 0xff
+        for i in range(256):
+            a.insert(i, 255)
+
+        payload_bits = a._pack(False)
+        self.assertEqual(self._create_expected_payload(), payload_bits)
+
+    def test_decode(self):
+        a = transport.ArrayValue(self.array_type)
+
+        a._unpack(self._create_expected_payload(), False)
+        self.assertEqual(256, len(a))
+
+        # Check data
+        for i in range(256):
+            self.assertEqual(255, a[i])
 
 class TestFloats(unittest.TestCase):
     def test_basic(self):
@@ -645,6 +689,97 @@ class TestFloats(unittest.TestCase):
         a.value = float('-inf')
         print(a.value)
         self.assertEqual(str(a.value), '-inf')
+
+class DummyTransfer(transport.Transfer):
+    def __init__(self, bus, payload):
+        super(DummyTransfer, self).__init__(bus, payload=payload)
+
+    @property
+    def message_id(self):
+        return 0
+
+class TestCanFDPadding(unittest.TestCase):
+    array_type = parser.ArrayType(
+        parser.PrimitiveType(
+            parser.PrimitiveType.KIND_UNSIGNED_INT,
+            8,
+            parser.PrimitiveType.CAST_MODE_TRUNCATED
+        ),
+        parser.ArrayType.MODE_DYNAMIC,
+        255
+    )
+    # We are not interested in these so just play along...
+    array_type.default_dtid = None
+    array_type.base_crc = 0
+
+    PADDING = transport.Transfer.PADDING_BYTE
+    CRC_LEN = 2
+
+    def _get_payload(self, nr_bytes):
+        array = transport.ArrayValue(self.array_type)
+        # Fill array with 0xff
+        for i in range(nr_bytes - 1): # account for array size byte
+            array.insert(i, 255)
+
+        return array
+
+    def _verify_padding(self, frame, nr_of_padding):
+        nr_bytes = len(frame.bytes) - 1 - nr_of_padding
+
+        for i in range(nr_bytes, nr_bytes + nr_of_padding):
+            self.assertEqual(self.PADDING, frame.bytes[i])
+
+    def test_single_frame(self):
+        t = DummyTransfer(CanBusFD(), payload=self._get_payload(11))
+        frames = t.to_frames()
+        self.assertEqual(1, len(frames))
+        self.assertEqual(12, len(frames[0].bytes))
+
+        t = DummyTransfer(CanBusFD(), payload=self._get_payload(12))
+        frames = t.to_frames()
+        self.assertEqual(1, len(frames))
+        self.assertEqual(16, len(frames[0].bytes))
+        self._verify_padding(frames[0], 16 - 12 - 1)
+
+        t = DummyTransfer(CanBusFD(), payload=self._get_payload(15))
+        frames = t.to_frames()
+        self.assertEqual(1, len(frames))
+        self.assertEqual(16, len(frames[0].bytes))
+
+        t = DummyTransfer(CanBusFD(), payload=self._get_payload(48))
+        frames = t.to_frames()
+        self.assertEqual(1, len(frames))
+        self.assertEqual(64, len(frames[0].bytes))
+        self._verify_padding(frames[0], 64 - 48 - 1)
+
+        t = DummyTransfer(CanBusFD(), payload=self._get_payload(63))
+        frames = t.to_frames()
+        self.assertEqual(1, len(frames))
+        self.assertEqual(64, len(frames[0].bytes))
+
+    def test_multi_frame(self):
+        # 2 full frames of 64 bytes, minus CRC bytes and tail bytes
+        t = DummyTransfer(CanBusFD(), payload=self._get_payload(128 - self.CRC_LEN - 2))
+        frames = t.to_frames()
+        self.assertEqual(2, len(frames))
+        self.assertEqual(64, len(frames[0].bytes))
+        self.assertEqual(64, len(frames[1].bytes))
+
+        # Like previous but 2 less data, hence padding
+        t = DummyTransfer(CanBusFD(), payload=self._get_payload(128 - self.CRC_LEN - 2 - 2))
+        frames = t.to_frames()
+        self.assertEqual(2, len(frames))
+        self.assertEqual(64, len(frames[0].bytes))
+        self.assertEqual(64, len(frames[1].bytes))
+        self._verify_padding(frames[1], 2)
+
+        # Frames are 64 and 32 bytes, expect 2 bytes of padding
+        t = DummyTransfer(CanBusFD(), payload=self._get_payload(64 + 32 - self.CRC_LEN - 2 - 2))
+        frames = t.to_frames()
+        self.assertEqual(2, len(frames))
+        self.assertEqual(64, len(frames[0].bytes))
+        self.assertEqual(32, len(frames[1].bytes))
+        self._verify_padding(frames[1], 2)
 
 
 if __name__ == '__main__':

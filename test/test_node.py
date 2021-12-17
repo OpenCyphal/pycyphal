@@ -16,7 +16,8 @@ except ImportError:
 import pyuavcan_v0_5
 from pyuavcan_v0_5.node import Node
 import pyuavcan_v0_5.transport as transport
-from pyuavcan_v0_5.driver.common import CANFrame
+from pyuavcan_v0_5.driver.common import CANFrame, CANFrameFd
+from pyuavcan_v0_5 import CanBusFD
 
 import os.path
 
@@ -33,6 +34,7 @@ class HandlerExceptionHandling(unittest.TestCase):
         msg.value = 42
 
         transfer = transport.Transfer(
+            bus=CanBusFD(),
             payload=msg,
             source_node_id=42,
             transfer_id=10,

@@ -39,6 +39,7 @@ class FileServer(object):
 
         self._path_hit_counters = defaultdict(int)
         self._handles = []
+        self._node_offsets = {}
 
         def add_handler(datatype, callback):
             self._handles.append(node.add_handler(datatype, callback))
@@ -54,6 +55,10 @@ class FileServer(object):
     @property
     def path_hit_counters(self):
         return dict(self._path_hit_counters)
+
+    @property
+    def node_offsets(self):
+        return dict(self._node_offsets)
 
     def _resolve_path(self, relative):
         rel = relative.path.decode().replace(chr(relative.SEPARATOR), os.path.sep)
@@ -86,12 +91,16 @@ class FileServer(object):
         logger.debug("[#{0:03d}:pyuavcan_v0_5.protocol.file.Read] {1!r} @ offset {2:d}"
                      .format(e.transfer.source_node_id, e.request.path.path.decode(), e.request.offset))
         try:
-            with open(self._resolve_path(e.request.path), "rb") as f:
+            path = self._resolve_path(e.request.path)
+            with open(path, "rb") as f:
                 f.seek(e.request.offset)
                 resp = pyuavcan_v0_5.protocol.file.Read.Response()
                 read_size = pyuavcan_v0_5.get_uavcan_data_type(pyuavcan_v0_5.get_fields(resp)['data']).max_size
                 resp.data = bytearray(f.read(read_size))
                 resp.error.value = resp.error.OK
+
+                file_size = os.path.getsize(path)
+                self._node_offsets[int(e.transfer.source_node_id)] = [int(e.request.offset), file_size]
         except Exception:
             logger.exception("[#{0:03d}:pyuavcan_v0_5.protocol.file.Read] error")
             resp = pyuavcan_v0_5.protocol.file.Read.Response()

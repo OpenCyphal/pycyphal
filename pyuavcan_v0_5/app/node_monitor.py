@@ -29,6 +29,7 @@ class NodeMonitor(object):
             self.info = None
             self.monotonic_timestamp = None
             self._remaining_retries = NodeMonitor.MAX_RETRIES
+            self._info_requested_at = 0
 
         @property
         def discovered(self):
