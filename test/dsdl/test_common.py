@@ -9,7 +9,7 @@
 
 import os
 import unittest
-from pyuavcan_v0.dsdl import common
+from pyuavcan_v0_5.dsdl import common
 
 
 class TestCRC16FromBytes(unittest.TestCase):

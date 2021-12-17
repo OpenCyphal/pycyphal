@@ -8,7 +8,7 @@
 #
 
 import unittest
-from pyuavcan_v0 import driver
+from pyuavcan_v0_5 import driver
 
 
 # TODO
