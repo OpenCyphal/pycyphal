@@ -330,7 +330,7 @@ class RedundantTransport(pyuavcan.transport.Transport):
     def _construct_inferior_session(transport: pyuavcan.transport.Transport, owner: RedundantSession) -> None:
         assert isinstance(transport, pyuavcan.transport.Transport)
         if isinstance(owner, pyuavcan.transport.InputSession):
-            inferior = transport.get_input_session(owner.specifier, owner.payload_metadata)
+            inferior: pyuavcan.transport.Session = transport.get_input_session(owner.specifier, owner.payload_metadata)
         elif isinstance(owner, pyuavcan.transport.OutputSession):
             inferior = transport.get_output_session(owner.specifier, owner.payload_metadata)
         else:

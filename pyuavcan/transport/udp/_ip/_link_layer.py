@@ -5,7 +5,7 @@
 from __future__ import annotations
 import sys
 import time
-import typing
+from typing import Callable, Any, Optional, cast, Sequence
 import ctypes
 import socket
 import logging
@@ -100,7 +100,7 @@ class LinkLayerSniffer:
     - https://github.com/karpierz/libpcap/blob/master/tests/capturetest.py
     """
 
-    def __init__(self, filter_expression: str, callback: typing.Callable[[LinkLayerCapture], None]) -> None:
+    def __init__(self, filter_expression: str, callback: Callable[[LinkLayerCapture], None]) -> None:
         """
         :param filter_expression: The standard pcap filter expression;
             see https://www.tcpdump.org/manpages/pcap-filter.7.html.
@@ -117,7 +117,7 @@ class LinkLayerSniffer:
         self._filter_expr = str(filter_expression)
         self._callback = callback
         self._keep_going = True
-        self._workers: typing.List[threading.Thread] = []
+        self._workers: list[threading.Thread] = []
         try:
             dev_names = _find_devices()
             _logger.debug("Capturable network devices: %s", dev_names)
@@ -175,7 +175,7 @@ class LinkLayerSniffer:
 
             # noinspection PyTypeChecker
             @pcap.pcap_handler  # type: ignore
-            def proxy(_: object, header: ctypes.Structure, packet: typing.Any) -> None:
+            def proxy(_: object, header: ctypes.Structure, packet: Any) -> None:
                 # Parse the header, extract the timestamp and the packet length.
                 header = header.contents
                 ts_ns = (header.ts.tv_sec * 1_000_000 + header.ts.tv_usec) * 1000
@@ -247,11 +247,11 @@ class LinkLayerSniffer:
         )
 
 
-PacketEncoder = typing.Callable[["LinkLayerPacket"], typing.Optional[memoryview]]
-PacketDecoder = typing.Callable[[memoryview], typing.Optional["LinkLayerPacket"]]
+PacketEncoder = Callable[["LinkLayerPacket"], Optional[memoryview]]
+PacketDecoder = Callable[[memoryview], Optional["LinkLayerPacket"]]
 
 
-def _get_codecs() -> typing.Dict[int, typing.Tuple[PacketEncoder, PacketDecoder]]:
+def _get_codecs() -> dict[int, tuple[PacketEncoder, PacketDecoder]]:
     """
     A factory of paired encode/decode functions that are used for building and parsing link-layer packets.
     The pairs are organized into a dict where the key is the data link type code from libpcap;
@@ -265,7 +265,7 @@ def _get_codecs() -> typing.Dict[int, typing.Tuple[PacketEncoder, PacketDecoder]
     import libpcap as pcap
     from socket import AddressFamily
 
-    def get_ethernet() -> typing.Tuple[PacketEncoder, PacketDecoder]:
+    def get_ethernet() -> tuple[PacketEncoder, PacketDecoder]:
         # https://en.wikipedia.org/wiki/EtherType
         af_to_ethertype = {
             AddressFamily.AF_INET: 0x0800,
@@ -273,7 +273,7 @@ def _get_codecs() -> typing.Dict[int, typing.Tuple[PacketEncoder, PacketDecoder]
         }
         ethertype_to_af = {v: k for k, v in af_to_ethertype.items()}
 
-        def enc(p: LinkLayerPacket) -> typing.Optional[memoryview]:
+        def enc(p: LinkLayerPacket) -> Optional[memoryview]:
             try:
                 return memoryview(
                     b"".join(
@@ -288,7 +288,7 @@ def _get_codecs() -> typing.Dict[int, typing.Tuple[PacketEncoder, PacketDecoder]
             except LookupError:
                 return None
 
-        def dec(p: memoryview) -> typing.Optional[LinkLayerPacket]:
+        def dec(p: memoryview) -> Optional[LinkLayerPacket]:
             if len(p) < 14:
                 return None
             src = p[0:6]
@@ -302,17 +302,17 @@ def _get_codecs() -> typing.Dict[int, typing.Tuple[PacketEncoder, PacketDecoder]
 
         return enc, dec
 
-    def get_loopback(byte_order: str) -> typing.Tuple[PacketEncoder, PacketDecoder]:
+    def get_loopback(byte_order: str) -> tuple[PacketEncoder, PacketDecoder]:
         # DLT_NULL is used by the Windows loopback interface. Info: https://wiki.wireshark.org/NullLoopback
         # The source and destination addresses are not representable in this data link layer.
-        def enc(p: LinkLayerPacket) -> typing.Optional[memoryview]:
-            return memoryview(b"".join((p.protocol.to_bytes(4, byte_order), p.payload)))
+        def enc(p: LinkLayerPacket) -> Optional[memoryview]:
+            return memoryview(b"".join((p.protocol.to_bytes(4, byte_order), p.payload)))  # type: ignore
 
-        def dec(p: memoryview) -> typing.Optional[LinkLayerPacket]:
+        def dec(p: memoryview) -> Optional[LinkLayerPacket]:
             if len(p) < 4:
                 return None
             try:
-                protocol = AddressFamily(int.from_bytes(p[0:4], byte_order))
+                protocol = AddressFamily(int.from_bytes(p[0:4], byte_order))  # type: ignore
             except ValueError:
                 return None
             empty = memoryview(b"")
@@ -328,7 +328,7 @@ def _get_codecs() -> typing.Dict[int, typing.Tuple[PacketEncoder, PacketDecoder]
     }
 
 
-def _find_devices() -> typing.List[str]:
+def _find_devices() -> list[str]:
     """
     Returns a list of local network devices that can be captured from.
     Raises a PermissionError if the user is suspected to lack the privileges necessary for capture.
@@ -351,8 +351,8 @@ def _find_devices() -> typing.List[str]:
         #   because, for example, that process does not have sufficient privileges to open them for capturing;
         #   if so, those devices will not appear on the list.
         raise PermissionError("No capturable devices have been found. Do you have the required privileges?")
-    dev_names: typing.List[str] = []
-    d = typing.cast(ctypes.Structure, devices)
+    dev_names: list[str] = []
+    d = cast(ctypes.Structure, devices)
     while d:
         d = d.contents
         name = d.name.decode()
@@ -365,9 +365,7 @@ def _find_devices() -> typing.List[str]:
     return dev_names
 
 
-def _capture_all(
-    device_names: typing.List[str], filter_expression: str
-) -> typing.List[typing.Tuple[str, object, PacketDecoder]]:
+def _capture_all(device_names: list[str], filter_expression: str) -> list[tuple[str, object, PacketDecoder]]:
     """
     Begin capture on all devices in promiscuous mode.
     We can't use "any" because libpcap does not support promiscuous mode with it, as stated in the docs and here:
@@ -378,7 +376,7 @@ def _capture_all(
     import libpcap as pcap
 
     codecs = _get_codecs()
-    caps: typing.List[typing.Tuple[str, object, PacketDecoder]] = []
+    caps: list[tuple[str, object, PacketDecoder]] = []
     try:
         for name in device_names:
             pd = _capture_single_device(name, filter_expression, list(codecs.keys()))
@@ -410,9 +408,7 @@ def _capture_all(
     return caps
 
 
-def _capture_single_device(
-    device: str, filter_expression: str, data_link_hints: typing.Sequence[int]
-) -> typing.Optional[object]:
+def _capture_single_device(device: str, filter_expression: str, data_link_hints: Sequence[int]) -> Optional[object]:
     """
     Returns None if the interface managed by this device is not up or if it cannot be captured from for other reasons.
     On GNU/Linux, some virtual devices (like netfilter devices) can only be accessed by a superuser.
@@ -498,7 +494,7 @@ def _capture_single_device(
     except Exception:
         pcap.close(pd)
         raise
-    return typing.cast(object, pd)
+    return cast(object, pd)
 
 
 _SNAPSHOT_LENGTH = 65535

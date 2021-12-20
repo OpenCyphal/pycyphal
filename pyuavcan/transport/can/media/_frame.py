@@ -75,7 +75,7 @@ class Envelope:
 
 
 _DLC_TO_LENGTH = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64]
-_LENGTH_TO_DLC: typing.Dict[int, int] = dict(zip(*list(zip(*enumerate(_DLC_TO_LENGTH)))[::-1]))  # type: ignore
+_LENGTH_TO_DLC: typing.Dict[int, int] = dict(zip(*list(zip(*enumerate(_DLC_TO_LENGTH)))[::-1]))
 assert len(_LENGTH_TO_DLC) == 16 == len(_DLC_TO_LENGTH)
 for item in _DLC_TO_LENGTH:
     assert _DLC_TO_LENGTH[_LENGTH_TO_DLC[item]] == item, "Invalid DLC tables"
