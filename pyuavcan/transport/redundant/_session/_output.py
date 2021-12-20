@@ -268,7 +268,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             # Extract the results to determine the final outcome of the transaction.
             results = [x.result() for x in done if x.exception() is None]
             exceptions = [x.exception() for x in done if x.exception() is not None]
-            assert len(results) + len(exceptions) == len(inferiors) == len(futures)
+            assert 0 < (len(results) + len(exceptions)) <= len(inferiors)  # Some tasks may be not yet done.
             assert not results or all(isinstance(x, bool) for x in results)
             if exceptions and not results:
                 self._stat_errors += 1
