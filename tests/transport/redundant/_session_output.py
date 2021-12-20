@@ -194,6 +194,7 @@ async def _unittest_redundant_output() -> None:
         ],
     )
     assert len(feedback) == 2
+    feedback.sort(key=lambda x: x.inferior_session is not inf_a)  # Ensure consistent ordering
     assert feedback[0].inferior_session is inf_a
     assert feedback[0].original_transfer_timestamp == ts
     assert ts.system <= feedback[0].first_frame_transmission_timestamp.system <= time.time()
@@ -324,6 +325,8 @@ async def _unittest_redundant_output() -> None:
     assert None is await (rx_a.receive(loop.time() + 1))
     assert None is await (rx_b.receive(loop.time() + 1))
 
+    await asyncio.sleep(2.0)
+
 
 async def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     loop = asyncio.get_event_loop()
@@ -450,3 +453,5 @@ async def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     is_retired = False
     ses.close()
     assert not is_retired
+
+    await asyncio.sleep(2.0)
