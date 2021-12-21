@@ -20,7 +20,6 @@
 from __future__ import annotations
 import numpy as _np_
 from numpy.typing import NDArray as _NDArray_
-from typing import Optional as _Opt_
 import pydsdl as _pydsdl_
 import pyuavcan.dsdl as _dsdl_
 {%- if T.deprecated %}
@@ -175,7 +174,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
                  {%- for f in type.fields_except_padding -%}
                  ,
                  {{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
-                     _Opt_[{{ relaxed_type_annotation(f.data_type) }}] = None
+                     None | {{ relaxed_type_annotation(f.data_type) }} = None
                  {%- endfor -%}
     ) -> None:
         """
@@ -250,7 +249,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 {%- else %}  {#- IS UNION (guaranteed to contain at least 2 fields none of which are padding) #}
     {%- for f in type.fields %}
         self._{{ f|id }}: {{ ''.ljust(type.fields|longest_id_length - f|id|length) -}}
-            _Opt_[{{ strict_type_annotation(f.data_type) }}] = None
+            None | {{ strict_type_annotation(f.data_type) }} = None
     {%- endfor %}
         _init_cnt_: int = 0
     {% for f in type.fields %}
@@ -298,14 +297,7 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
 -#}
 {%- for f in type.fields_except_padding %}
     @property
-    def {{ f|id }}(self) -> {# #}
-    {%- if type.inner_type is UnionType -%}
-        _Opt_[
-    {%- endif -%}
-        {{ strict_type_annotation(f.data_type) }}
-    {%- if type.inner_type is UnionType -%}
-        ]
-    {%- endif -%}:
+    def {{ f|id }}(self) -> {{ "None | " * (type.inner_type is UnionType) }}{{ strict_type_annotation(f.data_type) }}:
         """
         {{ f }}
     {%- if f.data_type is VariableLengthArrayType and f.data_type.string_like %}
