@@ -3,11 +3,10 @@
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
 import typing
-
+import logging
 import numpy
 from numpy.typing import NDArray
 import pydsdl
-
 from ._composite_object import CompositeObject, get_model, get_attribute, set_attribute, get_class
 from ._composite_object import CompositeObjectTypeVar
 
@@ -94,6 +93,9 @@ def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any)
     e.g., `if`, not `if_`. If there is more than one variant specified for a union type, the last
     specified variant takes precedence.
 
+    If the structure of the source does not match the destination object, the correct representation
+    may be deduced automatically as long as it can be done unambiguously.
+
     :param destination: The object to update. The update will be done in-place. If you don't want the source
         object modified, clone it beforehand.
 
@@ -124,21 +126,30 @@ def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any)
     ...     }
     ... })  # doctest: +NORMALIZE_WHITESPACE
     uavcan.register.Access.Request...name='my.register'...value=[ 1, 2, 42,-10000]...
+
+    The following is a shorthand for the above -- notice how the value is used to populate the first field:
+
+    >>> update_from_builtin(request, {  # Observe that we provide the values directly instead of using nested dict.
+    ...     'value': {
+    ...         'integer16': [1, 2, 42, -10000]
+    ...     }
+    ... })  # doctest: +NORMALIZE_WHITESPACE
+    uavcan.register.Access.Request...name='my.register'...value=[ 1, 2, 42,-10000]...
     """
-    # UX improvement; see https://github.com/UAVCAN/pyuavcan/issues/116
-    if not isinstance(source, dict):
-        raise TypeError(
-            f"Invalid format: cannot update an instance of type {type(destination).__name__!r} "
-            f"from value of type {type(source).__name__!r}"
-        )
-
-    source = dict(source)  # Create copy to prevent mutation of the original
-
     if not isinstance(destination, CompositeObject):  # pragma: no cover
         raise TypeError(f"Bad destination: expected a CompositeObject, got {type(destination).__name__}")
-
     model = get_model(destination)
     _raise_if_service_type(model)
+
+    # UX improvement; see https://github.com/UAVCAN/pyuavcan/issues/116
+    # Further UX improvement: https://github.com/UAVCAN/pyuavcan/issues/147
+    if not isinstance(source, dict):
+        first_field = model.fields_except_padding[0]
+        val = source
+        source = {first_field.name: val}
+        _logger.debug("Automatic promotion for %s: %r --> %r", model, val, source)
+
+    source = dict(source)  # Create copy to prevent mutation of the original
 
     for f in model.fields_except_padding:
         field_type = f.data_type
@@ -182,3 +193,6 @@ def _raise_if_service_type(model: pydsdl.SerializableType) -> None:
             f"Built-in form is not defined for service types. "
             f"Did you mean to use Request or Response? Input type: {model}"
         )
+
+
+_logger = logging.getLogger(__name__)

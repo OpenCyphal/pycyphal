@@ -11,6 +11,8 @@ v1.4
   transmitting, the slower ones keep transmitting in the background.
   In other words, the redundant transport now operates at the rate of the fastest inferior (used to be the slowest one).
 
+- Implement the DSDL UX improvement described in `#147 <https://github.com/UAVCAN/pyuavcan/issues/147>`_.
+
 - Fully adopt PEP 585 in generated code.
 
 v1.3
