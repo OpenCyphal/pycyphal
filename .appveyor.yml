@@ -81,6 +81,8 @@ for:
     test_script:
       - 'nox --non-interactive --error-on-missing-interpreters --session test pristine --python $PYTHON'
       - 'nox --non-interactive --session demo check_style docs'
+    on_finish:
+      - 'ip link show'  # Diagnostics aid
 
   - # DEPLOYMENT
     matrix:
