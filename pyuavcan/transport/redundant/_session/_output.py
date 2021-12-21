@@ -329,6 +329,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                     break  # Do not cancel the future because we don't want to unblock the master task.
                 except Exception as ex:
                     _logger.error("%s: Inferior %r failed: %s: %s", self, ses, type(ex).__name__, ex)
+                    _logger.debug("%s: Stack trace for the above inferior failure:", self, exc_info=True)
                     if not wrk.future.done():
                         wrk.future.set_exception(ex)
                 else:

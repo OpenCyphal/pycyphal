@@ -468,4 +468,5 @@ async def _unittest_redundant_transport_reconfiguration() -> None:
         tr.attach_inferior(LoopbackTransport(None, allow_anonymous_transfers=False))
     assert len(tr.inferiors) == 1
 
+    tr.close()
     await asyncio.sleep(2.0)

@@ -365,6 +365,11 @@ True
 >>> tr.protocol_parameters
 ProtocolParameters(transfer_id_modulo=0, max_nodes=0, mtu=0)
 
+..  doctest::
+    :hide:
+
+    >>> doctest_await(asyncio.sleep(1.0))  # Let pending tasks terminate before the loop is closed.
+
 A redundant transport can be used with just one inferior to implement ad-hoc PnP allocation as follows:
 the transport is set up with an anonymous inferior which is disposed of upon completing the allocation procedure;
 the new inferior is then installed in the place of the old one configured to use the newly allocated node-ID value.
