@@ -92,7 +92,6 @@ def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any)
     Source field names shall match the original unstropped names provided in the DSDL definition;
     e.g., `if`, not `if_`. If there is more than one variant specified for a union type, the last
     specified variant takes precedence.
-
     If the structure of the source does not match the destination object, the correct representation
     may be deduced automatically as long as it can be done unambiguously.
 
@@ -127,31 +126,67 @@ def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any)
     ... })  # doctest: +NORMALIZE_WHITESPACE
     uavcan.register.Access.Request...name='my.register'...value=[ 1, 2, 42,-10000]...
 
-    The following is a shorthand for the above -- notice how the value is used to populate the first field:
+    The following examples showcase positional initialization:
 
-    >>> update_from_builtin(request, {  # Observe that we provide the values directly instead of using nested dict.
-    ...     'value': {
-    ...         'integer16': [1, 2, 42, -10000]
-    ...     }
-    ... })  # doctest: +NORMALIZE_WHITESPACE
-    uavcan.register.Access.Request...name='my.register'...value=[ 1, 2, 42,-10000]...
+    >>> from uavcan.node import Heartbeat_1
+    >>> update_from_builtin(Heartbeat_1(), [123456, 1, 2])  # doctest: +NORMALIZE_WHITESPACE
+    uavcan.node.Heartbeat.1.0(uptime=123456,
+                              health=uavcan.node.Health.1.0(value=1),
+                              mode=uavcan.node.Mode.1.0(value=2),
+                              vendor_specific_status_code=0)
+    >>> update_from_builtin(Heartbeat_1(), 123456)  # doctest: +NORMALIZE_WHITESPACE
+    uavcan.node.Heartbeat.1.0(uptime=123456,
+                              health=uavcan.node.Health.1.0(value=0),
+                              mode=uavcan.node.Mode.1.0(value=0),
+                              vendor_specific_status_code=0)
+    >>> update_from_builtin(Heartbeat_1(), [0, 0, 0, 0, 0])  # doctest: +IGNORE_EXCEPTION_DETAIL
+    Traceback (most recent call last):
+        ...
+    TypeError: ...
+
+    >>> update_from_builtin(uavcan.primitive.array.Real64_1(), 123.456) # doctest: +NORMALIZE_WHITESPACE
+    uavcan.primitive.array.Real64.1.0(value=[123.456])
+    >>> update_from_builtin(uavcan.primitive.array.Real64_1(), [123.456]) # doctest: +NORMALIZE_WHITESPACE
+    uavcan.primitive.array.Real64.1.0(value=[123.456])
+    >>> update_from_builtin(uavcan.primitive.array.Real64_1(), [123.456, -9]) # doctest: +NORMALIZE_WHITESPACE
+    uavcan.primitive.array.Real64.1.0(value=[123.456, -9. ])
+
+    >>> update_from_builtin(uavcan.register.Access_1_0.Request(), ["X", {"integer8": 99}])  # Same as the next one!
+    uavcan.register.Access.Request...name='X'...value=[99]...
+    >>> update_from_builtin(uavcan.register.Access_1_0.Request(), {'name': 'X', 'value': {'integer8': {'value': [99]}}})
+    uavcan.register.Access.Request...name='X'...value=[99]...
     """
+    _logger.debug("update_from_builtin: destination/source on the next lines:\n%r\n%r", destination, source)
     if not isinstance(destination, CompositeObject):  # pragma: no cover
         raise TypeError(f"Bad destination: expected a CompositeObject, got {type(destination).__name__}")
     model = get_model(destination)
     _raise_if_service_type(model)
+    fields = model.fields_except_padding
 
-    # UX improvement; see https://github.com/UAVCAN/pyuavcan/issues/116
-    # Further UX improvement: https://github.com/UAVCAN/pyuavcan/issues/147
+    # UX improvement: https://github.com/UAVCAN/pyuavcan/issues/147 -- match the source against the data type.
     if not isinstance(source, dict):
-        first_field = model.fields_except_padding[0]
-        val = source
-        source = {first_field.name: val}
-        _logger.debug("Automatic promotion for %s: %r --> %r", model, val, source)
+        if not isinstance(source, (list, tuple)):  # Assume positional initialization.
+            source = (source,)
+        can_propagate = fields and isinstance(fields[0].data_type, (pydsdl.ArrayType, pydsdl.CompositeType))
+        too_many_values = len(source) > (1 if isinstance(model.inner_type, pydsdl.UnionType) else len(fields))
+        if can_propagate and too_many_values:
+            _logger.debug(
+                "update_from_builtin: %d source values cannot be applied to %s but the first field accepts "
+                "positional initialization -- propagating down",
+                len(source),
+                type(destination).__name__,
+            )
+            source = [source]
+        if len(source) > len(fields):
+            raise TypeError(
+                f"Cannot apply {len(source)} values to {len(fields)} fields in {type(destination).__name__}"
+            )
+        source = {f.name: v for f, v in zip(fields, source)}
+        return update_from_builtin(destination, source)
 
     source = dict(source)  # Create copy to prevent mutation of the original
 
-    for f in model.fields_except_padding:
+    for f in fields:
         field_type = f.data_type
         try:
             value = source.pop(f.name)
