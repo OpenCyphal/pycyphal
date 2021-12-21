@@ -67,6 +67,11 @@ async def _unittest_can_socketcan() -> None:
         [
             Envelope(DataFrame(FrameFormat.BASE, 0x123, bytearray(range(6))), loopback=True),
             Envelope(DataFrame(FrameFormat.EXTENDED, 0x1BADC0FE, bytearray(range(8))), loopback=True),
+        ],
+        asyncio.get_event_loop().time() + 1.0,
+    )
+    await media_a.send(
+        [
             Envelope(DataFrame(FrameFormat.EXTENDED, 0x1FF45678, bytearray(range(0))), loopback=False),
         ],
         asyncio.get_event_loop().time() + 1.0,
