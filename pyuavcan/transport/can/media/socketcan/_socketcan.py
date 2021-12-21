@@ -2,6 +2,7 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
+import sys
 import enum
 import time
 import errno
@@ -19,9 +20,8 @@ from pyuavcan.transport import Timestamp
 from pyuavcan.transport.can.media import Media, Envelope, FilterConfiguration, FrameFormat
 from pyuavcan.transport.can.media import DataFrame
 
-# Disable unused ignore warning for this file only because there appears to be no other way to make MyPy
-# accept this file both on Windows and GNU/Linux.
-# mypy: warn_unused_ignores=False
+# https://mypy.readthedocs.io/en/stable/common_issues.html#python-version-and-system-platform-checks
+assert sys.platform != "win32"
 
 
 _logger = logging.getLogger(__name__)
@@ -239,7 +239,7 @@ class SocketCANMedia(Media):
 
     def _set_loopback_enabled(self, enable: bool) -> None:
         if enable != self._loopback_enabled:
-            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_RECV_OWN_MSGS, int(enable))  # type: ignore
+            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_RECV_OWN_MSGS, int(enable))
             self._loopback_enabled = enable
 
     @staticmethod
@@ -296,12 +296,12 @@ _CAN_EFF_MASK = 0x1FFFFFFF
 
 
 def _make_socket(iface_name: str, can_fd: bool) -> socket.socket:
-    s = socket.socket(socket.PF_CAN, socket.SOCK_RAW, socket.CAN_RAW)  # type: ignore
+    s = socket.socket(socket.PF_CAN, socket.SOCK_RAW, socket.CAN_RAW)
     try:
         s.bind((iface_name,))
         s.setsockopt(socket.SOL_SOCKET, _SO_TIMESTAMP, 1)  # timestamping
         if can_fd:
-            s.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)  # type: ignore
+            s.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)
 
         s.setblocking(False)
 
