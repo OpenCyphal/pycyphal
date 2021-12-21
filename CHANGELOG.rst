@@ -3,6 +3,16 @@
 Changelog
 =========
 
+v1.4
+----
+
+- Behavior of the redundant output session changed:
+  :meth:`pyuavcan.transport.redundant.RedundantOutputSession.send` returns as soon as at least one inferior is done
+  transmitting, the slower ones keep transmitting in the background.
+  In other words, the redundant transport now operates at the rate of the fastest inferior (used to be the slowest one).
+
+- Fully adopt PEP 585 in generated code.
+
 v1.3
 ----
 
