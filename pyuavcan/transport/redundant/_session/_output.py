@@ -140,10 +140,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             session.disable_feedback()
         # If all went well, add the new inferior to the set.
         que: asyncio.Queue[_WorkItem] = asyncio.Queue()
-        tsk = asyncio.get_event_loop().create_task(
-            self._inferior_worker_task(session, que),
-            name=f"{self}@{id(self):016x}:{session}@{id(session):016x}",
-        )
+        tsk = asyncio.get_event_loop().create_task(self._inferior_worker_task(session, que))
         self._inferiors.append(_Inferior(session, tsk, que))
         # Unlock the pending transmission because now we have an inferior to work with.
         if self._idle_send_future is not None:
