@@ -126,13 +126,9 @@ def _unittest_slow_builtin_form_automatic(compiled: typing.List[pyuavcan.dsdl.Ge
 
 
 # noinspection PyUnusedLocal
-def _unittest_issue_116(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_issue_147(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
     from uavcan.register import Access_1_0
 
-    valid = pyuavcan.dsdl.update_from_builtin(Access_1_0.Request(), {"name": {"name": "uavcan.pub.measurement"}})
+    # Automatic promotion https://github.com/UAVCAN/pyuavcan/issues/147
+    valid = pyuavcan.dsdl.update_from_builtin(Access_1_0.Request(), "uavcan.pub.measurement")
     assert valid.name.name.tobytes().decode() == "uavcan.pub.measurement"
-    with pytest.raises(TypeError) as ex:
-        pyuavcan.dsdl.update_from_builtin(Access_1_0.Request(), {"name": "uavcan.pub.measurement"})
-    print("Exception message:", ex)
-    assert "str" in str(ex)
-    assert "Name_1_" in str(ex)

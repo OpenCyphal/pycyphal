@@ -2,9 +2,11 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@uavcan.org>
 
-import typing
+from __future__ import annotations
+from typing import Callable, Optional, Sequence
 import logging
 import asyncio
+import dataclasses
 import pyuavcan.transport
 from ._base import RedundantSession, RedundantSessionStatistics
 
@@ -54,6 +56,44 @@ class RedundantFeedback(pyuavcan.transport.Feedback):
         return self._inferior_session
 
 
+@dataclasses.dataclass(frozen=True)
+class _WorkItem:
+    """
+    Send the transfer before the deadline, then notify the future unless it is already canceled.
+    """
+
+    transfer: pyuavcan.transport.Transfer
+    monotonic_deadline: float
+    future: asyncio.Future[bool]
+
+
+@dataclasses.dataclass(frozen=True)
+class _Inferior:
+    """
+    Each inferior runs a dedicated worker task.
+    The worker takes work items from the queue one by one and attempts to transmit them.
+    Upon completion (timeout/exception/success) the future is materialized unless cancelled.
+    """
+
+    session: pyuavcan.transport.OutputSession
+    worker: asyncio.Task[None]
+    queue: asyncio.Queue[_WorkItem]
+
+    def close(self) -> None:
+        try:
+            self.session.close()
+        finally:
+            if self.worker.done():
+                self.worker.result()
+            else:
+                self.worker.cancel()
+            while True:
+                try:
+                    self.queue.get_nowait().future.cancel()
+                except asyncio.QueueEmpty:
+                    break
+
+
 class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession):
     """
     This is a composite of a group of :class:`pyuavcan.transport.OutputSession`.
@@ -65,21 +105,21 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         self,
         specifier: pyuavcan.transport.OutputSessionSpecifier,
         payload_metadata: pyuavcan.transport.PayloadMetadata,
-        finalizer: typing.Callable[[], None],
+        finalizer: Callable[[], None],
     ):
         """
         Do not call this directly! Use the factory method instead.
         """
         self._specifier = specifier
         self._payload_metadata = payload_metadata
-        self._finalizer: typing.Optional[typing.Callable[[], None]] = finalizer
+        self._finalizer: Optional[Callable[[], None]] = finalizer
         assert isinstance(self._specifier, pyuavcan.transport.OutputSessionSpecifier)
         assert isinstance(self._payload_metadata, pyuavcan.transport.PayloadMetadata)
         assert callable(self._finalizer)
 
-        self._inferiors: typing.List[pyuavcan.transport.OutputSession] = []
-        self._feedback_handler: typing.Optional[typing.Callable[[RedundantFeedback], None]] = None
-        self._idle_send_future: typing.Optional[asyncio.Future[None]] = None
+        self._inferiors: list[_Inferior] = []
+        self._feedback_handler: Optional[Callable[[RedundantFeedback], None]] = None
+        self._idle_send_future: Optional[asyncio.Future[None]] = None
         self._lock = asyncio.Lock()
 
         self._stat_transfers = 0
@@ -91,17 +131,20 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         assert isinstance(session, pyuavcan.transport.OutputSession)
         assert self._finalizer is not None, "The session was supposed to be unregistered"
         assert session.specifier == self.specifier and session.payload_metadata == self.payload_metadata
-        if session not in self._inferiors:
-            # Synchronize the feedback state.
-            if self._feedback_handler is not None:
-                self._enable_feedback_on_inferior(session)
-            else:
-                session.disable_feedback()
-            # If and only if all went well, add the new inferior to the set.
-            self._inferiors.append(session)
-            # Unlock the pending transmission because now we have an inferior to work with.
-            if self._idle_send_future is not None:
-                self._idle_send_future.set_result(None)
+        if session in self.inferiors:
+            return
+        # Synchronize the feedback state.
+        if self._feedback_handler is not None:
+            self._enable_feedback_on_inferior(session)
+        else:
+            session.disable_feedback()
+        # If all went well, add the new inferior to the set.
+        que: asyncio.Queue[_WorkItem] = asyncio.Queue()
+        tsk = asyncio.get_event_loop().create_task(self._inferior_worker_task(session, que))
+        self._inferiors.append(_Inferior(session, tsk, que))
+        # Unlock the pending transmission because now we have an inferior to work with.
+        if self._idle_send_future is not None:
+            self._idle_send_future.set_result(None)
 
     def _close_inferior(self, session_index: int) -> None:
         assert session_index >= 0, "Negative indexes may lead to unexpected side effects"
@@ -114,10 +157,10 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             session.close()  # May raise.
 
     @property
-    def inferiors(self) -> typing.Sequence[pyuavcan.transport.OutputSession]:
-        return self._inferiors[:]
+    def inferiors(self) -> Sequence[pyuavcan.transport.OutputSession]:
+        return [x.session for x in self._inferiors]
 
-    def enable_feedback(self, handler: typing.Callable[[RedundantFeedback], None]) -> None:
+    def enable_feedback(self, handler: Callable[[RedundantFeedback], None]) -> None:
         """
         The operation is atomic on all inferiors.
         If at least one inferior fails to enable feedback, all inferiors are rolled back into the disabled state.
@@ -126,7 +169,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         try:
             self._feedback_handler = handler
             for ses in self._inferiors:
-                self._enable_feedback_on_inferior(ses)
+                self._enable_feedback_on_inferior(ses.session)
         except Exception as ex:
             _logger.info("%s could not enable feedback, rolling back into the disabled state: %r", self, ex)
             self.disable_feedback()
@@ -139,14 +182,16 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         self._feedback_handler = None
         for ses in self._inferiors:
             try:
-                ses.disable_feedback()
+                ses.session.disable_feedback()
             except Exception as ex:
                 _logger.exception("%s could not disable feedback on %r: %s", self, ses, ex)
 
     async def send(self, transfer: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
         """
         Sends the transfer via all of the inferior sessions concurrently.
-        Returns when all of the inferior calls return and/or raise exceptions.
+        Returns when the first of the inferior calls succeeds; the remaining will keep sending in the background;
+        that is, the redundant transport operates at the rate of the fastest inferior, delegating the slower ones
+        to background tasks.
         Edge cases:
 
         - If there are no inferiors, the method will await until either the deadline is expired
@@ -157,8 +202,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         - If at least one inferior succeeds, True is returned (logical OR).
           If the other inferiors raise exceptions, they are logged as errors and suppressed.
 
-        - If all inferiors raise exceptions, the exception from the first one is propagated,
-          the rest are logged as errors and suppressed.
+        - If all inferiors raise exceptions, one of them is propagated, the rest are logged as errors and suppressed.
 
         - If all inferiors time out, False is returned (logical OR).
 
@@ -199,31 +243,36 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                 finally:
                     self._idle_send_future = None
             assert not self._idle_send_future
-
             if not inferiors:
                 self._stat_drops += 1
                 return False  # Still nothing.
 
-            results = await asyncio.gather(
-                *[ses.send(transfer, monotonic_deadline) for ses in inferiors], return_exceptions=True
-            )
-            assert results and len(results) == len(inferiors)
-            _logger.debug("%s send results: %s", self, results)
+            # We have at least one inferior so we can handle this transaction. Create the work items.
+            futures: list[asyncio.Future[bool]] = []
+            for inf in self._inferiors:
+                fut: asyncio.Future[bool] = asyncio.Future()
+                inf.queue.put_nowait(_WorkItem(transfer, monotonic_deadline, fut))
+                futures.append(fut)
 
-            exceptions = [ex for ex in results if isinstance(ex, Exception)]
+            # Execute the work items concurrently and unblock as soon as the first inferior is done transmitting.
+            # Those that are still pending are cancelled because we're not going to wait around for the slow ones.
+            done, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED)
+            assert len(done) + len(pending) == len(inferiors) == len(futures)
+            _logger.debug("%s send results: done=%s, pending=%s", self, done, pending)
+            for p in pending:
+                p.cancel()  # We will no longer need this.
 
-            # Result consolidation logic as described in the doc.
-            if exceptions:
-                # Taking great efforts to make the error message very understandable to the user.
-                _logger.error(  # pylint: disable=logging-not-lazy
-                    f"{self}: {len(exceptions)} of {len(results)} inferiors have failed: "
-                    + ", ".join(f"{i}:{self._describe_send_result(r)}" for i, r in enumerate(results))
-                )
-                if len(exceptions) >= len(results):
-                    self._stat_errors += 1
-                    raise exceptions[0]
-
-            if any(x is True for x in results):
+            # Extract the results to determine the final outcome of the transaction.
+            results = [x.result() for x in done if x.exception() is None]
+            exceptions = [x.exception() for x in done if x.exception() is not None]
+            assert 0 < (len(results) + len(exceptions)) <= len(inferiors)  # Some tasks may be not yet done.
+            assert not results or all(isinstance(x, bool) for x in results)
+            if exceptions and not results:
+                self._stat_errors += 1
+                exc = exceptions[0]
+                assert isinstance(exc, BaseException)
+                raise exc
+            if results and any(results):
                 self._stat_transfers += 1
                 self._stat_payload_bytes += sum(map(len, transfer.fragmented_payload))
                 return True
@@ -247,7 +296,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         - ``frames``        - the total number of frames summed from all inferiors (i.e., replicated frame count).
           This value is invalidated when the set of inferiors is changed. The semantics may change later.
         """
-        inferiors = [s.sample_statistics() for s in self._inferiors]
+        inferiors = [s.session.sample_statistics() for s in self._inferiors]
         return RedundantSessionStatistics(
             transfers=self._stat_transfers,
             frames=sum(s.frames for s in inferiors),
@@ -269,6 +318,37 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
         if fin is not None:
             fin()
 
+    async def _inferior_worker_task(self, ses: pyuavcan.transport.OutputSession, que: asyncio.Queue[_WorkItem]) -> None:
+        try:
+            _logger.debug("%s: Task for inferior %r is starting", self, ses)
+            while self._finalizer:
+                wrk = await que.get()
+                try:
+                    result = await ses.send(wrk.transfer, wrk.monotonic_deadline)
+                except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError):
+                    break  # Do not cancel the future because we don't want to unblock the master task.
+                except Exception as ex:
+                    _logger.error("%s: Inferior %r failed: %s: %s", self, ses, type(ex).__name__, ex)
+                    _logger.debug("%s: Stack trace for the above inferior failure:", self, exc_info=True)
+                    if not wrk.future.done():
+                        wrk.future.set_exception(ex)
+                else:
+                    _logger.debug(
+                        "%s: Inferior %r send result: %s; future %s",
+                        self,
+                        ses,
+                        "success" if result else "timeout",
+                        wrk.future,
+                    )
+                    if not wrk.future.done():
+                        wrk.future.set_result(result)
+        except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError):
+            pass
+        except Exception as ex:
+            _logger.exception("%s: Task for %r has encountered an unhandled exception: %s", self, ses, ex)
+        finally:
+            _logger.debug("%s: Task for %r is stopping", self, ses)
+
     def _enable_feedback_on_inferior(self, inferior_session: pyuavcan.transport.OutputSession) -> None:
         def proxy(fb: pyuavcan.transport.Feedback) -> None:
             """
@@ -276,7 +356,7 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
             constructs a higher-level redundant feedback instance from it,
             and then passes it along to the higher-level handler.
             """
-            if inferior_session not in self._inferiors:
+            if inferior_session not in self.inferiors:
                 _logger.warning(
                     "%s got unexpected feedback %s from %s which is not a registered inferior. "
                     "The transport or its underlying software or hardware are probably misbehaving, "
@@ -298,11 +378,3 @@ class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession)
                 _logger.debug("%s ignoring unattended feedback %r from %r", self, fb, inferior_session)
 
         inferior_session.enable_feedback(proxy)
-
-    @staticmethod
-    def _describe_send_result(result: typing.Union[bool, Exception]) -> str:
-        if isinstance(result, Exception):
-            return repr(result)
-        if isinstance(result, bool):
-            return "success" if result else "timeout"
-        assert False

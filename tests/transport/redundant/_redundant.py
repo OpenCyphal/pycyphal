@@ -452,7 +452,8 @@ async def _unittest_redundant_transport_capture() -> None:
     await asyncio.sleep(1.0)
 
 
-def _unittest_redundant_transport_reconfiguration() -> None:
+@pytest.mark.asyncio
+async def _unittest_redundant_transport_reconfiguration() -> None:
     from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, PayloadMetadata
 
     tr = RedundantTransport()
@@ -466,3 +467,6 @@ def _unittest_redundant_transport_reconfiguration() -> None:
     with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
         tr.attach_inferior(LoopbackTransport(None, allow_anonymous_transfers=False))
     assert len(tr.inferiors) == 1
+
+    tr.close()
+    await asyncio.sleep(2.0)
