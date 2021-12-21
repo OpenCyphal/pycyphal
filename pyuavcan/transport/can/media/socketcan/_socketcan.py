@@ -195,7 +195,7 @@ class SocketCANMedia(Media):
 
     def _read_frame(self, ts_mono_ns: int) -> typing.Tuple[Timestamp, Envelope]:
         while True:
-            data, ancdata, msg_flags, _addr = self._sock.recvmsg(
+            data, ancdata, msg_flags, _addr = self._sock.recvmsg(  # type: ignore
                 self._native_frame_size, self._ancillary_data_buffer_size
             )
             assert msg_flags & socket.MSG_TRUNC == 0, "The data buffer is not large enough"
