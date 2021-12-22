@@ -455,8 +455,8 @@ async def _unittest_slow_demo_app_with_plant(
         assert int((time.time() - 3.0) * 1e6) <= last_meas.timestamp.microsecond <= int(time.time() * 1e6)
         assert 300.0 < last_meas.kelvin < (peak_temp - 0.4), "Temperature did not decrease"
 
-        demo_proc.wait(10.0, interrupt=True)
-        plant_proc.wait(10.0, interrupt=True)
+        demo_proc.wait(20.0, interrupt=True)
+        plant_proc.wait(20.0, interrupt=True)
     finally:
         demo_proc.kill()
         plant_proc.kill()
