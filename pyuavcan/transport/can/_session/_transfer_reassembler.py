@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 import enum
-import typing
+from typing import Sequence
 import pyuavcan
 from pyuavcan.transport import Timestamp, TransferFrom
 from .._frame import UAVCANFrame, compute_transfer_id_forward_distance, TRANSFER_CRC_LENGTH_BYTES, TRANSFER_ID_MODULO
@@ -32,7 +32,7 @@ class TransferReassembler:
         self._max_payload_size_bytes_with_crc = int(extent_bytes) + TRANSFER_CRC_LENGTH_BYTES
         self._crc = pyuavcan.transport.commons.crc.CRC16CCITT()
         self._payload_truncated = False
-        self._fragmented_payload: typing.List[memoryview] = []
+        self._fragmented_payload: list[memoryview] = []
 
     def process_frame(
         self,
@@ -40,7 +40,7 @@ class TransferReassembler:
         priority: pyuavcan.transport.Priority,
         frame: UAVCANFrame,
         transfer_id_timeout_ns: int,
-    ) -> typing.Union[None, TransferReassemblyErrorID, TransferFrom]:
+    ) -> None | TransferReassemblyErrorID | TransferFrom:
         """
         Observe that occasionally newer frames may have lower timestamp values due to error variations in the time
         recovery algorithms, depending on the methods of timestamping. This class therefore does not check if the
@@ -99,8 +99,16 @@ class TransferReassembler:
             if frame.start_of_transfer:
                 assert len(fragmented_payload) == 1  # Single-frame transfer, additional checks not needed
             else:
-                assert len(fragmented_payload) > 1  # Multi-frame transfer, check and remove the trailing CRC
-                if not self._crc.check_residue():
+                # Multi-frame transfer, check and remove the trailing CRC.
+                # We don't bother checking the CRC if we received fewer than 2 frames because that implies that there
+                # was a TID wraparound mid-transfer.
+                # This happens when the reassembler that has just been reset is fed with the last frame of another
+                # transfer, whose TOGGLE and TRANSFER-ID happen to match the expectations of the reassembler:
+                #   1. Wait for the reassembler to be reset. Let: expected transfer-ID = X, expected toggle bit = Y.
+                #   2. Construct a frame with SOF=0, EOF=1, TID=X, TOGGLE=Y.
+                #   3. Feed the frame into the reassembler.
+                # See https://github.com/UAVCAN/pyuavcan/issues/198. There is a dedicated test covering this case.
+                if len(fragmented_payload) < 2 or not self._crc.check_residue():
                     return TransferReassemblyErrorID.TRANSFER_CRC_MISMATCH
 
                 # Cut off the CRC, unless it's already been removed by the implicit payload truncation rule.
@@ -139,7 +147,7 @@ def _unittest_can_transfer_reassembler_manual() -> None:
 
     err = TransferReassemblyErrorID
 
-    def proc(monotonic_ns: int, frame: UAVCANFrame) -> typing.Union[None, TransferReassemblyErrorID, TransferFrom]:
+    def proc(monotonic_ns: int, frame: UAVCANFrame) -> None | TransferReassemblyErrorID | TransferFrom:
         away = rx.process_frame(
             timestamp=Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
             priority=priority,
@@ -150,7 +158,7 @@ def _unittest_can_transfer_reassembler_manual() -> None:
         return away
 
     def frm(
-        padded_payload: typing.Union[bytes, str],
+        padded_payload: bytes | str,
         transfer_id: int,
         start_of_transfer: bool,
         end_of_transfer: bool,
@@ -166,7 +174,7 @@ def _unittest_can_transfer_reassembler_manual() -> None:
         )
 
     def trn(
-        monotonic_ns: int, transfer_id: int, fragmented_payload: typing.Sequence[typing.Union[bytes, str, memoryview]]
+        monotonic_ns: int, transfer_id: int, fragmented_payload: Sequence[bytes | str | memoryview]
     ) -> TransferFrom:
         return TransferFrom(
             timestamp=Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
@@ -288,3 +296,57 @@ def _unittest_can_transfer_reassembler_manual() -> None:
             b"0123456789abcdefghi",
         ],
     )
+
+
+def _unittest_issue_198() -> None:
+    priority = pyuavcan.transport.Priority.SLOW
+    source_node_id = 88
+    transfer_id_timeout_ns = 900
+
+    def proc(monotonic_ns: int, frame: UAVCANFrame) -> None | TransferReassemblyErrorID | TransferFrom:
+        away = rx.process_frame(
+            timestamp=Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
+            priority=priority,
+            frame=frame,
+            transfer_id_timeout_ns=transfer_id_timeout_ns,
+        )
+        assert away is None or isinstance(away, (TransferReassemblyErrorID, TransferFrom))
+        return away
+
+    def frm(
+        padded_payload: bytes | str,
+        transfer_id: int,
+        start_of_transfer: bool,
+        end_of_transfer: bool,
+        toggle_bit: bool,
+    ) -> UAVCANFrame:
+        return UAVCANFrame(
+            identifier=0xBADC0FE,
+            padded_payload=memoryview(padded_payload if isinstance(padded_payload, bytes) else padded_payload.encode()),
+            transfer_id=transfer_id,
+            start_of_transfer=start_of_transfer,
+            end_of_transfer=end_of_transfer,
+            toggle_bit=toggle_bit,
+        )
+
+    def trn(
+        monotonic_ns: int, transfer_id: int, fragmented_payload: Sequence[bytes | str | memoryview]
+    ) -> TransferFrom:
+        return TransferFrom(
+            timestamp=Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
+            priority=priority,
+            transfer_id=transfer_id,
+            fragmented_payload=[
+                memoryview(x if isinstance(x, (bytes, memoryview)) else x.encode()) for x in fragmented_payload
+            ],
+            source_node_id=source_node_id,
+        )
+
+    rx = TransferReassembler(source_node_id, 50)
+
+    # First, ensure that the reassembler is initialized, by feeding it a valid transfer at least once.
+    assert proc(1000, frm("123", 0, True, True, True)) == trn(1000, 0, ["123"])
+
+    # Next, feed the last frame of another transfer whose TID/TOG match the expected state of the reassembler.
+    # This should be recognized as a CRC error.
+    assert proc(1000, frm("456", 1, False, True, True)) == TransferReassemblyErrorID.TRANSFER_CRC_MISMATCH
