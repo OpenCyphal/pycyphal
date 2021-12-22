@@ -299,21 +299,10 @@ def _unittest_can_transfer_reassembler_manual() -> None:
 
 
 def _unittest_issue_198() -> None:
-    priority = pyuavcan.transport.Priority.SLOW
     source_node_id = 88
     transfer_id_timeout_ns = 900
 
-    def proc(monotonic_ns: int, frame: UAVCANFrame) -> None | TransferReassemblyErrorID | TransferFrom:
-        away = rx.process_frame(
-            timestamp=Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
-            priority=priority,
-            frame=frame,
-            transfer_id_timeout_ns=transfer_id_timeout_ns,
-        )
-        assert away is None or isinstance(away, (TransferReassemblyErrorID, TransferFrom))
-        return away
-
-    def frm(
+    def mk_frame(
         padded_payload: bytes | str,
         transfer_id: int,
         start_of_transfer: bool,
@@ -329,24 +318,30 @@ def _unittest_issue_198() -> None:
             toggle_bit=toggle_bit,
         )
 
-    def trn(
-        monotonic_ns: int, transfer_id: int, fragmented_payload: Sequence[bytes | str | memoryview]
-    ) -> TransferFrom:
-        return TransferFrom(
-            timestamp=Timestamp(system_ns=0, monotonic_ns=monotonic_ns),
-            priority=priority,
-            transfer_id=transfer_id,
-            fragmented_payload=[
-                memoryview(x if isinstance(x, (bytes, memoryview)) else x.encode()) for x in fragmented_payload
-            ],
-            source_node_id=source_node_id,
-        )
-
     rx = TransferReassembler(source_node_id, 50)
 
     # First, ensure that the reassembler is initialized, by feeding it a valid transfer at least once.
-    assert proc(1000, frm("123", 0, True, True, True)) == trn(1000, 0, ["123"])
+    assert rx.process_frame(
+        timestamp=Timestamp(system_ns=0, monotonic_ns=1000),
+        priority=pyuavcan.transport.Priority.SLOW,
+        frame=mk_frame("123", 0, True, True, True),
+        transfer_id_timeout_ns=transfer_id_timeout_ns,
+    ) == TransferFrom(
+        timestamp=Timestamp(system_ns=0, monotonic_ns=1000),
+        priority=pyuavcan.transport.Priority.SLOW,
+        transfer_id=0,
+        fragmented_payload=[memoryview(x if isinstance(x, (bytes, memoryview)) else x.encode()) for x in ["123"]],
+        source_node_id=source_node_id,
+    )
 
     # Next, feed the last frame of another transfer whose TID/TOG match the expected state of the reassembler.
     # This should be recognized as a CRC error.
-    assert proc(1000, frm("456", 1, False, True, True)) == TransferReassemblyErrorID.TRANSFER_CRC_MISMATCH
+    assert (
+        rx.process_frame(
+            timestamp=Timestamp(system_ns=0, monotonic_ns=1000),
+            priority=pyuavcan.transport.Priority.SLOW,
+            frame=mk_frame("456", 1, False, True, True),
+            transfer_id_timeout_ns=transfer_id_timeout_ns,
+        )
+        == TransferReassemblyErrorID.TRANSFER_CRC_MISMATCH
+    )
