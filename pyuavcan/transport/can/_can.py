@@ -341,7 +341,7 @@ class CANTransport(pyuavcan.transport.Transport):
                 "%s: %d frames of %d total with CAN ID 0x%08x could not be sent before the deadline",
                 self,
                 len(unsent_frames),
-                num_sent,
+                len(t.frames),
                 can_id_int,
             )
 
