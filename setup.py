@@ -13,27 +13,27 @@ import sys
 from setuptools import setup
 
 __version__ = None
-VERSION_FILE = os.path.join(os.path.dirname(__file__), 'pyuavcan_v0', 'version.py')
+VERSION_FILE = os.path.join(os.path.dirname(__file__), 'pyuavcan_v0_5', 'version.py')
 exec(open(VERSION_FILE).read())         # Adds __version__ to globals
 
 with open('README.md', 'r') as fh:
     long_description = fh.read()
 
 args = dict(
-    name='pyuavcan_v0',
+    name='pyuavcan_v0_5',
     version=__version__,
-    description='UAVCAN/CAN v0 (legacy) implementation in Python. Checkout pyuavcan for v1 implementation.',
+    description='UAVCAN/CAN v0.5 (legacy) implementation in Python. Checkout pyuavcan for v1 implementation.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     packages=[
-        'pyuavcan_v0',
-        'pyuavcan_v0.dsdl',
-        'pyuavcan_v0.driver',
-        'pyuavcan_v0.app',
+        'pyuavcan_v0_5',
+        'pyuavcan_v0_5.dsdl',
+        'pyuavcan_v0_5.driver',
+        'pyuavcan_v0_5.app',
     ],
     package_data={
-        'pyuavcan_v0': [os.path.join(root[len('pyuavcan_v0/'):], fname)
-                   for root, dirs, files in os.walk('pyuavcan_v0/dsdl_files')
+        'pyuavcan_v0_5': [os.path.join(root[len('pyuavcan_v0_5/'):], fname)
+                   for root, dirs, files in os.walk('pyuavcan_v0_5/dsdl_files')
                    for fname in files if fname.endswith('.uavcan')]
     },
     author='Pavel Kirienko, Ben Dyer',

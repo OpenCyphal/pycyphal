@@ -11,14 +11,14 @@ from __future__ import division, absolute_import, print_function, unicode_litera
 import sys
 from .python_can import PythonCAN
 from .slcan import SLCAN
-from .common import DriverError, CANFrame
+from .common import DriverError, CANFrame, CANFrameFd
 
 if sys.platform.startswith('linux'):
     from .socketcan import SocketCAN
 else:
     SocketCAN = None
 
-__all__ = ['make_driver', 'DriverError', 'CANFrame']
+__all__ = ['make_driver', 'DriverError', 'CANFrame', 'CANFrameFd']
 
 
 def make_driver(device_name, **kwargs):

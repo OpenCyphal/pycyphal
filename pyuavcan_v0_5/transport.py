@@ -22,9 +22,10 @@ except ImportError:
     import collections  # Python 2
     MutableSequence = collections.MutableSequence
 
-import pyuavcan_v0
-import pyuavcan_v0.dsdl as dsdl
-import pyuavcan_v0.dsdl.common as common
+import pyuavcan_v0_5
+import pyuavcan_v0_5.dsdl as dsdl
+import pyuavcan_v0_5.dsdl.common as common
+from pyuavcan_v0_5 import CanBus, CanBusFD
 
 
 try:
@@ -646,14 +647,26 @@ class Frame(object):
         return bool(self.bytes[-1] & 0x80) if self.bytes else False
 
 
-class TransferError(pyuavcan_v0.UAVCANException):
+class TransferError(pyuavcan_v0_5.UAVCANException):
     pass
 
 
 class Transfer(object):
     DEFAULT_TRANSFER_PRIORITY = 31
+    LENGTH_TO_MAX_DATA_SIZE = [
+            0, 1, 2, 3, 4, 5, 6, 7,
+            11,11,11,11,
+            15,15,15,15,
+            19,19,19,19,
+            23,23,23,23,
+            31,31,31,31,31,31,31,31,
+            47,47,47,47,47,47,47,47,47,47,47,47,47,47,47,47,
+            63,63,63,63,63,63,63,63,63,63,63,63,63,63,63,63
+            ]
+    PADDING_BYTE = 0x55
 
     def __init__(self,
+                 bus,
                  transfer_id=0,
                  source_node_id=0,
                  dest_node_id=None,
@@ -662,6 +675,9 @@ class Transfer(object):
                  request_not_response=False,
                  service_not_message=False,
                  discriminator=None):
+        if not isinstance(bus, CanBus):
+            raise Exception("bus type is not a CanBus object?")
+        self._bus = bus
         self.transfer_priority = transfer_priority if transfer_priority is not None else self.DEFAULT_TRANSFER_PRIORITY
         self.transfer_id = transfer_id
         self.source_node_id = source_node_id
@@ -675,7 +691,7 @@ class Transfer(object):
 
         if payload:
             # noinspection PyProtectedMember
-            payload_bits = payload._pack()
+            payload_bits = payload._pack(bus.supports_tao)
             if len(payload_bits) & 7:
                 payload_bits += "0" * (8 - (len(payload_bits) & 7))
             self.payload = bytes_from_bits(payload_bits)
@@ -737,14 +753,37 @@ class Transfer(object):
         else:
             self.data_type_id = (value >> 8) & 0xFFFF
 
+    def _get_padding_length(self, payload_length):
+        # No padding for non-FD
+        if not isinstance(self._bus, CanBusFD):
+            return 0
+
+        max_frame_payload_len = self._bus.max_payload_len - 1
+        if payload_length > max_frame_payload_len:
+            payload_length = payload_length + 2 # for CRC if multi-frame
+
+        data_in_last_frame = payload_length % max_frame_payload_len
+        dlc_length = self.LENGTH_TO_MAX_DATA_SIZE[data_in_last_frame]
+        padding_length = dlc_length - data_in_last_frame
+
+        return padding_length
+
     def to_frames(self):
         out_frames = []
+
         remaining_payload = self.payload
 
+        # Add padding if necessary
+        padding_length = self._get_padding_length(len(remaining_payload))
+        if padding_length > 0:
+            padding = bytearray([self.PADDING_BYTE] * padding_length)
+            remaining_payload = remaining_payload + padding
+
+        data_payload_len = self._bus.max_payload_len - 1
         # Prepend the transfer CRC to the payload if the transfer requires
         # multiple frames
-        if len(remaining_payload) > 7:
-            crc = common.crc16_from_bytes(self.payload,
+        if len(remaining_payload) > data_payload_len:
+            crc = common.crc16_from_bytes(remaining_payload,
                                           initial=self.data_type_crc)
             remaining_payload = bytearray([crc & 0xFF, crc >> 8]) + remaining_payload
 
@@ -753,11 +792,11 @@ class Transfer(object):
         while True:
             # Tail byte contains start-of-transfer, end-of-transfer, toggle, and Transfer ID
             tail = ((0x80 if len(out_frames) == 0 else 0) |
-                    (0x40 if len(remaining_payload) <= 7 else 0) |
+                    (0x40 if len(remaining_payload) <= data_payload_len else 0) |
                     ((tail ^ 0x20) & 0x20) |
                     (self.transfer_id & 0x1F))
-            out_frames.append(Frame(message_id=self.message_id, data=remaining_payload[0:7] + bchr(tail)))
-            remaining_payload = remaining_payload[7:]
+            out_frames.append(Frame(message_id=self.message_id, data=remaining_payload[0:data_payload_len] + bchr(tail)))
+            remaining_payload = remaining_payload[data_payload_len:]
             if not remaining_payload:
                 break
 
@@ -797,9 +836,9 @@ class Transfer(object):
             kind = dsdl.CompoundType.KIND_SERVICE
         else:
             kind = dsdl.CompoundType.KIND_MESSAGE
-        datatype = pyuavcan_v0.DATATYPES.get((self.data_type_id, kind))
+        datatype = pyuavcan_v0_5.DATATYPES.get((self.data_type_id, kind))
         if not datatype:
-            raise TransferError("Unrecognised {0} type ID {1}"
+            raise UnknownDatatypeError("Unrecognised {0} type ID {1}"
                                 .format("service" if self.service_not_message else "message", self.data_type_id))
 
         # For a multi-frame transfer, validate the CRC and frame indexes
@@ -821,7 +860,7 @@ class Transfer(object):
             self.payload = datatype()
 
         # noinspection PyProtectedMember
-        self.payload._unpack(bits_from_bytes(payload_bytes))
+        self.payload._unpack(bits_from_bytes(payload_bytes), self._bus.supports_tao)
 
     @property
     def key(self):
@@ -833,7 +872,7 @@ class Transfer(object):
                 not self.request_not_response and
                 transfer.dest_node_id == self.source_node_id and
                 transfer.source_node_id == self.dest_node_id and
-                transfer.data_type_id == self.data_type_id and
+                transfer.data_type_id == self.data_type_id and 
                 transfer.transfer_id == self.transfer_id):
             return True
         else:

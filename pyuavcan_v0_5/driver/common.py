@@ -16,6 +16,21 @@ from .. import UAVCANException
 logger = getLogger(__name__)
 
 
+# The CAN 2.0B FD specification DLC (indexes) sizes (values)
+DLCS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64]
+assert len(DLCS) == 16, "Must have exactly 16 entries"
+
+
+def dlc_to_len(dlc: int) -> int:
+    """ Converts a DLC to a length """
+    return DLCS[dlc & 0xF]
+
+
+def len_to_dlc(length: int) -> int:
+    """ Returns None if not a valid DLC. """
+    return DLCS.index(length)
+
+
 class DriverError(UAVCANException):
     pass
 
@@ -48,6 +63,12 @@ class CANFrame:
                (self.ts_monotonic, self.ts_real, id_str, hex_data, ascii_data)
 
     __repr__ = __str__
+
+class CANFrameFd(CANFrame):
+    MAX_DATA_LENGTH = 64
+
+    def __init__(self, can_id, data, extended, ts_monotonic=None, ts_real=None):
+        super(CANFrameFd, self).__init__(can_id, data, extended, ts_monotonic=ts_monotonic, ts_real=ts_real)
 
 
 class AbstractDriver(object):

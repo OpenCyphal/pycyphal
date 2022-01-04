@@ -15,12 +15,12 @@ import sys
 import inspect
 from logging import getLogger
 
-import pyuavcan_v0
-import pyuavcan_v0.driver as driver
-import pyuavcan_v0.transport as transport
-from pyuavcan_v0.transport import get_uavcan_data_type
-from pyuavcan_v0 import UAVCANException
-
+import pyuavcan_v0_5
+import pyuavcan_v0_5.driver as driver
+import pyuavcan_v0_5.transport as transport
+from pyuavcan_v0_5.transport import get_uavcan_data_type
+from pyuavcan_v0_5 import UAVCANException
+from pyuavcan_v0_5 import CanBus2, CanBusFD
 
 DEFAULT_NODE_STATUS_INTERVAL = 1.0
 DEFAULT_SERVICE_TIMEOUT = 1.0
@@ -44,7 +44,7 @@ class Scheduler(object):
             self._run_scheduler = lambda: self._scheduler.run(blocking=False) + self._scheduler.timefunc()
         else:
             # Nightmare inducing hacks
-            class SayNoToBlockingSchedulingException(pyuavcan_v0.UAVCANException):
+            class SayNoToBlockingSchedulingException(pyuavcan_v0_5.UAVCANException):
                 pass
 
             def delayfunc_impostor(duration):
@@ -238,7 +238,7 @@ class Node(Scheduler):
 
         :param mode: Initial operating mode (INITIALIZATION, OPERATIONAL, etc.); defaults to INITIALIZATION.
 
-        :param node_info: Structure of type pyuavcan_v0.protocol.GetNodeInfo.Response, responded with when the local
+        :param node_info: Structure of type pyuavcan_v0_5.protocol.GetNodeInfo.Response, responded with when the local
                           node is queried for its node info.
         :param catch_handler_exceptions: If true, exceptions raised from message
                                          handlers will be caught and logged. If
@@ -248,7 +248,11 @@ class Node(Scheduler):
         super(Node, self).__init__()
 
         self._handler_dispatcher = HandlerDispatcher(self, catch_handler_exceptions)
-
+        if "fd" in _extras and _extras["fd"]:
+            self._bus = CanBusFD()
+        else:
+            self._bus = CanBus2()
+                
         self._can_driver = can_driver
         self._node_id = node_id
 
@@ -263,8 +267,8 @@ class Node(Scheduler):
         self._transfer_hook_dispatcher = TransferHookDispatcher()
 
         # NodeStatus publisher
-        self.health = pyuavcan_v0.protocol.NodeStatus().HEALTH_OK                                    # @UndefinedVariable
-        self.mode = pyuavcan_v0.protocol.NodeStatus().MODE_INITIALIZATION if mode is None else mode  # @UndefinedVariable
+        self.health = pyuavcan_v0_5.protocol.NodeStatus().HEALTH_OK                                    # @UndefinedVariable
+        self.mode = pyuavcan_v0_5.protocol.NodeStatus().MODE_INITIALIZATION if mode is None else mode  # @UndefinedVariable
         self.vendor_specific_status_code = 0
 
         node_status_interval = node_status_interval or DEFAULT_NODE_STATUS_INTERVAL
@@ -275,8 +279,8 @@ class Node(Scheduler):
             logger.debug('GetNodeInfo request from %r', e.transfer.source_node_id)
             self._fill_node_status(self.node_info.status)
             return self.node_info
-        self.node_info = node_info or pyuavcan_v0.protocol.GetNodeInfo.Response()     # @UndefinedVariable
-        self.add_handler(pyuavcan_v0.protocol.GetNodeInfo, on_get_node_info)          # @UndefinedVariable
+        self.node_info = node_info or pyuavcan_v0_5.protocol.GetNodeInfo.Response()     # @UndefinedVariable
+        self.add_handler(pyuavcan_v0_5.protocol.GetNodeInfo, on_get_node_info)          # @UndefinedVariable
 
     @property
     def is_anonymous(self):
@@ -300,6 +304,10 @@ class Node(Scheduler):
     def can_driver(self):
         return self._can_driver
 
+    @property 
+    def can_bus(self):
+        return self._bus
+
     def _recv_frame(self, raw_frame):
         if not raw_frame.extended:
             return
@@ -310,7 +318,7 @@ class Node(Scheduler):
         if not transfer_frames:
             return
 
-        transfer = transport.Transfer()
+        transfer = transport.Transfer(self._bus)
         transfer.from_frames(transfer_frames)
 
         self._transfer_hook_dispatcher.call_hooks(self._transfer_hook_dispatcher.TRANSFER_DIRECTION_INCOMING, transfer)
@@ -338,7 +346,7 @@ class Node(Scheduler):
 
     def _throw_if_anonymous(self):
         if not self._node_id:
-            raise pyuavcan_v0.UAVCANException('The local node is configured in anonymous mode')
+            raise pyuavcan_v0_5.UAVCANException('The local node is configured in anonymous mode')
 
     def _fill_node_status(self, msg):
         msg.uptime_sec = int(time.monotonic() - self.start_time_monotonic + 0.5)
@@ -350,7 +358,7 @@ class Node(Scheduler):
         self._fill_node_status(self.node_info.status)
         if self._node_id:
             # TODO: transmit self.node_info.status instead of creating a new object
-            msg = pyuavcan_v0.protocol.NodeStatus()  # @UndefinedVariable
+            msg = pyuavcan_v0_5.protocol.NodeStatus()  # @UndefinedVariable
             self._fill_node_status(msg)
             self.broadcast(msg)
 
@@ -426,7 +434,8 @@ class Node(Scheduler):
 
         # Preparing the transfer
         transfer_id = self._next_transfer_id((get_uavcan_data_type(payload).default_dtid, dest_node_id))
-        transfer = transport.Transfer(payload=payload,
+        transfer = transport.Transfer(bus=self._bus,
+                                      payload=payload,
                                       source_node_id=self._node_id,
                                       dest_node_id=dest_node_id,
                                       transfer_id=transfer_id,
@@ -444,7 +453,7 @@ class Node(Scheduler):
         # Registering a callback that will be invoked if there was no response after 'timeout' seconds
         def on_timeout():
             try:
-               del self._outstanding_requests[transfer.key]
+                del self._outstanding_requests[transfer.key]
             except KeyError:
                 pass
             try:
@@ -471,6 +480,7 @@ class Node(Scheduler):
         self._throw_if_anonymous()
 
         transfer = transport.Transfer(
+            bus=self._bus,
             payload=payload,
             source_node_id=self._node_id,
             dest_node_id=dest_node_id,
@@ -492,7 +502,8 @@ class Node(Scheduler):
         self._throw_if_anonymous()
 
         transfer_id = self._next_transfer_id(get_uavcan_data_type(payload).default_dtid)
-        transfer = transport.Transfer(payload=payload,
+        transfer = transport.Transfer(bus=self._bus,
+                                      payload=payload,
                                       source_node_id=self._node_id,
                                       transfer_id=transfer_id,
                                       transfer_priority=priority or DEFAULT_TRANSFER_PRIORITY,

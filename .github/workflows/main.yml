@@ -2,7 +2,7 @@ name: Main Workflow
 
 on:
   push:
-    branches: [legacy-v0]
+    branches: [legacy-v0_5]
 
 jobs:
   lint:
@@ -69,5 +69,5 @@ jobs:
         continue-on-error: true # this step will fail if the file has already been published
         with:
           user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN_PYUAVCAN_V0 }}
+          password: ${{ secrets.PYPI_API_TOKEN_PYUAVCAN_V0_5 }}
           verbose: true

@@ -9,7 +9,7 @@
 
 from __future__ import division, absolute_import, print_function, unicode_literals
 from logging import getLogger
-import pyuavcan_v0
+import pyuavcan_v0_5
 
 
 logger = getLogger(__name__)
@@ -17,7 +17,7 @@ logger = getLogger(__name__)
 
 class LogMessageMonitor(object):
     def __init__(self, node):
-        self._handle = node.add_handler(pyuavcan_v0.protocol.debug.LogMessage, self._on_message)  # @UndefinedVariable
+        self._handle = node.add_handler(pyuavcan_v0_5.protocol.debug.LogMessage, self._on_message)  # @UndefinedVariable
 
     def close(self):
         self._handle.remove()
