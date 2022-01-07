@@ -259,12 +259,14 @@ class PythonCANMedia(Media):
     def close(self) -> None:
         self._closed = True
         try:
-            self._bus.shutdown()
             if self._maybe_thread is not None:
-                self._maybe_thread.join()
-        except Exception as ex:
-            _logger.exception("%s: Bus closing error: %s", self, ex)
-        self._maybe_thread = None
+                self._maybe_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
+                self._maybe_thread = None
+        finally:
+            try:
+                self._bus.shutdown()
+            except Exception as ex:
+                _logger.exception("%s: Bus closing error: %s", self, ex)
 
     @staticmethod
     def list_available_interface_names() -> typing.Iterable[str]:
@@ -286,7 +288,11 @@ class PythonCANMedia(Media):
             try:
                 batch = self._read_batch()
                 if batch:
-                    loop.call_soon_threadsafe(self._invoke_rx_handler, batch)
+                    try:
+                        loop.call_soon_threadsafe(self._invoke_rx_handler, batch)
+                    except RuntimeError as ex:
+                        _logger.debug("%s: Event loop is closed, exiting: %r", self, ex)
+                        break
             except OSError as ex:
                 if not self._closed:
                     _logger.exception("%s thread input/output error; stopping: %s", self, ex)
