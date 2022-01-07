@@ -37,7 +37,7 @@ class Serializer(abc.ABC):
     @staticmethod
     def new(buffer_size_in_bytes: int) -> Serializer:
         buffer_size_in_bytes = int(buffer_size_in_bytes) + _EXTRA_BUFFER_CAPACITY_BYTES
-        buf = numpy.zeros(buffer_size_in_bytes, dtype=Byte)
+        buf: NDArray[Byte] = numpy.zeros(buffer_size_in_bytes, dtype=Byte)
         return _PlatformSpecificSerializer(buf)
 
     @property
@@ -242,7 +242,7 @@ class Serializer(abc.ABC):
         assert value >= 0, "This operation is undefined for negative integers"
         value &= 2 ** bit_length - 1
         num_bytes = (bit_length + 7) // 8
-        out = numpy.zeros(num_bytes, dtype=Byte)
+        out: NDArray[Byte] = numpy.zeros(num_bytes, dtype=Byte)
         for i in range(num_bytes):  # Oh, why is my life like this?
             out[i] = value & 0xFF
             value >>= 8
@@ -256,7 +256,7 @@ class Serializer(abc.ABC):
         except OverflowError:  # Oops, let's truncate (saturation must be implemented by the caller if needed)
             out = struct.pack(f, numpy.inf if x > 0 else -numpy.inf)
         # Note: this operation does not copy the underlying bytes
-        return numpy.frombuffer(out, dtype=Byte)  # type: ignore
+        return numpy.frombuffer(out, dtype=Byte)
 
     @staticmethod
     def _ensure_not_negative(x: int) -> None:
