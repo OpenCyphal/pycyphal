@@ -264,7 +264,7 @@ class RedundantInputSession(RedundantSession, pyuavcan.transport.InputSession):
                 try:
                     deadline = loop.time() + RedundantInputSession._READ_TIMEOUT
                     tr = await session.receive(deadline)
-                    if tr is not None:
+                    if tr is not None and self._deduplicator is not None:
                         await self._process_transfer(session, tr)
                 except (asyncio.CancelledError, pyuavcan.transport.ResourceClosedError):
                     break
