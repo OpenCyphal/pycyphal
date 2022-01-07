@@ -179,8 +179,11 @@ class SocketCANMedia(Media):
                     except OSError as ex:
                         if ex.errno != errno.EAGAIN:
                             raise
-                    loop.call_soon_threadsafe(handler_wrapper, frames)
-
+                    try:
+                        loop.call_soon_threadsafe(handler_wrapper, frames)
+                    except RuntimeError as ex:
+                        _logger.debug("%s: Event loop is closed, exiting: %r", self, ex)
+                        break
                 if self._ctl_worker in read_ready:
                     if self._ctl_worker.recv(1):  # pragma: no branch
                         break
