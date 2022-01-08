@@ -243,7 +243,7 @@ class Deserializer(abc.ABC):
                 # It is faster because here we are aware that the destination is always aligned, which we take
                 # advantage of. This algorithm breaks for byte-aligned offset, so we have to delegate the aligned
                 # case to the aligned copy method (which is also much faster).
-                out = numpy.empty(count, dtype=Byte)
+                out: NDArray[Byte] = numpy.empty(count, dtype=Byte)
                 right = self._bit_offset % 8
                 left = 8 - right
                 assert (1 <= right <= 7) and (1 <= left <= 7)
@@ -340,7 +340,7 @@ class _LittleEndianDeserializer(Deserializer):
         bo = self._byte_offset
         # Interestingly, numpy doesn't care about alignment. If the source buffer is not properly aligned, it will
         # work anyway but slower.
-        out: NDArray[StdPrimitive] = numpy.frombuffer(  # type: ignore
+        out: NDArray[StdPrimitive] = numpy.frombuffer(
             self._buf.get_unsigned_slice(bo, bo + count * numpy.dtype(dtype).itemsize), dtype=dtype
         )
         assert len(out) == count
@@ -353,7 +353,7 @@ class _LittleEndianDeserializer(Deserializer):
         assert dtype not in (bool, numpy.bool_, object), "Invalid usage"
         bs = self.fetch_unaligned_bytes(numpy.dtype(dtype).itemsize * count)
         assert len(bs) >= count
-        return numpy.frombuffer(bs, dtype=dtype, count=count)  # type: ignore
+        return numpy.frombuffer(bs, dtype=dtype, count=count)
 
 
 class _BigEndianDeserializer(Deserializer):
@@ -387,8 +387,8 @@ class ZeroExtendingBuffer:
         else:
             contiguous = bytearray().join(fragmented_buffer)
 
-        self._buf: NDArray[Byte] = numpy.frombuffer(contiguous, dtype=Byte)  # type: ignore
-        assert self._buf.dtype == Byte and self._buf.ndim == 1  # type: ignore
+        self._buf: NDArray[Byte] = numpy.frombuffer(contiguous, dtype=Byte)
+        assert self._buf.dtype == Byte and self._buf.ndim == 1
 
     @property
     def bit_length(self) -> int:
@@ -417,7 +417,7 @@ class ZeroExtendingBuffer:
         assert count >= 0
         out: NDArray[Byte] = self._buf[left:right]  # Slicing never raises an IndexError.
         if len(out) < count:  # Implicit zero extension rule
-            out = numpy.concatenate((out, numpy.zeros(count - len(out), dtype=Byte)))  # type: ignore
+            out = numpy.concatenate((out, numpy.zeros(count - len(out), dtype=Byte)))
         assert len(out) == count
         return out
 

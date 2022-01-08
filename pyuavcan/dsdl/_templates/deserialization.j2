@@ -74,7 +74,7 @@
     {% set element_offset = offset + t.element_type.bit_length_set.repeat_range(t.capacity - 1) %}
     {% set element_ref = 'e'|to_template_unique_name %}
     {% set index_ref = 'i'|to_template_unique_name %}
-    {{ ref }} = _np_.empty({{ t.capacity }}, {{ t.element_type|numpy_scalar_type }})
+    {{ ref }} = _np_.empty({{ t.capacity }}, {{ t.element_type|numpy_scalar_type }})  # type: ignore
     for {{ index_ref }} in range({{ t.capacity }}):
         {{ _deserialize_any(t.element_type, element_ref, element_offset)|indent }}
         {{ ref }}[{{ index_ref }}] = {{ element_ref }}
@@ -100,7 +100,7 @@
 {% else %}
     {% set element_ref = 'e'|to_template_unique_name %}
     {% set index_ref = 'i'|to_template_unique_name %}
-    {{ ref }} = _np_.empty({{ length_ref }}, {{ t.element_type|numpy_scalar_type }})
+    {{ ref }} = _np_.empty({{ length_ref }}, {{ t.element_type|numpy_scalar_type }})  # type: ignore
     for {{ index_ref }} in range({{ length_ref }}):
         {{ _deserialize_any(t.element_type, element_ref, offset + t.bit_length_set)|indent }}
         {{ ref }}[{{ index_ref }}] = {{ element_ref }}

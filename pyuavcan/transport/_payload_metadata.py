@@ -31,8 +31,7 @@ class PayloadMetadata:
     It is always safe to pick a larger value if not sure.
     You will find a more rigorous description in the UAVCAN Specification.
 
-    Transport implementations may use this information to statically size receive buffers or
-    to perform early detection of malformed transfers if the size of their payload exceeds this limit.
+    Transport implementations may use this information to statically size receive buffers.
     """
 
     def __post_init__(self) -> None:

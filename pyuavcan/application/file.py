@@ -236,7 +236,7 @@ class FileServer:
                 if request.offset != 0:  # Do not seek unless necessary to support non-seekable files.
                     f.seek(request.offset)
                 data = f.read(self._data_transfer_capacity)
-            return Read.Response(data=Unstructured(np.frombuffer(data, np.uint8)))  # type: ignore
+            return Read.Response(data=Unstructured(np.frombuffer(data, np.uint8)))
         except Exception as ex:
             _logger.info("%r: Error: %r", self, ex, exc_info=True)
             return Read.Response(self.convert_error(ex))
@@ -465,7 +465,7 @@ class FileClient:
         async def once(d: typing.Union[memoryview, bytes]) -> int:
             res = await self._call(
                 Write,
-                Write.Request(offset, path=Path(path), data=Unstructured(np.frombuffer(d, np.uint8))),  # type: ignore
+                Write.Request(offset, path=Path(path), data=Unstructured(np.frombuffer(d, np.uint8))),
             )
             assert isinstance(res, Write.Response)
             return res.error.value

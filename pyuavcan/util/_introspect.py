@@ -74,7 +74,7 @@ def import_submodules(
     ...                                 lambda parent, ex: print(parent, ex.name))
     tests.util.import_error._subpackage nonexistent_module_should_raise_import_error
     """
-    for _, module_name, _ in pkgutil.walk_packages(root_module.__path__, root_module.__name__ + "."):  # type: ignore
+    for _, module_name, _ in pkgutil.walk_packages(root_module.__path__, root_module.__name__ + "."):
         try:
             importlib.import_module(module_name)
         except ImportError as ex:
