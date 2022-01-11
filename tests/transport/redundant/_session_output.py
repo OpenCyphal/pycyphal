@@ -455,3 +455,35 @@ async def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     assert not is_retired
 
     await asyncio.sleep(2.0)
+
+
+async def _unittest_close_while_blocked() -> None:  # https://github.com/UAVCAN/pyuavcan/issues/204
+    import contextlib
+
+    spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
+    meta = pyuavcan.transport.PayloadMetadata(30 * 1024 * 1024)
+    ses = RedundantOutputSession(spec, meta, finalizer=lambda: None)
+    tr_a = LoopbackTransport(111)
+    tr_a.send_delay = 10.0
+    inf_a = tr_a.get_output_session(spec, meta)
+    ses._add_inferior(inf_a)  # pylint: disable=protected-access
+    # Begin transmission, the task will be blocked for a while due to send_delay.
+    task = asyncio.get_event_loop().create_task(
+        ses.send(
+            Transfer(
+                timestamp=Timestamp.now(),
+                priority=Priority.FAST,
+                transfer_id=444444444444,
+                fragmented_payload=[memoryview(b"BAYANIST TAMADA USLUGI")],
+            ),
+            asyncio.get_event_loop().time() + 20.0,
+        )
+    )
+    # While the task is blocked, close the instance. It should be handled correctly.
+    ses.close()
+    await asyncio.sleep(2.0)
+    # Ensure the task is finalized properly.
+    assert task.done()
+    with contextlib.suppress(Exception):
+        task.result()
+    tr_a.close()
