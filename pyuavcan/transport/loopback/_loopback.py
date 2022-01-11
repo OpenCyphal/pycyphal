@@ -42,6 +42,7 @@ class LoopbackTransport(pyuavcan.transport.Transport):
         self._output_sessions: typing.Dict[pyuavcan.transport.OutputSessionSpecifier, LoopbackOutputSession] = {}
         self._capture_handlers: typing.List[pyuavcan.transport.CaptureCallback] = []
         self._spoof_result: typing.Union[bool, Exception] = True
+        self._send_delay = 0.0
         # Unlimited protocol capabilities by default.
         self._protocol_parameters = pyuavcan.transport.ProtocolParameters(
             transfer_id_modulo=2 ** 64,
@@ -75,6 +76,22 @@ class LoopbackTransport(pyuavcan.transport.Transport):
     @spoof_result.setter
     def spoof_result(self, value: typing.Union[bool, Exception]) -> None:
         self._spoof_result = value
+
+    @property
+    def send_delay(self) -> float:
+        """
+        Test rigging. If positive, this delay will be inserted for each sent transfer.
+        If after the delay the transfer deadline is in the past, it is assumed to have timed out.
+        Zero by default (no delay is inserted, deadline not checked).
+        """
+        return self._send_delay
+
+    @send_delay.setter
+    def send_delay(self, value: float) -> None:
+        if float(value) >= 0:
+            self._send_delay = float(value)
+        else:
+            raise ValueError(f"Send delay shall be a non-negative number of seconds, got {value}")
 
     def close(self) -> None:
         sessions = (*self._input_sessions.values(), *self._output_sessions.values())
@@ -110,7 +127,10 @@ class LoopbackTransport(pyuavcan.transport.Transport):
                 pass
 
         async def do_route(tr: pyuavcan.transport.Transfer, monotonic_deadline: float) -> bool:
-            _ = monotonic_deadline  # Unused, all operations always successful and instantaneous.
+            if self._send_delay > 0:
+                await asyncio.sleep(self._send_delay)
+                if asyncio.get_running_loop().time() > monotonic_deadline:
+                    return False
             if specifier.remote_node_id in {self.local_node_id, None}:  # Otherwise drop the transfer.
                 tr_from = pyuavcan.transport.TransferFrom(
                     timestamp=tr.timestamp,

@@ -80,9 +80,8 @@ class _Inferior:
     queue: asyncio.Queue[_WorkItem]
 
     def close(self) -> None:
+        # Ensure correct finalization order to avoid https://github.com/UAVCAN/pyuavcan/issues/204
         try:
-            self.session.close()
-        finally:
             if self.worker.done():
                 self.worker.result()
             else:
@@ -92,6 +91,8 @@ class _Inferior:
                     self.queue.get_nowait().future.cancel()
                 except asyncio.QueueEmpty:
                     break
+        finally:
+            self.session.close()
 
 
 class RedundantOutputSession(RedundantSession, pyuavcan.transport.OutputSession):
