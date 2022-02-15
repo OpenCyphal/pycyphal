@@ -36,3 +36,5 @@ The acronym *UAVCAN* stands for ***Uncomplicated Application-level Vehicular Com
 
 *See also: [**Yakut**](https://github.com/UAVCAN/yakut) -- a CLI tool for diagnostics and management of
 UAVCAN networks built on top of PyUAVCAN.*
+
+*See also: [PyDroneCAN](https://github.com/dronecan/pydronecan) -- an independent project aimed to provide continued support for legacy UAVCAN/CAN v0 under a new name.*
