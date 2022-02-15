@@ -7,6 +7,8 @@ to prevent conflict with the stable version of the protocol, UAVCAN v1.
 This package is currently maintained for migration and backwards compatibility purposes. v0 is not recommended for
 new designs; new users should adopt pyuavcan v1. Please consult with [uavcan.org](https://uavcan.org) for details.
 
+Also see [PyDroneCAN](https://github.com/dronecan/pydronecan) -- an independent project aimed to provide continued support for UAVCAN/CAN v0 under a new name.
+
 ## Installation
 
 ```bash
