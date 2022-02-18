@@ -128,6 +128,8 @@ class SocketCANMedia(Media):
                     timeout=monotonic_deadline - loop.time(),
                 )
             except OSError as err:
+                if self._closed:  # https://github.com/UAVCAN/pyuavcan/issues/204
+                    break
                 if err.errno == errno.EINVAL and self._is_fd:
                     raise pyuavcan.transport.InvalidMediaConfigurationError(
                         "Invalid socketcan configuration: "
