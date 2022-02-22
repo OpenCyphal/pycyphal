@@ -451,6 +451,16 @@ def _construct_canalystii(parameters: _InterfaceParameters) -> can.ThreadSafeBus
     assert False, "Internal error"
 
 
+def _construct_cantact(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
+        )
+    if isinstance(parameters, _FDInterfaceParameters):
+        raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
+    assert False, "Internal error"
+
+
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     raise InvalidMediaConfigurationError(f"Interface not supported yet: {parameters.interface_name}")
 
@@ -467,5 +477,6 @@ _CONSTRUCTORS: typing.DefaultDict[
         "virtual": _construct_virtual,
         "usb2can": _construct_usb2can,
         "canalystii": _construct_canalystii,
+        "cantact": _construct_cantact,
     },
 )
