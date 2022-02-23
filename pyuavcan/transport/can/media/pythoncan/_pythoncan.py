@@ -94,7 +94,7 @@ class PythonCANMedia(Media):
               ``pip3 install git+https://github.com/Cherish-Gww/python-can.git@add_canalystii_so``
               More info: https://github.com/UAVCAN/pyuavcan/issues/178#issuecomment-912497882
               Example: ``canalystii:0``
-            
+
             - Interface ``cantact`` is implemented by :class:`can.interfaces.cantact.CantactBus`.
               The channel name refers to a channel inside the cantact device.
               Multiple cantact devices are not supported by the python-can interface.
