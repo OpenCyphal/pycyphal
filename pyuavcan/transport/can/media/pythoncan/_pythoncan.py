@@ -95,6 +95,10 @@ class PythonCANMedia(Media):
               More info: https://github.com/UAVCAN/pyuavcan/issues/178#issuecomment-912497882
               Example: ``canalystii:0``
 
+            - Interface ``gs_usb`` is implemented by :class:`can.interfaces.gs_usb.GsUsbBus`.
+              Channel name is an integer, refering to the device index in a system.
+              Example: ``gs_usb:0``
+
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
             - A single integer selects Classic CAN.
@@ -252,7 +256,7 @@ class PythonCANMedia(Media):
                 num_sent += 1
                 if f.loopback:
                     loopback.append((Timestamp.now(), f))
-        if loopback:
+        if loopback and not self._hardware_loopback:
             loop.call_soon(self._invoke_rx_handler, loopback)
         return num_sent
 
@@ -311,8 +315,11 @@ class PythonCANMedia(Media):
             msg = self._bus.recv(0.0 if batch else self._MAXIMAL_TIMEOUT_SEC)
             if msg is None:
                 break
+            # Detect if hardware supports loopback at runtime
+            if not msg.is_rx:
+                self._hardware_loopback = True
             timestamp = Timestamp.now()  # TODO: use accurate timestamping
-            loopback = False  # TODO: no possibility to get real loopback yet
+            loopback = not msg.is_rx
             frame = self._parse_native_frame(msg)
             if frame is not None:
                 batch.append((timestamp, Envelope(frame, loopback)))
@@ -451,6 +458,21 @@ def _construct_canalystii(parameters: _InterfaceParameters) -> can.ThreadSafeBus
     assert False, "Internal error"
 
 
+def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        try:
+            index = int(parameters.channel_name)
+        except ValueError:
+            raise InvalidMediaConfigurationError("Channel name must be an integer interface index")
+
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name, channel=parameters.channel_name, index=index, bitrate=parameters.bitrate
+        )
+    if isinstance(parameters, _FDInterfaceParameters):
+        raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
+    assert False, "Internal error"
+
+
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     raise InvalidMediaConfigurationError(f"Interface not supported yet: {parameters.interface_name}")
 
@@ -467,5 +489,6 @@ _CONSTRUCTORS: typing.DefaultDict[
         "virtual": _construct_virtual,
         "usb2can": _construct_usb2can,
         "canalystii": _construct_canalystii,
+        "gs_usb": _construct_gs_usb,
     },
 )
