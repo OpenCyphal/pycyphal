@@ -169,6 +169,7 @@ class PythonCANMedia(Media):
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self._hardware_loopback = False
 
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
         if self._is_fd:
@@ -256,6 +257,7 @@ class PythonCANMedia(Media):
                 num_sent += 1
                 if f.loopback:
                     loopback.append((Timestamp.now(), f))
+        # Fake received frames if hardware does not support loopback
         if loopback and not self._hardware_loopback:
             loop.call_soon(self._invoke_rx_handler, loopback)
         return num_sent
