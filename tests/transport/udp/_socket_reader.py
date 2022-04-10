@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import sys
 import typing
@@ -10,11 +10,11 @@ import logging
 from ipaddress import ip_address
 import pytest
 from pytest import raises
-import pyuavcan
-from pyuavcan.transport import Timestamp
-from pyuavcan.transport.udp import UDPFrame
-from pyuavcan.transport.udp._socket_reader import SocketReader, SocketReaderStatistics, _READ_TIMEOUT
-from pyuavcan.transport import Priority
+import pycyphal
+from pycyphal.transport import Timestamp
+from pycyphal.transport.udp import UDPFrame
+from pycyphal.transport.udp._socket_reader import SocketReader, SocketReaderStatistics, _READ_TIMEOUT
+from pycyphal.transport import Priority
 
 pytestmark = pytest.mark.asyncio
 
@@ -24,8 +24,8 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
 
     ts = Timestamp.now()
 
-    def check_timestamp(t: pyuavcan.transport.Timestamp) -> bool:
-        now = pyuavcan.transport.Timestamp.now()
+    def check_timestamp(t: pycyphal.transport.Timestamp) -> bool:
+        now = pycyphal.transport.Timestamp.now()
         s = ts.system_ns <= t.system_ns <= now.system_ns
         m = ts.monotonic_ns <= t.monotonic_ns <= now.system_ns
         return s and m
@@ -227,7 +227,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not srd.has_listeners
     srd.close()
     srd.close()  # Idempotency
-    with raises(pyuavcan.transport.ResourceClosedError):
+    with raises(pycyphal.transport.ResourceClosedError):
         srd.add_listener(3, lambda t, i, f: received_frames_3.append((t, i, f)))
     assert sock_rx.fileno() < 0, "The socket has not been closed"
 

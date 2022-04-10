@@ -13,7 +13,7 @@ Source directory layout
 Most of the package configuration can be gathered by reading ``setup.cfg``.
 When adding new tools and such, try storing all their configuration there to keep everything in one place.
 
-All shippable entities are located exclusively inside the directory ``pyuavcan/``.
+All shippable entities are located exclusively inside the directory ``pycyphal/``.
 The entirety of the directory is packaged for distribution.
 
 The submodule ``demo/public_regulated_data_types/`` is needed only for demo, testing, and documentation building.
@@ -77,8 +77,8 @@ This helps reduce scope contamination and avoid naming conflicts.
 
 ::
 
-    from pyuavcan.transport import Transport    # Avoid this if you can.
-    import pyuavcan.transport                   # Prefer this.
+    from pycyphal.transport import Transport    # Avoid this if you can.
+    import pycyphal.transport                   # Prefer this.
 
 
 Semantic and behavioral conventions
@@ -103,9 +103,9 @@ API functions and methods that contain the following parameters should adhere to
 +======================================+=======================+=======================================================+
 |``pydsdl.*Type``                      |``model``              |PyDSDL type model (descriptor).                        |
 +--------------------------------------+-----------------------+-------------------------------------------------------+
-|``pyuavcan.dsdl.*Object``             |``obj``                |Instance of a generated class implementing DSDL type.  |
+|``pycyphal.dsdl.*Object``             |``obj``                |Instance of a generated class implementing DSDL type.  |
 +--------------------------------------+-----------------------+-------------------------------------------------------+
-|``typing.Type[pyuavcan.dsdl.*Object]``|``dtype``              |Generated class implementing a DSDL type.              |
+|``typing.Type[pycyphal.dsdl.*Object]``|``dtype``              |Generated class implementing a DSDL type.              |
 +--------------------------------------+-----------------------+-------------------------------------------------------+
 |``float``                             |``monotonic_deadline`` |Abort operation if not completed **by** this time.     |
 |                                      |                       |Time system is ``AbstractEventLoop.time()``.           |
@@ -209,7 +209,7 @@ After the packages are generated, the output is cached on disk to permit fast re
 The cache can be invalidated manually by running ``nox -s clean``.
 
 On GNU/Linux, the amount of memory available for the test process is artificially limited to a few gibibytes
-to catch possible memory hogs (like https://github.com/UAVCAN/pydsdl/issues/23 ).
+to catch possible memory hogs (like https://github.com/OpenCyphal/pydsdl/issues/23 ).
 See ``conftest.py`` for details.
 
 
@@ -228,14 +228,14 @@ When the CI/CD pipelines pass, you are all set.
 Releasing
 ---------
 
-PyUAVCAN is versioned by following `Semantic Versioning <https://semver.org>`_.
+PyCyphal is versioned by following `Semantic Versioning <https://semver.org>`_.
 
 Please update ``/CHANGELOG.rst`` whenever you introduce externally visible changes.
 Changes that only affect the internal structure of the library (like test rigging, internal refactorings, etc.)
 should not be mentioned in the changelog.
 
 CI/CD automation uploads a new release to PyPI and pushes a new tag upstream on every push to ``master``.
-It is therefore necessary to ensure that the library version (see ``pyuavcan/VERSION``) is bumped whenever
+It is therefore necessary to ensure that the library version (see ``pycyphal/VERSION``) is bumped whenever
 a new commit is merged into ``master``;
 otherwise, the automation will fail with an explicit tag conflict error instead of deploying the release.
 

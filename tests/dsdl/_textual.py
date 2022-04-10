@@ -1,22 +1,22 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import pydsdl
-import pyuavcan.dsdl
+import pycyphal.dsdl
 from . import _util
 
 
-def _unittest_slow_textual(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    def validate(obj: pyuavcan.dsdl.CompositeObject, s: str) -> None:
+def _unittest_slow_textual(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
+    def validate(obj: pycyphal.dsdl.CompositeObject, s: str) -> None:
         for f in model.fields_except_padding:  # pylint: disable=undefined-loop-variable
             field_present = (f"{f.name}=" in s) or (f"{f.name}_=" in s)
             if isinstance(model.inner_type, pydsdl.UnionType):  # pylint: disable=undefined-loop-variable
                 # In unions only the active field is printed.
                 # The active field may contain nested fields which  may be named similarly to other fields
                 # in the current union, so we can't easily ensure lack of non-active fields in the output.
-                field_active = pyuavcan.dsdl.get_attribute(obj, f.name) is not None
+                field_active = pycyphal.dsdl.get_attribute(obj, f.name) is not None
                 if field_active:
                     assert field_present, f"{f.name}: {s}"
             else:

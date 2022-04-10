@@ -1,24 +1,24 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import asyncio
 import ipaddress
 import pytest
-import pyuavcan.transport
+import pycyphal.transport
 
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
-from pyuavcan.transport.udp import UDPTransport, UDPTransportStatistics
+from pycyphal.transport.udp import UDPTransport, UDPTransportStatistics
 
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_udp_transport_ipv4() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
-    from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
-    from pyuavcan.transport import ProtocolParameters
+    from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
+    from pycyphal.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
+    from pycyphal.transport import ProtocolParameters
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
@@ -44,7 +44,7 @@ async def _unittest_udp_transport_ipv4() -> None:
 
     assert "127.0.0.111" in repr(tr)
     assert tr.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2 ** 64,
+        transfer_id_modulo=2**64,
         max_nodes=65535,
         mtu=9000,
     )
@@ -52,7 +52,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     default_mtu = min(UDPTransport.VALID_MTU_RANGE)
     assert "127.0.0.222" in repr(tr2)
     assert tr2.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2 ** 64,
+        transfer_id_modulo=2**64,
         max_nodes=65535,
         mtu=default_mtu,
     )
@@ -239,10 +239,10 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert not set(tr2.input_sessions)
     assert not set(tr2.output_sessions)
 
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
+    with pytest.raises(pycyphal.transport.ResourceClosedError):
         _ = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
+    with pytest.raises(pycyphal.transport.ResourceClosedError):
         _ = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
@@ -250,10 +250,10 @@ async def _unittest_udp_transport_ipv4() -> None:
 
 async def _unittest_udp_transport_ipv4_capture() -> None:
     import socket
-    from pyuavcan.transport.udp import UDPCapture, IPPacket
-    from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
-    from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
-    from pyuavcan.transport import Capture, AlienSessionSpecifier
+    from pycyphal.transport.udp import UDPCapture, IPPacket
+    from pycyphal.transport import MessageDataSpecifier, PayloadMetadata, Transfer
+    from pycyphal.transport import Priority, Timestamp, OutputSessionSpecifier
+    from pycyphal.transport import Capture, AlienSessionSpecifier
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
 

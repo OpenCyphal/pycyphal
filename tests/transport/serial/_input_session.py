@@ -1,17 +1,17 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import asyncio
 import typing
 import pytest
 from pytest import raises, approx
-from pyuavcan.transport import InputSessionSpecifier, MessageDataSpecifier, Priority, TransferFrom
-from pyuavcan.transport import PayloadMetadata, Timestamp
-from pyuavcan.transport.commons.high_overhead_transport import TransferCRC
-from pyuavcan.transport.serial._session._input import SerialInputSession
-from pyuavcan.transport.serial import SerialFrame, SerialInputSessionStatistics
-from pyuavcan.transport.commons.high_overhead_transport import TransferReassembler
+from pycyphal.transport import InputSessionSpecifier, MessageDataSpecifier, Priority, TransferFrom
+from pycyphal.transport import PayloadMetadata, Timestamp
+from pycyphal.transport.commons.high_overhead_transport import TransferCRC
+from pycyphal.transport.serial._session._input import SerialInputSession
+from pycyphal.transport.serial import SerialFrame, SerialInputSessionStatistics
+from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
 
 pytestmark = pytest.mark.asyncio
 

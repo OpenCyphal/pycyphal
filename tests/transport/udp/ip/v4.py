@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 # pylint: disable=protected-access
 
@@ -9,13 +9,13 @@ import sys
 import time
 import typing
 import socket
-from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
-from pyuavcan.transport import InvalidMediaConfigurationError, Timestamp
-from pyuavcan.transport.udp._ip._socket_factory import SocketFactory
-from pyuavcan.transport.udp._ip._endpoint_mapping import SUBJECT_PORT, service_data_specifier_to_udp_port
-from pyuavcan.transport.udp._ip._v4 import SnifferIPv4, IPv4SocketFactory
-from pyuavcan.transport.udp._ip import LinkLayerCapture
-from pyuavcan.transport.udp import IPPacket, LinkLayerPacket, UDPIPPacket
+from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
+from pycyphal.transport import InvalidMediaConfigurationError, Timestamp
+from pycyphal.transport.udp._ip._socket_factory import SocketFactory
+from pycyphal.transport.udp._ip._endpoint_mapping import SUBJECT_PORT, service_data_specifier_to_udp_port
+from pycyphal.transport.udp._ip._v4 import SnifferIPv4, IPv4SocketFactory
+from pycyphal.transport.udp._ip import LinkLayerCapture
+from pycyphal.transport.udp import IPPacket, LinkLayerPacket, UDPIPPacket
 
 
 def _unittest_socket_factory() -> None:

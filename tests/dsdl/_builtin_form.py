@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import logging
@@ -8,7 +8,7 @@ import logging
 import pytest
 import pydsdl
 
-import pyuavcan.dsdl
+import pycyphal.dsdl
 from . import _util
 
 
@@ -16,13 +16,13 @@ _logger = logging.getLogger(__name__)
 
 
 # noinspection PyUnusedLocal
-def _unittest_slow_builtin_form_manual(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_builtin_form_manual(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     import uavcan.node
     import uavcan.register
     import uavcan.primitive.array
     import uavcan.time
 
-    bi = pyuavcan.dsdl.to_builtin(
+    bi = pycyphal.dsdl.to_builtin(
         uavcan.node.Heartbeat_1_0(
             uptime=123456,
             health=uavcan.node.Health_1_0(2),
@@ -37,7 +37,7 @@ def _unittest_slow_builtin_form_manual(compiled: typing.List[pyuavcan.dsdl.Gener
         "vendor_specific_status_code": 186,
     }
 
-    bi = pyuavcan.dsdl.to_builtin(
+    bi = pycyphal.dsdl.to_builtin(
         uavcan.node.GetInfo_1_0.Response(
             protocol_version=uavcan.node.Version_1_0(1, 2),
             hardware_version=uavcan.node.Version_1_0(3, 4),
@@ -62,7 +62,7 @@ def _unittest_slow_builtin_form_manual(compiled: typing.List[pyuavcan.dsdl.Gener
         "certificate_of_authenticity": bytes(range(100)).decode(),
     }
 
-    bi = pyuavcan.dsdl.to_builtin(
+    bi = pycyphal.dsdl.to_builtin(
         uavcan.register.Access_1_0.Response(
             timestamp=uavcan.time.SynchronizedTimestamp_1_0(1234567890),
             mutable=True,
@@ -96,10 +96,10 @@ def _unittest_slow_builtin_form_manual(compiled: typing.List[pyuavcan.dsdl.Gener
 
     with pytest.raises(ValueError, match=".*field.*"):
         bi["nonexistent_field"] = 123
-        pyuavcan.dsdl.update_from_builtin(uavcan.register.Access_1_0.Response(), bi)
+        pycyphal.dsdl.update_from_builtin(uavcan.register.Access_1_0.Response(), bi)
 
 
-def _unittest_slow_builtin_form_automatic(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_builtin_form_automatic(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     for info in compiled:
         for model in _util.expand_service_types(info.models):
             if model.bit_length_set.max / 8 > 1024 * 1024:
@@ -107,8 +107,8 @@ def _unittest_slow_builtin_form_automatic(compiled: typing.List[pyuavcan.dsdl.Ge
                 continue  # Skip large objects because they take forever to convert and test
 
             obj = _util.make_random_object(model)
-            bi = pyuavcan.dsdl.to_builtin(obj)
-            reconstructed = pyuavcan.dsdl.update_from_builtin(pyuavcan.dsdl.get_class(model)(), bi)
+            bi = pycyphal.dsdl.to_builtin(obj)
+            reconstructed = pycyphal.dsdl.update_from_builtin(pycyphal.dsdl.get_class(model)(), bi)
 
             if str(obj) != str(reconstructed) or repr(obj) != repr(reconstructed):  # pragma: no branch
                 if pydsdl.FloatType.__name__ not in repr(model):  # pragma: no cover
@@ -126,9 +126,9 @@ def _unittest_slow_builtin_form_automatic(compiled: typing.List[pyuavcan.dsdl.Ge
 
 
 # noinspection PyUnusedLocal
-def _unittest_issue_147(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_issue_147(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     from uavcan.register import Access_1_0
 
-    # Automatic promotion https://github.com/UAVCAN/pyuavcan/issues/147
-    valid = pyuavcan.dsdl.update_from_builtin(Access_1_0.Request(), "uavcan.pub.measurement")
+    # Automatic promotion https://github.com/OpenCyphal/pycyphal/issues/147
+    valid = pycyphal.dsdl.update_from_builtin(Access_1_0.Request(), "uavcan.pub.measurement")
     assert valid.name.name.tobytes().decode() == "uavcan.pub.measurement"

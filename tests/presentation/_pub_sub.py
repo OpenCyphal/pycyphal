@@ -1,11 +1,11 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import asyncio
 import pytest
-import pyuavcan
+import pycyphal
 from .conftest import TransportFactory
 
 
@@ -15,11 +15,11 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_slow_presentation_pub_sub_anon(
-    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
+    compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:
     assert compiled
     import uavcan.node
-    from pyuavcan.transport import Priority
+    from pycyphal.transport import Priority
 
     loop = asyncio.get_running_loop()
     loop.slow_callback_duration = 5.0
@@ -28,8 +28,8 @@ async def _unittest_slow_presentation_pub_sub_anon(
     assert tran_a.local_node_id is None
     assert tran_b.local_node_id is None
 
-    pres_a = pyuavcan.presentation.Presentation(tran_a)
-    pres_b = pyuavcan.presentation.Presentation(tran_b)
+    pres_a = pycyphal.presentation.Presentation(tran_a)
+    pres_b = pycyphal.presentation.Presentation(tran_b)
 
     assert pres_a.transport is tran_a
 
@@ -45,7 +45,7 @@ async def _unittest_slow_presentation_pub_sub_anon(
     if transmits_anon:
         pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
     else:
-        with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+        with pytest.raises(pycyphal.transport.OperationNotDefinedForAnonymousNodeError):
             pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)
         pres_a.close()
         pres_b.close()
@@ -71,7 +71,7 @@ async def _unittest_slow_presentation_pub_sub_anon(
 
     assert pub_heart.transport_session.destination_node_id is None
     assert sub_heart.transport_session.specifier.data_specifier == pub_heart.transport_session.specifier.data_specifier
-    assert pub_heart.port_id == pyuavcan.dsdl.get_fixed_port_id(uavcan.node.Heartbeat_1_0)
+    assert pub_heart.port_id == pycyphal.dsdl.get_fixed_port_id(uavcan.node.Heartbeat_1_0)
     assert sub_heart.dtype is uavcan.node.Heartbeat_1_0
 
     heart = uavcan.node.Heartbeat_1_0(
@@ -80,14 +80,14 @@ async def _unittest_slow_presentation_pub_sub_anon(
         mode=uavcan.node.Mode_1_0(uavcan.node.Mode_1_0.OPERATIONAL),
         vendor_specific_status_code=0xC0,
     )
-    assert pub_heart.priority == pyuavcan.presentation.DEFAULT_PRIORITY
+    assert pub_heart.priority == pycyphal.presentation.DEFAULT_PRIORITY
     pub_heart.priority = Priority.SLOW
     assert pub_heart.priority == Priority.SLOW
     await pub_heart.publish(heart)
 
     item = await sub_heart.receive_for(1)
     assert item
-    rx, transfer = item  # type: typing.Any, pyuavcan.transport.TransferFrom
+    rx, transfer = item  # type: typing.Any, pycyphal.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id is None
     assert transfer.priority == Priority.SLOW
@@ -117,12 +117,12 @@ async def _unittest_slow_presentation_pub_sub_anon(
 
 
 async def _unittest_slow_presentation_pub_sub(
-    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
+    compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:
     assert compiled
     import uavcan.node
     from test_dsdl_namespace.numpy import Complex_254_255
-    from pyuavcan.transport import Priority
+    from pycyphal.transport import Priority
 
     loop = asyncio.get_running_loop()
     loop.slow_callback_duration = 5.0
@@ -131,8 +131,8 @@ async def _unittest_slow_presentation_pub_sub(
     assert tran_a.local_node_id == 123
     assert tran_b.local_node_id == 42
 
-    pres_a = pyuavcan.presentation.Presentation(tran_a)
-    pres_b = pyuavcan.presentation.Presentation(tran_b)
+    pres_a = pycyphal.presentation.Presentation(tran_a)
+    pres_b = pycyphal.presentation.Presentation(tran_b)
 
     assert pres_a.transport is tran_a
 
@@ -154,7 +154,7 @@ async def _unittest_slow_presentation_pub_sub(
     await pub_heart.publish(heart)
     item = await sub_heart.receive(asyncio.get_running_loop().time() + 1)
     assert item
-    rx, transfer = item  # type: typing.Any, pyuavcan.transport.TransferFrom
+    rx, transfer = item  # type: typing.Any, pycyphal.transport.TransferFrom
     assert repr(rx) == repr(heart)
     assert transfer.source_node_id == 123
     assert transfer.priority == Priority.NOMINAL
@@ -182,16 +182,16 @@ async def _unittest_slow_presentation_pub_sub(
     sub_heart.close()
     sub_heart.close()  # Shall not raise.
 
-    handler_output: typing.List[typing.Tuple[Complex_254_255, pyuavcan.transport.TransferFrom]] = []
+    handler_output: typing.List[typing.Tuple[Complex_254_255, pycyphal.transport.TransferFrom]] = []
 
-    async def handler(message: Complex_254_255, cb_transfer: pyuavcan.transport.TransferFrom) -> None:
+    async def handler(message: Complex_254_255, cb_transfer: pycyphal.transport.TransferFrom) -> None:
         print("HANDLER:", message, cb_transfer)
         handler_output.append((message, cb_transfer))
 
     sub_record2.receive_in_background(handler)
 
     record = Complex_254_255(bytes_=[1, 2, 3, 1])
-    assert pub_record.priority == pyuavcan.presentation.DEFAULT_PRIORITY
+    assert pub_record.priority == pycyphal.presentation.DEFAULT_PRIORITY
     pub_record.priority = Priority.NOMINAL
     assert pub_record.priority == Priority.NOMINAL
     with pytest.raises(TypeError, match=".*Heartbeat.*"):
@@ -217,8 +217,8 @@ async def _unittest_slow_presentation_pub_sub(
     assert stat.messages == 1
 
     await pub_record.transport_session.send(
-        pyuavcan.transport.Transfer(
-            timestamp=pyuavcan.transport.Timestamp.now(),
+        pycyphal.transport.Transfer(
+            timestamp=pycyphal.transport.Timestamp.now(),
             priority=Priority.NOMINAL,
             transfer_id=12,
             fragmented_payload=[memoryview(b"\xFF" * 15)],  # Invalid union tag.

@@ -1,6 +1,6 @@
-# Copyright (c) 2020 UAVCAN Consortium
+# Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 # type: ignore
 
 import os
@@ -74,7 +74,7 @@ def test(session):
         # It can't be done from within the test suite because it has to be done before the interpreter is started.
         session.run("sudo", "setcap", "cap_net_raw+eip", str(Path(session.bin, "python").resolve()), external=True)
 
-    # Launch the TCP broker for testing the UAVCAN/serial transport.
+    # Launch the TCP broker for testing the Cyphal/serial transport.
     broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"], env=session.env)
     time.sleep(1.0)  # Ensure that it has started.
     if broker_process.poll() is not None:
@@ -84,10 +84,10 @@ def test(session):
     try:
         compiled_dir = Path.cwd().resolve() / ".compiled"
         src_dirs = [
-            ROOT_DIR / "pyuavcan",
+            ROOT_DIR / "pycyphal",
             ROOT_DIR / "tests",
         ]
-        postponed = ROOT_DIR / "pyuavcan" / "application"
+        postponed = ROOT_DIR / "pycyphal" / "application"
         env = {
             "PYTHONASYNCIODEBUG": "1",
             "PYTHONPATH": str(compiled_dir),
@@ -204,13 +204,13 @@ def pristine(session):
     session.cd(session.create_tmp())  # Change the directory to reveal spurious dependencies from the project root.
 
     session.install(f"{ROOT_DIR}")  # Testing bare installation first.
-    exe("import pyuavcan")
-    exe("import pyuavcan.transport.can")
-    exe("import pyuavcan.transport.udp")
-    exe("import pyuavcan.transport.loopback")
+    exe("import pycyphal")
+    exe("import pycyphal.transport.can")
+    exe("import pycyphal.transport.udp")
+    exe("import pycyphal.transport.loopback")
 
     session.install(f"{ROOT_DIR}[transport-serial]")
-    exe("import pyuavcan.transport.serial")
+    exe("import pycyphal.transport.serial")
 
 
 @nox.session(reuse_venv=True)

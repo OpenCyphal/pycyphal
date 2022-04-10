@@ -1,6 +1,6 @@
-# Copyright (c) 2020 UAVCAN Consortium
+# Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 # pylint: disable=protected-access
 
@@ -10,8 +10,8 @@ import time
 import typing
 import socket
 import libpcap as pcap  # type: ignore
-from pyuavcan.transport import Timestamp
-from pyuavcan.transport.udp._ip._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket, _get_codecs
+from pycyphal.transport import Timestamp
+from pycyphal.transport.udp._ip._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket, _get_codecs
 
 
 def _unittest_encode_decode_null() -> None:
@@ -138,7 +138,7 @@ def _unittest_encode_decode_ethernet() -> None:
 
 
 def _unittest_find_devices() -> None:
-    from pyuavcan.transport.udp._ip._link_layer import _find_devices
+    from pycyphal.transport.udp._ip._link_layer import _find_devices
 
     devices = _find_devices()
     print("Devices:", devices)
@@ -228,7 +228,7 @@ def _unittest_sniff() -> None:
 def _unittest_sniff_errors() -> None:
     from pytest import raises
 
-    from pyuavcan.transport.udp._ip._link_layer import LinkLayerCaptureError
+    from pycyphal.transport.udp._ip._link_layer import LinkLayerCaptureError
 
     with raises(LinkLayerCaptureError, match=r".*filter expression.*"):
         LinkLayerSniffer("invalid filter expression", lambda x: None)

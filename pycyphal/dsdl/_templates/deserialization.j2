@@ -1,0 +1,144 @@
+{#-
+ # Copyright (c) 2019 OpenCyphal
+ # This software is distributed under the terms of the MIT License.
+ # Author: Pavel Kirienko <pavel@opencyphal.org>
+-#}
+
+{% macro deserialize(self, self_type_name) -%}
+    assert _des_.consumed_bit_length % 8 == 0, 'Deserializer is not aligned'
+    _base_offset_ = _des_.consumed_bit_length
+    {% set t = self.inner_type %}
+{% if t is StructureType %}
+    {% set field_ref_map = {} %}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
+    {% if f is not padding %}
+    {% set field_ref = 'f'|to_template_unique_name %}
+    {% do field_ref_map.update({f: field_ref}) %}
+    # Temporary {{ field_ref }} holds the value of "{{ f.name }}"
+    {{ _deserialize_any(f.data_type, field_ref, offset) }}
+    {% else %}
+    {{ _deserialize_any(f.data_type, '[void field does not require a reference]', offset) }}
+    {% endif %}
+    {% endfor %}
+    {% set assignment_root -%}
+    self = {{ self_type_name }}(
+    {%- endset %}
+    {{ assignment_root }}
+    {% for f in t.fields_except_padding %}
+        {{ f|id }}={{ field_ref_map[f] }}
+        {{- ')' if loop.last else (',\n' + ' ' * (4 + assignment_root|length)) -}}
+    {% else %}
+            )
+    {% endfor %}
+{% elif t is UnionType %}
+    {% set tag_ref = 'tag'|to_template_unique_name %}
+    {{ _deserialize_integer(t.tag_field_type, tag_ref, 0|bit_length_set) }}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
+    {# We generate new temporary for each variant to prevent MyPy from complaining. #}
+    {% set field_ref = 'uni'|to_template_unique_name %}
+    {{ 'if' if loop.first else 'elif' }} {{ tag_ref }} == {{ loop.index0 }}:
+        {{ _deserialize_any(f.data_type, field_ref, offset)|indent }}
+        self = {{ self_type_name }}({{ f|id }}={{ field_ref }})
+    {% endfor %}
+    else:
+        raise _des_.FormatError(f'{{ t }}: Union tag value { {{- tag_ref -}} } is invalid')
+{% else %}{% assert False %}{# Delimited type is not expected in this context. #}
+{% endif %}
+    _des_.pad_to_alignment({{ self.alignment_requirement }})
+    assert {{ t.bit_length_set.min }} <= (_des_.consumed_bit_length - _base_offset_) <= {{ t.bit_length_set.max }}, \
+        'Bad deserialization of {{ self }}'
+{%- endmacro %}
+
+
+{% macro _deserialize_integer(t, ref, offset) %}
+{% if t.standard_bit_length and offset.is_aligned_at_byte() %}
+    {{ ref }} = _des_.fetch_aligned_{{ 'i' if t is SignedIntegerType else 'u' }}{{ t.bit_length }}()
+{% else %}
+    {% set signedness = 'signed' if t is SignedIntegerType else 'unsigned' %}
+    {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_{{ signedness }}({{ t.bit_length }})
+{% endif %}
+{% endmacro %}
+
+
+{% macro _deserialize_fixed_length_array(t, ref, offset) %}
+{% if t.element_type is BooleanType %}
+    {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_array_of_bits({{ t.capacity }})
+{% elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
+    {{ ref }} = _des_.fetch_{{ offset|alignment_prefix -}}
+                      _array_of_standard_bit_length_primitives({{ t.element_type|numpy_scalar_type }}, {{ t.capacity }})
+{% else %}
+    {# Element offset is the superposition of each individual element offsets plus the array's own offset.
+     # For example, an array like uint8[3] offset by 16 bits would have its element_offset = {16, 24, 32}.
+     # We can also unroll element deserialization for small arrays (e.g., below ~10 elements) to take advantage of
+     # spurious alignment of elements but the benefit of such optimization is believed to be negligible. #}
+    {% set element_offset = offset + t.element_type.bit_length_set.repeat_range(t.capacity - 1) %}
+    {% set element_ref = 'e'|to_template_unique_name %}
+    {% set index_ref = 'i'|to_template_unique_name %}
+    {{ ref }} = _np_.empty({{ t.capacity }}, {{ t.element_type|numpy_scalar_type }})  # type: ignore
+    for {{ index_ref }} in range({{ t.capacity }}):
+        {{ _deserialize_any(t.element_type, element_ref, element_offset)|indent }}
+        {{ ref }}[{{ index_ref }}] = {{ element_ref }}
+{% endif %}
+    assert len({{ ref }}) == {{ t.capacity }}, '{{ t }}'
+{% endmacro %}
+
+
+{% macro _deserialize_variable_length_array(t, ref, offset) %}
+    # Length field byte-aligned: {{ offset.is_aligned_at_byte() }}; {# -#}
+      all elements byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}.
+    {% set length_ref = 'len'|to_template_unique_name %}
+    {{ _deserialize_integer(t.length_field_type, length_ref, offset) }}
+    assert {{ length_ref }} >= 0
+    if {{ length_ref }} > {{ t.capacity }}:
+        raise _des_.FormatError(f'Variable array length prefix { {{- length_ref -}} } > {{ t.capacity }}')
+{% if t.element_type is BooleanType %}
+    {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
+                      _array_of_bits({{ length_ref }})
+{% elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
+    {{ ref }} = _des_.fetch_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
+                      _array_of_standard_bit_length_primitives({{ t.element_type|numpy_scalar_type }}, {{ length_ref }})
+{% else %}
+    {% set element_ref = 'e'|to_template_unique_name %}
+    {% set index_ref = 'i'|to_template_unique_name %}
+    {{ ref }} = _np_.empty({{ length_ref }}, {{ t.element_type|numpy_scalar_type }})  # type: ignore
+    for {{ index_ref }} in range({{ length_ref }}):
+        {{ _deserialize_any(t.element_type, element_ref, offset + t.bit_length_set)|indent }}
+        {{ ref }}[{{ index_ref }}] = {{ element_ref }}
+{% endif %}
+    assert len({{ ref }}) <= {{ t.capacity }}, '{{ t }}'
+{% endmacro %}
+
+
+{% macro _deserialize_any(t, ref, offset) %}
+    {% if t.alignment_requirement > 1 %}
+    _des_.pad_to_alignment({{ t.alignment_requirement }})
+    {% endif %}
+    {%- if t is VoidType -%}                 _des_.skip_bits({{ t.bit_length }})
+    {%- elif t is BooleanType -%}            {{ ref }} = _des_.fetch_unaligned_bit()
+    {%- elif t is IntegerType -%}            {{ _deserialize_integer(t, ref, offset) }}
+    {%- elif t is FloatType -%}              {{ ref }} = _des_.fetch_{{ offset|alignment_prefix }}_f{{ t.bit_length }}()
+    {%- elif t is FixedLengthArrayType -%}   {{ _deserialize_fixed_length_array(t, ref, offset) }}
+    {%- elif t is VariableLengthArrayType -%}{{ _deserialize_variable_length_array(t, ref, offset) }}
+    {%- elif t is CompositeType -%}
+        {% if t is DelimitedType %}
+    # Delimited deserialization of {{ t }}, extent {{ t.extent }}
+    _dh_ = _des_.fetch_aligned_u32()  # Read the delimiter header.
+    if _dh_ * 8 > _des_.remaining_bit_length:
+        raise _des_.FormatError(f'Delimiter header specifies {_dh_ * 8} bits, '
+                                f'but the remaining length is only {_des_.remaining_bit_length} bits')
+    _nested_ = _des_.fork_bytes(_dh_)
+    _des_.skip_bits(_dh_ * 8)
+    {{ ref }} = {{ t|full_reference_name }}._deserialize_(_nested_)
+    del _nested_
+        {% else %}
+    {{ ref }} = {{ t|full_reference_name }}._deserialize_(_des_)
+        {% endif %}
+    {%- else %}{% assert False %}
+    {%- endif %}
+    {% if t is CompositeType %}
+    assert _des_.consumed_bit_length % {{ t.alignment_requirement }} == 0, 'Nested object alignment error'
+    {% endif %}
+    {% if t is not CompositeType and t.alignment_requirement > 1 %}
+    _des_.pad_to_alignment({{ t.alignment_requirement }})
+    {% endif %}
+{% endmacro %}

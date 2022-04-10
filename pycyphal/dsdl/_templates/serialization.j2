@@ -1,0 +1,171 @@
+{#-
+ # Copyright (c) 2019 OpenCyphal
+ # This software is distributed under the terms of the MIT License.
+ # Author: Pavel Kirienko <pavel@opencyphal.org>
+-#}
+
+{% macro serialize(self) -%}
+    assert _ser_.current_bit_length % 8 == 0, 'Serializer is not aligned'
+    _base_offset_ = _ser_.current_bit_length
+    {% set t = self.inner_type %}
+{% if t is StructureType %}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
+    {{ _serialize_any(f.data_type, 'self.' + (f|id), offset) }}
+    {% endfor %}
+{% elif t is UnionType %}
+    {% for f, offset in t.iterate_fields_with_offsets() %}
+        {% set field_ref = 'self.' + (f|id) %}
+    {{ 'if' if loop.first else 'elif' }} {{ field_ref }} is not None:  # Union tag {{ loop.index0 }}
+        {{ _serialize_integer(t.tag_field_type, loop.index0|string, 0|bit_length_set)|indent }}
+        {{ _serialize_any(f.data_type, field_ref, offset)|indent }}
+    {% endfor %}
+    else:
+        raise RuntimeError('Malformed union {{ t }}')
+{% else %}{% assert False %}{# Delimited type is not expected in this context. #}
+{% endif %}
+    _ser_.pad_to_alignment({{ self.alignment_requirement }})
+    assert {{ t.bit_length_set.min }} <= (_ser_.current_bit_length - _base_offset_) <= {{ t.bit_length_set.max }}, \
+        'Bad serialization of {{ self }}'
+{%- endmacro %}
+
+
+{% macro _serialize_integer(t, ref, offset) %}
+{% if t is saturated %}  {# Note that value ranges are internally represented as rationals. #}
+    {% set ref = 'max(min(%s, %s), %s)'|format(ref, t.inclusive_value_range.max, t.inclusive_value_range.min) %}
+{% endif %}
+{% if t.standard_bit_length and offset.is_aligned_at_byte() %}
+    _ser_.add_aligned_{{ 'i' if t is SignedIntegerType else 'u' }}{{ t.bit_length }}({{ ref }})
+{% else %}
+    {% set signedness = 'signed' if t is SignedIntegerType else 'unsigned' %}
+    _ser_.add_{{ offset|alignment_prefix }}_{{ signedness }}({{ ref }}, {{ t.bit_length }})
+{% endif %}
+{% endmacro %}
+
+
+{% macro _serialize_float(t, ref, offset) %}
+{% set fun -%}
+    _ser_.add_{{ offset|alignment_prefix }}_f{{ t.bit_length }}
+{%- endset %}
+{# Note that value ranges are internally represented as rationals. #}
+{% if t is saturated %}
+    {# We do not emit saturation code for float64 because its range matches that of the native Python's float. #}
+    {% if t.bit_length < 64 %}
+    if _np_.isfinite({{ ref }}):
+        if {{ ref }} > {{ t.inclusive_value_range.max }}.0:
+            {{ fun }}({{ t.inclusive_value_range.max }}.0)
+        elif {{ ref }} < {{ t.inclusive_value_range.min }}.0:
+            {{ fun }}({{ t.inclusive_value_range.min }}.0)
+        else:
+            {{ fun }}({{ ref }})
+    else:
+        {{ fun }}({{ ref }})
+    {% else %}
+    # Saturation not required due to compatible native representation of "{{ t }}"
+    {{ fun }}({{ ref }})
+    {% endif %}
+{% else %}
+    {{ fun }}({{ ref }})
+{% endif %}
+{% endmacro %}
+
+
+{% macro _serialize_fixed_length_array(t, ref, offset) %}
+    assert len({{ ref }}) == {{ t.capacity }}, '{{ ref }}: {{ t }}'
+{# Saturation of bool[] or standard-bit-length primitive arrays is not needed because the range of native
+ # representations matches that of the final serialized value. Saturation is only needed in the case of elementwise
+ # serialization, which is implemented in the corresponding type serialization macros. #}
+{% if t.element_type is BooleanType %}
+    _ser_.add_{{ offset|alignment_prefix }}_array_of_bits({{ ref }})
+{% elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
+    _ser_.add_{{ offset|alignment_prefix -}}_array_of_standard_bit_length_primitives({{ ref }})
+{% else %}
+    {# Element offset is the superposition of each individual element offsets plus the array's own offset.
+     # For example, an array like uint8[3] offset by 16 bits would have its element_offset = {16, 24, 32}.
+     # We can also unroll element serialization for small arrays (e.g., below ~10 elements) to take advantage of
+     # spurious alignment of elements but the benefit of such optimization is believed to be negligible. #}
+    {% set element_offset = offset + t.element_type.bit_length_set.repeat_range(t.capacity - 1) %}
+    {% set element_ref = 'elem'|to_template_unique_name %}
+    # Element offset: {{ element_offset }}
+    for {{ element_ref }} in {{ ref }}:
+        {{ _serialize_any(t.element_type, element_ref, element_offset)|indent }}
+{% endif %}
+{% endmacro %}
+
+
+{% macro _serialize_variable_length_array(t, ref, offset) %}
+    # Variable-length array: length field byte-aligned: {{ offset.is_aligned_at_byte() }}; {# -#}
+      all elements byte-aligned: {{ (offset + t.bit_length_set).is_aligned_at_byte() }}.
+    assert len({{ ref }}) <= {{ t.capacity }}, '{{ ref }}: {{ t }}'
+    {{ _serialize_integer(t.length_field_type, 'len(%s)'|format(ref), offset) }}
+{# Saturation of bool[] or standard-bit-length primitive arrays is not needed because the range of native
+ # representations matches that of the final serialized value. Saturation is only needed in the case of elementwise
+ # serialization, which is implemented in the corresponding type serialization macros. #}
+{% if t.element_type is BooleanType %}
+    _ser_.add_{{ (offset + t.length_field_type.bit_length)|alignment_prefix }}_array_of_bits({{ ref }})
+{% elif t.element_type is PrimitiveType and t.element_type.standard_bit_length %}
+    _ser_.add_{{ (offset + t.length_field_type.bit_length)|alignment_prefix -}}
+          _array_of_standard_bit_length_primitives({{ ref }})
+{% else %}
+    {% set element_ref = 'elem'|to_template_unique_name %}
+    for {{ element_ref }} in {{ ref }}:
+        {{ _serialize_any(t.element_type, element_ref, offset + t.bit_length_set)|indent }}
+{% endif %}
+{% endmacro %}
+
+
+{% macro _serialize_any(t, ref, offset) %}
+    {% if t.alignment_requirement > 1 %}
+    _ser_.pad_to_alignment({{ t.alignment_requirement }})
+    {% endif %}
+    {%- if t is VoidType -%}                    _ser_.skip_bits({{ t.bit_length }})
+    {%- elif t is BooleanType -%}               _ser_.add_unaligned_bit({{ ref }})
+    {%- elif t is IntegerType -%}               {{ _serialize_integer(t, ref, offset) }}
+    {%- elif t is FloatType -%}                 {{ _serialize_float(t, ref, offset) }}
+    {%- elif t is FixedLengthArrayType -%}      {{ _serialize_fixed_length_array(t, ref, offset) }}
+    {%- elif t is VariableLengthArrayType -%}   {{ _serialize_variable_length_array(t, ref, offset) }}
+    {%- elif t is CompositeType -%}
+        {% if t is DelimitedType %}
+            {% if not t.inner_type.bit_length_set.fixed_length %}
+                {# Instead of the outer extent, we use the inner extent, which equals the max bit length and is a
+                 # tighter bound than the user-defined extent.
+                 # This is safe because when serializing we always know the concrete type.
+                 # This would be unsafe when deserializing, of course.
+                 # See the Specification for details. #}
+                {% set nested_capacity_bits = t.inner_type.extent + t.delimiter_header_type.bit_length %}
+                {% assert nested_capacity_bits % 8 == 0 %}
+                {% set nested_capacity_bytes = nested_capacity_bits // 8 %}
+    # Delimited serialization of {{ t }}, extent {{ t.extent }}, max bit length {{ t.inner_type.extent }}
+    _nested_ = _ser_.fork_bytes({{ nested_capacity_bytes }})  # Also includes the length of the delimiter header.
+    _nested_.skip_bits({{ t.delimiter_header_type.bit_length }})  # Leave space for the delimiter header.
+    assert _nested_.current_bit_length == {{ t.delimiter_header_type.bit_length }}
+    {{ ref }}._serialize_(_nested_)
+    _nested_length_ = _nested_.current_bit_length - {{ t.delimiter_header_type.bit_length }}
+    del _nested_
+    assert {{ t.inner_type.bit_length_set.min }} <= _nested_length_ <= {{ t.inner_type.bit_length_set.max }}
+    assert _nested_length_ % 8 == 0
+    _ser_.add_aligned_u32(_nested_length_ // 8)  # Jump back and serialize the delimiter header.
+    _ser_.skip_bits(_nested_length_)             # Return to the current offset.
+            {% else %}
+                {# Optional optimization: if the nested object is fixed-length, no need to fork the serializer. #}
+                {% set length_bits = t.inner_type.bit_length_set.max %}
+                {% assert length_bits == t.inner_type.bit_length_set.min %}
+                {% assert length_bits % 8 == 0 %}
+                {% set length_bytes = length_bits // 8 %}
+    # Delimited serialization of {{ t }}, fixed bit length {{ length_bits }} ({{ length_bytes }} bytes)
+    _ser_.add_aligned_u32({{ length_bytes }})  # Delimiter header is constant in this case.
+    _ser_base_offset_ = _ser_.current_bit_length
+    {{ ref }}._serialize_(_ser_)
+    assert _ser_.current_bit_length - _ser_base_offset_ == {{ length_bits }}
+            {% endif %}
+        {% else %}
+    {{ ref }}._serialize_(_ser_)
+        {% endif %}
+    {%- else %}{% assert False %}
+    {%- endif %}
+    {% if t is CompositeType %}
+    assert _ser_.current_bit_length % {{ t.alignment_requirement }} == 0, 'Nested object alignment error'
+    {% endif %}
+    {% if t is not CompositeType and t.alignment_requirement > 1 %}
+    _ser_.pad_to_alignment({{ t.alignment_requirement }})
+    {% endif %}
+{% endmacro %}

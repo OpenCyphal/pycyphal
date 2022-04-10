@@ -1,6 +1,6 @@
-# Copyright (c) 2020 UAVCAN Consortium
+# Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
 import sys
@@ -59,7 +59,7 @@ class BackgroundChildProcess:
         """
         A convenience factory for running the CLI tool.
         """
-        return BackgroundChildProcess("python", "-m", "pyuavcan", *args, environment_variables=environment_variables)
+        return BackgroundChildProcess("python", "-m", "pycyphal", *args, environment_variables=environment_variables)
 
     def wait(self, timeout: float, interrupt: typing.Optional[bool] = False) -> typing.Tuple[int, str]:
         if interrupt and self._inferior.poll() is None:

@@ -1,17 +1,17 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import asyncio
 import socket as socket_
 import typing
 import pytest
 from pytest import raises
-import pyuavcan
-from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
-from pyuavcan.transport import PayloadMetadata, SessionStatistics, Feedback, Transfer
-from pyuavcan.transport import Timestamp, ServiceDataSpecifier
-from pyuavcan.transport.udp._session._output import UDPOutputSession, UDPFeedback
+import pycyphal
+from pycyphal.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
+from pycyphal.transport import PayloadMetadata, SessionStatistics, Feedback, Transfer
+from pycyphal.transport import Timestamp, ServiceDataSpecifier
+from pycyphal.transport.udp._session._output import UDPOutputSession, UDPFeedback
 
 
 pytestmark = pytest.mark.asyncio
@@ -166,7 +166,7 @@ async def _unittest_output_session() -> None:
     assert data_main_b == (
         b"\x00\x07\x00\x00\x01\x00\x00\x801\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
         + b"e"
-        + pyuavcan.transport.commons.crc.CRC32C.new(b"one", b"two", b"three").value_as_bytes
+        + pycyphal.transport.commons.crc.CRC32C.new(b"one", b"two", b"three").value_as_bytes
     )
 
     sos.socket.close()  # This is to prevent resource warning
@@ -218,7 +218,7 @@ async def _unittest_output_session() -> None:
     assert finalized
     sos.close()  # Idempotency
 
-    with raises(pyuavcan.transport.ResourceClosedError):
+    with raises(pycyphal.transport.ResourceClosedError):
         await (
             sos.send(
                 Transfer(

@@ -3,6 +3,12 @@
 Changelog
 =========
 
+v1.5
+----
+
+- The library renamed from PyUAVCAN to PyCyphal and republished under a different name.
+  There are no changes to the API.
+
 v1.4
 ----
 

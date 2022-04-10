@@ -8,7 +8,7 @@ import pathlib
 import asyncio
 import logging
 import importlib
-import pyuavcan
+import pycyphal
 
 # Production applications are recommended to compile their DSDL namespaces as part of the build process. The enclosed
 # file "setup.py" provides an example of how to do that. The output path we specify here shall match that of "setup.py".
@@ -20,11 +20,11 @@ sys.path.insert(0, str(compiled_dsdl_dir))
 
 try:
     import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
-    import pyuavcan.application  # This module requires the root namespace "uavcan" to be transcompiled.
+    import pycyphal.application  # This module requires the root namespace "uavcan" to be transcompiled.
 except (ImportError, AttributeError):  # Redistributable applications typically don't need this section.
     logging.warning("Transcompiling DSDL, this may take a while")
     src_dir = pathlib.Path(__file__).resolve().parent
-    pyuavcan.dsdl.compile_all(
+    pycyphal.dsdl.compile_all(
         [
             src_dir / "custom_data_types/sirius_cyber_corp",
             src_dir / "public_regulated_data_types/uavcan/",
@@ -33,7 +33,7 @@ except (ImportError, AttributeError):  # Redistributable applications typically 
     )
     importlib.invalidate_caches()  # Python runtime requires this.
     import sirius_cyber_corp
-    import pyuavcan.application
+    import pycyphal.application
 
 # Import other namespaces we're planning to use. Nested namespaces are not auto-imported, so in order to reach,
 # say, "uavcan.node.Heartbeat", you have to "import uavcan.node".
@@ -54,13 +54,13 @@ class DemoApp:
     def __init__(self) -> None:
         node_info = uavcan.node.GetInfo_1.Response(
             software_version=uavcan.node.Version_1(major=1, minor=0),
-            name="org.uavcan.pyuavcan.demo.demo_app",
+            name="org.opencyphal.pycyphal.demo.demo_app",
         )
         # The Node class is basically the central part of the library -- it is the bridge between the application and
         # the UAVCAN network. Also, it implements certain standard application-layer functions, such as publishing
         # heartbeats and port introspection messages, responding to GetInfo, serving the register API, etc.
         # The register file stores the configuration parameters of our node (you can inspect it using SQLite Browser).
-        self._node = pyuavcan.application.make_node(node_info, DemoApp.REGISTER_FILE)
+        self._node = pycyphal.application.make_node(node_info, DemoApp.REGISTER_FILE)
 
         # Published heartbeat fields can be configured as follows.
         self._node.heartbeat_publisher.mode = uavcan.node.Mode_1.OPERATIONAL  # type: ignore
@@ -84,7 +84,7 @@ class DemoApp:
         try:
             srv_least_sq = self._node.get_server(sirius_cyber_corp.PerformLinearLeastSquaresFit_1, "least_squares")
             srv_least_sq.serve_in_background(self._serve_linear_least_squares)
-        except pyuavcan.application.register.MissingRegisterError:
+        except pycyphal.application.register.MissingRegisterError:
             logging.info("The least squares service is disabled by configuration")
 
         # Create another RPC-server using a standard service type for which a fixed service-ID is defined.
@@ -97,7 +97,7 @@ class DemoApp:
     @staticmethod
     async def _serve_linear_least_squares(
         request: sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request,
-        metadata: pyuavcan.presentation.ServiceRequestMetadata,
+        metadata: pycyphal.presentation.ServiceRequestMetadata,
     ) -> sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response:
         logging.info("Least squares request %s from node %d", request, metadata.client_node_id)
         sum_x = sum(map(lambda p: p.x, request.points))  # type: ignore
@@ -115,7 +115,7 @@ class DemoApp:
     @staticmethod
     async def _serve_execute_command(
         request: uavcan.node.ExecuteCommand_1.Request,
-        metadata: pyuavcan.presentation.ServiceRequestMetadata,
+        metadata: pycyphal.presentation.ServiceRequestMetadata,
     ) -> uavcan.node.ExecuteCommand_1.Response:
         logging.info("Execute command request %s from node %d", request, metadata.client_node_id)
         if request.command == uavcan.node.ExecuteCommand_1.Request.COMMAND_FACTORY_RESET:
@@ -134,7 +134,7 @@ class DemoApp:
         temperature_setpoint = 0.0
         temperature_error = 0.0
 
-        async def on_setpoint(msg: uavcan.si.unit.temperature.Scalar_1, _: pyuavcan.transport.TransferFrom) -> None:
+        async def on_setpoint(msg: uavcan.si.unit.temperature.Scalar_1, _: pycyphal.transport.TransferFrom) -> None:
             nonlocal temperature_setpoint
             temperature_setpoint = msg.kelvin
 

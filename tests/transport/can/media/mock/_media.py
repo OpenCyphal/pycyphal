@@ -1,14 +1,14 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
 import typing
 import asyncio
 import pytest
-import pyuavcan.transport
-from pyuavcan.transport import Timestamp
-from pyuavcan.transport.can.media import Media, Envelope, FilterConfiguration, DataFrame, FrameFormat
+import pycyphal.transport
+from pycyphal.transport import Timestamp
+from pycyphal.transport.can.media import Media, Envelope, FilterConfiguration, DataFrame, FrameFormat
 
 pytestmark = pytest.mark.asyncio
 
@@ -50,7 +50,7 @@ class MockMedia(Media):
 
     def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         if self._closed:
-            raise pyuavcan.transport.ResourceClosedError
+            raise pycyphal.transport.ResourceClosedError
 
         assert callable(handler)
         self._rx_handler = handler
@@ -59,7 +59,7 @@ class MockMedia(Media):
 
     def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         if self._closed:
-            raise pyuavcan.transport.ResourceClosedError
+            raise pycyphal.transport.ResourceClosedError
 
         configuration = list(configuration)  # Do not mutate the argument
         while len(configuration) < len(self._acceptance_filters):
@@ -79,7 +79,7 @@ class MockMedia(Media):
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         del monotonic_deadline  # Unused
         if self._closed:
-            raise pyuavcan.transport.ResourceClosedError
+            raise pycyphal.transport.ResourceClosedError
 
         if self._raise_on_send_once:
             self._raise_on_send_once, ex = None, self._raise_on_send_once
@@ -225,9 +225,9 @@ async def _unittest_can_mock_media() -> None:
     me.close()
     me.close()  # Idempotency.
     assert peers == {pe}
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
+    with pytest.raises(pycyphal.transport.ResourceClosedError):
         await me.send([], asyncio.get_event_loop().time() + 1.0)
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
+    with pytest.raises(pycyphal.transport.ResourceClosedError):
         me.configure_acceptance_filters([])
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 

@@ -1,4 +1,4 @@
-PyUAVCAN demo application
+PyCyphal demo application
 =========================
 
 This directory contains the demo application.

@@ -4,15 +4,15 @@
 # Shared environment variables for all nodes/processes (can be overridden or selectively removed in local scopes).
 YAKUT_COMPILE_OUTPUT: .yakut_compiled
 YAKUT_PATH: .yakut_compiled
-# Here we use Yakut for compiling DSDL. Normally one should use Nunavut though: https://github.com/UAVCAN/nunavut
+# Here we use Yakut for compiling DSDL. Normally one should use Nunavut though: https://github.com/OpenCyphal/nunavut
 PYTHONPATH: .yakut_compiled
 
 # Shared registers for all nodes/processes (can be overridden or selectively removed in local scopes).
 # See the docs for pyuavcan.application.make_node() to see which registers can be used here.
 uavcan:
-  # Use UAVCAN/UDP:
+  # Use Cyphal/UDP:
   udp.iface: 127.9.0.0
-  # If you have Ncat or some other TCP broker, you can use UAVCAN/serial tunneled over TCP (in a heterogeneous
+  # If you have Ncat or some other TCP broker, you can use Cyphal/serial tunneled over TCP (in a heterogeneous
   # redundant configuration with UDP or standalone). Ncat launch example: ncat --broker --listen --source-port 50905
   serial.iface: "" # socket://127.0.0.1:50905
   # It is recommended to explicitly assign unused transports to ensure that previously stored transport

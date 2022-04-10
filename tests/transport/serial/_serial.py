@@ -1,25 +1,25 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import asyncio
 import logging
 import pytest
 import serial
-import pyuavcan.transport
+import pycyphal.transport
 
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
-from pyuavcan.transport.serial import SerialTransport, SerialTransportStatistics, SerialFrame
-from pyuavcan.transport.serial import SerialCapture
+from pycyphal.transport.serial import SerialTransport, SerialTransportStatistics, SerialFrame
+from pycyphal.transport.serial import SerialCapture
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_serial_transport(caplog: typing.Any) -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
-    from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
-    from pyuavcan.transport import ProtocolParameters
+    from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
+    from pycyphal.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
+    from pycyphal.transport import ProtocolParameters
 
     get_monotonic = asyncio.get_event_loop().time
 
@@ -31,7 +31,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     with pytest.raises(ValueError):
         _ = SerialTransport(serial_port="loop://", local_node_id=None, service_transfer_multiplier=10000)
 
-    with pytest.raises(pyuavcan.transport.InvalidMediaConfigurationError):
+    with pytest.raises(pycyphal.transport.InvalidMediaConfigurationError):
         _ = SerialTransport(serial_port=serial.serial_for_url("loop://", do_not_open=True), local_node_id=None)
 
     tr = SerialTransport(serial_port="loop://", local_node_id=None, mtu=1024)
@@ -43,7 +43,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert tr.output_sessions == []
 
     assert tr.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2 ** 64,
+        transfer_id_modulo=2**64,
         max_nodes=4096,
         mtu=1024,
     )
@@ -119,7 +119,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert tr.sample_statistics().out_transfers == 1
     assert tr.sample_statistics().out_incomplete == 0
 
-    with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+    with pytest.raises(pycyphal.transport.OperationNotDefinedForAnonymousNodeError):
         # Anonymous nodes can't send multiframe transfers.
         assert await broadcaster.send(
             Transfer(
@@ -136,7 +136,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     #
     # Service exchange test.
     #
-    with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+    with pytest.raises(pycyphal.transport.OperationNotDefinedForAnonymousNodeError):
         # Anonymous nodes can't emit service transfers.
         tr.get_output_session(
             OutputSessionSpecifier(ServiceDataSpecifier(333, ServiceDataSpecifier.Role.REQUEST), 3210), meta
@@ -270,7 +270,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     #
     # Out-of-band data test.
     #
-    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.serial.__name__):
+    with caplog.at_level(logging.CRITICAL, logger=pycyphal.transport.serial.__name__):
         stats_reference = tr.sample_statistics()
 
         # The frame delimiter is needed to force new frame into the state machine.
@@ -326,18 +326,18 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert not set(tr.input_sessions)
     assert not set(tr.output_sessions)
 
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
+    with pytest.raises(pycyphal.transport.ResourceClosedError):
         _ = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):
+    with pytest.raises(pycyphal.transport.ResourceClosedError):
         _ = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
 async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
-    from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
+    from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer
+    from pycyphal.transport import Priority, Timestamp, OutputSessionSpecifier
 
     get_monotonic = asyncio.get_event_loop().time
 
@@ -358,9 +358,9 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     )
 
     events: typing.List[SerialCapture] = []
-    events2: typing.List[pyuavcan.transport.Capture] = []
+    events2: typing.List[pycyphal.transport.Capture] = []
 
-    def append_events(cap: pyuavcan.transport.Capture) -> None:
+    def append_events(cap: pycyphal.transport.Capture) -> None:
         assert isinstance(cap, SerialCapture)
         events.append(cap)
 
@@ -453,7 +453,7 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
     # Out-of-band data.
     #
     grownups = b"Aren't there any grownups at all? - No grownups!\x00"
-    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.serial.__name__):
+    with caplog.at_level(logging.CRITICAL, logger=pycyphal.transport.serial.__name__):
         # The frame delimiter is needed to force new frame into the state machine.
         tr.serial_port.write(grownups)
         await asyncio.sleep(1)
@@ -468,12 +468,12 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
 
 
 async def _unittest_serial_spoofing() -> None:
-    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
-    from pyuavcan.transport import MessageDataSpecifier
+    from pycyphal.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
+    from pycyphal.transport import MessageDataSpecifier
 
-    tr = pyuavcan.transport.serial.SerialTransport("loop://", None, mtu=1024)
+    tr = pycyphal.transport.serial.SerialTransport("loop://", None, mtu=1024)
 
-    mon_events: typing.List[pyuavcan.transport.Capture] = []
+    mon_events: typing.List[pycyphal.transport.Capture] = []
     assert not tr.capture_active
     tr.begin_capture(mon_events.append)
     assert tr.capture_active
@@ -491,11 +491,11 @@ async def _unittest_serial_spoofing() -> None:
     assert isinstance(cap_tx, SerialCapture)
     assert not cap_rx.own and cap_tx.own
     assert cap_tx.fragment.tobytes() == cap_rx.fragment.tobytes()
-    assert 0xBADC0FFEE0DDF00D .to_bytes(8, "little") in cap_rx.fragment.tobytes()
-    assert 1234 .to_bytes(2, "little") in cap_rx.fragment.tobytes()
-    assert 7777 .to_bytes(2, "little") in cap_rx.fragment.tobytes()
+    assert 0xBADC0FFEE0DDF00D.to_bytes(8, "little") in cap_rx.fragment.tobytes()
+    assert (1234).to_bytes(2, "little") in cap_rx.fragment.tobytes()
+    assert (7777).to_bytes(2, "little") in cap_rx.fragment.tobytes()
 
-    with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError, match=r".*multi-frame.*"):
+    with pytest.raises(pycyphal.transport.OperationNotDefinedForAnonymousNodeError, match=r".*multi-frame.*"):
         transfer = AlienTransfer(
             AlienTransferMetadata(
                 Priority.IMMEDIATE, 0xBADC0FFEE0DDF00D, AlienSessionSpecifier(None, None, MessageDataSpecifier(7777))

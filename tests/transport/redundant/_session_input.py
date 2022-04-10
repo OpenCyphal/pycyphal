@@ -1,16 +1,16 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import time
 import asyncio
 import pytest
-import pyuavcan
-from pyuavcan.transport import Transfer, Timestamp, Priority, ResourceClosedError
-from pyuavcan.transport.loopback import LoopbackTransport
-from pyuavcan.transport.redundant._session._base import RedundantSessionStatistics
-from pyuavcan.transport.redundant._session._input import RedundantInputSession
-from pyuavcan.transport.redundant._session._input import RedundantTransferFrom
+import pycyphal
+from pycyphal.transport import Transfer, Timestamp, Priority, ResourceClosedError
+from pycyphal.transport.loopback import LoopbackTransport
+from pycyphal.transport.redundant._session._base import RedundantSessionStatistics
+from pycyphal.transport.redundant._session._input import RedundantInputSession
+from pycyphal.transport.redundant._session._input import RedundantTransferFrom
 
 pytestmark = pytest.mark.asyncio
 
@@ -18,9 +18,9 @@ pytestmark = pytest.mark.asyncio
 async def _unittest_redundant_input_cyclic() -> None:
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
-    spec = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
-    spec_tx = pyuavcan.transport.OutputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(30)
+    spec = pycyphal.transport.InputSessionSpecifier(pycyphal.transport.MessageDataSpecifier(4321), None)
+    spec_tx = pycyphal.transport.OutputSessionSpecifier(spec.data_specifier, None)
+    meta = pycyphal.transport.PayloadMetadata(30)
 
     ts = Timestamp.now()
 
@@ -67,7 +67,7 @@ async def _unittest_redundant_input_cyclic() -> None:
         )
     )
 
-    async def add_inferior(inferior: pyuavcan.transport.InputSession) -> None:
+    async def add_inferior(inferior: pycyphal.transport.InputSession) -> None:
         await asyncio.sleep(1.0)
         ses._add_inferior(inferior)  # pylint: disable=protected-access
 
@@ -220,9 +220,9 @@ async def _unittest_redundant_input_cyclic() -> None:
 async def _unittest_redundant_input_monotonic() -> None:
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
-    spec = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
-    spec_tx = pyuavcan.transport.OutputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(30)
+    spec = pycyphal.transport.InputSessionSpecifier(pycyphal.transport.MessageDataSpecifier(4321), None)
+    spec_tx = pycyphal.transport.OutputSessionSpecifier(spec.data_specifier, None)
+    meta = pycyphal.transport.PayloadMetadata(30)
 
     ts = Timestamp.now()
 
@@ -238,7 +238,7 @@ async def _unittest_redundant_input_monotonic() -> None:
     ses = RedundantInputSession(
         spec,
         meta,
-        tid_modulo_provider=lambda: 2 ** 56,  # Like UDP or serial - infinite modulo.
+        tid_modulo_provider=lambda: 2**56,  # Like UDP or serial - infinite modulo.
         finalizer=lambda: None,
     )
     assert ses.specifier is spec

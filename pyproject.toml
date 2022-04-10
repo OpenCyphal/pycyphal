@@ -2,7 +2,7 @@
 line-length = 120
 target-version = ['py310']
 include = '''
-((pyuavcan|tests)/.*\.pyi?$)
+((pycyphal|tests)/.*\.pyi?$)
 |
 (demo/[a-z0-9_]+\.py$)
 '''

@@ -1,21 +1,21 @@
-# Copyright (c) 2020 UAVCAN Consortium
+# Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 from typing import Dict
 import asyncio
 import pytest
-import pyuavcan
-from pyuavcan.transport.udp import UDPTransport
-from pyuavcan.transport.redundant import RedundantTransport
-from pyuavcan.presentation import Presentation
+import pycyphal
+from pycyphal.transport.udp import UDPTransport
+from pycyphal.transport.redundant import RedundantTransport
+from pycyphal.presentation import Presentation
 
 pytestmark = pytest.mark.asyncio
 
 
-async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    from pyuavcan.application import make_node, make_registry
+async def _unittest_slow_node(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
+    from pycyphal.application import make_node, make_registry
     import uavcan.primitive
     from uavcan.node import Version_1_0, Heartbeat_1_0, GetInfo_1_0, Mode_1_0, Health_1_0
 
@@ -29,9 +29,9 @@ async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
     trans = RedundantTransport()
     try:
         info = GetInfo_1_0.Response(
-            protocol_version=Version_1_0(*pyuavcan.UAVCAN_SPECIFICATION_VERSION),
-            software_version=Version_1_0(*pyuavcan.__version_info__[:2]),
-            name="org.uavcan.pyuavcan.test.node",
+            protocol_version=Version_1_0(*pycyphal.CYPHAL_SPECIFICATION_VERSION),
+            software_version=Version_1_0(*pycyphal.__version_info__[:2]),
+            name="org.opencyphal.pycyphal.test.node",
         )
         node = make_node(info, make_registry(None, typing.cast(Dict[str, bytes], {})), transport=trans)
         print("node:", node)
@@ -50,7 +50,7 @@ async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
         # Same but for fixed port-ID types.
         assert "uavcan.pub.atypical_heartbeat.id" not in node.registry  # Nothing yet.
         port = node.make_publisher(uavcan.node.Heartbeat_1_0, "atypical_heartbeat")
-        assert port.port_id == pyuavcan.dsdl.get_model(uavcan.node.Heartbeat_1_0).fixed_port_id
+        assert port.port_id == pycyphal.dsdl.get_model(uavcan.node.Heartbeat_1_0).fixed_port_id
         port.close()
         assert 0xFFFF == int(node.registry["uavcan.pub.atypical_heartbeat.id"])  # Created automatically!
         node.registry["uavcan.pub.atypical_heartbeat.id"] = 111  # Override the default.
@@ -58,7 +58,7 @@ async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
         assert port.port_id == 111
         port.close()
 
-        node.heartbeat_publisher.priority = pyuavcan.transport.Priority.FAST
+        node.heartbeat_publisher.priority = pycyphal.transport.Priority.FAST
         node.heartbeat_publisher.period = 0.5
         node.heartbeat_publisher.mode = Mode_1_0.MAINTENANCE  # type: ignore
         node.heartbeat_publisher.health = Health_1_0.ADVISORY  # type: ignore
@@ -68,7 +68,7 @@ async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
         with pytest.raises(ValueError):
             node.heartbeat_publisher.vendor_specific_status_code = -299
 
-        assert node.heartbeat_publisher.priority == pyuavcan.transport.Priority.FAST
+        assert node.heartbeat_publisher.priority == pycyphal.transport.Priority.FAST
         assert node.heartbeat_publisher.period == pytest.approx(0.5)
         assert node.heartbeat_publisher.mode == Mode_1_0.MAINTENANCE
         assert node.heartbeat_publisher.health == Health_1_0.ADVISORY
@@ -85,7 +85,7 @@ async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
             assert hb_transfer is not None
             hb, transfer = hb_transfer
             assert transfer.source_node_id == 258
-            assert transfer.priority == pyuavcan.transport.Priority.FAST
+            assert transfer.priority == pycyphal.transport.Priority.FAST
             assert 1 <= hb.uptime <= 9
             assert hb.mode.value == Mode_1_0.MAINTENANCE
             assert hb.health.value == Health_1_0.ADVISORY
@@ -96,9 +96,9 @@ async def _unittest_slow_node(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
         resp, transfer = info_transfer
         assert transfer.source_node_id == 258
         assert isinstance(resp, GetInfo_1_0.Response)
-        assert resp.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node"
-        assert resp.protocol_version.major == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
-        assert resp.software_version.major == pyuavcan.__version_info__[0]
+        assert resp.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node"
+        assert resp.protocol_version.major == pycyphal.CYPHAL_SPECIFICATION_VERSION[0]
+        assert resp.software_version.major == pycyphal.__version_info__[0]
 
         trans.detach_inferior(trans.inferiors[0])
         assert trans.local_node_id is None

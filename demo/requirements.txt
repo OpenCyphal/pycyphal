@@ -1,1 +1,1 @@
-pyuavcan[transport-can-pythoncan,transport-serial,transport-udp]
+pycyphal[transport-can-pythoncan,transport-serial,transport-udp]

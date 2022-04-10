@@ -1,6 +1,6 @@
-# Copyright (c) 2020 UAVCAN Consortium
+# Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import os
 import sys
@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 import dataclasses
 import pytest
-import pyuavcan
+import pycyphal
 from ._subprocess import BackgroundChildProcess
 
 
@@ -94,7 +94,7 @@ def _get_run_configs() -> Iterable[RunConfig]:
 @pytest.mark.parametrize("parameters", [(idx == 0, rc) for idx, rc in enumerate(_get_run_configs())])
 @pytest.mark.asyncio
 async def _unittest_slow_demo_app(
-    compiled: Iterator[List[pyuavcan.dsdl.GeneratedPackageInfo]],
+    compiled: Iterator[List[pycyphal.dsdl.GeneratedPackageInfo]],
     parameters: Tuple[bool, RunConfig],
 ) -> None:
     import uavcan.node
@@ -103,7 +103,7 @@ async def _unittest_slow_demo_app(
     import uavcan.si.unit.temperature
     import uavcan.si.unit.voltage
     import sirius_cyber_corp
-    import pyuavcan.application  # pylint: disable=redefined-outer-name
+    import pycyphal.application  # pylint: disable=redefined-outer-name
 
     asyncio.get_running_loop().slow_callback_duration = 3.0
     _ = compiled
@@ -129,7 +129,7 @@ async def _unittest_slow_demo_app(
             "UAVCAN__SRV__LEAST_SQUARES__ID": "123",
             "THERMOSTAT__PID__GAINS": "0.1 0.0 0.0",  # Gain 0.1
             # Various low-level items:
-            "PYUAVCAN_LOGLEVEL": "INFO",
+            "PYCYPHAL_LOGLEVEL": "INFO",
             "PATH": os.environ.get("PATH", ""),
             "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),  # https://github.com/appveyor/ci/issues/1995
         }
@@ -147,13 +147,13 @@ async def _unittest_slow_demo_app(
 
     try:
         local_node_info = uavcan.node.GetInfo_1_0.Response(
-            software_version=uavcan.node.Version_1_0(*pyuavcan.__version_info__[:2]),
-            name="org.uavcan.pyuavcan.test.demo_app",
+            software_version=uavcan.node.Version_1_0(*pycyphal.__version_info__[:2]),
+            name="org.opencyphal.pycyphal.test.demo_app",
         )
         env = mirror(env)
         env["UAVCAN__NODE__ID"] = "123"
-        registry = pyuavcan.application.make_registry(None, env)
-        node = pyuavcan.application.make_node(local_node_info, registry)
+        registry = pycyphal.application.make_registry(None, env)
+        node = pycyphal.application.make_node(local_node_info, registry)
         node.start()
         del node.registry["thermostat*"]
     except Exception:
@@ -185,7 +185,7 @@ async def _unittest_slow_demo_app(
         # Once the heartbeat is in, we know that the demo is ready for being tested.
 
         # Validate GetInfo.
-        cln_get_info.priority = pyuavcan.transport.Priority.EXCEPTIONAL
+        cln_get_info.priority = pycyphal.transport.Priority.EXCEPTIONAL
         cln_get_info.transfer_id_counter.override(22)
         info_transfer = await cln_get_info.call(uavcan.node.GetInfo_1_0.Request())
         print("GET INFO RESPONSE:", info_transfer)
@@ -193,11 +193,11 @@ async def _unittest_slow_demo_app(
         info, transfer = info_transfer
         assert transfer.source_node_id == DEMO_APP_NODE_ID
         assert transfer.transfer_id == 22
-        assert transfer.priority == pyuavcan.transport.Priority.EXCEPTIONAL
+        assert transfer.priority == pycyphal.transport.Priority.EXCEPTIONAL
         assert isinstance(info, uavcan.node.GetInfo_1_0.Response)
-        assert info.name.tobytes().decode() == "org.uavcan.pyuavcan.demo.demo_app"
-        assert info.protocol_version.major == pyuavcan.UAVCAN_SPECIFICATION_VERSION[0]
-        assert info.protocol_version.minor == pyuavcan.UAVCAN_SPECIFICATION_VERSION[1]
+        assert info.name.tobytes().decode() == "org.opencyphal.pycyphal.demo.demo_app"
+        assert info.protocol_version.major == pycyphal.CYPHAL_SPECIFICATION_VERSION[0]
+        assert info.protocol_version.minor == pycyphal.CYPHAL_SPECIFICATION_VERSION[1]
         assert info.software_version.major == 1
         assert info.software_version.minor == 0
         del info_transfer
@@ -216,7 +216,7 @@ async def _unittest_slow_demo_app(
         solution, transfer = solution_transfer
         assert transfer.source_node_id == DEMO_APP_NODE_ID
         assert transfer.transfer_id == 0
-        assert transfer.priority == pyuavcan.transport.Priority.NOMINAL
+        assert transfer.priority == pycyphal.transport.Priority.NOMINAL
         assert isinstance(solution, sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response)
         assert solution.slope == pytest.approx(2.0)
         assert solution.y_intercept == pytest.approx(0.0)
@@ -276,7 +276,7 @@ async def _unittest_slow_demo_app(
         result, transfer = result_transfer
         assert transfer.source_node_id == DEMO_APP_NODE_ID
         assert transfer.transfer_id == 0
-        assert transfer.priority == pyuavcan.transport.Priority.NOMINAL
+        assert transfer.priority == pycyphal.transport.Priority.NOMINAL
         assert isinstance(result, uavcan.node.ExecuteCommand_1_1.Response)
         assert result.status == result.STATUS_BAD_COMMAND
         # Factory reset -- remove the register file.
@@ -289,7 +289,7 @@ async def _unittest_slow_demo_app(
         result, transfer = result_transfer
         assert transfer.source_node_id == DEMO_APP_NODE_ID
         assert transfer.transfer_id == 1
-        assert transfer.priority == pyuavcan.transport.Priority.NOMINAL
+        assert transfer.priority == pycyphal.transport.Priority.NOMINAL
         assert isinstance(result, uavcan.node.ExecuteCommand_1_1.Response)
         assert result.status == result.STATUS_SUCCESS
         del result_transfer
@@ -303,7 +303,7 @@ async def _unittest_slow_demo_app(
                 break
             hb, transfer = hb_transfer
             assert num_heartbeats <= transfer.transfer_id <= 300
-            assert transfer.priority == pyuavcan.transport.Priority.NOMINAL
+            assert transfer.priority == pycyphal.transport.Priority.NOMINAL
             assert transfer.source_node_id == DEMO_APP_NODE_ID
             assert hb.health.value == hb.health.NOMINAL
             assert hb.mode.value == hb.mode.OPERATIONAL
@@ -324,14 +324,14 @@ async def _unittest_slow_demo_app(
 @pytest.mark.parametrize("run_config", _get_run_configs())
 @pytest.mark.asyncio
 async def _unittest_slow_demo_app_with_plant(
-    compiled: Iterator[List[pyuavcan.dsdl.GeneratedPackageInfo]],
+    compiled: Iterator[List[pycyphal.dsdl.GeneratedPackageInfo]],
     run_config: RunConfig,
 ) -> None:
     import uavcan.node
     import uavcan.si.sample.temperature
     import uavcan.si.unit.temperature
     import uavcan.si.unit.voltage
-    import pyuavcan.application  # pylint: disable=redefined-outer-name
+    import pycyphal.application  # pylint: disable=redefined-outer-name
 
     asyncio.get_running_loop().slow_callback_duration = 3.0
     _ = compiled
@@ -347,7 +347,7 @@ async def _unittest_slow_demo_app_with_plant(
             "UAVCAN__SRV__LEAST_SQUARES__ID": "123",
             "THERMOSTAT__PID__GAINS": "0.1 0.0 0.0",  # Gain 0.1
             # Various low-level items:
-            "PYUAVCAN_LOGLEVEL": "INFO",
+            "PYCYPHAL_LOGLEVEL": "INFO",
             "PATH": os.environ.get("PATH", ""),
             "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),  # https://github.com/appveyor/ci/issues/1995
             "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
@@ -384,8 +384,8 @@ async def _unittest_slow_demo_app_with_plant(
         env["UAVCAN__NODE__ID"] = "123"
         env["UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID"] = "2346"
         env["UAVCAN__PUB__TEMPERATURE_SETPOINT__ID"] = "2345"
-        registry = pyuavcan.application.make_registry(None, env)
-        node = pyuavcan.application.make_node(uavcan.node.GetInfo_1_0.Response(), registry)
+        registry = pycyphal.application.make_registry(None, env)
+        node = pycyphal.application.make_node(uavcan.node.GetInfo_1_0.Response(), registry)
         node.start()
         del node.registry["model*"]
     except Exception:
@@ -402,7 +402,7 @@ async def _unittest_slow_demo_app_with_plant(
         last_hb_plant = uavcan.node.Heartbeat_1_0()
         last_meas = uavcan.si.sample.temperature.Scalar_1_0()
 
-        async def on_heartbeat(msg: uavcan.node.Heartbeat_1_0, meta: pyuavcan.transport.TransferFrom) -> None:
+        async def on_heartbeat(msg: uavcan.node.Heartbeat_1_0, meta: pycyphal.transport.TransferFrom) -> None:
             nonlocal last_hb_demo
             nonlocal last_hb_plant
             print(msg)
@@ -411,7 +411,7 @@ async def _unittest_slow_demo_app_with_plant(
             elif meta.source_node_id == DEMO_APP_NODE_ID + 1:
                 last_hb_plant = msg
 
-        async def on_meas(msg: uavcan.si.sample.temperature.Scalar_1_0, meta: pyuavcan.transport.TransferFrom) -> None:
+        async def on_meas(msg: uavcan.si.sample.temperature.Scalar_1_0, meta: pycyphal.transport.TransferFrom) -> None:
             nonlocal last_meas
             print(msg)
             assert meta.source_node_id == DEMO_APP_NODE_ID + 1

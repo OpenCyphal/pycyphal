@@ -8,10 +8,10 @@ Navigation resources:
 * :ref:`modindex`
 * :ref:`search`
 
-pyuavcan root module
+pycyphal root module
 --------------------
 
-.. automodule:: pyuavcan
+.. automodule:: pycyphal
    :members:
    :undoc-members:
    :imported-members:
@@ -23,8 +23,8 @@ Submodules
 
 .. toctree::
 
-   /api/pyuavcan.dsdl
-   /api/pyuavcan.application
-   /api/pyuavcan.presentation
-   /api/pyuavcan.transport
-   /api/pyuavcan.util
+   /api/pycyphal.dsdl
+   /api/pycyphal.application
+   /api/pycyphal.presentation
+   /api/pycyphal.transport
+   /api/pycyphal.util

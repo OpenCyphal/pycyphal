@@ -19,9 +19,9 @@ import importlib
 import subprocess
 
 
-GITHUB_USER_REPO = "UAVCAN", "pyuavcan"
+GITHUB_USER_REPO = "OpenCyphal", "pycyphal"
 
-DESCRIPTION = "A full-featured implementation of the UAVCAN protocol stack in Python."
+DESCRIPTION = "A full-featured implementation of the Cyphal protocol stack in Python."
 
 GIT_HASH = subprocess.check_output("git rev-parse HEAD", shell=True).decode().strip()
 
@@ -36,37 +36,37 @@ PUBLIC_REGULATED_DATA_TYPES_ROOT = REPOSITORY_ROOT / "demo" / "public_regulated_
 sys.path.insert(0, str(REPOSITORY_ROOT))
 sys.path.insert(0, str(DSDL_GENERATED_ROOT))
 
-import pyuavcan  # pylint: disable=wrong-import-position
+import pycyphal  # pylint: disable=wrong-import-position
 
 try:
-    import pyuavcan.application
+    import pycyphal.application
 except (ImportError, AttributeError) as ex:
     print("Generating DSDL packages because:", ex)
     DSDL_GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
-    pyuavcan.dsdl.compile(PUBLIC_REGULATED_DATA_TYPES_ROOT / "uavcan", [], DSDL_GENERATED_ROOT)
+    pycyphal.dsdl.compile(PUBLIC_REGULATED_DATA_TYPES_ROOT / "uavcan", [], DSDL_GENERATED_ROOT)
     importlib.invalidate_caches()
-    import pyuavcan.application
+    import pycyphal.application
 
-assert "/site-packages/" not in pyuavcan.__file__, "Wrong import source"
+assert "/site-packages/" not in pycyphal.__file__, "Wrong import source"
 
-PACKAGE_ROOT = pathlib.Path(pyuavcan.__file__).absolute().parent
+PACKAGE_ROOT = pathlib.Path(pycyphal.__file__).absolute().parent
 
 EXTERNAL_LINKS = {
-    "UAVCAN homepage": "https://uavcan.org/",
-    "Support forum": "https://forum.uavcan.org/",
+    "Homepage": "https://opencyphal.org/",
+    "Support forum": "https://forum.opencyphal.org/",
 }
 
 # -- Project information -----------------------------------------------------
 
-project = "PyUAVCAN"
+project = "PyCyphal"
 # noinspection PyShadowingBuiltins
-copyright = f"2019\u2013{datetime.datetime.now().year}, {pyuavcan.__author__}"  # pylint: disable=redefined-builtin
-author = pyuavcan.__author__
+copyright = f"2019\u2013{datetime.datetime.now().year}, {pycyphal.__author__}"  # pylint: disable=redefined-builtin
+author = pycyphal.__author__
 
 # The short semantic version
-version = ".".join(map(str, pyuavcan.__version_info__))
+version = ".".join(map(str, pycyphal.__version_info__))
 # The full version, including alpha/beta/rc tags
-release = pyuavcan.__version__
+release = pycyphal.__version__
 
 # -- General configuration ---------------------------------------------------
 
@@ -233,4 +233,4 @@ subprocess.check_call(
     ]
 )
 # We don't need the top-level page, it's maintained manually.
-os.unlink(f"{APIDOC_GENERATED_ROOT}/{pyuavcan.__name__}.rst")
+os.unlink(f"{APIDOC_GENERATED_ROOT}/{pycyphal.__name__}.rst")
