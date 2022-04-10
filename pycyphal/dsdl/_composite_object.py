@@ -26,9 +26,13 @@ def serialize(obj: object) -> typing.Iterable[memoryview]:
     Each yielded fragment is of type :class:`memoryview` pointing to raw unsigned bytes.
     It is guaranteed that at least one fragment is always returned (which may be empty).
     """
+    try:
+        fun = obj._serialize_  # type: ignore
+    except AttributeError:
+        raise TypeError(f"Cannot serialize object of type {type(obj)}") from None
     # TODO: update the Serializer class to emit an iterable of fragments.
     ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)  # type: ignore
-    obj._serialize_(ser)  # type: ignore
+    fun(ser)
     yield ser.buffer.data
 
 
@@ -49,9 +53,13 @@ def deserialize(
     .. important:: The supplied fragments of the serialized representation should be writeable.
         If they are not, some of the array-typed fields of the constructed object may be read-only.
     """
+    try:
+        fun = dtype._deserialize_  # type: ignore
+    except AttributeError:
+        raise TypeError(f"Cannot deserialize using type {dtype}") from None
     deserializer = _serialized_representation.Deserializer.new(fragmented_serialized_representation)
     try:
-        return dtype._deserialize_(deserializer)  # type: ignore
+        return fun(deserializer)  # type: ignore
     except _serialized_representation.Deserializer.FormatError:
         _logger.info("Invalid serialized representation of %s: %s", get_model(dtype), deserializer, exc_info=True)
         return None

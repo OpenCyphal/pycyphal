@@ -243,7 +243,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
             statistics=stats,
         )
         srd._sock.close()  # pylint: disable=protected-access
-        await (asyncio.sleep(_READ_TIMEOUT * 2))  # Wait for the reader thread to notice the problem.
+        await (asyncio.sleep(_READ_TIMEOUT * 5))  # Wait for the reader thread to notice the problem.
         assert not srd._thread.is_alive()  # pylint: disable=protected-access
         srd._ctl_main.close()  # pylint: disable=protected-access
         srd._ctl_worker.close()  # pylint: disable=protected-access
