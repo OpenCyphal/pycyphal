@@ -3,6 +3,8 @@
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
+
+import typing
 from typing import Callable, Type, TypeVar, Optional, List, Any
 import abc
 import asyncio
@@ -16,8 +18,7 @@ from . import register
 
 NodeInfo = uavcan.node.GetInfo_1.Response
 
-MessageClass = TypeVar("MessageClass", bound=pycyphal.dsdl.CompositeObject)
-ServiceClass = TypeVar("ServiceClass", bound=pycyphal.dsdl.ServiceObject)
+T = TypeVar("T")
 
 
 class PortNotConfiguredError(register.MissingRegisterError):
@@ -121,7 +122,7 @@ class Node(abc.ABC):
         """Provides access to the heartbeat publisher instance of this node."""
         return self._heartbeat_publisher
 
-    def make_publisher(self, dtype: Type[MessageClass], port_name: str = "") -> Publisher[MessageClass]:
+    def make_publisher(self, dtype: Type[T], port_name: str = "") -> Publisher[T]:
         """
         Wrapper over :meth:`pycyphal.presentation.Presentation.make_publisher`
         that takes the subject-ID from the standard register ``uavcan.pub.PORT_NAME.id``.
@@ -137,7 +138,7 @@ class Node(abc.ABC):
             return self.presentation.make_publisher(dtype, self._resolve_named_port(dtype, "pub", port_name))
         return self.presentation.make_publisher_with_fixed_subject_id(dtype)  # type: ignore
 
-    def make_subscriber(self, dtype: Type[MessageClass], port_name: str = "") -> Subscriber[MessageClass]:
+    def make_subscriber(self, dtype: Type[T], port_name: str = "") -> Subscriber[T]:
         """
         Wrapper over :meth:`pycyphal.presentation.Presentation.make_subscriber`
         that takes the subject-ID from the standard register ``uavcan.sub.PORT_NAME.id``.
@@ -153,7 +154,7 @@ class Node(abc.ABC):
             return self.presentation.make_subscriber(dtype, self._resolve_named_port(dtype, "sub", port_name))
         return self.presentation.make_subscriber_with_fixed_subject_id(dtype)  # type: ignore
 
-    def make_client(self, dtype: Type[ServiceClass], server_node_id: int, port_name: str = "") -> Client[ServiceClass]:
+    def make_client(self, dtype: Type[T], server_node_id: int, port_name: str = "") -> Client[T]:
         """
         Wrapper over :meth:`pycyphal.presentation.Presentation.make_client`
         that takes the service-ID from the standard register ``uavcan.cln.PORT_NAME.id``.
@@ -173,7 +174,7 @@ class Node(abc.ABC):
             )
         return self.presentation.make_client_with_fixed_service_id(dtype, server_node_id=server_node_id)  # type: ignore
 
-    def get_server(self, dtype: Type[ServiceClass], port_name: str = "") -> Server[ServiceClass]:
+    def get_server(self, dtype: Type[T], port_name: str = "") -> Server[T]:
         """
         Wrapper over :meth:`pycyphal.presentation.Presentation.get_server`
         that takes the service-ID from the standard register ``uavcan.srv.PORT_NAME.id``.
@@ -189,7 +190,7 @@ class Node(abc.ABC):
             return self.presentation.get_server(dtype, self._resolve_named_port(dtype, "srv", port_name))
         return self.presentation.get_server_with_fixed_service_id(dtype)  # type: ignore
 
-    def _resolve_named_port(self, dtype: Type[pycyphal.dsdl.CompositeObject], kind: str, name: str) -> int:
+    def _resolve_named_port(self, dtype: typing.Any, kind: str, name: str) -> int:
         assert name, "Internal error"
         model = pycyphal.dsdl.get_model(dtype)
 

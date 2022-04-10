@@ -288,10 +288,7 @@ class FileClient:
         # noinspection PyArgumentList
         self._priority = pycyphal.transport.Priority(priority)
 
-        self._clients: typing.Dict[
-            typing.Type[pycyphal.dsdl.ServiceObject],
-            pycyphal.presentation.Client[pycyphal.dsdl.ServiceObject],
-        ] = {}
+        self._clients: typing.Dict[typing.Type[object], pycyphal.presentation.Client[object]] = {}
 
         # noinspection PyUnresolvedReferences
         self._data_transfer_capacity = int(pycyphal.dsdl.get_model(Unstructured)["value"].data_type.capacity)
@@ -481,9 +478,7 @@ class FileClient:
             return await once(b"")
         return 0
 
-    async def _call(
-        self, ty: typing.Type[pycyphal.dsdl.ServiceObject], request: pycyphal.dsdl.CompositeObject
-    ) -> pycyphal.dsdl.CompositeObject:
+    async def _call(self, ty: typing.Type[object], request: object) -> object:
         try:
             cln = self._clients[ty]
         except LookupError:

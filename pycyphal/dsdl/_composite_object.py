@@ -1,13 +1,10 @@
 # Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
+# pylint: disable=protected-access
 
 from __future__ import annotations
-import abc
-import gzip
 import typing
-import pickle
-import base64
 import logging
 import importlib
 
@@ -19,105 +16,7 @@ from . import _serialized_representation
 _logger = logging.getLogger(__name__)
 
 
-class CompositeObject(abc.ABC):  # Members are surrounded with underscores to avoid collisions with DSDL attributes.
-    """
-    This is the base class for all Python classes generated from DSDL definitions.
-    It does not have any public members.
-    """
-
-    _MODEL_: pydsdl.CompositeType
-    """Type definition as provided by PyDSDL."""
-
-    _EXTENT_BYTES_: int
-    """Defined in generated classes."""
-
-    @abc.abstractmethod
-    def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
-        """
-        Auto-generated serialization method.
-        Appends the serialized representation of its object to the supplied Serializer instance.
-        This is not a part of the API.
-        """
-        raise NotImplementedError
-
-    @staticmethod
-    @abc.abstractmethod
-    def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
-        """
-        Auto-generated deserialization method. Consumes (some) data from the supplied Deserializer instance.
-        Raises a Deserializer.FormatError if the supplied serialized representation is invalid.
-        Always returns a valid object unless an exception is raised.
-        This is not a part of the API.
-        """
-        raise NotImplementedError
-
-    @staticmethod
-    def _restore_constant_(encoded_string: str) -> object:
-        """Recovers a pickled gzipped constant object from base85 string representation."""
-        out = pickle.loads(gzip.decompress(base64.b85decode(encoded_string)))
-        assert isinstance(out, object)
-        return out
-
-    # These typing hints are provided here for use in the generated classes. They are obviously not part of the API.
-    _SerializerTypeVar_ = typing.TypeVar("_SerializerTypeVar_", bound=_serialized_representation.Serializer)
-    _DeserializerTypeVar_ = typing.TypeVar("_DeserializerTypeVar_", bound=_serialized_representation.Deserializer)
-
-
-class ServiceObject(CompositeObject):
-    """
-    This is the base class for all Python classes generated from DSDL service type definitions.
-    Observe that it inherits from the composite object class, just like the nested types Request and Response.
-    """
-
-    Request: typing.Type[CompositeObject]
-    """
-    Nested request type. Inherits from :class:`CompositeObject`.
-    The base class provides a stub which is overridden in generated classes.
-    """
-
-    Response: typing.Type[CompositeObject]
-    """
-    Nested response type. Inherits from :class:`CompositeObject`.
-    The base class provides a stub which is overridden in generated classes.
-    """
-
-    _EXTENT_BYTES_ = 0
-
-    def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
-        raise TypeError(f"Service type {type(self).__name__} cannot be serialized")
-
-    @staticmethod
-    def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
-        raise TypeError("Service types cannot be deserialized")
-
-
-class FixedPortObject(abc.ABC):
-    """
-    This is the base class for all Python classes generated from DSDL types that have a fixed port identifier.
-    """
-
-    _FIXED_PORT_ID_: int
-
-
-class FixedPortCompositeObject(CompositeObject, FixedPortObject):
-    @abc.abstractmethod
-    def _serialize_(self, _ser_: _serialized_representation.Serializer) -> None:
-        raise NotImplementedError
-
-    @staticmethod
-    @abc.abstractmethod
-    def _deserialize_(_des_: _serialized_representation.Deserializer) -> CompositeObject:
-        raise NotImplementedError
-
-
-class FixedPortServiceObject(ServiceObject, FixedPortObject):
-    pass
-
-
-CompositeObjectTypeVar = typing.TypeVar("CompositeObjectTypeVar", bound=CompositeObject)
-
-
-def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
+def serialize(obj: object) -> typing.Iterable[memoryview]:
     """
     Constructs a serialized representation of the provided top-level object.
     The resulting serialized representation is padded to one byte in accordance with the Cyphal specification.
@@ -128,14 +27,14 @@ def serialize(obj: CompositeObject) -> typing.Iterable[memoryview]:
     It is guaranteed that at least one fragment is always returned (which may be empty).
     """
     # TODO: update the Serializer class to emit an iterable of fragments.
-    ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)  # pylint: disable=protected-access
-    obj._serialize_(ser)  # pylint: disable=protected-access
+    ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)  # type: ignore
+    obj._serialize_(ser)  # type: ignore
     yield ser.buffer.data
 
 
 def deserialize(
-    dtype: typing.Type[CompositeObjectTypeVar], fragmented_serialized_representation: typing.Sequence[memoryview]
-) -> typing.Optional[CompositeObjectTypeVar]:
+    dtype: typing.Type[object] | type, fragmented_serialized_representation: typing.Sequence[memoryview]
+) -> typing.Optional[object]:
     """
     Constructs an instance of the supplied DSDL-generated data type from its serialized representation.
     Returns None if the provided serialized representation is invalid.
@@ -152,23 +51,23 @@ def deserialize(
     """
     deserializer = _serialized_representation.Deserializer.new(fragmented_serialized_representation)
     try:
-        return dtype._deserialize_(deserializer)  # type: ignore    # pylint: disable=protected-access
+        return dtype._deserialize_(deserializer)  # type: ignore
     except _serialized_representation.Deserializer.FormatError:
         _logger.info("Invalid serialized representation of %s: %s", get_model(dtype), deserializer, exc_info=True)
         return None
 
 
-def get_model(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> pydsdl.CompositeType:
+def get_model(class_or_instance: typing.Any) -> pydsdl.CompositeType:
     """
     Obtains a PyDSDL model of the supplied DSDL-generated class or its instance.
     This is the inverse of :func:`get_class`.
     """
-    out = class_or_instance._MODEL_  # pylint: disable=protected-access
+    out = class_or_instance._MODEL_  # type: ignore
     assert isinstance(out, pydsdl.CompositeType)
     return out
 
 
-def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
+def get_class(model: pydsdl.CompositeType) -> type:
     """
     Returns a generated native class implementing the specified DSDL type represented by its PyDSDL model object.
     Promotes the model to delimited type automatically if necessary.
@@ -199,7 +98,6 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
         parent_name, child_name = model.name_components[-2:]
         mod = do_import(model.name_components[:-2])
         out = getattr(mod, f"{parent_name}_{model.version.major}_{model.version.minor}")
-        assert issubclass(out, ServiceObject)
         out = getattr(out, child_name)
     else:
         mod = do_import(model.name_components[:-1])
@@ -215,33 +113,27 @@ def get_class(model: pydsdl.CompositeType) -> typing.Type[CompositeObject]:
 
     assert str(get_model(out)) == str(model)
     assert isinstance(out, type)
-    assert issubclass(out, CompositeObject)
     return out
 
 
-def get_extent_bytes(class_or_instance: typing.Union[typing.Type[CompositeObject], CompositeObject]) -> int:
-    return int(class_or_instance._EXTENT_BYTES_)  # pylint: disable=protected-access
+def get_extent_bytes(class_or_instance: typing.Union[typing.Type[object], type, object]) -> int:
+    return int(class_or_instance._EXTENT_BYTES_)  # type: ignore
 
 
-def get_fixed_port_id(
-    class_or_instance: typing.Union[typing.Type[FixedPortObject], FixedPortObject]
-) -> typing.Optional[int]:
+def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[object], type, object]) -> typing.Optional[int]:
     """
     Returns None if the supplied type has no fixed port-ID.
     """
     try:
-        out = int(class_or_instance._FIXED_PORT_ID_)  # pylint: disable=protected-access
+        out = int(class_or_instance._FIXED_PORT_ID_)  # type: ignore
     except (TypeError, AttributeError):
         return None
     else:
-        if (isinstance(class_or_instance, type) and issubclass(class_or_instance, CompositeObject)) or isinstance(
-            class_or_instance, CompositeObject
-        ):  # pragma: no branch
-            assert out == get_model(class_or_instance).fixed_port_id
+        assert 0 <= out < 2**16
         return out
 
 
-def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject]], name: str) -> typing.Any:
+def get_attribute(obj: typing.Union[object, typing.Type[object], type], name: str) -> typing.Any:
     """
     DSDL type attributes whose names can't be represented in Python (such as ``def`` or ``type``)
     are suffixed with an underscore.
@@ -256,7 +148,7 @@ def get_attribute(obj: typing.Union[CompositeObject, typing.Type[CompositeObject
         return getattr(obj, name + "_")
 
 
-def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
+def set_attribute(obj: object, name: str, value: typing.Any) -> None:
     """
     DSDL type attributes whose names can't be represented in Python (such as ``def`` or ``type``)
     are suffixed with an underscore.
@@ -274,3 +166,24 @@ def set_attribute(obj: CompositeObject, name: str, value: typing.Any) -> None:
         setattr(obj, suffixed, value)
     else:
         raise AttributeError(name)
+
+
+def is_serializable(dtype: typing.Type[object] | type) -> bool:
+    return (
+        hasattr(dtype, "_MODEL_")
+        and hasattr(dtype, "_EXTENT_BYTES_")
+        and hasattr(dtype, "_serialize_")
+        and hasattr(dtype, "_deserialize_")
+    )
+
+
+def is_message_type(dtype: typing.Type[object] | type) -> bool:
+    return is_serializable(dtype) and not hasattr(dtype, "Request") and not hasattr(dtype, "Response")
+
+
+def is_service_type(dtype: typing.Type[object] | type) -> bool:
+    return (
+        hasattr(dtype, "_MODEL_")
+        and is_serializable(getattr(dtype, "Request", None))
+        and is_serializable(getattr(dtype, "Response", None))
+    )

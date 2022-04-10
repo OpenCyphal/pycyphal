@@ -8,7 +8,7 @@
 {%- block contents -%}
 
 # noinspection PyPep8Naming, SpellCheckingInspection, DuplicatedCode
-class {{ T|short_reference_name }}(_dsdl_.{%- if T.has_fixed_port_id -%}FixedPort{%- endif -%}ServiceObject):
+class {{ T|short_reference_name }}:
     {{ data_schema('Request',  T.request_type, T|short_reference_name)|indent }}
 
     {{ data_schema('Response', T.response_type, T|short_reference_name)|indent }}
@@ -19,7 +19,7 @@ class {{ T|short_reference_name }}(_dsdl_.{%- if T.has_fixed_port_id -%}FixedPor
     {% if T.has_fixed_port_id %}
     _FIXED_PORT_ID_ = {{ T.fixed_port_id|int }}
     {%- endif %}
-    _MODEL_: _pydsdl_.ServiceType = _dsdl_.CompositeObject._restore_constant_(
+    _MODEL_: _pydsdl_.ServiceType = _restore_constant(
         {{ T | pickle | indent(8) }}
     )
     assert isinstance(_MODEL_, _pydsdl_.ServiceType)

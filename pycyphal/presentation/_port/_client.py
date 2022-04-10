@@ -9,7 +9,7 @@ import logging
 import dataclasses
 import pycyphal.dsdl
 import pycyphal.transport
-from ._base import ServiceClass, ServicePort, PortFinalizer, OutgoingTransferIDCounter, Closable
+from ._base import T, ServicePort, PortFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError, RequestTransferIDVariabilityExhaustedError
 
@@ -35,7 +35,7 @@ class ClientStatistics:
     unexpected_responses: int  #: Response transfers that could not be matched with a request state.
 
 
-class Client(ServicePort[ServiceClass]):
+class Client(ServicePort[T]):
     """
     A task should request its own client instance from the presentation layer controller.
     Do not share the same client instance across different tasks. This class implements the RAII pattern.
@@ -47,21 +47,14 @@ class Client(ServicePort[ServiceClass]):
     None of the settings of a client instance, such as timeout or priority, can affect other client instances;
     this does not apply to the transfer-ID counter objects though because they are transport-layer entities
     and therefore are shared per session specifier.
-
-    .. note::
-        Normally we should use correct generic types ``ServiceClass.Request`` and ``ServiceClass.Response`` in the API;
-        however, MyPy does not support that yet. Please find the context at
-        https://github.com/python/mypy/issues/7121 and https://github.com/OpenCyphal/pycyphal/issues/61.
-        We use a tentative workaround for now to silence bogus type errors. When the missing logic is implemented
-        in MyPy, this should be switched back to proper implementation.
     """
 
-    def __init__(self, impl: ClientImpl[ServiceClass]):
+    def __init__(self, impl: ClientImpl[T]):
         """
         Do not call this directly! Use :meth:`Presentation.make_client`.
         """
         assert not impl.is_closed, "Internal logic error"
-        self._maybe_impl: typing.Optional[ClientImpl[ServiceClass]] = impl
+        self._maybe_impl: typing.Optional[ClientImpl[T]] = impl
         impl.register_proxy()  # Register ASAP to ensure correct finalization.
 
         self._dtype = impl.dtype  # Permit usage after close()
@@ -71,9 +64,7 @@ class Client(ServicePort[ServiceClass]):
         self._response_timeout = DEFAULT_SERVICE_REQUEST_TIMEOUT
         self._priority = DEFAULT_PRIORITY
 
-    async def call(
-        self, request: pycyphal.dsdl.CompositeObject
-    ) -> typing.Optional[typing.Tuple[pycyphal.dsdl.CompositeObject, pycyphal.transport.TransferFrom]]:
+    async def call(self, request: object) -> typing.Optional[typing.Tuple[object, pycyphal.transport.TransferFrom]]:
         """
         Sends the request to the remote server using the pre-configured priority and response timeout parameters.
         Returns the response along with its transfer info in the case of successful completion.
@@ -125,7 +116,7 @@ class Client(ServicePort[ServiceClass]):
         self._priority = pycyphal.transport.Priority(value)
 
     @property
-    def dtype(self) -> typing.Type[ServiceClass]:
+    def dtype(self) -> typing.Type[T]:
         return self._dtype
 
     @property
@@ -182,7 +173,7 @@ class Client(ServicePort[ServiceClass]):
             self._maybe_impl = None
 
 
-class ClientImpl(Closable, typing.Generic[ServiceClass]):
+class ClientImpl(Closable, typing.Generic[T]):
     """
     The client implementation. There is at most one such implementation per session specifier. It may be shared
     across multiple users with the help of the proxy class. When the last proxy is closed or garbage collected,
@@ -191,13 +182,14 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
     def __init__(
         self,
-        dtype: typing.Type[ServiceClass],
+        dtype: typing.Type[T],
         input_transport_session: pycyphal.transport.InputSession,
         output_transport_session: pycyphal.transport.OutputSession,
         transfer_id_counter: OutgoingTransferIDCounter,
         transfer_id_modulo_factory: typing.Callable[[], int],
         finalizer: PortFinalizer,
     ):
+        assert pycyphal.dsdl.is_service_type(dtype)
         self.dtype = dtype
         self.input_transport_session = input_transport_session
         self.output_transport_session = output_transport_session
@@ -217,7 +209,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         self._lock = asyncio.Lock()
         self._proxy_count = 0
         self._response_futures_by_transfer_id: typing.Dict[
-            int, asyncio.Future[typing.Tuple[pycyphal.dsdl.CompositeObject, pycyphal.transport.TransferFrom]]
+            int, asyncio.Future[typing.Tuple[object, pycyphal.transport.TransferFrom]]
         ] = {}
 
         self._task = asyncio.get_event_loop().create_task(self._task_function())
@@ -227,8 +219,8 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
         return self._maybe_finalizer is None
 
     async def call(
-        self, request: pycyphal.dsdl.CompositeObject, priority: pycyphal.transport.Priority, response_timeout: float
-    ) -> typing.Optional[typing.Tuple[pycyphal.dsdl.CompositeObject, pycyphal.transport.TransferFrom]]:
+        self, request: object, priority: pycyphal.transport.Priority, response_timeout: float
+    ) -> typing.Optional[typing.Tuple[object, pycyphal.transport.TransferFrom]]:
         loop = asyncio.get_running_loop()
         async with self._lock:
             if self.is_closed:
@@ -300,7 +292,7 @@ class ClientImpl(Closable, typing.Generic[ServiceClass]):
 
     async def _do_send(
         self,
-        request: pycyphal.dsdl.CompositeObject,
+        request: object,
         transfer_id: int,
         priority: pycyphal.transport.Priority,
         monotonic_deadline: float,

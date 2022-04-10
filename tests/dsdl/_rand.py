@@ -94,7 +94,7 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
     samples: typing.List[typing.Tuple[float, float]] = [_serialize_deserialize(dtype())]
     rand_sr_validness: typing.List[bool] = []
 
-    def once(obj: pycyphal.dsdl.CompositeObject) -> typing.Tuple[float, float]:
+    def once(obj: object) -> typing.Tuple[float, float]:
         s = _serialize_deserialize(obj)
         samples.append(s)
         return s
@@ -131,7 +131,7 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
     )
 
 
-def _serialize_deserialize(obj: pycyphal.dsdl.CompositeObject) -> typing.Tuple[float, float]:
+def _serialize_deserialize(obj: object) -> typing.Tuple[float, float]:
     gc.collect()
     gc.disable()  # Must be disabled, otherwise it induces spurious false-positive performance warnings
 

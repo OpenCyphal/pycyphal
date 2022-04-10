@@ -10,7 +10,7 @@ import dataclasses
 import pycyphal.dsdl
 import pycyphal.transport
 import pycyphal.util
-from ._base import ServiceClass, ServicePort, PortFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
+from ._base import T, ServicePort, PortFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError
 
 
@@ -20,8 +20,6 @@ _LISTEN_FOREVER_TIMEOUT = 1
 
 
 OutputTransportSessionFactory = typing.Callable[[int], pycyphal.transport.OutputSession]
-ServiceRequestClass = typing.TypeVar("ServiceRequestClass", bound=pycyphal.dsdl.CompositeObject)
-ServiceResponseClass = typing.TypeVar("ServiceResponseClass", bound=pycyphal.dsdl.CompositeObject)
 
 
 _logger = logging.getLogger(__name__)
@@ -70,28 +68,19 @@ class ServiceRequestMetadata:
         return pycyphal.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
 
-ServiceRequestHandler = typing.Callable[
-    [ServiceRequestClass, ServiceRequestMetadata], typing.Awaitable[typing.Optional[ServiceResponseClass]]
-]
+ServiceRequestHandler = typing.Callable[[object, ServiceRequestMetadata], typing.Awaitable[typing.Optional[object]]]
 """Type of the async request handler callable."""
 
 
-class Server(ServicePort[ServiceClass]):
+class Server(ServicePort[T]):
     """
     At most one task can use the server at any given time.
     The instance must be closed manually to stop the server.
-
-    .. note::
-        Normally we should use correct generic types ``ServiceClass.Request`` and ``ServiceClass.Response`` in the API;
-        however, MyPy does not support that yet. Please find the context at
-        https://github.com/python/mypy/issues/7121 and https://github.com/OpenCyphal/pycyphal/issues/61.
-        We use a tentative workaround for now to silence bogus type errors. When the missing logic is implemented
-        in MyPy, this should be switched back to proper implementation.
     """
 
     def __init__(
         self,
-        dtype: typing.Type[ServiceClass],
+        dtype: typing.Type[T],
         input_transport_session: pycyphal.transport.InputSession,
         output_transport_session_factory: OutputTransportSessionFactory,
         finalizer: PortFinalizer,
@@ -99,6 +88,7 @@ class Server(ServicePort[ServiceClass]):
         """
         Do not call this directly! Use :meth:`Presentation.get_server`.
         """
+        assert pycyphal.dsdl.is_service_type(dtype)
         self._dtype = dtype
         self._input_transport_session = input_transport_session
         self._output_transport_session_factory = output_transport_session_factory
@@ -117,7 +107,7 @@ class Server(ServicePort[ServiceClass]):
 
     async def serve(
         self,
-        handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass],
+        handler: ServiceRequestHandler[object, object],
         monotonic_deadline: typing.Optional[float] = None,
     ) -> None:
         """
@@ -130,7 +120,7 @@ class Server(ServicePort[ServiceClass]):
         # it might be that the transfer ID that we obtained from the request may be invalid for some of the transports.
         # This is why we can't reliably aggregate redundant transports with different transfer-ID overflow parameters.
         while not self._closed:
-            out: typing.Optional[typing.Tuple[pycyphal.dsdl.CompositeObject, ServiceRequestMetadata]]
+            out: typing.Optional[typing.Tuple[object, ServiceRequestMetadata]]
             if monotonic_deadline is None:
                 out = await self._receive(loop.time() + _LISTEN_FOREVER_TIMEOUT)
                 if out is None:
@@ -142,7 +132,7 @@ class Server(ServicePort[ServiceClass]):
 
             self._served_request_count += 1
             request, meta = out
-            response: typing.Optional[ServiceResponseClass] = None  # Fallback state
+            response: typing.Optional[object] = None  # Fallback state
             assert isinstance(request, self._dtype.Request), "Internal protocol violation"
             try:
                 response = await handler(request, meta)  # type: ignore
@@ -165,9 +155,7 @@ class Server(ServicePort[ServiceClass]):
                 # TODO: make the send timeout configurable.
                 await self._do_send(response, meta, response_transport_session, loop.time() + self._send_timeout)
 
-    async def serve_for(
-        self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass], timeout: float
-    ) -> None:
+    async def serve_for(self, handler: ServiceRequestHandler[object, object], timeout: float) -> None:
         """
         Listen for requests for the specified time or until the instance is closed, then exit.
 
@@ -179,7 +167,7 @@ class Server(ServicePort[ServiceClass]):
         loop = asyncio.get_running_loop()
         return await self.serve(handler, monotonic_deadline=loop.time() + timeout)
 
-    def serve_in_background(self, handler: ServiceRequestHandler[ServiceRequestClass, ServiceResponseClass]) -> None:
+    def serve_in_background(self, handler: ServiceRequestHandler[object, object]) -> None:
         """
         Start a new task and use it to run the server in the background.
         The task will be stopped when the server is closed.
@@ -248,7 +236,7 @@ class Server(ServicePort[ServiceClass]):
         )
 
     @property
-    def dtype(self) -> typing.Type[ServiceClass]:
+    def dtype(self) -> typing.Type[T]:
         return self._dtype
 
     @property
@@ -269,7 +257,7 @@ class Server(ServicePort[ServiceClass]):
 
     async def _receive(
         self, monotonic_deadline: float
-    ) -> typing.Optional[typing.Tuple[ServiceRequestClass, ServiceRequestMetadata]]:
+    ) -> typing.Optional[typing.Tuple[object, ServiceRequestMetadata]]:
         while True:
             transfer = await self._input_transport_session.receive(monotonic_deadline)
             if transfer is None:
@@ -290,7 +278,7 @@ class Server(ServicePort[ServiceClass]):
 
     @staticmethod
     async def _do_send(
-        response: ServiceResponseClass,
+        response: object,
         metadata: ServiceRequestMetadata,
         session: pycyphal.transport.OutputSession,
         monotonic_deadline: float,

@@ -7,11 +7,12 @@ import logging
 import numpy
 from numpy.typing import NDArray
 import pydsdl
-from ._composite_object import CompositeObject, get_model, get_attribute, set_attribute, get_class
-from ._composite_object import CompositeObjectTypeVar
+from ._composite_object import get_model, get_attribute, set_attribute, get_class
+
+T = typing.TypeVar("T")
 
 
-def to_builtin(obj: CompositeObject) -> typing.Dict[str, typing.Any]:
+def to_builtin(obj: object) -> typing.Dict[str, typing.Any]:
     """
     Accepts a DSDL object (an instance of a Python class auto-generated from a DSDL definition),
     returns its value represented using only native built-in types: dict, list, bool, int, float, str.
@@ -48,10 +49,9 @@ def to_builtin(obj: CompositeObject) -> typing.Dict[str, typing.Any]:
 
 
 def _to_builtin_impl(
-    obj: typing.Union[CompositeObject, NDArray[typing.Any], str, bool, int, float], model: pydsdl.SerializableType
+    obj: typing.Union[object, NDArray[typing.Any], str, bool, int, float], model: pydsdl.SerializableType
 ) -> typing.Union[typing.Dict[str, typing.Any], typing.List[typing.Any], str, bool, int, float]:
     if isinstance(model, pydsdl.CompositeType):
-        assert isinstance(obj, CompositeObject)
         return {
             f.name: _to_builtin_impl(get_attribute(obj, f.name), f.data_type)
             for f in model.fields_except_padding
@@ -81,7 +81,7 @@ def _to_builtin_impl(
     assert False, "Unexpected inputs"
 
 
-def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any) -> CompositeObjectTypeVar:
+def update_from_builtin(destination: T, source: typing.Any) -> T:
     """
     Updates the provided DSDL object (an instance of a Python class auto-generated from a DSDL definition)
     with the values from a native representation, where DSDL objects are represented as dicts, arrays
@@ -157,8 +157,6 @@ def update_from_builtin(destination: CompositeObjectTypeVar, source: typing.Any)
     uavcan.register.Access.Request...name='X'...value=[99]...
     """
     _logger.debug("update_from_builtin: destination/source on the next lines:\n%r\n%r", destination, source)
-    if not isinstance(destination, CompositeObject):  # pragma: no cover
-        raise TypeError(f"Bad destination: expected a CompositeObject, got {type(destination).__name__}")
     model = get_model(destination)
     _raise_if_service_type(model)
     fields = model.fields_except_padding

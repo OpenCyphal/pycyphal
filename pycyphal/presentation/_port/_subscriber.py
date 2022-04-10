@@ -10,7 +10,7 @@ import dataclasses
 import pycyphal.util
 import pycyphal.dsdl
 import pycyphal.transport
-from ._base import MessagePort, MessageClass, PortFinalizer, Closable
+from ._base import MessagePort, T, PortFinalizer, Closable
 from ._error import PortClosedError
 
 
@@ -22,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 
 #: Type of the async received message handler callable.
-ReceivedMessageHandler = typing.Callable[[MessageClass, pycyphal.transport.TransferFrom], typing.Awaitable[None]]
+ReceivedMessageHandler = typing.Callable[[T, pycyphal.transport.TransferFrom], typing.Awaitable[None]]
 
 
 @dataclasses.dataclass
@@ -33,7 +33,7 @@ class SubscriberStatistics:
     deserialization_failures: int  #: Number of messages lost to deserialization errors; shared per session specifier.
 
 
-class Subscriber(MessagePort[MessageClass]):
+class Subscriber(MessagePort[T]):
     """
     A task should request its own independent subscriber instance from the presentation layer controller.
     Do not share the same subscriber instance across different tasks. This class implements the RAII pattern.
@@ -57,7 +57,7 @@ class Subscriber(MessagePort[MessageClass]):
     the user code cannot access it and generally shouldn't care.
     """
 
-    def __init__(self, impl: SubscriberImpl[MessageClass], queue_capacity: typing.Optional[int]):
+    def __init__(self, impl: SubscriberImpl[T], queue_capacity: typing.Optional[int]):
         """
         Do not call this directly! Use :meth:`Presentation.make_subscriber`.
         """
@@ -72,12 +72,12 @@ class Subscriber(MessagePort[MessageClass]):
         self._closed = False
         self._impl = impl
         self._maybe_task: typing.Optional[asyncio.Task[None]] = None
-        self._rx: _Listener[MessageClass] = _Listener(asyncio.Queue(maxsize=queue_capacity))
+        self._rx: _Listener[T] = _Listener(asyncio.Queue(maxsize=queue_capacity))
         impl.add_listener(self._rx)
 
     # ----------------------------------------  HANDLER-BASED API  ----------------------------------------
 
-    def receive_in_background(self, handler: ReceivedMessageHandler[MessageClass]) -> None:
+    def receive_in_background(self, handler: ReceivedMessageHandler[T]) -> None:
         """
         Configures the subscriber to invoke the specified handler whenever a message is received.
         The handler is an async callable or returns an awaitable.
@@ -121,7 +121,7 @@ class Subscriber(MessagePort[MessageClass]):
 
     async def receive(
         self, monotonic_deadline: float
-    ) -> typing.Optional[typing.Tuple[MessageClass, pycyphal.transport.TransferFrom]]:
+    ) -> typing.Optional[typing.Tuple[T, pycyphal.transport.TransferFrom]]:
         """
         Blocks until either a valid message is received,
         in which case it is returned along with the transfer which delivered it;
@@ -140,9 +140,7 @@ class Subscriber(MessagePort[MessageClass]):
         loop = asyncio.get_running_loop()
         return await self.receive_for(timeout=monotonic_deadline - loop.time())
 
-    async def receive_for(
-        self, timeout: float
-    ) -> typing.Optional[typing.Tuple[MessageClass, pycyphal.transport.TransferFrom]]:
+    async def receive_for(self, timeout: float) -> typing.Optional[typing.Tuple[T, pycyphal.transport.TransferFrom]]:
         """
         This is like :meth:`receive` but with a relative timeout instead of an absolute deadline.
         """
@@ -163,13 +161,13 @@ class Subscriber(MessagePort[MessageClass]):
 
     # ----------------------------------------  ITERATOR API  ----------------------------------------
 
-    def __aiter__(self) -> Subscriber[MessageClass]:
+    def __aiter__(self) -> Subscriber[T]:
         """
         Iterator API support. Returns self unchanged.
         """
         return self
 
-    async def __anext__(self) -> typing.Tuple[MessageClass, pycyphal.transport.TransferFrom]:
+    async def __anext__(self) -> typing.Tuple[T, pycyphal.transport.TransferFrom]:
         """
         This is like :meth:`receive` with an infinite timeout, so it cannot return None.
         """
@@ -185,7 +183,7 @@ class Subscriber(MessagePort[MessageClass]):
     # ----------------------------------------  AUXILIARY  ----------------------------------------
 
     @property
-    def dtype(self) -> typing.Type[MessageClass]:
+    def dtype(self) -> typing.Type[T]:
         return self._impl.dtype
 
     @property
@@ -238,7 +236,7 @@ class Subscriber(MessagePort[MessageClass]):
 
 
 @dataclasses.dataclass
-class _Listener(typing.Generic[MessageClass]):
+class _Listener(typing.Generic[T]):
     """
     The queue-induced extra level of indirection adds processing overhead and latency. In the future we may need to
     consider an optimization where the subscriber would automatically detect whether the underlying implementation
@@ -246,12 +244,12 @@ class _Listener(typing.Generic[MessageClass]):
     instead. This would avoid the unnecessary overheads and at the same time would be transparent for the user.
     """
 
-    queue: asyncio.Queue[typing.Tuple[MessageClass, pycyphal.transport.TransferFrom]]
+    queue: asyncio.Queue[typing.Tuple[T, pycyphal.transport.TransferFrom]]
     push_count: int = 0
     overrun_count: int = 0
     exception: typing.Optional[Exception] = None
 
-    def push(self, message: MessageClass, transfer: pycyphal.transport.TransferFrom) -> None:
+    def push(self, message: T, transfer: pycyphal.transport.TransferFrom) -> None:
         try:
             self.queue.put_nowait((message, transfer))
             self.push_count += 1
@@ -273,7 +271,7 @@ class _Listener(typing.Generic[MessageClass]):
         )
 
 
-class SubscriberImpl(Closable, typing.Generic[MessageClass]):
+class SubscriberImpl(Closable, typing.Generic[T]):
     """
     This class implements the actual reception and deserialization logic. It is not visible to the user and is not
     part of the API. There is at most one instance per session specifier. It may be shared across multiple users
@@ -283,16 +281,17 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
 
     def __init__(
         self,
-        dtype: typing.Type[MessageClass],
+        dtype: typing.Type[T],
         transport_session: pycyphal.transport.InputSession,
         finalizer: PortFinalizer,
     ):
+        assert pycyphal.dsdl.is_message_type(dtype)
         self.dtype = dtype
         self.transport_session = transport_session
         self.deserialization_failure_count = 0
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
         self._task = asyncio.get_event_loop().create_task(self._task_function())
-        self._listeners: typing.List[_Listener[MessageClass]] = []
+        self._listeners: typing.List[_Listener[T]] = []
 
     @property
     def is_closed(self) -> bool:
@@ -338,11 +337,11 @@ class SubscriberImpl(Closable, typing.Generic[MessageClass]):
             _logger.debug("Explicit close: could not cancel the task %r: %s", self._task, ex, exc_info=True)
         self._finalize()
 
-    def add_listener(self, rx: _Listener[MessageClass]) -> None:
+    def add_listener(self, rx: _Listener[T]) -> None:
         assert not self.is_closed, "Internal logic error: cannot add listener to a closed subscriber implementation"
         self._listeners.append(rx)
 
-    def remove_listener(self, rx: _Listener[MessageClass]) -> None:
+    def remove_listener(self, rx: _Listener[T]) -> None:
         try:
             self._listeners.remove(rx)
         except ValueError:

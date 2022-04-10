@@ -9,7 +9,7 @@ import asyncio
 import pycyphal.util
 import pycyphal.dsdl
 import pycyphal.transport
-from ._base import MessagePort, OutgoingTransferIDCounter, MessageClass, Closable
+from ._base import MessagePort, OutgoingTransferIDCounter, T, Closable
 from ._base import DEFAULT_PRIORITY, PortFinalizer
 from ._error import PortClosedError
 
@@ -17,7 +17,7 @@ from ._error import PortClosedError
 _logger = logging.getLogger(__name__)
 
 
-class Publisher(MessagePort[MessageClass]):
+class Publisher(MessagePort[T]):
     """
     A task should request its own independent publisher instance from the presentation layer controller.
     Do not share the same publisher instance across different tasks. This class implements the RAII pattern.
@@ -36,11 +36,11 @@ class Publisher(MessagePort[MessageClass]):
     Default value for :attr:`send_timeout`. The value is an implementation detail, not required by Specification.
     """
 
-    def __init__(self, impl: PublisherImpl[MessageClass]):
+    def __init__(self, impl: PublisherImpl[T]):
         """
         Do not call this directly! Use :meth:`Presentation.make_publisher`.
         """
-        self._maybe_impl: typing.Optional[PublisherImpl[MessageClass]] = impl
+        self._maybe_impl: typing.Optional[PublisherImpl[T]] = impl
         impl.register_proxy()  # Register ASAP to ensure correct finalization.
 
         self._dtype = impl.dtype  # Permit usage after close()
@@ -50,7 +50,7 @@ class Publisher(MessagePort[MessageClass]):
         self._send_timeout = self.DEFAULT_SEND_TIMEOUT
 
     @property
-    def dtype(self) -> typing.Type[MessageClass]:
+    def dtype(self) -> typing.Type[T]:
         return self._dtype
 
     @property
@@ -101,7 +101,7 @@ class Publisher(MessagePort[MessageClass]):
         else:
             raise ValueError(f"Invalid send timeout value: {value}")
 
-    async def publish(self, message: MessageClass) -> bool:
+    async def publish(self, message: T) -> bool:
         """
         Serializes and publishes the message object at the priority level selected earlier.
         Should not be used simultaneously with :meth:`publish_soon` because that makes the message ordering undefined.
@@ -112,7 +112,7 @@ class Publisher(MessagePort[MessageClass]):
         loop = asyncio.get_running_loop()
         return await self._maybe_impl.publish(message, self._priority, loop.time() + self._send_timeout)
 
-    def publish_soon(self, message: MessageClass) -> None:
+    def publish_soon(self, message: T) -> None:
         """
         Serializes and publishes the message object at the priority level selected earlier.
         Does so without blocking (observe that this method is not async).
@@ -147,7 +147,7 @@ class Publisher(MessagePort[MessageClass]):
             self._maybe_impl = None
 
 
-class PublisherImpl(Closable, typing.Generic[MessageClass]):
+class PublisherImpl(Closable, typing.Generic[T]):
     """
     The publisher implementation. There is at most one such implementation per session specifier. It may be shared
     across multiple users with the help of the proxy class. When the last proxy is closed or garbage collected,
@@ -156,11 +156,12 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
 
     def __init__(
         self,
-        dtype: typing.Type[MessageClass],
+        dtype: typing.Type[T],
         transport_session: pycyphal.transport.OutputSession,
         transfer_id_counter: OutgoingTransferIDCounter,
         finalizer: PortFinalizer,
     ):
+        assert pycyphal.dsdl.is_message_type(dtype)
         self.dtype = dtype
         self.transport_session = transport_session
         self.transfer_id_counter = transfer_id_counter
@@ -168,9 +169,7 @@ class PublisherImpl(Closable, typing.Generic[MessageClass]):
         self._lock = asyncio.Lock()
         self._proxy_count = 0
 
-    async def publish(
-        self, message: MessageClass, priority: pycyphal.transport.Priority, monotonic_deadline: float
-    ) -> bool:
+    async def publish(self, message: T, priority: pycyphal.transport.Priority, monotonic_deadline: float) -> bool:
         if not isinstance(message, self.dtype):
             raise TypeError(f"Expected a message object of type {self.dtype}, found this: {message}")
 

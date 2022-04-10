@@ -21,8 +21,6 @@ def _unittest_slow_constants(compiled: typing.List[pycyphal.dsdl.GeneratedPackag
                     assert reference.native_value == pytest.approx(
                         generated
                     ), "The generated constant does not compare equal against the DSDL source"
-            if issubclass(dtype, pycyphal.dsdl.FixedPortObject):
-                assert issubclass(dtype, pycyphal.dsdl.CompositeObject) and issubclass(
-                    dtype, pycyphal.dsdl.FixedPortObject
-                )
-                assert pycyphal.dsdl.get_fixed_port_id(dtype) == pycyphal.dsdl.get_model(dtype).fixed_port_id
+            fpid_obj = pycyphal.dsdl.get_fixed_port_id(dtype)
+            fpid_mod = pycyphal.dsdl.get_model(dtype).fixed_port_id
+            assert (fpid_obj == fpid_mod) or (fpid_obj is None) or (fpid_mod is None)

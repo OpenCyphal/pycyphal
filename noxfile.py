@@ -215,7 +215,7 @@ def pristine(session):
 
 @nox.session(reuse_venv=True)
 def check_style(session):
-    session.install("black == 21.12b0")
+    session.install("black == 22.*")
     session.run("black", "--check", ".")
 
 

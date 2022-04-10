@@ -21,7 +21,6 @@ from __future__ import annotations
 import numpy as _np_
 from numpy.typing import NDArray as _NDArray_
 import pydsdl as _pydsdl_
-import pycyphal.dsdl as _dsdl_
 {%- if T.deprecated %}
 import warnings as _warnings_
 {%- endif -%}
@@ -136,7 +135,7 @@ import {{ n }}
 {%- macro data_schema(name, type, parent_class_name=None) -%}
 {%- set full_class_name = ((parent_class_name + '.') if parent_class_name else '') + name -%}
 # noinspection PyUnresolvedReferences, PyPep8, PyPep8Naming, SpellCheckingInspection, DuplicatedCode
-class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}CompositeObject):
+class {{ name }}:
     """
     Generated property settings use relaxed type signatures, accepting a large variety of
     possible representations of the value, which are automatically converted to a well-defined
@@ -397,16 +396,20 @@ class {{ name }}(_dsdl_.{%- if type.has_fixed_port_id -%}FixedPort{%- endif -%}C
     _EXTENT_BYTES_ = {{ type.extent // 8 }}
 
     {% set meta_type = type.__class__.__name__ -%}
-    _MODEL_: _pydsdl_.{{ meta_type }} = _dsdl_.CompositeObject._restore_constant_(
+    _MODEL_: _pydsdl_.{{ meta_type }} = _restore_constant(
         {{ type | pickle | indent(8) }}
     )
     assert isinstance(_MODEL_, _pydsdl_.{{ meta_type }})
 {%- endmacro -%}
 
 {#-
- # The position of this comment defines the number of blank lines between imports and class definition.
- # Do not put any definitions below.
+ # DEFINITIONS.
  #}
+
+
+def _restore_constant(encoded_string: str) -> object:
+    import pickle, gzip, base64
+    return pickle.loads(gzip.decompress(base64.b85decode(encoded_string)))
 
 
 {% block contents %}{% endblock %}

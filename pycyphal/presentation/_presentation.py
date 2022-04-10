@@ -16,12 +16,7 @@ from ._port import Client, ClientImpl
 from ._port import Server
 
 
-MessageClass = typing.TypeVar("MessageClass", bound=pycyphal.dsdl.CompositeObject)
-ServiceClass = typing.TypeVar("ServiceClass", bound=pycyphal.dsdl.ServiceObject)
-
-FixedPortMessageClass = typing.TypeVar("FixedPortMessageClass", bound=pycyphal.dsdl.FixedPortCompositeObject)
-FixedPortServiceClass = typing.TypeVar("FixedPortServiceClass", bound=pycyphal.dsdl.FixedPortServiceObject)
-
+T = typing.TypeVar("T")
 
 _logger = logging.getLogger(__name__)
 
@@ -52,7 +47,7 @@ class Presentation:
         ] = {}
         # For services, the session is the input session.
         self._registry: typing.Dict[
-            typing.Tuple[typing.Type[Port[pycyphal.dsdl.CompositeObject]], pycyphal.transport.SessionSpecifier],
+            typing.Tuple[typing.Type[Port[object]], pycyphal.transport.SessionSpecifier],
             Closable,
         ] = {}
 
@@ -96,11 +91,12 @@ class Presentation:
         """
         Deprecated.
         """
+        # noinspection PyDeprecation
         return self._transport.loop
 
     # ----------------------------------------  SESSION FACTORY METHODS  ----------------------------------------
 
-    def make_publisher(self, dtype: typing.Type[MessageClass], subject_id: int) -> Publisher[MessageClass]:
+    def make_publisher(self, dtype: typing.Type[T], subject_id: int) -> Publisher[T]:
         """
         Creates a new publisher instance for the specified subject-ID. All publishers created for a specific
         subject share the same underlying implementation object which is hidden from the user;
@@ -111,7 +107,7 @@ class Presentation:
 
         See :class:`Publisher` for further information about publishers.
         """
-        if issubclass(dtype, pycyphal.dsdl.ServiceObject):
+        if not pycyphal.dsdl.is_message_type(dtype):
             raise TypeError(f"Not a message type: {dtype}")
 
         self._raise_if_closed()
@@ -141,8 +137,8 @@ class Presentation:
         return Publisher(impl)
 
     def make_subscriber(
-        self, dtype: typing.Type[MessageClass], subject_id: int, queue_capacity: typing.Optional[int] = None
-    ) -> Subscriber[MessageClass]:
+        self, dtype: typing.Type[T], subject_id: int, queue_capacity: typing.Optional[int] = None
+    ) -> Subscriber[T]:
         """
         Creates a new subscriber instance for the specified subject-ID. All subscribers created for a specific
         subject share the same underlying implementation object which is hidden from the user; the implementation
@@ -159,7 +155,7 @@ class Presentation:
 
         See :class:`Subscriber` for further information about subscribers.
         """
-        if issubclass(dtype, pycyphal.dsdl.ServiceObject):
+        if not pycyphal.dsdl.is_message_type(dtype):
             raise TypeError(f"Not a message type: {dtype}")
 
         self._raise_if_closed()
@@ -188,9 +184,7 @@ class Presentation:
         assert isinstance(impl, SubscriberImpl)
         return Subscriber(impl=impl, queue_capacity=queue_capacity)
 
-    def make_client(
-        self, dtype: typing.Type[ServiceClass], service_id: int, server_node_id: int
-    ) -> Client[ServiceClass]:
+    def make_client(self, dtype: typing.Type[T], service_id: int, server_node_id: int) -> Client[T]:
         """
         Creates a new client instance for the specified service-ID and the remote server node-ID.
         The number of such instances can be arbitrary.
@@ -207,7 +201,7 @@ class Presentation:
 
         See :class:`Client` for further information about clients.
         """
-        if not issubclass(dtype, pycyphal.dsdl.ServiceObject):
+        if not pycyphal.dsdl.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
 
         self._raise_if_closed()
@@ -256,7 +250,7 @@ class Presentation:
         assert isinstance(impl, ClientImpl)
         return Client(impl=impl)
 
-    def get_server(self, dtype: typing.Type[ServiceClass], service_id: int) -> Server[ServiceClass]:
+    def get_server(self, dtype: typing.Type[T], service_id: int) -> Server[T]:
         """
         Returns the server instance for the specified service-ID. If such instance does not exist, it will be
         created. The instance should be used from one task only.
@@ -271,7 +265,7 @@ class Presentation:
 
         See :class:`Server` for further information about servers.
         """
-        if not issubclass(dtype, pycyphal.dsdl.ServiceObject):
+        if not pycyphal.dsdl.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
 
         self._raise_if_closed()
@@ -311,9 +305,7 @@ class Presentation:
 
     # ----------------------------------------  CONVENIENCE FACTORY METHODS  ----------------------------------------
 
-    def make_publisher_with_fixed_subject_id(
-        self, dtype: typing.Type[FixedPortMessageClass]
-    ) -> Publisher[FixedPortMessageClass]:
+    def make_publisher_with_fixed_subject_id(self, dtype: typing.Type[T]) -> Publisher[T]:
         """
         A wrapper for :meth:`make_publisher` that uses the fixed subject-ID associated with this type.
         Raises a TypeError if the type has no fixed subject-ID.
@@ -321,8 +313,8 @@ class Presentation:
         return self.make_publisher(dtype=dtype, subject_id=self._get_fixed_port_id(dtype))
 
     def make_subscriber_with_fixed_subject_id(
-        self, dtype: typing.Type[FixedPortMessageClass], queue_capacity: typing.Optional[int] = None
-    ) -> Subscriber[FixedPortMessageClass]:
+        self, dtype: typing.Type[T], queue_capacity: typing.Optional[int] = None
+    ) -> Subscriber[T]:
         """
         A wrapper for :meth:`make_subscriber` that uses the fixed subject-ID associated with this type.
         Raises a TypeError if the type has no fixed subject-ID.
@@ -331,18 +323,14 @@ class Presentation:
             dtype=dtype, subject_id=self._get_fixed_port_id(dtype), queue_capacity=queue_capacity
         )
 
-    def make_client_with_fixed_service_id(
-        self, dtype: typing.Type[FixedPortServiceClass], server_node_id: int
-    ) -> Client[FixedPortServiceClass]:
+    def make_client_with_fixed_service_id(self, dtype: typing.Type[T], server_node_id: int) -> Client[T]:
         """
         A wrapper for :meth:`make_client` that uses the fixed service-ID associated with this type.
         Raises a TypeError if the type has no fixed service-ID.
         """
         return self.make_client(dtype=dtype, service_id=self._get_fixed_port_id(dtype), server_node_id=server_node_id)
 
-    def get_server_with_fixed_service_id(
-        self, dtype: typing.Type[FixedPortServiceClass]
-    ) -> Server[FixedPortServiceClass]:
+    def get_server_with_fixed_service_id(self, dtype: typing.Type[T]) -> Server[T]:
         """
         A wrapper for :meth:`get_server` that uses the fixed service-ID associated with this type.
         Raises a TypeError if the type has no fixed service-ID.
@@ -367,7 +355,7 @@ class Presentation:
 
     def _make_finalizer(
         self,
-        session_type: typing.Type[Port[pycyphal.dsdl.CompositeObject]],
+        session_type: typing.Type[Port[object]],
         session_specifier: pycyphal.transport.SessionSpecifier,
     ) -> PortFinalizer:
         done = False
@@ -404,7 +392,7 @@ class Presentation:
         return finalizer
 
     @staticmethod
-    def _make_payload_metadata(dtype: typing.Type[pycyphal.dsdl.CompositeObject]) -> pycyphal.transport.PayloadMetadata:
+    def _make_payload_metadata(dtype: typing.Type[object]) -> pycyphal.transport.PayloadMetadata:
         extent_bytes = pycyphal.dsdl.get_extent_bytes(dtype)
         return pycyphal.transport.PayloadMetadata(extent_bytes=extent_bytes)
 
@@ -413,7 +401,7 @@ class Presentation:
             raise pycyphal.transport.ResourceClosedError(repr(self))
 
     @staticmethod
-    def _get_fixed_port_id(dtype: typing.Type[pycyphal.dsdl.FixedPortObject]) -> int:
+    def _get_fixed_port_id(dtype: typing.Type[object]) -> int:
         port_id = pycyphal.dsdl.get_fixed_port_id(dtype)
         if port_id is None:
             raise TypeError(f"{dtype} has no fixed port-ID")

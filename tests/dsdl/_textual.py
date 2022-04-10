@@ -9,7 +9,7 @@ from . import _util
 
 
 def _unittest_slow_textual(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
-    def validate(obj: pycyphal.dsdl.CompositeObject, s: str) -> None:
+    def validate(obj: object, s: str) -> None:
         for f in model.fields_except_padding:  # pylint: disable=undefined-loop-variable
             field_present = (f"{f.name}=" in s) or (f"{f.name}_=" in s)
             if isinstance(model.inner_type, pydsdl.UnionType):  # pylint: disable=undefined-loop-variable

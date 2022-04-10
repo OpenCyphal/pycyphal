@@ -23,9 +23,7 @@ This value is recommended by Specification.
 PortFinalizer = typing.Callable[[typing.Sequence[pycyphal.transport.Session]], None]
 
 
-TypeClass = typing.TypeVar("TypeClass", bound=pycyphal.dsdl.CompositeObject)
-MessageClass = typing.TypeVar("MessageClass", bound=pycyphal.dsdl.CompositeObject)
-ServiceClass = typing.TypeVar("ServiceClass", bound=pycyphal.dsdl.ServiceObject)
+T = typing.TypeVar("T")
 
 
 class OutgoingTransferIDCounter:
@@ -83,7 +81,7 @@ class Closable(abc.ABC):
         raise NotImplementedError
 
 
-class Port(Closable, typing.Generic[TypeClass]):
+class Port(Closable, typing.Generic[T]):
     """
     The base class for any presentation layer session such as publisher, subscriber, client, or server.
     The term "port" came to be from <https://forum.opencyphal.org/t/a-generic-term-for-either-subject-or-service/182>.
@@ -91,7 +89,7 @@ class Port(Closable, typing.Generic[TypeClass]):
 
     @property
     @abc.abstractmethod
-    def dtype(self) -> typing.Type[TypeClass]:
+    def dtype(self) -> typing.Type[T]:
         """
         The generated Python class modeling the corresponding DSDL data type.
         """
@@ -111,7 +109,7 @@ class Port(Closable, typing.Generic[TypeClass]):
 
 
 # noinspection DuplicatedCode
-class MessagePort(Port[MessageClass]):
+class MessagePort(Port[T]):
     """
     The base class for publishers and subscribers.
     """
@@ -138,7 +136,7 @@ class MessagePort(Port[MessageClass]):
 
 
 # noinspection DuplicatedCode
-class ServicePort(Port[ServiceClass]):
+class ServicePort(Port[T]):
     @property
     @abc.abstractmethod
     def input_transport_session(self) -> pycyphal.transport.InputSession:
