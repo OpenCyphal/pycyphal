@@ -1,6 +1,12 @@
 PyUAVCAN documentation
 ======================
 
+..  attention::
+
+    This library has been renamed into PyCyphal.
+    Please migrate your software to use PyCyphal instead of PyUAVCAN.
+    There have been no API changes aside from the renaming.
+
 PyUAVCAN is a full-featured implementation of the `UAVCAN protocol stack <https://uavcan.org>`_ in Python.
 PyUAVCAN aims to support all features and transport layers of UAVCAN,
 be portable across all major platforms supporting Python, and
