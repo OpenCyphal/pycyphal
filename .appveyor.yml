@@ -47,7 +47,7 @@ for:
           APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
     install:
       - 'systeminfo'
-      # Configure Npcap. This is for testing the packet capture functionality in the UAVCAN/UDP transport.
+      # Configure Npcap. This is for testing the packet capture functionality in the Cyphal/UDP transport.
       - '.test_deps\npcap-0.96.exe /loopback_support=yes /winpcap_mode=yes /S'
       # Installation of the NDIS filter driver from Npcap may have disrupted network connectivity, as explained in
       # https://github.com/nmap/npcap/issues/215. Also, a restart appears to be necessary to enable the NPF service.
@@ -72,7 +72,7 @@ for:
           APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
     install:
       - 'export extras_pkg="linux-*-extra-$(uname -r)"'
-      # Graphviz is needed for the docs, ncat is needed for testing the UAVCAN/serial transport.
+      # Graphviz is needed for the docs, ncat is needed for testing the Cyphal/serial transport.
       - 'sudo apt-get install -y $extras_pkg graphviz ncat'
       - 'git submodule update --init --recursive'
       - 'python -m pip install --upgrade pip setuptools nox'
@@ -100,10 +100,10 @@ for:
       # Configure git credentials.
       - echo "https://${GIT_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
       - git config --global credential.helper store
-      - git config --global user.email "hedgehoginthefog@uavcan.org"
+      - git config --global user.email "hedgehoginthefog@opencyphal.org"
       - git config --global user.name  "Release Automation"
       # Tag and publish this release. Push the tag after the release is out in case it could not be published.
-      - 'git tag "$(cat pyuavcan/VERSION)"'
+      - 'git tag "$(cat pycyphal/VERSION)"'
       - 'python setup.py sdist bdist_wheel'
       - 'python -m twine upload dist/*'
       - 'git push --tags'

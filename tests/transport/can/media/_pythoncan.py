@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Alex Kiselev <a.kiselev@volz-servos.com>, Pavel Kirienko <pavel@uavcan.org>
+# Author: Alex Kiselev <a.kiselev@volz-servos.com>, Pavel Kirienko <pavel@opencyphal.org>
 
 # pylint: disable=protected-access
 
@@ -8,9 +8,9 @@ import sys
 import typing
 import asyncio
 import pytest
-from pyuavcan.transport import Timestamp, InvalidMediaConfigurationError
-from pyuavcan.transport.can.media import Envelope, DataFrame, FrameFormat
-from pyuavcan.transport.can.media.pythoncan import PythonCANMedia
+from pycyphal.transport import Timestamp, InvalidMediaConfigurationError
+from pycyphal.transport.can.media import Envelope, DataFrame, FrameFormat
+from pycyphal.transport.can.media.pythoncan import PythonCANMedia
 
 
 @pytest.mark.asyncio

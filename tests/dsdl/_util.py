@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import random
@@ -11,7 +11,7 @@ import functools
 import numpy
 import pydsdl
 
-import pyuavcan.dsdl
+import pycyphal.dsdl
 
 
 def expand_service_types(
@@ -46,7 +46,7 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
         return random.randint(int(model.inclusive_value_range.min), int(model.inclusive_value_range.max))
 
     if isinstance(model, pydsdl.FloatType):  # We want inf/nan as well, so we generate int and then reinterpret
-        int_value = random.randrange(0, 2 ** model.bit_length)
+        int_value = random.randrange(0, 2**model.bit_length)
         unpack_fmt, pack_fmt = {
             16: ("e", "H"),
             32: ("f", "I"),
@@ -85,17 +85,17 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
         return out
 
     if isinstance(model, pydsdl.StructureType):
-        o = pyuavcan.dsdl.get_class(model)()
+        o = pycyphal.dsdl.get_class(model)()
         for f in model.fields_except_padding:
             v = make_random_object(f.data_type)
-            pyuavcan.dsdl.set_attribute(o, f.name, v)
+            pycyphal.dsdl.set_attribute(o, f.name, v)
         return o
 
     if isinstance(model, pydsdl.UnionType):
         f = random.choice(model.fields)
         v = make_random_object(f.data_type)
-        o = pyuavcan.dsdl.get_class(model)()
-        pyuavcan.dsdl.set_attribute(o, f.name, v)
+        o = pycyphal.dsdl.get_class(model)()
+        pycyphal.dsdl.set_attribute(o, f.name, v)
         return o
 
     if isinstance(model, pydsdl.DelimitedType):
@@ -116,9 +116,9 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
     if isinstance(model, pydsdl.CompositeType):
         if type(a) != type(b):  # pragma: no cover  # pylint: disable=unidiomatic-typecheck
             return False
-        for f in pyuavcan.dsdl.get_model(a).fields_except_padding:  # pragma: no cover
+        for f in pycyphal.dsdl.get_model(a).fields_except_padding:  # pragma: no cover
             if not are_close(
-                f.data_type, pyuavcan.dsdl.get_attribute(a, f.name), pyuavcan.dsdl.get_attribute(b, f.name)
+                f.data_type, pycyphal.dsdl.get_attribute(a, f.name), pycyphal.dsdl.get_attribute(b, f.name)
             ):
                 return False
         return True  # Empty objects of same type compare equal

@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import sys
 import typing
@@ -15,10 +15,10 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_can_socketcan() -> None:
-    from pyuavcan.transport import Timestamp
-    from pyuavcan.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
+    from pycyphal.transport import Timestamp
+    from pycyphal.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
 
-    from pyuavcan.transport.can.media.socketcan import SocketCANMedia
+    from pycyphal.transport.can.media.socketcan import SocketCANMedia
 
     available = SocketCANMedia.list_available_interface_names()
     print("Available SocketCAN ifaces:", available)

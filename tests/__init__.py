@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import os
 import asyncio
@@ -18,7 +18,7 @@ _logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 
-_PATCH_RESTORE_PREFIX = "_pyuavcan_orig_"
+_PATCH_RESTORE_PREFIX = "_pycyphal_orig_"
 
 
 def asyncio_allow_event_loop_access_from_top_level() -> None:

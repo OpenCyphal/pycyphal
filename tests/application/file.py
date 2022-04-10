@@ -1,6 +1,6 @@
-# Copyright (c) 2021 UAVCAN Consortium
+# Copyright (c) 2021 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import sys
 import shutil
@@ -9,16 +9,16 @@ import asyncio
 from tempfile import mkdtemp
 from pathlib import Path
 import pytest
-import pyuavcan
+import pycyphal
 
 
 pytestmark = pytest.mark.asyncio
 
 
-async def _unittest_file(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
-    from pyuavcan.application import make_node, NodeInfo
-    from pyuavcan.transport.udp import UDPTransport
-    from pyuavcan.application.file import FileClient, FileServer, Error
+async def _unittest_file(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
+    from pycyphal.application import make_node, NodeInfo
+    from pycyphal.transport.udp import UDPTransport
+    from pycyphal.application.file import FileClient, FileServer, Error
 
     assert compiled
     asyncio.get_running_loop().slow_callback_duration = 3.0
@@ -26,11 +26,11 @@ async def _unittest_file(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInf
     root_a = mkdtemp(".file", "a.")
     root_b = mkdtemp(".file", "b.")
     srv_node = make_node(
-        NodeInfo(name="org.uavcan.pyuavcan.test.file.server"),
+        NodeInfo(name="org.opencyphal.pycyphal.test.file.server"),
         transport=UDPTransport("127.63.0.0", 222, service_transfer_multiplier=2),
     )
     cln_node = make_node(
-        NodeInfo(name="org.uavcan.pyuavcan.test.file.client"),
+        NodeInfo(name="org.opencyphal.pycyphal.test.file.client"),
         transport=UDPTransport("127.63.0.0", 223, service_transfer_multiplier=2),
     )
     try:

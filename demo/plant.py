@@ -10,9 +10,9 @@ import asyncio
 import uavcan.si.unit.voltage
 import uavcan.si.sample.temperature
 import uavcan.time
-import pyuavcan
-from pyuavcan.application.heartbeat_publisher import Health
-from pyuavcan.application import make_node, NodeInfo, register
+import pycyphal
+from pycyphal.application.heartbeat_publisher import Health
+from pycyphal.application import make_node, NodeInfo, register
 
 
 UPDATE_PERIOD = 0.5
@@ -21,7 +21,7 @@ heater_voltage = 0.0
 saturation = False
 
 
-async def handle_command(msg: uavcan.si.unit.voltage.Scalar_1, _metadata: pyuavcan.transport.TransferFrom) -> None:
+async def handle_command(msg: uavcan.si.unit.voltage.Scalar_1, _metadata: pycyphal.transport.TransferFrom) -> None:
     global heater_voltage, saturation
     if msg.volt < 0.0:
         heater_voltage = 0.0
@@ -35,7 +35,7 @@ async def handle_command(msg: uavcan.si.unit.voltage.Scalar_1, _metadata: pyuavc
 
 
 async def main() -> None:
-    with make_node(NodeInfo(name="org.uavcan.pyuavcan.demo.plant"), "plant.db") as node:
+    with make_node(NodeInfo(name="org.opencyphal.pycyphal.demo.plant"), "plant.db") as node:
         # Expose internal states for diagnostics.
         node.registry["status.saturation"] = lambda: saturation  # The register type will be deduced as "bit[1]".
 
@@ -46,7 +46,7 @@ async def main() -> None:
 
         # Set up the ports.
         pub_meas = node.make_publisher(uavcan.si.sample.temperature.Scalar_1, "temperature")
-        pub_meas.priority = pyuavcan.transport.Priority.HIGH
+        pub_meas.priority = pycyphal.transport.Priority.HIGH
         sub_volt = node.make_subscriber(uavcan.si.unit.voltage.Scalar_1, "voltage")
         sub_volt.receive_in_background(handle_command)
 

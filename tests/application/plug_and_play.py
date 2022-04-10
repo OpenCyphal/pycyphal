@@ -1,14 +1,14 @@
-# Copyright (c) 2020 UAVCAN Consortium
+# Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import asyncio
 import logging
 import pathlib
 import pytest
-import pyuavcan
-from pyuavcan.transport.can import CANTransport
+import pycyphal
+from pycyphal.transport.can import CANTransport
 from tests.transport.can.media.mock import MockMedia
 
 _TABLE = pathlib.Path("allocation_table.db")
@@ -20,10 +20,10 @@ pytestmark = pytest.mark.asyncio
 
 @pytest.mark.parametrize("mtu", [8, 16, 20, 64])
 async def _unittest_slow_plug_and_play_centralized(
-    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], mtu: int
+    compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo], mtu: int
 ) -> None:
-    from pyuavcan.application import make_node, NodeInfo
-    from pyuavcan.application.plug_and_play import CentralizedAllocator, Allocatee
+    from pycyphal.application import make_node, NodeInfo
+    from pycyphal.application.plug_and_play import CentralizedAllocator, Allocatee
 
     assert compiled
     asyncio.get_running_loop().slow_callback_duration = 5.0
@@ -98,10 +98,10 @@ async def _unittest_slow_plug_and_play_centralized(
 
 
 async def _unittest_slow_plug_and_play_allocatee(
-    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
+    compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo], caplog: typing.Any
 ) -> None:
-    from pyuavcan.presentation import Presentation
-    from pyuavcan.application.plug_and_play import Allocatee, NodeIDAllocationData_2, ID
+    from pycyphal.presentation import Presentation
+    from pycyphal.application.plug_and_play import Allocatee, NodeIDAllocationData_2, ID
 
     assert compiled
 
@@ -117,7 +117,7 @@ async def _unittest_slow_plug_and_play_allocatee(
     await asyncio.sleep(1.0)
     assert allocatee.get_result() is None
 
-    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.application.plug_and_play.__name__):  # Bad NID.
+    with caplog.at_level(logging.CRITICAL, logger=pycyphal.application.plug_and_play.__name__):  # Bad NID.
         await pub.publish(NodeIDAllocationData_2(ID(999), unique_id=_uid("00112233445566778899aabbccddeeff")))
         await asyncio.sleep(1.0)
         assert allocatee.get_result() is None

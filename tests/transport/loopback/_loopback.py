@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import time
 import typing
@@ -8,8 +8,8 @@ import asyncio
 import logging
 import pytest
 
-import pyuavcan.transport
-import pyuavcan.transport.loopback
+import pycyphal.transport
+import pycyphal.transport.loopback
 
 
 pytestmark = pytest.mark.asyncio
@@ -18,43 +18,43 @@ pytestmark = pytest.mark.asyncio
 async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     loop = asyncio.get_running_loop()
 
-    tr = pyuavcan.transport.loopback.LoopbackTransport(None)
-    protocol_params = pyuavcan.transport.ProtocolParameters(
+    tr = pycyphal.transport.loopback.LoopbackTransport(None)
+    protocol_params = pycyphal.transport.ProtocolParameters(
         transfer_id_modulo=32,
-        max_nodes=2 ** 64,
-        mtu=2 ** 64 - 1,
+        max_nodes=2**64,
+        mtu=2**64 - 1,
     )
     tr.protocol_parameters = protocol_params
     assert tr.protocol_parameters == protocol_params
     assert tr.local_node_id is None
 
-    tr = pyuavcan.transport.loopback.LoopbackTransport(42)
+    tr = pycyphal.transport.loopback.LoopbackTransport(42)
     tr.protocol_parameters = protocol_params
     assert 42 == tr.local_node_id
 
-    payload_metadata = pyuavcan.transport.PayloadMetadata(1234)
+    payload_metadata = pycyphal.transport.PayloadMetadata(1234)
 
-    message_spec_123_in = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
-    message_spec_123_out = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 123)
-    message_spec_42_in = pyuavcan.transport.InputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), 42)
-    message_spec_any_out = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(123), None)
+    message_spec_123_in = pycyphal.transport.InputSessionSpecifier(pycyphal.transport.MessageDataSpecifier(123), 123)
+    message_spec_123_out = pycyphal.transport.OutputSessionSpecifier(pycyphal.transport.MessageDataSpecifier(123), 123)
+    message_spec_42_in = pycyphal.transport.InputSessionSpecifier(pycyphal.transport.MessageDataSpecifier(123), 42)
+    message_spec_any_out = pycyphal.transport.OutputSessionSpecifier(pycyphal.transport.MessageDataSpecifier(123), None)
 
     out_123 = tr.get_output_session(specifier=message_spec_123_out, payload_metadata=payload_metadata)
     assert out_123 is tr.get_output_session(specifier=message_spec_123_out, payload_metadata=payload_metadata)
 
-    last_feedback: typing.Optional[pyuavcan.transport.Feedback] = None
+    last_feedback: typing.Optional[pycyphal.transport.Feedback] = None
 
-    def on_feedback(fb: pyuavcan.transport.Feedback) -> None:
+    def on_feedback(fb: pycyphal.transport.Feedback) -> None:
         nonlocal last_feedback
         last_feedback = fb
 
     out_123.enable_feedback(on_feedback)
 
-    ts = pyuavcan.transport.Timestamp.now()
+    ts = pycyphal.transport.Timestamp.now()
     assert await out_123.send(
-        pyuavcan.transport.Transfer(
+        pycyphal.transport.Transfer(
             timestamp=ts,
-            priority=pyuavcan.transport.Priority.IMMEDIATE,
+            priority=pycyphal.transport.Priority.IMMEDIATE,
             transfer_id=123,  # mod 32 = 27
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
@@ -67,7 +67,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert last_feedback.first_frame_transmission_timestamp == ts
     del ts
 
-    assert out_123.sample_statistics() == pyuavcan.transport.SessionStatistics(
+    assert out_123.sample_statistics() == pycyphal.transport.SessionStatistics(
         transfers=1,
         frames=1,
         payload_bytes=len("Hello world!"),
@@ -95,9 +95,9 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
 
     # This one will be dropped because wrong target node 123 != 42
     assert await out_123.send(
-        pyuavcan.transport.Transfer(
-            timestamp=pyuavcan.transport.Timestamp.now(),
-            priority=pyuavcan.transport.Priority.IMMEDIATE,
+        pycyphal.transport.Transfer(
+            timestamp=pycyphal.transport.Timestamp.now(),
+            priority=pycyphal.transport.Priority.IMMEDIATE,
             transfer_id=123,  # mod 32 = 27
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
@@ -113,9 +113,9 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert inp_123 is not inp_42
 
     assert await out_bc.send(
-        pyuavcan.transport.Transfer(
-            timestamp=pyuavcan.transport.Timestamp.now(),
-            priority=pyuavcan.transport.Priority.IMMEDIATE,
+        pycyphal.transport.Transfer(
+            timestamp=pycyphal.transport.Timestamp.now(),
+            priority=pycyphal.transport.Priority.IMMEDIATE,
             transfer_id=123,  # mod 32 = 27
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
@@ -128,27 +128,27 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert rx is not None
     assert rx.timestamp.monotonic <= time.monotonic()
     assert rx.timestamp.system <= time.time()
-    assert rx.priority == pyuavcan.transport.Priority.IMMEDIATE
+    assert rx.priority == pycyphal.transport.Priority.IMMEDIATE
     assert rx.transfer_id == 27
     assert rx.fragmented_payload == [memoryview(b"Hello world!")]
     assert rx.source_node_id == tr.local_node_id
 
-    assert inp_42.sample_statistics() == pyuavcan.transport.SessionStatistics(
+    assert inp_42.sample_statistics() == pycyphal.transport.SessionStatistics(
         transfers=1,
         frames=1,
         payload_bytes=len("Hello world!"),
     )
 
-    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.loopback.__name__):
+    with caplog.at_level(logging.CRITICAL, logger=pycyphal.transport.loopback.__name__):
         out_bc.exception = RuntimeError("INTENDED EXCEPTION")
         with pytest.raises(ValueError):
             # noinspection PyTypeHints
             out_bc.exception = 123  # type: ignore
         with pytest.raises(RuntimeError, match="INTENDED EXCEPTION"):
             assert await out_bc.send(
-                pyuavcan.transport.Transfer(
-                    timestamp=pyuavcan.transport.Timestamp.now(),
-                    priority=pyuavcan.transport.Priority.IMMEDIATE,
+                pycyphal.transport.Transfer(
+                    timestamp=pycyphal.transport.Timestamp.now(),
+                    priority=pycyphal.transport.Priority.IMMEDIATE,
                     transfer_id=123,  # mod 32 = 27
                     fragmented_payload=[memoryview(b"Hello world!")],
                 ),
@@ -160,17 +160,17 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
 
     assert None is await inp_42.receive(0)
 
-    mon_events: typing.List[pyuavcan.transport.Capture] = []
-    mon_events2: typing.List[pyuavcan.transport.Capture] = []
+    mon_events: typing.List[pycyphal.transport.Capture] = []
+    mon_events2: typing.List[pycyphal.transport.Capture] = []
     assert tr.capture_handlers == []
     tr.begin_capture(mon_events.append)
     assert len(tr.capture_handlers) == 1
     tr.begin_capture(mon_events2.append)
     assert len(tr.capture_handlers) == 2
     assert await out_bc.send(
-        pyuavcan.transport.Transfer(
-            timestamp=pyuavcan.transport.Timestamp.now(),
-            priority=pyuavcan.transport.Priority.IMMEDIATE,
+        pycyphal.transport.Transfer(
+            timestamp=pycyphal.transport.Timestamp.now(),
+            priority=pycyphal.transport.Priority.IMMEDIATE,
             transfer_id=200,
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
@@ -180,7 +180,7 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
     assert rx is not None
     assert rx.transfer_id == 200 % 32
     (ev,) = mon_events
-    assert isinstance(ev, pyuavcan.transport.loopback.LoopbackCapture)
+    assert isinstance(ev, pycyphal.transport.loopback.LoopbackCapture)
     assert ev.timestamp == rx.timestamp
     assert ev.transfer.metadata.transfer_id == rx.transfer_id
     assert ev.transfer.metadata.session_specifier.source_node_id == tr.local_node_id
@@ -196,11 +196,11 @@ async def _unittest_loopback_transport(caplog: typing.Any) -> None:
 
 
 async def _unittest_loopback_transport_service() -> None:
-    from pyuavcan.transport import ServiceDataSpecifier, InputSessionSpecifier, OutputSessionSpecifier
+    from pycyphal.transport import ServiceDataSpecifier, InputSessionSpecifier, OutputSessionSpecifier
 
     loop = asyncio.get_running_loop()
-    payload_metadata = pyuavcan.transport.PayloadMetadata(1234)
-    tr = pyuavcan.transport.loopback.LoopbackTransport(1234)
+    payload_metadata = pycyphal.transport.PayloadMetadata(1234)
+    tr = pycyphal.transport.loopback.LoopbackTransport(1234)
 
     inp = tr.get_input_session(
         InputSessionSpecifier(ServiceDataSpecifier(123, ServiceDataSpecifier.Role.REQUEST), 1234), payload_metadata
@@ -211,9 +211,9 @@ async def _unittest_loopback_transport_service() -> None:
     )
 
     assert await out.send(
-        pyuavcan.transport.Transfer(
-            timestamp=pyuavcan.transport.Timestamp.now(),
-            priority=pyuavcan.transport.Priority.IMMEDIATE,
+        pycyphal.transport.Transfer(
+            timestamp=pycyphal.transport.Timestamp.now(),
+            priority=pycyphal.transport.Priority.IMMEDIATE,
             transfer_id=123,  # mod 32 = 27
             fragmented_payload=[memoryview(b"Hello world!")],
         ),
@@ -224,11 +224,11 @@ async def _unittest_loopback_transport_service() -> None:
 
 
 async def _unittest_loopback_tracer() -> None:
-    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Timestamp, Priority
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, TransferTrace
-    from pyuavcan.transport.loopback import LoopbackCapture
+    from pycyphal.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Timestamp, Priority
+    from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, TransferTrace
+    from pycyphal.transport.loopback import LoopbackCapture
 
-    tr = pyuavcan.transport.loopback.LoopbackTransport.make_tracer()
+    tr = pycyphal.transport.loopback.LoopbackTransport.make_tracer()
     ts = Timestamp.now()
 
     # MESSAGE
@@ -290,17 +290,17 @@ async def _unittest_loopback_tracer() -> None:
     )
 
     # Unknown capture types should yield None.
-    assert tr.update(pyuavcan.transport.Capture(ts)) is None
+    assert tr.update(pycyphal.transport.Capture(ts)) is None
 
 
 async def _unittest_loopback_spoofing() -> None:
-    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
-    from pyuavcan.transport import MessageDataSpecifier
-    from pyuavcan.transport.loopback import LoopbackCapture
+    from pycyphal.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata, Priority
+    from pycyphal.transport import MessageDataSpecifier
+    from pycyphal.transport.loopback import LoopbackCapture
 
-    tr = pyuavcan.transport.loopback.LoopbackTransport(None)
+    tr = pycyphal.transport.loopback.LoopbackTransport(None)
 
-    mon_events: typing.List[pyuavcan.transport.Capture] = []
+    mon_events: typing.List[pycyphal.transport.Capture] = []
     tr.begin_capture(mon_events.append)
     assert tr.capture_active
 

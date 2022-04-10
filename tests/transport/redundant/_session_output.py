@@ -1,19 +1,19 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import time
 import typing
 import logging
 import asyncio
 import pytest
-import pyuavcan
-from pyuavcan.transport import ResourceClosedError
-from pyuavcan.transport import Transfer, Timestamp, Priority, SessionStatistics
-from pyuavcan.transport import TransferFrom
-from pyuavcan.transport.loopback import LoopbackTransport, LoopbackFeedback
-from pyuavcan.transport.redundant._session._output import RedundantOutputSession
-from pyuavcan.transport.redundant import RedundantSessionStatistics, RedundantFeedback
+import pycyphal
+from pycyphal.transport import ResourceClosedError
+from pycyphal.transport import Transfer, Timestamp, Priority, SessionStatistics
+from pycyphal.transport import TransferFrom
+from pycyphal.transport.loopback import LoopbackTransport, LoopbackFeedback
+from pycyphal.transport.redundant._session._output import RedundantOutputSession
+from pycyphal.transport.redundant import RedundantSessionStatistics, RedundantFeedback
 
 pytestmark = pytest.mark.asyncio
 
@@ -21,9 +21,9 @@ pytestmark = pytest.mark.asyncio
 async def _unittest_redundant_output() -> None:
     loop = asyncio.get_event_loop()
 
-    spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
-    spec_rx = pyuavcan.transport.InputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(30 * 1024 * 1024)
+    spec = pycyphal.transport.OutputSessionSpecifier(pycyphal.transport.MessageDataSpecifier(4321), None)
+    spec_rx = pycyphal.transport.InputSessionSpecifier(spec.data_specifier, None)
+    meta = pycyphal.transport.PayloadMetadata(30 * 1024 * 1024)
 
     ts = Timestamp.now()
 
@@ -67,7 +67,7 @@ async def _unittest_redundant_output() -> None:
     rx_b = tr_b.get_input_session(spec_rx, meta)
 
     # Begin transmission, then add an inferior while it is in progress.
-    async def add_inferior(inferior: pyuavcan.transport.OutputSession) -> None:
+    async def add_inferior(inferior: pycyphal.transport.OutputSession) -> None:
         print("sleeping before adding the inferior...")
         await asyncio.sleep(2.0)
         print("adding the inferior...")
@@ -331,9 +331,9 @@ async def _unittest_redundant_output() -> None:
 async def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     loop = asyncio.get_event_loop()
 
-    spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
-    spec_rx = pyuavcan.transport.InputSessionSpecifier(spec.data_specifier, None)
-    meta = pyuavcan.transport.PayloadMetadata(30 * 1024 * 1024)
+    spec = pycyphal.transport.OutputSessionSpecifier(pycyphal.transport.MessageDataSpecifier(4321), None)
+    spec_rx = pycyphal.transport.InputSessionSpecifier(spec.data_specifier, None)
+    meta = pycyphal.transport.PayloadMetadata(30 * 1024 * 1024)
 
     ts = Timestamp.now()
 
@@ -457,11 +457,11 @@ async def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
     await asyncio.sleep(2.0)
 
 
-async def _unittest_close_while_blocked() -> None:  # https://github.com/UAVCAN/pyuavcan/issues/204
+async def _unittest_close_while_blocked() -> None:  # https://github.com/OpenCyphal/pycyphal/issues/204
     import contextlib
 
-    spec = pyuavcan.transport.OutputSessionSpecifier(pyuavcan.transport.MessageDataSpecifier(4321), None)
-    meta = pyuavcan.transport.PayloadMetadata(30 * 1024 * 1024)
+    spec = pycyphal.transport.OutputSessionSpecifier(pycyphal.transport.MessageDataSpecifier(4321), None)
+    meta = pycyphal.transport.PayloadMetadata(30 * 1024 * 1024)
     ses = RedundantOutputSession(spec, meta, finalizer=lambda: None)
     tr_a = LoopbackTransport(111)
     tr_a.send_delay = 10.0

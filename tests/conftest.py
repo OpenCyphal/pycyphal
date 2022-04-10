@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import sys
 import typing
@@ -12,9 +12,9 @@ import pytest
 from .dsdl.conftest import compiled as compiled  # noqa  # pylint: disable=unused-import
 
 
-GIBIBYTE = 1024 ** 3
+GIBIBYTE = 1024**3
 
-MEMORY_LIMIT = 4 * GIBIBYTE
+MEMORY_LIMIT = 8 * GIBIBYTE
 """
 The test suite artificially limits the amount of consumed memory in order to avoid triggering the OOM killer
 should a test go crazy and eat all memory.

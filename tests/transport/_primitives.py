@@ -1,12 +1,12 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 
 def _unittest_transport_primitives() -> None:
     from pytest import raises
-    from pyuavcan.transport import InputSessionSpecifier, OutputSessionSpecifier
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata
+    from pycyphal.transport import InputSessionSpecifier, OutputSessionSpecifier
+    from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata
 
     with raises(ValueError):
         MessageDataSpecifier(-1)

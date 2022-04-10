@@ -1,14 +1,14 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import time
 import typing
 import asyncio
 import logging
 import pytest
-import pyuavcan.transport
-from pyuavcan.transport import can
+import pycyphal.transport
+from pycyphal.transport import can
 
 
 _RX_TIMEOUT = 10e-3
@@ -17,21 +17,21 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_can_transport_anon() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
-    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
-    from pyuavcan.transport import OperationNotDefinedForAnonymousNodeError
-    from pyuavcan.transport import InputSessionSpecifier, OutputSessionSpecifier
-    from pyuavcan.transport.can._identifier import MessageCANID
-    from pyuavcan.transport.can._frame import UAVCANFrame
+    from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
+    from pycyphal.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
+    from pycyphal.transport import OperationNotDefinedForAnonymousNodeError
+    from pycyphal.transport import InputSessionSpecifier, OutputSessionSpecifier
+    from pycyphal.transport.can._identifier import MessageCANID
+    from pycyphal.transport.can._frame import CyphalFrame
     from .media.mock import MockMedia, FrameCollector
 
     loop = asyncio.get_running_loop()
     loop.slow_callback_duration = 5.0
 
-    with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
+    with pytest.raises(pycyphal.transport.InvalidTransportConfigurationError):
         can.CANTransport(MockMedia(set(), 64, 0), None)
 
-    with pytest.raises(pyuavcan.transport.InvalidTransportConfigurationError):
+    with pytest.raises(pycyphal.transport.InvalidTransportConfigurationError):
         can.CANTransport(MockMedia(set(), 7, 16), None)
 
     peers: typing.Set[MockMedia] = set()
@@ -43,7 +43,7 @@ async def _unittest_can_transport_anon() -> None:
     tr = can.CANTransport(media, None)
     tr2 = can.CANTransport(media2, None)
 
-    assert tr.protocol_parameters == pyuavcan.transport.ProtocolParameters(transfer_id_modulo=32, max_nodes=128, mtu=63)
+    assert tr.protocol_parameters == pycyphal.transport.ProtocolParameters(transfer_id_modulo=32, max_nodes=128, mtu=63)
     assert tr.local_node_id is None
     assert tr.protocol_parameters == tr2.protocol_parameters
 
@@ -139,7 +139,7 @@ async def _unittest_can_transport_anon() -> None:
 
     assert (
         collector.pop()[1].frame
-        == UAVCANFrame(
+        == CyphalFrame(
             identifier=MessageCANID(Priority.IMMEDIATE, None, 2345).compile(
                 [_mem("abcdef")]
             ),  # payload fragments joined
@@ -234,12 +234,12 @@ async def _unittest_can_transport_anon() -> None:
 
 
 async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
-    from pyuavcan.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
-    from pyuavcan.transport import ResourceClosedError, InputSessionSpecifier, OutputSessionSpecifier
-    from pyuavcan.transport.can._identifier import MessageCANID, ServiceCANID
-    from pyuavcan.transport.can._frame import UAVCANFrame
-    from pyuavcan.transport.can.media import Envelope
+    from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
+    from pycyphal.transport import UnsupportedSessionConfigurationError, Priority, SessionStatistics, Timestamp
+    from pycyphal.transport import ResourceClosedError, InputSessionSpecifier, OutputSessionSpecifier
+    from pycyphal.transport.can._identifier import MessageCANID, ServiceCANID
+    from pycyphal.transport.can._frame import CyphalFrame
+    from pycyphal.transport.can.media import Envelope
     from .media.mock import MockMedia, FrameCollector
 
     loop = asyncio.get_running_loop()
@@ -254,7 +254,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     tr = can.CANTransport(media, 5)
     tr2 = can.CANTransport(media2, 123)
 
-    assert tr.protocol_parameters == pyuavcan.transport.ProtocolParameters(transfer_id_modulo=32, max_nodes=128, mtu=63)
+    assert tr.protocol_parameters == pycyphal.transport.ProtocolParameters(transfer_id_modulo=32, max_nodes=128, mtu=63)
     assert tr.local_node_id == 5
     assert tr.protocol_parameters == tr2.protocol_parameters
 
@@ -339,7 +339,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
 
     assert (
         collector.pop()[1].frame
-        == UAVCANFrame(
+        == CyphalFrame(
             identifier=MessageCANID(Priority.IMMEDIATE, 5, 2345).compile([_mem("abcdef")]),  # payload fragments joined
             padded_payload=_mem("abcdef"),
             transfer_id=11,
@@ -564,7 +564,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     media.inject_received(
         [
             Envelope(
-                UAVCANFrame(
+                CyphalFrame(
                     identifier=ServiceCANID(
                         priority=Priority.FAST,
                         source_node_id=5,
@@ -585,7 +585,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     media.inject_received(
         [
             Envelope(
-                UAVCANFrame(
+                CyphalFrame(
                     identifier=ServiceCANID(
                         priority=Priority.FAST,
                         source_node_id=5,
@@ -606,7 +606,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
 
     # Now, this transmission will succeed, but a pending loopback registry entry will be overwritten, which will be
     # reflected in the error counter.
-    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.can.__name__):
+    with caplog.at_level(logging.CRITICAL, logger=pycyphal.transport.can.__name__):
         assert await client_requester.send(
             Transfer(
                 timestamp=ts,
@@ -632,7 +632,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     media.inject_received(
         [
             Envelope(
-                UAVCANFrame(
+                CyphalFrame(
                     identifier=ServiceCANID(
                         priority=Priority.FAST,
                         source_node_id=5,
@@ -703,7 +703,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     )
 
     #
-    # Drop non-UAVCAN frames silently
+    # Drop non-Cyphal frames silently
     #
     media.inject_received(
         [
@@ -715,7 +715,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
                     service_id=333,
                     request_not_response=True,
                 ).compile([_mem("")]),
-                data=bytearray(b""),  # The CAN ID is valid for UAVCAN, but the payload is not - no tail byte
+                data=bytearray(b""),  # The CAN ID is valid for Cyphal, but the payload is not - no tail byte
                 format=can.media.FrameFormat.EXTENDED,
             )
         ]
@@ -724,7 +724,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     media.inject_received(
         [
             can.media.DataFrame(
-                identifier=0,  # The CAN ID is not valid for UAVCAN
+                identifier=0,  # The CAN ID is not valid for Cyphal
                 data=bytearray(b"123"),
                 format=can.media.FrameFormat.BASE,
             )
@@ -734,7 +734,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     media.inject_received(
         [
             Envelope(
-                UAVCANFrame(
+                CyphalFrame(
                     identifier=ServiceCANID(
                         priority=Priority.FAST,
                         source_node_id=5,
@@ -936,8 +936,8 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
 
 
 async def _unittest_issue_120() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
-    from pyuavcan.transport import Priority, Timestamp, OutputSessionSpecifier
+    from pycyphal.transport import MessageDataSpecifier, PayloadMetadata, Transfer
+    from pycyphal.transport import Priority, Timestamp, OutputSessionSpecifier
     from .media.mock import MockMedia
 
     loop = asyncio.get_running_loop()
@@ -978,11 +978,11 @@ async def _unittest_issue_120() -> None:
 
 
 async def _unittest_can_capture_trace() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer, Priority, Timestamp
-    from pyuavcan.transport import InputSessionSpecifier, OutputSessionSpecifier, TransferTrace
+    from pycyphal.transport import MessageDataSpecifier, PayloadMetadata, Transfer, Priority, Timestamp
+    from pycyphal.transport import InputSessionSpecifier, OutputSessionSpecifier, TransferTrace
     from .media.mock import MockMedia
-    from pyuavcan.transport.can import CANCapture
-    from pyuavcan.transport.can.media import FilterConfiguration, FrameFormat
+    from pycyphal.transport.can import CANCapture
+    from pycyphal.transport.can.media import FilterConfiguration, FrameFormat
 
     loop = asyncio.get_running_loop()
     loop.slow_callback_duration = 5.0
@@ -999,11 +999,11 @@ async def _unittest_can_capture_trace() -> None:
     captures: typing.List[CANCapture] = []
     captures_other: typing.List[CANCapture] = []
 
-    def add_capture(cap: pyuavcan.transport.Capture) -> None:
+    def add_capture(cap: pycyphal.transport.Capture) -> None:
         assert isinstance(cap, CANCapture)
         captures.append(cap)
 
-    def add_capture_other(cap: pyuavcan.transport.Capture) -> None:
+    def add_capture_other(cap: pycyphal.transport.Capture) -> None:
         assert isinstance(cap, CANCapture)
         captures_other.append(cap)
 
@@ -1066,9 +1066,9 @@ async def _unittest_can_capture_trace() -> None:
 
 
 async def _unittest_can_spoofing() -> None:
-    from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, Priority, Timestamp
-    from pyuavcan.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata
-    from pyuavcan.transport.can._identifier import CANID
+    from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, Priority, Timestamp
+    from pycyphal.transport import AlienTransfer, AlienSessionSpecifier, AlienTransferMetadata
+    from pycyphal.transport.can._identifier import CANID
     from .media.mock import MockMedia
 
     loop = asyncio.get_running_loop()
@@ -1135,7 +1135,7 @@ async def _unittest_can_spoofing() -> None:
     assert peep.data[:-1] == b"321"
     assert peep.data[-1] == 0b1110_0000 | 1
 
-    with pytest.raises(pyuavcan.transport.TransportError):
+    with pytest.raises(pycyphal.transport.TransportError):
         await tr.spoof(
             AlienTransfer(
                 AlienTransferMetadata(
@@ -1152,7 +1152,7 @@ async def _unittest_can_spoofing() -> None:
             loop.time() + 1.0,
         )
 
-    with pytest.raises(pyuavcan.transport.TransportError):
+    with pytest.raises(pycyphal.transport.TransportError):
         await tr.spoof(
             AlienTransfer(
                 AlienTransferMetadata(
@@ -1169,7 +1169,7 @@ async def _unittest_can_spoofing() -> None:
             loop.time() + 1.0,
         )
 
-    with pytest.raises(pyuavcan.transport.TransportError):
+    with pytest.raises(pycyphal.transport.TransportError):
         await tr.spoof(
             AlienTransfer(
                 AlienTransferMetadata(
@@ -1193,13 +1193,13 @@ def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
 
 class _FeedbackCollector:
     def __init__(self) -> None:
-        self._item: typing.Optional[pyuavcan.transport.Feedback] = None
+        self._item: typing.Optional[pycyphal.transport.Feedback] = None
 
-    def give(self, feedback: pyuavcan.transport.Feedback) -> None:
+    def give(self, feedback: pycyphal.transport.Feedback) -> None:
         assert self._item is None, "Clear the old feedback first"
         self._item = feedback
 
-    def take(self) -> pyuavcan.transport.Feedback:
+    def take(self) -> pycyphal.transport.Feedback:
         out = self._item
         self._item = None
         assert out is not None, "Feedback is missing"

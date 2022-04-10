@@ -1,16 +1,16 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import asyncio
 import pytest
 from pytest import raises, approx
-import pyuavcan
-from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority, ServiceDataSpecifier
-from pyuavcan.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback, Transfer
-from pyuavcan.transport.serial._session._output import SerialOutputSession
-from pyuavcan.transport.serial import SerialFrame
+import pycyphal
+from pycyphal.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority, ServiceDataSpecifier
+from pycyphal.transport import PayloadMetadata, SessionStatistics, Timestamp, Feedback, Transfer
+from pycyphal.transport.serial._session._output import SerialOutputSession
+from pycyphal.transport.serial import SerialFrame
 
 pytestmark = pytest.mark.asyncio
 
@@ -38,7 +38,7 @@ async def _unittest_output_session() -> None:
         nonlocal finalized
         finalized = True
 
-    with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+    with raises(pycyphal.transport.OperationNotDefinedForAnonymousNodeError):
         SerialOutputSession(
             specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
             payload_metadata=PayloadMetadata(1024),
@@ -76,7 +76,7 @@ async def _unittest_output_session() -> None:
     assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 1
 
-    with raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+    with raises(pycyphal.transport.OperationNotDefinedForAnonymousNodeError):
         await (
             sos.send(
                 Transfer(
@@ -167,7 +167,7 @@ async def _unittest_output_session() -> None:
     assert finalized
     sos.close()  # Idempotency
 
-    with raises(pyuavcan.transport.ResourceClosedError):
+    with raises(pycyphal.transport.ResourceClosedError):
         await (
             sos.send(
                 Transfer(

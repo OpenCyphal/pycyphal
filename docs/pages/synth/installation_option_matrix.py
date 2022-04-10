@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import re
 import typing
 import textwrap
 import dataclasses
 import configparser
-import pyuavcan
+import pycyphal
 
 HEADER_SUFFIX = "\n" + "." * 80 + "\n"
 
@@ -18,7 +18,7 @@ extras: typing.Dict[str, str] = dict(cp["options.extras_require"])
 
 
 print("If you need full-featured library, use this and read no more::", end="\n\n")
-print(f'   pip install pyuavcan[{",".join(extras.keys())}]', end="\n\n")
+print(f'   pip install pycyphal[{",".join(extras.keys())}]', end="\n\n")
 print("If you want to know what exactly you are installing, read on.", end="\n\n")
 
 
@@ -32,9 +32,9 @@ class TransportOption:
 transport_options: typing.List[TransportOption] = []
 
 # noinspection PyTypeChecker
-pyuavcan.util.import_submodules(pyuavcan.transport)
-for cls in pyuavcan.util.iter_descendants(pyuavcan.transport.Transport):
-    transport_name = cls.__module__.split(".")[2]  # pyuavcan.transport.X
+pycyphal.util.import_submodules(pycyphal.transport)
+for cls in pycyphal.util.iter_descendants(pycyphal.transport.Transport):
+    transport_name = cls.__module__.split(".")[2]  # pycyphal.transport.X
     relevant_extras: typing.Dict[str, str] = {}
     for k in list(extras.keys()):
         if k.startswith(f"transport_{transport_name}"):
