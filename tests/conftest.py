@@ -14,7 +14,7 @@ from .dsdl.conftest import compiled as compiled  # noqa  # pylint: disable=unuse
 
 GIBIBYTE = 1024**3
 
-MEMORY_LIMIT = 4 * GIBIBYTE
+MEMORY_LIMIT = 8 * GIBIBYTE
 """
 The test suite artificially limits the amount of consumed memory in order to avoid triggering the OOM killer
 should a test go crazy and eat all memory.
