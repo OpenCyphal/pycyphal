@@ -189,7 +189,9 @@ class ClientImpl(Closable, typing.Generic[T]):
         transfer_id_modulo_factory: typing.Callable[[], int],
         finalizer: PortFinalizer,
     ):
-        assert pycyphal.dsdl.is_service_type(dtype)
+        if not pycyphal.dsdl.is_service_type(dtype):
+            raise TypeError(f"Not a service type: {dtype}")
+
         self.dtype = dtype
         self.input_transport_session = input_transport_session
         self.output_transport_session = output_transport_session
@@ -213,6 +215,11 @@ class ClientImpl(Closable, typing.Generic[T]):
         ] = {}
 
         self._task = asyncio.get_event_loop().create_task(self._task_function())
+
+        self._request_dtype = self._dtype.Request  # type: ignore
+        self._response_dtype = self._dtype.Response  # type: ignore
+        assert pycyphal.dsdl.is_serializable(self._request_dtype)
+        assert pycyphal.dsdl.is_serializable(self._response_dtype)
 
     @property
     def is_closed(self) -> bool:
@@ -254,7 +261,6 @@ class ClientImpl(Closable, typing.Generic[T]):
             if send_result:
                 self.sent_request_count += 1
                 response, transfer = await asyncio.wait_for(future, timeout=response_timeout)
-                assert isinstance(response, self.dtype.Response)
                 assert isinstance(transfer, pycyphal.transport.TransferFrom)
                 return response, transfer
             self.unsent_request_count += 1
@@ -297,9 +303,9 @@ class ClientImpl(Closable, typing.Generic[T]):
         priority: pycyphal.transport.Priority,
         monotonic_deadline: float,
     ) -> bool:
-        if not isinstance(request, self.dtype.Request):
+        if not isinstance(request, self._request_dtype):
             raise TypeError(
-                f"Invalid request object: expected an instance of {self.dtype.Request}, "
+                f"Invalid request object: expected an instance of {self._request_dtype}, "
                 f"got {type(request)} instead."
             )
 
@@ -319,7 +325,7 @@ class ClientImpl(Closable, typing.Generic[T]):
                 if transfer is None:
                     continue
 
-                response = pycyphal.dsdl.deserialize(self.dtype.Response, transfer.fragmented_payload)
+                response = pycyphal.dsdl.deserialize(self._response_dtype, transfer.fragmented_payload)
                 if response is None:
                     self.deserialization_failure_count += 1
                     continue

@@ -16,7 +16,7 @@ from . import _serialized_representation
 _logger = logging.getLogger(__name__)
 
 
-def serialize(obj: object) -> typing.Iterable[memoryview]:
+def serialize(obj: typing.Any) -> typing.Iterable[memoryview]:
     """
     Constructs a serialized representation of the provided top-level object.
     The resulting serialized representation is padded to one byte in accordance with the Cyphal specification.
@@ -27,18 +27,18 @@ def serialize(obj: object) -> typing.Iterable[memoryview]:
     It is guaranteed that at least one fragment is always returned (which may be empty).
     """
     try:
-        fun = obj._serialize_  # type: ignore
+        fun = obj._serialize_
     except AttributeError:
         raise TypeError(f"Cannot serialize object of type {type(obj)}") from None
     # TODO: update the Serializer class to emit an iterable of fragments.
-    ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)  # type: ignore
+    ser = _serialized_representation.Serializer.new(obj._EXTENT_BYTES_)
     fun(ser)
     yield ser.buffer.data
 
 
 def deserialize(
-    dtype: typing.Type[object] | type, fragmented_serialized_representation: typing.Sequence[memoryview]
-) -> typing.Optional[object]:
+    dtype: typing.Any, fragmented_serialized_representation: typing.Sequence[memoryview]
+) -> typing.Optional[typing.Any]:
     """
     Constructs an instance of the supplied DSDL-generated data type from its serialized representation.
     Returns None if the provided serialized representation is invalid.
@@ -54,12 +54,12 @@ def deserialize(
         If they are not, some of the array-typed fields of the constructed object may be read-only.
     """
     try:
-        fun = dtype._deserialize_  # type: ignore
+        fun = dtype._deserialize_
     except AttributeError:
         raise TypeError(f"Cannot deserialize using type {dtype}") from None
     deserializer = _serialized_representation.Deserializer.new(fragmented_serialized_representation)
     try:
-        return fun(deserializer)  # type: ignore
+        return fun(deserializer)
     except _serialized_representation.Deserializer.FormatError:
         _logger.info("Invalid serialized representation of %s: %s", get_model(dtype), deserializer, exc_info=True)
         return None
@@ -70,7 +70,7 @@ def get_model(class_or_instance: typing.Any) -> pydsdl.CompositeType:
     Obtains a PyDSDL model of the supplied DSDL-generated class or its instance.
     This is the inverse of :func:`get_class`.
     """
-    out = class_or_instance._MODEL_  # type: ignore
+    out = class_or_instance._MODEL_
     assert isinstance(out, pydsdl.CompositeType)
     return out
 
@@ -124,16 +124,16 @@ def get_class(model: pydsdl.CompositeType) -> type:
     return out
 
 
-def get_extent_bytes(class_or_instance: typing.Union[typing.Type[object], type, object]) -> int:
-    return int(class_or_instance._EXTENT_BYTES_)  # type: ignore
+def get_extent_bytes(class_or_instance: typing.Any) -> int:
+    return int(class_or_instance._EXTENT_BYTES_)
 
 
-def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[object], type, object]) -> typing.Optional[int]:
+def get_fixed_port_id(class_or_instance: typing.Any) -> typing.Optional[int]:
     """
     Returns None if the supplied type has no fixed port-ID.
     """
     try:
-        out = int(class_or_instance._FIXED_PORT_ID_)  # type: ignore
+        out = int(class_or_instance._FIXED_PORT_ID_)
     except (TypeError, AttributeError):
         return None
     else:
@@ -141,7 +141,7 @@ def get_fixed_port_id(class_or_instance: typing.Union[typing.Type[object], type,
         return out
 
 
-def get_attribute(obj: typing.Union[object, typing.Type[object], type], name: str) -> typing.Any:
+def get_attribute(obj: typing.Any, name: str) -> typing.Any:
     """
     DSDL type attributes whose names can't be represented in Python (such as ``def`` or ``type``)
     are suffixed with an underscore.
@@ -156,7 +156,7 @@ def get_attribute(obj: typing.Union[object, typing.Type[object], type], name: st
         return getattr(obj, name + "_")
 
 
-def set_attribute(obj: object, name: str, value: typing.Any) -> None:
+def set_attribute(obj: typing.Any, name: str, value: typing.Any) -> None:
     """
     DSDL type attributes whose names can't be represented in Python (such as ``def`` or ``type``)
     are suffixed with an underscore.
@@ -176,7 +176,7 @@ def set_attribute(obj: object, name: str, value: typing.Any) -> None:
         raise AttributeError(name)
 
 
-def is_serializable(dtype: typing.Type[object] | type) -> bool:
+def is_serializable(dtype: typing.Any) -> bool:
     return (
         hasattr(dtype, "_MODEL_")
         and hasattr(dtype, "_EXTENT_BYTES_")
@@ -185,11 +185,11 @@ def is_serializable(dtype: typing.Type[object] | type) -> bool:
     )
 
 
-def is_message_type(dtype: typing.Type[object] | type) -> bool:
+def is_message_type(dtype: typing.Any) -> bool:
     return is_serializable(dtype) and not hasattr(dtype, "Request") and not hasattr(dtype, "Response")
 
 
-def is_service_type(dtype: typing.Type[object] | type) -> bool:
+def is_service_type(dtype: typing.Any) -> bool:
     return (
         hasattr(dtype, "_MODEL_")
         and is_serializable(getattr(dtype, "Request", None))

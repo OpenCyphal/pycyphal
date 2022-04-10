@@ -56,9 +56,9 @@ def test(session):
     session.log("Using the newest supported Python: %s", is_latest_python(session))
     session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
     session.install(
-        "pytest         ~= 6.2",
-        "pytest-asyncio == 0.16",
-        "coverage       ~= 6.2",
+        "pytest         ~= 7.1",
+        "pytest-asyncio == 0.18",
+        "coverage       ~= 6.3",
     )
 
     # The test suite generates a lot of temporary files, so we change the working directory.
@@ -124,8 +124,8 @@ def test(session):
     #   2. At least MyPy has to be run separately per Python version we support.
     # If the interpreter is not CPython, this may need to be conditionally disabled.
     session.install(
-        "mypy   == 0.931",
-        "pylint == 2.12.*",
+        "mypy   == 0.942",
+        "pylint == 2.13.*",
     )
     relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
     if not relaxed_static_analysis:

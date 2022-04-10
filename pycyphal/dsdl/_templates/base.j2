@@ -18,6 +18,8 @@
 # mypy: warn_unused_ignores=False
 
 from __future__ import annotations
+{# FIXME Kalyan, please replace _Issue110_ with Serializer/Deserializer defined in the Nunavut support module. #}
+from typing import Any as _Issue110_
 import numpy as _np_
 from numpy.typing import NDArray as _NDArray_
 import pydsdl as _pydsdl_
@@ -359,12 +361,12 @@ class {{ name }}:
  # SERIALIZATION METHODS
  #}
     # noinspection PyProtectedMember
-    def _serialize_(self, _ser_: {{ full_class_name }}._SerializerTypeVar_) -> None:
+    def _serialize_(self, _ser_: _Issue110_) -> None:
         {{ serialize(type) | remove_blank_lines | indent }}
 
     # noinspection PyProtectedMember
     @staticmethod
-    def _deserialize_(_des_: {{ full_class_name }}._DeserializerTypeVar_) -> {{ full_class_name }}:
+    def _deserialize_(_des_: _Issue110_) -> {{ full_class_name }}:
         {{ deserialize(type, full_class_name) | remove_blank_lines | indent }}
         assert isinstance(self, {{ full_class_name }})
         return self

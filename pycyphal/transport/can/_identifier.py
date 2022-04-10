@@ -91,7 +91,7 @@ class MessageCANID(CANID):
         if source_node_id is None:  # Anonymous frame
             # Anonymous transfers cannot be multi-frame, but we have no way of enforcing this here since we don't
             # know what the MTU is. The caller must enforce this instead.
-            source_node_id = int(sum(map(sum, fragmented_transfer_payload))) & self.NODE_ID_MASK
+            source_node_id = int(sum(map(sum, fragmented_transfer_payload))) & self.NODE_ID_MASK  # type: ignore
             identifier |= _BIT_MSG_ANON
 
         assert 0 <= source_node_id <= self.NODE_ID_MASK  # Should be valid here already

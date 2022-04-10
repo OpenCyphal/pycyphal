@@ -37,10 +37,10 @@ async def _unittest_slow_presentation_pub_sub_anon(
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        pres_a.make_client_with_fixed_service_id(uavcan.node.Heartbeat_1_0, 123)  # type: ignore
+        pres_a.make_client_with_fixed_service_id(uavcan.node.Heartbeat_1_0, 123)
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        pres_a.get_server_with_fixed_service_id(uavcan.node.Heartbeat_1_0)  # type: ignore
+        pres_a.get_server_with_fixed_service_id(uavcan.node.Heartbeat_1_0)
 
     if transmits_anon:
         pub_heart = pres_a.make_publisher_with_fixed_subject_id(uavcan.node.Heartbeat_1_0)

@@ -20,11 +20,11 @@ from pycyphal.transport.udp import IPPacket, LinkLayerPacket, UDPIPPacket
 
 def _unittest_socket_factory() -> None:
     from pytest import raises
-    from ipaddress import ip_address
+    from ipaddress import IPv4Address
 
     is_linux = sys.platform.startswith("linux")
 
-    fac = SocketFactory.new(ip_address("127.42.1.200"))
+    fac = SocketFactory.new(IPv4Address("127.42.1.200"))
     assert fac.max_nodes == 0xFFFF
     assert str(fac.local_ip_address) == "127.42.1.200"
 
@@ -74,17 +74,17 @@ def _unittest_socket_factory() -> None:
 
     # ERRORS
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(ip_address("1.2.3.4")).make_input_socket(
+        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_input_socket(
             ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(ip_address("1.2.3.4")).make_input_socket(MessageDataSpecifier(0))
+        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_input_socket(MessageDataSpecifier(0))
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(ip_address("1.2.3.4")).make_output_socket(
+        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_output_socket(
             1, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(ip_address("1.2.3.4")).make_output_socket(1, MessageDataSpecifier(0))
+        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_output_socket(1, MessageDataSpecifier(0))
 
     with raises(UnsupportedSessionConfigurationError):
         fac.make_output_socket(1, MessageDataSpecifier(0))

@@ -203,6 +203,9 @@ class Presentation:
         """
         if not pycyphal.dsdl.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
+        # https://github.com/python/mypy/issues/7121
+        request_dtype = dtype.Request  # type: ignore
+        response_dtype = dtype.Response  # type: ignore
 
         self._raise_if_closed()
         _logger.debug(
@@ -229,10 +232,10 @@ class Presentation:
             assert isinstance(impl, ClientImpl)
         except LookupError:
             output_transport_session = self._transport.get_output_session(
-                output_session_specifier, self._make_payload_metadata(dtype.Request)
+                output_session_specifier, self._make_payload_metadata(request_dtype)
             )
             input_transport_session = self._transport.get_input_session(
-                input_session_specifier, self._make_payload_metadata(dtype.Response)
+                input_session_specifier, self._make_payload_metadata(response_dtype)
             )
             transfer_id_counter = self._output_transfer_id_map.setdefault(
                 output_session_specifier, OutgoingTransferIDCounter()
@@ -267,6 +270,9 @@ class Presentation:
         """
         if not pycyphal.dsdl.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
+        # https://github.com/python/mypy/issues/7121
+        request_dtype = dtype.Request  # type: ignore
+        response_dtype = dtype.Response  # type: ignore
 
         self._raise_if_closed()
         _logger.debug("%s: Providing server for %r at service-ID %d", self, dtype, service_id)
@@ -278,7 +284,7 @@ class Presentation:
             )
             return self._transport.get_output_session(
                 pycyphal.transport.OutputSessionSpecifier(ds, client_node_id),
-                self._make_payload_metadata(dtype.Response),
+                self._make_payload_metadata(response_dtype),
             )
 
         input_session_specifier = pycyphal.transport.InputSessionSpecifier(
@@ -290,7 +296,7 @@ class Presentation:
             assert isinstance(impl, Server)
         except LookupError:
             input_transport_session = self._transport.get_input_session(
-                input_session_specifier, self._make_payload_metadata(dtype.Request)
+                input_session_specifier, self._make_payload_metadata(request_dtype)
             )
             impl = Server(
                 dtype=dtype,

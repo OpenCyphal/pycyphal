@@ -68,8 +68,15 @@ class ServiceRequestMetadata:
         return pycyphal.util.repr_attributes(self, str(self.timestamp), **kwargs)
 
 
-ServiceRequestHandler = typing.Callable[[object, ServiceRequestMetadata], typing.Awaitable[typing.Optional[object]]]
-"""Type of the async request handler callable."""
+ServiceRequestHandler = typing.Callable[
+    [typing.Any, ServiceRequestMetadata],
+    typing.Awaitable[typing.Optional[typing.Any]],
+]
+"""
+Type of the async request handler callable.
+This should be parameterized by T.Request and T.Response, but it is currently not possible due to limitations of MyPy:
+https://github.com/python/mypy/issues/7121
+"""
 
 
 class Server(ServicePort[T]):
@@ -88,8 +95,12 @@ class Server(ServicePort[T]):
         """
         Do not call this directly! Use :meth:`Presentation.get_server`.
         """
-        assert pycyphal.dsdl.is_service_type(dtype)
+        if not pycyphal.dsdl.is_service_type(dtype):
+            raise TypeError(f"Not a service type: {dtype}")
+
         self._dtype = dtype
+        self._request_dtype = self._dtype.Request  # type: ignore
+        self._response_dtype = self._dtype.Response  # type: ignore
         self._input_transport_session = input_transport_session
         self._output_transport_session_factory = output_transport_session_factory
         self._finalizer = finalizer
@@ -103,11 +114,14 @@ class Server(ServicePort[T]):
         self._deserialization_failure_count = 0
         self._malformed_request_count = 0
 
+        assert pycyphal.dsdl.is_serializable(self._request_dtype)
+        assert pycyphal.dsdl.is_serializable(self._response_dtype)
+
     # ----------------------------------------  MAIN API  ----------------------------------------
 
     async def serve(
         self,
-        handler: ServiceRequestHandler[object, object],
+        handler: ServiceRequestHandler,
         monotonic_deadline: typing.Optional[float] = None,
     ) -> None:
         """
@@ -133,13 +147,13 @@ class Server(ServicePort[T]):
             self._served_request_count += 1
             request, meta = out
             response: typing.Optional[object] = None  # Fallback state
-            assert isinstance(request, self._dtype.Request), "Internal protocol violation"
+            assert isinstance(request, self._request_dtype), "Internal protocol violation"
             try:
-                response = await handler(request, meta)  # type: ignore
-                if response is not None and not isinstance(response, self._dtype.Response):
+                response = await handler(request, meta)
+                if response is not None and not isinstance(response, self._response_dtype):
                     raise TypeError(
                         f"The application request handler has returned an invalid response: "
-                        f"expected an instance of {self._dtype.Response} or None, "
+                        f"expected an instance of {self._response_dtype} or None, "
                         f"found {type(response)} instead. "
                         f"The corresponding request was {request} with metadata {meta}."
                     )
@@ -155,7 +169,7 @@ class Server(ServicePort[T]):
                 # TODO: make the send timeout configurable.
                 await self._do_send(response, meta, response_transport_session, loop.time() + self._send_timeout)
 
-    async def serve_for(self, handler: ServiceRequestHandler[object, object], timeout: float) -> None:
+    async def serve_for(self, handler: ServiceRequestHandler, timeout: float) -> None:
         """
         Listen for requests for the specified time or until the instance is closed, then exit.
 
@@ -167,7 +181,7 @@ class Server(ServicePort[T]):
         loop = asyncio.get_running_loop()
         return await self.serve(handler, monotonic_deadline=loop.time() + timeout)
 
-    def serve_in_background(self, handler: ServiceRequestHandler[object, object]) -> None:
+    def serve_in_background(self, handler: ServiceRequestHandler) -> None:
         """
         Start a new task and use it to run the server in the background.
         The task will be stopped when the server is closed.
@@ -269,9 +283,9 @@ class Server(ServicePort[T]):
                     transfer_id=transfer.transfer_id,
                     client_node_id=transfer.source_node_id,
                 )
-                request = pycyphal.dsdl.deserialize(self._dtype.Request, transfer.fragmented_payload)
+                request = pycyphal.dsdl.deserialize(self._request_dtype, transfer.fragmented_payload)
                 if request is not None:
-                    return request, meta  # type: ignore
+                    return request, meta
                 self._deserialization_failure_count += 1
             else:
                 self._malformed_request_count += 1

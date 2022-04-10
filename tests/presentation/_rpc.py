@@ -48,10 +48,10 @@ async def _unittest_slow_presentation_rpc(
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        pres_a.make_publisher_with_fixed_subject_id(uavcan.register.Access_1_0)  # type: ignore
+        pres_a.make_publisher_with_fixed_subject_id(uavcan.register.Access_1_0)
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        pres_a.make_subscriber_with_fixed_subject_id(uavcan.register.Access_1_0)  # type: ignore
+        pres_a.make_subscriber_with_fixed_subject_id(uavcan.register.Access_1_0)
 
     assert client0.response_timeout == pytest.approx(1.0)
     client0.response_timeout = 0.1

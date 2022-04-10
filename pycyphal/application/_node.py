@@ -136,7 +136,7 @@ class Node(abc.ABC):
         """
         if port_name:
             return self.presentation.make_publisher(dtype, self._resolve_named_port(dtype, "pub", port_name))
-        return self.presentation.make_publisher_with_fixed_subject_id(dtype)  # type: ignore
+        return self.presentation.make_publisher_with_fixed_subject_id(dtype)
 
     def make_subscriber(self, dtype: Type[T], port_name: str = "") -> Subscriber[T]:
         """
@@ -152,7 +152,7 @@ class Node(abc.ABC):
         """
         if port_name:
             return self.presentation.make_subscriber(dtype, self._resolve_named_port(dtype, "sub", port_name))
-        return self.presentation.make_subscriber_with_fixed_subject_id(dtype)  # type: ignore
+        return self.presentation.make_subscriber_with_fixed_subject_id(dtype)
 
     def make_client(self, dtype: Type[T], server_node_id: int, port_name: str = "") -> Client[T]:
         """
@@ -172,7 +172,7 @@ class Node(abc.ABC):
                 service_id=self._resolve_named_port(dtype, "cln", port_name),
                 server_node_id=server_node_id,
             )
-        return self.presentation.make_client_with_fixed_service_id(dtype, server_node_id=server_node_id)  # type: ignore
+        return self.presentation.make_client_with_fixed_service_id(dtype, server_node_id=server_node_id)
 
     def get_server(self, dtype: Type[T], port_name: str = "") -> Server[T]:
         """
@@ -188,7 +188,7 @@ class Node(abc.ABC):
         """
         if port_name:
             return self.presentation.get_server(dtype, self._resolve_named_port(dtype, "srv", port_name))
-        return self.presentation.get_server_with_fixed_service_id(dtype)  # type: ignore
+        return self.presentation.get_server_with_fixed_service_id(dtype)
 
     def _resolve_named_port(self, dtype: typing.Any, kind: str, name: str) -> int:
         assert name, "Internal error"
