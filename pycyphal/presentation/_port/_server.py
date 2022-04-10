@@ -84,7 +84,7 @@ class Server(ServicePort[ServiceClass]):
     .. note::
         Normally we should use correct generic types ``ServiceClass.Request`` and ``ServiceClass.Response`` in the API;
         however, MyPy does not support that yet. Please find the context at
-        https://github.com/python/mypy/issues/7121 (please upvote!) and https://github.com/OpenCyphal/pycyphal/issues/61.
+        https://github.com/python/mypy/issues/7121 and https://github.com/OpenCyphal/pycyphal/issues/61.
         We use a tentative workaround for now to silence bogus type errors. When the missing logic is implemented
         in MyPy, this should be switched back to proper implementation.
     """

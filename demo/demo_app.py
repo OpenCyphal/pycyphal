@@ -103,7 +103,7 @@ class DemoApp:
         sum_x = sum(map(lambda p: p.x, request.points))  # type: ignore
         sum_y = sum(map(lambda p: p.y, request.points))  # type: ignore
         a = sum_x * sum_y - len(request.points) * sum(map(lambda p: p.x * p.y, request.points))  # type: ignore
-        b = sum_x * sum_x - len(request.points) * sum(map(lambda p: p.x ** 2, request.points))  # type: ignore
+        b = sum_x * sum_x - len(request.points) * sum(map(lambda p: p.x**2, request.points))  # type: ignore
         try:
             slope = a / b
             y_intercept = (sum_y - slope * sum_x) / len(request.points)
