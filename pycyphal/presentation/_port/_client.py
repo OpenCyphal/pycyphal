@@ -216,8 +216,8 @@ class ClientImpl(Closable, typing.Generic[T]):
 
         self._task = asyncio.get_event_loop().create_task(self._task_function())
 
-        self._request_dtype = self._dtype.Request  # type: ignore
-        self._response_dtype = self._dtype.Response  # type: ignore
+        self._request_dtype = self.dtype.Request  # type: ignore
+        self._response_dtype = self.dtype.Response  # type: ignore
         assert pycyphal.dsdl.is_serializable(self._request_dtype)
         assert pycyphal.dsdl.is_serializable(self._response_dtype)
 

@@ -130,16 +130,6 @@ def test(session):
     relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
     if not relaxed_static_analysis:
         session.run("mypy", "--strict", *map(str, src_dirs), str(compiled_dir))
-    else:
-        session.run(
-            "mypy",
-            "--no-warn-return-any",
-            "--no-warn-unused-ignores",
-            "--allow-untyped-calls",
-            "--no-strict-equality",
-            *map(str, src_dirs),
-            str(compiled_dir),
-        )
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
