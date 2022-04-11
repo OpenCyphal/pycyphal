@@ -95,6 +95,9 @@ class PythonCANMedia(Media):
               More info: https://github.com/OpenCyphal/pycyphal/issues/178#issuecomment-912497882
               Example: ``canalystii:0``
 
+            - Interface ``seeedstudio`` is described in https://python-can.readthedocs.io/en/stable/interfaces/seeedstudio.html.
+              Example: ``seeedstudio:/dev/ttyUSB0`` (Linux) or ``seeedstudio:COM3`` (Windows)
+
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
             - A single integer selects Classic CAN.
@@ -451,6 +454,18 @@ def _construct_canalystii(parameters: _InterfaceParameters) -> can.ThreadSafeBus
     assert False, "Internal error"
 
 
+def _construct_seeedstudio(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return can.ThreadSafeBus(
+            interface=parameters.interface_name,
+            channel=parameters.channel_name,
+            bitrate=parameters.bitrate,
+        )
+    if isinstance(parameters, _FDInterfaceParameters):
+        raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
+    assert False, "Internal error"
+
+
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     raise InvalidMediaConfigurationError(f"Interface not supported yet: {parameters.interface_name}")
 
@@ -467,5 +482,6 @@ _CONSTRUCTORS: typing.DefaultDict[
         "virtual": _construct_virtual,
         "usb2can": _construct_usb2can,
         "canalystii": _construct_canalystii,
+        "seeedstudio": _construct_seeedstudio,
     },
 )
