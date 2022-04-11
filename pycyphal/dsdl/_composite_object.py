@@ -13,6 +13,8 @@ import pydsdl
 from . import _serialized_representation
 
 
+T = typing.TypeVar("T")
+
 _logger = logging.getLogger(__name__)
 
 
@@ -37,8 +39,8 @@ def serialize(obj: typing.Any) -> typing.Iterable[memoryview]:
 
 
 def deserialize(
-    dtype: typing.Any, fragmented_serialized_representation: typing.Sequence[memoryview]
-) -> typing.Optional[typing.Any]:
+    dtype: typing.Type[T], fragmented_serialized_representation: typing.Sequence[memoryview]
+) -> typing.Optional[T]:
     """
     Constructs an instance of the supplied DSDL-generated data type from its serialized representation.
     Returns None if the provided serialized representation is invalid.
@@ -48,18 +50,18 @@ def deserialize(
 
     .. important:: The constructed object may contain arrays referencing the memory allocated for the serialized
         representation. Therefore, in order to avoid unintended data corruption, the caller should destroy all
-        references to the serialized representation immediately after the invocation.
+        references to the serialized representation after the invocation.
 
     .. important:: The supplied fragments of the serialized representation should be writeable.
         If they are not, some of the array-typed fields of the constructed object may be read-only.
     """
     try:
-        fun = dtype._deserialize_
+        fun = dtype._deserialize_  # type: ignore
     except AttributeError:
         raise TypeError(f"Cannot deserialize using type {dtype}") from None
     deserializer = _serialized_representation.Deserializer.new(fragmented_serialized_representation)
     try:
-        return fun(deserializer)
+        return typing.cast(T, fun(deserializer))
     except _serialized_representation.Deserializer.FormatError:
         _logger.info("Invalid serialized representation of %s: %s", get_model(dtype), deserializer, exc_info=True)
         return None

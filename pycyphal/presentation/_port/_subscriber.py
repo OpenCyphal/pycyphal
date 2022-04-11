@@ -307,7 +307,7 @@ class SubscriberImpl(Closable, typing.Generic[T]):
                     message = pycyphal.dsdl.deserialize(self.dtype, transfer.fragmented_payload)
                     if message is not None:
                         for rx in self._listeners:
-                            rx.push(typing.cast(T, message), transfer)
+                            rx.push(message, transfer)
                     else:
                         self.deserialization_failure_count += 1
         except (asyncio.CancelledError, pycyphal.transport.ResourceClosedError) as ex:
