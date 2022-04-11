@@ -398,7 +398,7 @@ class {{ name }}:
     _EXTENT_BYTES_ = {{ type.extent // 8 }}
 
     {% set meta_type = type.__class__.__name__ -%}
-    _MODEL_: _pydsdl_.{{ meta_type }} = _restore_constant(
+    _MODEL_: _pydsdl_.{{ meta_type }} = _restore_constant_(
         {{ type | pickle | indent(8) }}
     )
     assert isinstance(_MODEL_, _pydsdl_.{{ meta_type }})
@@ -409,7 +409,7 @@ class {{ name }}:
  #}
 
 
-def _restore_constant(encoded_string: str) -> object:
+def _restore_constant_(encoded_string: str) -> object:
     import pickle, gzip, base64
     return pickle.loads(gzip.decompress(base64.b85decode(encoded_string)))
 

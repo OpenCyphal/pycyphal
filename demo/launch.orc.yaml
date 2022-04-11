@@ -8,7 +8,7 @@ YAKUT_PATH: .yakut_compiled
 PYTHONPATH: .yakut_compiled
 
 # Shared registers for all nodes/processes (can be overridden or selectively removed in local scopes).
-# See the docs for pyuavcan.application.make_node() to see which registers can be used here.
+# See the docs for pycyphal.application.make_node() to see which registers can be used here.
 uavcan:
   # Use Cyphal/UDP:
   udp.iface: 127.9.0.0
