@@ -124,9 +124,8 @@ class ServiceCANID(CANID):
         _validate_unsigned_range(self.service_id, pycyphal.transport.ServiceDataSpecifier.SERVICE_ID_MASK)
         _validate_unsigned_range(self.source_node_id, self.NODE_ID_MASK)
         _validate_unsigned_range(self.destination_node_id, self.NODE_ID_MASK)
-
-        if self.source_node_id == self.destination_node_id:
-            raise ValueError(f"Invalid service frame: source node ID == destination node ID == {self.source_node_id}")
+        # The case where server node-ID equals client node-ID is not an error at this level;
+        # see https://github.com/OpenCyphal/pycyphal/issues/191
 
     def compile(self, fragmented_transfer_payload: typing.Iterable[memoryview]) -> int:
         del fragmented_transfer_payload
@@ -330,8 +329,8 @@ def _unittest_can_identifier_parse() -> None:
         # noinspection PyTypeChecker
         ServiceCANID(Priority.HIGH, None, 123, 512, True)  # type: ignore
 
-    with raises(ValueError):
-        ServiceCANID(Priority.HIGH, 123, 123, 42, True)  # Same source and destination
+    # Same source and destination is not an error https://github.com/OpenCyphal/pycyphal/issues/191
+    _ = ServiceCANID(Priority.HIGH, 123, 123, 42, True)
 
     assert CANID.parse(0b_010_0_0_0110100100101001_1_1111011) is None
     reference_message = MessageCANID(Priority.FAST, 123, 2345)
