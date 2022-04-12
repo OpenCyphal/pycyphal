@@ -84,7 +84,8 @@ class Client(ServicePort[T]):
         """
         This is a simpler wrapper over :meth:`call` that only returns the response object without the metadata.
         """
-        if result := await self.call(request):  # https://github.com/OpenCyphal/pycyphal/issues/200
+        result = await self.call(request)  # https://github.com/OpenCyphal/pycyphal/issues/200
+        if result:
             resp, _meta = result
             return resp
         return None

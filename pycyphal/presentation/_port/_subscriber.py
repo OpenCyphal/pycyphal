@@ -104,7 +104,8 @@ class Subscriber(MessagePort[T]):
                 try:
                     async for message, transfer in self:
                         try:
-                            if (maybe_awaitable := handler(message, transfer)) is not None:
+                            maybe_awaitable = handler(message, transfer)
+                            if maybe_awaitable is not None:
                                 await maybe_awaitable  # The user provided an async handler function
                         except Exception as ex:
                             if isinstance(ex, asyncio.CancelledError):
@@ -168,7 +169,8 @@ class Subscriber(MessagePort[T]):
         and the default timeout is zero (which means check for new messages non-blockingly).
         This method approximates the standard Queue API.
         """
-        if result := await self.receive_for(timeout):
+        result = await self.receive_for(timeout)
+        if result:
             message, _meta = result
             return message
         return None
