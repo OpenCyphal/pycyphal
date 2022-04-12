@@ -335,6 +335,7 @@ class ClientImpl(Closable, Generic[T]):
                     continue
 
                 response = pycyphal.dsdl.deserialize(self._response_dtype, transfer.fragmented_payload)
+                _logger.debug("%r received response: %r", self, response)
                 if response is None:
                     self.deserialization_failure_count += 1
                     continue

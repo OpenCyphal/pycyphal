@@ -284,6 +284,7 @@ class Server(ServicePort[T]):
                     client_node_id=transfer.source_node_id,
                 )
                 request = pycyphal.dsdl.deserialize(self._request_dtype, transfer.fragmented_payload)
+                _logger.debug("%r received request: %r", self, request)
                 if request is not None:
                     return request, meta
                 self._deserialization_failure_count += 1
