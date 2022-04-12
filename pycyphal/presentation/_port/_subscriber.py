@@ -162,6 +162,17 @@ class Subscriber(MessagePort[T]):
             assert isinstance(transfer, pycyphal.transport.TransferFrom), "Internal protocol violation"
             return message, transfer
 
+    async def get(self, timeout: float = 0) -> Optional[T]:
+        """
+        A convenience wrapper over :meth:`receive_for` where the result does not contain the transfer metadata,
+        and the default timeout is zero (which means check for new messages non-blockingly).
+        This method approximates the standard Queue API.
+        """
+        if result := await self.receive_for(timeout):
+            message, _meta = result
+            return message
+        return None
+
     # ----------------------------------------  ITERATOR API  ----------------------------------------
 
     def __aiter__(self) -> Subscriber[T]:

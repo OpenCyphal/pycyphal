@@ -143,6 +143,7 @@ async def _unittest_slow_presentation_pub_sub(
     sub_record = pres_a.make_subscriber(Complex_254_255, 2222)
     sub_record2 = pres_a.make_subscriber(Complex_254_255, 2222)
     sub_record3 = pres_a.make_subscriber(Complex_254_255, 2222)
+    sub_record4 = pres_a.make_subscriber(Complex_254_255, 2222)
 
     heart = uavcan.node.Heartbeat_1_0(
         uptime=123456,
@@ -177,7 +178,7 @@ async def _unittest_slow_presentation_pub_sub(
     await pub_heart.publish(heart)
     rx = (await sub_heart.receive(asyncio.get_event_loop().time() + _RX_TIMEOUT))[0]  # type: ignore
     assert repr(rx) == repr(heart)
-    rx = await sub_heart.receive_for(_RX_TIMEOUT)
+    rx = await sub_heart.get(_RX_TIMEOUT)
     assert rx is None
 
     sub_heart.close()
@@ -211,6 +212,12 @@ async def _unittest_slow_presentation_pub_sub(
     assert transfer.priority == Priority.NOMINAL
     assert transfer.transfer_id == 0
 
+    msg4 = await sub_record4.get()
+    assert msg4
+    assert isinstance(msg4, Complex_254_255)
+    assert repr(msg4) == repr(record)
+    assert not await sub_record4.get()
+
     # Broken transfer
     stat = sub_record.sample_statistics()
     assert stat.transport_session.transfers == 1
@@ -242,6 +249,8 @@ async def _unittest_slow_presentation_pub_sub(
     pub_heart.close()
     sub_record.close()
     sub_record2.close()
+    sub_record3.close()
+    sub_record4.close()
     pub_record.close()
     await asyncio.sleep(1.1)
 
