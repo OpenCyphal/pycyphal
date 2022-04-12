@@ -21,7 +21,7 @@ heater_voltage = 0.0
 saturation = False
 
 
-async def handle_command(msg: uavcan.si.unit.voltage.Scalar_1, _metadata: pycyphal.transport.TransferFrom) -> None:
+def handle_command(msg: uavcan.si.unit.voltage.Scalar_1, _metadata: pycyphal.transport.TransferFrom) -> None:
     global heater_voltage, saturation
     if msg.volt < 0.0:
         heater_voltage = 0.0

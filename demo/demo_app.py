@@ -134,7 +134,7 @@ class DemoApp:
         temperature_setpoint = 0.0
         temperature_error = 0.0
 
-        async def on_setpoint(msg: uavcan.si.unit.temperature.Scalar_1, _: pycyphal.transport.TransferFrom) -> None:
+        def on_setpoint(msg: uavcan.si.unit.temperature.Scalar_1, _: pycyphal.transport.TransferFrom) -> None:
             nonlocal temperature_setpoint
             temperature_setpoint = msg.kelvin
 
