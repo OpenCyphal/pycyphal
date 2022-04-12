@@ -21,11 +21,13 @@ _RECEIVE_TIMEOUT = 1
 _logger = logging.getLogger(__name__)
 
 
-#: Type of the async received message handler callable.
 ReceivedMessageHandler = Union[
     Callable[[T, pycyphal.transport.TransferFrom], None],
     Callable[[T, pycyphal.transport.TransferFrom], Awaitable[None]],
 ]
+"""
+The handler may be either sync or async (auto-detected).
+"""
 
 
 @dataclasses.dataclass
