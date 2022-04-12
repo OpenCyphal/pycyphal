@@ -3,7 +3,7 @@
 Changelog
 =========
 
-v1.6
+v1.7
 ----
 
 - :class:`pycyphal.application.Node` supports construction of ports (publishers, subscribers, clients, servers)
