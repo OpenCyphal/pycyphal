@@ -3,7 +3,7 @@
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
-from typing import Type, Optional, Generic, Awaitable, Callable
+from typing import Type, Optional, Generic, Awaitable, Callable, Union
 import logging
 import asyncio
 import dataclasses
@@ -22,10 +22,10 @@ _logger = logging.getLogger(__name__)
 
 
 #: Type of the async received message handler callable.
-ReceivedMessageHandler = (
-    Callable[[T, pycyphal.transport.TransferFrom], None]
-    | Callable[[T, pycyphal.transport.TransferFrom], Awaitable[None]]
-)
+ReceivedMessageHandler = Union[
+    Callable[[T, pycyphal.transport.TransferFrom], None],
+    Callable[[T, pycyphal.transport.TransferFrom], Awaitable[None]],
+]
 
 
 @dataclasses.dataclass
