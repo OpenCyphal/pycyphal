@@ -37,7 +37,7 @@ for cls in pycyphal.util.iter_descendants(pycyphal.transport.Transport):
     transport_name = cls.__module__.split(".")[2]  # pycyphal.transport.X
     relevant_extras: typing.Dict[str, str] = {}
     for k in list(extras.keys()):
-        if k.startswith(f"transport_{transport_name}"):
+        if k.startswith(f"transport-{transport_name}"):
             relevant_extras[k] = extras.pop(k)
 
     transport_module_name = re.sub(r"\._[_a-zA-Z0-9]*", "", cls.__module__)
