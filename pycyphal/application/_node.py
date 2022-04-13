@@ -197,7 +197,7 @@ class Node(abc.ABC):
             result = pycyphal.dsdl.get_fixed_port_id(dtype)
         else:
             result = int(name_or_id)
-        _logger.info("%r: Resolved port: %s %r %r --> %r", self, dtype, kind, name_or_id, result)
+        _logger.debug("%r: Resolved port: dtype=%s kind=%r name_or_id=%r --> %r", self, dtype, kind, name_or_id, result)
         if result is not None:
             return result
         raise TypeError(
