@@ -3,6 +3,20 @@
 Changelog
 =========
 
+v1.7
+----
+
+- :class:`pycyphal.application.Node` supports construction of ports (publishers, subscribers, clients, servers)
+  with a fixed port-ID, bypassing the registry.
+
+- New presentation layer capabilities:
+
+  - New overload :meth:`pycyphal.presentation.Client.__call__`
+
+  - New method :meth:`pycyphal.presentation.Subscriber.get`
+
+  - Support sync callbacks in :meth:`pycyphal.presentation.Subscriber.receive_in_background`
+
 v1.5
 ----
 

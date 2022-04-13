@@ -3,7 +3,7 @@
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
-import typing
+from typing import Optional, Type, Callable, Generic
 import asyncio
 import logging
 import dataclasses
@@ -54,7 +54,7 @@ class Client(ServicePort[T]):
         Do not call this directly! Use :meth:`Presentation.make_client`.
         """
         assert not impl.is_closed, "Internal logic error"
-        self._maybe_impl: typing.Optional[ClientImpl[T]] = impl
+        self._maybe_impl: Optional[ClientImpl[T]] = impl
         impl.register_proxy()  # Register ASAP to ensure correct finalization.
 
         self._dtype = impl.dtype  # Permit usage after close()
@@ -64,7 +64,7 @@ class Client(ServicePort[T]):
         self._response_timeout = DEFAULT_SERVICE_REQUEST_TIMEOUT
         self._priority = DEFAULT_PRIORITY
 
-    async def call(self, request: object) -> typing.Optional[typing.Tuple[object, pycyphal.transport.TransferFrom]]:
+    async def call(self, request: object) -> Optional[tuple[object, pycyphal.transport.TransferFrom]]:
         """
         Sends the request to the remote server using the pre-configured priority and response timeout parameters.
         Returns the response along with its transfer info in the case of successful completion.
@@ -79,6 +79,16 @@ class Client(ServicePort[T]):
         return await self._maybe_impl.call(
             request=request, priority=self._priority, response_timeout=self._response_timeout
         )
+
+    async def __call__(self, request: object) -> Optional[object]:
+        """
+        This is a simpler wrapper over :meth:`call` that only returns the response object without the metadata.
+        """
+        result = await self.call(request)  # https://github.com/OpenCyphal/pycyphal/issues/200
+        if result:
+            resp, _meta = result
+            return resp
+        return None
 
     @property
     def response_timeout(self) -> float:
@@ -116,7 +126,7 @@ class Client(ServicePort[T]):
         self._priority = pycyphal.transport.Priority(value)
 
     @property
-    def dtype(self) -> typing.Type[T]:
+    def dtype(self) -> Type[T]:
         return self._dtype
 
     @property
@@ -173,7 +183,7 @@ class Client(ServicePort[T]):
             self._maybe_impl = None
 
 
-class ClientImpl(Closable, typing.Generic[T]):
+class ClientImpl(Closable, Generic[T]):
     """
     The client implementation. There is at most one such implementation per session specifier. It may be shared
     across multiple users with the help of the proxy class. When the last proxy is closed or garbage collected,
@@ -182,11 +192,11 @@ class ClientImpl(Closable, typing.Generic[T]):
 
     def __init__(
         self,
-        dtype: typing.Type[T],
+        dtype: Type[T],
         input_transport_session: pycyphal.transport.InputSession,
         output_transport_session: pycyphal.transport.OutputSession,
         transfer_id_counter: OutgoingTransferIDCounter,
-        transfer_id_modulo_factory: typing.Callable[[], int],
+        transfer_id_modulo_factory: Callable[[], int],
         finalizer: PortFinalizer,
     ):
         if not pycyphal.dsdl.is_service_type(dtype):
@@ -206,12 +216,12 @@ class ClientImpl(Closable, typing.Generic[T]):
         # common use case, but it makes sense supporting it in this library since it's supposed to be usable with
         # diagnostic and inspection tools.
         self._transfer_id_modulo_factory = transfer_id_modulo_factory
-        self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
+        self._maybe_finalizer: Optional[PortFinalizer] = finalizer
 
         self._lock = asyncio.Lock()
         self._proxy_count = 0
-        self._response_futures_by_transfer_id: typing.Dict[
-            int, asyncio.Future[typing.Tuple[object, pycyphal.transport.TransferFrom]]
+        self._response_futures_by_transfer_id: dict[
+            int, asyncio.Future[tuple[object, pycyphal.transport.TransferFrom]]
         ] = {}
 
         self._task = asyncio.get_event_loop().create_task(self._task_function())
@@ -227,7 +237,7 @@ class ClientImpl(Closable, typing.Generic[T]):
 
     async def call(
         self, request: object, priority: pycyphal.transport.Priority, response_timeout: float
-    ) -> typing.Optional[typing.Tuple[object, pycyphal.transport.TransferFrom]]:
+    ) -> Optional[tuple[object, pycyphal.transport.TransferFrom]]:
         loop = asyncio.get_running_loop()
         async with self._lock:
             if self.is_closed:
@@ -317,7 +327,7 @@ class ClientImpl(Closable, typing.Generic[T]):
         return await self.output_transport_session.send(transfer, monotonic_deadline)
 
     async def _task_function(self) -> None:
-        exception: typing.Optional[Exception] = None
+        exception: Optional[Exception] = None
         loop = asyncio.get_running_loop()
         try:
             while not self.is_closed:
@@ -326,6 +336,7 @@ class ClientImpl(Closable, typing.Generic[T]):
                     continue
 
                 response = pycyphal.dsdl.deserialize(self._response_dtype, transfer.fragmented_payload)
+                _logger.debug("%r received response: %r", self, response)
                 if response is None:
                     self.deserialization_failure_count += 1
                     continue
@@ -358,7 +369,7 @@ class ClientImpl(Closable, typing.Generic[T]):
         except LookupError:
             pass
 
-    def _finalize(self, exception: typing.Optional[Exception] = None) -> None:
+    def _finalize(self, exception: Optional[Exception] = None) -> None:
         exception = exception if exception is not None else PortClosedError(repr(self))
         try:
             if self._maybe_finalizer is not None:

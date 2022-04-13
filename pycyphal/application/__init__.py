@@ -85,11 +85,9 @@ Create a subscription and receive a message from it:
 
 >>> import uavcan.si.unit.length
 >>> sub_position = node.make_subscriber(uavcan.si.unit.length.Vector3_1, "position_setpoint")
->>> msg, metadata = doctest_await(sub_position.receive_for(timeout=0.5))
->>> msg.meter[0], msg.meter[1], msg.meter[2]                            # Some payload in the message we received.
+>>> msg = doctest_await(sub_position.get(timeout=0.5))              # None if timed out.
+>>> msg.meter[0], msg.meter[1], msg.meter[2]                        # Some payload in the message we received.
 (42.0, 15.4, -8.7)
->>> metadata.source_node_id, metadata.priority, metadata.transfer_id    # Metadata for the message.
-(42, <Priority.NOMINAL: 4>, 0)
 
 
 RPC-service clients and servers
@@ -115,14 +113,14 @@ Invoke the service we defined above assuming that it is served by node 42:
 >>> from sirius_cyber_corp import PointXY_1
 >>> cln_least_sq = node.make_client(PerformLinearLeastSquaresFit_1, 42, "least_squares")
 >>> req = PerformLinearLeastSquaresFit_1.Request([PointXY_1(10, 1), PointXY_1(20, 2)])
->>> response, metadata = doctest_await(cln_least_sq.call(req))
+>>> response = doctest_await(cln_least_sq(req))                         # None if timed out.
 >>> round(response.slope, 1), round(response.y_intercept, 1)
 (0.1, 0.0)
 
 Here is another example showcasing the use of a standard service with a fixed port-ID:
 
 >>> client_node_info = node.make_client(uavcan.node.GetInfo_1, 42)    # Port name is not required.
->>> response, metadata = doctest_await(client_node_info.call(uavcan.node.GetInfo_1.Request()))
+>>> response = doctest_await(client_node_info(uavcan.node.GetInfo_1.Request()))
 >>> response.software_version
 uavcan.node.Version.1.0(major=1, minor=0)
 

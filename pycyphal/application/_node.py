@@ -3,8 +3,6 @@
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
-
-import typing
 from typing import Callable, Type, TypeVar, Optional, List, Any
 import abc
 import asyncio
@@ -122,7 +120,7 @@ class Node(abc.ABC):
         """Provides access to the heartbeat publisher instance of this node."""
         return self._heartbeat_publisher
 
-    def make_publisher(self, dtype: Type[T], port_name: str = "") -> Publisher[T]:
+    def make_publisher(self, dtype: Type[T], port_name: str | int = "") -> Publisher[T]:
         """
         Wrapper over :meth:`pycyphal.presentation.Presentation.make_publisher`
         that takes the subject-ID from the standard register ``uavcan.pub.PORT_NAME.id``.
@@ -130,15 +128,15 @@ class Node(abc.ABC):
         The type information is automatically exposed via ``uavcan.pub.PORT_NAME.type`` based on dtype.
         For details on the standard registers see Specification.
 
+        The port_name may also be the integer port-ID if it is desired to bypass the registry (not recommended).
+
         :raises:
             :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
-        if port_name:
-            return self.presentation.make_publisher(dtype, self._resolve_named_port(dtype, "pub", port_name))
-        return self.presentation.make_publisher_with_fixed_subject_id(dtype)
+        return self.presentation.make_publisher(dtype, self._resolve_port(dtype, "pub", port_name))
 
-    def make_subscriber(self, dtype: Type[T], port_name: str = "") -> Subscriber[T]:
+    def make_subscriber(self, dtype: Type[T], port_name: str | int = "") -> Subscriber[T]:
         """
         Wrapper over :meth:`pycyphal.presentation.Presentation.make_subscriber`
         that takes the subject-ID from the standard register ``uavcan.sub.PORT_NAME.id``.
@@ -146,15 +144,15 @@ class Node(abc.ABC):
         The type information is automatically exposed via ``uavcan.sub.PORT_NAME.type`` based on dtype.
         For details on the standard registers see Specification.
 
+        The port_name may also be the integer port-ID if it is desired to bypass the registry (not recommended).
+
         :raises:
             :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
-        if port_name:
-            return self.presentation.make_subscriber(dtype, self._resolve_named_port(dtype, "sub", port_name))
-        return self.presentation.make_subscriber_with_fixed_subject_id(dtype)
+        return self.presentation.make_subscriber(dtype, self._resolve_port(dtype, "sub", port_name))
 
-    def make_client(self, dtype: Type[T], server_node_id: int, port_name: str = "") -> Client[T]:
+    def make_client(self, dtype: Type[T], server_node_id: int, port_name: str | int = "") -> Client[T]:
         """
         Wrapper over :meth:`pycyphal.presentation.Presentation.make_client`
         that takes the service-ID from the standard register ``uavcan.cln.PORT_NAME.id``.
@@ -162,19 +160,19 @@ class Node(abc.ABC):
         The type information is automatically exposed via ``uavcan.cln.PORT_NAME.type`` based on dtype.
         For details on the standard registers see Specification.
 
+        The port_name may also be the integer port-ID if it is desired to bypass the registry (not recommended).
+
         :raises:
             :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
-        if port_name:
-            return self.presentation.make_client(
-                dtype,
-                service_id=self._resolve_named_port(dtype, "cln", port_name),
-                server_node_id=server_node_id,
-            )
-        return self.presentation.make_client_with_fixed_service_id(dtype, server_node_id=server_node_id)
+        return self.presentation.make_client(
+            dtype,
+            service_id=self._resolve_port(dtype, "cln", port_name),
+            server_node_id=server_node_id,
+        )
 
-    def get_server(self, dtype: Type[T], port_name: str = "") -> Server[T]:
+    def get_server(self, dtype: Type[T], port_name: str | int = "") -> Server[T]:
         """
         Wrapper over :meth:`pycyphal.presentation.Presentation.get_server`
         that takes the service-ID from the standard register ``uavcan.srv.PORT_NAME.id``.
@@ -182,15 +180,34 @@ class Node(abc.ABC):
         The type information is automatically exposed via ``uavcan.srv.PORT_NAME.type`` based on dtype.
         For details on the standard registers see Specification.
 
+        The port_name may also be the integer port-ID if it is desired to bypass the registry (not recommended).
+
         :raises:
             :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
-        if port_name:
-            return self.presentation.get_server(dtype, self._resolve_named_port(dtype, "srv", port_name))
-        return self.presentation.get_server_with_fixed_service_id(dtype)
+        return self.presentation.get_server(dtype, self._resolve_port(dtype, "srv", port_name))
 
-    def _resolve_named_port(self, dtype: typing.Any, kind: str, name: str) -> int:
+    def _resolve_port(self, dtype: Any, kind: str, name_or_id: str | int) -> int:
+        result: int | None
+        if isinstance(name_or_id, str) and name_or_id:
+            result = self._resolve_named_port(dtype, kind, name_or_id)
+        elif isinstance(name_or_id, str):
+            assert not name_or_id
+            result = pycyphal.dsdl.get_fixed_port_id(dtype)
+        else:
+            result = int(name_or_id)
+        _logger.debug("%r: Resolved port: dtype=%s kind=%r name_or_id=%r --> %r", self, dtype, kind, name_or_id, result)
+        if result is not None:
+            return result
+        raise TypeError(
+            f"Cannot open a {kind}-port of type {dtype} because neither a port name nor port-ID were provided "
+            f"and the data type has no fixed port-ID. "
+            f"In order to use this port with a non-fixed port-ID you simply need to assign it a name. "
+            f"You can find the rationale at https://forum.opencyphal.org/t/choosing-message-and-service-ids/889"
+        )
+
+    def _resolve_named_port(self, dtype: Any, kind: str, name: str) -> int:
         assert name, "Internal error"
         model = pycyphal.dsdl.get_model(dtype)
 

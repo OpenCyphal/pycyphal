@@ -142,6 +142,8 @@ async def _unittest_slow_presentation_pub_sub(
     pub_record = pres_b.make_publisher(Complex_254_255, 2222)
     sub_record = pres_a.make_subscriber(Complex_254_255, 2222)
     sub_record2 = pres_a.make_subscriber(Complex_254_255, 2222)
+    sub_record3 = pres_a.make_subscriber(Complex_254_255, 2222)
+    sub_record4 = pres_a.make_subscriber(Complex_254_255, 2222)
 
     heart = uavcan.node.Heartbeat_1_0(
         uptime=123456,
@@ -176,19 +178,21 @@ async def _unittest_slow_presentation_pub_sub(
     await pub_heart.publish(heart)
     rx = (await sub_heart.receive(asyncio.get_event_loop().time() + _RX_TIMEOUT))[0]  # type: ignore
     assert repr(rx) == repr(heart)
-    rx = await sub_heart.receive_for(_RX_TIMEOUT)
+    rx = await sub_heart.get(_RX_TIMEOUT)
     assert rx is None
 
     sub_heart.close()
     sub_heart.close()  # Shall not raise.
 
-    handler_output: typing.List[typing.Tuple[Complex_254_255, pycyphal.transport.TransferFrom]] = []
+    handler_output_async: typing.List[typing.Tuple[Complex_254_255, pycyphal.transport.TransferFrom]] = []
+    handler_output_sync: typing.List[typing.Tuple[Complex_254_255, pycyphal.transport.TransferFrom]] = []
 
-    async def handler(message: Complex_254_255, cb_transfer: pycyphal.transport.TransferFrom) -> None:
-        print("HANDLER:", message, cb_transfer)
-        handler_output.append((message, cb_transfer))
+    async def handler_async(message: Complex_254_255, cb_transfer: pycyphal.transport.TransferFrom) -> None:
+        print("HANDLER ASYNC:", message, cb_transfer)
+        handler_output_async.append((message, cb_transfer))
 
-    sub_record2.receive_in_background(handler)
+    sub_record2.receive_in_background(handler_async)
+    sub_record3.receive_in_background(lambda *a: handler_output_sync.append(a))
 
     record = Complex_254_255(bytes_=[1, 2, 3, 1])
     assert pub_record.priority == pycyphal.presentation.DEFAULT_PRIORITY
@@ -207,6 +211,12 @@ async def _unittest_slow_presentation_pub_sub(
     assert transfer.source_node_id == 42
     assert transfer.priority == Priority.NOMINAL
     assert transfer.transfer_id == 0
+
+    msg4 = await sub_record4.get()
+    assert msg4
+    assert isinstance(msg4, Complex_254_255)
+    assert repr(msg4) == repr(record)
+    assert not await sub_record4.get()
 
     # Broken transfer
     stat = sub_record.sample_statistics()
@@ -239,6 +249,8 @@ async def _unittest_slow_presentation_pub_sub(
     pub_heart.close()
     sub_record.close()
     sub_record2.close()
+    sub_record3.close()
+    sub_record4.close()
     pub_record.close()
     await asyncio.sleep(1.1)
 
@@ -253,10 +265,12 @@ async def _unittest_slow_presentation_pub_sub(
     assert list(pres_a.transport.output_sessions) == []
     assert list(pres_b.transport.output_sessions) == []
 
-    assert len(handler_output) == 1
-    assert repr(handler_output[0][0]) == repr(record)
-    assert handler_output[0][1].source_node_id == 42
-    assert handler_output[0][1].transfer_id == 0
-    assert handler_output[0][1].priority == Priority.NOMINAL
+    assert len(handler_output_async) == 1
+    assert repr(handler_output_async[0][0]) == repr(record)
+    assert handler_output_async[0][1].source_node_id == 42
+    assert handler_output_async[0][1].transfer_id == 0
+    assert handler_output_async[0][1].priority == Priority.NOMINAL
+
+    assert repr(handler_output_async) == repr(handler_output_sync), "Sync handler is not functional"
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.

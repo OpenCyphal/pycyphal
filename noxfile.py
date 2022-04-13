@@ -224,6 +224,10 @@ def docs(session):
     session.run("sphinx-build", *sphinx_args)
     session.log(f"DOCUMENTATION BUILD OUTPUT: file://{out_dir}/index.html")
 
+    session.cd(ROOT_DIR)
+    session.install("doc8 ~= 0.11")
+    session.run("doc8", "docs", *map(str, ROOT_DIR.glob("*.rst")))
+
 
 def is_latest_python(session) -> bool:
     return PYTHONS[-1] in session.run("python", "-V", silent=True)

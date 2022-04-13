@@ -87,7 +87,7 @@ We can use custom subject-ID with any data type, even if there is a fixed subjec
 Here is an example; we also show here that when a receive call times out, it returns None:
 
 >>> sub_record_custom = presentation.make_subscriber(uavcan.diagnostic.Record_1_1, subject_id=2345)
->>> doctest_await(sub_record_custom.receive_for(timeout=0.5))  # Times out and returns None.
+>>> doctest_await(sub_record_custom.get(timeout=0.5))  # Times out and returns None.
 
 You can see above that the node-ID of the received transfer metadata is None,
 that's because it is actually an anonymous transfer, and it is so because our node is an anonymous node;
@@ -143,7 +143,7 @@ For example, here we create a client for a nonexistent service; the call times o
 ...                                       server_node_id=321)   # There is no such server.
 >>> bad_client.response_timeout = 0.1                           # Override the default.
 >>> bad_client.priority = pycyphal.transport.Priority.HIGH      # Override the default.
->>> doctest_await(bad_client.call(request_object))              # Times out and returns None.
+>>> doctest_await(bad_client(request_object))                   # Times out and returns None.
 
 ..  doctest::
     :hide:

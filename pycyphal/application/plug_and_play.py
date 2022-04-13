@@ -91,6 +91,8 @@ class Allocatee:
             If provided, the PnP allocator will try to find a node-ID that is close to the stated preference.
             If not provided, the PnP allocator will pick a node-ID at its own discretion.
         """
+        from pycyphal.transport.commons.crc import CRC64WE
+
         if isinstance(transport_or_presentation, pycyphal.transport.Transport):
             self._transport = transport_or_presentation
             self._presentation = pycyphal.presentation.Presentation(self._transport)
@@ -101,6 +103,7 @@ class Allocatee:
             raise TypeError(f"Expected transport or presentation controller, found {type(transport_or_presentation)}")
 
         self._local_unique_id = local_unique_id
+        self._local_pseudo_uid = int(CRC64WE.new(self._local_unique_id).value & _PSEUDO_UNIQUE_ID_MASK)
         self._preferred_node_id = int(preferred_node_id if preferred_node_id is not None else _NODE_ID_MASK)
         if not isinstance(self._local_unique_id, bytes) or len(self._local_unique_id) != _UNIQUE_ID_SIZE_BYTES:
             raise ValueError(f"Invalid unique-ID: {self._local_unique_id!r}")
@@ -158,7 +161,7 @@ class Allocatee:
             if self.presentation.transport.protocol_parameters.mtu > self._MTU_THRESHOLD:
                 msg = NodeIDAllocationData_2(node_id=ID(self._preferred_node_id), unique_id=self._local_unique_id)
             else:
-                msg = NodeIDAllocationData_1(unique_id_hash=_make_pseudo_unique_id(self._local_unique_id))
+                msg = NodeIDAllocationData_1(unique_id_hash=self._local_pseudo_uid)
 
             if self._pub is None or self._pub.dtype != type(msg):
                 if self._pub is not None:
@@ -186,7 +189,7 @@ class Allocatee:
 
         allocated: Optional[int] = None
         if isinstance(msg, NodeIDAllocationData_1):
-            if msg.unique_id_hash == _make_pseudo_unique_id(self._local_unique_id) and len(msg.allocated_node_id) > 0:
+            if msg.unique_id_hash == self._local_pseudo_uid and len(msg.allocated_node_id) > 0:
                 allocated = msg.allocated_node_id[0].value
         elif isinstance(msg, NodeIDAllocationData_2):
             if msg.unique_id.tobytes() == self._local_unique_id:
@@ -317,13 +320,13 @@ class CentralizedAllocator(Allocator):
         assert max_node_id > 0
 
         if isinstance(msg, NodeIDAllocationData_1):
-            allocated = self._alloc.allocate(max_node_id, max_node_id, pseudo_unique_id=msg.unique_id_hash)
+            allocated = self._alloc.allocate(max_node_id, max_node_id, uid=msg.unique_id_hash)
             if allocated is not None:
                 self._respond_v1(meta.priority, msg.unique_id_hash, allocated)
                 return
         elif isinstance(msg, NodeIDAllocationData_2):
             uid = msg.unique_id.tobytes()
-            allocated = self._alloc.allocate(msg.node_id.value, max_node_id, unique_id=uid)
+            allocated = self._alloc.allocate(msg.node_id.value, max_node_id, uid=uid)
             if allocated is not None:
                 self._respond_v2(meta.priority, uid, allocated)
                 return
@@ -366,8 +369,8 @@ class _AllocationTable:
     _SCHEMA = """
     create table if not exists `allocation` (
         `node_id`          int not null unique check(node_id >= 0),
-        `unique_id_hex`    varchar(32) not null,  -- all zeros if unique-ID is unknown.
-        `pseudo_unique_id` bigint not null check(pseudo_unique_id >= 0), -- 48 LSB of CRC64WE(unique-ID); v1 compat.
+        `unique_id_hex`    varchar(32),
+        `pseudo_unique_id` bigint,
         `ts`               time not null default current_timestamp,
         primary key(node_id)
     );
@@ -379,111 +382,94 @@ class _AllocationTable:
         self._con.commit()
 
     def register(self, node_id: int, unique_id: Optional[bytes]) -> None:
-        unique_id_defined = unique_id is not None
-        if unique_id is None:
-            unique_id = bytes(_UNIQUE_ID_SIZE_BYTES)
-        if not isinstance(unique_id, bytes) or len(unique_id) != _UNIQUE_ID_SIZE_BYTES:
+        if unique_id is not None and (not isinstance(unique_id, bytes) or len(unique_id) != _UNIQUE_ID_SIZE_BYTES):
             raise ValueError(f"Invalid unique-ID: {unique_id!r}")
         if not isinstance(node_id, int) or not (0 <= node_id <= _NODE_ID_MASK):
             raise ValueError(f"Invalid node-ID: {node_id!r}")
-
-        def execute() -> None:
-            assert isinstance(unique_id, bytes)
+        _logger.debug("Node registration: NID % 5d, UID %s", node_id, unique_id and unique_id.hex())
+        if unique_id:
             self._con.execute(
-                "insert or replace into allocation (node_id, unique_id_hex, pseudo_unique_id) values (?, ?, ?);",
-                (node_id, unique_id.hex(), _make_pseudo_unique_id(unique_id)),
+                """
+                insert or replace into allocation (node_id, unique_id_hex, pseudo_unique_id) values
+                (
+                    :nid,
+                    :uid,
+                    (select pseudo_unique_id from allocation where node_id = :nid)
+                );
+                """,
+                {"nid": node_id, "uid": unique_id.hex()},
             )
-            self._con.commit()
-
-        res = self._con.execute("select unique_id_hex from allocation where node_id = ?", (node_id,)).fetchone()
-        existing_uid = bytes.fromhex(res[0]) if res is not None else None
-        if existing_uid is None:
-            _logger.debug("Original node registration: NID % 5d, UID %s", node_id, unique_id.hex())
-            execute()
-        elif unique_id_defined and existing_uid != unique_id:
-            _logger.debug(
-                "Updated node registration:  NID % 5d, UID %s -> %s", node_id, existing_uid.hex(), unique_id.hex()
+        else:
+            self._con.execute(
+                """
+                insert or replace into allocation (node_id, unique_id_hex, pseudo_unique_id) values
+                (
+                    :nid,
+                    (select unique_id_hex    from allocation where node_id = :nid),
+                    (select pseudo_unique_id from allocation where node_id = :nid)
+                );
+                """,
+                {"nid": node_id},
             )
-            execute()
+        self._con.commit()
 
-    def allocate(
-        self,
-        preferred_node_id: int,
-        max_node_id: int,
-        unique_id: Optional[bytes] = None,
-        pseudo_unique_id: Optional[int] = None,
-    ) -> Optional[int]:
-        use_unique_id = unique_id is not None
+    def allocate(self, preferred_node_id: int, max_node_id: int, uid: bytes | int) -> Optional[int]:
         preferred_node_id = min(max(preferred_node_id, 0), max_node_id)
         _logger.debug(
-            "Table alloc request: preferred_node_id=%s, max_node_id=%s, unique_id=%s, pseudo_unique_id=%s",
-            preferred_node_id,
-            max_node_id,
-            unique_id.hex() if unique_id else None,
-            pseudo_unique_id,
+            "Table alloc request: preferred_node_id=%s, max_node_id=%s, uid=%r", preferred_node_id, max_node_id, uid
         )
-        if unique_id is None:
-            unique_id = bytes(_UNIQUE_ID_SIZE_BYTES)
-        if pseudo_unique_id is None:
-            pseudo_unique_id = _make_pseudo_unique_id(unique_id)
-        assert isinstance(unique_id, bytes) and len(unique_id) == _UNIQUE_ID_SIZE_BYTES
-        assert isinstance(pseudo_unique_id, int) and (0 <= pseudo_unique_id <= _PSEUDO_UNIQUE_ID_MASK)
-
         # Check if there is an existing allocation for this UID. If there are multiple matches, pick the newest.
         # Ignore existing allocations where the node-ID exceeds the maximum in case we're reusing an existing
         # allocation table with a less capable transport.
-        if use_unique_id:
+        if isinstance(uid, bytes):
+            uid = uid.ljust(_UNIQUE_ID_SIZE_BYTES, b"\0")
             res = self._con.execute(
                 "select node_id from allocation where unique_id_hex = ? and node_id <= ? order by ts desc limit 1",
-                (unique_id.hex(), max_node_id),
+                (uid.hex(), max_node_id),
             ).fetchone()
         else:
+            uid = int(uid)
             res = self._con.execute(
                 "select node_id from allocation where pseudo_unique_id = ? and node_id <= ? order by ts desc limit 1",
-                (pseudo_unique_id, max_node_id),
+                (uid, max_node_id),
             ).fetchone()
         if res is not None:
             candidate = int(res[0])
             assert 0 <= candidate <= max_node_id, "Internal logic error"
-            _logger.debug(
-                "Serving existing allocation: NID %s, (pseudo-)UID %s",
-                candidate,
-                unique_id.hex() if use_unique_id else hex(pseudo_unique_id),
-            )
+            _logger.debug("Serving existing allocation: NID %s, UID %r", candidate, uid)
             return candidate
 
         # Do a new allocation. Consider re-implementing this in pure SQL -- should be possible with SQLite.
         result: Optional[int] = None
         candidate = preferred_node_id
         while result is None and candidate <= max_node_id:
-            if self._try_allocate(candidate, unique_id, pseudo_unique_id):
+            if self._try_allocate(candidate, uid):
                 result = candidate
             candidate += 1
         candidate = preferred_node_id
         while result is None and candidate >= 0:
-            if self._try_allocate(candidate, unique_id, pseudo_unique_id):
+            if self._try_allocate(candidate, uid):
                 result = candidate
             candidate -= 1
 
         # Final report.
         if result is not None:
-            _logger.debug(
-                "New allocation: allocated NID %s, (pseudo-)UID %s, preferred NID %s",
-                result,
-                unique_id.hex() if use_unique_id else hex(pseudo_unique_id),
-                preferred_node_id,
-            )
+            _logger.debug("New allocation: allocated NID %s, UID %r, preferred NID %s", result, uid, preferred_node_id)
         return result
 
     def close(self) -> None:
         self._con.close()
 
-    def _try_allocate(self, node_id: int, unique_id: bytes, pseudo_unique_id: int) -> bool:
+    def _try_allocate(self, node_id: int, uid: bytes | int) -> bool:
         try:
-            self._con.execute(
-                "insert into allocation (node_id, unique_id_hex, pseudo_unique_id) values (?, ?, ?);",
-                (node_id, unique_id.hex(), pseudo_unique_id),
-            )
+            if isinstance(uid, bytes):
+                self._con.execute(
+                    "insert into allocation (node_id, unique_id_hex) values (?, ?);", (node_id, uid.hex())
+                )
+            else:
+                self._con.execute(
+                    "insert into allocation (node_id, pseudo_unique_id) values (?, ?);", (node_id, int(uid))
+                )
             self._con.commit()
         except sqlite3.IntegrityError:  # Such entry already exists.
             return False
@@ -495,15 +481,6 @@ class _AllocationTable:
         for nid, uid_hex, pseudo, ts in self._con.execute(
             "select node_id, unique_id_hex, pseudo_unique_id, ts from allocation order by ts desc"
         ).fetchall():
-            lines.append(f"{nid: 5d}  \t{uid_hex:32s}/{pseudo:012x}\t{ts}")
+            r_pse = pseudo if pseudo is None else f"{pseudo:012x}"
+            lines.append(f"{nid: 5d}  \t{uid_hex}/{r_pse}\t{ts}")
         return "\n".join(lines) + "\n"
-
-
-def _make_pseudo_unique_id(unique_id: bytes) -> int:
-    """
-    The recommended mapping function from unique-ID to pseudo unique-ID.
-    """
-    from pycyphal.transport.commons.crc import CRC64WE
-
-    assert isinstance(unique_id, bytes) and len(unique_id) == _UNIQUE_ID_SIZE_BYTES
-    return int(CRC64WE.new(unique_id).value & _PSEUDO_UNIQUE_ID_MASK)
