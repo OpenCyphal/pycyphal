@@ -36,7 +36,7 @@ class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchro
         >>> import tests
         >>> _ = tests.dsdl.compile()
         >>> tests.asyncio_allow_event_loop_access_from_top_level()
-        >>> from tests import doctest_await as aw
+        >>> from tests import doctest_await
 
     Prepare some scaffolding for the demo:
 
@@ -61,33 +61,33 @@ class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchro
 
     Publish some messages in an arbitrary order and observe them to be synchronized:
 
-    >>> _ = aw(pub_a.publish(Integer64_1(123)))
-    >>> _ = aw(pub_a.publish(Integer64_1(234)))  # Replaces the previous one because newer.
-    >>> _ = aw(pub_b.publish(Integer64_1(321)))
-    >>> _ = aw(pub_c.publish(Bit_1(True)))
-    >>> aw(asyncio.sleep(2.0))               # Wait a little and publish another group.
-    >>> _ = aw(pub_a.publish(Integer64_1(456)))
-    >>> _ = aw(pub_b.publish(Integer64_1(654)))
-    >>> _ = aw(pub_c.publish(Bit_1(False)))
-    >>> aw(asyncio.sleep(1.5))
-    >>> _ = aw(pub_a.publish(Integer64_1(789)))
+    >>> _ = doctest_await(pub_a.publish(Integer64_1(123)))
+    >>> _ = doctest_await(pub_a.publish(Integer64_1(234)))  # Replaces the previous one because newer.
+    >>> _ = doctest_await(pub_b.publish(Integer64_1(321)))
+    >>> _ = doctest_await(pub_c.publish(Bit_1(True)))
+    >>> doctest_await(asyncio.sleep(2.0))               # Wait a little and publish another group.
+    >>> _ = doctest_await(pub_a.publish(Integer64_1(456)))
+    >>> _ = doctest_await(pub_b.publish(Integer64_1(654)))
+    >>> _ = doctest_await(pub_c.publish(Bit_1(False)))
+    >>> doctest_await(asyncio.sleep(1.5))
+    >>> _ = doctest_await(pub_a.publish(Integer64_1(789)))
     >>> # This group is incomplete because we did not publish on subject B, so no output will be generated.
-    >>> _ = aw(pub_c.publish(Bit_1(False)))
-    >>> aw(asyncio.sleep(1.5))
-    >>> _ = aw(pub_a.publish(Integer64_1(741)))
-    >>> _ = aw(pub_b.publish(Integer64_1(852)))
-    >>> _ = aw(pub_c.publish(Bit_1(True)))
-    >>> aw(asyncio.sleep(0.1))
+    >>> _ = doctest_await(pub_c.publish(Bit_1(False)))
+    >>> doctest_await(asyncio.sleep(1.5))
+    >>> _ = doctest_await(pub_a.publish(Integer64_1(741)))
+    >>> _ = doctest_await(pub_b.publish(Integer64_1(852)))
+    >>> _ = doctest_await(pub_c.publish(Bit_1(True)))
+    >>> doctest_await(asyncio.sleep(0.1))
 
     Now the synchronizer will automatically sort our messages into well-defined synchronized groups:
 
-    >>> aw(synchronizer.get())  # First group.
+    >>> doctest_await(synchronizer.get())  # First group.
     (...Integer64.1...(value=234), ...Integer64.1...(value=321), ...Bit.1...(value=True))
-    >>> aw(synchronizer.get())  # Second group.
+    >>> doctest_await(synchronizer.get())  # Second group.
     (...Integer64.1...(value=456), ...Integer64.1...(value=654), ...Bit.1...(value=False))
-    >>> aw(synchronizer.get())  # Fourth group -- the third one was incomplete so dropped.
+    >>> doctest_await(synchronizer.get())  # Fourth group -- the third one was incomplete so dropped.
     (...Integer64.1...(value=741), ...Integer64.1...(value=852), ...Bit.1...(value=True))
-    >>> aw(synchronizer.get()) is None  # No more groups.
+    >>> doctest_await(synchronizer.get()) is None  # No more groups.
     True
 
     Closing the synchronizer will also close all subscribers we passed to it
@@ -171,8 +171,7 @@ class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchro
             if self._last_output_key is not None:
                 new_tol = (key - self._last_output_key) * 0.5  # Tolerance is half the period.
                 self._tolerance = _clamp(self._tolerance_bound, (new_tol + self._tolerance) * 0.5)
-            else:
-                self._last_output_key = key
+            self._last_output_key = key
             # The following may throw, we don't bother catching because the caller will do it for us if needed.
             self._output(res)
 
@@ -181,7 +180,7 @@ class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchro
         if isinstance(self._destination, asyncio.Queue):
             self._destination.put_nowait(res)
         else:
-            self._destination(res)
+            self._destination(*res)
 
     async def receive_for(self, timeout: float) -> _SG | None:
         if isinstance(self._destination, asyncio.Queue):
