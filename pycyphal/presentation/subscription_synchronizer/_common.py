@@ -5,13 +5,16 @@
 from __future__ import annotations
 import abc
 import asyncio
-from typing import Any, Callable, Tuple
+import logging
+from typing import Any, Callable, Tuple, Iterable
 import pycyphal.util
 from pycyphal.transport import TransferFrom
 from pycyphal.presentation import Subscriber
 
 
 MessageWithMetadata = Tuple[Any, TransferFrom]
+
+SynchronizedGroup = Tuple[MessageWithMetadata, ...]
 
 MessageOrderingKeyFunction = Callable[[MessageWithMetadata], float]
 """
@@ -60,39 +63,30 @@ class Synchronizer(abc.ABC):
     - https://github.com/OpenCyphal/pycyphal/issues/65
     - http://wiki.ros.org/message_filters/ApproximateTime
     - https://forum.opencyphal.org/t/si-namespace-design/207/5?u=pavel.kirienko
+
+    ..  warning::
+
+        This API (incl. all derived types) is experimental and subject to breaking changes between minor revisions.
     """
 
+    def __init__(self, subscribers: Iterable[pycyphal.presentation.Subscriber[Any]]) -> None:
+        self._subscribers = tuple(subscribers)
+        self._closed = False
+
     @property
-    @abc.abstractmethod
     def subscribers(self) -> tuple[Subscriber[Any], ...]:
         """
         The set of subscribers whose outputs are synchronized.
         The ordering matches that of the output data.
         """
-        raise NotImplementedError
+        return self._subscribers
 
     @abc.abstractmethod
-    def close(self) -> None:
-        """Idempotent."""
-        raise NotImplementedError
-
-    @property
-    @abc.abstractmethod
-    def _closed(self) -> bool:
-        """True if the instance is finalized or if calling close() is not required for other reasons."""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def receive_in_background(self, handler: Callable[..., None]) -> None:
+    async def receive_for(self, timeout: float) -> SynchronizedGroup | None:
         """See :class:`pycyphal.presentation.Subscriber`"""
         raise NotImplementedError
 
-    @abc.abstractmethod
-    async def receive_for(self, timeout: float) -> tuple[MessageWithMetadata, ...] | None:
-        """See :class:`pycyphal.presentation.Subscriber`"""
-        raise NotImplementedError
-
-    async def receive(self, monotonic_deadline: float) -> tuple[MessageWithMetadata, ...] | None:
+    async def receive(self, monotonic_deadline: float) -> SynchronizedGroup | None:
         """See :class:`pycyphal.presentation.Subscriber`"""
         return await self.receive_for(timeout=monotonic_deadline - asyncio.get_running_loop().time())
 
@@ -103,11 +97,27 @@ class Synchronizer(abc.ABC):
             return tuple(msg for msg, _meta in result)
         return None
 
+    @abc.abstractmethod
+    def receive_in_background(self, handler: Callable[..., None]) -> None:
+        """
+        See :class:`pycyphal.presentation.Subscriber`.
+        The for N subscribers, the callback receives N tuples of :class:`MessageWithMetadata`.
+        """
+        raise NotImplementedError
+
+    def get_in_background(self, handler: Callable[..., None]) -> None:
+        """
+        This is like :meth:`receive_in_background` but the callback receives message objects directly
+        rather than the tuples of (message, metadata).
+        The two methods cannot be used concurrently.
+        """
+        self.receive_in_background(lambda *tup: handler(*(msg for msg, _meta in tup)))
+
     def __aiter__(self) -> Synchronizer:
         """See :class:`pycyphal.presentation.Subscriber`"""
         return self
 
-    async def __anext__(self) -> tuple[MessageWithMetadata, ...]:
+    async def __anext__(self) -> SynchronizedGroup:
         """See :class:`pycyphal.presentation.Subscriber`"""
         try:
             while not self._closed:
@@ -118,5 +128,13 @@ class Synchronizer(abc.ABC):
             pass
         raise StopAsyncIteration
 
+    def close(self) -> None:
+        """Idempotent."""
+        self._closed = True
+        pycyphal.util.broadcast(x.close for x in self._subscribers)()
+
     def __repr__(self) -> str:
         return pycyphal.util.repr_attributes_noexcept(self, self.subscribers)
+
+
+_logger = logging.getLogger(__name__)
