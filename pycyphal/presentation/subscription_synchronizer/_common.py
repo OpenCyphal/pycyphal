@@ -16,17 +16,13 @@ MessageWithMetadata = Tuple[Any, TransferFrom]
 
 SynchronizedGroup = Tuple[MessageWithMetadata, ...]
 
-KeyFunction = Callable[[MessageWithMetadata], int | float]
-"""
-Synchronizers use this function to order and cluster messages.
-"""
-
 _RECEIVE_TIMEOUT = 1.0
 
 
 def get_timestamp_field(item: MessageWithMetadata) -> float:
     """
-    Message ordering key function that defines key as the value of the ``timestamp`` field of the message.
+    Message ordering key function that defines key as the value of the ``timestamp`` field of the message
+    converted to seconds.
     The field is expected to be of type ``uavcan.time.SynchronizedTimestamp``.
     This function will fail with an attribute error if such field is not present in the message.
     """
@@ -35,7 +31,7 @@ def get_timestamp_field(item: MessageWithMetadata) -> float:
 
 def get_local_reception_timestamp(item: MessageWithMetadata) -> float:
     """
-    Message ordering key function that defines key as the local system (wall) reception timestamp.
+    Message ordering key function that defines key as the local system (wall) reception timestamp (in seconds).
     This function works for messages of any type.
     """
     return float(item[1].timestamp.system)
@@ -43,7 +39,7 @@ def get_local_reception_timestamp(item: MessageWithMetadata) -> float:
 
 def get_local_reception_monotonic_timestamp(item: MessageWithMetadata) -> float:
     """
-    Message ordering key function that defines key as the local monotonic reception timestamp.
+    Message ordering key function that defines key as the local monotonic reception timestamp (in seconds).
     This function works for messages of any type.
     This function may perform worse than the wall time alternative because monotonic timestamp is usually less accurate.
     """
@@ -53,7 +49,7 @@ def get_local_reception_monotonic_timestamp(item: MessageWithMetadata) -> float:
 class Synchronizer(abc.ABC):
     """
     Synchronizer is used to receive messages from multiple subjects concurrently such that messages that
-    belong to the same (or nearly the same) point in time, and only those,
+    belong to the same group, and only those,
     are delivered to the application synchronously in one batch.
     Different synchronization policies may be provided by different implementations of this abstract class.
 

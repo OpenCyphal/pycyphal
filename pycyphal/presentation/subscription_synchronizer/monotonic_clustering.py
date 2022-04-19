@@ -19,10 +19,12 @@ class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchro
     """
     Messages are clustered by the message ordering key with the specified tolerance.
     The key shall be monotonically non-decreasing except under special circumstances such as time adjustment.
-    Once a full cluster is collected, it is delivered to the application, and this and all older clusters are dropped.
+    Once a full cluster is collected, it is delivered to the application, and this and all older clusters are dropped
+    (where "older" means smaller key).
     Each received message is used at most once
     (it follows that the output frequency is not higher than the frequency of the slowest subject).
-    If a given cluster receives multiple messages from the same subject, the latest one is used.
+    If a given cluster receives multiple messages from the same subject, the latest one is used
+    (this situation occurs if the subjects are updated at different rates).
 
     The maximum number of clusters, or depth, is limited (oldest dropped).
     This is needed to address the case when the message ordering key leaps backward
@@ -63,7 +65,7 @@ class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchro
 
     Set up the synchronizer. It will take ownership of our subscribers.
     In this example, we are using the local reception timestamp for synchronization,
-    but we could also use the timestamp field by swapping the ordering key function here:
+    but we could also use the timestamp field or whatever by swapping the ordering key function here:
 
     >>> from pycyphal.presentation.subscription_synchronizer import get_local_reception_timestamp
     >>> from pycyphal.presentation.subscription_synchronizer.monotonic_clustering import MonotonicClusteringSynchronizer
@@ -72,16 +74,16 @@ class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchro
     0.1
     >>> synchronizer.tolerance = 0.75  # Tolerance can be changed at any moment.
 
-    Publish some messages in an arbitrary order and observe them to be synchronized:
+    Publish some messages in an arbitrary order:
 
     >>> _ = doctest_await(pub_a.publish(Integer64_1(123)))
     >>> _ = doctest_await(pub_a.publish(Integer64_1(234)))  # Replaces the previous one because newer.
     >>> _ = doctest_await(pub_b.publish(Integer64_1(321)))
     >>> _ = doctest_await(pub_c.publish(Bit_1(True)))
     >>> doctest_await(asyncio.sleep(2.0))               # Wait a little and publish another group.
-    >>> _ = doctest_await(pub_a.publish(Integer64_1(456)))
-    >>> _ = doctest_await(pub_b.publish(Integer64_1(654)))
     >>> _ = doctest_await(pub_c.publish(Bit_1(False)))
+    >>> _ = doctest_await(pub_b.publish(Integer64_1(654)))
+    >>> _ = doctest_await(pub_a.publish(Integer64_1(456)))
     >>> doctest_await(asyncio.sleep(1.5))
     >>> _ = doctest_await(pub_a.publish(Integer64_1(789)))
     >>> # This group is incomplete because we did not publish on subject B, so no output will be generated.
@@ -115,12 +117,14 @@ class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchro
         >>> doctest_await(asyncio.sleep(1.0))
     """
 
+    KeyFunction = Callable[[pycyphal.presentation.subscription_synchronizer.MessageWithMetadata], float]
+
     DEFAULT_DEPTH = 15
 
     def __init__(
         self,
         subscribers: Iterable[pycyphal.presentation.Subscriber[Any]],
-        f_key: pycyphal.presentation.subscription_synchronizer.KeyFunction,
+        f_key: KeyFunction,
         tolerance: float,
         *,
         depth: int = DEFAULT_DEPTH,
@@ -254,7 +258,7 @@ class _Matcher(typing.Generic[T]):
     def __init__(self, *, subject_count: int, depth: int) -> None:
         self._subject_count = int(subject_count)
         if not self._subject_count >= 0:
-            raise ValueError("The subject set shall be non-negative")
+            raise ValueError("The subject count shall be non-negative")
         self._clusters: list[_Cluster[T]] = []
         self._depth = int(depth)
         self._seq_counter = 0
@@ -315,11 +319,6 @@ class _Matcher(typing.Generic[T]):
 
     def __repr__(self) -> str:
         return pycyphal.util.repr_attributes(self, self._clusters, seq=self._seq_counter)
-
-
-def _clamp(lo_hi: tuple[T, T], val: T) -> T:
-    lo, hi = lo_hi
-    return min(max(lo, val), hi)  # type: ignore
 
 
 _logger = logging.getLogger(__name__)

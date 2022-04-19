@@ -90,7 +90,6 @@ async def _unittest_timestamped(compiled: list[pycyphal.dsdl.GeneratedPackageInf
     await asyncio.sleep(0.1)
     assert 3 == cb_count
 
-    # Repeat a few successful groups to bring the auto-deduced tolerance to a low value
     for i in range(10):
         reference += 1
         await pub_a.publish(force.Scalar_1(ts(), reference))
