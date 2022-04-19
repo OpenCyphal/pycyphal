@@ -42,6 +42,16 @@ class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchro
     The attainable worst-case time complexity is ``O(log d)``, where d is the depth limit;
     the memory requirement is ``c*s``, where s is the number of subscribers assuming unity message size.
 
+    The behavior is illustrated on the following timeline:
+
+    .. figure:: /figures/subject_synchronizer_monotonic_clustering.svg
+
+        Time synchronization across multiple subjects with jitter, message loss, and publication frequency variation.
+        Time is increasing left to right.
+        Messages that were identified as belonging to the same synchronized group are connected.
+
+    A usage example is provided below. First it is necessary to prepare some scaffolding:
+
     ..  doctest::
         :hide:
 
@@ -49,8 +59,6 @@ class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchro
         >>> _ = tests.dsdl.compile()
         >>> tests.asyncio_allow_event_loop_access_from_top_level()
         >>> from tests import doctest_await
-
-    Prepare some scaffolding for the demo:
 
     >>> from uavcan.primitive.scalar import Integer64_1, Bit_1
     >>> from pycyphal.transport.loopback import LoopbackTransport
