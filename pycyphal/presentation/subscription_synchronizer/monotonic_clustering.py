@@ -15,19 +15,29 @@ T = typing.TypeVar("T")
 _SG = pycyphal.presentation.subscription_synchronizer.SynchronizedGroup
 
 
-class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchronizer):
+class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchronizer):
     """
-    Messages are clustered by the *message ordering key* with the specified tolerance.
+    Messages are clustered by the message ordering key with the specified tolerance.
+    The key shall be monotonically non-decreasing except under special circumstances such as time adjustment.
     Once a full cluster is collected, it is delivered to the application, and this and all older clusters are dropped.
     Each received message is used at most once
     (it follows that the output frequency is not higher than the frequency of the slowest subject).
     If a given cluster receives multiple messages from the same subject, the latest one is used.
-    The clustering tolerance may be auto-tuned heuristically (this is the default).
 
-    This synchronizer is well-suited for implementation on a real-time embedded system,
-    where the clustering matcher is based on the `Cavl <https://github.com/pavel-kirienko/cavl>`_.
-    The attainable worst-case time complexity is ``O(log c)``,
-    where c is the maximum number of concurrently maintained message clusters;
+    The maximum number of clusters, or depth, is limited (oldest dropped).
+    This is needed to address the case when the message ordering key leaps backward
+    (for example, if the sycnhronized time is adjusted),
+    because some clusters may end up in the future and there needs to be a mechanism in place to remove them.
+    This is also necessary to ensure that the worst-case complexity is well-bounded.
+
+    Old cluster removal is based on a simple non-overflowing sequence counter that is assigned to each
+    new cluster and then incremented; when the limit is exceeded, the cluster with the smallest seq no is dropped.
+    This approach allows us to reason about temporal ordering even if the key is not monotonically non-decreasing.
+
+    This synchronizer is well-suited for use in real-time embedded systems,
+    where the clustering logic can be based on
+    `Cavl <https://github.com/pavel-kirienko/cavl>`_ + `O1Heap <https://github.com/pavel-kirienko/o1heap>`_.
+    The attainable worst-case time complexity is ``O(log d)``, where d is the depth limit;
     the memory requirement is ``c*s``, where s is the number of subscribers assuming unity message size.
 
     ..  doctest::
@@ -56,8 +66,11 @@ class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchro
     but we could also use the timestamp field by swapping the ordering key function here:
 
     >>> from pycyphal.presentation.subscription_synchronizer import get_local_reception_timestamp
-    >>> from pycyphal.presentation.subscription_synchronizer.strict import StrictSynchronizer
-    >>> synchronizer = StrictSynchronizer([sub_a, sub_b, sub_c], get_local_reception_timestamp)
+    >>> from pycyphal.presentation.subscription_synchronizer.monotonic_clustering import MonotonicClusteringSynchronizer
+    >>> synchronizer = MonotonicClusteringSynchronizer([sub_a, sub_b, sub_c], get_local_reception_timestamp, 0.1)
+    >>> synchronizer.tolerance
+    0.1
+    >>> synchronizer.tolerance = 0.75  # Tolerance can be changed at any moment.
 
     Publish some messages in an arbitrary order and observe them to be synchronized:
 
@@ -99,18 +112,18 @@ class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchro
         :hide:
 
         >>> pres.close()
+        >>> doctest_await(asyncio.sleep(1.0))
     """
 
-    DEFAULT_TOLERANCE_BOUND = 1e-6, 1.0
-    """
-    Tolerance will be auto-tuned within this range unless overridden during construction.
-    """
+    DEFAULT_DEPTH = 15
 
     def __init__(
         self,
         subscribers: Iterable[pycyphal.presentation.Subscriber[Any]],
-        f_key: pycyphal.presentation.subscription_synchronizer.MessageOrderingKeyFunction,
-        tolerance: float | tuple[float, float] = DEFAULT_TOLERANCE_BOUND,
+        f_key: pycyphal.presentation.subscription_synchronizer.KeyFunction,
+        tolerance: float,
+        *,
+        depth: int = DEFAULT_DEPTH,
     ) -> None:
         """
         :param subscribers:
@@ -122,25 +135,23 @@ class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchro
             e.g., :func:`pycyphal.presentation.subscription_synchronizer.get_local_reception_timestamp`.
 
         :param tolerance:
-            If scalar, specifies the fixed synchronization tolerance.
-            If two-element tuple, specifies the min and max bounds for the auto-tuned tolerance.
-            A sensible default is provided that will suit most use cases.
+            Messages whose absolute key difference does not exceed this limit will be clustered together.
+            This value can be changed dynamically, which can be leveraged for automatic tolerance configuration
+            as some function of the output frequency.
+
+        :param depth:
+            At most this many newest clusters will be maintained at any moment.
+            This limits the time and memory requirements.
+            If the depth is too small, some valid clusters may be dropped prematurely.
         """
         super().__init__(subscribers)
+        self._tolerance = float(tolerance)
         self._f_key = f_key
-        if isinstance(tolerance, tuple):
-            self._tolerance_bound = float(tolerance[0]), float(tolerance[1])
-            self._tolerance = max(self._tolerance_bound)
-        else:
-            self._tolerance = float(tolerance)
-            self._tolerance_bound = self._tolerance, self._tolerance
-        if not (self._tolerance_bound[0] <= self._tolerance_bound[1]):
-            raise ValueError(f"Invalid tolerance bound: {self._tolerance_bound}")
         self._matcher: _Matcher[pycyphal.presentation.subscription_synchronizer.MessageWithMetadata] = _Matcher(
-            len(self.subscribers)
+            subject_count=len(self.subscribers),
+            depth=int(depth),
         )
         self._destination: asyncio.Queue[_SG] | Callable[..., None] = asyncio.Queue()
-        self._last_output_key: float | None = None
 
         def mk_handler(idx: int) -> Any:
             return lambda msg, meta: self._cb(idx, (msg, meta))
@@ -151,27 +162,27 @@ class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchro
     @property
     def tolerance(self) -> float:
         """
-        The current tolerance value. It may change at runtime if auto-tuning is enabled.
+        The current tolerance value.
 
-        A feedback loop is formed such that when a new synchronized group is assembled,
-        the delta from the previous group is computed and the tolerance is updated as some fraction of that
-        (low-pass filtered).
+        Auto-tuning with feedback can be implemented on top of this synchronizer
+        such that when a new synchronized group is delivered,
+        the key delta from the previous group is computed and the tolerance is updated as some function of that.
         If the tolerance is low, more synchronized groups will be skipped (delta increased);
         therefore, at the next successful synchronized group reassembly the tolerance will be increased.
-
-        If the initial tolerance is large, the synchronizer may initially output poorly grouped messages,
-        but it will quickly converge to a more sensible tolerance in a few iterations.
+        With this method, if the initial tolerance is large,
+        the synchronizer may initially output poorly grouped messages,
+        but it will converge to a more sensible tolerance setting in a few iterations.
         """
         return self._tolerance
+
+    @tolerance.setter
+    def tolerance(self, value: float) -> None:
+        self._tolerance = float(value)
 
     def _cb(self, index: int, mm: pycyphal.presentation.subscription_synchronizer.MessageWithMetadata) -> None:
         key = self._f_key(mm)
         res = self._matcher.update(key, self._tolerance, index, mm)
         if res is not None:
-            if self._last_output_key is not None:
-                new_tol = (key - self._last_output_key) * 0.5  # Tolerance is half the period.
-                self._tolerance = _clamp(self._tolerance_bound, (new_tol + self._tolerance) * 0.5)
-            self._last_output_key = key
             # The following may throw, we don't bother catching because the caller will do it for us if needed.
             self._output(res)
 
@@ -202,9 +213,14 @@ class StrictSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchro
 
 @functools.total_ordering
 class _Cluster(typing.Generic[T]):
-    def __init__(self, key: float, size: int) -> None:
+    def __init__(self, *, key: float, size: int, seq_no: int) -> None:
         self._key = float(key)
         self._collection: list[T | None] = [None] * int(size)
+        self._seq_no = int(seq_no)
+
+    @property
+    def seq_no(self) -> int:
+        return self._seq_no
 
     def put(self, index: int, item: T) -> tuple[T, ...] | None:
         self._collection[index] = item
@@ -230,14 +246,16 @@ class _Cluster(typing.Generic[T]):
 
 class _Matcher(typing.Generic[T]):
     """
-    An embedded implementation should use Cavl instead of this.
+    An embedded implementation can be based on Cavl.
     """
 
-    def __init__(self, subject_count: int) -> None:
+    def __init__(self, *, subject_count: int, depth: int) -> None:
         self._subject_count = int(subject_count)
         if not self._subject_count >= 0:
             raise ValueError("The subject set shall be non-negative")
         self._clusters: list[_Cluster[T]] = []
+        self._depth = int(depth)
+        self._seq_counter = 0
 
     def update(self, key: float, tolerance: float, index: int, item: T) -> tuple[T, ...] | None:
         clust: _Cluster[T] | None = None
@@ -257,8 +275,7 @@ class _Matcher(typing.Generic[T]):
                 clust = self._clusters[ni]
                 _logger.debug("Choosing %r for key=%r delta=%r; candidates: %r", clust, key, dist, neigh)
         if clust is None:
-            clust = _Cluster(key, self._subject_count)
-            bisect.insort(self._clusters, clust)
+            clust = self._new_cluster(key)
             _logger.debug("New cluster %r", clust)
         assert clust is not None
         res = clust.put(index, item)
@@ -270,6 +287,10 @@ class _Matcher(typing.Generic[T]):
         return res
 
     @property
+    def counter(self) -> int:
+        return self._seq_counter
+
+    @property
     def clusters(self) -> list[_Cluster[T]]:
         """Debugging/testing aid."""
         return list(self._clusters)
@@ -277,8 +298,21 @@ class _Matcher(typing.Generic[T]):
     def _drop_older(self, key: float) -> None:
         self._clusters = [it for it in self._clusters if float(it) > key]
 
+    def _new_cluster(self, key: float) -> _Cluster[T]:
+        # Trim the set to ensure we will not exceed the limit.
+        # This implementation can be improved but it doesn't matter much because the depth is small.
+        if len(self._clusters) >= self._depth:
+            idx, _ = min(enumerate(self._clusters), key=lambda idx_cl: idx_cl[1].seq_no)
+            del self._clusters[idx]
+        # Create and insert the new one.
+        clust: _Cluster[T] = _Cluster(key=key, size=self._subject_count, seq_no=self._seq_counter)
+        self._seq_counter += 1
+        bisect.insort(self._clusters, clust)
+        assert 0 < len(self._clusters) <= self._depth
+        return clust
+
     def __repr__(self) -> str:
-        return pycyphal.util.repr_attributes(self, self._clusters)
+        return pycyphal.util.repr_attributes(self, self._clusters, seq=self._seq_counter)
 
 
 def _clamp(lo_hi: tuple[T, T], val: T) -> T:
@@ -293,9 +327,11 @@ _logger = logging.getLogger(__name__)
 def _unittest_cluster() -> None:
     from pytest import approx
 
-    cl: _Cluster[int] = _Cluster(5.0, 3)
-    assert cl < _Cluster(5.1, 0)
-    assert cl > _Cluster(4.9, 0)
+    cl: _Cluster[int] = _Cluster(key=5.0, size=3, seq_no=543210)
+    assert cl.seq_no == 543210
+
+    assert cl < _Cluster(key=5.1, size=0, seq_no=0)
+    assert cl > _Cluster(key=4.9, size=0, seq_no=0)
     assert cl < 5.1
     assert cl > 4.9
     assert cl.delta(5.1) == approx(0.1)
@@ -310,35 +346,39 @@ def _unittest_cluster() -> None:
 
 
 def _unittest_matcher() -> None:
-    mat: _Matcher[int] = _Matcher(3)
+    mat: _Matcher[int] = _Matcher(subject_count=3, depth=3)
     assert len(mat.clusters) == 0
 
-    assert not mat.update(5.0, 0.5, 1, 51)
+    assert not mat.update(1.0, 0.5, 1, 51)
     assert len(mat.clusters) == 1
+
+    assert not mat.update(5.0, 0.5, 1, 51)
+    assert len(mat.clusters) == 2
 
     assert not mat.update(4.8, 0.5, 0, 50)
-    assert len(mat.clusters) == 1
+    assert len(mat.clusters) == 2
 
     assert not mat.update(6.0, 0.5, 1, 61)
-    assert len(mat.clusters) == 2
+    assert len(mat.clusters) == 3
 
     assert not mat.update(6.4, 0.5, 2, 62)
-    assert len(mat.clusters) == 2
-
-    assert not mat.update(4.0, 0.5, 0, 40)
     assert len(mat.clusters) == 3
+
+    print(0, mat)
+    assert not mat.update(4.0, 0.5, 0, 40)
+    assert len(mat.clusters) == 3  # Depth limit exceeded, first one dropped.
+    print(1, mat)
 
     assert not mat.update(4.0, 0.5, 1, 41)
     assert len(mat.clusters) == 3
-
-    print(mat)
+    print(2, mat)
 
     assert len(mat.clusters) == 3
     assert (50, 51, 52) == mat.update(5.4, 0.5, 2, 52)
     assert len(mat.clusters) == 1
-    print(mat)
+    print(3, mat)
 
     assert len(mat.clusters) == 1
     assert (60, 61, 62) == mat.update(9.1, 10.0, 0, 60)
     assert len(mat.clusters) == 0
-    print(mat)
+    print(4, mat)

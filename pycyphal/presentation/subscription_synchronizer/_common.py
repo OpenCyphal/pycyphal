@@ -16,10 +16,9 @@ MessageWithMetadata = Tuple[Any, TransferFrom]
 
 SynchronizedGroup = Tuple[MessageWithMetadata, ...]
 
-MessageOrderingKeyFunction = Callable[[MessageWithMetadata], float]
+KeyFunction = Callable[[MessageWithMetadata], int | float]
 """
 Synchronizers use this function to order and cluster messages.
-The key shall be monotonically non-decreasing over time.
 """
 
 _RECEIVE_TIMEOUT = 1.0

@@ -8,5 +8,5 @@ from ._common import get_local_reception_monotonic_timestamp as get_local_recept
 
 from ._common import MessageWithMetadata as MessageWithMetadata
 from ._common import SynchronizedGroup as SynchronizedGroup
-from ._common import MessageOrderingKeyFunction as MessageOrderingKeyFunction
+from ._common import KeyFunction as KeyFunction
 from ._common import Synchronizer as Synchronizer
