@@ -41,10 +41,10 @@ async def _unittest_timestamped(compiled: list[pycyphal.dsdl.GeneratedPackageInf
     def cb(a: force.Scalar_1, b: power.Scalar_1, c: angle.Scalar_1) -> None:
         nonlocal cb_count
         cb_count += 1
+        print(synchronizer.tolerance, a, b, c)
         assert reference == round(a.newton)
         assert reference == round(b.watt)
         assert reference == round(c.radian)
-        print(synchronizer.tolerance, a, b, c)
 
     synchronizer.get_in_background(cb)
 
@@ -61,15 +61,17 @@ async def _unittest_timestamped(compiled: list[pycyphal.dsdl.GeneratedPackageInf
     assert 1 == cb_count
 
     reference += 1
-    await pub_a.publish(force.Scalar_1(ts(), reference))
+    await pub_c.publish(angle.Scalar_1(ts(), reference))  # Reordered.
     await pub_b.publish(power.Scalar_1(ts(), reference))
-    await pub_c.publish(angle.Scalar_1(ts(), reference))
+    await pub_a.publish(force.Scalar_1(ts(), reference))
     await asyncio.sleep(0.1)
     assert 2 == cb_count
 
     reference += 1
+    await pub_b.publish(power.Scalar_1(ts(), 999999999))  # Incorrect, will be overridden next.
+    await pub_b.publish(power.Scalar_1(ts(), reference))  # Override the incorrect value.
+    await asyncio.sleep(0.1)
     await pub_a.publish(force.Scalar_1(ts(), reference))
-    await pub_b.publish(power.Scalar_1(ts(), reference))
     await pub_c.publish(angle.Scalar_1(ts(), reference))
     await asyncio.sleep(0.1)
     assert 3 == cb_count

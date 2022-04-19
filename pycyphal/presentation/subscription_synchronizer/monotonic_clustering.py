@@ -133,6 +133,8 @@ class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchro
         :param f_key:
             Message ordering key function;
             e.g., :func:`pycyphal.presentation.subscription_synchronizer.get_local_reception_timestamp`.
+            Any monotonic non-decreasing function of the received message with its metadata is acceptable,
+            and it doesn't necessarily have to be time-related.
 
         :param tolerance:
             Messages whose absolute key difference does not exceed this limit will be clustered together.
