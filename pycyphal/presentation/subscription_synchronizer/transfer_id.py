@@ -10,14 +10,17 @@ from typing import Iterable, Any, Callable
 import pycyphal.presentation.subscription_synchronizer
 
 T = typing.TypeVar("T")
+K = typing.TypeVar("K")
 _SG = pycyphal.presentation.subscription_synchronizer.SynchronizedGroup
 
 
 class TransferIDSynchronizer(pycyphal.presentation.subscription_synchronizer.Synchronizer):
     """
-    Messages that share the same transfer-ID value are assumed synchronous.
+    Messages that share the same (source node-ID, transfer-ID) are assumed synchronous
+    (i.e., all messages in a synchronized group always originate from the same node).
     Each received message is used at most once
     (it follows that the output frequency is not higher than the frequency of the slowest subject).
+    Anonymous messages are dropped unconditionally (because the source node-ID is not defined for them).
 
     The Cyphal Specification does not recommend this mode of synchronization but it is provided for completeness.
     If not sure, use other synchronizers instead.
@@ -82,7 +85,7 @@ class TransferIDSynchronizer(pycyphal.presentation.subscription_synchronizer.Syn
         >>> doctest_await(asyncio.sleep(1.0))
     """
 
-    DEFAULT_SPAN = 15
+    DEFAULT_SPAN = 30  # The default should be below 32 for compatibility with Cyphal/CAN.
 
     def __init__(
         self,
@@ -100,7 +103,10 @@ class TransferIDSynchronizer(pycyphal.presentation.subscription_synchronizer.Syn
             This protects against mismatch if cyclic transfer-ID is used and limits the time and memory requirements.
         """
         super().__init__(subscribers)
-        self._matcher: _Matcher[pycyphal.presentation.subscription_synchronizer.MessageWithMetadata] = _Matcher(
+        self._matcher: _Matcher[
+            tuple[int, int],
+            pycyphal.presentation.subscription_synchronizer.MessageWithMetadata,
+        ] = _Matcher(
             subject_count=len(self.subscribers),
             span=int(span),
         )
@@ -113,10 +119,14 @@ class TransferIDSynchronizer(pycyphal.presentation.subscription_synchronizer.Syn
             sub.receive_in_background(mk_handler(index))
 
     def _cb(self, index: int, mm: pycyphal.presentation.subscription_synchronizer.MessageWithMetadata) -> None:
-        res = self._matcher.update(mm[1].transfer_id, index, mm)
-        if res is not None:
-            # The following may throw, we don't bother catching because the caller will do it for us if needed.
-            self._output(res)
+        # Use both node-ID and transfer-ID https://github.com/OpenCyphal/pycyphal/pull/220#discussion_r853500453
+        src_nid = mm[1].source_node_id
+        tr_id = mm[1].transfer_id
+        if src_nid is not None:
+            res = self._matcher.update((src_nid, tr_id), index, mm)
+            if res is not None:
+                # The following may throw, we don't bother catching because the caller will do it for us if needed.
+                self._output(res)
 
     def _output(self, res: _SG) -> None:
         _logger.debug("OUTPUT: %r", res)
@@ -162,16 +172,16 @@ class _Cluster(typing.Generic[T]):
         return f"({self._seq_no:09}:{''.join(('+-'[x is None]) for x in self._collection)})"
 
 
-class _Matcher(typing.Generic[T]):
+class _Matcher(typing.Generic[K, T]):
     def __init__(self, *, subject_count: int, span: int) -> None:
         self._subject_count = int(subject_count)
         if not self._subject_count >= 0:
             raise ValueError("The subject count shall be non-negative")
-        self._clusters: dict[int, _Cluster[T]] = {}
+        self._clusters: dict[K, _Cluster[T]] = {}
         self._span = int(span)
         self._seq_counter = 0
 
-    def update(self, key: int, index: int, item: T) -> tuple[T, ...] | None:
+    def update(self, key: K, index: int, item: T) -> tuple[T, ...] | None:
         try:
             clust = self._clusters[key]
         except LookupError:
@@ -188,7 +198,7 @@ class _Matcher(typing.Generic[T]):
         return res
 
     @property
-    def clusters(self) -> dict[int, _Cluster[T]]:
+    def clusters(self) -> dict[K, _Cluster[T]]:
         return self._clusters
 
     def __repr__(self) -> str:
@@ -211,7 +221,7 @@ def _unittest_cluster() -> None:
 
 
 def _unittest_matcher() -> None:
-    mat: _Matcher[int] = _Matcher(subject_count=3, span=3)
+    mat: _Matcher[int, int] = _Matcher(subject_count=3, span=3)
     assert len(mat.clusters) == 0
 
     assert not mat.update(0, 1, 51)
