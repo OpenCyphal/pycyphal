@@ -18,6 +18,11 @@ NodeInfo = uavcan.node.GetInfo_1.Response
 
 T = TypeVar("T")
 
+_UNSET_PORT_ID = 0xFFFF
+"""
+Value from the Regiester API definition.
+"""
+
 
 class PortNotConfiguredError(register.MissingRegisterError):
     """
@@ -128,10 +133,14 @@ class Node(abc.ABC):
         The type information is automatically exposed via ``uavcan.pub.PORT_NAME.type`` based on dtype.
         For details on the standard registers see Specification.
 
-        The port_name may also be the integer port-ID if it is desired to bypass the registry (not recommended).
+        **Experimental:** the ``port_name`` may also be the integer port-ID.
+        In this case, new port registers will be created with the names derived from the supplied port-ID
+        (e.g., ``uavcan.pub.1234.id``, ``uavcan.pub.1234.type``).
+        If the ID register created in such way is overridden externally,
+        the supplied ID will be ignored in favor of the override.
 
         :raises:
-            :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
+            :class:`PortNotConfiguredError` if the register is not set and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
         return self.presentation.make_publisher(dtype, self._resolve_port(dtype, "pub", port_name))
@@ -144,10 +153,10 @@ class Node(abc.ABC):
         The type information is automatically exposed via ``uavcan.sub.PORT_NAME.type`` based on dtype.
         For details on the standard registers see Specification.
 
-        The port_name may also be the integer port-ID if it is desired to bypass the registry (not recommended).
+        The port_name may also be the integer port-ID; see :meth:`make_publisher` for details.
 
         :raises:
-            :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
+            :class:`PortNotConfiguredError` if the register is not set and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
         return self.presentation.make_subscriber(dtype, self._resolve_port(dtype, "sub", port_name))
@@ -160,10 +169,10 @@ class Node(abc.ABC):
         The type information is automatically exposed via ``uavcan.cln.PORT_NAME.type`` based on dtype.
         For details on the standard registers see Specification.
 
-        The port_name may also be the integer port-ID if it is desired to bypass the registry (not recommended).
+        The port_name may also be the integer port-ID; see :meth:`make_publisher` for details.
 
         :raises:
-            :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
+            :class:`PortNotConfiguredError` if the register is not set and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
         return self.presentation.make_client(
@@ -180,62 +189,56 @@ class Node(abc.ABC):
         The type information is automatically exposed via ``uavcan.srv.PORT_NAME.type`` based on dtype.
         For details on the standard registers see Specification.
 
-        The port_name may also be the integer port-ID if it is desired to bypass the registry (not recommended).
+        The port_name may also be the integer port-ID; see :meth:`make_publisher` for details.
 
         :raises:
-            :class:`PortNotConfiguredError` if the register is missing and no fixed port-ID is defined.
+            :class:`PortNotConfiguredError` if the register is not set and no fixed port-ID is defined.
             :class:`TypeError` if no name is given and no fixed port-ID is defined.
         """
         return self.presentation.get_server(dtype, self._resolve_port(dtype, "srv", port_name))
 
     def _resolve_port(self, dtype: Any, kind: str, name_or_id: str | int) -> int:
-        result: int | None
         if isinstance(name_or_id, str) and name_or_id:
-            result = self._resolve_named_port(dtype, kind, name_or_id)
-        elif isinstance(name_or_id, str):
+            return self._resolve_named_port(dtype, kind, name_or_id)
+        if isinstance(name_or_id, str):
             assert not name_or_id
-            result = pycyphal.dsdl.get_fixed_port_id(dtype)
-        else:
-            result = int(name_or_id)
-        _logger.debug("%r: Resolved port: dtype=%s kind=%r name_or_id=%r --> %r", self, dtype, kind, name_or_id, result)
-        if result is not None:
-            return result
-        raise TypeError(
-            f"Cannot open a {kind}-port of type {dtype} because neither a port name nor port-ID were provided "
-            f"and the data type has no fixed port-ID. "
-            f"In order to use this port with a non-fixed port-ID you simply need to assign it a name. "
-            f"You can find the rationale at https://forum.opencyphal.org/t/choosing-message-and-service-ids/889"
-        )
+            res = pycyphal.dsdl.get_fixed_port_id(dtype)
+            if res is not None:
+                return res
+            raise TypeError(f"Type {dtype} has no fixed port-ID, and no port name is given")
+        return self._resolve_named_port(dtype, kind, str(name_or_id), default=int(name_or_id))
 
-    def _resolve_named_port(self, dtype: Any, kind: str, name: str) -> int:
+    def _resolve_named_port(self, dtype: Any, kind: str, name: str, *, default: int | None = None) -> int:
         assert name, "Internal error"
-        model = pycyphal.dsdl.get_model(dtype)
-
-        id_register_name = f"uavcan.{kind}.{name}.id"
-        port_id = int(
-            self.registry.setdefault(
-                id_register_name,
-                register.Value(natural16=register.Natural16([0xFFFF])),  # 0xFFFF means unset
-            )
-        )
-        # Expose the type information to other network participants as prescribed by the Specification.
-        self.registry[f"uavcan.{kind}.{name}.type"] = lambda: register.Value(string=register.String(str(model)))
-
-        # Check if the value stored in the register is actually valid.
         mask = {
             "pub": pycyphal.transport.MessageDataSpecifier.SUBJECT_ID_MASK,
             "sub": pycyphal.transport.MessageDataSpecifier.SUBJECT_ID_MASK,
             "cln": pycyphal.transport.ServiceDataSpecifier.SERVICE_ID_MASK,
             "srv": pycyphal.transport.ServiceDataSpecifier.SERVICE_ID_MASK,
         }[kind]
-        if 0 <= port_id <= mask:
+        if default is not None and not (0 <= default <= mask):
+            raise ValueError(f"Default port-ID {default} is not valid for a {kind}-port")
+
+        id_register_name = self._get_port_id_register_name(kind, name)
+        port_id = int(
+            self.registry.setdefault(
+                id_register_name,
+                register.Value(natural16=register.Natural16([default if default is not None else _UNSET_PORT_ID])),
+            )
+        )
+        # Expose the type information to other network participants as prescribed by the Specification.
+        model = pycyphal.dsdl.get_model(dtype)
+        self.registry[self._get_port_type_register_name(kind, name)] = lambda: register.Value(
+            string=register.String(str(model))
+        )
+        if 0 <= port_id <= mask:  # Check if the value is actually configured.
             return port_id
 
         # Default to the fixed port-ID if the register value is invalid.
         _logger.debug("%r: %r = %r not in [0, %d], assume undefined", self, id_register_name, port_id, mask)
-        if model.fixed_port_id is not None:
-            assert isinstance(model.fixed_port_id, int)
-            return model.fixed_port_id
+        fpid = pycyphal.dsdl.get_fixed_port_id(dtype)
+        if fpid is not None:
+            return fpid
 
         raise PortNotConfiguredError(
             id_register_name,
@@ -244,6 +247,14 @@ class Node(abc.ABC):
             f"Check if the environment variables are passed correctly or if the application is using the "
             f"correct register file.",
         )
+
+    @staticmethod
+    def _get_port_id_register_name(kind: str, name: str) -> str:
+        return f"uavcan.{kind}.{name}.id"
+
+    @staticmethod
+    def _get_port_type_register_name(kind: str, name: str) -> str:
+        return f"uavcan.{kind}.{name}.type"
 
     def start(self) -> None:
         """
