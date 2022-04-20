@@ -16,7 +16,7 @@ MessageWithMetadata = Tuple[Any, TransferFrom]
 
 SynchronizedGroup = Tuple[MessageWithMetadata, ...]
 
-_RECEIVE_TIMEOUT = 1.0
+_RECEIVE_TIMEOUT = 1.0  # [second]
 
 
 def get_timestamp_field(item: MessageWithMetadata) -> float:
