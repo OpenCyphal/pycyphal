@@ -140,8 +140,7 @@ class TransferIDSynchronizer(pycyphal.presentation.subscription_synchronizer.Syn
             try:
                 if timeout > 1e-6:
                     return await asyncio.wait_for(self._destination.get(), timeout)
-                else:
-                    return self._destination.get_nowait()
+                return self._destination.get_nowait()
             except asyncio.QueueEmpty:
                 return None
             except asyncio.TimeoutError:
@@ -175,7 +174,7 @@ class _Cluster(typing.Generic[T]):
 class _Matcher(typing.Generic[K, T]):
     def __init__(self, *, subject_count: int, span: int) -> None:
         self._subject_count = int(subject_count)
-        if not self._subject_count >= 0:
+        if self._subject_count < 0:
             raise ValueError("The subject count shall be non-negative")
         self._clusters: dict[K, _Cluster[T]] = {}
         self._span = int(span)

@@ -4,9 +4,9 @@
 
 from __future__ import annotations
 import asyncio
+from typing import Any
 import pytest
 import pycyphal
-from typing import Any
 from pycyphal.transport import TransferFrom
 from pycyphal.transport.loopback import LoopbackTransport, LoopbackInputSession
 from pycyphal.presentation import Presentation

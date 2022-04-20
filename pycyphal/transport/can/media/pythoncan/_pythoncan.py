@@ -95,7 +95,8 @@ class PythonCANMedia(Media):
               More info: https://github.com/OpenCyphal/pycyphal/issues/178#issuecomment-912497882
               Example: ``canalystii:0``
 
-            - Interface ``seeedstudio`` is described in https://python-can.readthedocs.io/en/stable/interfaces/seeedstudio.html.
+            - Interface ``seeedstudio`` is described in
+              https://python-can.readthedocs.io/en/stable/interfaces/seeedstudio.html.
               Example: ``seeedstudio:/dev/ttyUSB0`` (Linux) or ``seeedstudio:COM3`` (Windows)
 
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:

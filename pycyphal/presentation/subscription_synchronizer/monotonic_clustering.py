@@ -212,8 +212,7 @@ class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchro
             try:
                 if timeout > 1e-6:
                     return await asyncio.wait_for(self._destination.get(), timeout)
-                else:
-                    return self._destination.get_nowait()
+                return self._destination.get_nowait()
             except asyncio.QueueEmpty:
                 return None
             except asyncio.TimeoutError:
