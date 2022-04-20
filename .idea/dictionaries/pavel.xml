@@ -94,6 +94,7 @@
       <w>ffff</w>
       <w>fgsfds</w>
       <w>findalldevs</w>
+      <w>fixedsize</w>
       <w>fontname</w>
       <w>forcecolor</w>
       <w>fpid</w>
@@ -176,6 +177,7 @@
       <w>pathlib</w>
       <w>pcap</w>
       <w>pcapy</w>
+      <w>penwidth</w>
       <w>pfft</w>
       <w>pizdec</w>
       <w>pizdets</w>
@@ -269,6 +271,7 @@
       <w>suka</w>
       <w>supernum</w>
       <w>supremum</w>
+      <w>synchronizers</w>
       <w>synth</w>
       <w>systeminfo</w>
       <w>tamada</w>

@@ -3,11 +3,17 @@
 Changelog
 =========
 
+
+v1.8
+----
+
+- Subscription synchronizer added (`#65 <https://github.com/OpenCyphal/pycyphal/issues/65>`_).
+
 v1.7
 ----
 
 - :class:`pycyphal.application.Node` supports construction of ports (publishers, subscribers, clients, servers)
-  with a fixed port-ID, bypassing the registry.
+  with a directly specified port-ID, bypassing the registry.
 
 - New presentation layer capabilities:
 

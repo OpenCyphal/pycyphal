@@ -45,7 +45,7 @@ each implementing a well-segregated part of the protocol:
 
 The overall structure of the library and its mapping onto the Cyphal protocol is shown on the following diagram:
 
-.. image:: /static/arch-non-redundant.svg
+.. image:: /figures/arch-non-redundant.svg
 
 The dependency relations of the submodules are as follows:
 
@@ -161,7 +161,7 @@ In order to initialize it, the application should first initialize each of the p
 supply them to the redundant pseudo-transport instance.
 Afterwards, the configured instance is used with the upper layers of the protocol stack, as shown on the diagram.
 
-.. image:: /static/arch-redundant.svg
+.. image:: /figures/arch-redundant.svg
 
 The `Cyphal Specification <https://opencyphal.org/specification>`_ adds the following remark on redundant transports:
 
