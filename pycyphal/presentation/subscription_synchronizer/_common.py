@@ -16,7 +16,7 @@ MessageWithMetadata = Tuple[Any, TransferFrom]
 
 SynchronizedGroup = Tuple[MessageWithMetadata, ...]
 
-_RECEIVE_TIMEOUT = 1.0  # [second]
+_AITER_POLL_INTERVAL = 1.0  # [second]
 
 
 def get_timestamp_field(item: MessageWithMetadata) -> float:
@@ -59,9 +59,16 @@ class Synchronizer(abc.ABC):
     - http://wiki.ros.org/message_filters/ApproximateTime
     - https://forum.opencyphal.org/t/si-namespace-design/207/5?u=pavel.kirienko
 
+    ..  caution::
+
+        Synchronizers may not be notified when the underlying subscribers are closed.
+        That is, closing any or all of the subscribers will not automatically unblock
+        data consumers blocked on their synchronizer.
+        This may be changed later.
+
     ..  warning::
 
-        This API (incl. all derived types) is experimental and subject to breaking changes between minor revisions.
+        This API (incl. all derived types) is experimental and subject to breaking changes.
     """
 
     def __init__(self, subscribers: Iterable[pycyphal.presentation.Subscriber[Any]]) -> None:
@@ -109,16 +116,30 @@ class Synchronizer(abc.ABC):
         self.receive_in_background(lambda *tup: handler(*(msg for msg, _meta in tup)))
 
     def __aiter__(self) -> Synchronizer:
-        """See :class:`pycyphal.presentation.Subscriber`"""
+        """
+        Iterator API support. Returns self unchanged.
+        """
         return self
 
-    async def __anext__(self) -> SynchronizedGroup:
-        """See :class:`pycyphal.presentation.Subscriber`"""
+    async def __anext__(self) -> tuple[tuple[MessageWithMetadata, Subscriber[Any]], ...]:
+        """
+        This is like :meth:`receive` with an infinite timeout, so it always returns something.
+        Iteration stops when the instance is :meth:`close` d.
+
+        The return type is not just a message with metadata but is a tuple of that with its subscriber.
+        The reason we need the subscriber here is to enhance usability because it is not possible
+        to use ``zip``, ``enumerate``, and other combinators with async iterators.
+        The typical usage is then like (synchronizing two subjects here)::
+
+            async for (((msg_a, meta_a), subscriber_a), ((msg_b, meta_b), subscriber_b),) in synchronizer:
+                ...
+        """
         try:
             while not self._closed:
-                out = await self.receive_for(_RECEIVE_TIMEOUT)
+                out = await self.receive_for(_AITER_POLL_INTERVAL)
                 if out is not None:
-                    return out
+                    assert len(out) == len(self.subscribers)
+                    return tuple(zip(out, self.subscribers))
         except pycyphal.transport.ResourceClosedError:
             pass
         raise StopAsyncIteration

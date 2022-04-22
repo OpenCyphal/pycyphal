@@ -9,6 +9,9 @@ v1.8
 
 - Subscription synchronizer added (`#65 <https://github.com/OpenCyphal/pycyphal/issues/65>`_).
 
+- **v1.8.1:**
+  Port factory methods in :class:`pycyphal.application.Node` that accept direct port-ID always update the registry.
+
 v1.7
 ----
 

@@ -7,9 +7,10 @@ import random
 import asyncio
 import pytest
 import pycyphal
+from pycyphal.transport import TransferFrom
 from pycyphal.transport.loopback import LoopbackTransport
 from pycyphal.presentation import Presentation
-from pycyphal.presentation.subscription_synchronizer import get_timestamp_field
+from pycyphal.presentation.subscription_synchronizer import get_timestamp_field, get_local_reception_timestamp
 from pycyphal.presentation.subscription_synchronizer.monotonic_clustering import MonotonicClusteringSynchronizer
 
 
@@ -98,5 +99,43 @@ async def _unittest_timestamped(compiled: list[pycyphal.dsdl.GeneratedPackageInf
         await asyncio.sleep(0.1)
         assert 4 + i == cb_count
 
+    pres.close()
+    await asyncio.sleep(1.0)
+
+
+async def _unittest_async_iter(compiled: list[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
+    from uavcan.primitive.scalar import Integer8_1
+
+    _ = compiled
+    asyncio.get_running_loop().slow_callback_duration = 5.0
+
+    pres = Presentation(LoopbackTransport(1234))
+
+    pub_a = pres.make_publisher(Integer8_1, 2000)
+    pub_b = pres.make_publisher(Integer8_1, 2001)
+
+    sub_a = pres.make_subscriber(pub_a.dtype, pub_a.port_id)
+    sub_b = pres.make_subscriber(pub_b.dtype, pub_b.port_id)
+
+    synchronizer = MonotonicClusteringSynchronizer([sub_a, sub_b], get_local_reception_timestamp, 1.0)
+
+    for i in range(2):
+        await pub_a.publish(Integer8_1(+i))
+        await pub_b.publish(Integer8_1(-i))
+
+    asyncio.get_running_loop().call_later(3.0, synchronizer.close)  # This will break us out of the loop.
+    count = 0
+    async for (((msg_a, meta_a), ref_sub_a), ((msg_b, meta_b), ref_sub_b)) in synchronizer:
+        print(msg_a, msg_b)
+        assert isinstance(msg_a, Integer8_1) and isinstance(meta_a, TransferFrom)
+        assert isinstance(msg_b, Integer8_1) and isinstance(meta_b, TransferFrom)
+        assert msg_a.value == +count
+        assert msg_b.value == -count
+        assert meta_a.transfer_id == meta_b.transfer_id == count
+        assert ref_sub_a is sub_a
+        assert ref_sub_b is sub_b
+        count += 1
+
+    assert count == 2
     pres.close()
     await asyncio.sleep(1.0)
