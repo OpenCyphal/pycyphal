@@ -68,7 +68,7 @@ class Synchronizer(abc.ABC):
 
     ..  warning::
 
-        This API (incl. all derived types) is experimental and subject to breaking changes between minor revisions.
+        This API (incl. all derived types) is experimental and subject to breaking changes.
     """
 
     def __init__(self, subscribers: Iterable[pycyphal.presentation.Subscriber[Any]]) -> None:

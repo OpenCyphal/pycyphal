@@ -20,7 +20,7 @@ T = TypeVar("T")
 
 _UNSET_PORT_ID = 0xFFFF
 """
-Value from the Regiester API definition.
+Value from the Register API definition.
 """
 
 
