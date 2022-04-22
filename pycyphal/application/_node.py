@@ -136,7 +136,7 @@ class Node(abc.ABC):
         **Experimental:** the ``port_name`` may also be the integer port-ID.
         In this case, new port registers will be created with the names derived from the supplied port-ID
         (e.g., ``uavcan.pub.1234.id``, ``uavcan.pub.1234.type``).
-        If the ID register created in such way is overridden externally,
+        If ID registers created this way are overridden externally,
         the supplied ID will be ignored in favor of the override.
 
         :raises:
