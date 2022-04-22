@@ -104,7 +104,7 @@ def _unittest_can_transfer_id_forward_distance() -> None:
     assert 30 == cfd(7, 5)
 
 
-def _unittest_can_uavcan_frame() -> None:
+def _unittest_can_cyphal_frame() -> None:
     from pytest import raises
 
     CyphalFrame(123, 123, True, False, True, memoryview(b""))
