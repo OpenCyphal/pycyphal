@@ -70,7 +70,7 @@ class CANTransportStatistics(pycyphal.transport.TransportStatistics):
         return self.in_frames_cyphal
 
     @property
-    def in_frames_uavcan_accepted(self):
+    def in_frames_uavcan_accepted(self) -> int:
         warnings.warn("Use in_frames_cyphal_accepted", DeprecationWarning)
         return self.in_frames_cyphal_accepted
 
