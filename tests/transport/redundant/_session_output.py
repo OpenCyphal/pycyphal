@@ -361,8 +361,12 @@ async def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
 
     # Transmission with exceptions.
     # If at least one transmission succeeds, the call succeeds.
+    # One inferior raises an error and the other one takes its time to transmit.
+    # The correct behavior is to stow the exception and wait for the other one to finish.
+    # https://github.com/OpenCyphal/pycyphal/issues/222
     with caplog.at_level(logging.CRITICAL, logger=__name__):
         inf_a.exception = RuntimeError("INTENDED EXCEPTION")
+        inf_b.delay = 0.5
         assert await (
             ses.send(
                 Transfer(
@@ -371,7 +375,7 @@ async def _unittest_redundant_output_exceptions(caplog: typing.Any) -> None:
                     transfer_id=444444444444,
                     fragmented_payload=[memoryview(b"INTENDED EXCEPTION")],
                 ),
-                loop.time() + 1.0,
+                loop.time() + 2.0,
             )
         )
         assert ses.sample_statistics() == RedundantSessionStatistics(
