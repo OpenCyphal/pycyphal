@@ -131,7 +131,7 @@ async def _unittest_can_transport_anon() -> None:
     assert broadcaster.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
 
     assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=1)
-    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=1, in_frames_uavcan=1)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=1, in_frames_cyphal=1)
     assert tr.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(1)
     assert tr2.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(0)
     assert tr.sample_statistics().lost_loopback_frames == 0
@@ -194,7 +194,7 @@ async def _unittest_can_transport_anon() -> None:
 
     assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=2)
     assert tr2.sample_statistics() == can.CANTransportStatistics(
-        in_frames=2, in_frames_uavcan=2, in_frames_uavcan_accepted=1
+        in_frames=2, in_frames_cyphal=2, in_frames_cyphal_accepted=1
     )
 
     received = await promiscuous_m2345.receive(loop.time() + 1.0)
@@ -331,7 +331,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert broadcaster.sample_statistics() == SessionStatistics(transfers=1, frames=1, payload_bytes=6)
 
     assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=1)
-    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=1, in_frames_uavcan=1)
+    assert tr2.sample_statistics() == can.CANTransportStatistics(in_frames=1, in_frames_cyphal=1)
     assert tr.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(1)
     assert tr2.sample_statistics().media_acceptance_filtering_efficiency == pytest.approx(0)
     assert tr.sample_statistics().lost_loopback_frames == 0
@@ -370,7 +370,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
 
     assert tr.sample_statistics() == can.CANTransportStatistics(out_frames=2)
     assert tr2.sample_statistics() == can.CANTransportStatistics(
-        in_frames=2, in_frames_uavcan=2, in_frames_uavcan_accepted=1
+        in_frames=2, in_frames_cyphal=2, in_frames_cyphal_accepted=1
     )
 
     received = await promiscuous_m2345.receive(loop.time() + 1.0)
@@ -408,7 +408,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
         out_frames=7, out_frames_loopback=1, in_frames_loopback=1
     )
     assert tr2.sample_statistics() == can.CANTransportStatistics(
-        in_frames=7, in_frames_uavcan=7, in_frames_uavcan_accepted=6
+        in_frames=7, in_frames_cyphal=7, in_frames_cyphal_accepted=6
     )
 
     fb = feedback_collector.take()
@@ -447,7 +447,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
         out_frames=8, out_frames_loopback=1, in_frames_loopback=1
     )
     assert tr2.sample_statistics() == can.CANTransportStatistics(
-        in_frames=8, in_frames_uavcan=8, in_frames_uavcan_accepted=7
+        in_frames=8, in_frames_cyphal=8, in_frames_cyphal_accepted=7
     )
 
     broadcaster.close()
@@ -699,7 +699,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
         out_frames=16, out_frames_loopback=2, in_frames_loopback=5
     )
     assert tr2.sample_statistics() == can.CANTransportStatistics(
-        in_frames=16, in_frames_uavcan=16, in_frames_uavcan_accepted=15
+        in_frames=16, in_frames_cyphal=16, in_frames_cyphal_accepted=15
     )
 
     #
@@ -758,7 +758,7 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     )
 
     assert tr2.sample_statistics() == can.CANTransportStatistics(
-        in_frames=16, in_frames_uavcan=16, in_frames_uavcan_accepted=15
+        in_frames=16, in_frames_cyphal=16, in_frames_cyphal_accepted=15
     )
 
     #
@@ -804,14 +804,14 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert tr.sample_statistics() == can.CANTransportStatistics(
         out_frames=16,
         in_frames=4,
-        in_frames_uavcan=2,
-        in_frames_uavcan_accepted=2,
+        in_frames_cyphal=2,
+        in_frames_cyphal_accepted=2,
         out_frames_loopback=2,
         in_frames_loopback=6,
     )
 
     assert tr2.sample_statistics() == can.CANTransportStatistics(
-        out_frames=2, in_frames=16, in_frames_uavcan=16, in_frames_uavcan_accepted=15
+        out_frames=2, in_frames=16, in_frames_cyphal=16, in_frames_cyphal_accepted=15
     )
 
     received = await subscriber_promiscuous.receive(loop.time() + 1.0)
@@ -852,14 +852,14 @@ async def _unittest_can_transport_non_anon(caplog: typing.Any) -> None:
     assert tr.sample_statistics() == can.CANTransportStatistics(
         out_frames=16,
         in_frames=5,
-        in_frames_uavcan=3,
-        in_frames_uavcan_accepted=3,
+        in_frames_cyphal=3,
+        in_frames_cyphal_accepted=3,
         out_frames_loopback=2,
         in_frames_loopback=6,
     )
 
     assert tr2.sample_statistics() == can.CANTransportStatistics(
-        out_frames=3, in_frames=16, in_frames_uavcan=16, in_frames_uavcan_accepted=15
+        out_frames=3, in_frames=16, in_frames_cyphal=16, in_frames_cyphal_accepted=15
     )
 
     received = await subscriber_promiscuous.receive(loop.time() + 1.0)

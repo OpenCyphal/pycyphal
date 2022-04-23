@@ -12,6 +12,9 @@ v1.8
 - **v1.8.1:**
   Port factory methods in :class:`pycyphal.application.Node` that accept direct port-ID always update the registry.
 
+- **v1.8.2:** Fix error handing in :meth:`pycyphal.transport.redundant.RedundantOutputSession.send`;
+  see `#222 <https://github.com/OpenCyphal/pycyphal/issues/222>`_.
+
 v1.7
 ----
 

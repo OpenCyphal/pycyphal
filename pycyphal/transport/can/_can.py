@@ -29,13 +29,13 @@ class CANTransportStatistics(pycyphal.transport.TransportStatistics):
     The following invariants apply::
 
         out_frames >= out_frames_loopback
-        in_frames >= in_frames_uavcan >= in_frames_uavcan_accepted
+        in_frames >= in_frames_cyphal >= in_frames_cyphal_accepted
         out_frames_loopback >= in_frames_loopback
     """
 
     in_frames: int = 0  #: Number of genuine frames received from the bus (loopback not included).
-    in_frames_uavcan: int = 0  #: Subset of the above that happen to be valid Cyphal frames.
-    in_frames_uavcan_accepted: int = 0  #: Subset of the above that are useful for the local application.
+    in_frames_cyphal: int = 0  #: Subset of the above that happen to be valid Cyphal frames.
+    in_frames_cyphal_accepted: int = 0  #: Subset of the above that are useful for the local application.
     in_frames_loopback: int = 0  #: Number of loopback frames received from the media instance (not bus).
     in_frames_errored: int = 0  #: How many frames of any kind could not be successfully processed.
 
@@ -51,7 +51,7 @@ class CANTransportStatistics(pycyphal.transport.TransportStatistics):
         irrelevant ones completely autonomously. The value of 0 indicates that none of the frames passed over
         from the media instance are useful for the application (all ignored).
         """
-        return (self.in_frames_uavcan_accepted / self.in_frames) if self.in_frames > 0 else 1.0
+        return (self.in_frames_cyphal_accepted / self.in_frames) if self.in_frames > 0 else 1.0
 
     @property
     def lost_loopback_frames(self) -> int:
@@ -63,6 +63,16 @@ class CANTransportStatistics(pycyphal.transport.TransportStatistics):
         A negative value means that the media instance is sending more loopback frames than requested (bad).
         """
         return self.out_frames_loopback - self.in_frames_loopback
+
+    @property
+    def in_frames_uavcan(self) -> int:
+        warnings.warn("Use in_frames_cyphal", DeprecationWarning)
+        return self.in_frames_cyphal
+
+    @property
+    def in_frames_uavcan_accepted(self) -> int:
+        warnings.warn("Use in_frames_cyphal_accepted", DeprecationWarning)
+        return self.in_frames_cyphal_accepted
 
 
 class CANTransport(pycyphal.transport.Transport):
@@ -374,9 +384,9 @@ class CANTransport(pycyphal.transport.Transport):
 
     def _handle_any_frame(self, timestamp: Timestamp, can_id: CANID, frame: CyphalFrame, loopback: bool) -> None:
         if not loopback:
-            self._frame_stats.in_frames_uavcan += 1
+            self._frame_stats.in_frames_cyphal += 1
             if self._handle_received_frame(timestamp, can_id, frame):
-                self._frame_stats.in_frames_uavcan_accepted += 1
+                self._frame_stats.in_frames_cyphal_accepted += 1
         else:
             self._handle_loopback_frame(timestamp, can_id, frame)
 

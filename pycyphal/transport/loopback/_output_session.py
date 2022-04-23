@@ -3,7 +3,7 @@
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
-
+import asyncio
 import pycyphal.transport
 
 
@@ -39,6 +39,7 @@ class LoopbackOutputSession(pycyphal.transport.OutputSession):
         self._feedback_handler: typing.Optional[typing.Callable[[pycyphal.transport.Feedback], None]] = None
         self._injected_exception: typing.Optional[Exception] = None
         self._should_timeout = False
+        self._delay = 0.0
 
     def enable_feedback(self, handler: typing.Callable[[pycyphal.transport.Feedback], None]) -> None:
         self._feedback_handler = handler
@@ -49,7 +50,8 @@ class LoopbackOutputSession(pycyphal.transport.OutputSession):
     async def send(self, transfer: pycyphal.transport.Transfer, monotonic_deadline: float) -> bool:
         if self._injected_exception is not None:
             raise self._injected_exception
-
+        if self._delay > 0:
+            await asyncio.sleep(self._delay)
         out = False if self._should_timeout else await self._router(transfer, monotonic_deadline)
         if out:
             self._stats.transfers += 1
@@ -93,6 +95,14 @@ class LoopbackOutputSession(pycyphal.transport.OutputSession):
             self._injected_exception = value
         else:
             raise ValueError(f"Bad exception: {value}")
+
+    @property
+    def delay(self) -> float:
+        return self._delay
+
+    @delay.setter
+    def delay(self, value: float) -> None:
+        self._delay = float(value)
 
     @property
     def should_timeout(self) -> bool:

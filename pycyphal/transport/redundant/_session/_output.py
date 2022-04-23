@@ -249,16 +249,19 @@ class RedundantOutputSession(RedundantSession, pycyphal.transport.OutputSession)
                 return False  # Still nothing.
 
             # We have at least one inferior so we can handle this transaction. Create the work items.
-            futures: list[asyncio.Future[bool]] = []
+            pending: set[asyncio.Future[bool]] = set()
             for inf in self._inferiors:
                 fut: asyncio.Future[bool] = asyncio.Future()
                 inf.queue.put_nowait(_WorkItem(transfer, monotonic_deadline, fut))
-                futures.append(fut)
+                pending.add(fut)
 
-            # Execute the work items concurrently and unblock as soon as the first inferior is done transmitting.
-            # Those that are still pending are cancelled because we're not going to wait around for the slow ones.
-            done, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED)
-            assert len(done) + len(pending) == len(inferiors) == len(futures)
+            # Execute the work items concurrently and unblock as soon as at least one inferior is done transmitting.
+            # Those that are still pending are detached because we're not going to wait around for the slow ones
+            # (they will continue transmitting in the background of course).
+            done: set[asyncio.Future[bool]] = set()
+            while pending and not any(f.exception() is None for f in done):
+                done_subset, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                done |= done_subset
             _logger.debug("%s send results: done=%s, pending=%s", self, done, pending)
             for p in pending:
                 p.cancel()  # We will no longer need this.
