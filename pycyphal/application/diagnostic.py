@@ -71,6 +71,7 @@ class DiagnosticPublisher(logging.Handler):
     diagnostics subject of Cyphal.
     Log messages that are too long to fit into a Cyphal Record object are truncated.
     Log messages emitted by PyCyphal itself may be dropped to avoid infinite recursion.
+    No messages will be published if the local node is anonymous.
 
     Here's a usage example. Set up test rigging:
 
@@ -127,10 +128,7 @@ class DiagnosticPublisher(logging.Handler):
     """
 
     def __init__(self, node: pycyphal.application.Node, level: int = logging.WARNING) -> None:
-        self._pub = node.make_publisher(Record)
-        self._pub.priority = pycyphal.transport.Priority.OPTIONAL
-        self._pub.send_timeout = 10.0
-
+        self._pub: Optional[pycyphal.presentation.Publisher[Record]] = None
         self._fut: Optional[asyncio.Future[None]] = None
         self._forward_timestamp = False
         self._started = False
@@ -138,10 +136,17 @@ class DiagnosticPublisher(logging.Handler):
 
         def start() -> None:
             self._started = True
+            if node.id is not None:
+                self._pub = node.make_publisher(Record)
+                self._pub.priority = pycyphal.transport.Priority.OPTIONAL
+                self._pub.send_timeout = 10.0
+            else:
+                _logger.info("DiagnosticPublisher not initialized because the local node is anonymous")
 
         def close() -> None:
             self._started = False
-            self._pub.close()
+            if self._pub:
+                self._pub.close()
             if self._fut is not None:
                 try:
                     self._fut.result()
@@ -186,7 +191,7 @@ class DiagnosticPublisher(logging.Handler):
 
     async def _publish(self, record: Record) -> None:
         try:
-            if not await self._pub.publish(record):
+            if self._pub is not None and not await self._pub.publish(record):
                 print(self, "TIMEOUT", record, file=sys.stderr)  # pragma: no cover
         except pycyphal.transport.TransportError:
             pass
