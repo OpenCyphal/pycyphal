@@ -128,7 +128,12 @@ class Publisher(MessagePort[T]):
                 if not await self.publish(message):
                     _logger.info("%s send timeout", self)
             except Exception as ex:
-                _logger.exception("%s deferred publication has failed: %s", self, ex)
+                if self._maybe_impl is not None:
+                    _logger.exception("%s deferred publication has failed: %s", self, ex)
+                else:
+                    _logger.debug(
+                        "%s deferred publication has failed but the publisher is already closed", self, exc_info=True
+                    )
 
         asyncio.ensure_future(executor())
 
