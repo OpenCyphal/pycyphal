@@ -285,7 +285,7 @@ def _do_convert(to: Value, s: Value) -> Optional[Value]:
     if to.unstructured and s.string:
         return Value(unstructured=Unstructured(s.string.value))
 
-    if s.string or s.unstructured:
+    if s.string or s.unstructured or to.string or to.unstructured:
         return None
 
     val_s: NDArray[Any] = get_attribute(
