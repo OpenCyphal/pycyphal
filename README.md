@@ -26,7 +26,7 @@ so it should be usable with other systems as well.
 and communication based on modern networking standards (Ethernet, CAN FD, etc.).
 
 <p align="center">
-  <a href="https://pycyphal.readthedocs.io/"><img src="/docs/static/arch-non-redundant.svg" width="400px"></a>
+  <a href="https://pycyphal.readthedocs.io/"><img src="/docs/figures/arch-non-redundant.svg" width="400px"></a>
 </p>
 
 **READ THE DOCS: [pycyphal.readthedocs.io](https://pycyphal.readthedocs.io/)**
