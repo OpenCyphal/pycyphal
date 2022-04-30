@@ -194,7 +194,7 @@ class PublisherImpl(Closable, typing.Generic[T]):
             )
             try:
                 return await self.transport_session.send(transfer, monotonic_deadline)
-            except PortClosedError:
+            except pycyphal.transport.ResourceClosedError:
                 self._underlying_session_closed = True
                 raise
 
