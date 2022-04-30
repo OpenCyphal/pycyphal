@@ -15,6 +15,11 @@ v1.8
 - **v1.8.2:** Fix error handing in :meth:`pycyphal.transport.redundant.RedundantOutputSession.send`;
   see `#222 <https://github.com/OpenCyphal/pycyphal/issues/222>`_.
 
+- **v1.8.3:**
+  - ``DiagnosticPublisher``: do not instantiate the publisher if the local node is anonymous.
+  - ``publish_soon()``: Do not log error if closed.
+  - Fix assertion failure during register value coercion.
+
 v1.7
 ----
 
