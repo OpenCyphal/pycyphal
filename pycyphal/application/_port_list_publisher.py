@@ -103,7 +103,11 @@ class PortListPublisher:
             _logger.debug("%r: Publishing: state_changed=%r, state=%r", self, state_changed, state)
             self._state = state
             self._updates_since_pub = 0  # Should we handle ResourceClosedError here?
-            publisher.publish_soon(_make_port_list(self._state, trans.capture_active))
+            try:
+                publisher.publish_soon(_make_port_list(self._state, trans.capture_active))
+            except pycyphal.transport.ResourceClosedError as ex:
+                _logger.debug("%r: Stopping because the underlying resource is closed: %s", self, ex, exc_info=True)
+                self._timer.cancel()
 
     def __repr__(self) -> str:
         return pycyphal.util.repr_attributes(self, self.node)
