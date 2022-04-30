@@ -39,6 +39,18 @@ class SocketCANMedia(Media):
     SocketCAN documentation: https://www.kernel.org/doc/Documentation/networking/can.txt
     """
 
+    _ERRNO_UNRECOVERABLE = {
+        errno.ENODEV,
+        errno.ENXIO,
+        errno.EBADF,
+        errno.EBADFD,
+        errno.ENAVAIL,
+        errno.ENETDOWN,
+        errno.ENETRESET,
+        errno.ENETUNREACH,
+        errno.ENOLINK,
+    }
+
     def __init__(self, iface_name: str, mtu: int, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
         """
         CAN Classic/FD is selected automatically based on the MTU. It is not possible to use CAN FD with MTU of 8 bytes.
@@ -136,6 +148,7 @@ class SocketCANMedia(Media):
                         "the device probably doesn't support CAN-FD. "
                         "Try setting MTU to 8 (Classic CAN)"
                     ) from err
+                self._closed = self._closed or err.errno in SocketCANMedia._ERRNO_UNRECOVERABLE
                 raise err
             except asyncio.TimeoutError:
                 break
@@ -190,7 +203,12 @@ class SocketCANMedia(Media):
                     if self._ctl_worker.recv(1):  # pragma: no branch
                         break
             except Exception as ex:  # pragma: no cover
-                if self._sock.fileno() < 0 or self._ctl_worker.fileno() < 0 or self._ctl_main.fileno() < 0:
+                if (
+                    self._sock.fileno() < 0
+                    or self._ctl_worker.fileno() < 0
+                    or self._ctl_main.fileno() < 0
+                    or (isinstance(ex, OSError) and ex.errno in SocketCANMedia._ERRNO_UNRECOVERABLE)
+                ):
                     self._closed = True
                 _logger.exception("%s thread failure: %s", self, ex)
                 time.sleep(1)  # Is this an adequate failure management strategy?
