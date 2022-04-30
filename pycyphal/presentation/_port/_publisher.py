@@ -109,6 +109,7 @@ class Publisher(MessagePort[T]):
         """
         self._require_usable()
         loop = asyncio.get_running_loop()
+        assert self._maybe_impl
         return await self._maybe_impl.publish(message, self._priority, loop.time() + self._send_timeout)
 
     def publish_soon(self, message: T) -> None:
@@ -140,7 +141,7 @@ class Publisher(MessagePort[T]):
         if impl is not None:
             impl.remove_proxy()
 
-    def _require_usable(self):
+    def _require_usable(self) -> None:
         if self._maybe_impl is None or not self._maybe_impl.up:
             raise PortClosedError(repr(self))
 
