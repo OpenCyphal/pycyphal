@@ -19,6 +19,7 @@ v1.8
 
   - ``DiagnosticPublisher``: do not instantiate the publisher if the local node is anonymous.
   - ``publish_soon()``: Do not log error if closed.
+  - ``Client`` and ``Publisher``: fix edge cases related to ``PortClosedError`` when the interface becomes unavailable.
   - Fix assertion failure during register value coercion.
   - SocketCAN: close the media instance automatically on unrecoverable errors like ENODEV, ENXIO, EBADF, EBADFD, etc.
 

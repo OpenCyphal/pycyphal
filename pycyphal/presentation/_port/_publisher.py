@@ -107,8 +107,7 @@ class Publisher(MessagePort[T]):
         Should not be used simultaneously with :meth:`publish_soon` because that makes the message ordering undefined.
         Returns False if the publication could not be completed in :attr:`send_timeout`, True otherwise.
         """
-        if self._maybe_impl is None:
-            raise PortClosedError(repr(self))
+        self._require_usable()
         loop = asyncio.get_running_loop()
         return await self._maybe_impl.publish(message, self._priority, loop.time() + self._send_timeout)
 
@@ -120,8 +119,6 @@ class Publisher(MessagePort[T]):
         The send timeout is still in effect here -- if the operation cannot complete in the selected time,
         send will be cancelled and a low-severity log message will be emitted.
         """
-        if self._maybe_impl is None:  # Detect errors as early as possible, do not wait for the task to start.
-            raise PortClosedError(repr(self))
 
         async def executor() -> None:
             try:
@@ -135,12 +132,17 @@ class Publisher(MessagePort[T]):
                         "%s deferred publication has failed but the publisher is already closed", self, exc_info=True
                     )
 
+        self._require_usable()  # Detect errors as early as possible, do not wait for the task to start.
         asyncio.ensure_future(executor())
 
     def close(self) -> None:
         impl, self._maybe_impl = self._maybe_impl, None
         if impl is not None:
             impl.remove_proxy()
+
+    def _require_usable(self):
+        if self._maybe_impl is None or not self._maybe_impl.up:
+            raise PortClosedError(repr(self))
 
     def __del__(self) -> None:
         if self._maybe_impl is not None:
@@ -173,13 +175,14 @@ class PublisherImpl(Closable, typing.Generic[T]):
         self._maybe_finalizer: typing.Optional[PortFinalizer] = finalizer
         self._lock = asyncio.Lock()
         self._proxy_count = 0
+        self._underlying_session_closed = False
 
     async def publish(self, message: T, priority: pycyphal.transport.Priority, monotonic_deadline: float) -> bool:
         if not isinstance(message, self.dtype):
             raise TypeError(f"Expected a message object of type {self.dtype}, found this: {message}")
 
         async with self._lock:
-            if self._is_closed:
+            if not self.up:
                 raise PortClosedError(repr(self))
             timestamp = pycyphal.transport.Timestamp.now()
             fragmented_payload = list(pycyphal.dsdl.serialize(message))
@@ -189,12 +192,16 @@ class PublisherImpl(Closable, typing.Generic[T]):
                 transfer_id=self.transfer_id_counter.get_then_increment(),
                 fragmented_payload=fragmented_payload,
             )
-            return await self.transport_session.send(transfer, monotonic_deadline)
+            try:
+                return await self.transport_session.send(transfer, monotonic_deadline)
+            except PortClosedError:
+                self._underlying_session_closed = True
+                raise
 
     def register_proxy(self) -> None:
         self._proxy_count += 1
         _logger.debug("%s got a new proxy, new count %s", self, self._proxy_count)
-        assert not self._is_closed, "Internal protocol violation"
+        assert self.up, "Internal protocol violation"
         assert self._proxy_count >= 1
 
     def remove_proxy(self) -> None:
@@ -216,8 +223,8 @@ class PublisherImpl(Closable, typing.Generic[T]):
             self._maybe_finalizer = None
 
     @property
-    def _is_closed(self) -> bool:
-        return self._maybe_finalizer is None
+    def up(self) -> bool:
+        return self._maybe_finalizer is not None and not self._underlying_session_closed
 
     def __repr__(self) -> str:
         return pycyphal.util.repr_attributes_noexcept(
