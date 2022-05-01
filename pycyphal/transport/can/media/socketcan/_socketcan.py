@@ -50,6 +50,19 @@ class SocketCANMedia(Media):
 
         :param loop: Deprecated.
         """
+        # This can't be made a class attribute because these errnos are only available on GNU/Linux.
+        self._errno_unrecoverable = {
+            errno.ENODEV,  # type: ignore
+            errno.ENXIO,  # type: ignore
+            errno.EBADF,  # type: ignore
+            errno.EBADFD,  # type: ignore
+            errno.ENAVAIL,  # type: ignore
+            errno.ENETDOWN,  # type: ignore
+            errno.ENETRESET,  # type: ignore
+            errno.ENETUNREACH,  # type: ignore
+            errno.ENOLINK,  # type: ignore
+        }
+
         self._mtu = int(mtu)
         if self._mtu not in self.VALID_MTU_SET:
             raise ValueError(f"Invalid MTU: {self._mtu} not in {self.VALID_MTU_SET}")
@@ -136,6 +149,7 @@ class SocketCANMedia(Media):
                         "the device probably doesn't support CAN-FD. "
                         "Try setting MTU to 8 (Classic CAN)"
                     ) from err
+                self._closed = self._closed or err.errno in self._errno_unrecoverable
                 raise err
             except asyncio.TimeoutError:
                 break
@@ -190,7 +204,12 @@ class SocketCANMedia(Media):
                     if self._ctl_worker.recv(1):  # pragma: no branch
                         break
             except Exception as ex:  # pragma: no cover
-                if self._sock.fileno() < 0 or self._ctl_worker.fileno() < 0 or self._ctl_main.fileno() < 0:
+                if (
+                    self._sock.fileno() < 0
+                    or self._ctl_worker.fileno() < 0
+                    or self._ctl_main.fileno() < 0
+                    or (isinstance(ex, OSError) and ex.errno in self._errno_unrecoverable)
+                ):
                     self._closed = True
                 _logger.exception("%s thread failure: %s", self, ex)
                 time.sleep(1)  # Is this an adequate failure management strategy?

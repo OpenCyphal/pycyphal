@@ -352,7 +352,8 @@ class ClientImpl(Closable, Generic[T]):
                     )
                     self.unexpected_response_count += 1
                 else:
-                    fut.set_result((response, transfer))
+                    if not fut.done():  # Could have been canceled meanwhile.
+                        fut.set_result((response, transfer))
         except asyncio.CancelledError:
             _logger.debug("Cancelling the task of %s", self)
         except Exception as ex:

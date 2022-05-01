@@ -41,9 +41,6 @@ Related projects built on top of PyCyphal:
 - `Yakut <https://github.com/OpenCyphal/yakut>`_ ---
   a command-line interface utility for diagnostics and management of Cyphal networks.
 
-- `Yukon <https://github.com/OpenCyphal/yukon>`_ ---
-  a rich integrated development environment for developing and maintaining Cyphal-powered vehicular computing systems.
-
 
 License
 -------
