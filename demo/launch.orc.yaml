@@ -58,14 +58,14 @@ $=:
 
   # Publish the setpoint a few times to show how the thermostat drives the plant to the correct temperature.
   # You can publish a different setpoint by running this command in a separate terminal to see how the system responds:
-  #   $ yakut -i "UDP('127.9.0.0', 100)" pub 2345:uavcan.si.unit.temperature.Scalar.1.0 "kelvin: 200"
+  #   yakut pub 2345 "kelvin: 200"
   - $=: |
-      yakut pub 2345:uavcan.si.unit.temperature.Scalar.1.0 "kelvin: 450.0" -N3
+      yakut pub 2345:uavcan.si.unit.temperature.scalar 450 -N3
     uavcan.node.id: 100
 
 # Launch diagnostic subscribers to print messages in the terminal that runs the orchestrator.
-- yakut subscribe uavcan.diagnostic.Record.1.1
-- yakut --format=json subscribe --no-metadata 2346:uavcan.si.sample.temperature.Scalar.1.0
+- yakut subscribe --with-metadata uavcan.diagnostic.record
+- yakut --json subscribe 2346:uavcan.si.sample.temperature.scalar
 
 # Exit automatically if STOP_AFTER is defined (frankly, this is just a testing aid, feel free to ignore).
 - ?=: test -n "$STOP_AFTER"
