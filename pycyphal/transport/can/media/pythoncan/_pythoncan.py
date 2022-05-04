@@ -23,6 +23,7 @@ _logger = logging.getLogger(__name__)
 
 
 class PythonCANMedia(Media):
+    # pylint: disable=line-too-long
     """
     Media interface adapter for `Python-CAN <https://python-can.readthedocs.io/>`_.
     It is designed to be usable with all host platforms supported by Python-CAN (GNU/Linux, Windows, macOS).

@@ -264,7 +264,7 @@ class _Matcher(typing.Generic[T]):
 
     def __init__(self, *, subject_count: int, depth: int) -> None:
         self._subject_count = int(subject_count)
-        if not self._subject_count >= 0:
+        if self._subject_count < 0:
             raise ValueError("The subject count shall be non-negative")
         self._clusters: list[_Cluster[T]] = []
         self._depth = int(depth)
