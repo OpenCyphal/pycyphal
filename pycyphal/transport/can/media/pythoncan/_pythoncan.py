@@ -23,6 +23,7 @@ _logger = logging.getLogger(__name__)
 
 
 class PythonCANMedia(Media):
+    # pylint: disable=line-too-long
     """
     Media interface adapter for `Python-CAN <https://python-can.readthedocs.io/>`_.
     It is designed to be usable with all host platforms supported by Python-CAN (GNU/Linux, Windows, macOS).
@@ -38,15 +39,12 @@ class PythonCANMedia(Media):
     Here is a basic usage example based on the Yakut CLI tool.
     Suppose that there are two interconnected CAN bus adapters connected to the host computer:
     one SLCAN-based, the other is PCAN USB.
-    Launch Yakut to listen for messages using the SLCAN adapter::
+    Launch Yakut to listen for messages using the SLCAN adapter (only one at a time)::
 
-        export YAKUT_TRANSPORT='CAN(can.media.pythoncan.PythonCANMedia("slcan:/dev/ttyACM0", 1_000_000), None)'
-        yakut sub 33.uavcan.si.unit.voltage.Scalar.1.0
-
-    While the subscriber is running, publish a message to this subject::
-
-        export YAKUT_TRANSPORT='CAN(can.media.pythoncan.PythonCANMedia("pcan:PCAN_USBBUS1", 1_000_000), 42)'
-        yakut pub 33.uavcan/si/unit/voltage/Scalar_1_0 '{volt: 12}'
+        export UAVCAN__CAN__IFACE="slcan:/dev/serial/by-id/usb-Zubax_Robotics_Zubax_Babel_1B003D00145130365030332000000000-if00"
+        export UAVCAN__CAN__BITRATE='1000000 1000000'
+        export UAVCAN__CAN__MTU=8
+        yakut sub 33:uavcan.si.unit.voltage.scalar
     """
 
     _MAXIMAL_TIMEOUT_SEC = 0.1

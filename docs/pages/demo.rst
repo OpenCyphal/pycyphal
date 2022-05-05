@@ -110,6 +110,14 @@ Further snippets will not include this remark.
 An environment variable ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID`` sets register ``uavcan.sub.temperature_setpoint.id``,
 and so on.
 
+..  tip::
+
+    Specifying the environment variables manually is inconvenient.
+    A better option is to store the configuration you use often into a shell file,
+    and then source that when necessary into your active shell session like ``source my_env.sh``
+    (this is similar to Python virtualenv).
+    See Yakut user manual for practical examples.
+
 In PyCyphal, registers are normally stored in the *register file*, in our case it's ``my_registers.db``
 (the Cyphal Specification does not regulate how the registers are to be stored, this is an implementation detail).
 Once you started the application with a specific configuration, it will store the values in the register file,
@@ -165,17 +173,12 @@ So, for Yakut, we can export this configuration to let it run on the same networ
     export UAVCAN__UDP__IFACE=127.9.0.0  # We don't export the node-ID, so it will remain anonymous.
 
 To listen to the demo's heartbeat and diagnostics,
-launch the following commands in new terminals and leave them running:
+launch the following in a new terminal and leave it running (``y`` is a convenience shortcut for ``yakut``):
 
 ..  code-block:: sh
 
     export UAVCAN__UDP__IFACE=127.9.0.0
-    yakut sub uavcan.node.Heartbeat.1.0     # You should see heartbeats being printed continuously.
-
-..  code-block:: sh
-
-    export UAVCAN__UDP__IFACE=127.9.0.0
-    yakut sub uavcan.diagnostic.Record.1.1  # This one will not show anything yet -- read on.
+    y sub --with-metadata uavcan.node.heartbeat uavcan.diagnostic.record    # You should see heartbeats
 
 Now let's see how the simple thermostat node is operating.
 Launch another subscriber to see the published voltage command (it is not going to print anything yet):
@@ -183,16 +186,16 @@ Launch another subscriber to see the published voltage command (it is not going 
 ..  code-block:: sh
 
     export UAVCAN__UDP__IFACE=127.9.0.0
-    yakut sub -M 2347:uavcan.si.unit.voltage.Scalar.1.0     # Prints nothing.
+    y sub 2347:uavcan.si.unit.voltage.scalar --redraw       # Prints nothing.
 
-And publish the setpoint along with measurement (process variable):
+And publish the setpoint along with the measurement (process variable):
 
 ..  code-block:: sh
 
     export UAVCAN__UDP__IFACE=127.9.0.0
     export UAVCAN__NODE__ID=111         # We need a node-ID to publish messages
-    yakut pub --count 10 2345:uavcan.si.unit.temperature.Scalar.1.0   'kelvin: 250' \
-                         2346:uavcan.si.sample.temperature.Scalar.1.0 'kelvin: 240'
+    y pub --count=10 2345:uavcan.si.unit.temperature.scalar   250 \
+                     2346:uavcan.si.sample.temperature.scalar 'kelvin: 240'
 
 You should see the voltage subscriber that we just started print something along these lines:
 
@@ -200,7 +203,6 @@ You should see the voltage subscriber that we just started print something along
 
     ---
     2347: {volt: 1.1999999284744263}
-
     # And so on...
 
 Okay, the thermostat is working.
@@ -213,22 +215,18 @@ In some way it is similar to performance counters or tracing probes:
 
 ..  code-block:: sh
 
-    yakut call 42 uavcan.register.Access.1.0 'name: {name: thermostat.error}'
+    y r 42 thermostat.error     # Read register
 
-We will see the current value of the temperature error registered by the thermostat:
+We will see the current value of the temperature error registered by the thermostat.
+If you run the last command with ``-dd`` (d for detailed), you will see the register metadata:
 
 ..  code-block:: yaml
 
-    ---
-    384:
-      timestamp: {microsecond: 0}
-      mutable: false
-      persistent: false
-      value:
-        real32:
-          value: [10.0]
+    real64:
+      value: [10.0]
+    _meta_: {mutable: false, persistent: false}
 
-Field ``mutable: false`` says that this register cannot be modified and ``persistent: false`` says that
+``mutable: false`` says that this register cannot be modified and ``persistent: false`` says that
 it is not committed to any persistent storage (like a register file).
 Together they mean that the value is computed at runtime dynamically.
 
@@ -237,23 +235,10 @@ For example, we can change the PID gains of the thermostat:
 
 ..  code-block:: sh
 
-    yakut call 42 uavcan.register.Access.1.0 '{name: {name: thermostat.pid.gains}, value: {integer8: {value: [2, 0, 0]}}}'
+    y r thermostat.pid.gains 2 0 0
 
-Which results in:
-
-..  code-block:: yaml
-
-    ---
-    384:
-      timestamp: {microsecond: 0}
-      mutable: true
-      persistent: true
-      value:
-        real64:
-          value: [2.0, 0.0, 0.0]
-
-An attentive reader would notice that the assigned value was of type ``integer8``, whereas the result is ``real64``.
-This is because the register server does implicit type conversion to the type specified by the application.
+Which returns ``[2.0, 0.0, 0.0]``, meaning that the new value was assigned successfully.
+Observe that the register server does implicit type conversion to the type specified by the application (our script).
 The Cyphal Specification does not require this behavior, though, so some simpler nodes (embedded systems in particular)
 may just reject mis-typed requests.
 
@@ -263,16 +248,15 @@ Now let's try the linear regression service:
 
 .. code-block:: sh
 
-    yakut call 42 123:sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0 'points: [{x: 10, y: 3}, {x: 20, y: 4}]'
+    # The following commands do the same thing but differ in verbosity/explicitness:
+    y call 42 123:sirius_cyber_corp.PerformLinearLeastSquaresFit 'points: [{x: 10, y: 3}, {x: 20, y: 4}]'
+    y q 42 least_squares '[[10, 3], [20, 4]]'
 
 The response should look like:
 
 ..  code-block:: yaml
 
-    ---
-    123:
-      slope: 0.1
-      y_intercept: 2.0
+    123: {slope: 0.1, y_intercept: 2.0}
 
 And the diagnostic subscriber we started in the beginning (type ``uavcan.diagnostic.Record``) should print a message.
 
@@ -320,6 +304,7 @@ The following orchestration file (orc-file) ``launch.orc.yaml`` does this:
   If they are already compiled, this step is skipped.
 
 - When compilation is done, the two applications are launched.
+  Be sure to stop the first script if it is still running!
 
 - Aside from the applications, a couple of diagnostic processes are started as well.
   A setpoint publisher will command the thermostat to drive the plant to the specified temperature.
@@ -364,6 +349,7 @@ indicating that the thermostat is driving the plant towards the setpoint:
 
     # And so on. Notice how the temperature is rising slowly towards the setpoint at 450 K!
 
+You can run ``yakut monitor`` to see what is happening on the network.
 As an exercise, consider this:
 
 - Run the same composition over CAN by changing the transport configuration registers at the top of the orc-file.

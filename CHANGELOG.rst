@@ -23,6 +23,10 @@ v1.8
   - Fix assertion failure during register value coercion.
   - SocketCAN: close the media instance automatically on unrecoverable errors like ENODEV, ENXIO, EBADF, EBADFD, etc.
 
+- **v1.8.4**:
+
+  - Actualize the Demo (mostly Yakut-related).
+
 v1.7
 ----
 
