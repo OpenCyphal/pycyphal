@@ -332,21 +332,41 @@ indicating that the thermostat is driving the plant towards the setpoint:
 ..  code-block:: yaml
 
     ---
+    2346:
+      _meta_: {ts_system: 1651773332.157150, ts_monotonic: 3368.421244, source_node_id: 43, transfer_id: 0, priority: high, dtype: uavcan.si.sample.temperature.Scalar.1.0}
+      timestamp: {microsecond: 1651773332156343}
+      kelvin: 300.0
+    ---
     8184:
-      _metadata_:
-        timestamp: {system: 1614489567.052270, monotonic: 4864.397568}
-        priority: optional
-        transfer_id: 0
-        source_node_id: 42
-      timestamp: {microsecond: 1614489567047461}
+      _meta_: {ts_system: 1651773332.162746, ts_monotonic: 3368.426840, source_node_id: 42, transfer_id: 0, priority: optional, dtype: uavcan.diagnostic.Record.1.1}
+      timestamp: {microsecond: 1651773332159267}
       severity: {value: 2}
       text: 'root: Application started with PID gains: 0.100 0.000 0.000'
-
-    {"2346":{"timestamp":{"microsecond":1614489568025004},"kelvin":300.0}}
-    {"2346":{"timestamp":{"microsecond":1614489568524508},"kelvin":300.7312622070312}}
-    {"2346":{"timestamp":{"microsecond":1614489569024634},"kelvin":301.4406433105469}}
-    {"2346":{"timestamp":{"microsecond":1614489569526189},"kelvin":302.1288757324219}}
-
+    ---
+    2346:
+      _meta_: {ts_system: 1651773332.157150, ts_monotonic: 3368.421244, source_node_id: 43, transfer_id: 1, priority: high, dtype: uavcan.si.sample.temperature.Scalar.1.0}
+      timestamp: {microsecond: 1651773332657040}
+      kelvin: 300.0
+    ---
+    2346:
+      _meta_: {ts_system: 1651773332.657383, ts_monotonic: 3368.921476, source_node_id: 43, transfer_id: 2, priority: high, dtype: uavcan.si.sample.temperature.Scalar.1.0}
+      timestamp: {microsecond: 1651773333157512}
+      kelvin: 300.0
+    ---
+    2346:
+      _meta_: {ts_system: 1651773333.158257, ts_monotonic: 3369.422350, source_node_id: 43, transfer_id: 3, priority: high, dtype: uavcan.si.sample.temperature.Scalar.1.0}
+      timestamp: {microsecond: 1651773333657428}
+      kelvin: 300.73126220703125
+    ---
+    2346:
+      _meta_: {ts_system: 1651773333.657797, ts_monotonic: 3369.921891, source_node_id: 43, transfer_id: 4, priority: high, dtype: uavcan.si.sample.temperature.Scalar.1.0}
+      timestamp: {microsecond: 1651773334157381}
+      kelvin: 301.4406433105469
+    ---
+    2346:
+      _meta_: {ts_system: 1651773334.158120, ts_monotonic: 3370.422213, source_node_id: 43, transfer_id: 5, priority: high, dtype: uavcan.si.sample.temperature.Scalar.1.0}
+      timestamp: {microsecond: 1651773334657390}
+      kelvin: 302.1288757324219
     # And so on. Notice how the temperature is rising slowly towards the setpoint at 450 K!
 
 You can run ``yakut monitor`` to see what is happening on the network.
