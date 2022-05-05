@@ -64,8 +64,7 @@ $=:
     uavcan.node.id: 100
 
 # Launch diagnostic subscribers to print messages in the terminal that runs the orchestrator.
-- yakut subscribe --with-metadata uavcan.diagnostic.record
-- yakut --json subscribe 2346:uavcan.si.sample.temperature.scalar
+- yakut sub --with-metadata uavcan.diagnostic.record 2346:uavcan.si.sample.temperature.scalar
 
 # Exit automatically if STOP_AFTER is defined (frankly, this is just a testing aid, feel free to ignore).
 - ?=: test -n "$STOP_AFTER"
