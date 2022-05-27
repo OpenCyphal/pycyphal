@@ -93,7 +93,7 @@ class IPv4SocketFactory(SocketFactory):
         # These options shall be set before the socket is bound.
         # https://stackoverflow.com/questions/14388706/how-do-so-reuseaddr-and-so-reuseport-differ/14388707#14388707
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if sys.platform.startswith("linux"):  # pragma: no branch
+        if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):  # pragma: no branch
             # This is expected to be useful for unicast inputs only.
             # https://stackoverflow.com/a/14388707/1007777
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
@@ -101,7 +101,7 @@ class IPv4SocketFactory(SocketFactory):
         if isinstance(data_specifier, MessageDataSpecifier):
             multicast_ip = message_data_specifier_to_multicast_group(self._local, data_specifier)
             multicast_port = SUBJECT_PORT
-            if sys.platform.startswith("linux"):
+            if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
                 # Binding to the multicast group address is necessary on GNU/Linux: https://habr.com/ru/post/141021/
                 s.bind((str(multicast_ip), multicast_port))
             else:
