@@ -107,6 +107,12 @@ The snippet is valid for sh/bash/zsh; if you are using PowerShell on Windows, re
 and take values into double quotes.
 Further snippets will not include this remark.
 
+For MacIntosh users, note that OSX does not properly adhere to RFC3330 such that you will need to manually create
+aliases for each IFACE + NODE__ID used. In our example, with IFACE being `127.9.0.0` and NODE_ID being `42`
+this would be `ifconfig lo0 alias 127.9.0.42 up` (see
+`this <https://superuser.com/questions/458875/how-do-you-get-loopback-addresses-other-than-127-0-0-1-to-work-on-os-x>`_
+superuser article for more details).
+
 An environment variable ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID`` sets register ``uavcan.sub.temperature_setpoint.id``,
 and so on.
 
