@@ -211,7 +211,7 @@ def _compile_serialized_representation(*binary_chunks: str) -> typing.Sequence[m
     assert len(s) % 8 == 0
     byte_sized_chunks = [s[i : i + 8] for i in range(0, len(s), 8)]
     byte_list = list(map(lambda x: int(x, 2), byte_sized_chunks))
-    out = numpy.array(byte_list, dtype=numpy.uint8)  # type: ignore
+    out = numpy.array(byte_list, dtype=numpy.uint8)
     _logger.debug("Constructed serialized representation: %r --> %s", binary_chunks, out)
     return [out.data]
 

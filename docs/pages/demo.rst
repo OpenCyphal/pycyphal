@@ -107,6 +107,14 @@ The snippet is valid for sh/bash/zsh; if you are using PowerShell on Windows, re
 and take values into double quotes.
 Further snippets will not include this remark.
 
+.. tip:: macOS loopback addresses
+
+    macOS does not properly adhere to RFC3330 such that you will need to manually create aliases for each
+    iface + node-ID used.
+    In our example, with iface being ``127.9.0.0`` and node-ID being ``42`` this would be
+    ``ifconfig lo0 alias 127.9.0.42 up``
+    (see `this <https://superuser.com/questions/458875>`_ superuser article for more details).
+
 An environment variable ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID`` sets register ``uavcan.sub.temperature_setpoint.id``,
 and so on.
 
