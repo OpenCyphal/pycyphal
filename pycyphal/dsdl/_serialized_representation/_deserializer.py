@@ -433,7 +433,7 @@ class ZeroExtendingBuffer:
         # to discard the fragments before the requested offset and then return the following subset of fragments.
         if offset_bytes + length_bytes > len(self._buf):
             raise ValueError(f"Invalid fork: offset ({offset_bytes}) + length ({length_bytes}) > {len(self._buf)}")
-        out = memoryview(self._buf[offset_bytes : offset_bytes + length_bytes])
+        out = memoryview(self._buf[offset_bytes : offset_bytes + length_bytes])  # type: ignore
         assert len(out) == length_bytes
         return [out]
 
