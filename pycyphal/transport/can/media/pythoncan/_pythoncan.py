@@ -557,7 +557,7 @@ def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 
 _CONSTRUCTORS: typing.DefaultDict[
-    str, typing.Callable[[_InterfaceParameters], (PythonCANBusOptions, can.ThreadSafeBus)]
+    str, typing.Callable[[_InterfaceParameters], typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]]
 ] = collections.defaultdict(
     lambda: _construct_any,
     {
