@@ -4,15 +4,15 @@
 # Shared environment variables for all nodes/processes (can be overridden or selectively removed in local scopes).
 YAKUT_COMPILE_OUTPUT: .yakut_compiled
 YAKUT_PATH: .yakut_compiled
-# Here we use Yakut for compiling DSDL. Normally one should use Nunavut though: https://github.com/UAVCAN/nunavut
+# Here we use Yakut for compiling DSDL. Normally one should use Nunavut though: https://github.com/OpenCyphal/nunavut
 PYTHONPATH: .yakut_compiled
 
 # Shared registers for all nodes/processes (can be overridden or selectively removed in local scopes).
-# See the docs for pyuavcan.application.make_node() to see which registers can be used here.
+# See the docs for pycyphal.application.make_node() to see which registers can be used here.
 uavcan:
-  # Use UAVCAN/UDP:
+  # Use Cyphal/UDP:
   udp.iface: 127.9.0.0
-  # If you have Ncat or some other TCP broker, you can use UAVCAN/serial tunneled over TCP (in a heterogeneous
+  # If you have Ncat or some other TCP broker, you can use Cyphal/serial tunneled over TCP (in a heterogeneous
   # redundant configuration with UDP or standalone). Ncat launch example: ncat --broker --listen --source-port 50905
   serial.iface: "" # socket://127.0.0.1:50905
   # It is recommended to explicitly assign unused transports to ensure that previously stored transport
@@ -58,14 +58,13 @@ $=:
 
   # Publish the setpoint a few times to show how the thermostat drives the plant to the correct temperature.
   # You can publish a different setpoint by running this command in a separate terminal to see how the system responds:
-  #   $ yakut -i "UDP('127.9.0.0', 100)" pub 2345:uavcan.si.unit.temperature.Scalar.1.0 "kelvin: 200"
+  #   yakut pub 2345 "kelvin: 200"
   - $=: |
-      yakut pub 2345:uavcan.si.unit.temperature.Scalar.1.0 "kelvin: 450.0" -N3
+      yakut pub 2345:uavcan.si.unit.temperature.scalar 450 -N3
     uavcan.node.id: 100
 
 # Launch diagnostic subscribers to print messages in the terminal that runs the orchestrator.
-- yakut subscribe uavcan.diagnostic.Record.1.1
-- yakut --format=json subscribe --no-metadata 2346:uavcan.si.sample.temperature.Scalar.1.0
+- yakut sub --with-metadata uavcan.diagnostic.record 2346:uavcan.si.sample.temperature.scalar
 
 # Exit automatically if STOP_AFTER is defined (frankly, this is just a testing aid, feel free to ignore).
 - ?=: test -n "$STOP_AFTER"

@@ -1,6 +1,6 @@
-# Copyright (c) 2020 UAVCAN Consortium
+# Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 # type: ignore
 
 import os
@@ -56,9 +56,9 @@ def test(session):
     session.log("Using the newest supported Python: %s", is_latest_python(session))
     session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
     session.install(
-        "pytest         ~= 6.2",
-        "pytest-asyncio == 0.16",
-        "coverage       ~= 6.2",
+        "pytest         ~= 7.1",
+        "pytest-asyncio == 0.18",
+        "coverage       ~= 6.3",
     )
 
     # The test suite generates a lot of temporary files, so we change the working directory.
@@ -74,7 +74,7 @@ def test(session):
         # It can't be done from within the test suite because it has to be done before the interpreter is started.
         session.run("sudo", "setcap", "cap_net_raw+eip", str(Path(session.bin, "python").resolve()), external=True)
 
-    # Launch the TCP broker for testing the UAVCAN/serial transport.
+    # Launch the TCP broker for testing the Cyphal/serial transport.
     broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"], env=session.env)
     time.sleep(1.0)  # Ensure that it has started.
     if broker_process.poll() is not None:
@@ -84,10 +84,10 @@ def test(session):
     try:
         compiled_dir = Path.cwd().resolve() / ".compiled"
         src_dirs = [
-            ROOT_DIR / "pyuavcan",
+            ROOT_DIR / "pycyphal",
             ROOT_DIR / "tests",
         ]
-        postponed = ROOT_DIR / "pyuavcan" / "application"
+        postponed = ROOT_DIR / "pycyphal" / "application"
         env = {
             "PYTHONASYNCIODEBUG": "1",
             "PYTHONPATH": str(compiled_dir),
@@ -124,22 +124,12 @@ def test(session):
     #   2. At least MyPy has to be run separately per Python version we support.
     # If the interpreter is not CPython, this may need to be conditionally disabled.
     session.install(
-        "mypy   == 0.931",
-        "pylint == 2.12.*",
+        "mypy   == 0.942",
+        "pylint == 2.13.*",
     )
     relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
     if not relaxed_static_analysis:
         session.run("mypy", "--strict", *map(str, src_dirs), str(compiled_dir))
-    else:
-        session.run(
-            "mypy",
-            "--no-warn-return-any",
-            "--no-warn-unused-ignores",
-            "--allow-untyped-calls",
-            "--no-strict-equality",
-            *map(str, src_dirs),
-            str(compiled_dir),
-        )
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
@@ -204,18 +194,18 @@ def pristine(session):
     session.cd(session.create_tmp())  # Change the directory to reveal spurious dependencies from the project root.
 
     session.install(f"{ROOT_DIR}")  # Testing bare installation first.
-    exe("import pyuavcan")
-    exe("import pyuavcan.transport.can")
-    exe("import pyuavcan.transport.udp")
-    exe("import pyuavcan.transport.loopback")
+    exe("import pycyphal")
+    exe("import pycyphal.transport.can")
+    exe("import pycyphal.transport.udp")
+    exe("import pycyphal.transport.loopback")
 
     session.install(f"{ROOT_DIR}[transport-serial]")
-    exe("import pyuavcan.transport.serial")
+    exe("import pycyphal.transport.serial")
 
 
 @nox.session(reuse_venv=True)
 def check_style(session):
-    session.install("black == 21.12b0")
+    session.install("black == 22.*")
     session.run("black", "--check", ".")
 
 
@@ -233,6 +223,10 @@ def docs(session):
     sphinx_args = ["-b", "html", "-W", "--keep-going", f"-j{os.cpu_count() or 1}", ".", str(out_dir)]
     session.run("sphinx-build", *sphinx_args)
     session.log(f"DOCUMENTATION BUILD OUTPUT: file://{out_dir}/index.html")
+
+    session.cd(ROOT_DIR)
+    session.install("doc8 ~= 0.11")
+    session.run("doc8", "docs", *map(str, ROOT_DIR.glob("*.rst")))
 
 
 def is_latest_python(session) -> bool:

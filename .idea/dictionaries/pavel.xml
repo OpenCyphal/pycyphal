@@ -29,6 +29,7 @@
       <w>bayanist</w>
       <w>bgcolor</w>
       <w>blin</w>
+      <w>blockingly</w>
       <w>booleaness</w>
       <w>bools</w>
       <w>bufferless</w>
@@ -50,6 +51,7 @@
       <w>creationflags</w>
       <w>ctrunc</w>
       <w>cyber</w>
+      <w>cyphal</w>
       <w>datagrams</w>
       <w>dcabf</w>
       <w>ddddddd</w>
@@ -79,6 +81,7 @@
       <w>dsdlgp</w>
       <w>dsonar</w>
       <w>dtype</w>
+      <w>ebadfd</w>
       <w>ebed</w>
       <w>edgeitems</w>
       <w>elif</w>
@@ -86,14 +89,17 @@
       <w>endfor</w>
       <w>endmacro</w>
       <w>environb</w>
+      <w>errnos</w>
       <w>ethertype</w>
       <w>facto</w>
       <w>ffee</w>
       <w>ffff</w>
       <w>fgsfds</w>
       <w>findalldevs</w>
+      <w>fixedsize</w>
       <w>fontname</w>
       <w>forcecolor</w>
+      <w>fpid</w>
       <w>frombuffer</w>
       <w>fyodor</w>
       <w>geez</w>
@@ -166,12 +172,14 @@
       <w>numpy's</w>
       <w>octothorp</w>
       <w>onboard</w>
+      <w>opencyphal</w>
       <w>overgeneral</w>
       <w>packbits</w>
       <w>parseltongue</w>
       <w>pathlib</w>
       <w>pcap</w>
       <w>pcapy</w>
+      <w>penwidth</w>
       <w>pfft</w>
       <w>pizdec</w>
       <w>pizdets</w>
@@ -183,6 +191,7 @@
       <w>protip</w>
       <w>py's</w>
       <w>pycodestyle</w>
+      <w>pycyphal</w>
       <w>pydev</w>
       <w>pydsdl</w>
       <w>pydsdlgen</w>
@@ -264,6 +273,7 @@
       <w>suka</w>
       <w>supernum</w>
       <w>supremum</w>
+      <w>synchronizers</w>
       <w>synth</w>
       <w>systeminfo</w>
       <w>tamada</w>

@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 # pylint: disable=protected-access
 
@@ -9,22 +9,22 @@ import sys
 import time
 import typing
 import socket
-from pyuavcan.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
-from pyuavcan.transport import InvalidMediaConfigurationError, Timestamp
-from pyuavcan.transport.udp._ip._socket_factory import SocketFactory
-from pyuavcan.transport.udp._ip._endpoint_mapping import SUBJECT_PORT, service_data_specifier_to_udp_port
-from pyuavcan.transport.udp._ip._v4 import SnifferIPv4, IPv4SocketFactory
-from pyuavcan.transport.udp._ip import LinkLayerCapture
-from pyuavcan.transport.udp import IPPacket, LinkLayerPacket, UDPIPPacket
+from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
+from pycyphal.transport import InvalidMediaConfigurationError, Timestamp
+from pycyphal.transport.udp._ip._socket_factory import SocketFactory
+from pycyphal.transport.udp._ip._endpoint_mapping import SUBJECT_PORT, service_data_specifier_to_udp_port
+from pycyphal.transport.udp._ip._v4 import SnifferIPv4, IPv4SocketFactory
+from pycyphal.transport.udp._ip import LinkLayerCapture
+from pycyphal.transport.udp import IPPacket, LinkLayerPacket, UDPIPPacket
 
 
 def _unittest_socket_factory() -> None:
     from pytest import raises
-    from ipaddress import ip_address
+    from ipaddress import IPv4Address
 
     is_linux = sys.platform.startswith("linux")
 
-    fac = SocketFactory.new(ip_address("127.42.1.200"))
+    fac = SocketFactory.new(IPv4Address("127.42.1.200"))
     assert fac.max_nodes == 0xFFFF
     assert str(fac.local_ip_address) == "127.42.1.200"
 
@@ -74,17 +74,17 @@ def _unittest_socket_factory() -> None:
 
     # ERRORS
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(ip_address("1.2.3.4")).make_input_socket(
+        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_input_socket(
             ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(ip_address("1.2.3.4")).make_input_socket(MessageDataSpecifier(0))
+        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_input_socket(MessageDataSpecifier(0))
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(ip_address("1.2.3.4")).make_output_socket(
+        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_output_socket(
             1, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(ip_address("1.2.3.4")).make_output_socket(1, MessageDataSpecifier(0))
+        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_output_socket(1, MessageDataSpecifier(0))
 
     with raises(UnsupportedSessionConfigurationError):
         fac.make_output_socket(1, MessageDataSpecifier(0))

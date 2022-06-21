@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import os
 import gc
@@ -14,7 +14,7 @@ import numpy
 import pytest
 import pydsdl
 
-import pyuavcan.dsdl
+import pycyphal.dsdl
 from . import _util
 
 
@@ -28,7 +28,7 @@ _MAX_ALLOWED_SERIALIZATION_DESERIALIZATION_TIME = 90e-3
 _MAX_RANDOM_SERIALIZED_REPRESENTATION_FRAGMENTS = 1000
 
 # Set this environment variable to a higher value for a deeper state exploration.
-_NUM_RANDOM_SAMPLES = int(os.environ.get("PYUAVCAN_TEST_NUM_RANDOM_SAMPLES", 5))
+_NUM_RANDOM_SAMPLES = int(os.environ.get("PYCYPHAL_TEST_NUM_RANDOM_SAMPLES", 5))
 
 
 _logger = logging.getLogger(__name__)
@@ -45,15 +45,15 @@ class _TypeTestStatistics:
         return max(self.mean_serialization_time, self.mean_deserialization_time)
 
 
-def _unittest_slow_random(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any) -> None:
+def _unittest_slow_random(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo], caplog: typing.Any) -> None:
     _logger.info(
-        "Number of random samples: %s. Set the environment variable PYUAVCAN_TEST_NUM_RANDOM_SAMPLES to override.",
+        "Number of random samples: %s. Set the environment variable PYCYPHAL_TEST_NUM_RANDOM_SAMPLES to override.",
         _NUM_RANDOM_SAMPLES,
     )
 
     # The random test intentionally generates a lot of faulty data, which generates a lot of log messages.
     # We don't want them to clutter the test output, so we raise the logging level temporarily.
-    caplog.set_level(logging.WARNING, logger="pyuavcan.dsdl")
+    caplog.set_level(logging.WARNING, logger="pycyphal.dsdl")
 
     performance: typing.Dict[pydsdl.CompositeType, _TypeTestStatistics] = {}
 
@@ -62,11 +62,11 @@ def _unittest_slow_random(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageIn
             if not isinstance(model, pydsdl.ServiceType):
                 performance[model] = _test_type(model, _NUM_RANDOM_SAMPLES)
             else:
-                dtype = pyuavcan.dsdl.get_class(model)
+                dtype = pycyphal.dsdl.get_class(model)
                 with pytest.raises(TypeError):
-                    assert list(pyuavcan.dsdl.serialize(dtype()))
+                    assert list(pycyphal.dsdl.serialize(dtype()))
                 with pytest.raises(TypeError):
-                    pyuavcan.dsdl.deserialize(dtype, [memoryview(b"")])
+                    pycyphal.dsdl.deserialize(dtype, [memoryview(b"")])
 
     _logger.info("Tested types ordered by serialization speed, %d random samples per type", _NUM_RANDOM_SAMPLES)
     _logger.info(
@@ -90,11 +90,11 @@ def _unittest_slow_random(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageIn
 
 def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTestStatistics:
     _logger.debug("Roundtrip serialization test of %s with %d random samples", model, num_random_samples)
-    dtype = pyuavcan.dsdl.get_class(model)
+    dtype = pycyphal.dsdl.get_class(model)
     samples: typing.List[typing.Tuple[float, float]] = [_serialize_deserialize(dtype())]
     rand_sr_validness: typing.List[bool] = []
 
-    def once(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[float, float]:
+    def once(obj: object) -> typing.Tuple[float, float]:
         s = _serialize_deserialize(obj)
         samples.append(s)
         return s
@@ -105,8 +105,8 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
         sample_ser = once(_util.make_random_object(model))
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
-        sr = _make_random_fragmented_serialized_representation(pyuavcan.dsdl.get_model(dtype).bit_length_set)
-        ob = pyuavcan.dsdl.deserialize(dtype, sr)
+        sr = _make_random_fragmented_serialized_representation(pycyphal.dsdl.get_model(dtype).bit_length_set)
+        ob = pycyphal.dsdl.deserialize(dtype, sr)
         rand_sr_validness.append(ob is not None)
         sample_des: typing.Optional[typing.Tuple[float, float]] = None
         if ob:
@@ -131,30 +131,30 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
     )
 
 
-def _serialize_deserialize(obj: pyuavcan.dsdl.CompositeObject) -> typing.Tuple[float, float]:
+def _serialize_deserialize(obj: object) -> typing.Tuple[float, float]:
     gc.collect()
     gc.disable()  # Must be disabled, otherwise it induces spurious false-positive performance warnings
 
     ts = time.process_time()
-    chunks = list(pyuavcan.dsdl.serialize(obj))  # GC must be disabled while we're in the timed context
+    chunks = list(pycyphal.dsdl.serialize(obj))  # GC must be disabled while we're in the timed context
     ser_sample = time.process_time() - ts
 
     ts = time.process_time()
-    d = pyuavcan.dsdl.deserialize(type(obj), chunks)  # GC must be disabled while we're in the timed context
+    d = pycyphal.dsdl.deserialize(type(obj), chunks)  # GC must be disabled while we're in the timed context
     des_sample = time.process_time() - ts
 
     gc.enable()
 
     assert d is not None
     assert type(obj) is type(d)
-    assert pyuavcan.dsdl.get_model(obj) == pyuavcan.dsdl.get_model(d)
+    assert pycyphal.dsdl.get_model(obj) == pycyphal.dsdl.get_model(d)
 
-    if not _util.are_close(pyuavcan.dsdl.get_model(obj), obj, d):  # pragma: no cover
+    if not _util.are_close(pycyphal.dsdl.get_model(obj), obj, d):  # pragma: no cover
         assert False, f"{obj} != {d}; sr: {bytes().join(chunks).hex()}"  # Branched for performance reasons
 
     # Similar floats may produce drastically different string representations, so if there is at least one float inside,
     # we skip the string representation equality check.
-    if pydsdl.FloatType.__name__ not in repr(pyuavcan.dsdl.get_model(d)):
+    if pydsdl.FloatType.__name__ not in repr(pycyphal.dsdl.get_model(d)):
         assert str(obj) == str(d)
         assert repr(obj) == repr(d)
 

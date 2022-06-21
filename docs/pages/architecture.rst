@@ -6,46 +6,46 @@ Architecture
 Overview
 --------
 
-PyUAVCAN is a full-featured implementation of the `UAVCAN protocol stack <https://uavcan.org>`_
+PyCyphal is a full-featured implementation of the `Cyphal protocol stack <https://opencyphal.org>`_
 intended for non-embedded, user-facing applications such as GUI software, diagnostic tools,
 automation scripts, prototypes, and various R&D cases.
 It is designed to support **GNU/Linux**, **MS Windows**, and **macOS** as first-class target platforms.
 
-The reader should understand the basics of UAVCAN and be familiar with
+The reader should understand the basics of Cyphal and be familiar with
 `asynchronous programming in Python <https://docs.python.org/3/library/asyncio.html>`_
 to read this documentation.
 
 The library consists of several loosely coupled submodules,
 each implementing a well-segregated part of the protocol:
 
-- :mod:`pyuavcan.dsdl` --- DSDL language support: transcompilation (code generation) and object serialization.
-  This module is a thin wrapper over `Nunavut <https://github.com/UAVCAN/nunavut/>`_.
+- :mod:`pycyphal.dsdl` --- DSDL language support: transcompilation (code generation) and object serialization.
+  This module is a thin wrapper over `Nunavut <https://github.com/OpenCyphal/nunavut/>`_.
 
-- :mod:`pyuavcan.transport` --- the abstract UAVCAN transport layer model and several
-  concrete transport implementations (UAVCAN/CAN, UAVCAN/UDP, UAVCAN/serial, etc.).
+- :mod:`pycyphal.transport` --- the abstract Cyphal transport layer model and several
+  concrete transport implementations (Cyphal/CAN, Cyphal/UDP, Cyphal/serial, etc.).
   This submodule exposes a relatively low-level API where data is represented as serialized blocks of bytes.
   Users may build custom concrete transports based on this module as well.
   *Typical applications are not expected to use this API directly.*
 
-- :mod:`pyuavcan.presentation` --- this layer binds the transport layer together with DSDL serialization logic,
+- :mod:`pycyphal.presentation` --- this layer binds the transport layer together with DSDL serialization logic,
   providing a higher-level object-oriented API.
   At this layer, data is represented as instances of auto-generated Python classes
-  (code generation is managed by :mod:`pyuavcan.dsdl`).
+  (code generation is managed by :mod:`pycyphal.dsdl`).
   *Typical applications are not expected to use this API directly.*
 
-- :mod:`pyuavcan.application` --- the top-level API for the application.
-  The factory :func:`pyuavcan.application.make_node` is the main entry point of the library.
+- :mod:`pycyphal.application` --- the top-level API for the application.
+  The factory :func:`pycyphal.application.make_node` is the main entry point of the library.
 
-- :mod:`pyuavcan.util` --- a loosely organized collection of various utility functions and classes
+- :mod:`pycyphal.util` --- a loosely organized collection of various utility functions and classes
   that are used across the library. User applications may benefit from them also.
 
 .. note::
    In order to use this library the user should at least skim through the API docs for
-   :mod:`pyuavcan.application` and check out the :ref:`demo`.
+   :mod:`pycyphal.application` and check out the :ref:`demo`.
 
-The overall structure of the library and its mapping onto the UAVCAN protocol is shown on the following diagram:
+The overall structure of the library and its mapping onto the Cyphal protocol is shown on the following diagram:
 
-.. image:: /static/arch-non-redundant.svg
+.. image:: /figures/arch-non-redundant.svg
 
 The dependency relations of the submodules are as follows:
 
@@ -56,11 +56,11 @@ The dependency relations of the submodules are as follows:
         graph   [bgcolor=transparent];
         node    [shape=box, style=filled, fontname="monospace"];
 
-        dsdl            [fillcolor="#FF88FF", label="pyuavcan.dsdl"];
-        transport       [fillcolor="#FFF2CC", label="pyuavcan.transport"];
-        presentation    [fillcolor="#D9EAD3", label="pyuavcan.presentation"];
-        application     [fillcolor="#C9DAF8", label="pyuavcan.application"];
-        util            [fillcolor="#D3D3D3", label="pyuavcan.util"];
+        dsdl            [fillcolor="#FF88FF", label="pycyphal.dsdl"];
+        transport       [fillcolor="#FFF2CC", label="pycyphal.transport"];
+        presentation    [fillcolor="#D9EAD3", label="pycyphal.presentation"];
+        application     [fillcolor="#C9DAF8", label="pycyphal.application"];
+        util            [fillcolor="#D3D3D3", label="pycyphal.util"];
 
         dsdl            -> util;
         transport       -> util;
@@ -71,36 +71,36 @@ The dependency relations of the submodules are as follows:
 Every submodule is imported automatically except the application layer and concrete transport implementation
 submodules --- those must be imported explicitly by the user::
 
-    >>> import pyuavcan
-    >>> pyuavcan.dsdl.serialize         # OK, the DSDL submodule is auto-imported.
+    >>> import pycyphal
+    >>> pycyphal.dsdl.serialize         # OK, the DSDL submodule is auto-imported.
     <function serialize at ...>
-    >>> pyuavcan.transport.can          # Not the transport-specific modules though.
+    >>> pycyphal.transport.can          # Not the transport-specific modules though.
     Traceback (most recent call last):
     ...
-    AttributeError: module 'pyuavcan.transport' has no attribute 'can'
-    >>> import pyuavcan.transport.can   # Import the necessary transports explicitly before use.
-    >>> import pyuavcan.transport.serial
-    >>> import pyuavcan.application     # Likewise the application layer -- it depends on DSDL generated classes.
+    AttributeError: module 'pycyphal.transport' has no attribute 'can'
+    >>> import pycyphal.transport.can   # Import the necessary transports explicitly before use.
+    >>> import pycyphal.transport.serial
+    >>> import pycyphal.application     # Likewise the application layer -- it depends on DSDL generated classes.
 
 
 Transport layer
 ---------------
 
-The UAVCAN protocol itself is designed to support different transports such as CAN bus (UAVCAN/CAN),
-UDP/IP (UAVCAN/UDP), raw serial links (UAVCAN/serial), and so on.
-Generally, a real-time safety-critical implementation of UAVCAN would support a limited subset of
+The Cyphal protocol itself is designed to support different transports such as CAN bus (Cyphal/CAN),
+UDP/IP (Cyphal/UDP), raw serial links (Cyphal/serial), and so on.
+Generally, a real-time safety-critical implementation of Cyphal would support a limited subset of
 transports defined by the protocol (often just one) in order to reduce the validation & verification efforts.
-PyUAVCAN is different --- it is created for user-facing software rather than reliable deeply embedded systems;
-that is, PyUAVCAN can't be put onboard a vehicle, but it can be put onto the computer of an engineer or a researcher
+PyCyphal is different --- it is created for user-facing software rather than reliable deeply embedded systems;
+that is, PyCyphal can't be put onboard a vehicle, but it can be put onto the computer of an engineer or a researcher
 building said vehicle to help them implement, understand, validate, verify, and diagnose its onboard network.
-Hence, PyUAVCAN trades off simplicity and constrainedness (desirable for embedded systems)
+Hence, PyCyphal trades off simplicity and constrainedness (desirable for embedded systems)
 for extensibility and repurposeability (desirable for user-facing software).
 
-The library consists of a transport-agnostic core which implements the higher levels of the UAVCAN protocol,
+The library consists of a transport-agnostic core which implements the higher levels of the Cyphal protocol,
 DSDL code generation, and object serialization.
 The core defines an abstract *transport model* which decouples it from transport-specific logic.
-The main component of the abstract transport model is the interface class :class:`pyuavcan.transport.Transport`,
-accompanied by several auxiliary definitions available in the same module :mod:`pyuavcan.transport`.
+The main component of the abstract transport model is the interface class :class:`pycyphal.transport.Transport`,
+accompanied by several auxiliary definitions available in the same module :mod:`pycyphal.transport`.
 
 The concrete transports implemented in the library are contained in nested submodules;
 here is the full list of them:
@@ -111,9 +111,9 @@ here is the full list of them:
 ..  important::
 
     Typical applications are not expected to initialize their transport manually, or to access this module at all.
-    Initialization of low-level components is fully managed by :func:`pyuavcan.application.make_node`.
+    Initialization of low-level components is fully managed by :func:`pycyphal.application.make_node`.
 
-Users can implement their own custom transports by subclassing :class:`pyuavcan.transport.Transport`.
+Users can implement their own custom transports by subclassing :class:`pycyphal.transport.Transport`.
 
 Whenever the API documentation refers to *monotonic time*, the time system of
 :meth:`asyncio.AbstractEventLoop.time` is implied.
@@ -126,20 +126,20 @@ Media sub-layers
 
 Typically, a given concrete transport implementation would need to support multiple different lower-level
 communication mediums for the sake of application flexibility.
-Such lower-level implementation details fall outside of the scope of the UAVCAN transport model entirely,
+Such lower-level implementation details fall outside of the scope of the Cyphal transport model entirely,
 but they are relevant for this library as we want to encourage consistent design across the codebase.
 Such lower-level modules are called *media sub-layers*.
 
 Media sub-layer implementations should be located under the submodule called ``media``,
-which in turn should be located under its parent transport's submodule, i.e., ``pyuavcan.transport.*.media.*``.
-The media interface class should be ``pyuavcan.transport.*.media.Media``;
+which in turn should be located under its parent transport's submodule, i.e., ``pycyphal.transport.*.media.*``.
+The media interface class should be ``pycyphal.transport.*.media.Media``;
 derived concrete implementations should be suffixed with ``*Media``, e.g., ``SocketCANMedia``.
 Users may implement their custom media drivers for use with the transport by subclassing ``Media`` as well.
 
 Take the CAN media sub-layer for example; it contains the following classes (among others):
 
-- :class:`pyuavcan.transport.can.media.socketcan.SocketCANMedia`
-- :class:`pyuavcan.transport.can.media.pythoncan.PythonCANMedia`
+- :class:`pycyphal.transport.can.media.socketcan.SocketCANMedia`
+- :class:`pycyphal.transport.can.media.pythoncan.PythonCANMedia`
 
 Media sub-layer modules should not be auto-imported. Instead, the user should import the required media sub-modules
 manually as necessary.
@@ -149,21 +149,21 @@ also, unnecessary submodules slow down package initialization and increase the m
 not to mention possible software reliability issues.
 
 Some transport implementations may be entirely monolithic, without a dedicated media sub-layer.
-For example, see :class:`pyuavcan.transport.serial.SerialTransport`.
+For example, see :class:`pycyphal.transport.serial.SerialTransport`.
 
 
 Redundant pseudo-transport
 ++++++++++++++++++++++++++
 
-The pseudo-transport :class:`pyuavcan.transport.redundant.RedundantTransport` is used to operate with
-UAVCAN networks built with redundant transports.
+The pseudo-transport :class:`pycyphal.transport.redundant.RedundantTransport` is used to operate with
+Cyphal networks built with redundant transports.
 In order to initialize it, the application should first initialize each of the physical transports and then
 supply them to the redundant pseudo-transport instance.
 Afterwards, the configured instance is used with the upper layers of the protocol stack, as shown on the diagram.
 
-.. image:: /static/arch-redundant.svg
+.. image:: /figures/arch-redundant.svg
 
-The `UAVCAN Specification <https://uavcan.org/specification>`_ adds the following remark on redundant transports:
+The `Cyphal Specification <https://opencyphal.org/specification>`_ adds the following remark on redundant transports:
 
     Reassembly of transfers from redundant interfaces may be implemented either on the per-transport-frame level
     or on the per-transfer level.
@@ -176,7 +176,7 @@ The `UAVCAN Specification <https://uavcan.org/specification>`_ adds the followin
     on the per-transfer level;
     this method may be more computationally complex but it provides greater flexibility.
 
-Per this classification, PyUAVCAN implements *per-transfer* redundancy.
+Per this classification, PyCyphal implements *per-transfer* redundancy.
 
 
 Advanced network diagnostics: sniffing/snooping, tracing, spoofing
@@ -189,22 +189,22 @@ low-level access, they are unsuitable for non-trivial use cases where comprehens
 
 Certain scenarios require emission of spoofed traffic where some of its parameters are intentionally distorted
 (like fake source address).
-This may be useful for implementing complex end-to-end tests for UAVCAN-enabled equipment,
-running HITL/SITL simulation, or validating devices for compliance against the UAVCAN Specification.
+This may be useful for implementing complex end-to-end tests for Cyphal-enabled equipment,
+running HITL/SITL simulation, or validating devices for compliance against the Cyphal Specification.
 
 These capabilities are covered by the advanced network diagnostics API exposed by the transport layer:
 
-- :meth:`pyuavcan.transport.Transport.begin_capture` ---
+- :meth:`pycyphal.transport.Transport.begin_capture` ---
   **capturing** on a transport refers to monitoring low-level network events and packets exchanged over the
   network even if they neither originate nor terminate at the local node.
 
-- :meth:`pyuavcan.transport.Transport.make_tracer` ---
+- :meth:`pycyphal.transport.Transport.make_tracer` ---
   **tracing** refers to reconstructing high-level processes that transpire on the network from a sequence of
   captured low-level events.
-  Tracing may take place in real-time (with PyUAVCAN connected to a live network) or offline
+  Tracing may take place in real-time (with PyCyphal connected to a live network) or offline
   (with events read from a black box recorder or from a log file).
 
-- :meth:`pyuavcan.transport.Transport.spoof` ---
+- :meth:`pycyphal.transport.Transport.spoof` ---
   **spoofing** refers to faking network transactions as if they were coming from a different node
   (possibly a non-existent one) or whose parameters are significantly altered (e.g., out-of-sequence transfer-ID).
 
@@ -217,14 +217,14 @@ Virtualization
 
 Some transports support virtual interfaces that can be used for testing and experimentation
 instead of physical connections.
-For example, the UAVCAN/CAN transport supports virtual CAN buses via SocketCAN,
+For example, the Cyphal/CAN transport supports virtual CAN buses via SocketCAN,
 and the serial transport supports TCP/IP tunneling and local loopback mode.
 
 
 DSDL support
 ------------
 
-The DSDL support module :mod:`pyuavcan.dsdl` is used for automatic generation of Python
+The DSDL support module :mod:`pycyphal.dsdl` is used for automatic generation of Python
 classes from DSDL type definitions.
 The auto-generated classes have a high-level application-facing API and built-in auto-generated
 serialization and deserialization routines.
@@ -236,15 +236,15 @@ either via the ``PYTHONPATH`` environment variable or via :data:`sys.path`.
 
 The main API entries are:
 
-- :func:`pyuavcan.dsdl.compile` --- transcompiles a DSDL namespace into a Python package.
+- :func:`pycyphal.dsdl.compile` --- transcompiles a DSDL namespace into a Python package.
 
-- :func:`pyuavcan.dsdl.serialize` and :func:`pyuavcan.dsdl.deserialize` --- serialize and deserialize
+- :func:`pycyphal.dsdl.serialize` and :func:`pycyphal.dsdl.deserialize` --- serialize and deserialize
   an instance of an autogenerated class.
 
-- :class:`pyuavcan.dsdl.CompositeObject` and :class:`pyuavcan.dsdl.ServiceObject` --- base classes for
+- :class:`pycyphal.dsdl.CompositeObject` and :class:`pycyphal.dsdl.ServiceObject` --- base classes for
   Python classes generated from DSDL type definitions; message types and service types, respectively.
 
-- :func:`pyuavcan.dsdl.to_builtin` and :func:`pyuavcan.dsdl.update_from_builtin` --- used to convert
+- :func:`pycyphal.dsdl.to_builtin` and :func:`pycyphal.dsdl.update_from_builtin` --- used to convert
   a DSDL object instance to/from a simplified representation using only built-in types such as :class:`dict`,
   :class:`list`, :class:`int`, :class:`float`, :class:`str`, and so on. These can be used as an intermediate
   representation for conversion to/from JSON, YAML, and other commonly used serialization formats.
@@ -253,22 +253,22 @@ The main API entries are:
 Presentation layer
 ------------------
 
-The role of the presentation layer submodule :mod:`pyuavcan.presentation` is to provide a
+The role of the presentation layer submodule :mod:`pycyphal.presentation` is to provide a
 high-level object-oriented interface and to route data between port instances
 (publishers, subscribers, RPC-clients, and RPC-servers) and their transport sessions.
 
 A typical application is not expected to access the presentation-layer API directly;
-instead, it should rely on the higher-level API entities provided by :mod:`pyuavcan.application`.
+instead, it should rely on the higher-level API entities provided by :mod:`pycyphal.application`.
 
 
 Application layer
 -----------------
 
-Submodule :mod:`pyuavcan.application` provides the top-level API for the application and implements certain
-standard application-layer functions defined by the UAVCAN Specification (chapter 5 *Application layer*).
-The **main entry point of the library** is :func:`pyuavcan.application.make_node`.
+Submodule :mod:`pycyphal.application` provides the top-level API for the application and implements certain
+standard application-layer functions defined by the Cyphal Specification (chapter 5 *Application layer*).
+The **main entry point of the library** is :func:`pycyphal.application.make_node`.
 
-This submodule requires the standard DSDL namespace ``uavcan`` to be compiled first (see :func:`pyuavcan.dsdl.compile`),
+This submodule requires the standard DSDL namespace ``uavcan`` to be compiled first (see :func:`pycyphal.dsdl.compile`),
 so it is not auto-imported.
 A typical usage scenario is to either distribute compiled DSDL namespaces together with the application,
 or to generate them lazily before importing this submodule.
@@ -292,5 +292,5 @@ these modules are not auto-imported.
 Utilities
 ---------
 
-Submodule :mod:`pyuavcan.util` contains a loosely organized collection of minor utilities and helpers that are
+Submodule :mod:`pycyphal.util` contains a loosely organized collection of minor utilities and helpers that are
 used by the library and are also available for reuse by the application.

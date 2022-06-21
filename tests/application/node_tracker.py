@@ -1,34 +1,34 @@
-# Copyright (c) 2020 UAVCAN Consortium
+# Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import asyncio
 import logging
 import pytest
-import pyuavcan
+import pycyphal
 
 if typing.TYPE_CHECKING:
-    import pyuavcan.application
+    import pycyphal.application
 
 _logger = logging.getLogger(__name__)
 
 pytestmark = pytest.mark.asyncio
 
 
-async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     from . import get_transport
     from uavcan.node import GetInfo_1_0
-    from pyuavcan.application import make_node, NodeInfo
-    from pyuavcan.application.node_tracker import NodeTracker, Entry
+    from pycyphal.application import make_node, NodeInfo
+    from pycyphal.application.node_tracker import NodeTracker, Entry
 
     assert compiled
     asyncio.get_running_loop().slow_callback_duration = 3.0
 
-    n_a = make_node(NodeInfo(name="org.uavcan.pyuavcan.test.node_tracker.a"), transport=get_transport(0xA))
-    n_b = make_node(NodeInfo(name="org.uavcan.pyuavcan.test.node_tracker.b"), transport=get_transport(0xB))
-    n_c = make_node(NodeInfo(name="org.uavcan.pyuavcan.test.node_tracker.c"), transport=get_transport(0xC))
-    n_trk = make_node(NodeInfo(name="org.uavcan.pyuavcan.test.node_tracker.trk"), transport=get_transport(None))
+    n_a = make_node(NodeInfo(name="org.opencyphal.pycyphal.test.node_tracker.a"), transport=get_transport(0xA))
+    n_b = make_node(NodeInfo(name="org.opencyphal.pycyphal.test.node_tracker.b"), transport=get_transport(0xB))
+    n_c = make_node(NodeInfo(name="org.opencyphal.pycyphal.test.node_tracker.c"), transport=get_transport(0xC))
+    n_trk = make_node(NodeInfo(name="org.opencyphal.pycyphal.test.node_tracker.trk"), transport=get_transport(None))
 
     try:
         last_update_args: typing.List[typing.Tuple[int, typing.Optional[Entry], typing.Optional[Entry]]] = []
@@ -124,7 +124,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.Genera
                     assert new.heartbeat.vendor_specific_status_code == 0xDE
                     assert old.info is None
                     assert new.info is not None
-                    assert new.info.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node_tracker.a"
+                    assert new.info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
                 elif num_events_a == 2:  # Restart detected
                     assert old is not None
                     assert new is not None
@@ -139,7 +139,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.Genera
                     assert new.heartbeat.vendor_specific_status_code == 0xFE
                     assert old.info is None
                     assert new.info is not None
-                    assert new.info.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node_tracker.a"
+                    assert new.info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
                 elif num_events_a == 4:  # Offline
                     assert old is not None
                     assert new is None
@@ -161,7 +161,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.Genera
                     assert new.heartbeat.vendor_specific_status_code == 0xBE
                     assert old.info is None
                     assert new.info is not None
-                    assert new.info.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node_tracker.b"
+                    assert new.info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.b"
                 elif num_events_b == 2:
                     assert old is not None
                     assert new is None
@@ -206,11 +206,11 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.Genera
         assert 60 >= trk.registry[0xA].heartbeat.uptime >= 8
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xDE
         assert trk.registry[0xA].info is not None
-        assert trk.registry[0xA].info.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node_tracker.a"
+        assert trk.registry[0xA].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
         assert 60 >= trk.registry[0xB].heartbeat.uptime >= 6
         assert trk.registry[0xB].heartbeat.vendor_specific_status_code == 0xBE
         assert trk.registry[0xB].info is not None
-        assert trk.registry[0xB].info.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node_tracker.b"
+        assert trk.registry[0xB].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.b"
 
         # Node B goes offline.
         n_b.close()
@@ -222,17 +222,17 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.Genera
         assert 90 >= trk.registry[0xA].heartbeat.uptime >= 12
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xDE
         assert trk.registry[0xA].info is not None
-        assert trk.registry[0xA].info.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node_tracker.a"
+        assert trk.registry[0xA].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
 
         # Node C appears online. It does not respond to GetInfo.
         n_c.heartbeat_publisher.vendor_specific_status_code = 0xF0
         n_c.start()
         # To make it not respond to GetInfo, get under the hood and break the transport session for this RPC-service.
-        get_info_service_id = pyuavcan.dsdl.get_fixed_port_id(GetInfo_1_0)
+        get_info_service_id = pycyphal.dsdl.get_fixed_port_id(GetInfo_1_0)
         assert get_info_service_id
         for ses in n_c.presentation.transport.input_sessions:
             ds = ses.specifier.data_specifier
-            if isinstance(ds, pyuavcan.transport.ServiceDataSpecifier) and ds.service_id == get_info_service_id:
+            if isinstance(ds, pycyphal.transport.ServiceDataSpecifier) and ds.service_id == get_info_service_id:
                 ses.close()
         await asyncio.sleep(9)
         assert num_events_a == 2
@@ -242,7 +242,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.Genera
         assert 180 >= trk.registry[0xA].heartbeat.uptime >= 17
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xDE
         assert trk.registry[0xA].info is not None
-        assert trk.registry[0xA].info.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node_tracker.a"
+        assert trk.registry[0xA].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
         assert 30 >= trk.registry[0xC].heartbeat.uptime >= 5
         assert trk.registry[0xC].heartbeat.vendor_specific_status_code == 0xF0
         assert trk.registry[0xC].info is None
@@ -250,7 +250,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.Genera
         # Node A is restarted. Node C goes offline.
         n_a.close()
         n_c.close()
-        n_a = make_node(NodeInfo(name="org.uavcan.pyuavcan.test.node_tracker.a"), transport=get_transport(0xA))
+        n_a = make_node(NodeInfo(name="org.opencyphal.pycyphal.test.node_tracker.a"), transport=get_transport(0xA))
         n_a.heartbeat_publisher.vendor_specific_status_code = 0xFE
         n_a.start()
         await asyncio.sleep(9)
@@ -261,7 +261,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pyuavcan.dsdl.Genera
         assert 30 >= trk.registry[0xA].heartbeat.uptime >= 5
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xFE
         assert trk.registry[0xA].info is not None
-        assert trk.registry[0xA].info.name.tobytes().decode() == "org.uavcan.pyuavcan.test.node_tracker.a"
+        assert trk.registry[0xA].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
 
         # Node A goes offline. No online nodes are left standing.
         n_a.close()

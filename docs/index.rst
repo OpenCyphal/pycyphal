@@ -1,13 +1,13 @@
-PyUAVCAN documentation
+PyCyphal documentation
 ======================
 
-PyUAVCAN is a full-featured implementation of the `UAVCAN protocol stack <https://uavcan.org>`_ in Python.
-PyUAVCAN aims to support all features and transport layers of UAVCAN,
+PyCyphal is a full-featured implementation of the `Cyphal protocol stack <https://opencyphal.org>`_ in Python.
+PyCyphal aims to support all features and transport layers of UAVCAN,
 be portable across all major platforms supporting Python, and
 be extensible to permit low-effort experimentation and testing of new protocol capabilities.
 
 Start reading this documentation from the first chapter -- :ref:`architecture`.
-If you have questions, please bring them to the `UAVCAN support forum <https://forum.uavcan.org/>`_.
+If you have questions, please bring them to the `support forum <https://forum.opencyphal.org/>`_.
 
 
 Contents
@@ -36,14 +36,10 @@ Indices and tables
 See also
 --------
 
-Related projects built on top of PyUAVCAN:
+Related projects built on top of PyCyphal:
 
-- `Yakut <https://github.com/UAVCAN/yakut>`_ ---
-  a command-line interface utility for diagnostics and management of UAVCAN networks.
-
-- `Yukon <https://github.com/UAVCAN/yukon>`_ ---
-  a rich integrated development environment for developing and maintaining UAVCAN-powered
-  vehicular computing systems.
+- `Yakut <https://github.com/OpenCyphal/yakut>`_ ---
+  a command-line interface utility for diagnostics and management of Cyphal networks.
 
 
 License

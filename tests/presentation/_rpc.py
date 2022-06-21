@@ -1,24 +1,24 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import asyncio
 import pytest
-import pyuavcan
+import pycyphal
 from .conftest import TransportFactory
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_slow_presentation_rpc(
-    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
+    compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:
     assert compiled
     import uavcan.register
     import uavcan.primitive
     import uavcan.time
-    from pyuavcan.transport import Priority, Timestamp
+    from pycyphal.transport import Priority, Timestamp
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
@@ -26,8 +26,8 @@ async def _unittest_slow_presentation_rpc(
     assert tran_a.local_node_id == 123
     assert tran_b.local_node_id == 42
 
-    pres_a = pyuavcan.presentation.Presentation(tran_a)
-    pres_b = pyuavcan.presentation.Presentation(tran_b)
+    pres_a = pycyphal.presentation.Presentation(tran_a)
+    pres_b = pycyphal.presentation.Presentation(tran_b)
 
     assert pres_a.transport is tran_a
 
@@ -48,10 +48,10 @@ async def _unittest_slow_presentation_rpc(
 
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        pres_a.make_publisher_with_fixed_subject_id(uavcan.register.Access_1_0)  # type: ignore
+        pres_a.make_publisher_with_fixed_subject_id(uavcan.register.Access_1_0)
     with pytest.raises(TypeError):
         # noinspection PyTypeChecker
-        pres_a.make_subscriber_with_fixed_subject_id(uavcan.register.Access_1_0)  # type: ignore
+        pres_a.make_subscriber_with_fixed_subject_id(uavcan.register.Access_1_0)
 
     assert client0.response_timeout == pytest.approx(1.0)
     client0.response_timeout = 0.1
@@ -59,13 +59,13 @@ async def _unittest_slow_presentation_rpc(
     client0.priority = Priority.SLOW
 
     last_request = uavcan.register.Access_1_0.Request()
-    last_metadata = pyuavcan.presentation.ServiceRequestMetadata(
+    last_metadata = pycyphal.presentation.ServiceRequestMetadata(
         timestamp=Timestamp(0, 0), priority=Priority(0), transfer_id=0, client_node_id=0
     )
     response: typing.Optional[uavcan.register.Access_1_0.Response] = None
 
     async def server_handler(
-        request: uavcan.register.Access_1_0.Request, metadata: pyuavcan.presentation.ServiceRequestMetadata
+        request: uavcan.register.Access_1_0.Request, metadata: pycyphal.presentation.ServiceRequestMetadata
     ) -> typing.Optional[uavcan.register.Access_1_0.Response]:
         nonlocal last_metadata
         print("SERVICE REQUEST:", request, metadata)
@@ -80,7 +80,7 @@ async def _unittest_slow_presentation_rpc(
         name=uavcan.register.Name_1_0("Hello world!"),
         value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0("Profanity will not be tolerated")),
     )
-    result_a = await client0.call(last_request)
+    result_a = await client0(last_request)
     assert result_a is None, "Expected to fail"
     assert last_metadata.client_node_id == 42
     assert last_metadata.transfer_id == 0
@@ -96,7 +96,7 @@ async def _unittest_slow_presentation_rpc(
         value=uavcan.register.Value_1_0(string=uavcan.primitive.String_1_0("hunter2")),
     )
     client0.priority = Priority.IMMEDIATE
-    result_b = (await client0.call(last_request))[0]  # type: ignore
+    result_b = await client0(last_request)
     assert repr(result_b) == repr(response)
     assert last_metadata.client_node_id == 42
     assert last_metadata.transfer_id == 1

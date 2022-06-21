@@ -3,6 +3,49 @@
 Changelog
 =========
 
+
+v1.8
+----
+
+- Subscription synchronizer added (`#65 <https://github.com/OpenCyphal/pycyphal/issues/65>`_).
+
+- **v1.8.1:**
+  Port factory methods in :class:`pycyphal.application.Node` that accept direct port-ID always update the registry.
+
+- **v1.8.2:** Fix error handing in :meth:`pycyphal.transport.redundant.RedundantOutputSession.send`;
+  see `#222 <https://github.com/OpenCyphal/pycyphal/issues/222>`_.
+
+- **v1.8.3:**
+
+  - ``DiagnosticPublisher``: do not instantiate the publisher if the local node is anonymous.
+  - ``publish_soon()``: Do not log error if closed.
+  - ``Client`` and ``Publisher``: fix edge cases related to ``PortClosedError`` when the interface becomes unavailable.
+  - Fix assertion failure during register value coercion.
+  - SocketCAN: close the media instance automatically on unrecoverable errors like ENODEV, ENXIO, EBADF, EBADFD, etc.
+
+- **v1.8.4**:
+
+  - Actualize the Demo (mostly Yakut-related).
+
+v1.7
+----
+
+- :class:`pycyphal.application.Node` supports construction of ports (publishers, subscribers, clients, servers)
+  with a directly specified port-ID, bypassing the registry.
+
+- New presentation layer capabilities:
+
+  - New overload :meth:`pycyphal.presentation.Client.__call__`
+
+  - New method :meth:`pycyphal.presentation.Subscriber.get`
+
+  - Support sync callbacks in :meth:`pycyphal.presentation.Subscriber.receive_in_background`
+
+v1.5
+----
+
+- The library renamed from PyUAVCAN to PyCyphal and republished under the new name.
+
 v1.4
 ----
 

@@ -1,0 +1,27 @@
+{#-
+ # Copyright (c) 2019 OpenCyphal
+ # This software is distributed under the terms of the MIT License.
+ # Author: Pavel Kirienko <pavel@opencyphal.org>
+-#}
+
+{% extends "base.j2" -%}
+{%- block contents -%}
+
+# noinspection PyPep8Naming, SpellCheckingInspection, DuplicatedCode
+class {{ T|short_reference_name }}:
+    {{ data_schema('Request',  T.request_type, T|short_reference_name)|indent }}
+
+    {{ data_schema('Response', T.response_type, T|short_reference_name)|indent }}
+
+    def __repr__(self) -> str:
+        return '{{ T }}()'
+
+    {% if T.has_fixed_port_id %}
+    _FIXED_PORT_ID_ = {{ T.fixed_port_id|int }}
+    {%- endif %}
+    _MODEL_: _pydsdl_.ServiceType = _restore_constant_(
+        {{ T | pickle | indent(8) }}
+    )
+    assert isinstance(_MODEL_, _pydsdl_.ServiceType)
+
+{%- endblock -%}

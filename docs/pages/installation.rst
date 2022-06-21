@@ -3,9 +3,9 @@
 Installation
 ============
 
-Install the library from PyPI; the package name is ``pyuavcan``.
+Install the library from PyPI; the package name is ``pycyphal``.
 Specify the installation options (known as "package extras" in parseltongue)
-depending on which UAVCAN transports and features you are planning to use.
+depending on which Cyphal transports and features you are planning to use.
 
 Installation options
 --------------------
@@ -25,12 +25,12 @@ Installation options whose names do not begin with ``transport-`` enable other o
 Use from source
 ---------------
 
-PyUAVCAN requires no unconventional installation steps and is usable directly in its source form.
+PyCyphal requires no unconventional installation steps and is usable directly in its source form.
 If installation from PyPI is considered undesirable,
 the library sources can be just directly embedded into the user's codebase
 (as a git submodule/subtree or copy-paste).
 
-When doing so, don't forget to let others know that you use PyUAVCAN (it's MIT-licensed),
+When doing so, don't forget to let others know that you use PyCyphal (it's MIT-licensed),
 and make sure to include at least its core dependencies, which are:
 
 .. computron-injection::

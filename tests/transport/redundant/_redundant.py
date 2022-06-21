@@ -1,28 +1,28 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import asyncio
 import logging
 import pytest
-import pyuavcan.transport
+import pycyphal.transport
 
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
-from pyuavcan.transport.redundant import RedundantTransport, RedundantTransportStatistics
-from pyuavcan.transport.redundant import InconsistentInferiorConfigurationError
-from pyuavcan.transport.loopback import LoopbackTransport
-from pyuavcan.transport.serial import SerialTransport
-from pyuavcan.transport.udp import UDPTransport
-from pyuavcan.transport.can import CANTransport
+from pycyphal.transport.redundant import RedundantTransport, RedundantTransportStatistics
+from pycyphal.transport.redundant import InconsistentInferiorConfigurationError
+from pycyphal.transport.loopback import LoopbackTransport
+from pycyphal.transport.serial import SerialTransport
+from pycyphal.transport.udp import UDPTransport
+from pycyphal.transport.can import CANTransport
 from tests.transport.serial import VIRTUAL_BUS_URI as SERIAL_URI
 
 
 @pytest.mark.asyncio
 async def _unittest_redundant_transport(caplog: typing.Any) -> None:
-    from pyuavcan.transport import MessageDataSpecifier, PayloadMetadata, Transfer
-    from pyuavcan.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
-    from pyuavcan.transport import ProtocolParameters
+    from pycyphal.transport import MessageDataSpecifier, PayloadMetadata, Transfer
+    from pycyphal.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
+    from pycyphal.transport import ProtocolParameters
 
     loop = asyncio.get_event_loop()
     loop.slow_callback_duration = 5.0
@@ -138,7 +138,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     #
     # Incapacitate one inferior, ensure things are still OK.
     #
-    with caplog.at_level(logging.CRITICAL, logger=pyuavcan.transport.redundant.__name__):
+    with caplog.at_level(logging.CRITICAL, logger=pycyphal.transport.redundant.__name__):
         for s in lo_mono_0.output_sessions:
             s.exception = RuntimeError("INTENDED EXCEPTION")
 
@@ -167,7 +167,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     lo_cyc_1.protocol_parameters = cyc_proto_params
     assert lo_cyc_0.protocol_parameters == lo_cyc_1.protocol_parameters == cyc_proto_params
 
-    assert tr_a.protocol_parameters.transfer_id_modulo >= 2 ** 56
+    assert tr_a.protocol_parameters.transfer_id_modulo >= 2**56
     with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*transfer-id.*"):
         tr_a.attach_inferior(lo_cyc_0)  # Transfer-ID modulo mismatch
 
@@ -226,7 +226,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     tr_b.attach_inferior(serial_b)
 
     assert tr_a.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2 ** 64,
+        transfer_id_modulo=2**64,
         max_nodes=4096,
         mtu=udp_a.protocol_parameters.mtu,
     )
@@ -234,7 +234,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert repr(tr_a) == f"RedundantTransport({udp_a}, {serial_a})"
 
     assert tr_b.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2 ** 64,
+        transfer_id_modulo=2**64,
         max_nodes=4096,
         mtu=udp_b.protocol_parameters.mtu,
     )
@@ -282,13 +282,13 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     tr_b.close()
     tr_b.close()  # Idempotency
 
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):  # Make sure the inferiors are closed.
+    with pytest.raises(pycyphal.transport.ResourceClosedError):  # Make sure the inferiors are closed.
         udp_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):  # Make sure the inferiors are closed.
+    with pytest.raises(pycyphal.transport.ResourceClosedError):  # Make sure the inferiors are closed.
         serial_b.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    with pytest.raises(pyuavcan.transport.ResourceClosedError):  # Make sure the sessions are closed.
+    with pytest.raises(pycyphal.transport.ResourceClosedError):  # Make sure the sessions are closed.
         await pub_a.send(
             Transfer(timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=100, fragmented_payload=[]),
             monotonic_deadline=loop.time() + 1.0,
@@ -300,9 +300,9 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
 @pytest.mark.asyncio
 async def _unittest_redundant_transport_capture() -> None:
     from threading import Lock
-    from pyuavcan.transport import Capture, Trace, TransferTrace, Priority, ServiceDataSpecifier
-    from pyuavcan.transport import AlienTransfer, AlienTransferMetadata, AlienSessionSpecifier
-    from pyuavcan.transport.redundant import RedundantDuplicateTransferTrace, RedundantCapture
+    from pycyphal.transport import Capture, Trace, TransferTrace, Priority, ServiceDataSpecifier
+    from pycyphal.transport import AlienTransfer, AlienTransferMetadata, AlienSessionSpecifier
+    from pycyphal.transport.redundant import RedundantDuplicateTransferTrace, RedundantCapture
     from tests.transport.can.media.mock import MockMedia as CANMockMedia
 
     asyncio.get_event_loop().slow_callback_duration = 5.0
@@ -315,9 +315,9 @@ async def _unittest_redundant_transport_capture() -> None:
         with lock:
             # Drop TX frames, they are not interesting for this test.
             assert isinstance(cap, RedundantCapture)
-            if isinstance(cap.inferior, pyuavcan.transport.serial.SerialCapture) and cap.inferior.own:
+            if isinstance(cap.inferior, pycyphal.transport.serial.SerialCapture) and cap.inferior.own:
                 return
-            if isinstance(cap.inferior, pyuavcan.transport.can.CANCapture) and cap.inferior.own:
+            if isinstance(cap.inferior, pycyphal.transport.can.CANCapture) and cap.inferior.own:
                 return
             print("CAPTURE:", cap)
             traces.append(tracer.update(cap))
@@ -333,8 +333,8 @@ async def _unittest_redundant_transport_capture() -> None:
     # Setup capture -- one is added before capture started, the other is added later.
     # Make sure they are treated identically.
     tr = RedundantTransport()
-    inf_a: pyuavcan.transport.Transport = SerialTransport(SERIAL_URI, 1234)
-    inf_b: pyuavcan.transport.Transport = SerialTransport(SERIAL_URI, 1234)
+    inf_a: pycyphal.transport.Transport = SerialTransport(SERIAL_URI, 1234)
+    inf_b: pycyphal.transport.Transport = SerialTransport(SERIAL_URI, 1234)
     tr.attach_inferior(inf_a)
     assert not tr.capture_active
     assert not inf_a.capture_active
@@ -454,7 +454,7 @@ async def _unittest_redundant_transport_capture() -> None:
 
 @pytest.mark.asyncio
 async def _unittest_redundant_transport_reconfiguration() -> None:
-    from pyuavcan.transport import OutputSessionSpecifier, MessageDataSpecifier, PayloadMetadata
+    from pycyphal.transport import OutputSessionSpecifier, MessageDataSpecifier, PayloadMetadata
 
     tr = RedundantTransport()
     tr.attach_inferior(LoopbackTransport(1234))
@@ -464,7 +464,7 @@ async def _unittest_redundant_transport_reconfiguration() -> None:
     tr.attach_inferior(LoopbackTransport(1235))  # Different node-ID
     tr.detach_inferior(tr.inferiors[0])
     tr.attach_inferior(LoopbackTransport(None, allow_anonymous_transfers=True))  # Anonymous
-    with pytest.raises(pyuavcan.transport.OperationNotDefinedForAnonymousNodeError):
+    with pytest.raises(pycyphal.transport.OperationNotDefinedForAnonymousNodeError):
         tr.attach_inferior(LoopbackTransport(None, allow_anonymous_transfers=False))
     assert len(tr.inferiors) == 1
 

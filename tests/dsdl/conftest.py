@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import sys
 import pickle
@@ -11,7 +11,7 @@ import functools
 import importlib
 from pathlib import Path
 import pytest
-import pyuavcan.dsdl
+import pycyphal.dsdl
 
 
 # Please maintain these carefully if you're changing the project's directory structure.
@@ -24,7 +24,7 @@ _CACHE_FILE_NAME = "pydsdl_cache.pickle.tmp"
 
 
 @functools.lru_cache()
-def compile() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:  # pylint: disable=redefined-builtin
+def compile() -> typing.List[pycyphal.dsdl.GeneratedPackageInfo]:  # pylint: disable=redefined-builtin
     """
     Runs the DSDL package generator against the standard and test namespaces, emits a list of GeneratedPackageInfo.
     Automatically adds the path to the generated packages to sys path to make them importable.
@@ -42,7 +42,7 @@ def compile() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:  # pylint: dis
             with open(cache_file, "rb") as f:
                 out = pickle.load(f)
             assert out and isinstance(out, list)
-            assert all(map(lambda x: isinstance(x, pyuavcan.dsdl.GeneratedPackageInfo), out))
+            assert all(map(lambda x: isinstance(x, pycyphal.dsdl.GeneratedPackageInfo), out))
             return out
 
         shutil.rmtree(DESTINATION_DIR, ignore_errors=True)
@@ -52,7 +52,7 @@ def compile() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:  # pylint: dis
     pydsdl_logging_level = pydsdl_logger.level
     try:
         pydsdl_logger.setLevel(logging.INFO)
-        out = pyuavcan.dsdl.compile_all(
+        out = pycyphal.dsdl.compile_all(
             [
                 DEMO_DIR / "public_regulated_data_types" / "uavcan",
                 DEMO_DIR / "custom_data_types" / "sirius_cyber_corp",
@@ -67,7 +67,7 @@ def compile() -> typing.List[pyuavcan.dsdl.GeneratedPackageInfo]:  # pylint: dis
         pickle.dump(out, f)
 
     assert out and isinstance(out, list)
-    assert all(map(lambda x: isinstance(x, pyuavcan.dsdl.GeneratedPackageInfo), out))
+    assert all(map(lambda x: isinstance(x, pycyphal.dsdl.GeneratedPackageInfo), out))
     return out
 
 

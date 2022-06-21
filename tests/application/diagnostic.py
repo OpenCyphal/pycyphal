@@ -1,6 +1,6 @@
-# Copyright (c) 2020 UAVCAN Consortium
+# Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import re
 import typing
@@ -8,16 +8,16 @@ from typing import Dict
 import asyncio
 import logging
 import pytest
-import pyuavcan
-from pyuavcan.transport.loopback import LoopbackTransport
+import pycyphal
+from pycyphal.transport.loopback import LoopbackTransport
 
 pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_slow_diagnostic_subscriber(
-    compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo], caplog: typing.Any
+    compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo], caplog: typing.Any
 ) -> None:
-    from pyuavcan.application import make_node, NodeInfo, diagnostic, make_registry
+    from pycyphal.application import make_node, NodeInfo, diagnostic, make_registry
     from uavcan.time import SynchronizedTimestamp_1_0
 
     assert compiled

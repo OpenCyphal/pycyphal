@@ -1,6 +1,6 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import typing
 import logging
@@ -8,13 +8,13 @@ import logging
 import numpy
 import pytest
 
-import pyuavcan.dsdl
+import pycyphal.dsdl
 
 
 _logger = logging.getLogger(__name__)
 
 
-def _unittest_slow_manual_assignment(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_manual_assignment(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     from uavcan.primitive import Unstructured_1_0 as Un, String_1_0 as St
 
     _ = compiled
@@ -27,15 +27,15 @@ def _unittest_slow_manual_assignment(compiled: typing.List[pyuavcan.dsdl.Generat
 
 
 # noinspection PyUnusedLocal
-def _unittest_slow_manual_del(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_manual_del(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     import test_dsdl_namespace.if_
 
     # Implicit zero extension
-    ize = pyuavcan.dsdl.deserialize(test_dsdl_namespace.if_.del_1_0, [memoryview(b"")])
+    ize = pycyphal.dsdl.deserialize(test_dsdl_namespace.if_.del_1_0, [memoryview(b"")])
     assert ize is not None
     assert repr(ize) == repr(test_dsdl_namespace.if_.del_1_0())
 
-    obj = pyuavcan.dsdl.deserialize(
+    obj = pycyphal.dsdl.deserialize(
         test_dsdl_namespace.if_.del_1_0,
         _compile_serialized_representation(
             # void8
@@ -78,24 +78,24 @@ def _unittest_slow_manual_del(compiled: typing.List[pyuavcan.dsdl.GeneratedPacka
     assert len(obj.raise_) == 0
 
     with pytest.raises(AttributeError, match="nonexistent"):
-        pyuavcan.dsdl.get_attribute(obj, "nonexistent")
+        pycyphal.dsdl.get_attribute(obj, "nonexistent")
 
     with pytest.raises(AttributeError, match="nonexistent"):
-        pyuavcan.dsdl.set_attribute(obj, "nonexistent", 123)
+        pycyphal.dsdl.set_attribute(obj, "nonexistent", 123)
 
 
 # noinspection PyUnusedLocal
-def _unittest_slow_manual_heartbeat(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_manual_heartbeat(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     import uavcan.node
 
     # Implicit zero extension
-    ize = pyuavcan.dsdl.deserialize(uavcan.node.Heartbeat_1_0, [memoryview(b"")])
+    ize = pycyphal.dsdl.deserialize(uavcan.node.Heartbeat_1_0, [memoryview(b"")])
     assert ize is not None
     assert repr(ize) == repr(uavcan.node.Heartbeat_1_0())
     assert ize.uptime == 0
     assert ize.vendor_specific_status_code == 0
 
-    obj = pyuavcan.dsdl.deserialize(
+    obj = pycyphal.dsdl.deserialize(
         uavcan.node.Heartbeat_1_0,
         _compile_serialized_representation(
             _bin(0xEFBE_ADDE, 32),  # uptime dead beef in little-endian byte order
@@ -111,13 +111,13 @@ def _unittest_slow_manual_heartbeat(compiled: typing.List[pyuavcan.dsdl.Generate
     assert obj.vendor_specific_status_code == 0b10101111
 
     with pytest.raises(AttributeError, match="nonexistent"):
-        pyuavcan.dsdl.get_attribute(obj, "nonexistent")
+        pycyphal.dsdl.get_attribute(obj, "nonexistent")
 
     with pytest.raises(AttributeError, match="nonexistent"):
-        pyuavcan.dsdl.set_attribute(obj, "nonexistent", 123)
+        pycyphal.dsdl.set_attribute(obj, "nonexistent", 123)
 
 
-def _unittest_minor_alias(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_minor_alias(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     _ = compiled
 
     from test_dsdl_namespace.delimited import BDelimited_1, BDelimited_1_1, BDelimited_1_0
@@ -127,7 +127,7 @@ def _unittest_minor_alias(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageIn
 
 
 # noinspection PyUnusedLocal
-def _unittest_slow_delimited(compiled: typing.List[pyuavcan.dsdl.GeneratedPackageInfo]) -> None:
+def _unittest_slow_delimited(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     del compiled
 
     from test_dsdl_namespace.delimited import A_1_0, A_1_1, BDelimited_1_0, BDelimited_1_1
@@ -147,7 +147,7 @@ def _unittest_slow_delimited(compiled: typing.List[pyuavcan.dsdl.GeneratedPackag
         ),
     )
     print("object below:\n", o)
-    sr = b"".join(pyuavcan.dsdl.serialize(o))
+    sr = b"".join(pycyphal.dsdl.serialize(o))
     del o
     ref = (
         u8(1)  # | Union tag of del
@@ -171,7 +171,7 @@ def _unittest_slow_delimited(compiled: typing.List[pyuavcan.dsdl.GeneratedPackag
     assert sr == ref
 
     # Deserialize using a DIFFERENT MINOR VERSION which requires the implicit zero extension/truncation rules to work.
-    q = pyuavcan.dsdl.deserialize(A_1_1, [memoryview(sr)])
+    q = pycyphal.dsdl.deserialize(A_1_1, [memoryview(sr)])
     assert q
     assert q.del_ is not None
     assert len(q.del_.var) == 2
@@ -188,10 +188,10 @@ def _unittest_slow_delimited(compiled: typing.List[pyuavcan.dsdl.GeneratedPackag
             fix=[CFixed_1_1([5, 6, 7], 8), CFixed_1_1([100, 200, 123], 99)],
         ),
     )
-    sr = b"".join(pyuavcan.dsdl.serialize(q))
+    sr = b"".join(pycyphal.dsdl.serialize(q))
     del q
     print(" ".join(f"{b:02x}" for b in sr))
-    p = pyuavcan.dsdl.deserialize(A_1_0, [memoryview(sr)])
+    p = pycyphal.dsdl.deserialize(A_1_0, [memoryview(sr)])
     assert p
     assert p.del_ is not None
     assert len(p.del_.var) == 1
@@ -202,7 +202,7 @@ def _unittest_slow_delimited(compiled: typing.List[pyuavcan.dsdl.GeneratedPackag
     assert list(p.del_.fix[1].a) == [100, 200]  # 3rd is implicitly truncated, b is implicitly truncated
 
     # Delimiter header too large.
-    assert None is pyuavcan.dsdl.deserialize(A_1_1, [memoryview(b"\x01" + b"\xFF" * 4)])
+    assert None is pycyphal.dsdl.deserialize(A_1_1, [memoryview(b"\x01" + b"\xFF" * 4)])
 
 
 def _compile_serialized_representation(*binary_chunks: str) -> typing.Sequence[memoryview]:
@@ -211,7 +211,7 @@ def _compile_serialized_representation(*binary_chunks: str) -> typing.Sequence[m
     assert len(s) % 8 == 0
     byte_sized_chunks = [s[i : i + 8] for i in range(0, len(s), 8)]
     byte_list = list(map(lambda x: int(x, 2), byte_sized_chunks))
-    out = numpy.array(byte_list, dtype=numpy.uint8)  # type: ignore
+    out = numpy.array(byte_list, dtype=numpy.uint8)
     _logger.debug("Constructed serialized representation: %r --> %s", binary_chunks, out)
     return [out.data]
 

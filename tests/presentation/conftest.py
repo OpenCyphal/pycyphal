@@ -1,14 +1,14 @@
-# Copyright (c) 2019 UAVCAN Consortium
+# Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
-# Author: Pavel Kirienko <pavel@uavcan.org>
+# Author: Pavel Kirienko <pavel@opencyphal.org>
 
 import sys
 import typing
 import pytest
-import pyuavcan
+import pycyphal
 
 
-TransportPack = typing.Tuple[pyuavcan.transport.Transport, pyuavcan.transport.Transport, bool]
+TransportPack = typing.Tuple[pycyphal.transport.Transport, pycyphal.transport.Transport, bool]
 
 TransportFactory = typing.Callable[[typing.Optional[int], typing.Optional[int]], TransportPack]
 """
@@ -29,7 +29,7 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
         whereas the virtual bus emulated by SocketCAN has certain limitations there
         (a frame with BRS set cannot be received by receiver for which FD is not enabled).
         """
-        from pyuavcan.transport.can import CANTransport
+        from pycyphal.transport.can import CANTransport
         from tests.transport.can.media.mock import MockMedia
 
         def fact(nid_a: typing.Optional[int], nid_b: typing.Optional[int]) -> TransportPack:
@@ -44,8 +44,8 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
     yield can_mock_media
 
     def can_mock_media_triply_redundant() -> typing.Iterator[TransportFactory]:
-        from pyuavcan.transport.redundant import RedundantTransport
-        from pyuavcan.transport.can import CANTransport
+        from pycyphal.transport.redundant import RedundantTransport
+        from pycyphal.transport.can import CANTransport
         from tests.transport.can.media.mock import MockMedia
 
         def factory(nid_a: typing.Optional[int], nid_b: typing.Optional[int]) -> TransportPack:
@@ -69,8 +69,8 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
     if sys.platform.startswith("linux"):
 
         def can_socketcan_vcan0() -> typing.Iterator[TransportFactory]:
-            from pyuavcan.transport.can import CANTransport
-            from pyuavcan.transport.can.media.socketcan import SocketCANMedia
+            from pycyphal.transport.can import CANTransport
+            from pycyphal.transport.can.media.socketcan import SocketCANMedia
 
             yield lambda nid_a, nid_b: (
                 CANTransport(SocketCANMedia("vcan0", 16), nid_a),
@@ -81,9 +81,9 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
         yield can_socketcan_vcan0
 
         def can_socketcan_vcan0_vcan1() -> typing.Iterator[TransportFactory]:
-            from pyuavcan.transport.redundant import RedundantTransport
-            from pyuavcan.transport.can import CANTransport
-            from pyuavcan.transport.can.media.socketcan import SocketCANMedia
+            from pycyphal.transport.redundant import RedundantTransport
+            from pycyphal.transport.can import CANTransport
+            from pycyphal.transport.can.media.socketcan import SocketCANMedia
 
             def one(nid: typing.Optional[int]) -> RedundantTransport:
                 red = RedundantTransport()
@@ -96,7 +96,7 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
         yield can_socketcan_vcan0_vcan1
 
     def serial_tunneled_via_tcp() -> typing.Iterator[TransportFactory]:
-        from pyuavcan.transport.serial import SerialTransport
+        from pycyphal.transport.serial import SerialTransport
         from tests.transport.serial import VIRTUAL_BUS_URI
 
         yield lambda nid_a, nid_b: (
@@ -108,7 +108,7 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
     yield serial_tunneled_via_tcp
 
     def udp_loopback() -> typing.Iterator[TransportFactory]:
-        from pyuavcan.transport.udp import UDPTransport
+        from pycyphal.transport.udp import UDPTransport
 
         def one(nid: typing.Optional[int]) -> UDPTransport:
             return UDPTransport("127.0.0.1", local_node_id=nid)
@@ -118,9 +118,9 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
     yield udp_loopback
 
     def heterogeneous_udp_serial() -> typing.Iterator[TransportFactory]:
-        from pyuavcan.transport.redundant import RedundantTransport
-        from pyuavcan.transport.udp import UDPTransport
-        from pyuavcan.transport.serial import SerialTransport
+        from pycyphal.transport.redundant import RedundantTransport
+        from pycyphal.transport.udp import UDPTransport
+        from pycyphal.transport.serial import SerialTransport
         from tests.transport.serial import VIRTUAL_BUS_URI
 
         def one(nid: typing.Optional[int]) -> RedundantTransport:
