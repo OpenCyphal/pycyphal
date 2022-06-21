@@ -22,6 +22,16 @@ from pycyphal.transport.can.media import Media, FilterConfiguration, Envelope, F
 _logger = logging.getLogger(__name__)
 
 
+class PythonCANBusOptions:
+    def __init__(self, hardware_loopback: bool = False):
+        """
+        :param hardware_loopback: Hardware loopback support.
+            If True, loopback is handled by the supported hardware.
+            If False, loopback is emulated with software.
+        """
+        self.hardware_loopback = hardware_loopback
+
+
 class PythonCANMedia(Media):
     # pylint: disable=line-too-long
     """
@@ -171,7 +181,6 @@ class PythonCANMedia(Media):
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        self._hardware_loopback = False
 
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
         if self._is_fd:
@@ -183,7 +192,9 @@ class PythonCANMedia(Media):
                 interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate[0]
             )
         try:
-            self._bus = _CONSTRUCTORS[self._conn_name[0]](params)
+            bus_options, bus = _CONSTRUCTORS[self._conn_name[0]](params)
+            self._bus_options: PythonCANBusOptions = bus_options
+            self._bus: can.ThreadSafeBus = bus
         except can.CanError as ex:
             raise InvalidMediaConfigurationError(f"Could not initialize PythonCAN: {ex}") from ex
         super().__init__()
@@ -260,7 +271,7 @@ class PythonCANMedia(Media):
                 if f.loopback:
                     loopback.append((Timestamp.now(), f))
         # Fake received frames if hardware does not support loopback
-        if loopback and not self._hardware_loopback:
+        if loopback and not self._bus_options.hardware_loopback:
             loop.call_soon(self._invoke_rx_handler, loopback)
         return num_sent
 
@@ -319,9 +330,6 @@ class PythonCANMedia(Media):
             msg = self._bus.recv(0.0 if batch else self._MAXIMAL_TIMEOUT_SEC)
             if msg is None:
                 break
-            # Detect if hardware supports loopback at runtime
-            if not msg.is_rx:
-                self._hardware_loopback = True
             timestamp = Timestamp.now()  # TODO: use accurate timestamping
             loopback = not msg.is_rx
             frame = self._parse_native_frame(msg)
@@ -357,37 +365,52 @@ class _FDInterfaceParameters(_InterfaceParameters):
 
 def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=False)
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=False),
+        )
     if isinstance(parameters, _FDInterfaceParameters):
-        return can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=True)
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name, fd=True),
+        )
     assert False, "Internal error"
 
 
 def _construct_kvaser(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name,
-            channel=parameters.channel_name,
-            bitrate=parameters.bitrate,
-            fd=False,
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                channel=parameters.channel_name,
+                bitrate=parameters.bitrate,
+                fd=False,
+            ),
         )
     if isinstance(parameters, _FDInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name,
-            channel=parameters.channel_name,
-            bitrate=parameters.bitrate[0],
-            fd=True,
-            data_bitrate=parameters.bitrate[1],
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                channel=parameters.channel_name,
+                bitrate=parameters.bitrate[0],
+                fd=True,
+                data_bitrate=parameters.bitrate[1],
+            ),
         )
     assert False, "Internal error"
 
 
 def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name,
-            channel=parameters.channel_name,
-            bitrate=parameters.bitrate,
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                channel=parameters.channel_name,
+                bitrate=parameters.bitrate,
+            ),
         )
     if isinstance(parameters, _FDInterfaceParameters):
         raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
@@ -396,10 +419,13 @@ def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name,
-            channel=parameters.channel_name,
-            bitrate=parameters.bitrate,
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                channel=parameters.channel_name,
+                bitrate=parameters.bitrate,
+            ),
         )
     if isinstance(parameters, _FDInterfaceParameters):
         # These magic numbers come from the settings of PCAN adapter.
@@ -414,19 +440,22 @@ def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         data_br = int(f_clock / parameters.bitrate[1] / (data_tseg1 + data_tseg2 + data_sjw))
         # TODO: validate the result and see if it is within an acceptable range
 
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name,
-            channel=parameters.channel_name,
-            f_clock=f_clock,
-            nom_brp=nom_br,
-            data_brp=data_br,
-            nom_tseg1=nom_tseg1,
-            nom_tseg2=nom_tseg2,
-            nom_sjw=nom_sjw,
-            data_tseg1=data_tseg1,
-            data_tseg2=data_tseg2,
-            data_sjw=data_sjw,
-            fd=True,
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                channel=parameters.channel_name,
+                f_clock=f_clock,
+                nom_brp=nom_br,
+                data_brp=data_br,
+                nom_tseg1=nom_tseg1,
+                nom_tseg2=nom_tseg2,
+                nom_sjw=nom_sjw,
+                data_tseg1=data_tseg1,
+                data_tseg2=data_tseg2,
+                data_sjw=data_sjw,
+                fd=True,
+            ),
         )
 
     assert False, "Internal error"
@@ -434,18 +463,24 @@ def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(interface=parameters.interface_name, bitrate=parameters.bitrate)
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(interface=parameters.interface_name, bitrate=parameters.bitrate),
+        )
     if isinstance(parameters, _FDInterfaceParameters):
-        return can.ThreadSafeBus(interface=parameters.interface_name)
+        return (PythonCANBusOptions(), can.ThreadSafeBus(interface=parameters.interface_name))
     assert False, "Internal error"
 
 
 def _construct_usb2can(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name,
-            channel=parameters.channel_name,
-            bitrate=parameters.bitrate,
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                channel=parameters.channel_name,
+                bitrate=parameters.bitrate,
+            ),
         )
     if isinstance(parameters, _FDInterfaceParameters):
         raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
@@ -454,8 +489,11 @@ def _construct_usb2can(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 def _construct_canalystii(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name, channel=parameters.channel_name, bitrate=parameters.bitrate
+            ),
         )
     if isinstance(parameters, _FDInterfaceParameters):
         raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
@@ -464,10 +502,13 @@ def _construct_canalystii(parameters: _InterfaceParameters) -> can.ThreadSafeBus
 
 def _construct_seeedstudio(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _ClassicInterfaceParameters):
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name,
-            channel=parameters.channel_name,
-            bitrate=parameters.bitrate,
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                channel=parameters.channel_name,
+                bitrate=parameters.bitrate,
+            ),
         )
     if isinstance(parameters, _FDInterfaceParameters):
         raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
@@ -481,8 +522,15 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         except ValueError:
             raise InvalidMediaConfigurationError("Channel name must be an integer interface index")
 
-        return can.ThreadSafeBus(
-            interface=parameters.interface_name, channel=parameters.channel_name, index=index, bitrate=parameters.bitrate
+        return (
+            PythonCANBusOptions(hardware_loopback=True),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                channel=parameters.channel_name,
+                index=index,
+                bitrate=parameters.bitrate,
+            ),
+        )
     if isinstance(parameters, _FDInterfaceParameters):
         raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
     assert False, "Internal error"
@@ -493,7 +541,7 @@ def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 
 _CONSTRUCTORS: typing.DefaultDict[
-    str, typing.Callable[[_InterfaceParameters], can.ThreadSafeBus]
+    str, typing.Callable[[_InterfaceParameters], (PythonCANBusOptions, can.ThreadSafeBus)]
 ] = collections.defaultdict(
     lambda: _construct_any,
     {
