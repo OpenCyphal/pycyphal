@@ -22,14 +22,20 @@ from pycyphal.transport.can.media import Media, FilterConfiguration, Envelope, F
 _logger = logging.getLogger(__name__)
 
 
+@dataclasses.dataclass(frozen=True)
 class PythonCANBusOptions:
-    def __init__(self, hardware_loopback: bool = False):
-        """
-        :param hardware_loopback: Hardware loopback support.
-            If True, loopback is handled by the supported hardware.
-            If False, loopback is emulated with software.
-        """
-        self.hardware_loopback = hardware_loopback
+    hardware_loopback: bool = False
+    """
+    Hardware loopback support.
+        If True, loopback is handled by the supported hardware.
+        If False, loopback is emulated with software.
+    """
+    hardware_timestamp: bool = False
+    """
+    Hardware timestamp support.
+        If True, timestamp returned by the hardware is used.
+        If False, approximate timestamp is captured by software.
+    """
 
 
 class PythonCANMedia(Media):
@@ -42,9 +48,10 @@ class PythonCANMedia(Media):
 
     This media interface supports both Classic CAN and CAN FD. The selection logic is documented below.
 
-    This implementation emulates loopback instead of requesting it from the underlying driver due to the limitations
-    of Python-CAN. Same goes for timestamping.
-    If accurate timestamping is desired, consider using the SocketCAN media driver instead.
+    Python-CAN supports hardware loopback and timestamping only for some of the interfaces. This has to be manually
+    specified in PythonCANBusOptions for supported hardware. Both are disabled by default, but can be enabled if it
+    is verified that hardware in question supports either or both options.
+    For best compatibility, consider using the non-python-can SocketCAN media driver instead.
 
     Here is a basic usage example based on the Yakut CLI tool.
     Suppose that there are two interconnected CAN bus adapters connected to the host computer:
@@ -330,8 +337,17 @@ class PythonCANMedia(Media):
             msg = self._bus.recv(0.0 if batch else self._MAXIMAL_TIMEOUT_SEC)
             if msg is None:
                 break
-            timestamp = Timestamp.now()  # TODO: use accurate timestamping
-            loopback = not msg.is_rx
+
+            if self._bus_options.hardware_timestamp:
+                timestamp = Timestamp(system_ns=time.time_ns(), monotonic_ns=Timestamp._second_to_ns(msg.timestamp))
+            else:
+                timestamp = Timestamp.now()
+
+            if self._bus_options.hardware_loopback:
+                loopback = not msg.is_rx
+            else:
+                loopback = False
+
             frame = self._parse_native_frame(msg)
             if frame is not None:
                 batch.append((timestamp, Envelope(frame, loopback)))
@@ -523,7 +539,7 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
             raise InvalidMediaConfigurationError("Channel name must be an integer interface index")
 
         return (
-            PythonCANBusOptions(hardware_loopback=True),
+            PythonCANBusOptions(hardware_loopback=True, hardware_timestamp=True),
             can.ThreadSafeBus(
                 interface=parameters.interface_name,
                 channel=parameters.channel_name,
