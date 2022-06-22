@@ -117,6 +117,7 @@ class PythonCANMedia(Media):
             - Interface ``gs_usb`` is implemented by :class:`can.interfaces.gs_usb.GsUsbBus`.
               Channel name is an integer, refering to the device index in a system.
               Example: ``gs_usb:0``
+              Note: this interface currently requires unreleased `python-can` version from git.
 
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
@@ -533,15 +534,21 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         except ValueError:
             raise InvalidMediaConfigurationError("Channel name must be an integer interface index")
 
-        return (
-            PythonCANBusOptions(hardware_loopback=True, hardware_timestamp=True),
-            can.ThreadSafeBus(
-                interface=parameters.interface_name,
-                channel=parameters.channel_name,
-                index=index,
-                bitrate=parameters.bitrate,
-            ),
-        )
+        try:
+            bus = (
+                can.ThreadSafeBus(
+                    interface=parameters.interface_name,
+                    channel=parameters.channel_name,
+                    index=index,
+                    bitrate=parameters.bitrate,
+                ),
+            )
+        except TypeError as e:
+            raise InvalidMediaConfigurationError(
+                f"Interface error: {e}.\nNote: gs_usb currently requires unreleased python-can version from git."
+            )
+
+        return (PythonCANBusOptions(hardware_loopback=True, hardware_timestamp=True), bus)
     if isinstance(parameters, _FDInterfaceParameters):
         raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
     assert False, "Internal error"
