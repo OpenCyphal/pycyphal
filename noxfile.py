@@ -165,7 +165,7 @@ def demo(session):
         return 0
 
     session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
-    session.install("yakut ~= 0.7")
+    session.install("yakut ~= 0.11")
 
     demo_dir = ROOT_DIR / "demo"
     tmp_dir = Path(session.create_tmp()).resolve()
