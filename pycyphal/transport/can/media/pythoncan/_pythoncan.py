@@ -338,15 +338,10 @@ class PythonCANMedia(Media):
             if msg is None:
                 break
 
-            if self._bus_options.hardware_timestamp:
-                timestamp = Timestamp(system_ns=time.time_ns(), monotonic_ns=Timestamp._second_to_ns(msg.timestamp))
-            else:
-                timestamp = Timestamp.now()
+            mono_ns = msg.timestamp * 1e9 if self._bus_options.hardware_timestamp else time.monotonic_ns()
+            timestamp = Timestamp(system_ns=time.time_ns(), monotonic_ns=mono_ns)
 
-            if self._bus_options.hardware_loopback:
-                loopback = not msg.is_rx
-            else:
-                loopback = False
+            loopback = self._bus_options.hardware_loopback and (not msg.is_rx)
 
             frame = self._parse_native_frame(msg)
             if frame is not None:
