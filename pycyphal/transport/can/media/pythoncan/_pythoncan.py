@@ -535,13 +535,11 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
             raise InvalidMediaConfigurationError("Channel name must be an integer interface index")
 
         try:
-            bus = (
-                can.ThreadSafeBus(
-                    interface=parameters.interface_name,
-                    channel=parameters.channel_name,
-                    index=index,
-                    bitrate=parameters.bitrate,
-                ),
+            bus = can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                channel=parameters.channel_name,
+                index=index,
+                bitrate=parameters.bitrate,
             )
         except TypeError as e:
             raise InvalidMediaConfigurationError(
