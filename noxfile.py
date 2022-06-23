@@ -160,12 +160,12 @@ def demo(session):
     Test the demo app orchestration example.
     This is a separate session because it is dependent on Yakut.
     """
-    if sys.platform.startswith("win"):
-        session.log("This session cannot be run on Windows")
+    if sys.platform.startswith("win") or "3.7" in session.run("python", "-V", silent=True):  # Drop 3.7 check when EOLed
+        session.log("This session cannot be run on in this environment")
         return 0
 
     session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
-    session.install("yakut ~= 0.7")
+    session.install("yakut ~= 0.11")
 
     demo_dir = ROOT_DIR / "demo"
     tmp_dir = Path(session.create_tmp()).resolve()
