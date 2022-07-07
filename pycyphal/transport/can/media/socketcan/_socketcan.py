@@ -14,6 +14,7 @@ import logging
 import warnings
 import threading
 import contextlib
+import pathlib
 import pycyphal.transport
 from pycyphal.transport import Timestamp
 from pycyphal.transport.can.media import Media, Envelope, FilterConfiguration, FrameFormat
@@ -79,7 +80,7 @@ class SocketCANMedia(Media):
         )
         self._native_frame_size = _FRAME_HEADER_STRUCT.size + self._native_frame_data_capacity
 
-        self._sock = _make_socket(iface_name, can_fd=self._is_fd)
+        self._sock = _make_socket(iface_name, can_fd=self._is_fd, native_frame_size=self._native_frame_size)
         self._ctl_main, self._ctl_worker = socket.socketpair()  # This is used for controlling the worker thread.
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
@@ -309,6 +310,7 @@ _TIMEVAL_STRUCT = struct.Struct("@Ll")  # Using native size because the native d
 
 # From the Linux kernel; not exposed via the Python's socket module
 _SO_TIMESTAMP = 29
+_SO_SNDBUF = 7
 
 _CANFD_BRS = 1
 
@@ -318,12 +320,35 @@ _CAN_ERR_FLAG = 0x20000000
 
 _CAN_EFF_MASK = 0x1FFFFFFF
 
+# approximate sk_buffer kernel struct overhead.
+# A lower estimate over higher estimate is preferred since _SO_SNDBUF will enforce
+# a minimum value, and blocking behavior will not work if this is too high.
+_SKB_OVERHEAD = 444
 
-def _make_socket(iface_name: str, can_fd: bool) -> socket.socket:
+
+def _get_tx_queue_len(iface_name: str) -> int:
+    try:
+        sysfs_net = pathlib.Path("/sys/class/net/")
+        sysfs_tx_queue_len = sysfs_net / iface_name / "tx_queue_len"
+        return int(sysfs_tx_queue_len.read_text())
+    except FileNotFoundError as e:
+        raise FileNotFoundError("tx_queue_len sysfs location not found") from e
+
+
+def _make_socket(iface_name: str, can_fd: bool, native_frame_size: int) -> socket.socket:
     s = socket.socket(socket.PF_CAN, socket.SOCK_RAW, socket.CAN_RAW)  # type: ignore
     try:
         s.bind((iface_name,))
         s.setsockopt(socket.SOL_SOCKET, _SO_TIMESTAMP, 1)  # timestamping
+        default_sndbuf_size = s.getsockopt(socket.SOL_SOCKET, _SO_SNDBUF)
+        blocking_sndbuf_size = (native_frame_size + _SKB_OVERHEAD) * _get_tx_queue_len(iface_name)
+
+        # Allow CAN sockets to block when full similar to how Ethernet sockets do.
+        # Avoids ENOBUFS errors on TX when queues are full in most cases.
+        # More info:
+        #   - https://github.com/OpenCyphal/pycyphal/issues/233
+        #   - "SocketCAN and queueing disciplines: Final Report", Sojka et al, 2012
+        s.setsockopt(socket.SOL_SOCKET, _SO_SNDBUF, min(blocking_sndbuf_size, default_sndbuf_size) // 2)
         if can_fd:
             s.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)  # type: ignore
 
