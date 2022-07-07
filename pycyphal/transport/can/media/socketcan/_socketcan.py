@@ -325,6 +325,7 @@ _CAN_EFF_MASK = 0x1FFFFFFF
 # a minimum value, and blocking behavior will not work if this is too high.
 _SKB_OVERHEAD = 444
 
+
 def _get_tx_queue_len(iface_name: str) -> int:
     try:
         sysfs_net = pathlib.Path("/sys/class/net/")
