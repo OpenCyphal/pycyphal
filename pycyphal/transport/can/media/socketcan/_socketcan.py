@@ -344,6 +344,9 @@ def _make_socket(iface_name: str, can_fd: bool, native_frame_size: int) -> socke
 
         # Allow CAN sockets to block when full similar to how Ethernet sockets do.
         # Avoids ENOBUFS errors on TX when queues are full in most cases.
+        # More info:
+        #   - https://github.com/OpenCyphal/pycyphal/issues/233
+        #   - "SocketCAN and queueing disciplines: Final Report", Sojka et al, 2012
         s.setsockopt(socket.SOL_SOCKET, _SO_SNDBUF, min(blocking_sndbuf_size, default_sndbuf_size) // 2)
         if can_fd:
             s.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)  # type: ignore
