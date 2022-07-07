@@ -320,6 +320,10 @@ _CAN_ERR_FLAG = 0x20000000
 
 _CAN_EFF_MASK = 0x1FFFFFFF
 
+# approximate sk_buffer kernel struct overhead.
+# A lower estimate over higher estimate is preferred since _SO_SNDBUF will enforce
+# a minimum value, and blocking behavior will not work if this is too high.
+_SKB_OVERHEAD = 444
 
 def _get_tx_queue_len(iface_name: str) -> int:
     try:
@@ -336,13 +340,7 @@ def _make_socket(iface_name: str, can_fd: bool, native_frame_size: int) -> socke
         s.bind((iface_name,))
         s.setsockopt(socket.SOL_SOCKET, _SO_TIMESTAMP, 1)  # timestamping
         default_sndbuf_size = s.getsockopt(socket.SOL_SOCKET, _SO_SNDBUF)
-
-        # approximate sk_buffer kernel struct overhead.
-        # A lower estimate over higher estimate is preferred since _SO_SNDBUF will enforce
-        # a minimum value, and blocking behavior will not work if this is too high.
-        SKB_OVERHEAD = 444
-
-        blocking_sndbuf_size = (native_frame_size + SKB_OVERHEAD) * _get_tx_queue_len(iface_name)
+        blocking_sndbuf_size = (native_frame_size + _SKB_OVERHEAD) * _get_tx_queue_len(iface_name)
 
         # Allow CAN sockets to block when full similar to how Ethernet sockets do.
         # Avoids ENOBUFS errors on TX when queues are full in most cases.
