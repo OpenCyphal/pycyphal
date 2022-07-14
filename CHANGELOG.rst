@@ -6,11 +6,14 @@ Changelog
 v1.9
 ----
 
-- Cyphal/CAN: Add support for GS USB adapter support via PythonCAN
+- Cyphal/CAN: Support GS USB adapter via PythonCAN
   (`#212 <https://github.com/OpenCyphal/pycyphal/pull/212>`_).
 
 - Cyphal/CAN: Adjust SocketCAN socket behavior to avoid ENOBUFS
   (`#234 <https://github.com/OpenCyphal/pycyphal/pull/234>`_).
+
+- Cyphal/CAN: Add :mod:``pycyphal.transport.can.media.candump`` media that reads standard CAN bus log files created
+  by the candump utility (part of SocketCAN).
 
 v1.8
 ----
