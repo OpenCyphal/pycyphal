@@ -63,7 +63,11 @@ class CandumpMedia(Media):
     GLOB_PATTERN = "candump*.log"
 
     def __init__(self, file: str | Path | TextIO) -> None:
-        self._f: TextIO = open(file, "r") if isinstance(file, (str, Path)) else file
+        self._f: TextIO = (
+            open(file, "r", encoding="utf8")  # pylint: disable=consider-using-with
+            if isinstance(file, (str, Path))
+            else file
+        )
         self._thread: threading.Thread | None = None
         self._iface_name: str | None = None
         self._acceptance_filters_queue: queue.Queue[Sequence[FilterConfiguration]] = queue.Queue()
@@ -95,6 +99,7 @@ class CandumpMedia(Media):
     async def send(self, frames: Iterable[Envelope], monotonic_deadline: float) -> int:
         _logger.debug(
             "%r: Sending not supported, TX frames with monotonic_deadline=%r dropped: %r",
+            self,
             monotonic_deadline,
             list(frames),
         )
@@ -154,7 +159,7 @@ class CandumpMedia(Media):
                     )
                     continue
                 loop.call_soon_threadsafe(forward, rec)
-        except BaseException as ex:
+        except BaseException as ex:  # pylint: disable=broad-except
             if not self._is_closed:
                 _logger.exception("%r: Log file reader failed: %s", self, ex)
         _logger.debug("%r: Reader thread exiting, bye bye", self)
@@ -165,8 +170,8 @@ class CandumpMedia(Media):
         """
         Returns the list of candump log files in the current working directory.
         """
-        dir = Path.cwd()
-        glo = dir.rglob if recurse else dir.glob
+        directory = Path.cwd()
+        glo = directory.rglob if recurse else directory.glob
         return [str(x) for x in glo(CandumpMedia.GLOB_PATTERN)]
 
 
