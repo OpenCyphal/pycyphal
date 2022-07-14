@@ -23,7 +23,7 @@ _logger = logging.getLogger(__name__)
 
 class CandumpMedia(Media):
     """
-    This is a pseudo-media layer that reads standard SocketCAN candump log files.
+    This is a pseudo-media layer that replays standard SocketCAN candump log files.
     It can be used to perform postmortem analysis of a Cyphal/CAN network based on the standard log files
     collected by ``candump``.
 
@@ -58,9 +58,21 @@ class CandumpMedia(Media):
 
     Each line contains a CAN frame which is reported as received with the specified wall (system) timestamp.
     This media layer, naturally, cannot accept outgoing frames, so they are dropped (and logged).
+
+    Usage example with `Yakut <https://github.com/OpenCyphal/yakut>`_::
+
+        export UAVCAN__CAN__IFACE='candump:verification/integration/candump.log'
+        y sub uavcan.node.heartbeat 10:reg.udral.service.common.readiness 130:reg.udral.service.actuator.common.status
+        y mon
+
+    ..  warning::
+
+        The API of this class is experimental and subject to breaking changes.
     """
 
     GLOB_PATTERN = "candump*.log"
+
+    _BATCH_SIZE_LIMIT = 100
 
     def __init__(self, file: str | Path | TextIO) -> None:
         self._f: TextIO = (
@@ -117,16 +129,20 @@ class CandumpMedia(Media):
         return self._thread is None
 
     def _thread_function(self, handler: Media.ReceivedFramesHandler, loop: asyncio.AbstractEventLoop) -> None:
-        def forward(rec: DataFrameRecord) -> None:
-            frm = (
-                rec.ts,
-                Envelope(
-                    frame=DataFrame(format=rec.fmt, identifier=rec.can_id, data=bytearray(rec.can_payload)),
-                    loopback=False,
-                ),
-            )
+        def forward(batch: list[DataFrameRecord]) -> None:
             if not self._is_closed:  # Don't call after closure to prevent race conditions and use-after-close.
-                pycyphal.util.broadcast([handler])([frm])
+                pycyphal.util.broadcast([handler])(
+                    [
+                        (
+                            rec.ts,
+                            Envelope(
+                                frame=DataFrame(format=rec.fmt, identifier=rec.can_id, data=bytearray(rec.can_payload)),
+                                loopback=False,
+                            ),
+                        )
+                        for rec in batch
+                    ]
+                )
 
         try:
             _logger.debug("%r: Waiting for the acceptance filters to be configured before proceeding...", self)
@@ -138,6 +154,8 @@ class CandumpMedia(Media):
                 else:
                     break
             _logger.debug("%r: Acceptance filters configured, starting to read frames", self)
+            batch: list[DataFrameRecord] = []
+            time_offset: float | None = None
             for idx, line in enumerate(self._f):
                 rec = Record.parse(line)
                 if not rec:
@@ -158,7 +176,19 @@ class CandumpMedia(Media):
                         self._iface_name,
                     )
                     continue
-                loop.call_soon_threadsafe(forward, rec)
+                now_mono = time.monotonic()
+                ts = float(rec.ts.system)
+                if time_offset is None:
+                    time_offset = ts - now_mono
+                target_mono = ts - time_offset
+                sleep_duration = target_mono - now_mono
+                if sleep_duration > 0 or len(batch) > self._BATCH_SIZE_LIMIT:
+                    loop.call_soon_threadsafe(forward, batch)
+                    batch = []
+                    if sleep_duration > 0:
+                        time.sleep(sleep_duration)
+                batch.append(rec)
+            loop.call_soon_threadsafe(forward, batch)
         except BaseException as ex:  # pylint: disable=broad-except
             if not self._is_closed:
                 _logger.exception("%r: Log file reader failed: %s", self, ex)
