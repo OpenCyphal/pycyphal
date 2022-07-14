@@ -75,6 +75,9 @@ class CandumpMedia(Media):
     _BATCH_SIZE_LIMIT = 100
 
     def __init__(self, file: str | Path | TextIO) -> None:
+        """
+        :param file: Path to the candump log file, or a text-IO instance.
+        """
         self._f: TextIO = (
             open(file, "r", encoding="utf8")  # pylint: disable=consider-using-with
             if isinstance(file, (str, Path))
@@ -86,6 +89,9 @@ class CandumpMedia(Media):
 
     @property
     def interface_name(self) -> str:
+        """
+        The name of the log file.
+        """
         return self._f.name
 
     @property
@@ -109,6 +115,9 @@ class CandumpMedia(Media):
         self._acceptance_filters_queue.put_nowait(configuration)
 
     async def send(self, frames: Iterable[Envelope], monotonic_deadline: float) -> int:
+        """
+        Sent frames are dropped.
+        """
         _logger.debug(
             "%r: Sending not supported, TX frames with monotonic_deadline=%r dropped: %r",
             self,
