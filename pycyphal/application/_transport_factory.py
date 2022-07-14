@@ -90,8 +90,13 @@ def make_transport(
         * - ``uavcan.can.iface``
           - ``string``
           - Whitespace-separated list of CAN iface names.
-            Each iface name shall follow the format defined in :class:`pycyphal.transport.can.media.pythoncan`.
+            Each iface name shall follow the format defined in :mod:`pycyphal.transport.can.media.pythoncan`.
             E.g.: ``socketcan:vcan0``.
+            On GNU/Linux, the ``socketcan:`` prefix selects :mod:`pycyphal.transport.can.media.socketcan`
+            instead of PythonCAN.
+            All platforms support the ``candump:`` prefix, which selects :mod:`pycyphal.transport.can.media.candump`;
+            the text after colon is the path of the log file;
+            e.g., ``candump:/home/pavel/candump-2022-07-14_150815.log``.
 
         * - ``uavcan.can.mtu``
           - ``natural16[1]``
@@ -287,7 +292,11 @@ def _make_can(
             if iface.lower().startswith("socketcan:"):
                 from pycyphal.transport.can.media.socketcan import SocketCANMedia
 
-                media = SocketCANMedia(iface.split(":")[-1], mtu=mtu)
+                media = SocketCANMedia(iface.split(":", 1)[-1], mtu=mtu)
+            elif iface.lower().startswith("candump:"):
+                from pycyphal.transport.can.media.candump import CandumpMedia
+
+                media = CandumpMedia(iface.split(":", 1)[-1])
             else:
                 from pycyphal.transport.can.media.pythoncan import PythonCANMedia
 
