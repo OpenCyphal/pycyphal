@@ -174,7 +174,7 @@ class LinkLayerSniffer:
             _logger.debug("%r: Worker thread for %r is started: %s", self, name, threading.current_thread())
 
             # noinspection PyTypeChecker
-            @pcap.pcap_handler  # type: ignore
+            @pcap.pcap_handler
             def proxy(_: object, header: ctypes.Structure, packet: Any) -> None:
                 # Parse the header, extract the timestamp and the packet length.
                 header = header.contents

@@ -8,6 +8,7 @@ import time
 from typing import Sequence, Iterable, TextIO
 import asyncio
 import logging
+import queue
 from pathlib import Path
 from decimal import Decimal
 import threading
@@ -65,6 +66,7 @@ class CandumpMedia(Media):
         self._f: TextIO = open(file, "r") if isinstance(file, (str, Path)) else file
         self._thread: threading.Thread | None = None
         self._iface_name: str | None = None
+        self._acceptance_filters_queue: queue.Queue[Sequence[FilterConfiguration]] = queue.Queue()
 
     @property
     def interface_name(self) -> str:
@@ -88,11 +90,7 @@ class CandumpMedia(Media):
         self._thread.start()
 
     def configure_acceptance_filters(self, configuration: Sequence[FilterConfiguration]) -> None:
-        _logger.debug(
-            "%r: Acceptance filters not supported by this media layer implementation. Requested configuration: %r",
-            self,
-            configuration,
-        )
+        self._acceptance_filters_queue.put_nowait(configuration)
 
     async def send(self, frames: Iterable[Envelope], monotonic_deadline: float) -> int:
         _logger.debug(
@@ -106,6 +104,7 @@ class CandumpMedia(Media):
         if self._thread is not None:
             self._f.close()
             self._thread, thd = None, self._thread
+            assert thd is not None
             thd.join(timeout=1)
 
     @property
@@ -122,9 +121,18 @@ class CandumpMedia(Media):
                 ),
             )
             if not self._is_closed:  # Don't call after closure to prevent race conditions and use-after-close.
-                pycyphal.util.broadcast(handler)([frm])
+                pycyphal.util.broadcast([handler])([frm])
 
         try:
+            _logger.debug("%r: Waiting for the acceptance filters to be configured before proceeding...", self)
+            while True:
+                try:
+                    self._acceptance_filters_queue.get(timeout=1.0)
+                except queue.Empty:
+                    pass
+                else:
+                    break
+            _logger.debug("%r: Acceptance filters configured, starting to read frames", self)
             for idx, line in enumerate(self._f):
                 rec = Record.parse(line)
                 if not rec:
@@ -149,9 +157,8 @@ class CandumpMedia(Media):
         except BaseException as ex:
             if not self._is_closed:
                 _logger.exception("%r: Log file reader failed: %s", self, ex)
-                self._f.close()
-        self._thread = None
-        _logger.debug("%r: Exiting, bye bye", self)
+        _logger.debug("%r: Reader thread exiting, bye bye", self)
+        self._f.close()
 
     @staticmethod
     def list_available_interface_names(*, recurse: bool = False) -> Iterable[str]:
