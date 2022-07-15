@@ -532,7 +532,7 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         try:
             index = int(parameters.channel_name)
         except ValueError:
-            raise InvalidMediaConfigurationError("Channel name must be an integer interface index")
+            raise InvalidMediaConfigurationError("Channel name must be an integer interface index") from None
 
         try:
             bus = can.ThreadSafeBus(
@@ -544,7 +544,7 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         except TypeError as e:
             raise InvalidMediaConfigurationError(
                 f"Interface error: {e}.\nNote: gs_usb currently requires unreleased python-can version from git."
-            )
+            ) from e
 
         return (PythonCANBusOptions(hardware_loopback=True, hardware_timestamp=True), bus)
     if isinstance(parameters, _FDInterfaceParameters):

@@ -86,7 +86,7 @@ class SocketCANMedia(Media):
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._loopback_enabled = False
 
-        self._ancillary_data_buffer_size = socket.CMSG_SPACE(_TIMEVAL_STRUCT.size)  # Used for recvmsg()
+        self._ancillary_data_buffer_size = socket.CMSG_SPACE(_TIMEVAL_STRUCT.size)  # type: ignore
 
         super().__init__()
 

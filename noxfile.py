@@ -124,8 +124,8 @@ def test(session):
     #   2. At least MyPy has to be run separately per Python version we support.
     # If the interpreter is not CPython, this may need to be conditionally disabled.
     session.install(
-        "mypy   == 0.942",
-        "pylint == 2.13.*",
+        "mypy   == 0.961",
+        "pylint == 2.14.*",
     )
     relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
     if not relaxed_static_analysis:
