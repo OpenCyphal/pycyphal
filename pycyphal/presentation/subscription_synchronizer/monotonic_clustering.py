@@ -2,6 +2,8 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
+# mypy: warn_unused_ignores=False
+
 from __future__ import annotations
 import bisect
 import asyncio
@@ -273,7 +275,7 @@ class _Matcher(typing.Generic[T]):
     def update(self, key: float, tolerance: float, index: int, item: T) -> tuple[T, ...] | None:
         clust: _Cluster[T] | None = None
         # noinspection PyTypeChecker
-        ni = bisect.bisect_left(self._clusters, key)
+        ni = bisect.bisect_left(self._clusters, key)  # type: ignore
         assert 0 <= ni <= len(self._clusters)
         neigh: list[tuple[float, int]] = []
         if 0 < ni:
