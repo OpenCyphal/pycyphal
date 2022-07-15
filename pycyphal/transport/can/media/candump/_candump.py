@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 import re
+import os
+import signal
 import time
 from typing import Sequence, Iterable, TextIO
 import asyncio
@@ -65,6 +67,17 @@ class CandumpMedia(Media):
         y sub uavcan.node.heartbeat 10:reg.udral.service.common.readiness 130:reg.udral.service.actuator.common.status
         y mon
 
+    .. note::
+
+        Currently, there is no way for this media implementation to notify the upper layers that the end of the
+        log file is reached.
+        It should be addressed eventually as part of `#227 <https://github.com/OpenCyphal/pycyphal/issues/227>`_.
+        Meanwhile, you can force the media layer to terminate its own process when the log file is fully replayed
+        by setting the environment variable ``PYCYPHAL_CANDUMP_YOU_ARE_TERMINATED`` to a non-zero value.
+
+        Ideally, there also should be a way to report how far along are we in the log file,
+        but it is not clear how to reconcile that with the normal media implementations.
+
     ..  warning::
 
         The API of this class is experimental and subject to breaking changes.
@@ -73,6 +86,8 @@ class CandumpMedia(Media):
     GLOB_PATTERN = "candump*.log"
 
     _BATCH_SIZE_LIMIT = 100
+
+    _ENV_EXIT_AT_END = "PYCYPHAL_CANDUMP_YOU_ARE_TERMINATED"
 
     def __init__(self, file: str | Path | TextIO) -> None:
         """
@@ -203,6 +218,16 @@ class CandumpMedia(Media):
                 _logger.exception("%r: Log file reader failed: %s", self, ex)
         _logger.debug("%r: Reader thread exiting, bye bye", self)
         self._f.close()
+        # FIXME: this should be addressed properly as part of https://github.com/OpenCyphal/pycyphal/issues/227
+        # Perhaps we should send some notification to the upper layers that the media is toast.
+        if os.getenv(self._ENV_EXIT_AT_END, "0") != "0":
+            _logger.warning(
+                "%r: Terminating the process because reached the end of the log file and the envvar %s is set. "
+                "This is a workaround for https://github.com/OpenCyphal/pycyphal/issues/227",
+                self,
+                self._ENV_EXIT_AT_END,
+            )
+            os.kill(os.getpid(), signal.SIGINT)
 
     @staticmethod
     def list_available_interface_names(*, recurse: bool = False) -> Iterable[str]:
