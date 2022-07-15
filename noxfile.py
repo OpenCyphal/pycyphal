@@ -125,7 +125,7 @@ def test(session):
     # If the interpreter is not CPython, this may need to be conditionally disabled.
     session.install(
         "mypy   == 0.961",
-        "pylint == 2.13.*",
+        "pylint == 2.14.*",
     )
     relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
     if not relaxed_static_analysis:
