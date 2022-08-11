@@ -39,6 +39,8 @@ from ._composite_object import is_service_type as is_service_type
 from ._builtin_form import to_builtin as to_builtin
 from ._builtin_form import update_from_builtin as update_from_builtin
 
+from ._import_hook import install_import_hook as install_import_hook
+
 
 def generate_package(*args, **kwargs):  # type: ignore  # pragma: no cover
     """Deprecated alias of :func:`compile`."""
