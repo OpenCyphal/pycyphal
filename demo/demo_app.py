@@ -7,7 +7,17 @@ import sys
 import pathlib
 import asyncio
 import logging
-import importlib
+
+logging.basicConfig()
+logging.getLogger("pycyphal.dsdl._import_hook").setLevel(logging.DEBUG)
+
+src_dir = pathlib.Path(__file__).resolve().parent
+os.environ["CYPHAL_PATH"] = os.pathsep.join(
+    map(str, [src_dir.joinpath("custom_data_types"), src_dir.joinpath("public_regulated_data_types")])
+)
+
+os.environ["PYCYPHAL_PATH"] = str(src_dir.joinpath(".demo_dsdl_generated"))
+
 import pycyphal
 
 # Production applications are recommended to compile their DSDL namespaces as part of the build process. The enclosed
@@ -17,18 +27,6 @@ compiled_dsdl_dir = pathlib.Path(__file__).resolve().parent / ".demo_dsdl_compil
 
 # Make the compilation outputs importable. Let your IDE index this directory as sources to enable code completion.
 sys.path.insert(0, str(compiled_dsdl_dir))
-
-logging.basicConfig()
-logging.getLogger("pycyphal.dsdl._import_hook").setLevel(logging.DEBUG)
-
-src_dir = pathlib.Path(__file__).resolve().parent
-pycyphal.dsdl.install_import_hook(
-    lookup_directories=[
-        src_dir / "custom_data_types/",
-        src_dir / "public_regulated_data_types/",
-    ],
-    output_directory=compiled_dsdl_dir,
-)
 
 import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
 import pycyphal.application  # This module requires the root namespace "uavcan" to be transcompiled.
