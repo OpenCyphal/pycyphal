@@ -28,4 +28,3 @@ Submodules
    /api/pycyphal.presentation
    /api/pycyphal.transport
    /api/pycyphal.util
-   /api/pycyphal.version
