@@ -235,7 +235,7 @@ Changes that only affect the internal structure of the library (like test riggin
 should not be mentioned in the changelog.
 
 CI/CD automation uploads a new release to PyPI and pushes a new tag upstream on every push to ``master``.
-It is therefore necessary to ensure that the library version (see ``pycyphal/VERSION``) is bumped whenever
+It is therefore necessary to ensure that the library version (see ``pycyphal/_version.py``) is bumped whenever
 a new commit is merged into ``master``;
 otherwise, the automation will fail with an explicit tag conflict error instead of deploying the release.
 
