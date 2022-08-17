@@ -35,6 +35,7 @@ import os as _os
 
 
 from .version import __version__ as __version__
+
 __version_info__ = tuple(map(int, __version__.split(".")[:3]))
 __author__ = "OpenCyphal"
 __copyright__ = "Copyright (c) 2019 OpenCyphal"
