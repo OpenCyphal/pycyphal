@@ -32,10 +32,10 @@ the library log level:
 """
 
 import os as _os
-from importlib.resources import read_text as _read_text
 
 
-__version__ = _read_text(__name__, "VERSION", encoding="utf8").strip()
+from version import __version__ as _v
+__version__ = _v
 __version_info__ = tuple(map(int, __version__.split(".")[:3]))
 __author__ = "OpenCyphal"
 __copyright__ = "Copyright (c) 2019 OpenCyphal"
