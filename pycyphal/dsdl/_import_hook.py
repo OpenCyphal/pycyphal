@@ -4,7 +4,7 @@
 import logging
 import sys
 import os
-from typing import Optional, Union
+from typing import Iterable, Optional, Union
 import pathlib
 from . import compile
 
@@ -19,7 +19,7 @@ _logger = logging.getLogger(__name__)
 class DsdlMetaFinder(MetaPathFinder):
     def __init__(
         self,
-        lookup_directories: list[_AnyPath],
+        lookup_directories: Iterable[_AnyPath],
         output_directory: _AnyPath,
         allow_unregulated_fixed_port_id: bool,
     ) -> None:
@@ -31,7 +31,7 @@ class DsdlMetaFinder(MetaPathFinder):
         self.lookup_directories = list(map(str, lookup_directories))
         self.output_directory = output_directory
         self.allow_unregulated_fixed_port_id = allow_unregulated_fixed_port_id
-        self.root_namespace_directories: list[pathlib.Path] = list()
+        self.root_namespace_directories: Iterable[pathlib.Path] = list()
 
         # Build a list of root namespace directories from lookup directories.
         # Any dir inside any of the lookup directories is considered a root namespace.
