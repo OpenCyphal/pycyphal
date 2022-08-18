@@ -7,6 +7,7 @@ import os
 from typing import Iterable, Optional, Union
 import pathlib
 import keyword
+import re
 from . import compile
 
 from importlib.abc import MetaPathFinder
@@ -46,10 +47,10 @@ class DsdlMetaFinder(MetaPathFinder):
         self.root_namespace_directories: Iterable[pathlib.Path] = list()
 
         # Build a list of root namespace directories from lookup directories.
-        # Any dir inside any of the lookup directories is considered a root namespace.
+        # Any dir inside any of the lookup directories is considered a root namespace if it matches regex
         for dir in self.lookup_directories:
             for namespace in pathlib.Path(dir).iterdir():
-                if namespace.is_dir():
+                if namespace.is_dir() and re.match(r"[a-zA-Z_][a-zA-Z0-9_]*", namespace.name):
                     _logger.debug("Using root namespace %s at %s", namespace.name, namespace)
                     self.root_namespace_directories.append(namespace)
 
