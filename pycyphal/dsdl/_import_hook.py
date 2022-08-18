@@ -97,7 +97,7 @@ class DsdlMetaFinder(MetaPathFinder):
 
 
 def get_default_lookup_dirs():
-    return os.environ.get("CYPHAL_PATH", "").split(os.pathsep)
+    return os.environ.get("CYPHAL_PATH", "").replace(os.pathsep, ";").split(";")
 
 
 def get_default_output_dir():

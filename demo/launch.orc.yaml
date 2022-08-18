@@ -2,12 +2,10 @@
 # Read the docs about the orc-file syntax: yakut orchestrate --help
 
 # Shared environment variables for all nodes/processes (can be overridden or selectively removed in local scopes).
-CYPHAL_PATH: "./public_regulated_data_types:./custom_data_types"
+CYPHAL_PATH: "./public_regulated_data_types;./custom_data_types"
 PYCYPHAL_PATH: ".pycyphal_generated"
 YAKUT_COMPILE_OUTPUT: .yakut_compiled
 YAKUT_PATH: .yakut_compiled
-# Here we use Yakut for compiling DSDL. Normally one should use Nunavut though: https://github.com/OpenCyphal/nunavut
-PYTHONPATH: .yakut_compiled
 
 # Shared registers for all nodes/processes (can be overridden or selectively removed in local scopes).
 # See the docs for pycyphal.application.make_node() to see which registers can be used here.
