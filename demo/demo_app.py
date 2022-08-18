@@ -11,13 +11,6 @@ import logging
 logging.basicConfig()
 logging.getLogger("pycyphal.dsdl._import_hook").setLevel(logging.DEBUG)
 
-src_dir = pathlib.Path(__file__).resolve().parent
-os.environ["CYPHAL_PATH"] = os.pathsep.join(
-    map(str, [src_dir.joinpath("custom_data_types"), src_dir.joinpath("public_regulated_data_types")])
-)
-
-os.environ["PYCYPHAL_PATH"] = str(src_dir.joinpath(".demo_dsdl_generated"))
-
 import pycyphal
 
 # Production applications are recommended to compile their DSDL namespaces as part of the build process. The enclosed
