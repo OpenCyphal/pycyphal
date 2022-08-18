@@ -15,7 +15,7 @@ import pycyphal
 
 # Production applications are recommended to compile their DSDL namespaces as part of the build process. The enclosed
 # file "setup.py" provides an example of how to do that. The output path we specify here shall match that of "setup.py".
-# Here we compile DSDL just-in-time to demonstrate an alternative.
+# However, if compiled modules are not found, the pycyphal import hook will compile them from sources defined in CYPHAL_PATH.
 compiled_dsdl_dir = pathlib.Path(__file__).resolve().parent / ".demo_dsdl_compiled"
 
 # Make the compilation outputs importable. Let your IDE index this directory as sources to enable code completion.
