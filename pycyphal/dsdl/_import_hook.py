@@ -106,7 +106,7 @@ def get_default_output_dir():
 
 
 def install_import_hook(
-    lookup_directories: Optional[list[_AnyPath]] = None,
+    lookup_directories: Optional[Iterable[_AnyPath]] = None,
     output_directory: Optional[_AnyPath] = None,
     allow_unregulated_fixed_port_id: Optional[bool] = None,
 ):
