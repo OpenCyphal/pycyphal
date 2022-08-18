@@ -102,8 +102,7 @@ def get_default_lookup_dirs():
 
 
 def get_default_output_dir():
-    pycyphal_dir = os.environ.get("PYCYPHAL_PATH", pathlib.Path.home().joinpath(".pycyphal"))
-    return pathlib.Path(pycyphal_dir, "compiled")
+    return os.environ.get("PYCYPHAL_PATH", pathlib.Path.home().joinpath(".pycyphal"))
 
 
 def install_import_hook(
