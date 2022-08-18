@@ -82,7 +82,7 @@ class DsdlMetaFinder(MetaPathFinder):
         _logger.debug("Found root namespace %s in DSDL source directory %s", root_namespace, root_namespace_dir)
 
         if not self.is_compiled(root_namespace):
-            _logger.debug("Compiling DSDL in %s", root_namespace_dir)
+            _logger.warning("Compiling DSDL namespace %s", root_namespace_dir)
             compile(
                 root_namespace_dir,
                 self.root_namespace_directories,
