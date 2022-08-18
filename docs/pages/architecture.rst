@@ -229,10 +229,12 @@ classes from DSDL type definitions.
 The auto-generated classes have a high-level application-facing API and built-in auto-generated
 serialization and deserialization routines.
 
-By default, DSDL-generated packages are stored in the current working directory.
-This is convenient because the packages contained in the same directory are importable by default.
-If a different directory is used, it has to be added to the import lookup path manually
-either via the ``PYTHONPATH`` environment variable or via :data:`sys.path`.
+By default, pycyphal installs an import hook, which automatically compiles DSDLs on import (if not yet compiled).
+Import hook is triggered when all other import handlers fail (local folder or ``PYTHONPATH``). Import hook then
+checks for a root namespace matching imported module name inside one of the paths in ``CYPHAL_PATH`` environment
+variable. If found, DSDL root namespace is compiled into output directory given by ``PYCYPHAL_PATH`` environment
+variable, or if not provided, into `~/.pycyphal` (or OS equivalent). Default import hook can be disabled by setting
+``PYCYPHAL_NO_IMPORT_HOOK=True`` environment variable.
 
 The main API entries are:
 
