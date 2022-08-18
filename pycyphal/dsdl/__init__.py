@@ -41,9 +41,6 @@ from ._builtin_form import update_from_builtin as update_from_builtin
 
 from ._import_hook import install_import_hook as install_import_hook
 
-# Install default import hook that uses CYPHAL_PATH and PYCYPHAL_PATH
-install_import_hook()
-
 
 def generate_package(*args, **kwargs):  # type: ignore  # pragma: no cover
     """Deprecated alias of :func:`compile`."""

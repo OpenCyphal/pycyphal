@@ -33,45 +33,55 @@ class DsdlMetaFinder(MetaPathFinder):
         self.allow_unregulated_fixed_port_id = allow_unregulated_fixed_port_id
         self.root_namespace_directories: list[pathlib.Path] = list()
 
-        # Any dir inside any of the lookup directories is considered a root namespace
+        # Build a list of root namespace directories from lookup directories.
+        # Any dir inside any of the lookup directories is considered a root namespace.
         for dir in self.lookup_directories:
             for namespace in pathlib.Path(dir).iterdir():
                 if namespace.is_dir():
                     _logger.debug("Using root namespace %s at %s", namespace.name, namespace)
                     self.root_namespace_directories.append(namespace)
 
-    def find_module_dir(self, fullname):
+    def find_source_dir(self, root_namespace: str):
+        """
+        Finds DSDL source directory for a given root namespace name.
+        """
         for namespace_dir in self.root_namespace_directories:
-            if namespace_dir.name == fullname:
+            if namespace_dir.name == root_namespace:
                 return namespace_dir
         return None
 
-    def is_module_compiled(self, fullname):
-        pathlib.Path(self.output_directory, fullname).exists()
+    def is_compiled(self, root_namespace: str):
+        """
+        Returns true if given root namespace exists in output directory (compiled).
+        """
+        pathlib.Path(self.output_directory, root_namespace).exists()
 
     def find_spec(self, fullname, path, target=None):
         _logger.debug("Attempting to load module %s as DSDL", fullname)
 
-        module_dir = self.find_module_dir(fullname)
-        if not module_dir:
+        # DSDL root namespace is equal to module name
+        root_namespace = fullname
+
+        root_namespace_dir = self.find_source_dir(root_namespace)
+        if not root_namespace_dir:
             return None
 
-        _logger.debug("Found module %s in DSDL source directory %s", fullname, module_dir)
+        _logger.debug("Found root namespace %s in DSDL source directory %s", root_namespace, root_namespace_dir)
 
-        if not self.is_module_compiled(fullname):
-            _logger.debug("Compiling DSDL in %s", module_dir)
+        if not self.is_compiled(root_namespace):
+            _logger.debug("Compiling DSDL in %s", root_namespace_dir)
             compile(
-                module_dir,
+                root_namespace_dir,
                 self.root_namespace_directories,
                 self.output_directory,
                 self.allow_unregulated_fixed_port_id,
             )
 
-        compiled_module_dir = os.path.join(self.output_directory, fullname)
-        filename = os.path.join(compiled_module_dir, "__init__.py")
-        submodule_locations = [compiled_module_dir]
+        compiled_module_dir = pathlib.Path(self.output_directory, root_namespace)
+        module_location = compiled_module_dir.joinpath("__init__.py")
+        submodule_locations = [str(compiled_module_dir)]
 
-        return spec_from_file_location(fullname, filename, submodule_search_locations=submodule_locations)
+        return spec_from_file_location(fullname, module_location, submodule_search_locations=submodule_locations)
 
 
 def get_default_lookup_dirs():
@@ -88,13 +98,39 @@ def install_import_hook(
     output_directory: Optional[_AnyPath] = None,
     allow_unregulated_fixed_port_id: Optional[bool] = None,
 ):
+    """
+    Installs python import hook, which automatically compiles any DSDL if package is not found.
+
+    A default import hook is automatically installed when pycyphal is imported. To opt out, set environment variable
+    ``PYCYPHAL_NO_IMPORT_HOOK=True`` before importing pycyphal.
+
+    :param lookup_directories:
+        List of directories where to look for DSDL sources. If not provided, it is sourced from ``CYPHAL_PATH``
+        environment variable.
+
+    :param output_directory:
+        Directory to output compiled DSDL packages. If not provided, ``PYCYPHAL_PATH`` environment variable is used.
+        If that is not available either, a default ``~/.pycyphal`` (or other OS equivalent) directory is used.
+
+    :param allow_unregulated_fixed_port_id:
+        If True, the compiler will not reject unregulated data types with fixed port-ID. If not provided, it will be
+        sourced from ``CYPHAL_ALLOW_UNREGULATED_FIXED_PORT_ID`` variable or default to False.
+    """
     lookup_directories = get_default_lookup_dirs() if lookup_directories is None else lookup_directories
     output_directory = get_default_output_dir() if output_directory is None else output_directory
     allow_unregulated_fixed_port_id = (
-        bool(os.environ.get("CYPHAL_ALLOW_UNREGULATED_FIXED_PORT_ID", "False"))
+        os.environ.get("CYPHAL_ALLOW_UNREGULATED_FIXED_PORT_ID", "False").lower() in ("true", "1", "t")
         if allow_unregulated_fixed_port_id is None
         else allow_unregulated_fixed_port_id
     )
 
     # Install finder at the end of the list so it is the last to attempt to load a missing package
     sys.meta_path.append(DsdlMetaFinder(lookup_directories, output_directory, allow_unregulated_fixed_port_id))
+
+
+# Install default import hook unless explicitly requested not to
+if os.environ.get("PYCYPHAL_NO_IMPORT_HOOK", "False").lower() not in ("true", "1", "t"):
+    _logger.debug("Installing default import hook.")
+    install_import_hook()
+else:
+    _logger.debug("Default import hook installation skipped. %s", os.environ.get("PYCYPHAL_NO_IMPORT_HOOK", "False"))
