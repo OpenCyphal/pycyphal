@@ -41,7 +41,7 @@ class DsdlMetaFinder(MetaPathFinder):
                     _logger.debug("Using root namespace %s at %s", namespace.name, namespace)
                     self.root_namespace_directories.append(namespace)
 
-    def find_source_dir(self, root_namespace: str):
+    def find_source_dir(self, root_namespace: str) -> Optional[pathlib.Path]:
         """
         Finds DSDL source directory for a given root namespace name.
         """
@@ -50,11 +50,11 @@ class DsdlMetaFinder(MetaPathFinder):
                 return namespace_dir
         return None
 
-    def is_compiled(self, root_namespace: str):
+    def is_compiled(self, root_namespace: str) -> bool:
         """
         Returns true if given root namespace exists in output directory (compiled).
         """
-        pathlib.Path(self.output_directory, root_namespace).exists()
+        return pathlib.Path(self.output_directory, root_namespace).exists()
 
     def find_spec(self, fullname, path, target=None):
         _logger.debug("Attempting to load module %s as DSDL", fullname)
