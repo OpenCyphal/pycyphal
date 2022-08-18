@@ -105,7 +105,7 @@ for:
       - git config --global user.name  "Release Automation"
       # Tag and publish this release. Push the tag after the release is out in case it could not be published.
       - |
-        git tag "$(python -c 'from pycyphal._version import __version__; print(__version__)')"
+        PYTHONPATH=pycyphal git tag "$(python -c 'from _version import __version__; print(__version__)')"
       - 'python setup.py sdist bdist_wheel'
       - 'python -m twine upload dist/*'
       - 'git push --tags'
