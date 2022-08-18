@@ -1,6 +1,0 @@
-export UAVCAN__SUB__TEMPERATURE_SETPOINT__ID=2345
-export UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID=2346
-export UAVCAN__PUB__HEATER_VOLTAGE__ID=2347
-export CYPHAL_PATH="./public_regulated_data_types:./custom_data_types"
-export PYCYPHAL_PATH=".pycyphal_generated"
-python demo_app.py
