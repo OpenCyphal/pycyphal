@@ -6,6 +6,7 @@ import sys
 import os
 from typing import Iterable, Optional, Union
 import pathlib
+import keyword
 from . import compile
 
 from importlib.abc import MetaPathFinder
@@ -14,6 +15,17 @@ from importlib.util import spec_from_file_location
 _AnyPath = Union[str, pathlib.Path]
 
 _logger = logging.getLogger(__name__)
+
+
+def root_namespace_from_module_name(module_name: str) -> str:
+    """
+    Tranlates python module name to DSDL root namespace.
+    This handles special case where root namespace is a python keyword by removing trailing underscore.
+    """
+    if module_name.endswith("_") and keyword.iskeyword(module_name[-1]):
+        return module_name[-1]
+    else:
+        return module_name
 
 
 class DsdlMetaFinder(MetaPathFinder):
@@ -59,8 +71,8 @@ class DsdlMetaFinder(MetaPathFinder):
     def find_spec(self, fullname, path, target=None):
         _logger.debug("Attempting to load module %s as DSDL", fullname)
 
-        # DSDL root namespace is equal to module name
-        root_namespace = fullname
+        # Translate module name to DSDL root namespace
+        root_namespace = root_namespace_from_module_name(fullname)
 
         root_namespace_dir = self.find_source_dir(root_namespace)
         if not root_namespace_dir:
