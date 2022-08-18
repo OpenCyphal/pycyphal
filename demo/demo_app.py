@@ -8,9 +8,6 @@ import pathlib
 import asyncio
 import logging
 
-logging.basicConfig()
-logging.getLogger("pycyphal.dsdl._import_hook").setLevel(logging.DEBUG)
-
 import pycyphal
 
 # Production applications are recommended to compile their DSDL namespaces as part of the build process. The enclosed

@@ -133,4 +133,4 @@ if os.environ.get("PYCYPHAL_NO_IMPORT_HOOK", "False").lower() not in ("true", "1
     _logger.debug("Installing default import hook.")
     install_import_hook()
 else:
-    _logger.debug("Default import hook installation skipped. %s", os.environ.get("PYCYPHAL_NO_IMPORT_HOOK", "False"))
+    _logger.debug("Default import hook installation skipped.")
