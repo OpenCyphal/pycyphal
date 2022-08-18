@@ -3,6 +3,10 @@
 # type: ignore
 """
 A simplified setup.py demo that shows how to distribute compiled DSDL definitions with Python packages.
+
+To use precompiled DSDL files in app, the compilation output directory must be included in path:
+    compiled_dsdl_dir = pathlib.Path(__file__).resolve().parent / ".demo_dsdl_compiled"
+    sys.path.insert(0, str(compiled_dsdl_dir))
 """
 
 import setuptools

@@ -7,17 +7,9 @@ import sys
 import pathlib
 import asyncio
 import logging
-
 import pycyphal
 
-# Production applications are recommended to compile their DSDL namespaces as part of the build process. The enclosed
-# file "setup.py" provides an example of how to do that. The output path we specify here shall match that of "setup.py".
-# However, if compiled modules are not found, the pycyphal import hook will compile them from sources defined in CYPHAL_PATH.
-compiled_dsdl_dir = pathlib.Path(__file__).resolve().parent / ".demo_dsdl_compiled"
-
-# Make the compilation outputs importable. Let your IDE index this directory as sources to enable code completion.
-sys.path.insert(0, str(compiled_dsdl_dir))
-
+# DSDL files are automatically compiled by pycyphal import hook from sources pointed by CYPHAL_PATH env variable.
 import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
 import pycyphal.application  # This module requires the root namespace "uavcan" to be transcompiled.
 
