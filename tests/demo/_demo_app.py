@@ -129,8 +129,8 @@ async def _unittest_slow_demo_app(
             "UAVCAN__SRV__LEAST_SQUARES__ID": "123",
             "THERMOSTAT__PID__GAINS": "0.1 0.0 0.0",  # Gain 0.1
             # Various low-level items:
-            "CYPHAL_PATH": "./public_regulated_data_types;./custom_data_types",
-            "PYCYPHAL_PATH": ".pycyphal_generated",
+            "CYPHAL_PATH": f"{DEMO_DIR}/public_regulated_data_types;{DEMO_DIR}/custom_data_types",
+            "PYCYPHAL_PATH": f"{DEMO_DIR}/.pycyphal_generated",
             "PYCYPHAL_LOGLEVEL": "INFO",
             "PATH": os.environ.get("PATH", ""),
             "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),  # https://github.com/appveyor/ci/issues/1995
@@ -349,8 +349,8 @@ async def _unittest_slow_demo_app_with_plant(
             "UAVCAN__SRV__LEAST_SQUARES__ID": "123",
             "THERMOSTAT__PID__GAINS": "0.1 0.0 0.0",  # Gain 0.1
             # Various low-level items:
-            "CYPHAL_PATH": "./public_regulated_data_types;./custom_data_types",
-            "PYCYPHAL_PATH": ".pycyphal_generated",
+            "CYPHAL_PATH": f"{DEMO_DIR}/public_regulated_data_types;{DEMO_DIR}/custom_data_types",
+            "PYCYPHAL_PATH": f"{DEMO_DIR}/.pycyphal_generated",
             "PYCYPHAL_LOGLEVEL": "INFO",
             "PATH": os.environ.get("PATH", ""),
             "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),  # https://github.com/appveyor/ci/issues/1995
