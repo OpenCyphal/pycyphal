@@ -5,14 +5,15 @@ import logging
 import sys
 import os
 from types import ModuleType
-from typing import Iterable, List, Optional, Sequence, Union
+from typing import Iterable, Optional, Sequence, Union
 import pathlib
 import keyword
 import re
-from . import compile
 from importlib.abc import MetaPathFinder
 from importlib.util import spec_from_file_location
 from importlib.machinery import ModuleSpec
+from . import compile  # pylint: disable=redefined-builtin
+
 
 _AnyPath = Union[str, pathlib.Path]
 
@@ -26,8 +27,7 @@ def root_namespace_from_module_name(module_name: str) -> str:
     """
     if module_name.endswith("_") and keyword.iskeyword(module_name[-1]):
         return module_name[-1]
-    else:
-        return module_name
+    return module_name
 
 
 class DsdlMetaFinder(MetaPathFinder):
@@ -45,12 +45,12 @@ class DsdlMetaFinder(MetaPathFinder):
         self.lookup_directories = list(map(str, lookup_directories))
         self.output_directory = output_directory
         self.allow_unregulated_fixed_port_id = allow_unregulated_fixed_port_id
-        self.root_namespace_directories: Sequence[pathlib.Path] = list()
+        self.root_namespace_directories: Sequence[pathlib.Path] = []
 
         # Build a list of root namespace directories from lookup directories.
         # Any dir inside any of the lookup directories is considered a root namespace if it matches regex
-        for dir in self.lookup_directories:
-            for namespace in pathlib.Path(dir).iterdir():
+        for directory in self.lookup_directories:
+            for namespace in pathlib.Path(directory).iterdir():
                 if namespace.is_dir() and re.match(r"[a-zA-Z_][a-zA-Z0-9_]*", namespace.name):
                     _logger.debug("Using root namespace %s at %s", namespace.name, namespace)
                     self.root_namespace_directories.append(namespace)
