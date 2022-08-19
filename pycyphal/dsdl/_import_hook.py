@@ -4,14 +4,15 @@
 import logging
 import sys
 import os
-from typing import Iterable, Optional, Union
+from types import ModuleType
+from typing import Iterable, List, Optional, Sequence, Union
 import pathlib
 import keyword
 import re
 from . import compile
-
 from importlib.abc import MetaPathFinder
 from importlib.util import spec_from_file_location
+from importlib.machinery import ModuleSpec
 
 _AnyPath = Union[str, pathlib.Path]
 
@@ -44,7 +45,7 @@ class DsdlMetaFinder(MetaPathFinder):
         self.lookup_directories = list(map(str, lookup_directories))
         self.output_directory = output_directory
         self.allow_unregulated_fixed_port_id = allow_unregulated_fixed_port_id
-        self.root_namespace_directories: Iterable[pathlib.Path] = list()
+        self.root_namespace_directories: Sequence[pathlib.Path] = list()
 
         # Build a list of root namespace directories from lookup directories.
         # Any dir inside any of the lookup directories is considered a root namespace if it matches regex
@@ -69,7 +70,9 @@ class DsdlMetaFinder(MetaPathFinder):
         """
         return pathlib.Path(self.output_directory, root_namespace).exists()
 
-    def find_spec(self, fullname, path, target=None):
+    def find_spec(
+        self, fullname: str, path: Optional[Sequence[Union[bytes, str]]], target: Optional[ModuleType] = None
+    ) -> Optional[ModuleSpec]:
         _logger.debug("Attempting to load module %s as DSDL", fullname)
 
         # Translate module name to DSDL root namespace
@@ -85,7 +88,7 @@ class DsdlMetaFinder(MetaPathFinder):
             _logger.warning("Compiling DSDL namespace %s", root_namespace_dir)
             compile(
                 root_namespace_dir,
-                self.root_namespace_directories,
+                list(self.root_namespace_directories),
                 self.output_directory,
                 self.allow_unregulated_fixed_port_id,
             )
@@ -97,19 +100,19 @@ class DsdlMetaFinder(MetaPathFinder):
         return spec_from_file_location(fullname, module_location, submodule_search_locations=submodule_locations)
 
 
-def get_default_lookup_dirs():
+def get_default_lookup_dirs() -> Sequence[str]:
     return os.environ.get("CYPHAL_PATH", "").replace(os.pathsep, ";").split(";")
 
 
-def get_default_output_dir():
-    return os.environ.get("PYCYPHAL_PATH", pathlib.Path.home().joinpath(".pycyphal"))
+def get_default_output_dir() -> str:
+    return os.environ.get("PYCYPHAL_PATH", str(pathlib.Path.home().joinpath(".pycyphal")))
 
 
 def install_import_hook(
     lookup_directories: Optional[Iterable[_AnyPath]] = None,
     output_directory: Optional[_AnyPath] = None,
     allow_unregulated_fixed_port_id: Optional[bool] = None,
-):
+) -> None:
     """
     Installs python import hook, which automatically compiles any DSDL if package is not found.
 
