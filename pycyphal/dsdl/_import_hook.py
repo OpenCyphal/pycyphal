@@ -105,9 +105,9 @@ def get_default_lookup_dirs() -> Sequence[str]:
 
 
 def get_default_output_dir() -> str:
-    pycyphal_home = os.environ.get("PYCYPHAL_PATH")
-    if pycyphal_home:
-        return pycyphal_home
+    pycyphal_path = os.environ.get("PYCYPHAL_PATH")
+    if pycyphal_path:
+        return pycyphal_path
     try:
         return str(pathlib.Path.home().joinpath(".pycyphal"))
     except RuntimeError as e:
