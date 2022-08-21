@@ -105,7 +105,13 @@ def get_default_lookup_dirs() -> Sequence[str]:
 
 
 def get_default_output_dir() -> str:
-    return os.environ.get("PYCYPHAL_PATH", str(pathlib.Path.home().joinpath(".pycyphal")))
+    pycyphal_home = os.environ.get("PYCYPHAL_PATH")
+    if pycyphal_home:
+        return pycyphal_home
+    try:
+        return str(pathlib.Path.home().joinpath(".pycyphal"))
+    except RuntimeError as e:
+        raise RuntimeError("Please set PYCYPHAL_PATH env variable or setup a proper OS user home directory.") from e
 
 
 def install_import_hook(
