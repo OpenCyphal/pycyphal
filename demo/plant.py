@@ -7,10 +7,12 @@ runs a crude thermodynamics simulation, and publishes the temperature (i.e., one
 
 import time
 import asyncio
+import pycyphal
+
+# Import DSDL's after pycyphal import hook is installed
 import uavcan.si.unit.voltage
 import uavcan.si.sample.temperature
 import uavcan.time
-import pycyphal
 from pycyphal.application.heartbeat_publisher import Health
 from pycyphal.application import make_node, NodeInfo, register
 

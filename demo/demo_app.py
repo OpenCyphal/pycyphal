@@ -7,33 +7,11 @@ import sys
 import pathlib
 import asyncio
 import logging
-import importlib
 import pycyphal
 
-# Production applications are recommended to compile their DSDL namespaces as part of the build process. The enclosed
-# file "setup.py" provides an example of how to do that. The output path we specify here shall match that of "setup.py".
-# Here we compile DSDL just-in-time to demonstrate an alternative.
-compiled_dsdl_dir = pathlib.Path(__file__).resolve().parent / ".demo_dsdl_compiled"
-
-# Make the compilation outputs importable. Let your IDE index this directory as sources to enable code completion.
-sys.path.insert(0, str(compiled_dsdl_dir))
-
-try:
-    import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
-    import pycyphal.application  # This module requires the root namespace "uavcan" to be transcompiled.
-except (ImportError, AttributeError):  # Redistributable applications typically don't need this section.
-    logging.warning("Transcompiling DSDL, this may take a while")
-    src_dir = pathlib.Path(__file__).resolve().parent
-    pycyphal.dsdl.compile_all(
-        [
-            src_dir / "custom_data_types/sirius_cyber_corp",
-            src_dir / "public_regulated_data_types/uavcan/",
-        ],
-        output_directory=compiled_dsdl_dir,
-    )
-    importlib.invalidate_caches()  # Python runtime requires this.
-    import sirius_cyber_corp
-    import pycyphal.application
+# DSDL files are automatically compiled by pycyphal import hook from sources pointed by CYPHAL_PATH env variable.
+import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
+import pycyphal.application  # This module requires the root namespace "uavcan" to be transcompiled.
 
 # Import other namespaces we're planning to use. Nested namespaces are not auto-imported, so in order to reach,
 # say, "uavcan.node.Heartbeat", you have to "import uavcan.node".

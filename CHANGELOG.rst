@@ -3,6 +3,12 @@
 Changelog
 =========
 
+v1.10
+-----
+
+- Implement DSDL compilation via import hooks
+  (`#236 <https://github.com/OpenCyphal/pycyphal/pull/236>`_).
+
 v1.9
 ----
 

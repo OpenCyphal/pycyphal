@@ -16,6 +16,7 @@ def _unittest_slow_demo_setup_py(cd_to_demo: Any) -> None:
         environment_variables={
             "PATH": os.environ.get("PATH", ""),
             "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),  # https://github.com/appveyor/ci/issues/1995
+            "PYCYPHAL_NO_IMPORT_HOOK": "True",  # setup.py uses manual DSDL compilation so disable import hook instead of setting PYCYPHAL_PATH
         },
     )
     exit_code, stdout = proc.wait(120)

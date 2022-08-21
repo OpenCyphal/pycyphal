@@ -113,7 +113,7 @@ async def _unittest_slow_demo_app(
         # At the first run, force the demo script to regenerate packages.
         # The following runs shall not force this behavior to save time and enhance branch coverage.
         print("FORCE DSDL RECOMPILATION")
-        shutil.rmtree(Path(".demo_dsdl_compiled").resolve(), ignore_errors=True)
+        shutil.rmtree(Path(".pycyphal_generated").resolve(), ignore_errors=True)
 
     # The demo may need to generate packages as well, so we launch it first.
     env = run_config.env.copy()
@@ -129,6 +129,8 @@ async def _unittest_slow_demo_app(
             "UAVCAN__SRV__LEAST_SQUARES__ID": "123",
             "THERMOSTAT__PID__GAINS": "0.1 0.0 0.0",  # Gain 0.1
             # Various low-level items:
+            "CYPHAL_PATH": f"{DEMO_DIR}/public_regulated_data_types;{DEMO_DIR}/custom_data_types",
+            "PYCYPHAL_PATH": f"{DEMO_DIR}/.pycyphal_generated",
             "PYCYPHAL_LOGLEVEL": "INFO",
             "PATH": os.environ.get("PATH", ""),
             "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),  # https://github.com/appveyor/ci/issues/1995
@@ -347,6 +349,8 @@ async def _unittest_slow_demo_app_with_plant(
             "UAVCAN__SRV__LEAST_SQUARES__ID": "123",
             "THERMOSTAT__PID__GAINS": "0.1 0.0 0.0",  # Gain 0.1
             # Various low-level items:
+            "CYPHAL_PATH": f"{DEMO_DIR}/public_regulated_data_types;{DEMO_DIR}/custom_data_types",
+            "PYCYPHAL_PATH": f"{DEMO_DIR}/.pycyphal_generated",
             "PYCYPHAL_LOGLEVEL": "INFO",
             "PATH": os.environ.get("PATH", ""),
             "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),  # https://github.com/appveyor/ci/issues/1995
