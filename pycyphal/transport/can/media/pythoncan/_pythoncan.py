@@ -268,9 +268,10 @@ class PythonCANMedia(Media):
                 is_fd=self._is_fd,
             )
             try:
+                desired_timeout = monotonic_deadline - loop.time()
                 await loop.run_in_executor(
                     self._background_executor,
-                    functools.partial(self._bus.send, message, timeout=monotonic_deadline - loop.time()),
+                    functools.partial(self._bus.send, message, timeout=max(desired_timeout, 0)),
                 )
             except (asyncio.TimeoutError, can.CanError):  # CanError is also used to report timeouts (weird).
                 break
