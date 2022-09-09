@@ -59,7 +59,7 @@ def _unittest_slow_builtin_form_manual(compiled: typing.List[pycyphal.dsdl.Gener
         "name": "org.node.my",
         "software_image_crc": [0x0DDDEADB16B00B5],
         # The following will have to be changed when strings are supported natively in DSDL:
-        "certificate_of_authenticity": bytes(range(100)).decode(),
+        "certificate_of_authenticity": list(range(100)),
     }
 
     bi = pycyphal.dsdl.to_builtin(

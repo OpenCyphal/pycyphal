@@ -48,9 +48,6 @@ def to_builtin(obj: object) -> typing.Dict[str, typing.Any]:
     return out
 
 
-ascii_set = set(string.printable)
-
-
 def _to_builtin_impl(
     obj: typing.Union[object, NDArray[typing.Any], str, bool, int, float], model: pydsdl.SerializableType
 ) -> typing.Union[typing.Dict[str, typing.Any], typing.List[typing.Any], str, bool, int, float]:
@@ -63,9 +60,6 @@ def _to_builtin_impl(
 
     if isinstance(model, pydsdl.ArrayType):
         assert isinstance(obj, numpy.ndarray)
-        is_every_character_in_obj_printable = (obj.dtype == numpy.uint8 or isinstance(obj, int)) and all(
-            chr(c) in ascii_set for c in obj
-        )
         # TODO: drop this special case when strings are natively supported in DSDL.
         printable = set(map(ord, string.printable))
         if model.string_like and all(map(lambda x: x in printable, obj.tobytes())):
