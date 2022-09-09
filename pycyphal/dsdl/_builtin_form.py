@@ -1,7 +1,7 @@
 # Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
-
+import string
 import typing
 import logging
 import numpy
@@ -60,7 +60,9 @@ def _to_builtin_impl(
 
     if isinstance(model, pydsdl.ArrayType):
         assert isinstance(obj, numpy.ndarray)
-        if model.string_like:  # TODO: drop this special case when strings are natively supported in DSDL.
+        # TODO: drop this special case when strings are natively supported in DSDL.
+        printable = set(map(ord, string.printable))
+        if model.string_like and all(map(lambda x: x in printable, obj.tobytes())):
             try:
                 return bytes(e for e in obj).decode()
             except UnicodeError:
