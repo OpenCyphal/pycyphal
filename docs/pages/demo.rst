@@ -385,7 +385,16 @@ indicating that the thermostat is driving the plant towards the setpoint:
       kelvin: 302.1288757324219
     # And so on. Notice how the temperature is rising slowly towards the setpoint at 450 K!
 
-You can run ``yakut monitor`` to see what is happening on the network.
+You can run ``yakut monitor`` to see what is happening on the network. (Don't forget to set ``UAVCAN__UDP__IFACE``)
+
+.. tip:: macOS
+
+    Monitoring the network using ``yakut monitor``, requires using root while preserving your environment variables:
+
+    .. code-block:: sh
+
+    sudo -E yakut monitor
+
 As an exercise, consider this:
 
 - Run the same composition over CAN by changing the transport configuration registers at the top of the orc-file.
