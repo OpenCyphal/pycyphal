@@ -75,7 +75,7 @@ You should end up with the following directory structure::
 ``CYPHAL_PATH`` should contain a list to all the paths where the DSDL root namespace directories are to be found:
 
 ..  code-block:: sh
-    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"                           # Set the local node-ID 42 (anonymous by default)
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
 
 Here comes ``demo_app.py``:
 
