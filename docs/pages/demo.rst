@@ -72,9 +72,11 @@ You should end up with the following directory structure::
         ...
     demo_app.py                                     # The thermostat node script
 
-``CYPHAL_PATH`` should contain a list to all the paths where the DSDL root namespace directories are to be found:
+``CYPHAL_PATH`` should contain a list to all the paths where the DSDL root namespace directories are to be found
+(be sure to modify the values to match your environment):
 
 ..  code-block:: sh
+
     export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
 
 Here comes ``demo_app.py``:
@@ -385,7 +387,8 @@ indicating that the thermostat is driving the plant towards the setpoint:
       kelvin: 302.1288757324219
     # And so on. Notice how the temperature is rising slowly towards the setpoint at 450 K!
 
-You can run ``yakut monitor`` to see what is happening on the network. (Don't forget to set ``UAVCAN__UDP__IFACE``)
+You can run ``yakut monitor`` to see what is happening on the network. 
+(Don't forget to set ``UAVCAN__UDP__IFACE`` or similar depending on your transport.)
 
 .. tip:: macOS
 
@@ -393,7 +396,7 @@ You can run ``yakut monitor`` to see what is happening on the network. (Don't fo
 
     .. code-block:: sh
 
-    sudo -E yakut monitor
+        sudo -E yakut monitor
 
 As an exercise, consider this:
 
