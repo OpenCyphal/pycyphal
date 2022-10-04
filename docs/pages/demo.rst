@@ -72,6 +72,13 @@ You should end up with the following directory structure::
         ...
     demo_app.py                                     # The thermostat node script
 
+``CYPHAL_PATH`` should contain a list to all the paths where the DSDL root namespace directories are to be found
+(be sure to modify the values to match your environment):
+
+..  code-block:: sh
+
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
+
 Here comes ``demo_app.py``:
 
 .. literalinclude:: /../demo/demo_app.py
@@ -112,8 +119,11 @@ Further snippets will not include this remark.
     macOS does not properly adhere to RFC3330 such that you will need to manually create aliases for each
     iface + node-ID used.
     In our example, with iface being ``127.9.0.0`` and node-ID being ``42`` this would be
-    ``ifconfig lo0 alias 127.9.0.42 up``
+    ``sudo ifconfig lo0 alias 127.9.0.42 up``
     (see `this <https://superuser.com/questions/458875>`_ superuser article for more details).
+
+    If you come across ``InvalidMediaConfigurationError`` that usually means you haven't set the right alias,
+    you can verify this using ``ifconfig``.
 
 An environment variable ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID`` sets register ``uavcan.sub.temperature_setpoint.id``,
 and so on.
@@ -378,6 +388,16 @@ indicating that the thermostat is driving the plant towards the setpoint:
     # And so on. Notice how the temperature is rising slowly towards the setpoint at 450 K!
 
 You can run ``yakut monitor`` to see what is happening on the network.
+(Don't forget to set ``UAVCAN__UDP__IFACE`` or similar depending on your transport.)
+
+.. tip:: macOS
+
+    Monitoring the network using ``yakut monitor``, requires using root while preserving your environment variables:
+
+    .. code-block:: sh
+
+        sudo -E yakut monitor
+
 As an exercise, consider this:
 
 - Run the same composition over CAN by changing the transport configuration registers at the top of the orc-file.

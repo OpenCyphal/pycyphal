@@ -18,7 +18,7 @@ extras: typing.Dict[str, str] = dict(cp["options.extras_require"])
 
 
 print("If you need full-featured library, use this and read no more::", end="\n\n")
-print(f'   pip install pycyphal[{",".join(extras.keys())}]', end="\n\n")
+print(f'   pip install \'pycyphal[{",".join(extras.keys())}]\'', end="\n\n")
 print("If you want to know what exactly you are installing, read on.", end="\n\n")
 
 
