@@ -226,7 +226,8 @@ def docs(session):
 
     session.cd(ROOT_DIR)
     session.install("doc8 ~= 0.11")
-    session.run("doc8", "docs", *map(str, ROOT_DIR.glob("*.rst")))
+    if is_latest_python(session):
+        session.run("doc8", "docs", *map(str, ROOT_DIR.glob("*.rst")))
 
 
 def is_latest_python(session) -> bool:
