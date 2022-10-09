@@ -168,7 +168,8 @@ If you want to run the full test suite locally, you'll need to install ``ncat`` 
 
 - ``ncat``
 
-    sudo apt-get -y install ncat    # GNU/Linux
+    sudo apt-get -y install ncat    # Debian and derivatives
+    sudo pacman -s nmap             # Arch and derivatives
     brew install nmap               # macOS
 
 - ``nox``
@@ -179,13 +180,6 @@ Make sure that you have updated the included submodules:
 
     cd ~/pycyphal
     git submodule update --init --recursive
-
-``CYPHAL_PATH`` should contain a list to all the paths where the DSDL root namespace
-directories are to be found (be sure to modify the values to match your environment):
-
-..  code-block:: sh
-
-    export CYPHAL_PATH="$HOME/pycyphal/demo/custom_data_types:$HOME/pycyphal/demo/public_regulated_data_types"
 
 ..  tip:: macOS
 
@@ -208,7 +202,17 @@ Running a subset of tests
 .........................
 
 Sometimes during development it might be necessary to only run a certain subset of unit tests related to the
-newly developed functionality. To do this, open 2 terminal windows.
+newly developed functionality.
+
+As we're invoking ``pytest`` directly outside of ``nox``, we should first set ``CYPHAL_PATH`` to contain
+a list of all the paths where the DSDL root namespace directories are to be found
+(modify the values to match your environment).
+
+..  code-block:: sh
+
+    export CYPHAL_PATH="$HOME/pycyphal/demo/custom_data_types:$HOME/pycyphal/demo/public_regulated_data_types"
+
+Next, open 2 terminal windows.
 
 In the first, run:
 
@@ -217,7 +221,7 @@ In the first, run:
 In the second one:
 
     cd ~/pycyphal
-    export PYTHONASYNCIODEBUG = 1       # should be set while running tests
+    export PYTHONASYNCIODEBUG=1         # should be set while running tests
     nox --sessions test-3.10            # this will setup a virual environment for your tests
     source .nox/test-3-10/bin/activate  # activate the virtual environment
     pytest -k udp                       # only tests which match the given substring will be run
