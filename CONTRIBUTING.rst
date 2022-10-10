@@ -148,6 +148,10 @@ are evident from the code::
 Testing
 -------
 
+
+Setup
+.....
+
 In order to set up the local environment, execute the setup commands listed in the CI configuration files.
 It is assumed that library development and code analysis is done on a GNU/Linux system.
 
@@ -157,15 +161,74 @@ Naturally, these are mostly Windows-specific utilities.
 
 Testing, analysis, and documentation generation are automated with Nox via ``noxfile.py``.
 Do look at this file to see what actions are available and how the automation is set up.
-If you need to test a specific module or part thereof, consider invoking PyTest directly to speed things up.
-If you want to run the full suite locally::
+If you need to test a specific module or part thereof, consider invoking PyTest directly to speed things up
+(see section below).
 
-    pip install -U nox
-    nox
+If you want to run the full test suite locally, you'll need to install ``ncat`` and ``nox``:
+
+- ``ncat``
+
+    sudo apt-get -y install ncat    # Debian and derivatives
+    sudo pacman -s nmap             # Arch and derivatives
+    brew install nmap               # macOS
+
+- ``nox``
+
+    pip install nox
+
+Make sure that you have updated the included submodules:
+
+    cd ~/pycyphal
+    git submodule update --init --recursive
+
+..  tip:: macOS
+
+    In order to run certain tests you'll need to have special permissions to perform low-level network packet capture.
+    The easiest way to get around this is by installing `Wireshark <https://www.wireshark.org/>`_.
+    Run the program and it will (automatically) ask you to update certain permissions
+    (otherwise check `here <https://stackoverflow.com/questions/41126943/wireshark-you-dont-have-permission-to-capture-on-that-device-mac/>`_).
+
+Now you should be able to run the tests, you can use the following commands:
+
+    nox --list                  # shows all the different sessions that are available
+    nox --sessions test-3.10    # run the tests using Python 3.10
 
 To abort on first error::
 
     nox -x -- -x
+
+
+Running a subset of tests
+.........................
+
+Sometimes during development it might be necessary to only run a certain subset of unit tests related to the
+newly developed functionality.
+
+As we're invoking ``pytest`` directly outside of ``nox``, we should first set ``CYPHAL_PATH`` to contain
+a list of all the paths where the DSDL root namespace directories are to be found
+(modify the values to match your environment).
+
+..  code-block:: sh
+
+    export CYPHAL_PATH="$HOME/pycyphal/demo/custom_data_types:$HOME/pycyphal/demo/public_regulated_data_types"
+
+Next, open 2 terminal windows.
+
+In the first, run:
+
+    ncat --broker --listen -p 50905
+
+In the second one:
+
+    cd ~/pycyphal
+    export PYTHONASYNCIODEBUG=1         # should be set while running tests
+    nox --sessions test-3.10            # this will setup a virual environment for your tests
+    source .nox/test-3-10/bin/activate  # activate the virtual environment
+    pytest -k udp                       # only tests which match the given substring will be run
+
+
+Writing tests
+.............
 
 When writing tests, aim to cover at least 90% of branches.
 Ensure that your tests do not emit any errors or warnings into stderr output upon successful execution,
