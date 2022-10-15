@@ -23,7 +23,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         struct Header {
             uint8_t  version;
             uint8_t  priority;
-            uint16_t source_node_id;   
+            uint16_t source_node_id;
             uint32_t frame_index_eot;
             uint64_t transfer_id;
             uint64_t _reserved_b;   // Set to zero when encoding, ignore when decoding.
@@ -47,7 +47,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         "H"  # source_node_id
         "I"  # frame_index_eot
         "Q"  # transfer_id
-        "8x" # reserved 64 bits
+        "8x"  # reserved 64 bits
     )
     _VERSION = 1
 
@@ -82,21 +82,27 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         allowing the caller to rely on the vectorized IO API instead (sendmsg).
         """
         header = self._HEADER_FORMAT.pack(
-            self._VERSION, int(self.priority), self.source_node_id, self.index | ((1 << 31) if self.end_of_transfer else 0), self.transfer_id
+            self._VERSION,
+            int(self.priority),
+            self.source_node_id,
+            self.index | ((1 << 31) if self.end_of_transfer else 0),
+            self.transfer_id,
         )
         return memoryview(header), self.payload
 
     @staticmethod
     def parse(image: memoryview) -> typing.Optional[UDPFrame]:
         try:
-            version, int_priority, source_node_id, frame_index_eot, transfer_id = UDPFrame._HEADER_FORMAT.unpack_from(image)
+            version, int_priority, source_node_id, frame_index_eot, transfer_id = UDPFrame._HEADER_FORMAT.unpack_from(
+                image
+            )
         except struct.error:
             return None
         if version == UDPFrame._VERSION:
             # noinspection PyArgumentList
             return UDPFrame(
                 priority=pycyphal.transport.Priority(int_priority),
-                source_node_id = source_node_id,
+                source_node_id=source_node_id,
                 transfer_id=transfer_id,
                 index=(frame_index_eot & UDPFrame.INDEX_MASK),
                 end_of_transfer=bool(frame_index_eot & (UDPFrame.INDEX_MASK + 1)),
@@ -112,24 +118,41 @@ def _unittest_udp_frame_compile() -> None:
     from pycyphal.transport import Priority
     from pytest import raises
 
-    _ = UDPFrame(priority=Priority.LOW, source_node_id=1, transfer_id=0, index=0, end_of_transfer=False, payload=memoryview(b""))
+    _ = UDPFrame(
+        priority=Priority.LOW, source_node_id=1, transfer_id=0, index=0, end_of_transfer=False, payload=memoryview(b"")
+    )
 
     # Invalid transfer_id
     with raises(ValueError):
         _ = UDPFrame(
-            priority=Priority.LOW, source_node_id=1, transfer_id=2**64, index=0, end_of_transfer=False, payload=memoryview(b"")
+            priority=Priority.LOW,
+            source_node_id=1,
+            transfer_id=2**64,
+            index=0,
+            end_of_transfer=False,
+            payload=memoryview(b""),
         )
 
     # Invalid frame index
     with raises(ValueError):
         _ = UDPFrame(
-            priority=Priority.LOW, source_node_id=1, transfer_id=0, index=2**31, end_of_transfer=False, payload=memoryview(b"")
+            priority=Priority.LOW,
+            source_node_id=1,
+            transfer_id=0,
+            index=2**31,
+            end_of_transfer=False,
+            payload=memoryview(b""),
         )
-    
+
     # Invalid source_node_id
     with raises(ValueError):
         _ = UDPFrame(
-            priority=Priority.LOW, source_node_id=2**16, transfer_id=0, index=0, end_of_transfer=False, payload=memoryview(b"")
+            priority=Priority.LOW,
+            source_node_id=2**16,
+            transfer_id=0,
+            index=0,
+            end_of_transfer=False,
+            payload=memoryview(b""),
         )
 
     # Multi-frame, not the end of the transfer.
@@ -179,7 +202,7 @@ def _unittest_udp_frame_compile() -> None:
         memoryview(b"Well, I got here the same way the coin did."),
     ) == UDPFrame(
         priority=Priority.EXCEPTIONAL,
-        source_node_id=2**16-1,
+        source_node_id=2**16 - 1,
         transfer_id=0x_DEAD_BEEF_C0FFEE,
         index=0,
         end_of_transfer=True,
