@@ -316,7 +316,7 @@ Send a transfer from one instance to the other:
 
 >>> doctest_await(pub.send(pycyphal.transport.Transfer(pycyphal.transport.Timestamp.now(),
 ...                                                    pycyphal.transport.Priority.LOW,
-...                                                    1111,
+...                                                    transfer_id=1111,
 ...                                                    fragmented_payload=[]),
 ...                        asyncio.get_event_loop().time() + 1.0))
 True

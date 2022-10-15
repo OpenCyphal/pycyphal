@@ -3,12 +3,9 @@
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
-from multiprocessing.sharedctypes import Value
 import typing
 import struct
 import dataclasses
-
-from numpy import source
 import pycyphal
 
 
@@ -44,12 +41,12 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     """
 
     _HEADER_FORMAT = struct.Struct(
-        "<" # little-endian
-        "B" # version
-        "B" # priority
-        "H" # source_node_id
-        "I" # frame_index_eot
-        "Q" # transfer_id
+        "<"  # little-endian
+        "B"  # version
+        "B"  # priority
+        "H"  # source_node_id
+        "I"  # frame_index_eot
+        "Q"  # transfer_id
         "8x" # reserved 64 bits
     )
     _VERSION = 1
