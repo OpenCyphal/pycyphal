@@ -238,6 +238,7 @@ class UDPTransport(pycyphal.transport.Transport):
                 mtu=self._mtu,
                 multiplier=multiplier,
                 sock=sock,
+                source_node_id=self.local_node_id,
                 finalizer=finalizer,
             )
 

@@ -272,6 +272,7 @@ def _unittest_udp_tracer() -> None:
                     b"".join(
                         UDPFrame(
                             priority=Priority.SLOW,
+                            source_node_id=1,
                             transfer_id=1234567890,
                             index=0,
                             end_of_transfer=True,

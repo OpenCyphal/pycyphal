@@ -64,6 +64,7 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         mtu: int,
         multiplier: int,
         sock: socket_.socket,
+        source_node_id: int,
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -76,6 +77,7 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         self._mtu = int(mtu)
         self._multiplier = int(multiplier)
         self._sock = sock
+        self._source_node_id = source_node_id
         self._finalizer = finalizer
         self._feedback_handler: typing.Optional[typing.Callable[[pycyphal.transport.Feedback], None]] = None
         self._statistics = pycyphal.transport.SessionStatistics()
@@ -98,6 +100,7 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
             return UDPFrame(
                 priority=transfer.priority,
                 transfer_id=transfer.transfer_id,
+                source_node_id=self._source_node_id,
                 index=index,
                 end_of_transfer=end_of_transfer,
                 payload=payload,
