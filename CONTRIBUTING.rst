@@ -166,17 +166,17 @@ If you need to test a specific module or part thereof, consider invoking PyTest 
 
 If you want to run the full test suite locally, you'll need to install ``ncat`` and ``nox``:
 
-- ``ncat``
+- ``ncat``::
 
     sudo apt-get -y install ncat    # Debian and derivatives
     sudo pacman -s nmap             # Arch and derivatives
     brew install nmap               # macOS
 
-- ``nox``
+- ``nox``::
 
     pip install nox
 
-Make sure that you have updated the included submodules:
+Make sure that you have updated the included submodules::
 
     cd ~/pycyphal
     git submodule update --init --recursive
@@ -188,7 +188,7 @@ Make sure that you have updated the included submodules:
     Run the program and it will (automatically) ask you to update certain permissions
     (otherwise check `here <https://stackoverflow.com/questions/41126943/wireshark-you-dont-have-permission-to-capture-on-that-device-mac/>`_).
 
-Now you should be able to run the tests, you can use the following commands:
+Now you should be able to run the tests, you can use the following commands::
 
     nox --list                  # shows all the different sessions that are available
     nox --sessions test-3.10    # run the tests using Python 3.10
@@ -214,11 +214,11 @@ a list of all the paths where the DSDL root namespace directories are to be foun
 
 Next, open 2 terminal windows.
 
-In the first, run:
+In the first, run::
 
     ncat --broker --listen -p 50905
 
-In the second one:
+In the second one::
 
     cd ~/pycyphal
     export PYTHONASYNCIODEBUG=1         # should be set while running tests
