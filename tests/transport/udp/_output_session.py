@@ -52,6 +52,7 @@ async def _unittest_output_session() -> None:
         mtu=11,
         multiplier=1,
         sock=make_sock(),
+        source_node_id=5,
         finalizer=do_finalize,
     )
 
@@ -75,7 +76,7 @@ async def _unittest_output_session() -> None:
     rx_data, endpoint = sock_rx.recvfrom(1000)
     assert endpoint[0] == "127.100.0.2"
     assert rx_data == (
-        b"\x00\x04\x00\x00\x00\x00\x00\x8040\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x01\x04\x05\x00\x00\x00\x00\x8040\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
         + b"one"
         + b"two"
         + b"three"
@@ -126,6 +127,7 @@ async def _unittest_output_session() -> None:
         mtu=10,
         multiplier=2,
         sock=make_sock(),
+        source_node_id=6,
         finalizer=do_finalize,
     )
     assert await (
@@ -158,13 +160,13 @@ async def _unittest_output_session() -> None:
     assert data_main_a == data_redundant_a
     assert data_main_b == data_redundant_b
     assert data_main_a == (
-        b"\x00\x07\x00\x00\x00\x00\x00\x001\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x01\x07\x06\x00\x00\x00\x00\x001\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
         + b"one"
         + b"two"
         + b"three"[:-1]
     )
     assert data_main_b == (
-        b"\x00\x07\x00\x00\x01\x00\x00\x801\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x01\x07\x06\x00\x01\x00\x00\x801\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
         + b"e"
         + pycyphal.transport.commons.crc.CRC32C.new(b"one", b"two", b"three").value_as_bytes
     )
@@ -176,6 +178,7 @@ async def _unittest_output_session() -> None:
         mtu=10,
         multiplier=1,
         sock=make_sock(),
+        source_node_id=1,
         finalizer=do_finalize,
     )
 
@@ -256,6 +259,7 @@ async def _unittest_output_session_no_listener() -> None:
         mtu=11,
         multiplier=1,
         sock=make_sock(),
+        source_node_id=1,
         finalizer=lambda: None,
     )
     assert await (
@@ -285,6 +289,7 @@ async def _unittest_output_session_no_listener() -> None:
         mtu=10,
         multiplier=2,
         sock=make_sock(),
+        source_node_id=1,
         finalizer=lambda: None,
     )
     sos.enable_feedback(feedback_handler)

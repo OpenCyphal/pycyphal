@@ -114,16 +114,19 @@ def _unittest_udp_frame_compile() -> None:
 
     _ = UDPFrame(priority=Priority.LOW, source_node_id=1, transfer_id=0, index=0, end_of_transfer=False, payload=memoryview(b""))
 
+    # Invalid transfer_id
     with raises(ValueError):
         _ = UDPFrame(
             priority=Priority.LOW, source_node_id=1, transfer_id=2**64, index=0, end_of_transfer=False, payload=memoryview(b"")
         )
 
+    # Invalid frame index
     with raises(ValueError):
         _ = UDPFrame(
             priority=Priority.LOW, source_node_id=1, transfer_id=0, index=2**31, end_of_transfer=False, payload=memoryview(b"")
         )
     
+    # Invalid source_node_id
     with raises(ValueError):
         _ = UDPFrame(
             priority=Priority.LOW, source_node_id=2**16, transfer_id=0, index=0, end_of_transfer=False, payload=memoryview(b"")
@@ -168,7 +171,7 @@ def _unittest_udp_frame_compile() -> None:
     # Single-frame.
     assert (
         memoryview(
-            b"\x01\x00\x03\x00"
+            b"\x01\x00\xff\xff"
             b"\x00\x00\x00\x80"
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"
             b"\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -176,7 +179,7 @@ def _unittest_udp_frame_compile() -> None:
         memoryview(b"Well, I got here the same way the coin did."),
     ) == UDPFrame(
         priority=Priority.EXCEPTIONAL,
-        source_node_id=3,
+        source_node_id=2**16-1,
         transfer_id=0x_DEAD_BEEF_C0FFEE,
         index=0,
         end_of_transfer=True,

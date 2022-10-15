@@ -199,9 +199,9 @@ Datagram header format
 Every Cyphal/UDP frame contains the following header before the payload,
 encoded in the little-endian byte order, expressed here in the DSDL notation::
 
-    uint8 version           # =0 in this revision; ignore frame otherwise.
+    uint8 version           # =1 in this revision; ignore frame otherwise.
     uint8 priority          # Like in CAN: 0 -- highest priority, 7 -- lowest priority.
-    void16                  # Set to zero when transmitting, ignore when receiving.
+    uint16 source_node_id   # Cyphal node-ID of the origin.
     uint32 frame_index_eot  # MSB is set if the current frame is the last frame of the transfer.
     uint64 transfer_id      # The transfer-ID never overflows.
     void64                  # This space may be used later for runtime type identification.

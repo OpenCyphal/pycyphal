@@ -68,6 +68,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         b"".join(
             UDPFrame(
                 priority=Priority.HIGH,
+                source_node_id=1,
                 transfer_id=0x_DEAD_BEEF_C0FFEE,
                 index=0,
                 end_of_transfer=True,
@@ -97,6 +98,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         b"".join(
             UDPFrame(
                 priority=Priority.LOW,
+                source_node_id=1,
                 transfer_id=0x_DEADBEEF_DEADBE,
                 index=0,
                 end_of_transfer=False,
@@ -134,6 +136,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         b"".join(
             UDPFrame(
                 priority=Priority.HIGH,
+                source_node_id=1,
                 transfer_id=0x_DEAD_BEEF_C0FFEE,
                 index=0,
                 end_of_transfer=True,
@@ -163,6 +166,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         b"".join(
             UDPFrame(
                 priority=Priority.LOW,
+                source_node_id=1,
                 transfer_id=0x_DEADBEEF_DEADBE,
                 index=0,
                 end_of_transfer=False,
@@ -183,6 +187,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         b"".join(
             UDPFrame(
                 priority=Priority.LOW,
+                source_node_id=1,
                 transfer_id=0x_DEADBEEF_DEADBE,
                 index=0,
                 end_of_transfer=False,
@@ -274,6 +279,7 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
             b"".join(
                 UDPFrame(
                     priority=Priority.HIGH,
+                    source_node_id=1,
                     transfer_id=0,
                     index=0,
                     end_of_transfer=True,
