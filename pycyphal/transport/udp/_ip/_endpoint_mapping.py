@@ -22,6 +22,11 @@ MULTICAST_GROUP_SUBJECT_ID_MASK = 0xFFFF
 Masks the least significant bits of the multicast group address (v4/v6) that represent the subject-ID.
 """
 
+DATASPECIFIER_BIT_MASK = 0x0000_0001_0000_0000
+"""
+Masks the bit that determines whether the address represents a Message or Service
+"""
+
 SUBJECT_PORT = 16383
 """
 All subjects use the same fixed destination UDP port number.
@@ -120,21 +125,23 @@ def message_data_specifier_to_multicast_group(
 
     >>> from pycyphal.transport import MessageDataSpecifier
     >>> from ipaddress import ip_address
-    >>> str(message_data_specifier_to_multicast_group(ip_address('127.42.11.22'), MessageDataSpecifier(123)))
-    '239.42.0.123'
+    >>> str(message_data_specifier_to_multicast_group(ip_address('127.40.11.22'), MessageDataSpecifier(123)))
+    '239.40.0.123'
     >>> str(message_data_specifier_to_multicast_group(ip_address('192.168.11.22'), MessageDataSpecifier(456)))
     '239.40.1.200'
     >>> str(message_data_specifier_to_multicast_group(ip_address('239.168.11.22'), MessageDataSpecifier(456)))
     Traceback (most recent call last):
       ...
     ValueError: The local address shall be a unicast address, not multicast: 239.168.11.22
+    >>> msg_ip = message_data_specifier_to_multicast_group(ip_address('127.40.11.22'), MessageDataSpecifier(123))
+    >>> assert((int(msg_ip) & DATASPECIFIER_BIT_MASK) != DATASPECIFIER_BIT_MASK, "Dataspecifier bit is zero for message")
     """
     assert data_specifier.subject_id <= MULTICAST_GROUP_SUBJECT_ID_MASK, "Protocol design error"
     ty: type
     if isinstance(local_ip_address, ipaddress.IPv4Address):
         ty = ipaddress.IPv4Address
         fix = 0b_11101111_00000000_00000000_00000000
-        sub = 0b_00000000_01111111_00000000_00000000 & int(local_ip_address)
+        sub = 0b_00000000_01111100_00000000_00000000 & int(local_ip_address)
         msb = fix | sub
     elif isinstance(local_ip_address, ipaddress.IPv6Address):
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
@@ -155,7 +162,7 @@ def multicast_group_to_message_data_specifier(
     or if it belongs to a different Cyphal/UDP subnet.
 
     >>> from ipaddress import ip_address
-    >>> multicast_group_to_message_data_specifier(ip_address('127.42.11.22'), ip_address('239.42.1.200'))
+    >>> multicast_group_to_message_data_specifier(ip_address('127.168.11.22'), ip_address('239.40.1.200'))
     MessageDataSpecifier(subject_id=456)
     >>> multicast_group_to_message_data_specifier(ip_address('127.42.11.22'), ip_address('239.43.1.200'))    # -> None
     >>> multicast_group_to_message_data_specifier(ip_address('127.42.11.22'), ip_address('239.42.255.200'))  # -> None

@@ -309,7 +309,7 @@ Create an output and an input session:
 >>> ds = pycyphal.transport.MessageDataSpecifier(111)
 >>> pub = tr_0.get_output_session(pycyphal.transport.OutputSessionSpecifier(ds, None), pm)
 >>> pub.socket.getpeername()   # UDP port is fixed, and the multicast group address is computed as shown above.
-('239.9.0.111', 16383)
+('239.8.0.111', 16383)
 >>> sub = tr_1.get_input_session(pycyphal.transport.InputSessionSpecifier(ds, None), pm)
 
 Send a transfer from one instance to the other:

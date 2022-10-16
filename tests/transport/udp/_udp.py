@@ -281,7 +281,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sink.bind(("", 11111))
     sink.setsockopt(
-        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.50.0.190") + socket.inet_aton("127.0.0.1")
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.48.0.190") + socket.inet_aton("127.0.0.1")
     )
 
     ts = Timestamp.now()
@@ -313,7 +313,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     assert (ts.system - 1) <= pkt.timestamp.system <= Timestamp.now().system
     ip_pkt = IPPacket.parse(pkt.link_layer_packet)
     assert ip_pkt is not None
-    assert [str(x) for x in ip_pkt.source_destination] == ["127.50.0.111", "239.50.0.190"]
+    assert [str(x) for x in ip_pkt.source_destination] == ["127.50.0.111", "239.48.0.190"]
     parsed = pkt.parse()
     assert parsed
     ses, frame = parsed
