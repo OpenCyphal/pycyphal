@@ -134,7 +134,7 @@ def message_data_specifier_to_multicast_group(
       ...
     ValueError: The local address shall be a unicast address, not multicast: 239.168.11.22
     >>> msg_ip = message_data_specifier_to_multicast_group(ip_address('127.40.11.22'), MessageDataSpecifier(123))
-    >>> assert((int(msg_ip) & DATASPECIFIER_BIT_MASK) != DATASPECIFIER_BIT_MASK, "Dataspecifier bit is zero for message")
+    >>> assert (int(msg_ip) & DATASPECIFIER_BIT_MASK) != DATASPECIFIER_BIT_MASK, "Dataspecifier bit is zero for message"
     """
     assert data_specifier.subject_id <= MULTICAST_GROUP_SUBJECT_ID_MASK, "Protocol design error"
     ty: type
