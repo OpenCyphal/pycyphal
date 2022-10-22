@@ -144,7 +144,7 @@ class IPv4SocketFactory(SocketFactory):
 
 class SnifferIPv4(Sniffer):
     def __init__(self, local_ip_address: IPv4Address, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
-        netmask_width = IPV4LENGTH - IP_ADDRESS_NODE_ID_MASK.bit_length() + 2
+        netmask_width = IPV4LENGTH - IP_ADDRESS_NODE_ID_MASK.bit_length() - 2
         subnet = ip_network(f"{local_ip_address}/{netmask_width}", strict=False)
         filter_expression = f"udp and src net {subnet}"
         _logger.debug("Constructed BPF filter expression: %r", filter_expression)
