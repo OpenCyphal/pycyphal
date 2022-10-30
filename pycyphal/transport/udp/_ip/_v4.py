@@ -13,8 +13,10 @@ import pycyphal
 from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
 from pycyphal.transport import InvalidMediaConfigurationError
 from ._socket_factory import SocketFactory, Sniffer
-from ._endpoint_mapping import SUBJECT_PORT, IP_ADDRESS_NODE_ID_MASK, service_data_specifier_to_udp_port
-from ._endpoint_mapping import node_id_to_unicast_ip, message_data_specifier_to_multicast_group
+from ._endpoint_mapping import SUBJECT_PORT
+from ._endpoint_mapping import NODE_ID_MASK
+from ._endpoint_mapping import service_data_specifier_to_multicast_group, message_data_specifier_to_multicast_group
+from ._endpoint_mapping import service_data_specifier_to_udp_port
 from ._link_layer import LinkLayerCapture, LinkLayerSniffer
 
 
@@ -34,7 +36,7 @@ class IPv4SocketFactory(SocketFactory):
 
     @property
     def max_nodes(self) -> int:
-        return IP_ADDRESS_NODE_ID_MASK  # The maximum may not be available because it may be the broadcast address.
+        return NODE_ID_MASK  # The maximum may not be available because it may be the broadcast address.
 
     @property
     def local_ip_address(self) -> IPv4Address:
@@ -73,10 +75,12 @@ class IPv4SocketFactory(SocketFactory):
             remote_ip = message_data_specifier_to_multicast_group(self._local, data_specifier)
             remote_port = SUBJECT_PORT
         elif isinstance(data_specifier, ServiceDataSpecifier):
-            if remote_node_id is None:
+            if remote_node_id is not None:
                 s.close()
-                raise UnsupportedSessionConfigurationError("Broadcast service transfers are not defined.")
-            remote_ip = node_id_to_unicast_ip(self._local, remote_node_id)
+                raise UnsupportedSessionConfigurationError("Unicast service transfers are not defined.")
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local.packed)
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
+            remote_ip = service_data_specifier_to_multicast_group(self._local, data_specifier)
             remote_port = service_data_specifier_to_udp_port(data_specifier)
         else:
             assert False
@@ -122,14 +126,19 @@ class IPv4SocketFactory(SocketFactory):
                     ) from None
                 raise  # pragma: no cover
         elif isinstance(data_specifier, ServiceDataSpecifier):
-            local_port = service_data_specifier_to_udp_port(data_specifier)
+            multicast_ip = service_data_specifier_to_multicast_group(self._local, data_specifier)
+            multicast_port = service_data_specifier_to_udp_port(data_specifier)
+            if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
+                s.bind((str(multicast_ip), multicast_port))
+            else:
+                s.bind(("", multicast_port))
             try:
-                s.bind((str(self._local), local_port))
+                s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local.packed)
             except OSError as ex:
                 s.close()
                 if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
                     raise InvalidMediaConfigurationError(
-                        f"Could not bind input service socket to {self._local}:{local_port} "
+                        f"Could not register multicast group membership {multicast_ip} via {self._local} using {s} "
                         f"[{errno.errorcode[ex.errno]}]"
                     ) from None
                 raise  # pragma: no cover
@@ -144,7 +153,7 @@ class IPv4SocketFactory(SocketFactory):
 
 class SnifferIPv4(Sniffer):
     def __init__(self, local_ip_address: IPv4Address, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
-        netmask_width = IPV4LENGTH - IP_ADDRESS_NODE_ID_MASK.bit_length() - 2
+        netmask_width = IPV4LENGTH - NODE_ID_MASK.bit_length() - 2
         subnet = ip_network(f"{local_ip_address}/{netmask_width}", strict=False)
         filter_expression = f"udp and src net {subnet}"
         _logger.debug("Constructed BPF filter expression: %r", filter_expression)

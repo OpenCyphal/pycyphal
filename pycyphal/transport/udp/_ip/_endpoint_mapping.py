@@ -11,140 +11,155 @@ IPAddress = typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 I wonder why the common base class of IPv4Address and IPv6Address is not public?
 """
 
-IP_ADDRESS_NODE_ID_MASK = 0xFFFF
+SUBJECT_ID_MASK = 2**13 - 1
 """
-Masks the least significant bits of the IP address (v4/v6) that represent the node-ID.
-Does not apply to multicast group address.
-"""
-
-MULTICAST_GROUP_SUBJECT_ID_MASK = 0xFFFF
-"""
-Masks the least significant bits of the multicast group address (v4/v6) that represent the subject-ID.
+Masks the 13 least significant bits of the multicast group address (v4/v6) that represent the message-ID. (Message)
 """
 
-DATASPECIFIER_BIT_MASK = 0x0000_0001_0000_0000
+NODE_ID_MASK = 0xFFFF
 """
-Masks the bit that determines whether the address represents a Message or Service
+Masks the 16 least significant bits of the multicast group address (v4/v6) that represent the node-ID. (Service)
+"""
+
+DOMAIN_ID_MASK = 0b_00000000_01111100_00000000_00000000
+"""
+Masks the 5 bits of the multicast group address that represent the domain-ID.
+"""
+
+DATASPECIFIER_BIT_MASK = 0b_00000000_00000001_00000000_00000000
+"""
+Masks the bit that determines whether the address represents a Message (=0) or Service (=1)
 """
 
 SUBJECT_PORT = 16383
 """
 All subjects use the same fixed destination UDP port number.
-Subjects are differentiated by the IP multicast group address instead.
+Subjects are differentiated by the IP multicast group address.
+(Message)
 """
 
 SERVICE_BASE_PORT = 16384
 """
-Service transfers use unicast IP packets.
+Service transfers use multicast IP packets.
 Services are differentiated by the destination UDP port number.
-See :func:`get_service_udp_port`.
+See :func:`service_data_specifier_to_udp_port`.
 """
 
 
-def node_id_to_unicast_ip(local_ip_address: IPAddress, node_id: int) -> IPAddress:
+def service_data_specifier_to_multicast_group(domain_id: int, node_id: int, ipv6_addr: bool = False) -> IPAddress:
     """
-    The local IP address is needed to deduce the subnet that the Cyphal/UDP transport is operating on.
-    The function simply combines the most significant bits from the first argument with the second argument.
+    Takes a domain_id and node_id; returns the corresponding multicast address (for services).
+    For IPv4, the resulting address is constructed as follows::
+
+        fixed          service
+       (9 bits)  res.  selector
+       ________      ||
+      /        \     vv
+      11101111.0ddddd01.nnnnnnnn.nnnnnnnn
+      \__/      \___/   \_______________/
+    (4 bits)   (5 bits)     (16 bits)
+      IPv4     domain-ID     node-ID
+    multicast
+     prefix
 
     >>> from ipaddress import ip_address
-    >>> str(node_id_to_unicast_ip(ip_address('127.42.11.22'), 123))
-    '127.42.0.123'
-    >>> str(node_id_to_unicast_ip(ip_address('127.42.11.22'), 456))
-    '127.42.1.200'
-    >>> str(node_id_to_unicast_ip(ip_address('239.42.11.22'), 456))
+    >>> str(service_data_specifier_to_multicast_group(0, 123))
+    '239.1.0.123'
+    >>> str(service_data_specifier_to_multicast_group(13, 456))
+    '239.53.1.200'
+    >>> str(service_data_specifier_to_multicast_group(32, 456))
     Traceback (most recent call last):
       ...
-    ValueError: The local address shall be a unicast address, not multicast: 239.42.11.22
-    >>> str(node_id_to_unicast_ip(ip_address('127.42.11.22'), 65536))
+    ValueError: Invalid domain-ID...
+    >>> str(service_data_specifier_to_multicast_group(13, 65536))
     Traceback (most recent call last):
       ...
     ValueError: Invalid node-ID...
+    >>> srvc_ip = service_data_specifier_to_multicast_group(0, 123)
+    >>> assert (int(srvc_ip) & DATASPECIFIER_BIT_MASK) == DATASPECIFIER_BIT_MASK, "Dataspecifier bit is 1 for service"
     """
-    if node_id > IP_ADDRESS_NODE_ID_MASK:
-        raise ValueError(f"Invalid node-ID: {node_id} is larger than {IP_ADDRESS_NODE_ID_MASK}")
+    if domain_id >= (2**5):
+        raise ValueError(f"Invalid domain-ID: {domain_id} is larger than 31")
+    if node_id > NODE_ID_MASK:
+        raise ValueError(f"Invalid node-ID: {node_id} is larger than {NODE_ID_MASK}")
     ty: type
-    if isinstance(local_ip_address, ipaddress.IPv4Address):
-        mask = 2**ipaddress.IPV4LENGTH - 1
+    if not ipv6_addr:
         ty = ipaddress.IPv4Address
-    elif isinstance(local_ip_address, ipaddress.IPv6Address):
-        mask = 2**ipaddress.IPV6LENGTH - 1
-        ty = ipaddress.IPv6Address
+        fix = 0b_11101111_00000000_00000000_00000000  # multicast prefix
+        sub = DOMAIN_ID_MASK & (domain_id << 18)  # domain-ID
+        msb = fix | sub | DATASPECIFIER_BIT_MASK  # service selector
     else:
-        assert False
-    if local_ip_address.is_multicast:
-        raise ValueError(f"The local address shall be a unicast address, not multicast: {local_ip_address}")
-    return ty((int(local_ip_address) & (mask ^ IP_ADDRESS_NODE_ID_MASK)) | node_id)  # type: ignore
+        raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
+    return ty(msb | node_id)  # type: ignore
 
 
-def unicast_ip_to_node_id(local_ip_address: IPAddress, node_ip_address: IPAddress) -> typing.Optional[int]:
+def service_multicast_group_to_node_id(domain_id: int, multicast_group: IPAddress) -> typing.Optional[int]:
     """
-    Returns the node-ID if the node IP address and the local IP address belong to the same subnet.
-    Returns None if the node is not a member of the local subnet.
-    Raises a value error if either address is a multicast group address.
+    The inverse of :func:`service_data_specifier_to_multicast_group`.
+    The domain_id is needed to ensure that the multicast group belongs to the correct Cyphal/UDP domain.
+    The return value is None if the multicast group is not valid per the current Cyphal/UDP specification
+    or if it belongs to a different Cyphal/UDP domain.
 
     >>> from ipaddress import ip_address
-    >>> unicast_ip_to_node_id(ip_address('127.42.1.1'), ip_address('127.42.1.200'))
+    >>> service_multicast_group_to_node_id(13, ip_address('239.53.1.200'))
     456
-    >>> unicast_ip_to_node_id(ip_address('127.0.0.99'), ip_address('127.0.0.99'))
-    99
-    >>> unicast_ip_to_node_id(ip_address('127.99.1.1'), ip_address('127.42.1.200'))  # Returns None
-    >>> unicast_ip_to_node_id(ip_address('239.42.1.1'), ip_address('127.42.1.200'))
+    >>> service_multicast_group_to_node_id(13, ip_address('239.52.1.200')) # -> None (message, not service)
+    >>> service_multicast_group_to_node_id(14, ip_address('239.53.1.200')) # -> None (different domain)
+    >>> service_multicast_group_to_node_id(13, ip_address('255.53.1.200')) # -> None (multicast prefix is wrong)
+    >>> str(service_multicast_group_to_node_id(32, ip_address('255.53.1.200')))
     Traceback (most recent call last):
       ...
-    ValueError: Multicast group address cannot be a local IP address...
-    >>> unicast_ip_to_node_id(ip_address('127.42.1.1'), ip_address('239.42.1.200'))
-    Traceback (most recent call last):
-      ...
-    ValueError: Multicast group address cannot be mapped to a node-ID...
+    ValueError: Invalid domain-ID...
     """
-    if local_ip_address.is_multicast:
-        raise ValueError(f"Multicast group address cannot be a local IP address: {local_ip_address}")
-    if node_ip_address.is_multicast:
-        raise ValueError(f"Multicast group address cannot be mapped to a node-ID: {node_ip_address}")
-    if (int(local_ip_address) | IP_ADDRESS_NODE_ID_MASK) == (int(node_ip_address) | IP_ADDRESS_NODE_ID_MASK):
-        return int(node_ip_address) & IP_ADDRESS_NODE_ID_MASK
+    if domain_id >= (2**5):
+        raise ValueError(f"Invalid domain-ID: {domain_id} is larger than 31")
+    candidate = int(multicast_group) & NODE_ID_MASK
+    if service_data_specifier_to_multicast_group(domain_id, candidate) == multicast_group:
+        return candidate
     return None
 
 
 def message_data_specifier_to_multicast_group(
-    local_ip_address: IPAddress, data_specifier: MessageDataSpecifier
+    domain_id: int, data_specifier: MessageDataSpecifier, ipv6_addr: bool = False
 ) -> IPAddress:
     r"""
-    The local IP address is needed to deduce the subnet that the Cyphal/UDP transport is operating on.
+    Takes a domain_id and data_specifier; returns the corresponding multicast address (for messages).
     For IPv4, the resulting address is constructed as follows::
 
-       11101111.0ddddddd.ssssssss.ssssssss
-                 \_____/ \_______________/
-                subnet-ID    subject-ID
-
-    Where the subnet-ID is taken from the local IP address::
-
-       xxxxxxxx.xddddddd.nnnnnnnn.nnnnnnnn
-                 \_____/
-                subnet-ID
+        fixed   message  reserved
+       (9 bits) select.  (3 bits)
+       ________   res.|  _
+      /        \     vv / \
+      11101111.0ddddd00.000sssss.ssssssss
+      \__/      \___/      \____________/
+    (4 bits)   (5 bits)       (13 bits)
+      IPv4     domain-ID      subject-ID
+    multicast
+     prefix
 
     >>> from pycyphal.transport import MessageDataSpecifier
     >>> from ipaddress import ip_address
-    >>> str(message_data_specifier_to_multicast_group(ip_address('127.40.11.22'), MessageDataSpecifier(123)))
-    '239.40.0.123'
-    >>> str(message_data_specifier_to_multicast_group(ip_address('192.168.11.22'), MessageDataSpecifier(456)))
-    '239.40.1.200'
-    >>> str(message_data_specifier_to_multicast_group(ip_address('239.168.11.22'), MessageDataSpecifier(456)))
+    >>> str(message_data_specifier_to_multicast_group(0, MessageDataSpecifier(123)))
+    '239.0.0.123'
+    >>> str(message_data_specifier_to_multicast_group(13, MessageDataSpecifier(456)))
+    '239.52.1.200'
+    >>> str(message_data_specifier_to_multicast_group(32, MessageDataSpecifier(456)))
     Traceback (most recent call last):
       ...
-    ValueError: The local address shall be a unicast address, not multicast: 239.168.11.22
-    >>> msg_ip = message_data_specifier_to_multicast_group(ip_address('127.40.11.22'), MessageDataSpecifier(123))
-    >>> assert (int(msg_ip) & DATASPECIFIER_BIT_MASK) != DATASPECIFIER_BIT_MASK, "Dataspecifier bit is zero for message"
+    ValueError: Invalid domain-ID...
+    >>> msg_ip = message_data_specifier_to_multicast_group(13, MessageDataSpecifier(123))
+    >>> assert (int(msg_ip) & DATASPECIFIER_BIT_MASK) != DATASPECIFIER_BIT_MASK, "Dataspecifier bit is 0 for message"
     """
-    assert data_specifier.subject_id <= MULTICAST_GROUP_SUBJECT_ID_MASK, "Protocol design error"
+    if domain_id >= (2**5):
+        raise ValueError(f"Invalid domain-ID: {domain_id} is larger than 31")
+    if data_specifier.subject_id > SUBJECT_ID_MASK:
+        raise ValueError(f"Invalid node-ID: {data_specifier.subject_id} is larger than {SUBJECT_ID_MASK}")
     ty: type
-    if isinstance(local_ip_address, ipaddress.IPv4Address):
+    if not ipv6_addr:
         ty = ipaddress.IPv4Address
-        fix = 0b_11101111_00000000_00000000_00000000
-        sub = 0b_00000000_01111100_00000000_00000000 & int(local_ip_address)
-        msb = fix | sub
-    elif isinstance(local_ip_address, ipaddress.IPv6Address):
-        raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
+        fix = 0b_11101111_00000000_00000000_00000000  # multicast prefix
+        sub = DOMAIN_ID_MASK & (domain_id << 18)  # domain-ID
+        msb = fix | sub & ~(DATASPECIFIER_BIT_MASK)  # message selector
     else:
         assert False
     if local_ip_address.is_multicast:
@@ -153,25 +168,28 @@ def message_data_specifier_to_multicast_group(
 
 
 def multicast_group_to_message_data_specifier(
-    local_ip_address: IPAddress, multicast_group: IPAddress
+    domain_id: int, multicast_group: IPAddress
 ) -> typing.Optional[MessageDataSpecifier]:
     """
     The inverse of :func:`message_data_specifier_to_multicast_group`.
-    The local IP address is needed to ensure that the multicast group belongs to the correct Cyphal/UDP subnet.
+    The domain_id is needed to ensure that the multicast group belongs to the correct Cyphal/UDP subnet.
     The return value is None if the multicast group is not valid per the current Cyphal/UDP specification
     or if it belongs to a different Cyphal/UDP subnet.
 
     >>> from ipaddress import ip_address
-    >>> multicast_group_to_message_data_specifier(ip_address('127.168.11.22'), ip_address('239.40.1.200'))
+    >>> multicast_group_to_message_data_specifier(13, ip_address('239.52.1.200'))
     MessageDataSpecifier(subject_id=456)
-    >>> multicast_group_to_message_data_specifier(ip_address('127.42.11.22'), ip_address('239.43.1.200'))    # -> None
-    >>> multicast_group_to_message_data_specifier(ip_address('127.42.11.22'), ip_address('239.42.255.200'))  # -> None
+    >>> multicast_group_to_message_data_specifier(13, ip_address('239.53.1.200'))    # -> None (service, not message)
+    >>> multicast_group_to_message_data_specifier(14, ip_address('239.52.1.200'))  # -> None (different domain)
+    >>> multicast_group_to_message_data_specifier(13, ip_address('255.52.1.200'))  # -> None (multicast prefix is wrong)
     """
+    if domain_id >= (2**5):
+        raise ValueError(f"Invalid domain-ID: {domain_id} is larger than 31")
     try:
-        candidate = MessageDataSpecifier(int(multicast_group) & MULTICAST_GROUP_SUBJECT_ID_MASK)
+        candidate = MessageDataSpecifier(int(multicast_group) & SUBJECT_ID_MASK)
     except ValueError:
         return None
-    if message_data_specifier_to_multicast_group(local_ip_address, candidate) == multicast_group:
+    if message_data_specifier_to_multicast_group(domain_id, candidate) == multicast_group:
         return candidate
     return None
 
