@@ -83,14 +83,8 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         self._statistics = pycyphal.transport.SessionStatistics()
         if self._multiplier < 1:  # pragma: no cover
             raise ValueError(f"Invalid transfer multiplier: {self._multiplier}")
-        assert (
-            specifier.remote_node_id is None
-            if isinstance(specifier.data_specifier, pycyphal.transport.MessageDataSpecifier)
-            else True
-        ), "Internal protocol violation: cannot unicast a message transfer"
-        assert (
-            specifier.remote_node_id is not None if isinstance(specifier.data_specifier, ServiceDataSpecifier) else True
-        ), "Internal protocol violation: cannot broadcast a service transfer"
+
+        assert (self._source_node_id is None) or (0 <= self._source_node_id <= 0xFFFF)
 
     async def send(self, transfer: pycyphal.transport.Transfer, monotonic_deadline: float) -> bool:
         if self._closed:

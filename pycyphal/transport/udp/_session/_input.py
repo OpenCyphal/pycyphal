@@ -40,13 +40,13 @@ class UDPInputSession(pycyphal.transport.InputSession):
     The processing pipeline per datagram is as follows:
 
     - The socket reader obtains the datagram from the socket using ``recvfrom()``.
-      The source IP address is mapped to a node-ID and the contents are parsed into a Cyphal UDP frame instance.
+      The contents of the Cyphal UDP frame instance is parsed which, among others, contains the source node-ID.
       If anything goes wrong here (like if the source IP address belongs to a wrong subnet or the datagram
       does not contain a valid Cyphal frame or whatever), the datagram is dropped and the appropriate statistical
       counters are updated.
 
     - The socket reader looks up the input session instances that have subscribed for the datagram from the
-      current source node-ID (derived from the IP address) and passes the frame to them.
+      current source node-ID (derived from the Cyphal UDP frame) and passes the frame to them.
       By the way, remember that this is a zero-copy stack, so every subscribed input session gets a reference
       to the same instance of the frame, although it is beside the point right now.
 
@@ -108,7 +108,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._queue: asyncio.Queue[pycyphal.transport.TransferFrom] = asyncio.Queue()
 
-    def _process_frame(self, timestamp: Timestamp, source_node_id: int, frame: typing.Optional[UDPFrame]) -> None:
+    def _process_frame(self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]) -> None:
         """
         The source node-ID is always valid because anonymous transfers are not defined for the UDP transport.
         The frame argument may be None to indicate that the underlying transport has received a datagram
@@ -118,11 +118,13 @@ class UDPInputSession(pycyphal.transport.InputSession):
         visibility handling capabilities are limited. I guess we could define a private abstract base to
         handle this but it feels like too much work. Why can't we have protected visibility in Python?
         """
-        assert isinstance(source_node_id, int) and source_node_id >= 0, "Internal protocol violation"
         if frame is None:  # Malformed frame.
             self._statistics.errors += 1
             return
         self._statistics.frames += 1
+
+        source_node_id = frame.source_node_id
+        assert isinstance(source_node_id, int) and source_node_id >= 0, "Internal protocol violation"
 
         transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
         if transfer is not None:
