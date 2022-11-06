@@ -41,19 +41,16 @@ class SocketFactory(abc.ABC):
     """
 
     @staticmethod
-    def new(local_ip_address: IPAddress) -> SocketFactory:
+    def new(domain_id: int, ipv6_addr: bool = False) -> SocketFactory:
         """
         Use this factory factory to create new instances.
         """
-        if isinstance(local_ip_address, ipaddress.IPv4Address):
+        if not ipv6_addr:
             from ._v4 import IPv4SocketFactory
-
-            return IPv4SocketFactory(local_ip_address)
-
-        if isinstance(local_ip_address, ipaddress.IPv6Address):
+            return IPv4SocketFactory(domain_id)
+        
+        else:
             raise NotImplementedError("Sorry, IPv6 is not yet supported by this implementation.")
-
-        raise TypeError(f"Invalid local IP address: {local_ip_address!r}")  # pragma: no cover
 
     @property
     @abc.abstractmethod
@@ -65,7 +62,7 @@ class SocketFactory(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def local_ip_address(self) -> IPAddress:
+    def domain_id(self) -> int:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -99,7 +96,9 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def make_input_socket(self, data_specifier: pycyphal.transport.DataSpecifier) -> socket.socket:
+    def make_input_socket(
+        self, remote_node_id: typing.Optional[int], data_specifier: pycyphal.transport.DataSpecifier
+    ) -> socket.socket:
         r"""
         Makes a new non-blocking input socket bound to the correct endpoint
         (unicast for service data specifiers, multicast for message data specifiers).
@@ -124,7 +123,7 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pycyphal.util.repr_attributes(self, local_ip_address=str(self.local_ip_address))
+        return pycyphal.util.repr_attributes(self, domain_id=str(self._domain_id))
 
 
 class Sniffer(abc.ABC):

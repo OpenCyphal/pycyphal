@@ -11,6 +11,11 @@ IPAddress = typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 I wonder why the common base class of IPv4Address and IPv6Address is not public?
 """
 
+MULTICAST_PREFIX = 0b_11101111_00000000_00000000_00000000
+"""
+IPv4 address multicast prefix
+"""
+
 SUBJECT_ID_MASK = 2**13 - 1
 """
 Masks the 13 least significant bits of the multicast group address (v4/v6) that represent the message-ID. (Message)
@@ -85,7 +90,7 @@ def service_data_specifier_to_multicast_group(domain_id: int, node_id: int, ipv6
     ty: type
     if not ipv6_addr:
         ty = ipaddress.IPv4Address
-        fix = 0b_11101111_00000000_00000000_00000000  # multicast prefix
+        fix = MULTICAST_PREFIX
         sub = DOMAIN_ID_MASK & (domain_id << 18)  # domain-ID
         msb = fix | sub | DATASPECIFIER_BIT_MASK  # service selector
     else:
@@ -157,7 +162,7 @@ def message_data_specifier_to_multicast_group(
     ty: type
     if not ipv6_addr:
         ty = ipaddress.IPv4Address
-        fix = 0b_11101111_00000000_00000000_00000000  # multicast prefix
+        fix = MULTICAST_PREFIX
         sub = DOMAIN_ID_MASK & (domain_id << 18)  # domain-ID
         msb = fix | sub & ~(DATASPECIFIER_BIT_MASK)  # message selector
     else:
