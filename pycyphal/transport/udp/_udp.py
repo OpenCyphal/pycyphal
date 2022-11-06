@@ -13,7 +13,7 @@ import pycyphal
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
-from ._ip import SocketFactory, Sniffer, LinkLayerCapture, unicast_ip_to_node_id, node_id_to_unicast_ip
+from ._ip import SocketFactory, Sniffer, LinkLayerCapture
 from ._socket_reader import SocketReader, SocketReaderStatistics
 from ._tracer import UDPTracer, UDPCapture
 
@@ -55,9 +55,9 @@ class UDPTransport(pycyphal.transport.Transport):
 
     def __init__(
         self,
-        local_ip_address: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
-        local_node_id: typing.Optional[int] = -1,
-        *,
+        domain_id: int,
+        local_node_id: typing.Optional[int] = 0,
+        *, #?
         mtu: int = min(VALID_MTU_RANGE),
         service_transfer_multiplier: int = 1,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
@@ -87,35 +87,26 @@ class UDPTransport(pycyphal.transport.Transport):
             When the anonymous mode is enabled, it is quite possible to snoop on the network even if there is
             another node running locally on the same interface
             (because sockets are initialized with ``SO_REUSEADDR`` and ``SO_REUSEPORT``, when available).
+        
+        :param domain_id: Specifies which domain the session will be associated with.
 
-        :param local_node_id: As explained previously, the node-ID is part of the IP address,
-            but this parameter allows one to use the UDP transport in anonymous mode or easily build the
-            node IP address from a subnet address (like ``127.42.0.0``) and a node-ID.
+        Examples:
 
-            - If the value is negative, the node-ID equals the 16 least significant bits of the ``local_ip_address``.
-              This is the default behavior.
+        +-----------------------+-------------------+----------------------------+--------------------------+
+        | ``domain_id``         | ``remote_node_id``| Data specifier             | Multicast IP address     |
+        +=======================+===================+============================+==========================+
+        | 13                    | 42                | Message                    | 239.52.0.42              |
+        +-----------------------+-------------------+----------------------------+--------------------------+
+        | 13                    | 42                | Service                    | 239.53.0.42              |
+        +-----------------------+-------------------+----------------------------+--------------------------+
 
-            - If the value is None, an anonymous instance will be constructed,
-              where the transport will reject any attempt to create an output session.
-              The transport instance will also report its own :attr:`local_node_id` as None.
-              The Cyphal/UDP transport does not support anonymous transfers by design.
+        :param local_node_id: As explained previously, the node-ID is part of the UDP Frame,
+            this parameter allows one to setup an anonymous input session.
 
-            - If the value is a non-negative integer, the 16 least significant bits of the ``local_ip_address``
-              are replaced with this value.
+            - If the value is None, an anonymous instance will be constructed.
+              The UDP frame will then report its own :attr:`source_node_id` as None.
 
-            Examples:
-
-            +-----------------------+-------------------+----------------------------+--------------------------+
-            | ``local_ip_address``  | ``local_node_id`` | Local IP address           | Local node-ID            |
-            +=======================+===================+============================+==========================+
-            | 127.42.1.200          | (default)         | 127.42.1.200               | 456 (from IP address)    |
-            +-----------------------+-------------------+----------------------------+--------------------------+
-            | 127.42.1.200          | 42                | 127.42.0.42                | 42                       |
-            +-----------------------+-------------------+----------------------------+--------------------------+
-            | 127.42.0.0            | 42                | 127.42.0.42                | 42                       |
-            +-----------------------+-------------------+----------------------------+--------------------------+
-            | 127.42.1.200          | None              | 127.42.1.200               | anonymous                |
-            +-----------------------+-------------------+----------------------------+--------------------------+
+            - If the value is a non-negative integer, then we can setup both input and output sessions.
 
         :param mtu: The application-level MTU for outgoing packets.
             In other words, this is the maximum number of serialized bytes per Cyphal/UDP frame.
@@ -140,14 +131,9 @@ class UDPTransport(pycyphal.transport.Transport):
         if loop:
             warnings.warn("The loop parameter is deprecated.", DeprecationWarning)
 
-        if not isinstance(local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
-            local_ip_address = ipaddress.ip_address(local_ip_address)
-        assert not isinstance(local_ip_address, str)
-        if local_node_id is not None and local_node_id >= 0:
-            local_ip_address = node_id_to_unicast_ip(local_ip_address, local_node_id)
-
-        self._sock_factory = SocketFactory.new(local_ip_address)
+        self._sock_factory = SocketFactory.new(domain_id)
         self._anonymous = local_node_id is None
+        self._local_node_id = local_node_id
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
 
@@ -169,9 +155,8 @@ class UDPTransport(pycyphal.transport.Transport):
         self._closed = False
         self._statistics = UDPTransportStatistics()
 
-        assert (local_node_id is None) or (local_node_id < 0) or (self.local_node_id == local_node_id)
-        assert (self.local_node_id is None) or (0 <= self.local_node_id <= 0xFFFF)
-        _logger.debug("%s: Initialized with local node-ID %s", self, self.local_node_id)
+        assert (self._local_node_id is None) or (0 <= self._local_node_id <= 0xFFFF)
+        _logger.debug("%s: Initialized with local node-ID %s", self, self._local_node_id)
 
     @property
     def protocol_parameters(self) -> pycyphal.transport.ProtocolParameters:
@@ -183,8 +168,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
     @property
     def local_node_id(self) -> typing.Optional[int]:
-        addr = self._sock_factory.local_ip_address
-        return None if self._anonymous else unicast_ip_to_node_id(addr, addr)
+        return None if self._anonymous else self._local_node_id
 
     def close(self) -> None:
         self._closed = True
@@ -214,14 +198,6 @@ class UDPTransport(pycyphal.transport.Transport):
     ) -> UDPOutputSession:
         self._ensure_not_closed()
         if specifier not in self._output_registry:
-            if self.local_node_id is None:
-                # In Cyphal/UDP, the anonymous mode is somewhat bolted-on.
-                # The underlying protocol (IP) does not have the concept of anonymous packet.
-                # We add it artificially as an implementation detail of this library.
-                raise pycyphal.transport.OperationNotDefinedForAnonymousNodeError(
-                    "Cannot create an output session instance because this Cyphal/UDP transport instance is "
-                    "configured in the anonymous mode."
-                )
 
             def finalizer() -> None:
                 del self._output_registry[specifier]
@@ -238,7 +214,7 @@ class UDPTransport(pycyphal.transport.Transport):
                 mtu=self._mtu,
                 multiplier=multiplier,
                 sock=sock,
-                source_node_id=self.local_node_id,
+                source_node_id=self._local_node_id,
                 finalizer=finalizer,
             )
 
@@ -259,8 +235,8 @@ class UDPTransport(pycyphal.transport.Transport):
         return list(self._output_registry.values())
 
     @property
-    def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
-        return self._sock_factory.local_ip_address
+    def local_domain_id(self) -> int:
+        return self._sock_factory.domain_id
 
     def begin_capture(self, handler: pycyphal.transport.CaptureCallback) -> None:
         """
@@ -324,7 +300,7 @@ class UDPTransport(pycyphal.transport.Transport):
                 )
                 self._socket_reader_registry[specifier.data_specifier] = SocketReader(
                     sock=self._sock_factory.make_input_socket(specifier.data_specifier),
-                    local_ip_address=self._sock_factory.local_ip_address,
+                    domain_id=self._sock_factory.domain_id,
                     anonymous=self._anonymous,
                     statistics=self._statistics.received_datagrams.setdefault(
                         specifier.data_specifier, SocketReaderStatistics()
@@ -384,9 +360,10 @@ class UDPTransport(pycyphal.transport.Transport):
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
 
-    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
-        return [repr(str(self.local_ip_address))], {
-            "local_node_id": self.local_node_id,
+    def _get_repr_fields(self) -> typing.Dict[str, typing.Any]:
+        return {
+            "domain_id": self._domain_id,
+            "local_node_id": self._local_node_id,
             "service_transfer_multiplier": self._srv_multiplier,
             "mtu": self._mtu,
         }
