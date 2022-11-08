@@ -84,7 +84,7 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         if self._multiplier < 1:  # pragma: no cover
             raise ValueError(f"Invalid transfer multiplier: {self._multiplier}")
 
-        assert (self._source_node_id is None) or (0 <= self._source_node_id <= 0xFFFF)
+        assert (self._source_node_id is None) or (0 <= self._source_node_id <= 0xFFFE)
 
     async def send(self, transfer: pycyphal.transport.Transfer, monotonic_deadline: float) -> bool:
         if self._closed:

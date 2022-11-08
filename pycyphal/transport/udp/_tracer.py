@@ -14,7 +14,7 @@ from pycyphal.transport import AlienTransfer, TransferFrom, Timestamp
 from pycyphal.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
 from ._frame import UDPFrame
 from ._ip import LinkLayerPacket, SUBJECT_PORT
-from ._ip import unicast_ip_to_node_id, udp_port_to_service_data_specifier, multicast_group_to_message_data_specifier
+from ._ip import udp_port_to_service_data_specifier, multicast_group_to_message_data_specifier
 
 
 @dataclasses.dataclass(frozen=True)

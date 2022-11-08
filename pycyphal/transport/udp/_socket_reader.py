@@ -16,7 +16,6 @@ import dataclasses
 import pycyphal
 from pycyphal.transport import Timestamp
 from ._frame import UDPFrame
-from ._ip import unicast_ip_to_node_id
 
 
 _READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.

@@ -32,7 +32,12 @@ class IPv4SocketFactory(SocketFactory):
     a node-ID that maps to the broadcast address for the subnet is unavailable.
     """
 
-    def __init__(self, domain_id: int):
+    def __init__(
+        self,
+        local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address],
+        domain_id: int
+    ):
+        self._local_ip_addr = local_ip_addr
         if domain_id >= (2**5):
             raise ValueError(f"Invalid domain-ID: {domain_id} is larger than 31")
         self._domain_id = domain_id
@@ -42,38 +47,44 @@ class IPv4SocketFactory(SocketFactory):
         return NODE_ID_MASK  # The maximum may not be available because it may be the broadcast address.
 
     @property
+    def local_ip_addr(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+        return self._local_ip_addr
+
+    @property
     def domain_id(self) -> int:
         return self._domain_id
 
     def make_output_socket(
-        self, remote_node_id: typing.Optional[int], data_specifier: pycyphal.transport.DataSpecifier
+        self,
+        remote_node_id: typing.Optional[int],
+        data_specifier: pycyphal.transport.DataSpecifier
     ) -> socket.socket:
         _logger.debug(
             "%r: Constructing new output socket for remote node %s and %s", self, remote_node_id, data_specifier
         )
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.setblocking(False)
-        # try: # NOT NECESSARY ANYMORE?
-        #     # Output sockets shall be bound, too, in order to ensure that outgoing packets have the correct
-        #     # source IP address specified. This is particularly important for localhost; an unbound socket
-        #     # there emits all packets from 127.0.0.1 which is certainly not what we need.
-        #     s.bind((str(self._local), 0))  # Bind to an ephemeral port.
-        # except OSError as ex:
-        #     s.close()
-        #     if ex.errno == errno.EADDRNOTAVAIL:
-        #         raise InvalidMediaConfigurationError(
-        #             f"Bad IP configuration: cannot bind output socket to {self._local} [{errno.errorcode[ex.errno]}]"
-        #         ) from None
-        #     raise  # pragma: no cover
+        try:
+            # Output sockets shall be bound, too, in order to ensure that outgoing packets have the correct
+            # source IP address specified. This is particularly important for localhost; an unbound socket
+            # there emits all packets from 127.0.0.1 which is certainly not what we need.
+            s.bind((str(self._local_ip_addr), 0))  # Bind to an ephemeral port.
+        except OSError as ex:
+            s.close()
+            if ex.errno == errno.EADDRNOTAVAIL:
+                raise InvalidMediaConfigurationError(
+                    f"Bad IP configuration: cannot bind output socket to {self._local_ip_addr} [{errno.errorcode[ex.errno]}]"
+                ) from None
+            raise  # pragma: no cover
 
         if isinstance(data_specifier, MessageDataSpecifier):
             if remote_node_id is not None:
                 s.close()
-                raise UnsupportedSessionConfigurationError("Message transfers don't require a remote_node_it.")
+                raise UnsupportedSessionConfigurationError("Message transfers don't require a remote_node_id.")
             # Merely binding is not enough for multicast sockets. We also have to configure IP_MULTICAST_IF.
             # https://tldp.org/HOWTO/Multicast-HOWTO-6.html
             # https://stackoverflow.com/a/26988214/1007777
-            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local.packed)
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
             remote_ip = message_data_specifier_to_multicast_group(self._domain_id, data_specifier)
             remote_port = SUBJECT_PORT
@@ -81,7 +92,7 @@ class IPv4SocketFactory(SocketFactory):
             if remote_node_id is None:
                 s.close()
                 raise UnsupportedSessionConfigurationError("Service transfers require a remote_node_id.")
-            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local.packed)
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
             remote_ip = service_data_specifier_to_multicast_group(self._domain_id, remote_node_id)
             remote_port = service_data_specifier_to_udp_port(data_specifier)
@@ -117,19 +128,19 @@ class IPv4SocketFactory(SocketFactory):
                 # Binding to a multicast address is not allowed on Windows, and it is not necessary there. Error is:
                 #   OSError: [WinError 10049] The requested address is not valid in its context
                 s.bind(("", multicast_port))
-            # try: # NOT NECESSARY ANYMORE?
-            #     # Note that using INADDR_ANY in IP_ADD_MEMBERSHIP doesn't actually mean "any",
-            #     # it means "choose one automatically"; see https://tldp.org/HOWTO/Multicast-HOWTO-6.html
-            #     # This is why we have to specify the interface explicitly here.
-            #     s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._domain_id.packed)
-            # except OSError as ex:
-            #     s.close()
-            #     if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
-            #         raise InvalidMediaConfigurationError(
-            #             f"Could not register multicast group membership {multicast_ip} via {self._local} using {s} "
-            #             f"[{errno.errorcode[ex.errno]}]"
-            #         ) from None
-            #     raise  # pragma: no cover
+            try: # NOT NECESSARY ANYMORE?
+                # Note that using INADDR_ANY in IP_ADD_MEMBERSHIP doesn't actually mean "any",
+                # it means "choose one automatically"; see https://tldp.org/HOWTO/Multicast-HOWTO-6.html
+                # This is why we have to specify the interface explicitly here.
+                s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_addr.packed)
+            except OSError as ex:
+                s.close()
+                if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
+                    raise InvalidMediaConfigurationError(
+                        f"Could not register multicast group membership {multicast_ip} via {self._local_ip_addr} using {s} "
+                        f"[{errno.errorcode[ex.errno]}]"
+                    ) from None
+                raise  # pragma: no cover
         elif isinstance(data_specifier, ServiceDataSpecifier):
             multicast_ip = service_data_specifier_to_multicast_group(self._domain_id, remote_node_id, data_specifier)
             multicast_port = service_data_specifier_to_udp_port(data_specifier)
@@ -137,16 +148,16 @@ class IPv4SocketFactory(SocketFactory):
                 s.bind((str(multicast_ip), multicast_port))
             else:
                 s.bind(("", multicast_port))
-            # try: # NOT NECESSARY ANYMORE?
-            #     s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local.packed)
-            # except OSError as ex:
-            #     s.close()
-            #     if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
-            #         raise InvalidMediaConfigurationError(
-            #             f"Could not register multicast group membership {multicast_ip} via {self._local} using {s} "
-            #             f"[{errno.errorcode[ex.errno]}]"
-            #         ) from None
-            #     raise  # pragma: no cover
+            try: # NOT NECESSARY ANYMORE?
+                s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_addr.packed)
+            except OSError as ex:
+                s.close()
+                if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
+                    raise InvalidMediaConfigurationError(
+                        f"Could not register multicast group membership {multicast_ip} via {self._local_ip_addr} using {s} "
+                        f"[{errno.errorcode[ex.errno]}]"
+                    ) from None
+                raise  # pragma: no cover
         else:
             assert False
         _logger.debug("%r: New input %r", self, s)

@@ -29,11 +29,11 @@ is handled directly by the standard UDP/IP stack of the underlying operating sys
 Per the Cyphal transport model provided in the Cyphal specification, the following transfer categories are supported:
 
 +--------------------+--------------------------+---------------------------+
-| Supported transfers| Unicast                  | Broadcast                 |
+| Supported transfers| Point-to-point           | Broadcast                 |
 +====================+==========================+===========================+
 |**Message**         | No                       | Yes                       |
 +--------------------+--------------------------+---------------------------+
-|**Service**         | No                       | Yes                       |
+|**Service**         | Yes                      | No                        |
 +--------------------+--------------------------+---------------------------+
 
 
@@ -50,7 +50,7 @@ Cyphal-specific UDP datagram header.
 +=======================================+===========================================================================+
 | Transfer priority                     |                                                                           |
 +---------------------------------------+                                                                           |      
-| Node-ID                               | UDP datagram payload (frame header)                                       |
+| Source Node-ID                        | UDP datagram payload (frame header)                                       |
 +---------------------------------------+                                                                           |
 | Transfer-ID                           |                                                                           |
 +-------------------+-------------------+---------------------------------------------------------------------------+
@@ -68,20 +68,6 @@ for reporting captured packets (see :class:`UDPCaptured`).
 
 IP address mapping
 ~~~~~~~~~~~~~~~~~~
-
-The IPv4 address of a node is structured as follows::
-                    Route specifier
-                       (18 bits)
-                   __________________
-                  /                  \
-   xxxxxxxx.xdddddnn.nnnnnnnn.nnnnnnnn
-   \________/\___/
-    (9 bits) (5 bits)
-     prefix  domain-ID
-
-Incoming traffic from IP addresses whose 14 most significant bits are different is rejected;
-this behavior enables co-existence of multiple independent Cyphal/UDP networks along with other UDP protocols
-on the same network.
 
 The *domain-ID* is used to differentiate independent Cyphal/UDP transport networks sharing the same IP network
 (e.g., multiple Cyphal/UDP networks running on localhost or on some physical network).
@@ -169,7 +155,7 @@ Example::
 
     Fixed prefix:       11101111 0xxxxxxx xxxxxxxx xxxxxxxx 
 
-    Domain-ID (=13):     xxxxxxxx x01101xx xxxxxxxx xxxxxxxx
+    Domain-ID (=13):    xxxxxxxx x01101xx xxxxxxxx xxxxxxxx
 
     Message select:     xxxxxxxx xxxxxx00 000xxxxx xxxxxxxx 
     and reserved
@@ -307,12 +293,6 @@ about the state of other agents involved in data exchange).
 Implementation-specific details
 +++++++++++++++++++++++++++++++
 
-Applications relying on this particular transport implementation will be unable to detect a node-ID conflict on
-the bus because the implementation discards all traffic originating from its own IP address. (REVIEW)
-This is a very environment-specific edge case resulting from certain peculiarities of the Berkeley socket API.
-Other implementations of Cyphal/UDP (particularly those for embedded systems) may not have this limitation.
-
-
 Usage
 +++++
 
@@ -328,10 +308,15 @@ Create two transport instances -- one with a node-ID, one anonymous:
 >>> import asyncio
 >>> import pycyphal
 >>> import pycyphal.transport.udp
->>> tr_0 = pycyphal.transport.udp.UDPTransport(domain_id=13)
+>>> tr_0 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', domain_id=13, local_node_id=10)
 >>> tr_0.domain_id
 13
->>> tr_1 = pycyphal.transport.udp.UDPTransport(domain_id=13, local_node_id=None)  # Anonymous is only for listening.
+>>> tr_0.local_ip_addr
+IPv4Address('127.0.0.1')
+>>> tr_0.local_node_id
+10
+# Anonymous is only for listening.
+>>> tr_1 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', domain_id=13, local_node_id=None)
 >>> tr_1.local_node_id is None
 True
 
@@ -398,10 +383,10 @@ from ._session import UDPFeedback as UDPFeedback
 
 from ._frame import UDPFrame as UDPFrame
 
-from ._ip import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
+from ._ip import SUBJECT_ID_MASK as SUBJECT_ID_MASK
+from ._ip import NODE_ID_MASK as NODE_ID_MASK
 from ._ip import SUBJECT_PORT as SUBJECT_PORT
-from ._ip import node_id_to_unicast_ip as node_id_to_unicast_ip
-from ._ip import unicast_ip_to_node_id as unicast_ip_to_node_id
+from ._ip import SERVICE_BASE_PORT as SERVICE_BASE_PORT
 from ._ip import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group
 from ._ip import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
 from ._ip import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port

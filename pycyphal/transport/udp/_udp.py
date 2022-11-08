@@ -55,6 +55,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
     def __init__(
         self,
+        local_ip_addr: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
         domain_id: int,
         local_node_id: typing.Optional[int] = 0,
         *, #?
@@ -65,19 +66,6 @@ class UDPTransport(pycyphal.transport.Transport):
     ):
         """
         :param local_ip_address: Specifies which local IP address to use for this transport.
-            This setting also implicitly specifies the network interface to use.
-            All output sockets will be bound (see ``bind()``) to the specified local address.
-            If the specified address is not available locally, the transport will fail with
-            :class:`pycyphal.transport.InvalidMediaConfigurationError`.
-
-            For use on the loopback interface, any IP address from the loopback range can be used;
-            for example, ``127.0.0.123``.
-            This generally does not work with physical interfaces;
-            for example, if a host has one physical interface at ``192.168.1.200``,
-            an attempt to run a node at ``192.168.1.201`` will trigger the media configuration error
-            because ``bind()`` will fail with ``EADDRNOTAVAIL``.
-            One can change the node-ID of a physical transport by altering the network
-            interface configuration in the underlying operating system itself.
 
             Using ``INADDR_ANY`` here (i.e., ``0.0.0.0`` for IPv4) is not expected to work reliably or be portable
             because this configuration is, generally, incompatible with multicast sockets (even in the anonymous mode).
@@ -88,7 +76,7 @@ class UDPTransport(pycyphal.transport.Transport):
             another node running locally on the same interface
             (because sockets are initialized with ``SO_REUSEADDR`` and ``SO_REUSEPORT``, when available).
         
-        :param domain_id: Specifies which domain the session will be associated with.
+        :param domain_id: Specifies which domain the node will be associated with.
 
         Examples:
 
@@ -131,8 +119,15 @@ class UDPTransport(pycyphal.transport.Transport):
         if loop:
             warnings.warn("The loop parameter is deprecated.", DeprecationWarning)
 
-        self._sock_factory = SocketFactory.new(domain_id)
+        if not isinstance(local_ip_addr, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+            local_ip_addr = ipaddress.ip_address(local_ip_addr)
+        assert not isinstance(local_ip_addr, str)
+
+        assert (local_node_id is None) or (0 <= local_node_id <= 0xFFFE)
+
+        self._sock_factory = SocketFactory.new(local_ip_addr, domain_id)
         self._anonymous = local_node_id is None
+        self._local_ip_addr = local_ip_addr
         self._local_node_id = local_node_id
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
@@ -155,7 +150,6 @@ class UDPTransport(pycyphal.transport.Transport):
         self._closed = False
         self._statistics = UDPTransportStatistics()
 
-        assert (self._local_node_id is None) or (0 <= self._local_node_id <= 0xFFFF)
         _logger.debug("%s: Initialized with local node-ID %s", self, self._local_node_id)
 
     @property
@@ -235,7 +229,11 @@ class UDPTransport(pycyphal.transport.Transport):
         return list(self._output_registry.values())
 
     @property
-    def local_domain_id(self) -> int:
+    def local_ip_addr(self) -> int:
+        return self._sock_factory._local_ip_addr
+
+    @property
+    def domain_id(self) -> int:
         return self._sock_factory.domain_id
 
     def begin_capture(self, handler: pycyphal.transport.CaptureCallback) -> None:
@@ -299,8 +297,8 @@ class UDPTransport(pycyphal.transport.Transport):
                     self._socket_reader_registry,
                 )
                 self._socket_reader_registry[specifier.data_specifier] = SocketReader(
-                    sock=self._sock_factory.make_input_socket(specifier.data_specifier),
-                    domain_id=self._sock_factory.domain_id,
+                    sock=self._sock_factory.make_input_socket(specifier.remote_node_id, specifier.data_specifier),
+                    local_ip_address=self.local_ip_addr,
                     anonymous=self._anonymous,
                     statistics=self._statistics.received_datagrams.setdefault(
                         specifier.data_specifier, SocketReaderStatistics()

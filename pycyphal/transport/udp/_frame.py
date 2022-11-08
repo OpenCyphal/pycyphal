@@ -55,8 +55,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     SOURCE_NODE_ID_MASK = 2**16 - 1
     INDEX_MASK = 2**31 - 1
 
-    # No anonymous nodes for Cyphal/UDP
-    source_node_id: int
+    source_node_id: int | None
 
     def __post_init__(self) -> None:
         if not isinstance(self.priority, pycyphal.transport.Priority):
@@ -68,7 +67,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         if not (0 <= self.index <= self.INDEX_MASK):
             raise ValueError(f"Invalid frame index: {self.index}")
 
-        if not (0 <= self.source_node_id <= self.SOURCE_NODE_ID_MASK):
+        if not (0 <= self.source_node_id <= self.SOURCE_NODE_ID_MASK) or self.source_node_id is None:
             raise ValueError(f"Invalid source node id: {self.source_node_id}")
 
         if not isinstance(self.payload, memoryview):
@@ -84,7 +83,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         header = self._HEADER_FORMAT.pack(
             self._VERSION,
             int(self.priority),
-            self.source_node_id,
+            self.source_node_id if self.source_node_id is not None else 0xFFFF,
             self.index | ((1 << 31) if self.end_of_transfer else 0),
             self.transfer_id,
         )
