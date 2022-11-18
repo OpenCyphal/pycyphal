@@ -24,67 +24,79 @@ def _unittest_socket_factory() -> None:
 
     is_linux = sys.platform.startswith("linux")
 
-    fac = SocketFactory.new(IPv4Address("127.40.1.200"))
+    fac = SocketFactory.new(IPv4Address("127.0.0.1"), domain_id=13)
     assert fac.max_nodes == 0xFFFF
-    assert str(fac.local_ip_address) == "127.40.1.200"
+    assert str(fac.local_ip_address) == "127.0.0.1"
+    assert fac.domain_id == 13
 
-    # SERVICE SOCKET TEST (unicast)
+    # SERVICE SOCKET TEST
     ds = ServiceDataSpecifier(100, ServiceDataSpecifier.Role.REQUEST)
-    test_u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    test_u.bind(("127.40.0.123", service_data_specifier_to_udp_port(ds)))
+    test_srv_i = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_srv_i.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    test_srv_i.bind(("239.53.1.200" * is_linux, service_data_specifier_to_udp_port(ds)))
+    test_srv_i.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.53.1.200") + socket.inet_aton("127.0.0.1")
+    )
 
-    srv_o = fac.make_output_socket(123, ds)
+    srv_o = fac.make_output_socket(456, ds)
     srv_o.send(b"Goose")
-    rx = test_u.recvfrom(1024)
+    rx = test_srv_i.recvfrom(1024)
     assert rx[0] == b"Goose"
-    assert rx[1][0] == "127.40.1.200"
+    assert rx[1][0] == "127.0.0.1"
 
-    srv_i = fac.make_input_socket(ds)
-    test_u.sendto(b"Duck", ("127.40.1.200", service_data_specifier_to_udp_port(ds)))
+    test_srv_o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_srv_o.bind(("127.0.0.1", 0))
+    test_srv_o.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
+
+    srv_i = fac.make_input_socket(456, ds)
+    test_srv_o.sendto(b"Duck", ("239.53.1.200", service_data_specifier_to_udp_port(ds)))
+    time.sleep(1) ##QUESTION: BlockingIOError: [Errno 35] Resource temporarily unavailable
     rx = srv_i.recvfrom(1024)
     assert rx[0] == b"Duck"
-    assert rx[1][0] == "127.40.0.123"
-    test_u.close()
+    assert rx[1][0] == "127.0.0.1"
 
     # MESSAGE SOCKET TEST (multicast)
     # Note that Windows does not permit using the same socket for both sending to and receiving from a unicast group
     # because in order to specify a particular output interface the socket must be bound to a unicast address.
     # So we set up separate sockets for input and output.
-    test_i = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    test_i.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    test_i.bind(("239.40.2.100" * is_linux, SUBJECT_PORT))
-    test_i.setsockopt(
-        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.40.2.100") + socket.inet_aton("127.40.0.123")
+    test_msg_i = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_msg_i.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    test_msg_i.bind(("239.52.2.100" * is_linux, SUBJECT_PORT))
+    test_msg_i.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.52.2.100") + socket.inet_aton("127.0.0.1")
     )
 
-    msg_o = fac.make_output_socket(None, MessageDataSpecifier(612))  # 612 = (2 << 8) + 100
+    msg_o = fac.make_output_socket(None, MessageDataSpecifier(612))
     msg_o.send(b"Eagle")
-    rx = test_i.recvfrom(1024)
+    rx = test_msg_i.recvfrom(1024)
     assert rx[0] == b"Eagle"
-    assert rx[1][0] == "127.40.1.200"
+    assert rx[1][0] == "127.0.0.1"
 
-    test_o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    test_o.bind(("127.40.0.123", 0))
-    test_o.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.40.0.123"))
-    msg_i = fac.make_input_socket(MessageDataSpecifier(612))
-    test_o.sendto(b"Seagull", ("239.40.2.100", SUBJECT_PORT))
+    test_msg_o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_msg_o.bind(("127.0.0.1", 0))
+    test_msg_o.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
+
+    msg_i = fac.make_input_socket(None, MessageDataSpecifier(612))
+    test_msg_o.sendto(b"Seagull", ("239.52.2.100", SUBJECT_PORT))
+    time.sleep(1) ##QUESTION: BlockingIOError: [Errno 35] Resource temporarily unavailable
     rx = msg_i.recvfrom(1024)
     assert rx[0] == b"Seagull"
-    assert rx[1][0] == "127.40.0.123"  # Same address we just bound to.
+    assert rx[1][0] == "127.0.0.1"  # Same address we just bound to.
 
     # ERRORS
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_input_socket(
+        IPv4SocketFactory(IPv4Address("1.2.3.4"), 13).make_input_socket(
+            456,
             ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_input_socket(MessageDataSpecifier(0))
+        IPv4SocketFactory(IPv4Address("1.2.3.4"), 13).make_input_socket(None, MessageDataSpecifier(0))
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_output_socket(
+        IPv4SocketFactory(IPv4Address("1.2.3.4"), 13).make_output_socket(
             1, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_output_socket(1, MessageDataSpecifier(0))
+        IPv4SocketFactory(IPv4Address("1.2.3.4"), 13).make_output_socket(1, MessageDataSpecifier(0))
 
     with raises(UnsupportedSessionConfigurationError):
         fac.make_output_socket(1, MessageDataSpecifier(0))
@@ -92,9 +104,11 @@ def _unittest_socket_factory() -> None:
         fac.make_output_socket(None, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE))
 
     # CLEAN UP
-    test_u.close()
-    test_i.close()
-    test_o.close()
+    # test_u.close()
+    test_srv_i.close()
+    test_srv_o.close()
+    test_msg_i.close()
+    test_msg_o.close()
     srv_o.close()
     srv_i.close()
     msg_o.close()

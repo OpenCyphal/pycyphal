@@ -47,7 +47,7 @@ class IPv4SocketFactory(SocketFactory):
         return NODE_ID_MASK  # The maximum may not be available because it may be the broadcast address.
 
     @property
-    def local_ip_addr(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+    def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
         return self._local_ip_addr
 
     @property
@@ -106,6 +106,7 @@ class IPv4SocketFactory(SocketFactory):
     def make_input_socket(
         self, remote_node_id: typing.Optional[int], data_specifier: pycyphal.transport.DataSpecifier
     ) -> socket.socket:
+        ## TODO: Add check for remote_node_id is None or not (like in make_output_socket above)
         _logger.debug("%r: Constructing new input socket for %s", self, data_specifier)
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.setblocking(False)
@@ -128,7 +129,7 @@ class IPv4SocketFactory(SocketFactory):
                 # Binding to a multicast address is not allowed on Windows, and it is not necessary there. Error is:
                 #   OSError: [WinError 10049] The requested address is not valid in its context
                 s.bind(("", multicast_port))
-            try: # NOT NECESSARY ANYMORE?
+            try:
                 # Note that using INADDR_ANY in IP_ADD_MEMBERSHIP doesn't actually mean "any",
                 # it means "choose one automatically"; see https://tldp.org/HOWTO/Multicast-HOWTO-6.html
                 # This is why we have to specify the interface explicitly here.
@@ -142,13 +143,13 @@ class IPv4SocketFactory(SocketFactory):
                     ) from None
                 raise  # pragma: no cover
         elif isinstance(data_specifier, ServiceDataSpecifier):
-            multicast_ip = service_data_specifier_to_multicast_group(self._domain_id, remote_node_id, data_specifier)
+            multicast_ip = service_data_specifier_to_multicast_group(self._domain_id, remote_node_id)
             multicast_port = service_data_specifier_to_udp_port(data_specifier)
             if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
                 s.bind((str(multicast_ip), multicast_port))
             else:
                 s.bind(("", multicast_port))
-            try: # NOT NECESSARY ANYMORE?
+            try:
                 s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_addr.packed)
             except OSError as ex:
                 s.close()

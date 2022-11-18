@@ -25,16 +25,16 @@ async def _unittest_udp_transport_ipv4() -> None:
     get_monotonic = asyncio.get_event_loop().time
 
     with pytest.raises(ValueError):
-        _ = UDPTransport("127.0.0.111", mtu=10)
+        _ = UDPTransport("127.0.0.1", domain_id=13, local_node_id=111, mtu=10)
 
     with pytest.raises(ValueError):
-        _ = UDPTransport("127.0.0.111", service_transfer_multiplier=100)
+        _ = UDPTransport("127.0.0.1", domain_id=13, local_node_id=111, service_transfer_multiplier=100)
 
-    tr = UDPTransport("127.0.0.111", mtu=9000)
-    tr2 = UDPTransport("127.0.0.222", service_transfer_multiplier=2)
+    tr = UDPTransport("127.0.0.1", domain_id=13, local_node_id=111, mtu=9000)
+    tr2 = UDPTransport("127.0.0.1", domain_id=13, local_node_id=222, service_transfer_multiplier=2)
 
-    assert tr.local_ip_address == ipaddress.ip_address("127.0.0.111")
-    assert tr2.local_ip_address == ipaddress.ip_address("127.0.0.222")
+    assert tr.local_ip_addr == ipaddress.ip_address("127.0.0.1")
+    assert tr2.local_ip_addr == ipaddress.ip_address("127.0.0.1")
 
     assert tr.local_node_id == 111
     assert tr2.local_node_id == 222
@@ -42,7 +42,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.input_sessions == []
     assert tr.output_sessions == []
 
-    assert "127.0.0.111" in repr(tr)
+    assert "127.0.0.1" in repr(tr)
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
         max_nodes=65535,
@@ -50,7 +50,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     )
 
     default_mtu = min(UDPTransport.VALID_MTU_RANGE)
-    assert "127.0.0.222" in repr(tr2)
+    assert "127.0.0.1" in repr(tr2)
     assert tr2.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
         max_nodes=65535,

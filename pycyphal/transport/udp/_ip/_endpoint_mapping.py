@@ -85,8 +85,10 @@ def service_data_specifier_to_multicast_group(domain_id: int, node_id: int, ipv6
     """
     if domain_id >= (2**5):
         raise ValueError(f"Invalid domain-ID: {domain_id} is larger than 31")
-    if node_id > NODE_ID_MASK:
+    if node_id is not None and not (0 <= node_id <= NODE_ID_MASK):
         raise ValueError(f"Invalid node-ID: {node_id} is larger than {NODE_ID_MASK}")
+    if node_id is None:
+        node_id = int(0xFFFF)
     ty: type
     if not ipv6_addr:
         ty = ipaddress.IPv4Address

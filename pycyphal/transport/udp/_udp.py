@@ -127,6 +127,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
         self._sock_factory = SocketFactory.new(local_ip_addr, domain_id)
         self._anonymous = local_node_id is None
+        self._domain_id = domain_id
         self._local_ip_addr = local_ip_addr
         self._local_node_id = local_node_id
         self._mtu = int(mtu)
@@ -358,10 +359,10 @@ class UDPTransport(pycyphal.transport.Transport):
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
 
-    def _get_repr_fields(self) -> typing.Dict[str, typing.Any]:
-        return {
+    def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
+        return [repr(str(self.local_ip_addr))], {
             "domain_id": self._domain_id,
-            "local_node_id": self._local_node_id,
+            "local_node_id": self.local_node_id,
             "service_transfer_multiplier": self._srv_multiplier,
             "mtu": self._mtu,
         }
