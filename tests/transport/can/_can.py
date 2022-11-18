@@ -1187,6 +1187,46 @@ async def _unittest_can_spoofing() -> None:
         )
 
 
+async def _unittest_can_media_spoofing():
+    """Test the spoof_frames method of CANTransport.
+    1. Create a new MockMedia
+    2. Create a new CANTransport, set the mock media as its media
+    3. Send some frames on the media using the spoof_frames method
+    """
+    from tests.transport.can.media.mock import MockMedia
+    from pycyphal.transport.can.media import Envelope
+    from pycyphal.transport.can import CANCapture
+    mock_media = MockMedia(set(), 64, 1)
+    can_transport = can.CANTransport(mock_media, None)
+    list_of_frames: typing.Sequence[can.media.DataFrame] = [
+        can.media.DataFrame(
+            format=can.media.FrameFormat.EXTENDED,
+            identifier=0x123,
+            data=bytearray(b"123"),
+        ),
+        can.media.DataFrame(
+            format=can.media.FrameFormat.EXTENDED,
+            identifier=0x456,
+            data=bytearray(b"123"),
+        ),
+    ]
+    frames_confirmed_received = {frame.identifier:False for frame in list_of_frames}
+
+    list_of_envelopes = [Envelope(f, loopback=False) for f in list_of_frames]
+    all_frames_received_event = asyncio.Event()
+
+    def _capture_handler(capture: CANCapture) -> None:
+        nonlocal frames_confirmed_received
+        frames_confirmed_received[capture.frame.identifier] = True
+        if all(frames_confirmed_received.values()):
+            all_frames_received_event.set()
+
+    can_transport.begin_capture(_capture_handler)
+    await can_transport.spoof_frames(list_of_envelopes)
+    await asyncio.wait_for(all_frames_received_event.wait(), 0.1)
+
+
+
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:
     return memoryview(data.encode() if isinstance(data, str) else data)
 
