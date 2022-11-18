@@ -18,6 +18,7 @@ from ._frame import CyphalFrame, TRANSFER_ID_MODULO
 from ._identifier import CANID, generate_filter_configurations
 from ._input_dispatch_table import InputDispatchTable
 from ._tracer import CANTracer, CANCapture
+from .media import DataFrame
 
 
 _logger = logging.getLogger(__name__)
@@ -252,6 +253,15 @@ class CANTransport(pycyphal.transport.Transport):
         See :class:`CANTracer`.
         """
         return CANTracer()
+
+    async def spoof_frames(self, frames: typing.Sequence[DataFrame]) -> None:
+        async with self._media_lock:
+            if self._maybe_media is None:
+                raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
+            await self._maybe_media.send(
+                frames,
+                monotonic_deadline=asyncio.get_running_loop().time() + 1.0,
+            )
 
     async def spoof(self, transfer: pycyphal.transport.AlienTransfer, monotonic_deadline: float) -> bool:
         """
