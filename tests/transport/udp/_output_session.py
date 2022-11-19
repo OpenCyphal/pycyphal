@@ -33,7 +33,7 @@ async def _unittest_output_session() -> None:
         m = ts.monotonic_ns <= t.monotonic_ns <= now.system_ns
         return s and m
 
-    destination_endpoint = "127.100.0.1", 25406
+    destination_endpoint = "127.0.0.1", 25406
 
     sock_rx = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
     sock_rx.bind(destination_endpoint)
@@ -41,7 +41,7 @@ async def _unittest_output_session() -> None:
 
     def make_sock() -> socket_.socket:
         sock = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
-        sock.bind(("127.100.0.2", 0))
+        sock.bind(("127.0.0.2", 0))
         sock.connect(destination_endpoint)
         sock.setblocking(False)
         return sock
@@ -74,7 +74,7 @@ async def _unittest_output_session() -> None:
     )
 
     rx_data, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.100.0.2"
+    assert endpoint[0] == "127.0.0.2"
     assert rx_data == (
         b"\x01\x04\x05\x00\x00\x00\x00\x8040\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
         + b"one"
@@ -107,7 +107,7 @@ async def _unittest_output_session() -> None:
     sos.disable_feedback()  # Idempotency check
 
     _, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.100.0.2"
+    assert endpoint[0] == "127.0.0.2"
     with raises(socket_.timeout):
         sock_rx.recvfrom(1000)
 
@@ -142,13 +142,13 @@ async def _unittest_output_session() -> None:
         )
     )
     data_main_a, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.100.0.2"
+    assert endpoint[0] == "127.0.0.2"
     data_main_b, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.100.0.2"
+    assert endpoint[0] == "127.0.0.2"
     data_redundant_a, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.100.0.2"
+    assert endpoint[0] == "127.0.0.2"
     data_redundant_b, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.100.0.2"
+    assert endpoint[0] == "127.0.0.2"
     with raises(socket_.timeout):
         sock_rx.recvfrom(1000)
 
@@ -247,9 +247,9 @@ async def _unittest_output_session_no_listener() -> None:
 
     def make_sock() -> socket_.socket:
         sock = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
-        sock.bind(("127.100.0.2", 0))
+        sock.bind(("127.0.0.2", 0))
         sock.connect(("239.0.1.2", 33333))  # There is no listener on this endpoint.
-        sock.setsockopt(socket_.IPPROTO_IP, socket_.IP_MULTICAST_IF, socket_.inet_aton("127.100.0.2"))
+        sock.setsockopt(socket_.IPPROTO_IP, socket_.IP_MULTICAST_IF, socket_.inet_aton("127.0.0.2"))
         sock.setblocking(False)
         return sock
 
