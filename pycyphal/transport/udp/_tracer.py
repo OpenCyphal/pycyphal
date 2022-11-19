@@ -13,8 +13,8 @@ from pycyphal.transport import Trace, TransferTrace, Capture, AlienSessionSpecif
 from pycyphal.transport import AlienTransfer, TransferFrom, Timestamp
 from pycyphal.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
 from ._frame import UDPFrame
-from ._ip import LinkLayerPacket, SUBJECT_PORT
-from ._ip import udp_port_to_service_data_specifier, multicast_group_to_message_data_specifier
+from ._ip import LinkLayerPacket, SUBJECT_PORT, DOMAIN_ID_MASK
+from ._ip import udp_port_to_service_data_specifier, multicast_group_to_message_data_specifier, service_multicast_group_to_node_id
 
 
 @dataclasses.dataclass(frozen=True)
@@ -149,15 +149,18 @@ class UDPCapture(Capture):
         dst_nid: typing.Optional[int]
         data_spec: typing.Optional[pycyphal.transport.DataSpecifier]
         if ip_destination.is_multicast:
-            if udp_packet.destination_port != SUBJECT_PORT:
-                return None
-            dst_nid = None  # Broadcast
-            data_spec = multicast_group_to_message_data_specifier(ip_source, ip_destination)
+            if udp_packet.destination_port == SUBJECT_PORT:
+                # Message packet
+                dst_nid = None  # Broadcast
+                data_spec = multicast_group_to_message_data_specifier(ip_source, ip_destination)
+            else:
+                # Service packet
+                data_spec = udp_port_to_service_data_specifier(udp_packet.destination_port)
+                # QUESTION: Correct to use DOMAIN_ID_MASK here?
+                domain_id = (int(ip_destination)&DOMAIN_ID_MASK)>>18
+                dst_nid = service_multicast_group_to_node_id(domain_id, ip_destination)
         else:
-            dst_nid = unicast_ip_to_node_id(ip_source, ip_destination)
-            if dst_nid is None:  # The packet crosses the Cyphal/UDP subnet boundary, invalid.
-                return None
-            data_spec = udp_port_to_service_data_specifier(udp_packet.destination_port)
+            return None
 
         if data_spec is None:
             return None
@@ -166,7 +169,7 @@ class UDPCapture(Capture):
         if frame is None:
             return None
 
-        src_nid = unicast_ip_to_node_id(ip_source, ip_source)
+        src_nid = frame.source_node_id
         assert src_nid is not None
         ses_spec = pycyphal.transport.AlienSessionSpecifier(
             source_node_id=src_nid, destination_node_id=dst_nid, data_specifier=data_spec
@@ -261,8 +264,8 @@ def _unittest_udp_tracer() -> None:
                     b"\x7e\x50\x40\x00\x40",  # ID, flags, fragment offset, TTL
                     b"\x11",  # Protocol (UDP)
                     b"\x00\x00",  # IP checksum (unset)
-                    ip_address("127.0.0.42").packed,  # Source
-                    ip_address("127.0.0.63").packed,  # Destination
+                    ip_address("127.0.0.1").packed,  # Source
+                    ip_address("239.1.0.63").packed,  # Destination
                     # UDP/IP
                     (12345).to_bytes(2, "big"),  # Source port
                     service_data_specifier_to_udp_port(ds).to_bytes(2, "big"),  # Destination port
@@ -272,7 +275,7 @@ def _unittest_udp_tracer() -> None:
                     b"".join(
                         UDPFrame(
                             priority=Priority.SLOW,
-                            source_node_id=1,
+                            source_node_id=42,
                             transfer_id=1234567890,
                             index=0,
                             end_of_transfer=True,
@@ -285,7 +288,7 @@ def _unittest_udp_tracer() -> None:
     )
     ip_packet = IPPacket.parse(llp)
     assert ip_packet is not None
-    assert ip_packet.source_destination == (ip_address("127.0.0.42"), ip_address("127.0.0.63"))
+    assert ip_packet.source_destination == (ip_address("127.0.0.1"), ip_address("239.1.0.63"))
     assert ip_packet.protocol == 0x11
     udp_packet = UDPIPPacket.parse(ip_packet)
     assert udp_packet is not None

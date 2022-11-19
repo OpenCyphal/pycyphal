@@ -313,9 +313,8 @@ Create two transport instances -- one with a node-ID, one anonymous:
 13
 >>> tr_0.local_ip_addr
 IPv4Address('127.0.0.1')
->>> tr_0.local_node_id
+>>> tr_0.local_node_id # Anonymous is only for listening.
 10
-# Anonymous is only for listening.
 >>> tr_1 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', domain_id=13, local_node_id=None)
 >>> tr_1.local_node_id is None
 True
