@@ -323,7 +323,7 @@ def _unittest_udp_tracer() -> None:
                     b"\x11",  # Protocol (UDP)
                     b"\x00\x00",  # IP checksum (unset)
                     ip_address("127.0.0.42").packed,  # Source
-                    ip_address("127.0.0.63").packed,  # Destination
+                    ip_address("239.1.0.63").packed,  # Destination
                     # UDP/IP
                     (1).to_bytes(2, "big"),  # Source port
                     (1).to_bytes(2, "big"),  # Destination port
@@ -336,7 +336,7 @@ def _unittest_udp_tracer() -> None:
     )
     ip_packet = IPPacket.parse(llp)
     assert ip_packet is not None
-    assert ip_packet.source_destination == (ip_address("127.0.0.42"), ip_address("127.0.0.63"))
+    assert ip_packet.source_destination == (ip_address("127.0.0.42"), ip_address("239.1.0.63"))
     assert ip_packet.protocol == 0x11
     udp_packet = UDPIPPacket.parse(ip_packet)
     assert udp_packet is not None
