@@ -13,7 +13,7 @@ from pycyphal.transport import Trace, TransferTrace, Capture, AlienSessionSpecif
 from pycyphal.transport import AlienTransfer, TransferFrom, Timestamp
 from pycyphal.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
 from ._frame import UDPFrame
-from ._ip import LinkLayerPacket, SUBJECT_PORT, DOMAIN_ID_MASK
+from ._ip import LinkLayerPacket, SUBJECT_PORT, NODE_ID_MASK
 from ._ip import udp_port_to_service_data_specifier, multicast_group_to_message_data_specifier, service_multicast_group_to_node_id
 
 
@@ -156,9 +156,7 @@ class UDPCapture(Capture):
             else:
                 # Service packet
                 data_spec = udp_port_to_service_data_specifier(udp_packet.destination_port)
-                # QUESTION: Correct to use DOMAIN_ID_MASK here?
-                domain_id = (int(ip_destination)&DOMAIN_ID_MASK)>>18
-                dst_nid = service_multicast_group_to_node_id(domain_id, ip_destination)
+                dst_nid = NODE_ID_MASK & int(ip_destination)
         else:
             return None
 
