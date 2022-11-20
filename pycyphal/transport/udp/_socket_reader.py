@@ -16,6 +16,7 @@ import dataclasses
 import pycyphal
 from pycyphal.transport import Timestamp
 from ._frame import UDPFrame
+from ._ip import DOMAIN_ID_MASK
 
 
 _READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.
@@ -191,7 +192,15 @@ class SocketReader:
         # Process the datagram. This is where the actual demultiplexing takes place.
         # The node-ID mapper will return None for datagrams coming from outside of our Cyphal subnet.
         handled = False
-        source_node_id = unicast_ip_to_node_id(self._local_ip_address, source_ip_address)
+        source_node_id = None
+        if frame is not None:
+            # if source_ip_address is part of our Cyphal subnet
+            if (DOMAIN_ID_MASK & int(source_ip_address)) == (DOMAIN_ID_MASK & int(self._local_ip_address)):
+                source_node_id = frame.source_node_id
+            # if source_ip_address is not part of our Cyphal subnet, source_node_id is None
+            else:
+                source_node_id = None
+        
         if source_node_id is not None:
             # Each frame is sent to the promiscuous listener and to the selective listener.
             # We parse the frame before invoking the listener in order to avoid the double parsing workload.
