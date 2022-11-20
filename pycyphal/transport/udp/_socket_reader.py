@@ -212,7 +212,7 @@ class SocketReader:
                 else:
                     handled = True
                     try:
-                        callback(timestamp, source_node_id, frame)
+                        callback(timestamp, frame)
                     except Exception as ex:  # pragma: no cover
                         _logger.exception("%r: Unhandled exception in the listener for node-ID %r: %s", self, key, ex)
 
