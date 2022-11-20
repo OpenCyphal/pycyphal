@@ -47,14 +47,14 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     with raises(LookupError):
         srd.remove_listener(123)
 
-    received_frames_promiscuous: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]] = []
-    received_frames_3: typing.List[typing.Tuple[Timestamp, int, typing.Optional[UDPFrame]]] = []
+    received_frames_promiscuous: typing.List[typing.Tuple[Timestamp, typing.Optional[UDPFrame]]] = []
+    received_frames_3: typing.List[typing.Tuple[Timestamp, typing.Optional[UDPFrame]]] = []
 
-    srd.add_listener(None, lambda t, i, f: received_frames_promiscuous.append((t, i, f)))
+    srd.add_listener(None, lambda t, f: received_frames_promiscuous.append((t, f)))
     assert srd.has_listeners
-    srd.add_listener(3, lambda t, i, f: received_frames_3.append((t, i, f)))
+    srd.add_listener(3, lambda t, f: received_frames_3.append((t, f)))
     with raises(Exception):
-        srd.add_listener(3, lambda t, i, f: received_frames_3.append((t, i, f)))
+        srd.add_listener(3, lambda t, f: received_frames_3.append((t, f)))
     assert srd.has_listeners
 
     sock_tx_1 = make_sock_tx("127.100.0.1")
@@ -79,9 +79,9 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         accepted_datagrams={1: 1},
         dropped_datagrams={},
     )
-    t, nid, rxf = received_frames_promiscuous.pop()
+    t, rxf = received_frames_promiscuous.pop()
     assert rxf is not None
-    assert nid == 1
+    assert rxf.source_node_id == 1
     assert check_timestamp(t)
     assert bytes(rxf.payload) == b"HARDBASS"
     assert rxf.priority == Priority.HIGH
@@ -110,16 +110,16 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         accepted_datagrams={1: 1, 3: 1},
         dropped_datagrams={},
     )
-    t, nid, rxf = received_frames_promiscuous.pop()
+    t, rxf = received_frames_promiscuous.pop()
     assert rxf is not None
-    assert nid == 3
+    assert rxf.source_node_id == 3
     assert check_timestamp(t)
     assert bytes(rxf.payload) == b"Oy blin!"
     assert rxf.priority == Priority.LOW
     assert rxf.transfer_id == 0x_DEADBEEF_DEADBE
     assert not rxf.single_frame_transfer
 
-    assert (3, rxf) == received_frames_3.pop()[1:]  # Same exact frame in the other listener.
+    assert (rxf,) == received_frames_3.pop()[1:]  # Same exact frame in the other listener.
 
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -147,9 +147,9 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         accepted_datagrams={1: 1, 3: 2},
         dropped_datagrams={},
     )
-    t, nid, rxf = received_frames_3.pop()
+    t, rxf = received_frames_3.pop()
     assert rxf is not None
-    assert nid == 3
+    assert rxf.source_node_id == 3
     assert check_timestamp(t)
     assert bytes(rxf.payload) == b"HARDBASS"
     assert rxf.priority == Priority.HIGH
