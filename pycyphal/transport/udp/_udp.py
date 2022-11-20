@@ -58,7 +58,7 @@ class UDPTransport(pycyphal.transport.Transport):
         local_ip_addr: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
         domain_id: int,
         local_node_id: typing.Optional[int] = 0,
-        *, #?
+        *,  # ?
         mtu: int = min(VALID_MTU_RANGE),
         service_transfer_multiplier: int = 1,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
@@ -75,7 +75,7 @@ class UDPTransport(pycyphal.transport.Transport):
             When the anonymous mode is enabled, it is quite possible to snoop on the network even if there is
             another node running locally on the same interface
             (because sockets are initialized with ``SO_REUSEADDR`` and ``SO_REUSEPORT``, when available).
-        
+
         :param domain_id: Specifies which domain the node will be associated with.
 
         Examples:

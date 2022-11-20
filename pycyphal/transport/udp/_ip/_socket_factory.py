@@ -44,15 +44,16 @@ class SocketFactory(abc.ABC):
     def new(
         local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address],
         domain_id: int,
-        ipv6_addr: bool = False
+        ipv6_addr: bool = False,
     ) -> SocketFactory:
         """
         Use this factory factory to create new instances.
         """
         if not ipv6_addr:
             from ._v4 import IPv4SocketFactory
+
             return IPv4SocketFactory(local_ip_addr, domain_id)
-        
+
         else:
             raise NotImplementedError("Sorry, IPv6 is not yet supported by this implementation.")
 

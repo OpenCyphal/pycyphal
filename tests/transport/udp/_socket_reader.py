@@ -42,9 +42,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         return sock
 
     stats = SocketReaderStatistics()
-    srd = SocketReader(
-        sock=sock_rx, local_ip_address=ip_address("127.100.4.210"), anonymous=False, statistics=stats
-    )
+    srd = SocketReader(sock=sock_rx, local_ip_address=ip_address("127.100.4.210"), anonymous=False, statistics=stats)
     assert not srd.has_listeners
     with raises(LookupError):
         srd.remove_listener(123)
@@ -208,7 +206,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
-        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 1, ip_address('127.100.0.3'): 1},
+        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 1, ip_address("127.100.0.3"): 1},
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -218,7 +216,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
-        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 2, ip_address('127.100.0.3'): 1},
+        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 2, ip_address("127.100.0.3"): 1},
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -270,7 +268,7 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
     sock_tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_tx.bind(("127.30.0.10", 0))
     sock_tx.connect(destination_endpoint)
-    listener_node_id = 10 
+    listener_node_id = 10
 
     async def send_and_wait() -> None:
         ts = Timestamp.now()

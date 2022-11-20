@@ -32,11 +32,7 @@ class IPv4SocketFactory(SocketFactory):
     a node-ID that maps to the broadcast address for the subnet is unavailable.
     """
 
-    def __init__(
-        self,
-        local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address],
-        domain_id: int
-    ):
+    def __init__(self, local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address], domain_id: int):
         self._local_ip_addr = local_ip_addr
         if domain_id >= (2**5):
             raise ValueError(f"Invalid domain-ID: {domain_id} is larger than 31")
@@ -55,9 +51,7 @@ class IPv4SocketFactory(SocketFactory):
         return self._domain_id
 
     def make_output_socket(
-        self,
-        remote_node_id: typing.Optional[int],
-        data_specifier: pycyphal.transport.DataSpecifier
+        self, remote_node_id: typing.Optional[int], data_specifier: pycyphal.transport.DataSpecifier
     ) -> socket.socket:
         _logger.debug(
             "%r: Constructing new output socket for remote node %s and %s", self, remote_node_id, data_specifier
@@ -133,7 +127,9 @@ class IPv4SocketFactory(SocketFactory):
                 # Note that using INADDR_ANY in IP_ADD_MEMBERSHIP doesn't actually mean "any",
                 # it means "choose one automatically"; see https://tldp.org/HOWTO/Multicast-HOWTO-6.html
                 # This is why we have to specify the interface explicitly here.
-                s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_addr.packed)
+                s.setsockopt(
+                    socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_addr.packed
+                )
             except OSError as ex:
                 s.close()
                 if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
@@ -150,7 +146,9 @@ class IPv4SocketFactory(SocketFactory):
             else:
                 s.bind(("", multicast_port))
             try:
-                s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_addr.packed)
+                s.setsockopt(
+                    socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_addr.packed
+                )
             except OSError as ex:
                 s.close()
                 if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
@@ -172,7 +170,7 @@ class SnifferIPv4(Sniffer):
     def __init__(self, domain_id: int, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
         netmask_width = IPV4LENGTH - NODE_ID_MASK.bit_length() - 2
         fix = MULTICAST_PREFIX
-        sub = DOMAIN_ID_MASK & (domain_id << 18) # domain-ID
+        sub = DOMAIN_ID_MASK & (domain_id << 18)  # domain-ID
         subnet_ip = ipaddress.IPv4Address
         subnet_ip = subnet_ip(fix | sub)
         subnet = ip_network(f"{subnet_ip}/{netmask_width}", strict=False)

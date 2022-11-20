@@ -50,7 +50,7 @@ def _unittest_socket_factory() -> None:
 
     srv_i = fac.make_input_socket(456, ds)
     test_srv_o.sendto(b"Duck", ("239.53.1.200", service_data_specifier_to_udp_port(ds)))
-    time.sleep(1) ##QUESTION: BlockingIOError: [Errno 35] Resource temporarily unavailable
+    time.sleep(1)
     rx = srv_i.recvfrom(1024)
     assert rx[0] == b"Duck"
     assert rx[1][0] == "127.0.0.1"
@@ -78,7 +78,7 @@ def _unittest_socket_factory() -> None:
 
     msg_i = fac.make_input_socket(None, MessageDataSpecifier(612))
     test_msg_o.sendto(b"Seagull", ("239.52.2.100", SUBJECT_PORT))
-    time.sleep(1) ##QUESTION: BlockingIOError: [Errno 35] Resource temporarily unavailable
+    time.sleep(1)
     rx = msg_i.recvfrom(1024)
     assert rx[0] == b"Seagull"
     assert rx[1][0] == "127.0.0.1"  # Same address we just bound to.
@@ -86,8 +86,7 @@ def _unittest_socket_factory() -> None:
     # ERRORS
     with raises(InvalidMediaConfigurationError):
         IPv4SocketFactory(IPv4Address("1.2.3.4"), 13).make_input_socket(
-            456,
-            ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
+            456, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
         IPv4SocketFactory(IPv4Address("1.2.3.4"), 13).make_input_socket(None, MessageDataSpecifier(0))

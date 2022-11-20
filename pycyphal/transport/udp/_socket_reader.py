@@ -200,7 +200,7 @@ class SocketReader:
             # if source_ip_address is not part of our Cyphal subnet, source_node_id is None
             else:
                 source_node_id = None
-        
+
         if source_node_id is not None:
             # Each frame is sent to the promiscuous listener and to the selective listener.
             # We parse the frame before invoking the listener in order to avoid the double parsing workload.

@@ -168,10 +168,8 @@ def message_data_specifier_to_multicast_group(
         sub = DOMAIN_ID_MASK & (domain_id << 18)  # domain-ID
         msb = fix | sub & ~(DATASPECIFIER_BIT_MASK)  # message selector
     else:
-        assert False
-    if local_ip_address.is_multicast:
-        raise ValueError(f"The local address shall be a unicast address, not multicast: {local_ip_address}")
-    return ty(msb | data_specifier.subject_id)
+        raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
+    return ty(msb | data_specifier.subject_id)  # type: ignore
 
 
 def multicast_group_to_message_data_specifier(
