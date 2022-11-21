@@ -259,9 +259,12 @@ class CANTransport(pycyphal.transport.Transport):
             if self._maybe_media is None:
                 raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
             await self._maybe_media.send(
-                frames,
+                [Envelope(f, loopback=False) for f in frames],
                 monotonic_deadline=asyncio.get_running_loop().time() + 1.0,
             )
+            for frame in frames:
+                capture = CANCapture(Timestamp.now(), frame, False)
+                pycyphal.util.broadcast(self._capture_handlers)(capture)
 
     async def spoof(self, transfer: pycyphal.transport.AlienTransfer, monotonic_deadline: float) -> bool:
         """
