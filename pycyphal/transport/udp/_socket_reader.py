@@ -37,13 +37,14 @@ class SocketReaderStatistics:
 
     accepted_datagrams: typing.Dict[typing.Optional[int], int] = dataclasses.field(default_factory=dict)
     """
-    Key is the remote node-ID; value is the number of datagrams received from that node.
+    Key is the remote node-ID (None in case anonymous); value is the number of datagrams received from that node.
     The counters are invariant to the validity of the frame contained in the datagram.
     """
 
     dropped_datagrams: typing.Dict[typing.Optional[int], int] = dataclasses.field(default_factory=dict)
     """
-    Counters of datagrams received from nodes that no listener is registered for. The key is the node-ID.
+    Counters of datagrams received from nodes that no listener is registered for.
+    The key is the node-ID (None in case node-ID invalid).
     The counters are invariant to the validity of the frame contained in the datagram.
     """
 
@@ -58,14 +59,15 @@ class SocketReader:
     Even on GNU/Linux, there is a risk of race conditions, but I'll spare you the details.
     Those who care may read this: https://stackoverflow.com/a/54156768/1007777.
 
-    The UDP transport is unable to detect a node-ID conflict because it has to discard traffic generated ## QUESTION
+    The UDP transport is unable to detect a node-ID conflict because it has to discard traffic generated
     by itself in user space. To this transport, its own traffic and a node-ID conflict would look identical.
     """
 
     Listener = typing.Callable[[Timestamp, typing.Optional[int], typing.Optional[UDPFrame]], None]
     """
     The callback is invoked with the timestamp, source node-ID, and the frame instance upon successful reception.
-    Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that. ## QUESTION
+    Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that.
+    ## QUESTION: previous line not relevant anymore?
     If a UDP frame is received that does not contain a valid Cyphal frame,
     the callback is invoked with None for error statistic collection purposes.
     """
@@ -78,6 +80,7 @@ class SocketReader:
     ):
         """
         :param sock: The instance takes ownership of the socket; it will be closed when the instance is closed.
+        :param local_node_id: To prevent false node-ID collisions.
         :param statistics: A reference to the external statistics object that will be updated by the instance.
         """
         self._sock = sock
@@ -103,7 +106,6 @@ class SocketReader:
         """
         :param source_node_id: The listener will be invoked whenever a frame from this node-ID is received.
             If the value is None, the listener will be invoked for all source node-IDs (promiscuous).
-            QUESTION: source_node_id is 0xffff?
             There shall be at most one listener per source node-ID value (incl. None, i.e., at most one
             promiscuous listener).
             If such listener already exists, a :class:`ValueError` will be raised.
@@ -183,6 +185,9 @@ class SocketReader:
         source_node_id = None
         if frame is not None:
             source_node_id = frame.source_node_id
+            # if source_node_id is 0xffff, means anonymous
+            if source_node_id == NODE_ID_MASK:
+                source_node_id = None
 
         # Do not accept datagrams emitted by the local node itself. Do not update the statistics either.
         if self._local_node_id == source_node_id:
@@ -191,7 +196,6 @@ class SocketReader:
         if source_node_id is not None:
             # Each frame is sent to the promiscuous listener (None) and to the selective listener (source_node_id).
             # We parse the frame before invoking the listener in order to avoid the double parsing workload.
-            # source_node_id=int(0xffff) is datagrams from anonymous nodes
             for key in (None, source_node_id):
                 try:
                     callback = self._listeners[key]
