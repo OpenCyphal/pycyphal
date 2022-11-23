@@ -16,6 +16,7 @@ import dataclasses
 import pycyphal
 from pycyphal.transport import Timestamp
 from ._frame import UDPFrame
+from ._ip import NODE_ID_MASK
 
 
 _READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.
@@ -72,6 +73,7 @@ class SocketReader:
     def __init__(
         self,
         sock: socket.socket,
+        local_node_id: int,
         statistics: SocketReaderStatistics,
     ):
         """
@@ -81,8 +83,10 @@ class SocketReader:
         self._sock = sock
         self._sock.setblocking(False)
         self._original_file_desc = self._sock.fileno()  # This is needed for repr() only.
+        self._local_node_id = local_node_id
         self._statistics = statistics
 
+        assert( 0 <= self._local_node_id < NODE_ID_MASK)
         assert isinstance(self._statistics, SocketReaderStatistics)
 
         self._listeners: typing.Dict[typing.Optional[int], SocketReader.Listener] = {}
@@ -180,6 +184,10 @@ class SocketReader:
         if frame is not None:
             source_node_id = frame.source_node_id
 
+        # Do not accept datagrams emitted by the local node itself. Do not update the statistics either.
+        if self._local_node_id == source_node_id:
+            return
+
         if source_node_id is not None:
             # Each frame is sent to the promiscuous listener (None) and to the selective listener (source_node_id).
             # We parse the frame before invoking the listener in order to avoid the double parsing workload.
@@ -202,7 +210,7 @@ class SocketReader:
             try:
                 self._statistics.dropped_datagrams[ip_nid] += 1
             except LookupError:
-                self._statistics.dropped_datagrams[ip_nid] = 1 ## QUESTION: Why setting to 1?
+                self._statistics.dropped_datagrams[ip_nid] = 1
         else:
             assert source_node_id is not None
             try:

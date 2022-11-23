@@ -42,7 +42,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         return sock
 
     stats = SocketReaderStatistics()
-    srd = SocketReader(sock=sock_rx, statistics=stats)
+    srd = SocketReader(sock=sock_rx, local_node_id=666,statistics=stats)
     assert not srd.has_listeners
     with raises(LookupError):
         srd.remove_listener(123)
@@ -240,6 +240,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         stats = SocketReaderStatistics()
         srd = SocketReader(
             sock=sock_rx,
+            local_node_id=666,
             statistics=stats,
         )
         srd._sock.close()  # pylint: disable=protected-access
@@ -294,6 +295,7 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
         sock.bind(destination_endpoint)
         out = SocketReader(
             sock=sock,
+            local_node_id=666,
             statistics=stats,
         )
         out.add_listener(listener_node_id, lambda *args: destination.append(args))  # type: ignore
