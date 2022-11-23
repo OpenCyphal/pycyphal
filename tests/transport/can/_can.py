@@ -1186,7 +1186,7 @@ async def _unittest_can_spoofing() -> None:
         )
 
 
-async def _unittest_can_media_spoofing():
+async def _unittest_can_media_spoofing() -> None:
     """Test the spoof_frames method of CANTransport.
     1. Create a new MockMedia
     2. Create a new CANTransport, set the mock media as its media
@@ -1219,7 +1219,7 @@ async def _unittest_can_media_spoofing():
         ),
     ]
     frames_confirmed_received = {str(frame.data): False for frame in list_of_frames}
-    media1_confirmed_received = {str(frame.data): False for frame in list_of_frames}
+    # media1_confirmed_received = {str(frame.data): False for frame in list_of_frames}
     media2_confirmed_received = {str(frame.data): False for frame in list_of_frames}
     all_frames_received_event = asyncio.Event()
     all_media1_received_event = asyncio.Event()
@@ -1235,7 +1235,6 @@ async def _unittest_can_media_spoofing():
 
         return _media_receive_handler
 
-    mock_media1.start(make_media_receive_handler(media1_confirmed_received, all_media1_received_event), True)
     mock_media2.start(make_media_receive_handler(media2_confirmed_received, all_media2_received_event), True)
 
     def _capture_handler(capture: Capture) -> None:
@@ -1248,8 +1247,6 @@ async def _unittest_can_media_spoofing():
     can_transport.begin_capture(_capture_handler)
     await can_transport.spoof_frames(list_of_frames)
     await asyncio.wait_for(all_frames_received_event.wait(), 0.2)
-    # Loopback is not enabled so the frames should not be received on the media that sent them
-    # await asyncio.wait_for(all_media1_received_event.wait(), 0.2)
     await asyncio.wait_for(all_media2_received_event.wait(), 0.2)
     all_frames_received_event.clear()
     all_media1_received_event.clear()
@@ -1259,9 +1256,6 @@ async def _unittest_can_media_spoofing():
     # Set some transport1 frames as not received
     frames_confirmed_received[str(frame2.data)] = False
     frames_confirmed_received[str(frame3.data)] = False
-    # Set some frames of media1 as not received
-    media1_confirmed_received[str(frame2.data)] = False
-    media1_confirmed_received[str(frame3.data)] = False
     # Set some frames of media2 as not received
     media2_confirmed_received[str(frame2.data)] = False
     media2_confirmed_received[str(frame3.data)] = False

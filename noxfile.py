@@ -51,6 +51,43 @@ def clean(session):
             shutil.rmtree(f, ignore_errors=True)
 
 
+MYPY_VERSION = "0.961"
+
+@nox.session(python=PYTHONS, reuse_venv=True)
+def mypy(session):
+    sys.path += [str(ROOT_DIR)]
+    # Set the environment variable PYTHONASYNCIODEBUG to 1 to enable asyncio debug mode.
+    # This will cause asyncio to emit warnings if it detects any errors in the application code.
+    # https://docs.python.org/3/library/asyncio-dev.html
+    session.env["PYTHONASYNCIODEBUG"] = "1"
+    os.environ["PYTHONASYNCIODEBUG"] = "1"
+    tmp_dir = Path(session.create_tmp()).resolve()
+    session.cd(tmp_dir)
+    from tests.dsdl.conftest import compile
+    compile()
+    compiled_dir = Path.cwd().resolve() / ".compiled"
+    src_dirs = [
+        ROOT_DIR / "pycyphal",
+        ROOT_DIR / "tests",
+    ]
+    env = {
+        "PYTHONASYNCIODEBUG": "1",
+        "PYTHONPATH": str(compiled_dir),
+    }
+    session.install("mypy")  #   == " + MYPY_VERSION)
+    session.cd(ROOT_DIR)
+    separator = ":"
+    if sys.platform == "win32":
+        separator = ";"
+    if session.env.get("PYTHONPATH"):
+        session.env["PYTHONPATH"] = session.env["PYTHONPATH"] + separator + str(compiled_dir)
+    else:
+        session.env["PYTHONPATH"] = str(compiled_dir)
+    relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
+    if not relaxed_static_analysis:
+        session.run("mypy", "--strict", *map(str, src_dirs),)  # str(compiled_dir))
+
+
 @nox.session(python=PYTHONS, reuse_venv=True)
 def test(session):
     session.log("Using the newest supported Python: %s", is_latest_python(session))
@@ -124,7 +161,7 @@ def test(session):
     #   2. At least MyPy has to be run separately per Python version we support.
     # If the interpreter is not CPython, this may need to be conditionally disabled.
     session.install(
-        "mypy   == 0.961",
+        "mypy   == " + MYPY_VERSION,
         "pylint == 2.14.*",
     )
     relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
