@@ -167,27 +167,6 @@ def test(session):
         session.run("mypy", "--strict", *map(str, src_dirs), str(compiled_dir))
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
 
-    # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
-    if sys.platform.startswith("linux") and is_latest_python(session) and session.env.get("COVERALLS_REPO_TOKEN"):
-        session.install("coveralls")
-        session.run("coveralls")
-    else:
-        session.log("Coveralls skipped")
-
-    # Submit analysis to SonarCloud. This also has to be run from the test session to access the coverage files.
-    sonarcloud_token = session.env.get("SONARCLOUD_TOKEN")
-    if sys.platform.startswith("linux") and is_latest_python(session) and sonarcloud_token:
-        session.run("coverage", "xml", "-i", "-o", str(ROOT_DIR / ".coverage.xml"))
-
-        session.run("unzip", str(list(DEPS_DIR.glob("sonar-scanner*.zip"))[0]), silent=True, external=True)
-        (sonar_scanner_bin,) = list(Path().cwd().resolve().glob("sonar-scanner*/bin"))
-        os.environ["PATH"] = os.pathsep.join([str(sonar_scanner_bin), os.environ["PATH"]])
-
-        session.cd(ROOT_DIR)
-        session.run("sonar-scanner", f"-Dsonar.login={sonarcloud_token}", external=True)
-    else:
-        session.log("SonarQube scan skipped")
-
 
 @nox.session()
 def demo(session):
@@ -217,52 +196,6 @@ def demo(session):
 
     session.env["STOP_AFTER"] = "10"
     session.run("yakut", "orc", "launch.orc.yaml", success_codes=[111])
-
-
-@nox.session(python=PYTHONS)
-def pristine(session):
-    """
-    Install the library into a pristine environment and ensure that it is importable.
-    This is needed to catch errors caused by accidental reliance on test dependencies in the main codebase.
-    """
-    exe = partial(session.run, "python", "-c", silent=True)
-    session.cd(session.create_tmp())  # Change the directory to reveal spurious dependencies from the project root.
-
-    session.install(f"{ROOT_DIR}")  # Testing bare installation first.
-    exe("import pycyphal")
-    exe("import pycyphal.transport.can")
-    exe("import pycyphal.transport.udp")
-    exe("import pycyphal.transport.loopback")
-
-    session.install(f"{ROOT_DIR}[transport-serial]")
-    exe("import pycyphal.transport.serial")
-
-
-@nox.session(reuse_venv=True)
-def check_style(session):
-    session.install("black == 22.*")
-    session.run("black", "--check", ".")
-
-
-@nox.session()
-def docs(session):
-    try:
-        session.run("dot", "-V", silent=True, external=True)
-    except Exception:
-        session.error("Please install graphviz. It may be available from your package manager as 'graphviz'.")
-        raise
-
-    session.install("-r", "docs/requirements.txt")
-    out_dir = Path(session.create_tmp()).resolve()
-    session.cd("docs")
-    sphinx_args = ["-b", "html", "-W", "--keep-going", f"-j{os.cpu_count() or 1}", ".", str(out_dir)]
-    session.run("sphinx-build", *sphinx_args)
-    session.log(f"DOCUMENTATION BUILD OUTPUT: file://{out_dir}/index.html")
-
-    session.cd(ROOT_DIR)
-    session.install("doc8 ~= 0.11")
-    if is_latest_python(session):
-        session.run("doc8", "docs", *map(str, ROOT_DIR.glob("*.rst")))
 
 
 def is_latest_python(session) -> bool:
