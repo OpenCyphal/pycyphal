@@ -42,7 +42,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         return sock
 
     stats = SocketReaderStatistics()
-    srd = SocketReader(sock=sock_rx, local_ip_address=ip_address("127.100.4.210"), anonymous=False, statistics=stats)
+    srd = SocketReader(sock=sock_rx, statistics=stats)
     assert not srd.has_listeners
     with raises(LookupError):
         srd.remove_listener(123)
@@ -196,7 +196,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
-        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 1},
+        dropped_datagrams={1: 1, 9: 1},
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -206,7 +206,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
-        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 1, ip_address("127.100.0.3"): 1},
+        dropped_datagrams={1: 1, 9: 1, None: 1}, ## QUESTION: Invalid frame are registered as None?
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -216,7 +216,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2},
-        dropped_datagrams={1: 1, ip_address("127.200.0.9"): 2, ip_address("127.100.0.3"): 1},
+        dropped_datagrams={1: 1, 9: 1, None: 2},
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -240,8 +240,6 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         stats = SocketReaderStatistics()
         srd = SocketReader(
             sock=sock_rx,
-            local_ip_address=ip_address("127.100.4.210"),  # 1234
-            anonymous=False,
             statistics=stats,
         )
         srd._sock.close()  # pylint: disable=protected-access
@@ -296,8 +294,6 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
         sock.bind(destination_endpoint)
         out = SocketReader(
             sock=sock,
-            local_ip_address=ip_address(destination_endpoint[0]),
-            anonymous=False,
             statistics=stats,
         )
         out.add_listener(listener_node_id, lambda *args: destination.append(args))  # type: ignore

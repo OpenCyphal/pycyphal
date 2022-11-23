@@ -16,7 +16,6 @@ import dataclasses
 import pycyphal
 from pycyphal.transport import Timestamp
 from ._frame import UDPFrame
-from ._ip import DOMAIN_ID_MASK
 
 
 _READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.
@@ -35,39 +34,37 @@ class SocketReaderStatistics:
     Incoming UDP datagram statistics for an input socket.
     """
 
-    accepted_datagrams: typing.Dict[int, int] = dataclasses.field(default_factory=dict)
+    accepted_datagrams: typing.Dict[typing.Optional[int], int] = dataclasses.field(default_factory=dict)
     """
     Key is the remote node-ID; value is the number of datagrams received from that node.
     The counters are invariant to the validity of the frame contained in the datagram.
     """
 
-    dropped_datagrams: typing.Dict[typing.Union[_IPAddress, int], int] = dataclasses.field(default_factory=dict)
+    dropped_datagrams: typing.Dict[typing.Optional[int], int] = dataclasses.field(default_factory=dict)
     """
-    Counters of datagrams received from IP addresses that cannot be mapped to a valid node-ID,
-    and from nodes that no listener is registered for.
-    In the former case, the key is the IP address; in the latter case, the key is the node-ID.
+    Counters of datagrams received from nodes that no listener is registered for. The key is the node-ID.
     The counters are invariant to the validity of the frame contained in the datagram.
     """
 
 
 class SocketReader:
     """
-    This class is the solution to the UDP demultiplexing problem.
-    The objective is to read data from the supplied socket, parse it, and then forward it to interested listeners.
+    The objective is to read data from the supplied socket, forward it to interested listeners and
+    update the relevant statistics.
 
     Why can't we ask the operating system to do this for us? Because there is no portable way of doing this
-    (except for multicast sockets).
+    (except for multicast sockets). -> TODO: refactor code
     Even on GNU/Linux, there is a risk of race conditions, but I'll spare you the details.
     Those who care may read this: https://stackoverflow.com/a/54156768/1007777.
 
-    The UDP transport is unable to detect a node-ID conflict because it has to discard traffic generated
+    The UDP transport is unable to detect a node-ID conflict because it has to discard traffic generated ## QUESTION
     by itself in user space. To this transport, its own traffic and a node-ID conflict would look identical.
     """
 
-    Listener = typing.Callable[[Timestamp, int, typing.Optional[UDPFrame]], None]
+    Listener = typing.Callable[[Timestamp, typing.Optional[int], typing.Optional[UDPFrame]], None]
     """
     The callback is invoked with the timestamp, source node-ID, and the frame instance upon successful reception.
-    Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that.
+    Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that. ## QUESTION
     If a UDP frame is received that does not contain a valid Cyphal frame,
     the callback is invoked with None for error statistic collection purposes.
     """
@@ -75,25 +72,17 @@ class SocketReader:
     def __init__(
         self,
         sock: socket.socket,
-        local_ip_address: _IPAddress,
-        anonymous: bool,
         statistics: SocketReaderStatistics,
     ):
         """
         :param sock: The instance takes ownership of the socket; it will be closed when the instance is closed.
-        :param local_ip_address: Needed for node-ID mapping.
-        :param anonymous: If True, then packets originating from the local IP address will not be discarded.
         :param statistics: A reference to the external statistics object that will be updated by the instance.
         """
         self._sock = sock
         self._sock.setblocking(False)
         self._original_file_desc = self._sock.fileno()  # This is needed for repr() only.
-        self._local_ip_address = local_ip_address
-        self._anonymous = anonymous
         self._statistics = statistics
 
-        assert isinstance(self._local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address))
-        assert isinstance(self._anonymous, bool)
         assert isinstance(self._statistics, SocketReaderStatistics)
 
         self._listeners: typing.Dict[typing.Optional[int], SocketReader.Listener] = {}
@@ -110,6 +99,7 @@ class SocketReader:
         """
         :param source_node_id: The listener will be invoked whenever a frame from this node-ID is received.
             If the value is None, the listener will be invoked for all source node-IDs (promiscuous).
+            QUESTION: source_node_id is 0xffff?
             There shall be at most one listener per source node-ID value (incl. None, i.e., at most one
             promiscuous listener).
             If such listener already exists, a :class:`ValueError` will be raised.
@@ -182,28 +172,18 @@ class SocketReader:
         _logger.debug("%r: Closed. Elapsed time: %.3f milliseconds", self, (time.monotonic() - started_at) * 1e3)
 
     def _dispatch_frame(
-        self, timestamp: Timestamp, source_ip_address: _IPAddress, frame: typing.Optional[UDPFrame]
+        self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]
     ) -> None:
-        # Do not accept datagrams emitted by the local node itself. Do not update the statistics either.
-        external = self._anonymous or (source_ip_address != self._local_ip_address)
-        if not external:
-            return
-
-        # Process the datagram. This is where the actual demultiplexing takes place.
-        # The node-ID mapper will return None for datagrams coming from outside of our Cyphal subnet.
+        # Process the datagram.
         handled = False
         source_node_id = None
         if frame is not None:
-            # if source_ip_address is part of our Cyphal subnet
-            if (DOMAIN_ID_MASK & int(source_ip_address)) == (DOMAIN_ID_MASK & int(self._local_ip_address)):
-                source_node_id = frame.source_node_id
-            # if source_ip_address is not part of our Cyphal subnet, source_node_id is None
-            else:
-                source_node_id = None
+            source_node_id = frame.source_node_id
 
         if source_node_id is not None:
-            # Each frame is sent to the promiscuous listener and to the selective listener.
+            # Each frame is sent to the promiscuous listener (None) and to the selective listener (source_node_id).
             # We parse the frame before invoking the listener in order to avoid the double parsing workload.
+            # source_node_id=int(0xffff) is datagrams from anonymous nodes
             for key in (None, source_node_id):
                 try:
                     callback = self._listeners[key]
@@ -218,11 +198,11 @@ class SocketReader:
 
         # Update the statistics.
         if not handled:
-            ip_nid: typing.Union[_IPAddress, int] = source_node_id if source_node_id is not None else source_ip_address
+            ip_nid = source_node_id
             try:
                 self._statistics.dropped_datagrams[ip_nid] += 1
             except LookupError:
-                self._statistics.dropped_datagrams[ip_nid] = 1
+                self._statistics.dropped_datagrams[ip_nid] = 1 ## QUESTION: Why setting to 1?
         else:
             assert source_node_id is not None
             try:
@@ -244,7 +224,6 @@ class SocketReader:
                     # is likely to be carried all the way up to the application layer without being copied.
                     data, endpoint = self._sock.recvfrom(_READ_SIZE)
                     assert len(data) < _READ_SIZE, "Datagram might have been truncated"
-                    source_ip = _parse_address(endpoint[0])
 
                     frame = UDPFrame.parse(memoryview(data))
                     _logger.debug(
@@ -254,7 +233,7 @@ class SocketReader:
                         endpoint,
                         frame,
                     )
-                    loop.call_soon_threadsafe(self._dispatch_frame, ts, source_ip, frame)
+                    loop.call_soon_threadsafe(self._dispatch_frame, ts, frame)
 
                 if self._ctl_worker in read_ready:
                     cmd = self._ctl_worker.recv(_READ_SIZE)
