@@ -53,6 +53,7 @@ def clean(session):
 
 MYPY_VERSION = "0.961"
 
+
 @nox.session(python=PYTHONS, reuse_venv=True)
 def mypy(session):
     sys.path += [str(ROOT_DIR)]
@@ -64,6 +65,7 @@ def mypy(session):
     tmp_dir = Path(session.create_tmp()).resolve()
     session.cd(tmp_dir)
     from tests.dsdl.conftest import compile
+
     compile()
     compiled_dir = Path.cwd().resolve() / ".compiled"
     src_dirs = [
@@ -85,7 +87,13 @@ def mypy(session):
         session.env["PYTHONPATH"] = str(compiled_dir)
     relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
     if not relaxed_static_analysis:
-        session.run("mypy", "--strict", *map(str, src_dirs),)  # str(compiled_dir))
+        session.run(
+            "mypy",
+            "--config-file",
+            str(ROOT_DIR / "setup.cfg"),
+            "--strict",
+            *map(str, src_dirs),
+        )  # str(compiled_dir))
 
 
 @nox.session(python=PYTHONS, reuse_venv=True)

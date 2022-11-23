@@ -254,7 +254,11 @@ class CANTransport(pycyphal.transport.Transport):
         """
         return CANTracer()
 
-    async def spoof_frames(self, frames: typing.Sequence[DataFrame], monotonic_deadline: typing.Optional[float] = 1.0) -> None:
+    async def spoof_frames(
+        self,
+        frames: typing.Sequence[DataFrame],
+        monotonic_deadline: typing.Optional[float] = asyncio.get_running_loop().time() + 1.0,
+    ) -> None:
         async with self._media_lock:
             if self._maybe_media is None:
                 raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
