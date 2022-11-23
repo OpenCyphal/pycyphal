@@ -1,3 +1,5 @@
+demo/public_regulated_data_types/
+
 __pycache__/
 *.py[cod]
 *.so
