@@ -20,7 +20,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def _unittest_socket_reader(caplog: typing.Any) -> None:
-    destination_address = "127.100.0.100"
+    destination_address = "127.0.0.10"
 
     ts = Timestamp.now()
 
@@ -57,9 +57,9 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         srd.add_listener(3, lambda t, f: received_frames_3.append((t, f)))
     assert srd.has_listeners
 
-    sock_tx_1 = make_sock_tx("127.100.0.1")
-    sock_tx_3 = make_sock_tx("127.100.0.3")
-    sock_tx_9 = make_sock_tx("127.200.0.9")
+    sock_tx_1 = make_sock_tx("127.0.0.1")
+    sock_tx_3 = make_sock_tx("127.0.0.3")
+    sock_tx_9 = make_sock_tx("127.0.0.9")
 
     # FRAME FOR THE PROMISCUOUS LISTENER
     sock_tx_1.send(
@@ -124,6 +124,36 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_promiscuous
     assert not received_frames_3
 
+    # ANONYMOUS FRAME FOR THE PROMISCUOUS LISTENER
+    sock_tx_1.send(
+        b"".join(
+            UDPFrame(
+                priority=Priority.LOW,
+                source_node_id=0xFFFF, # anonymous
+                transfer_id=0x_DEADBEEF_DEADBE,
+                index=0,
+                end_of_transfer=False,
+                payload=memoryview(b"Oy blin!"),
+            ).compile_header_and_payload()
+        )
+    )
+    await (asyncio.sleep(1.1)) # Let the handler run in the background.
+    assert stats == SocketReaderStatistics(
+        accepted_datagrams={1: 1, 3: 1, None: 1},
+        dropped_datagrams={},
+    )
+    t, rxf = received_frames_promiscuous.pop()
+    assert rxf is not None
+    assert rxf.source_node_id == 0xFFFF
+    assert check_timestamp(t)
+    assert bytes(rxf.payload) == b"Oy blin!"
+    assert rxf.priority == Priority.LOW
+    assert rxf.transfer_id == 0x_DEADBEEF_DEADBE
+    assert not rxf.single_frame_transfer
+
+    assert not received_frames_promiscuous
+    assert not received_frames_3
+
     # DROP THE PROMISCUOUS LISTENER, ENSURE THE REMAINING SELECTIVE LISTENER WORKS
     srd.remove_listener(None)
     with raises(LookupError):
@@ -144,7 +174,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     )
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
-        accepted_datagrams={1: 1, 3: 2},
+        accepted_datagrams={1: 1, 3: 2, None: 1},
         dropped_datagrams={},
     )
     t, rxf = received_frames_3.pop()
@@ -159,7 +189,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_promiscuous
     assert not received_frames_3
 
-    # DROPPED DATAGRAM FROM VALID NODE-ID
+    # DROPPED DATAGRAM FROM UNSUBSCRIBED NODE-ID
     sock_tx_1.send(
         b"".join(
             UDPFrame(
@@ -174,13 +204,13 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     )
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
-        accepted_datagrams={1: 1, 3: 2},
+        accepted_datagrams={1: 1, 3: 2, None: 1},
         dropped_datagrams={1: 1},
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
 
-    # DROPPED DATAGRAM FROM AN UNMAPPED IP ADDRESS
+    # DROPPED DATAGRAM FROM AN UNMAPPED NODE ID
     sock_tx_9.send(
         b"".join(
             UDPFrame(
@@ -195,8 +225,29 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     )
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
-        accepted_datagrams={1: 1, 3: 2},
+        accepted_datagrams={1: 1, 3: 2, None: 1},
         dropped_datagrams={1: 1, 9: 1},
+    )
+    assert not received_frames_promiscuous
+    assert not received_frames_3
+
+    # DROPPED DATAGRAM FROM ANONYMOUS FRAME
+    sock_tx_1.send(
+        b"".join(
+            UDPFrame(
+                priority=Priority.LOW,
+                source_node_id=0xFFFF,
+                transfer_id=0x_DEADBEEF_DEADBE,
+                index=0,
+                end_of_transfer=False,
+                payload=memoryview(b"Oy blin!"),
+            ).compile_header_and_payload()
+        )
+    )
+    await (asyncio.sleep(1.1)) # Let the handler run in the background.
+    assert stats == SocketReaderStatistics(
+        accepted_datagrams={1: 1, 3: 2, None: 1},
+        dropped_datagrams={1: 1, 9: 1, None: 1},
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -205,18 +256,8 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     sock_tx_3.send(b"abc")
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
-        accepted_datagrams={1: 1, 3: 2},
-        dropped_datagrams={1: 1, 9: 1, None: 1}, ## QUESTION: Invalid frame are registered as None?
-    )
-    assert not received_frames_promiscuous
-    assert not received_frames_3
-
-    # INVALID FRAME FROM UNMAPPED IP ADDRESS
-    sock_tx_9.send(b"abc")
-    await (asyncio.sleep(1.1))  # Let the handler run in the background.
-    assert stats == SocketReaderStatistics(
-        accepted_datagrams={1: 1, 3: 2},
-        dropped_datagrams={1: 1, 9: 1, None: 2},
+        accepted_datagrams={1: 1, 3: 2, None: 1},
+        dropped_datagrams={1: 1, 9: 1, None: 2}, ## QUESTION: Both invalid and anonymous frames as None?
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
@@ -236,7 +277,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     # SOCKET FAILURE
     with caplog.at_level(logging.CRITICAL, logger=__name__):
         sock_rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock_rx.bind(("127.100.0.100", 0))
+        sock_rx.bind(("127.0.0.10", 0))
         stats = SocketReaderStatistics()
         srd = SocketReader(
             sock=sock_rx,
@@ -262,10 +303,10 @@ async def _unittest_socket_reader_endpoint_reuse() -> None:
     - https://stackoverflow.com/questions/3624365
     - https://stackoverflow.com/questions/3589723
     """
-    destination_endpoint = "127.30.0.30", 9999
+    destination_endpoint = "127.0.0.30", 9999
 
     sock_tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock_tx.bind(("127.30.0.10", 0))
+    sock_tx.bind(("127.0.0.10", 0))
     sock_tx.connect(destination_endpoint)
     listener_node_id = 10
 
