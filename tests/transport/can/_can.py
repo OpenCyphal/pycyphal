@@ -1198,7 +1198,7 @@ async def _unittest_can_media_spoofing() -> None:
     from pycyphal.transport import Timestamp
     from pycyphal.transport.can.media import Envelope
 
-    peers = set()
+    peers: typing.Set[MockMedia] = set()
     mock_media1 = MockMedia(peers, 64, 1)
     mock_media1.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
     mock_media2 = MockMedia(peers, 64, 1)
@@ -1219,14 +1219,15 @@ async def _unittest_can_media_spoofing() -> None:
         ),
     ]
     frames_confirmed_received = {str(frame.data): False for frame in list_of_frames}
-    # media1_confirmed_received = {str(frame.data): False for frame in list_of_frames}
     media2_confirmed_received = {str(frame.data): False for frame in list_of_frames}
     all_frames_received_event = asyncio.Event()
     all_media1_received_event = asyncio.Event()
     all_media2_received_event = asyncio.Event()
     from pycyphal.transport import Capture
 
-    def make_media_receive_handler(reception_dictionary: typing.Dict[str, bool], all_received_event: asyncio.Event):
+    def make_media_receive_handler(
+        reception_dictionary: typing.Dict[str, bool], all_received_event: asyncio.Event
+    ) -> typing.Callable[[typing.Sequence[typing.Tuple[Timestamp, Envelope]]], None]:
         def _media_receive_handler(frames: typing.Sequence[typing.Tuple[Timestamp, Envelope]]) -> None:
             for _, envelope in frames:
                 reception_dictionary[str(envelope.frame.data)] = True

@@ -9,18 +9,6 @@ environment:
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.10'
     -
-      job_group: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
-      PYTHON: '3.9'
-    -
-      job_group: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
-      PYTHON: '3.8'
-    -
-      job_group: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
-      PYTHON: '3.7'
-    -
       job_name: deploy
       job_depends_on: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
