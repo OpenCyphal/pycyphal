@@ -42,7 +42,7 @@ for:
     test_script:
       # FIXME on Windows we only test against the OLDEST and the NEWEST version of Python because we run out of time.
       # FIXME restructure the workflow or migrate to GitHub Actions.
-      - 'nox --forcecolor --non-interactive --error-on-missing-interpreters --pythons 3.7 3.10 --session test'
+      - 'nox --forcecolor --non-interactive --error-on-missing-interpreters --pythons 3.10 --session test'
 
   - # GNU/LINUX TEST
     matrix:
@@ -58,7 +58,7 @@ for:
       # Sonar scanner unconditionally fails on PR builds with a NullPointerException, so don't run it there.
       - '[[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]] || unset SONARCLOUD_TOKEN'
     test_script:
-      - 'nox --non-interactive --error-on-missing-interpreters --session test --python $PYTHON'
+      - 'nox --non-interactive --error-on-missing-interpreters --session test --python $PYTHON --pythons 3.10'
       - 'nox --non-interactive --session demo check_style docs'
     on_finish:
       - 'ip link show'  # Diagnostics aid
