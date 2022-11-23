@@ -137,7 +137,7 @@ def test(session):
             "PYTHONASYNCIODEBUG": "1",
             "PYTHONPATH": str(compiled_dir),
         }
-        pytest = partial(session.run, "coverage", "run", "-m", "pytest", *session.posargs, env=env)
+        pytest = partial(session.run, "coverage", "run", "-m", "pytest", [], env=env)
         # Application-layer tests are run separately after the main test suite because they require DSDL for
         # "uavcan" to be transpiled first. That namespace is transpiled as a side-effect of running the main suite.
         pytest("--ignore", str(postponed), *map(str, src_dirs))
