@@ -180,19 +180,32 @@ class SocketReader:
     def _dispatch_frame(
         self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]
     ) -> None:
-        # Process the datagram.
+        # No frame
+        #   └──> dropped_datagrams[None] {CASE 1}
+        # Frame, non-anonymous
+        #   ├──> if promiscuous listener -> accepted_datagram[source_node_id] {CASE 2}
+        #   ├──> if node_id listener -> accepted_datagram[source_node_id] {CASE 3}
+        #   └──> if none of above -> dropped_datagram[source_node_id] {CASE 4}
+        # Frame, anonymous
+        #   ├──> if promiscuous listener -> accepted_datagram[None] {CASE 5}
+        #   └──> if no promiscuous listener -> dropped_datagram[None] {CASE 6}
+
+        # Process the datagram, determine type (None/non-anonymous/anonymous)
         handled = False
+        anonymous_frame = False
         source_node_id = None
         if frame is not None:
             source_node_id = frame.source_node_id
-            # if source_node_id is 0xffff, means anonymous
+            # if source_node_id is 0xffff, means anonymous frame
             if source_node_id == NODE_ID_MASK:
                 source_node_id = None
+                anonymous_frame = True
 
         # Do not accept datagrams emitted by the local node itself. Do not update the statistics either.
         if self._local_node_id == source_node_id:
             return
 
+        # Handle non-anonymous frames
         if source_node_id is not None:
             # Each frame is sent to the promiscuous listener (None) and to the selective listener (source_node_id).
             # We parse the frame before invoking the listener in order to avoid the double parsing workload.
@@ -207,16 +220,27 @@ class SocketReader:
                         callback(timestamp, frame)
                     except Exception as ex:  # pragma: no cover
                         _logger.exception("%r: Unhandled exception in the listener for node-ID %r: %s", self, key, ex)
-
-        # Update the statistics.
-        if not handled:
-            ip_nid = source_node_id
+        
+        # Handle anonymous frames
+        if anonymous_frame:
             try:
-                self._statistics.dropped_datagrams[ip_nid] += 1
+                callback = self._listeners[None]
             except LookupError:
-                self._statistics.dropped_datagrams[ip_nid] = 1
+                pass
+            else:
+                handled = True
+                try:
+                    callback(timestamp, frame)
+                except Exception as ex:
+                    _logger.exception("%r: Unhandled exception in the listenere for anonymous node-ID: %s", self, ex)
+
+        # Update the statistics
+        if not handled:
+            try:
+                self._statistics.dropped_datagrams[source_node_id] += 1
+            except LookupError:
+                self._statistics.dropped_datagrams[source_node_id] = 1
         else:
-            assert source_node_id is not None
             try:
                 self._statistics.accepted_datagrams[source_node_id] += 1
             except LookupError:

@@ -42,7 +42,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
         return sock
 
     stats = SocketReaderStatistics()
-    srd = SocketReader(sock=sock_rx, local_node_id=666,statistics=stats)
+    srd = SocketReader(sock=sock_rx, local_node_id=10,statistics=stats)
     assert not srd.has_listeners
     with raises(LookupError):
         srd.remove_listener(123)
@@ -61,7 +61,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     sock_tx_3 = make_sock_tx("127.0.0.3")
     sock_tx_9 = make_sock_tx("127.0.0.9")
 
-    # FRAME FOR THE PROMISCUOUS LISTENER
+    # FRAME FOR THE PROMISCUOUS LISTENER {CASE 2}
     sock_tx_1.send(
         b"".join(
             UDPFrame(
@@ -91,7 +91,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_promiscuous
     assert not received_frames_3
 
-    # FRAME FOR THE SELECTIVE AND THE PROMISCUOUS LISTENER
+    # FRAME FOR THE SELECTIVE AND THE PROMISCUOUS LISTENER {CASE 2 & CASE 3}
     sock_tx_3.send(
         b"".join(
             UDPFrame(
@@ -124,7 +124,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_promiscuous
     assert not received_frames_3
 
-    # ANONYMOUS FRAME FOR THE PROMISCUOUS LISTENER
+    # ANONYMOUS FRAME FOR THE PROMISCUOUS LISTENER {CASE 5}
     sock_tx_1.send(
         b"".join(
             UDPFrame(
@@ -154,7 +154,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_promiscuous
     assert not received_frames_3
 
-    # DROP THE PROMISCUOUS LISTENER, ENSURE THE REMAINING SELECTIVE LISTENER WORKS
+    # DROP THE PROMISCUOUS LISTENER, ENSURE THE REMAINING SELECTIVE LISTENER WORKS {CASE 3}
     srd.remove_listener(None)
     with raises(LookupError):
         srd.remove_listener(None)
@@ -189,7 +189,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_promiscuous
     assert not received_frames_3
 
-    # DROPPED DATAGRAM FROM UNSUBSCRIBED NODE-ID
+    # DROPPED DATAGRAM FROM UNSUBSCRIBED NODE-ID {CASE 4}
     sock_tx_1.send(
         b"".join(
             UDPFrame(
@@ -210,7 +210,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_promiscuous
     assert not received_frames_3
 
-    # DROPPED DATAGRAM FROM AN UNMAPPED NODE ID
+    # DROPPED DATAGRAM FROM AN UNMAPPED NODE ID {CASE 4}
     sock_tx_9.send(
         b"".join(
             UDPFrame(
@@ -231,7 +231,7 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_promiscuous
     assert not received_frames_3
 
-    # DROPPED DATAGRAM FROM ANONYMOUS FRAME
+    # DROPPED DATAGRAM FROM ANONYMOUS FRAME {CASE 6}
     sock_tx_1.send(
         b"".join(
             UDPFrame(
@@ -252,12 +252,12 @@ async def _unittest_socket_reader(caplog: typing.Any) -> None:
     assert not received_frames_promiscuous
     assert not received_frames_3
 
-    # INVALID FRAME FROM NODE
+    # INVALID FRAME FROM NODE {CASE 1}
     sock_tx_3.send(b"abc")
     await (asyncio.sleep(1.1))  # Let the handler run in the background.
     assert stats == SocketReaderStatistics(
         accepted_datagrams={1: 1, 3: 2, None: 1},
-        dropped_datagrams={1: 1, 9: 1, None: 2}, ## QUESTION: Both invalid and anonymous frames as None?
+        dropped_datagrams={1: 1, 9: 1, None: 2},
     )
     assert not received_frames_promiscuous
     assert not received_frames_3
