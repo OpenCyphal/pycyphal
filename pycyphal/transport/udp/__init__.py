@@ -341,6 +341,8 @@ TransferFrom(..., transfer_id=1111, ...)
 >>> tr_0.close()
 >>> tr_1.close()
 
+TODO Add Service example
+
 
 Tooling
 +++++++

@@ -123,7 +123,7 @@ class UDPTransport(pycyphal.transport.Transport):
             local_ip_addr = ipaddress.ip_address(local_ip_addr)
         assert not isinstance(local_ip_addr, str)
 
-        assert (local_node_id is None) or (0 <= local_node_id <= 0xFFFE)
+        assert (local_node_id is None) or (0 <= local_node_id < 0xFFFF)
 
         self._sock_factory = SocketFactory.new(local_ip_addr, domain_id)
         self._anonymous = local_node_id is None
@@ -299,8 +299,7 @@ class UDPTransport(pycyphal.transport.Transport):
                 )
                 self._socket_reader_registry[specifier.data_specifier] = SocketReader(
                     sock=self._sock_factory.make_input_socket(specifier.remote_node_id, specifier.data_specifier),
-                    local_ip_address=self.local_ip_addr,
-                    anonymous=self._anonymous,
+                    local_node_id=self._local_node_id,
                     statistics=self._statistics.received_datagrams.setdefault(
                         specifier.data_specifier, SocketReaderStatistics()
                     ),

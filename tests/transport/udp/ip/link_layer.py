@@ -148,6 +148,7 @@ def _unittest_find_devices() -> None:
 
 
 def _unittest_sniff() -> None:
+    ## TODO: Remove unicast since no longer used
     ts_last = Timestamp.now()
     sniffs: typing.List[LinkLayerPacket] = []
 

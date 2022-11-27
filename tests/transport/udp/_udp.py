@@ -30,6 +30,8 @@ async def _unittest_udp_transport_ipv4() -> None:
     with pytest.raises(ValueError):
         _ = UDPTransport("127.0.0.1", domain_id=13, local_node_id=111, service_transfer_multiplier=100)
 
+    # Instantiate UDPTransport
+
     tr = UDPTransport("127.0.0.1", domain_id=13, local_node_id=111, mtu=9000)
     tr2 = UDPTransport("127.0.0.1", domain_id=13, local_node_id=222, service_transfer_multiplier=2)
 
@@ -69,6 +71,19 @@ async def _unittest_udp_transport_ipv4() -> None:
     #
     # Instantiate session objects.
     #
+    # UDPOutputSession          UDPTransport(local_node_id) data_specifier(subject_id)  remote_node_id
+    # ------------------------------------------------------------------------------------------------
+    # broadcaster               tr2(222)                    MessageDataSpecifier(2345)  None
+    # server_responder          tr(111)                     ServiceDataSpecifier(444)   222
+    # client_requester          tr2(222)                    ServiceDataSpecifier(444)   111
+    # 
+    # UDPInputSession           UDPTransport(local_node_id) data_specifier(subject_id)  remote_node_id
+    # ------------------------------------------------------------------------------------------------
+    # subscriber_promiscuous    tr(111)                     MessageDataSpecifier(2345)  None
+    # subscriber_selective      tr(111)                     MessageDataSpecifier(2345)  123
+    # server_listener           tr(111)                     ServiceDataSpecifier(444)   None
+    # client_listener           tr2(222)                    ServiceDataSpecifier(444)   111
+
     meta = PayloadMetadata(10000)
 
     broadcaster = tr2.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
@@ -133,6 +148,8 @@ async def _unittest_udp_transport_ipv4() -> None:
 
     #
     # Message exchange test.
+    # send: broadcaster
+    # receive: subscriber_promiscuous
     #
     assert await broadcaster.send(
         Transfer(
@@ -171,6 +188,8 @@ async def _unittest_udp_transport_ipv4() -> None:
 
     #
     # Service exchange test.
+    # send: client_requester
+    # receive: server_listener
     #
     assert await client_requester.send(
         Transfer(timestamp=Timestamp.now(), priority=Priority.HIGH, transfer_id=88888, fragmented_payload=payload_x3),
@@ -257,7 +276,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
-    tr_capture = UDPTransport("127.50.0.2", local_node_id=None)
+    tr_capture = UDPTransport("127.0.0.1", domain_id=13, local_node_id=None)
     captures: typing.List[UDPCapture] = []
 
     def inhale(s: Capture) -> None:
@@ -270,7 +289,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     assert tr_capture.capture_active
     await asyncio.sleep(1.0)
 
-    tr = UDPTransport("127.50.0.111")
+    tr = UDPTransport("127.0.0.1", domain_id=13, local_node_id=456)
     meta = PayloadMetadata(10000)
     broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)
     assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)
@@ -281,7 +300,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sink.bind(("", 11111))
     sink.setsockopt(
-        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.48.0.190") + socket.inet_aton("127.0.0.1")
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.53.0.190") + socket.inet_aton("127.0.0.1")
     )
 
     ts = Timestamp.now()
