@@ -25,15 +25,15 @@ async def _unittest_udp_transport_ipv4() -> None:
     get_monotonic = asyncio.get_event_loop().time
 
     with pytest.raises(ValueError):
-        _ = UDPTransport("127.0.0.1", domain_id=13, local_node_id=111, mtu=10)
+        _ = UDPTransport("127.0.0.1", subnet_id=13, local_node_id=111, mtu=10)
 
     with pytest.raises(ValueError):
-        _ = UDPTransport("127.0.0.1", domain_id=13, local_node_id=111, service_transfer_multiplier=100)
+        _ = UDPTransport("127.0.0.1", subnet_id=13, local_node_id=111, service_transfer_multiplier=100)
 
     # Instantiate UDPTransport
 
-    tr = UDPTransport("127.0.0.1", domain_id=13, local_node_id=111, mtu=9000)
-    tr2 = UDPTransport("127.0.0.1", domain_id=13, local_node_id=222, service_transfer_multiplier=2)
+    tr = UDPTransport("127.0.0.1", subnet_id=13, local_node_id=111, mtu=9000)
+    tr2 = UDPTransport("127.0.0.1", subnet_id=13, local_node_id=222, service_transfer_multiplier=2)
 
     assert tr.local_ip_addr == ipaddress.ip_address("127.0.0.1")
     assert tr2.local_ip_addr == ipaddress.ip_address("127.0.0.1")
@@ -276,7 +276,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
-    tr_capture = UDPTransport("127.0.0.1", domain_id=13, local_node_id=None)
+    tr_capture = UDPTransport("127.0.0.1", subnet_id=13, local_node_id=None)
     captures: typing.List[UDPCapture] = []
 
     def inhale(s: Capture) -> None:
@@ -289,7 +289,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     assert tr_capture.capture_active
     await asyncio.sleep(1.0)
 
-    tr = UDPTransport("127.0.0.1", domain_id=13, local_node_id=456)
+    tr = UDPTransport("127.0.0.1", subnet_id=13, local_node_id=456)
     meta = PayloadMetadata(10000)
     broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)
     assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)

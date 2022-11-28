@@ -24,10 +24,10 @@ def _unittest_socket_factory() -> None:
 
     is_linux = sys.platform.startswith("linux")
 
-    fac = SocketFactory.new(IPv4Address("127.0.0.1"), domain_id=13)
+    fac = SocketFactory.new(IPv4Address("127.0.0.1"), subnet_id=13)
     assert fac.max_nodes == 0xFFFF
     assert str(fac.local_ip_address) == "127.0.0.1"
-    assert fac.domain_id == 13
+    assert fac.subnet_id == 13
 
     # SERVICE SOCKET TEST
     ds = ServiceDataSpecifier(100, ServiceDataSpecifier.Role.REQUEST)
