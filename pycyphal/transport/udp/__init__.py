@@ -69,7 +69,7 @@ for reporting captured packets (see :class:`UDPCaptured`).
 IP address mapping
 ~~~~~~~~~~~~~~~~~~
 
-The *domain-ID* is used to differentiate independent Cyphal/UDP transport networks sharing the same IP network
+The *subnet-ID* is used to differentiate independent Cyphal/UDP transport networks sharing the same IP network
 (e.g., multiple Cyphal/UDP networks running on localhost or on some physical network).
 This is similar to the domain identifier in DDS.
 This value is not used anywhere else in the protocol other than in the construction of the multicast group address,
@@ -155,7 +155,7 @@ Example::
 
     Fixed prefix:       11101111 0xxxxxxx xxxxxxxx xxxxxxxx 
 
-    Domain-ID (=13):    xxxxxxxx x01101xx xxxxxxxx xxxxxxxx
+    Subnet-ID (=13):    xxxxxxxx x01101xx xxxxxxxx xxxxxxxx
 
     Message select:     xxxxxxxx xxxxxx00 000xxxxx xxxxxxxx 
     and reserved
@@ -200,7 +200,7 @@ Example::
 
     Fixed prefix:       11101111 0xxxxxxx xxxxxxxx xxxxxxxx 
 
-    Domain-ID (=13):    xxxxxxxx x01101xx xxxxxxxx xxxxxxxx
+    Subnet-ID (=13):    xxxxxxxx x01101xx xxxxxxxx xxxxxxxx
 
     Service select:     xxxxxxxx xxxxxx01 000xxxxx xxxxxxxx 
     and reserved
@@ -308,14 +308,14 @@ Create two transport instances -- one with a node-ID, one anonymous:
 >>> import asyncio
 >>> import pycyphal
 >>> import pycyphal.transport.udp
->>> tr_0 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', domain_id=13, local_node_id=10)
->>> tr_0.domain_id
+>>> tr_0 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', subnet_id=13, local_node_id=10)
+>>> tr_0.subnet_id
 13
 >>> tr_0.local_ip_addr
 IPv4Address('127.0.0.1')
 >>> tr_0.local_node_id # Anonymous is only for listening.
 10
->>> tr_1 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', domain_id=13, local_node_id=None)
+>>> tr_1 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', subnet_id=13, local_node_id=None)
 >>> tr_1.local_node_id is None
 True
 

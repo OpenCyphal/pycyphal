@@ -16,7 +16,7 @@ from pycyphal.transport import InvalidMediaConfigurationError
 from ._socket_factory import SocketFactory, Sniffer
 from ._endpoint_mapping import SUBJECT_PORT
 from ._endpoint_mapping import NODE_ID_MASK
-from ._endpoint_mapping import DOMAIN_ID_MASK
+from ._endpoint_mapping import SUBNET_ID_MASK
 from ._endpoint_mapping import MULTICAST_PREFIX
 from ._endpoint_mapping import service_data_specifier_to_multicast_group, message_data_specifier_to_multicast_group
 from ._endpoint_mapping import service_data_specifier_to_udp_port
@@ -32,11 +32,11 @@ class IPv4SocketFactory(SocketFactory):
     a node-ID that maps to the broadcast address for the subnet is unavailable.
     """
 
-    def __init__(self, local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address], domain_id: int):
+    def __init__(self, local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address], subnet_id: int):
         self._local_ip_addr = local_ip_addr
-        if domain_id >= (2**5):
-            raise ValueError(f"Invalid domain-ID: {domain_id} is larger than 31")
-        self._domain_id = domain_id
+        if subnet_id >= (2**5):
+            raise ValueError(f"Invalid subnet-ID: {subnet_id} is larger than 31")
+        self._subnet_id = subnet_id
 
     @property
     def max_nodes(self) -> int:
@@ -47,8 +47,8 @@ class IPv4SocketFactory(SocketFactory):
         return self._local_ip_addr
 
     @property
-    def domain_id(self) -> int:
-        return self._domain_id
+    def subnet_id(self) -> int:
+        return self._subnet_id
 
     def make_output_socket(
         self, remote_node_id: typing.Optional[int], data_specifier: pycyphal.transport.DataSpecifier
@@ -80,7 +80,7 @@ class IPv4SocketFactory(SocketFactory):
             # https://stackoverflow.com/a/26988214/1007777
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
-            remote_ip = message_data_specifier_to_multicast_group(self._domain_id, data_specifier)
+            remote_ip = message_data_specifier_to_multicast_group(self._subnet_id, data_specifier)
             remote_port = SUBJECT_PORT
         elif isinstance(data_specifier, ServiceDataSpecifier):
             if remote_node_id is None:
@@ -88,7 +88,7 @@ class IPv4SocketFactory(SocketFactory):
                 raise UnsupportedSessionConfigurationError("Service transfers require a remote_node_id.")
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
-            remote_ip = service_data_specifier_to_multicast_group(self._domain_id, remote_node_id)
+            remote_ip = service_data_specifier_to_multicast_group(self._subnet_id, remote_node_id)
             remote_port = service_data_specifier_to_udp_port(data_specifier)
         else:
             assert False
@@ -114,7 +114,7 @@ class IPv4SocketFactory(SocketFactory):
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 
         if isinstance(data_specifier, MessageDataSpecifier):
-            multicast_ip = message_data_specifier_to_multicast_group(self._domain_id, data_specifier)
+            multicast_ip = message_data_specifier_to_multicast_group(self._subnet_id, data_specifier)
             multicast_port = SUBJECT_PORT
             if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
                 # Binding to the multicast group address is necessary on GNU/Linux: https://habr.com/ru/post/141021/
@@ -139,7 +139,7 @@ class IPv4SocketFactory(SocketFactory):
                     ) from None
                 raise  # pragma: no cover
         elif isinstance(data_specifier, ServiceDataSpecifier):
-            multicast_ip = service_data_specifier_to_multicast_group(self._domain_id, remote_node_id)
+            multicast_ip = service_data_specifier_to_multicast_group(self._subnet_id, remote_node_id)
             multicast_port = service_data_specifier_to_udp_port(data_specifier)
             if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
                 s.bind((str(multicast_ip), multicast_port))
@@ -163,14 +163,14 @@ class IPv4SocketFactory(SocketFactory):
         return s
 
     def make_sniffer(self, handler: typing.Callable[[LinkLayerCapture], None]) -> SnifferIPv4:
-        return SnifferIPv4(self._domain_id, handler)
+        return SnifferIPv4(self._subnet_id, handler)
 
 
 class SnifferIPv4(Sniffer):
-    def __init__(self, domain_id: int, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
+    def __init__(self, subnet_id: int, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
         netmask_width = IPV4LENGTH - NODE_ID_MASK.bit_length() - 2
         fix = MULTICAST_PREFIX
-        sub = DOMAIN_ID_MASK & (domain_id << 18)  # domain-ID
+        sub = SUBNET_ID_MASK & (subnet_id << 18)  # subnet-ID
         subnet_ip = ipaddress.IPv4Address
         subnet_ip = subnet_ip(fix | sub)
         subnet = ip_network(f"{subnet_ip}/{netmask_width}", strict=False)

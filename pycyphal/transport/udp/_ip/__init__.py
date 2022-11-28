@@ -7,7 +7,7 @@ from ._socket_factory import Sniffer as Sniffer
 
 from ._endpoint_mapping import SUBJECT_ID_MASK as SUBJECT_ID_MASK
 from ._endpoint_mapping import NODE_ID_MASK as NODE_ID_MASK
-from ._endpoint_mapping import DOMAIN_ID_MASK as DOMAIN_ID_MASK
+from ._endpoint_mapping import SUBNET_ID_MASK as SUBNET_ID_MASK
 from ._endpoint_mapping import SUBJECT_PORT as SUBJECT_PORT
 from ._endpoint_mapping import SERVICE_BASE_PORT as SERVICE_BASE_PORT
 from ._endpoint_mapping import service_data_specifier_to_multicast_group as service_data_specifier_to_multicast_group

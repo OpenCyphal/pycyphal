@@ -56,7 +56,7 @@ class UDPTransport(pycyphal.transport.Transport):
     def __init__(
         self,
         local_ip_addr: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
-        domain_id: int,
+        subnet_id: int,
         local_node_id: typing.Optional[int] = 0,
         *,  # ?
         mtu: int = min(VALID_MTU_RANGE),
@@ -76,12 +76,12 @@ class UDPTransport(pycyphal.transport.Transport):
             another node running locally on the same interface
             (because sockets are initialized with ``SO_REUSEADDR`` and ``SO_REUSEPORT``, when available).
 
-        :param domain_id: Specifies which domain the node will be associated with.
+        :param subnet_id: Specifies which subnet the node will be associated with.
 
         Examples:
 
         +-----------------------+-------------------+----------------------------+--------------------------+
-        | ``domain_id``         | ``remote_node_id``| Data specifier             | Multicast IP address     |
+        | ``subnet_id``         | ``remote_node_id``| Data specifier             | Multicast IP address     |
         +=======================+===================+============================+==========================+
         | 13                    | 42                | Message                    | 239.52.0.42              |
         +-----------------------+-------------------+----------------------------+--------------------------+
@@ -125,9 +125,9 @@ class UDPTransport(pycyphal.transport.Transport):
 
         assert (local_node_id is None) or (0 <= local_node_id < 0xFFFF)
 
-        self._sock_factory = SocketFactory.new(local_ip_addr, domain_id)
+        self._sock_factory = SocketFactory.new(local_ip_addr, subnet_id)
         self._anonymous = local_node_id is None
-        self._domain_id = domain_id
+        self._subnet_id = subnet_id
         self._local_ip_addr = local_ip_addr
         self._local_node_id = local_node_id
         self._mtu = int(mtu)
@@ -234,8 +234,8 @@ class UDPTransport(pycyphal.transport.Transport):
         return self._sock_factory._local_ip_addr
 
     @property
-    def domain_id(self) -> int:
-        return self._sock_factory.domain_id
+    def subnet_id(self) -> int:
+        return self._sock_factory.subnet_id
 
     def begin_capture(self, handler: pycyphal.transport.CaptureCallback) -> None:
         """
@@ -360,7 +360,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
     def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
         return [repr(str(self.local_ip_addr))], {
-            "domain_id": self._domain_id,
+            "subnet_id": self._subnet_id,
             "local_node_id": self.local_node_id,
             "service_transfer_multiplier": self._srv_multiplier,
             "mtu": self._mtu,

@@ -43,7 +43,7 @@ class SocketFactory(abc.ABC):
     @staticmethod
     def new(
         local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address],
-        domain_id: int,
+        subnet_id: int,
         ipv6_addr: bool = False,
     ) -> SocketFactory:
         """
@@ -52,7 +52,7 @@ class SocketFactory(abc.ABC):
         if not ipv6_addr:
             from ._v4 import IPv4SocketFactory
 
-            return IPv4SocketFactory(local_ip_addr, domain_id)
+            return IPv4SocketFactory(local_ip_addr, subnet_id)
 
         else:
             raise NotImplementedError("Sorry, IPv6 is not yet supported by this implementation.")
@@ -67,7 +67,7 @@ class SocketFactory(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def domain_id(self) -> int:
+    def subnet_id(self) -> int:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -128,7 +128,7 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pycyphal.util.repr_attributes(self, domain_id=str(self._domain_id))
+        return pycyphal.util.repr_attributes(self, subnet_id=str(self._subnet_id))
 
 
 class Sniffer(abc.ABC):
