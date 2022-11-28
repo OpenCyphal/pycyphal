@@ -29,7 +29,7 @@ is handled directly by the standard UDP/IP stack of the underlying operating sys
 Per the Cyphal transport model provided in the Cyphal specification, the following transfer categories are supported:
 
 +--------------------+--------------------------+---------------------------+
-| Supported transfers| Point-to-point           | Broadcast                 |
+| Supported transfers| Point-to-point           | Point-to-many             |
 +====================+==========================+===========================+
 |**Message**         | No                       | Yes                       |
 +--------------------+--------------------------+---------------------------+

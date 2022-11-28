@@ -157,21 +157,25 @@ def message_data_specifier_to_multicast_group(
 
     >>> from pycyphal.transport import MessageDataSpecifier
     >>> from ipaddress import ip_address
-    >>> str(message_data_specifier_to_multicast_group(0, MessageDataSpecifier(123))) # Dataspecifier bit is 0, node_id=123
+    >>> str(message_data_specifier_to_multicast_group(0, MessageDataSpecifier(123)))
     '239.0.0.123'
-    >>> str(message_data_specifier_to_multicast_group(13, MessageDataSpecifier(456))) # multicast group with node_id=456
+    >>> str(message_data_specifier_to_multicast_group(13, MessageDataSpecifier(456)))
     '239.52.1.200'
     >>> str(message_data_specifier_to_multicast_group(32, MessageDataSpecifier(456)))
     Traceback (most recent call last):
       ...
     ValueError: Invalid subnet-ID...
+    >>> str(message_data_specifier_to_multicast_group(13, MessageDataSpecifier(2**13)))
+    Traceback (most recent call last):
+      ...
+    ValueError: Invalid subject-ID...
     >>> msg_ip = message_data_specifier_to_multicast_group(13, MessageDataSpecifier(123))
     >>> assert (int(msg_ip) & DATASPECIFIER_BIT_MASK) != DATASPECIFIER_BIT_MASK, "Dataspecifier bit is 0 for message"
     """
     if subnet_id >= (2**5):
         raise ValueError(f"Invalid subnet-ID: {subnet_id} is larger than 31")
     if data_specifier.subject_id > SUBJECT_ID_MASK:
-        raise ValueError(f"Invalid node-ID: {data_specifier.subject_id} is larger than {SUBJECT_ID_MASK}")
+        raise ValueError(f"Invalid subject-ID: {data_specifier.subject_id} is larger than {SUBJECT_ID_MASK}")
     ty: type
     if not ipv6_addr:
         ty = ipaddress.IPv4Address

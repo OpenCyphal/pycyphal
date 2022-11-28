@@ -23,7 +23,7 @@ class MessageDataSpecifier(DataSpecifier):
 
     def __post_init__(self) -> None:
         if not (0 <= self.subject_id <= self.SUBJECT_ID_MASK):
-            raise ValueError(f"Invalid subject ID: {self.subject_id}")
+            raise ValueError(f"Invalid subject-ID: {self.subject_id}")
 
 
 @dataclasses.dataclass(frozen=True)

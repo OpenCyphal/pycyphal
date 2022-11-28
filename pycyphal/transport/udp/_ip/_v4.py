@@ -168,6 +168,8 @@ class IPv4SocketFactory(SocketFactory):
 
 class SnifferIPv4(Sniffer):
     def __init__(self, subnet_id: int, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
+        if subnet_id >= (2**5):
+            raise ValueError(f"Invalid subnet-ID: {subnet_id} is larger than 31")
         netmask_width = IPV4LENGTH - NODE_ID_MASK.bit_length() - 2
         fix = MULTICAST_PREFIX
         sub = SUBNET_ID_MASK & (subnet_id << 18)  # subnet-ID
