@@ -1,7 +1,0 @@
-# For production requirements please do `pip install .`
-pytest ~= 7.1
-pytest-asyncio == 0.18
-coverage ~= 6.3
-pylint == 2.14.*
-mypy == 0.961
-wheel

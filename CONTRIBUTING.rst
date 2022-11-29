@@ -197,11 +197,6 @@ To abort on first error::
 
     nox -x -- -x
 
-To run no tests but mypy, pylint and others (this works only in theory)::
-
-    nox -s test -- -k foo
-
-Where foo should match no tests.
 
 Running a subset of tests
 .........................

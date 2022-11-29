@@ -9,6 +9,18 @@ environment:
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       PYTHON: '3.10'
     -
+      job_group: tests
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      PYTHON: '3.9'
+    -
+      job_group: tests
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      PYTHON: '3.8'
+    -
+      job_group: tests
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      PYTHON: '3.7'
+    -
       job_name: deploy
       job_depends_on: tests
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
@@ -35,6 +47,16 @@ for:
         - job_group: tests
           APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
     install:
+      - 'systeminfo'
+      # Configure Npcap. This is for testing the packet capture functionality in the Cyphal/UDP transport.
+      - '.test_deps\npcap-0.96.exe /loopback_support=yes /winpcap_mode=yes /S'
+      # Installation of the NDIS filter driver from Npcap may have disrupted network connectivity, as explained in
+      # https://github.com/nmap/npcap/issues/215. Also, a restart appears to be necessary to enable the NPF service.
+      # Therefore, we restart the VM as suggested in https://github.com/appveyor/ci/issues/3491.
+      - 'shutdown /r /f /t 5'
+      - 'timeout 30'         # Boot-up delay. This should be sufficient for the VM to get ready. Increase if not.
+      - 'route print & ipconfig /all'
+      # Due to the reboot, all volatile configuration like environment variables is lost here. We need to set it up now.
       - 'set PATH=%PYTHON%;%PYTHON%\Scripts;%PATH%'
       - 'echo %PATH%'
       - 'git submodule update --init --recursive'
@@ -42,7 +64,7 @@ for:
     test_script:
       # FIXME on Windows we only test against the OLDEST and the NEWEST version of Python because we run out of time.
       # FIXME restructure the workflow or migrate to GitHub Actions.
-      - 'nox --forcecolor --non-interactive --error-on-missing-interpreters --pythons 3.10 --session test'
+      - 'nox --forcecolor --non-interactive --error-on-missing-interpreters --pythons 3.7 3.10 --session test pristine'
 
   - # GNU/LINUX TEST
     matrix:
@@ -58,7 +80,7 @@ for:
       # Sonar scanner unconditionally fails on PR builds with a NullPointerException, so don't run it there.
       - '[[ -z "$APPVEYOR_PULL_REQUEST_HEAD_COMMIT" ]] || unset SONARCLOUD_TOKEN'
     test_script:
-      - 'nox --non-interactive --error-on-missing-interpreters --session test --python $PYTHON --pythons 3.10'
+      - 'nox --non-interactive --error-on-missing-interpreters --session test pristine --python $PYTHON'
       - 'nox --non-interactive --session demo check_style docs'
     on_finish:
       - 'ip link show'  # Diagnostics aid
