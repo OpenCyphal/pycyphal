@@ -175,7 +175,8 @@ def compile(  # pylint: disable=redefined-builtin
     if not composite_types:
         _logger.info("Root namespace directory %r does not contain DSDL definitions", root_namespace_directory)
         return None
-    (root_namespace_name,) = set(map(lambda x: x.root_namespace, composite_types))  # type: str,
+    root_namespace_name: str
+    (root_namespace_name,) = set(map(lambda x: x.root_namespace, composite_types))  # type: ignore
     _logger.info("Read %d definitions from root namespace %r", len(composite_types), root_namespace_name)
 
     # Template primitives
