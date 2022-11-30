@@ -1246,7 +1246,8 @@ async def _unittest_can_media_spoofing() -> None:
             all_frames_received_event.set()
 
     can_transport.begin_capture(_capture_handler)
-    await can_transport.spoof_frames(list_of_frames)
+    loop = asyncio.get_running_loop()
+    await can_transport.spoof_frames(list_of_frames, loop.time() + 1.0)
     await asyncio.wait_for(all_frames_received_event.wait(), 0.2)
     await asyncio.wait_for(all_media2_received_event.wait(), 0.2)
     all_frames_received_event.clear()
@@ -1260,8 +1261,8 @@ async def _unittest_can_media_spoofing() -> None:
     # Set some frames of media2 as not received
     media2_confirmed_received[str(frame2.data)] = False
     media2_confirmed_received[str(frame3.data)] = False
-    await can_transport.spoof_frames([frame2])
-    await can_transport.spoof_frames([frame3])
+    await can_transport.spoof_frames([frame2], loop.time() + 1.0)
+    await can_transport.spoof_frames([frame3], loop.time() + 1.0)
     await asyncio.wait_for(all_frames_received_event.wait(), 0.2)
     # Loopback is not enabled so the frames should not be received on the media that sent them
     # await asyncio.wait_for(all_media1_received_event.wait(), 2)

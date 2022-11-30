@@ -254,13 +254,13 @@ class CANTransport(pycyphal.transport.Transport):
         """
         return CANTracer()
 
-    async def spoof_frames(
-        self,
-        frames: typing.Sequence[DataFrame],
-        monotonic_deadline: typing.Optional[float] = None,
-    ) -> None:
-        if monotonic_deadline is None:
-            asyncio.get_running_loop().time() + 1.0
+    async def spoof_frames(self, frames: typing.Sequence[DataFrame], monotonic_deadline: float) -> None:
+        """
+        Inject arbitrary frames into the transport directly.
+        Frames that could not be delivered to the underlying media driver before the deadline are silently dropped.
+        This method is mostly intended for co-existence with other communication protocols that use the same
+        CAN interface (e.g., DroneCAN).
+        """
         async with self._media_lock:
             if self._maybe_media is None:
                 raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
@@ -269,7 +269,7 @@ class CANTransport(pycyphal.transport.Transport):
                 monotonic_deadline=monotonic_deadline,
             )
             for frame in frames:
-                capture = CANCapture(Timestamp.now(), frame, False)
+                capture = CANCapture(Timestamp.now(), frame, own=True)
                 pycyphal.util.broadcast(self._capture_handlers)(capture)
 
     async def spoof(self, transfer: pycyphal.transport.AlienTransfer, monotonic_deadline: float) -> bool:
