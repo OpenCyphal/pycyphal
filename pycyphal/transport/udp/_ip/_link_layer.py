@@ -2,6 +2,9 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
+# Disable unused ignore warning for this file to enable support for different libpcap versions.
+# mypy: warn_unused_ignores=False
+
 from __future__ import annotations
 import sys
 import time
@@ -174,7 +177,7 @@ class LinkLayerSniffer:
             _logger.debug("%r: Worker thread for %r is started: %s", self, name, threading.current_thread())
 
             # noinspection PyTypeChecker
-            @pcap.pcap_handler
+            @pcap.pcap_handler  # type: ignore
             def proxy(_: object, header: ctypes.Structure, packet: Any) -> None:
                 # Parse the header, extract the timestamp and the packet length.
                 header = header.contents
