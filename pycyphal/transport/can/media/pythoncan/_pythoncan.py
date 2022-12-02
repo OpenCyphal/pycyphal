@@ -14,7 +14,7 @@ import collections
 import concurrent.futures
 import warnings
 
-import can  # type: ignore
+import can
 from pycyphal.transport import Timestamp, ResourceClosedError, InvalidMediaConfigurationError
 from pycyphal.transport.can.media import Media, FilterConfiguration, Envelope, FrameFormat, DataFrame
 
