@@ -226,7 +226,7 @@ class SocketCANMedia(Media):
             assert msg_flags & socket.MSG_TRUNC == 0, "The data buffer is not large enough"
             assert msg_flags & socket.MSG_CTRUNC == 0, "The ancillary data buffer is not large enough"
 
-            loopback = bool(msg_flags & socket.MSG_CONFIRM)
+            loopback = bool(msg_flags & socket.MSG_CONFIRM)  # type: ignore
             ts_system_ns = 0
             for cmsg_level, cmsg_type, cmsg_data in ancdata:
                 if cmsg_level == socket.SOL_SOCKET and cmsg_type == _SO_TIMESTAMP:
