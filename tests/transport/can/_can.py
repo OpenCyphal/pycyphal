@@ -10,7 +10,6 @@ import pytest
 import pycyphal.transport
 from pycyphal.transport import can
 
-
 _RX_TIMEOUT = 10e-3
 
 pytestmark = pytest.mark.asyncio
@@ -1185,6 +1184,87 @@ async def _unittest_can_spoofing() -> None:
             ),
             loop.time() + 1.0,
         )
+
+
+async def _unittest_can_media_spoofing() -> None:
+    """Test the spoof_frames method of CANTransport.
+    1. Create a new MockMedia
+    2. Create a new CANTransport, set the mock media as its media
+    3. Send some frames on the media using the spoof_frames method
+    """
+    from tests.transport.can.media.mock import MockMedia
+    from pycyphal.transport.can import CANCapture
+
+    from pycyphal.transport import Timestamp
+    from pycyphal.transport.can.media import Envelope
+
+    peers: typing.Set[MockMedia] = set()
+    mock_media1 = MockMedia(peers, 64, 1)
+    mock_media1.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
+    mock_media2 = MockMedia(peers, 64, 1)
+    mock_media2.configure_acceptance_filters([can.media.FilterConfiguration.new_promiscuous()])
+    peers.add(mock_media1)
+    peers.add(mock_media2)
+    can_transport = can.CANTransport(mock_media1, None)
+    list_of_frames: typing.Sequence[can.media.DataFrame] = [
+        can.media.DataFrame(
+            format=can.media.FrameFormat.EXTENDED,
+            identifier=0x123,
+            data=bytearray(b"123"),
+        ),
+        can.media.DataFrame(
+            format=can.media.FrameFormat.EXTENDED,
+            identifier=0x123,
+            data=bytearray(b"124"),
+        ),
+    ]
+    frames_confirmed_received = {str(frame.data): False for frame in list_of_frames}
+    media2_confirmed_received = {str(frame.data): False for frame in list_of_frames}
+    all_frames_received_event = asyncio.Event()
+    all_media2_received_event = asyncio.Event()
+    from pycyphal.transport import Capture
+
+    def make_media_receive_handler(
+        reception_dictionary: typing.Dict[str, bool], all_received_event: asyncio.Event
+    ) -> typing.Callable[[typing.Sequence[typing.Tuple[Timestamp, Envelope]]], None]:
+        def _media_receive_handler(frames: typing.Sequence[typing.Tuple[Timestamp, Envelope]]) -> None:
+            for _, envelope in frames:
+                reception_dictionary[str(envelope.frame.data)] = True
+            if all(reception_dictionary.values()):
+                all_received_event.set()
+
+        return _media_receive_handler
+
+    mock_media2.start(make_media_receive_handler(media2_confirmed_received, all_media2_received_event), True)
+
+    def _capture_handler(capture: Capture) -> None:
+        nonlocal frames_confirmed_received
+        assert isinstance(capture, CANCapture)
+        assert capture.own
+        frames_confirmed_received[str(capture.frame.data)] = True
+        if all(frames_confirmed_received.values()):
+            all_frames_received_event.set()
+
+    can_transport.begin_capture(_capture_handler)
+    loop = asyncio.get_running_loop()
+    await can_transport.spoof_frames(list_of_frames, loop.time() + 1.0)
+    await asyncio.wait_for(all_frames_received_event.wait(), 0.2)
+    await asyncio.wait_for(all_media2_received_event.wait(), 0.2)
+    all_frames_received_event.clear()
+    all_media2_received_event.clear()
+    frame2 = can.media.DataFrame(format=can.media.FrameFormat.EXTENDED, identifier=0x116, data=bytearray(b"abc"))
+    frame3 = can.media.DataFrame(format=can.media.FrameFormat.EXTENDED, identifier=0x156, data=bytearray(b"632"))
+    # Set some transport1 frames as not received
+    frames_confirmed_received[str(frame2.data)] = False
+    frames_confirmed_received[str(frame3.data)] = False
+    # Set some frames of media2 as not received
+    media2_confirmed_received[str(frame2.data)] = False
+    media2_confirmed_received[str(frame3.data)] = False
+    await can_transport.spoof_frames([frame2], loop.time() + 1.0)
+    await can_transport.spoof_frames([frame3], loop.time() + 1.0)
+    await asyncio.wait_for(all_frames_received_event.wait(), 0.2)
+    # Loopback is not enabled so the frames should not be received on the media that sent them
+    await asyncio.wait_for(all_media2_received_event.wait(), 0.2)
 
 
 def _mem(data: typing.Union[str, bytes, bytearray]) -> memoryview:

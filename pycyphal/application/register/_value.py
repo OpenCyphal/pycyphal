@@ -348,9 +348,9 @@ def _strictify(s: RelaxedValue) -> Value:
     if not s:
         return Value()  # Empty list generalized into Value.empty.
     if all(isinstance(x, bool) for x in s):
-        return _strictify(Bit(s))  # type: ignore
+        return _strictify(Bit(s))
     if all(isinstance(x, (int, bool)) for x in s):
-        return _strictify(Natural64(s)) if all(x >= 0 for x in s) else _strictify(Integer64(s))  # type: ignore
+        return _strictify(Natural64(s)) if all(x >= 0 for x in s) else _strictify(Integer64(s))
     if all(isinstance(x, (float, int, bool)) for x in s):
         return _strictify(Real64(s))
 

@@ -142,7 +142,7 @@ def message_data_specifier_to_multicast_group(
         assert False
     if local_ip_address.is_multicast:
         raise ValueError(f"The local address shall be a unicast address, not multicast: {local_ip_address}")
-    return ty(msb | data_specifier.subject_id)  # type: ignore
+    return ty(msb | data_specifier.subject_id)
 
 
 def multicast_group_to_message_data_specifier(

@@ -2,6 +2,9 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
+# Disable unused ignore warning for this file to enable support for different libpcap versions.
+# mypy: warn_unused_ignores=False
+
 from __future__ import annotations
 import sys
 import time
