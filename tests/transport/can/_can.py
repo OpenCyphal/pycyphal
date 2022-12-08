@@ -1221,7 +1221,6 @@ async def _unittest_can_media_spoofing() -> None:
     frames_confirmed_received = {str(frame.data): False for frame in list_of_frames}
     media2_confirmed_received = {str(frame.data): False for frame in list_of_frames}
     all_frames_received_event = asyncio.Event()
-    all_media1_received_event = asyncio.Event()
     all_media2_received_event = asyncio.Event()
     from pycyphal.transport import Capture
 
@@ -1241,6 +1240,7 @@ async def _unittest_can_media_spoofing() -> None:
     def _capture_handler(capture: Capture) -> None:
         nonlocal frames_confirmed_received
         assert isinstance(capture, CANCapture)
+        assert capture.own
         frames_confirmed_received[str(capture.frame.data)] = True
         if all(frames_confirmed_received.values()):
             all_frames_received_event.set()
@@ -1251,7 +1251,6 @@ async def _unittest_can_media_spoofing() -> None:
     await asyncio.wait_for(all_frames_received_event.wait(), 0.2)
     await asyncio.wait_for(all_media2_received_event.wait(), 0.2)
     all_frames_received_event.clear()
-    all_media1_received_event.clear()
     all_media2_received_event.clear()
     frame2 = can.media.DataFrame(format=can.media.FrameFormat.EXTENDED, identifier=0x116, data=bytearray(b"abc"))
     frame3 = can.media.DataFrame(format=can.media.FrameFormat.EXTENDED, identifier=0x156, data=bytearray(b"632"))
@@ -1265,7 +1264,6 @@ async def _unittest_can_media_spoofing() -> None:
     await can_transport.spoof_frames([frame3], loop.time() + 1.0)
     await asyncio.wait_for(all_frames_received_event.wait(), 0.2)
     # Loopback is not enabled so the frames should not be received on the media that sent them
-    # await asyncio.wait_for(all_media1_received_event.wait(), 2)
     await asyncio.wait_for(all_media2_received_event.wait(), 0.2)
 
 
