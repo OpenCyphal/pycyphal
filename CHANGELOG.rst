@@ -3,6 +3,12 @@
 Changelog
 =========
 
+v1.11
+-----
+
+- Add ``pycyphal.transport.can.CANTransport.spoof_frames()`` for compatibility with 3rd-party CAN protocols
+  sharing the network interface with PyCyphal.
+
 v1.10
 -----
 
