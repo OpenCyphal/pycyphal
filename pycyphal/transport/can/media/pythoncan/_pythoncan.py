@@ -89,8 +89,8 @@ class PythonCANMedia(Media):
 
             - Interface ``slcan`` is implemented by :class:`can.interfaces.slcan.slcanBus`.
               Only Classic CAN is supported.
-              The serial port settings are fixed at 115200-8N1.
-              Example: ``slcan:COM12``
+              The serial port settings are fixed at 8N1, but baudrate can be optionally specified with ``@baudrate``.
+              Example: ``slcan:COM12@115200`` or ``slcan:socket://192.168.254.254:5000``
 
             - Interface ``pcan`` is implemented by :class:`can.interfaces.pcan.PcanBus`.
               Ensure that `PCAN-Basic <https://www.peak-system.com/PCAN-Basic.239.0.html>`_ is installed.
@@ -165,7 +165,7 @@ class PythonCANMedia(Media):
             PythonCANMedia('canalystii:0', 500_000)
 
         """
-        self._conn_name = str(iface_name).split(":")
+        self._conn_name = str(iface_name).split(":", 1)
         if len(self._conn_name) != 2:
             raise InvalidMediaConfigurationError(
                 f"Interface name {iface_name!r} does not match the format 'interface:channel'"
