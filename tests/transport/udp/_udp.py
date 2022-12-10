@@ -95,6 +95,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 123), meta)
     assert subscriber_selective is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 123), meta)
 
+    ## THIS
     server_listener = tr.get_input_session(
         InputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST), None), meta
     )
@@ -109,6 +110,7 @@ async def _unittest_udp_transport_ipv4() -> None:
         OutputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE), 222), meta
     )
 
+    ## THIS
     client_requester = tr2.get_output_session(
         OutputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST), 111), meta
     )

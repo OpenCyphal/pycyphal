@@ -384,14 +384,15 @@ from ._session import UDPFeedback as UDPFeedback
 
 from ._frame import UDPFrame as UDPFrame
 
-from ._ip import SUBJECT_ID_MASK as SUBJECT_ID_MASK
-from ._ip import NODE_ID_MASK as NODE_ID_MASK
-from ._ip import SUBJECT_PORT as SUBJECT_PORT
-from ._ip import SERVICE_BASE_PORT as SERVICE_BASE_PORT
+# from ._ip import SUBJECT_ID_MASK as SUBJECT_ID_MASK
+# from ._ip import NODE_ID_MASK as NODE_ID_MASK
+# from ._ip import SUBJECT_PORT as SUBJECT_PORT
+# from ._ip import SERVICE_BASE_PORT as SERVICE_BASE_PORT
 from ._ip import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group
 from ._ip import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
-from ._ip import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
-from ._ip import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier
+
+# from ._ip import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
+# from ._ip import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier
 from ._ip import LinkLayerPacket as LinkLayerPacket
 
 from ._tracer import IPPacket as IPPacket

@@ -16,7 +16,8 @@ import dataclasses
 import pycyphal
 from pycyphal.transport import Timestamp
 from ._frame import UDPFrame
-from ._ip import NODE_ID_MASK
+
+# from ._ip import NODE_ID_MASK
 
 
 _READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.
@@ -67,7 +68,6 @@ class SocketReader:
     """
     The callback is invoked with the timestamp, source node-ID, and the frame instance upon successful reception.
     Remember that on UDP there is no concept of "anonymous node", there is DHCP to handle that.
-    ## QUESTION: previous line not relevant anymore?
     If a UDP frame is received that does not contain a valid Cyphal frame,
     the callback is invoked with None for error statistic collection purposes.
     """
@@ -75,7 +75,7 @@ class SocketReader:
     def __init__(
         self,
         sock: socket.socket,
-        local_node_id: int,
+        local_node_id: int,  # NOTE: So as messages/services are now both using multicast we can remove local_node_id?
         statistics: SocketReaderStatistics,
     ):
         """
@@ -89,7 +89,7 @@ class SocketReader:
         self._local_node_id = local_node_id
         self._statistics = statistics
 
-        assert( 0 <= self._local_node_id < NODE_ID_MASK)
+        assert 0 <= self._local_node_id < NODE_ID_MASK
         assert isinstance(self._statistics, SocketReaderStatistics)
 
         self._listeners: typing.Dict[typing.Optional[int], SocketReader.Listener] = {}
@@ -177,9 +177,8 @@ class SocketReader:
             self._ctl_main.close()
         _logger.debug("%r: Closed. Elapsed time: %.3f milliseconds", self, (time.monotonic() - started_at) * 1e3)
 
-    def _dispatch_frame(
-        self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]
-    ) -> None:
+    def _dispatch_frame(self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]) -> None:
+        # 6 possible cases:
         # No frame
         #   └──> dropped_datagrams[None] {CASE 1}
         # Frame, non-anonymous
@@ -220,9 +219,9 @@ class SocketReader:
                         callback(timestamp, frame)
                     except Exception as ex:  # pragma: no cover
                         _logger.exception("%r: Unhandled exception in the listener for node-ID %r: %s", self, key, ex)
-        
+
         # Handle anonymous frames
-        if anonymous_frame:
+        elif anonymous_frame:
             try:
                 callback = self._listeners[None]
             except LookupError:

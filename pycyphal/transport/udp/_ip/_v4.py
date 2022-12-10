@@ -9,19 +9,18 @@ import typing
 import socket
 import logging
 import ipaddress
-from ipaddress import IPv4Address, IPV4LENGTH, ip_network
+from ipaddress import IPV4LENGTH, ip_network
 import pycyphal
 from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
 from pycyphal.transport import InvalidMediaConfigurationError
 from ._socket_factory import SocketFactory, Sniffer
-from ._endpoint_mapping import SUBJECT_PORT
-from ._endpoint_mapping import NODE_ID_MASK
-from ._endpoint_mapping import SUBNET_ID_MASK
-from ._endpoint_mapping import MULTICAST_PREFIX
-from ._endpoint_mapping import service_data_specifier_to_multicast_group, message_data_specifier_to_multicast_group
-from ._endpoint_mapping import service_data_specifier_to_udp_port
-from ._link_layer import LinkLayerCapture, LinkLayerSniffer
 
+from ._endpoint_mapping import DESTINATION_PORT
+from ._endpoint_mapping import DESTINATION_NODE_ID_MASK
+from ._endpoint_mapping import MULTICAST_PREFIX
+from ._endpoint_mapping import service_node_id_to_multicast_group, message_data_specifier_to_multicast_group
+
+from ._link_layer import LinkLayerCapture, LinkLayerSniffer
 
 _logger = logging.getLogger(__name__)
 
@@ -32,23 +31,16 @@ class IPv4SocketFactory(SocketFactory):
     a node-ID that maps to the broadcast address for the subnet is unavailable.
     """
 
-    def __init__(self, local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address], subnet_id: int):
+    def __init__(self, local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]):
         self._local_ip_addr = local_ip_addr
-        if subnet_id >= (2**5):
-            raise ValueError(f"Invalid subnet-ID: {subnet_id} is larger than 31")
-        self._subnet_id = subnet_id
 
     @property
     def max_nodes(self) -> int:
-        return NODE_ID_MASK  # The maximum may not be available because it may be the broadcast address.
+        return DESTINATION_NODE_ID_MASK  # The maximum may not be available because it may be the broadcast address.
 
     @property
     def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
         return self._local_ip_addr
-
-    @property
-    def subnet_id(self) -> int:
-        return self._subnet_id
 
     def make_output_socket(
         self, remote_node_id: typing.Optional[int], data_specifier: pycyphal.transport.DataSpecifier
@@ -80,16 +72,13 @@ class IPv4SocketFactory(SocketFactory):
             # https://stackoverflow.com/a/26988214/1007777
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
-            remote_ip = message_data_specifier_to_multicast_group(self._subnet_id, data_specifier)
-            remote_port = SUBJECT_PORT
+            remote_ip = message_data_specifier_to_multicast_group(data_specifier)
+            remote_port = DESTINATION_PORT
         elif isinstance(data_specifier, ServiceDataSpecifier):
-            if remote_node_id is None:
-                s.close()
-                raise UnsupportedSessionConfigurationError("Service transfers require a remote_node_id.")
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
-            remote_ip = service_data_specifier_to_multicast_group(self._subnet_id, remote_node_id)
-            remote_port = service_data_specifier_to_udp_port(data_specifier)
+            remote_ip = service_node_id_to_multicast_group(remote_node_id)
+            remote_port = DESTINATION_PORT
         else:
             assert False
 
@@ -114,8 +103,8 @@ class IPv4SocketFactory(SocketFactory):
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 
         if isinstance(data_specifier, MessageDataSpecifier):
-            multicast_ip = message_data_specifier_to_multicast_group(self._subnet_id, data_specifier)
-            multicast_port = SUBJECT_PORT
+            multicast_ip = message_data_specifier_to_multicast_group(data_specifier)
+            multicast_port = DESTINATION_PORT
             if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
                 # Binding to the multicast group address is necessary on GNU/Linux: https://habr.com/ru/post/141021/
                 s.bind((str(multicast_ip), multicast_port))
@@ -139,8 +128,8 @@ class IPv4SocketFactory(SocketFactory):
                     ) from None
                 raise  # pragma: no cover
         elif isinstance(data_specifier, ServiceDataSpecifier):
-            multicast_ip = service_data_specifier_to_multicast_group(self._subnet_id, remote_node_id)
-            multicast_port = service_data_specifier_to_udp_port(data_specifier)
+            multicast_ip = service_node_id_to_multicast_group(remote_node_id)
+            multicast_port = DESTINATION_PORT
             if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
                 s.bind((str(multicast_ip), multicast_port))
             else:
@@ -167,14 +156,11 @@ class IPv4SocketFactory(SocketFactory):
 
 
 class SnifferIPv4(Sniffer):
-    def __init__(self, subnet_id: int, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
-        if subnet_id >= (2**5):
-            raise ValueError(f"Invalid subnet-ID: {subnet_id} is larger than 31")
-        netmask_width = IPV4LENGTH - NODE_ID_MASK.bit_length() - 2
+    def __init__(self, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
+        netmask_width = IPV4LENGTH - DESTINATION_NODE_ID_MASK.bit_length() - 1
         fix = MULTICAST_PREFIX
-        sub = SUBNET_ID_MASK & (subnet_id << 18)  # subnet-ID
         subnet_ip = ipaddress.IPv4Address
-        subnet_ip = subnet_ip(fix | sub)
+        subnet_ip = subnet_ip(fix)
         subnet = ip_network(f"{subnet_ip}/{netmask_width}", strict=False)
         filter_expression = f"udp and src net {subnet}"
         _logger.debug("Constructed BPF filter expression: %r", filter_expression)
@@ -185,3 +171,46 @@ class SnifferIPv4(Sniffer):
 
     def __repr__(self) -> str:
         return pycyphal.util.repr_attributes(self, self._link_layer)
+
+
+# ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
+
+
+def _unittest_udp_socket_factory_v4() -> None:
+    sock_fac = IPv4SocketFactory(local_ip_addr=ipaddress.IPv4Address("127.0.0.1"))
+    assert sock_fac.local_ip_address == ipaddress.IPv4Address("127.0.0.1")
+
+    msg_output_socket = sock_fac.make_output_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(456))
+    assert "239.0.1.200" == msg_output_socket.getpeername()[0]
+    assert DESTINATION_PORT == msg_output_socket.getpeername()[1]
+
+    srvc_output_socket = sock_fac.make_output_socket(
+        remote_node_id=123, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.RESPONSE)
+    )
+    assert "239.1.0.123" == srvc_output_socket.getpeername()[0]
+    assert DESTINATION_PORT == srvc_output_socket.getpeername()[1]
+
+    broadcast_srvc_output_socket = sock_fac.make_output_socket(
+        remote_node_id=None, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.RESPONSE)
+    )
+    assert "239.1.255.255" == broadcast_srvc_output_socket.getpeername()[0]
+    assert DESTINATION_PORT == broadcast_srvc_output_socket.getpeername()[1]
+
+    msg_input_socket = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(456))
+    assert "239.0.1.200" == msg_input_socket.getsockname()[0]
+    assert DESTINATION_PORT == msg_input_socket.getsockname()[1]
+
+    srvc_input_socket = sock_fac.make_input_socket(
+        remote_node_id=123, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.REQUEST)
+    )
+    assert "239.1.0.123" == srvc_input_socket.getsockname()[0]
+    assert DESTINATION_PORT == srvc_input_socket.getsockname()[1]
+
+    broadcast_srvc_input_socket = sock_fac.make_input_socket(
+        remote_node_id=None, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.REQUEST)
+    )
+    assert "239.1.255.255" == broadcast_srvc_input_socket.getsockname()[0]
+    assert DESTINATION_PORT == broadcast_srvc_input_socket.getsockname()[1]
+
+    sniffer = SnifferIPv4(handler=lambda x: None)
+    assert "udp and src net 239.0.0.0/15" == sniffer._link_layer._filter_expr

@@ -10,9 +10,7 @@ import logging
 import ipaddress
 import pycyphal.util
 import pycyphal.transport
-from ._endpoint_mapping import IPAddress
 from ._link_layer import LinkLayerCapture
-
 
 _logger = logging.getLogger(__name__)
 
@@ -43,7 +41,6 @@ class SocketFactory(abc.ABC):
     @staticmethod
     def new(
         local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address],
-        subnet_id: int,
         ipv6_addr: bool = False,
     ) -> SocketFactory:
         """
@@ -52,7 +49,7 @@ class SocketFactory(abc.ABC):
         if not ipv6_addr:
             from ._v4 import IPv4SocketFactory
 
-            return IPv4SocketFactory(local_ip_addr, subnet_id)
+            return IPv4SocketFactory(local_ip_addr)
 
         else:
             raise NotImplementedError("Sorry, IPv6 is not yet supported by this implementation.")
@@ -65,18 +62,13 @@ class SocketFactory(abc.ABC):
         """
         raise NotImplementedError
 
-    @property
-    @abc.abstractmethod
-    def subnet_id(self) -> int:
-        raise NotImplementedError
-
     @abc.abstractmethod
     def make_output_socket(
         self, remote_node_id: typing.Optional[int], data_specifier: pycyphal.transport.DataSpecifier
     ) -> socket.socket:
         """
         Make a new non-blocking output socket connected to the appropriate endpoint
-        (unicast for service data specifiers, multicast for message data specifiers).
+        (multicast for both message data specifiers and service data specifiers).
         The socket will be bound to an ephemeral port at the configured local network address.
 
         The required options will be set up as needed automatically.
@@ -106,7 +98,7 @@ class SocketFactory(abc.ABC):
     ) -> socket.socket:
         r"""
         Makes a new non-blocking input socket bound to the correct endpoint
-        (unicast for service data specifiers, multicast for message data specifiers).
+        (multicast for both message data specifiers and service data specifiers).
 
         The required socket options will be set up as needed automatically;
         specifically, ``SO_REUSEADDR``, ``SO_REUSEPORT`` (if available), maybe others as needed.
@@ -128,7 +120,7 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pycyphal.util.repr_attributes(self, subnet_id=str(self._subnet_id))
+        return pycyphal.util.repr_attributes(self)
 
 
 class Sniffer(abc.ABC):

@@ -13,12 +13,13 @@ from pycyphal.transport import Trace, TransferTrace, Capture, AlienSessionSpecif
 from pycyphal.transport import AlienTransfer, TransferFrom, Timestamp
 from pycyphal.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
 from ._frame import UDPFrame
-from ._ip import LinkLayerPacket, SUBJECT_PORT, NODE_ID_MASK
-from ._ip import (
-    udp_port_to_service_data_specifier,
-    multicast_group_to_message_data_specifier,
-    service_multicast_group_to_node_id,
-)
+
+# from ._ip import LinkLayerPacket, SUBJECT_PORT, NODE_ID_MASK
+# from ._ip import (
+#     udp_port_to_service_data_specifier,
+#     multicast_group_to_message_data_specifier,
+#     service_multicast_group_to_node_id,
+# )
 
 
 @dataclasses.dataclass(frozen=True)
