@@ -45,7 +45,7 @@ This is a temporary UDP port. We'll register an official one later.
 """
 
 
-def service_data_specifier_to_multicast_group(destination_node_id: int | None, ipv6_addr: bool = False) -> IPAddress:
+def service_node_id_to_multicast_group(destination_node_id: int | None, ipv6_addr: bool = False) -> IPAddress:
     """
     Takes a destination node_id; returns the corresponding multicast address (for Service).
     For IPv4, the resulting address is constructed as follows::
@@ -62,21 +62,21 @@ def service_data_specifier_to_multicast_group(destination_node_id: int | None, i
      prefix   version
 
     >>> from ipaddress import ip_address
-    >>> str(service_data_specifier_to_multicast_group(123))
+    >>> str(service_node_id_to_multicast_group(123))
     '239.1.0.123'
-    >>> str(service_data_specifier_to_multicast_group(13, 456))
+    >>> str(service_node_id_to_multicast_group(456))
     '239.1.1.200'
-    >>> str(service_data_specifier_to_multicast_group(None))
+    >>> str(service_node_id_to_multicast_group(None))
     '239.1.255.255'
-    >>> str(service_data_specifier_to_multicast_group(int(0xFFFF)))
+    >>> str(service_node_id_to_multicast_group(int(0xFFFF)))
     Traceback (most recent call last):
       ...
     ValueError: Invalid node-ID...
-    >>> str(service_data_specifier_to_multicast_group(65536))
+    >>> str(service_node_id_to_multicast_group(65536))
     Traceback (most recent call last):
       ...
     ValueError: Invalid node-ID...
-    >>> srvc_ip = service_data_specifier_to_multicast_group(0, 123)
+    >>> srvc_ip = service_node_id_to_multicast_group(123)
     >>> assert (int(srvc_ip) & SNM_BIT_MASK) == SNM_BIT_MASK, "SNM bit is 1 for service"
     """
     if destination_node_id is not None and not (0 <= destination_node_id < DESTINATION_NODE_ID_MASK):
@@ -94,29 +94,23 @@ def service_data_specifier_to_multicast_group(destination_node_id: int | None, i
 
 def service_multicast_group_to_node_id(multicast_group: IPAddress) -> typing.Optional[int]:
     """
-    The inverse of :func:`service_data_specifier_to_multicast_group`.
+    The inverse of :func:`service_node_id_to_multicast_group`.
     The return value is None if:
-    - the multicast group is not valid per the current Cyphal/UDP specification,
-    - is an anonymous node.
+    - is a broadcast multicast group or
+    - the multicast group is not valid per the current Cyphal/UDP specification.
 
     >>> from ipaddress import ip_address
-    >>> service_multicast_group_to_node_id(13, ip_address('239.53.1.200'))
+    >>> service_multicast_group_to_node_id(13, ip_address('239.1.0.123'))
+    123
+    >>> service_multicast_group_to_node_id(13, ip_address('239.1.1.200'))
     456
-    >>> service_multicast_group_to_node_id(13, ip_address('239.52.1.200')) # -> None (message, not service)
-    >>> service_multicast_group_to_node_id(14, ip_address('239.53.1.200')) # -> None (different subnet)
-    >>> service_multicast_group_to_node_id(13, ip_address('255.53.1.200')) # -> None (multicast prefix is wrong)
-    >>> service_multicast_group_to_node_id(13, ip_address('255.53.255.255')) # -> None (anonymous node)
-    >>> str(service_multicast_group_to_node_id(32, ip_address('255.53.1.200')))
-    Traceback (most recent call last):
-      ...
-    ValueError: Invalid subnet-ID...
+    >>> service_multicast_group_to_node_id(13, ip_address('239.52.1.200')) # -> None (broadcast)
     """
-    if subnet_id >= (2**5):
-        raise ValueError(f"Invalid subnet-ID: {subnet_id} is larger than 31")
-    candidate = int(multicast_group) & NODE_ID_MASK
-    if candidate == NODE_ID_MASK:
+
+    candidate = int(multicast_group) & DESTINATION_NODE_ID_MASK
+    if candidate == DESTINATION_NODE_ID_MASK:
         candidate = None
-    if service_data_specifier_to_multicast_group(subnet_id, candidate) == multicast_group:
+    if service_node_id_to_multicast_group(candidate) == multicast_group:
         return candidate
     return None
 
@@ -247,20 +241,31 @@ def multicast_group_to_message_data_specifier(
 
 def _unittest_udp_endpoint_mapping() -> None:
     from pytest import raises
+    from ipaddress import ip_address
     
-    # Test service_data_specifier_to_multicast_group
-    assert '239.1.0.123' == str(service_data_specifier_to_multicast_group(destination_node_id=123))
-    assert '239.1.1.200' == str(service_data_specifier_to_multicast_group(destination_node_id=456))
-    assert '239.1.255.255' == str(service_data_specifier_to_multicast_group(destination_node_id=None))
+    ### service_data_specifier_to_multicast_group
+    # valid service IDs
+    assert '239.1.0.123' == str(service_node_id_to_multicast_group(destination_node_id=123))
+    assert '239.1.1.200' == str(service_node_id_to_multicast_group(destination_node_id=456))
+    assert '239.1.255.255' == str(service_node_id_to_multicast_group(destination_node_id=None))
 
+    # invalid destination_node_id
     with raises(ValueError):
-        _ = service_data_specifier_to_multicast_group(destination_node_id=int(0xFFFF))
+        _ = service_node_id_to_multicast_group(destination_node_id=int(0xFFFF))
 
-    srvc_ip = service_data_specifier_to_multicast_group(destination_node_id=123)
+    # SNM bit is set
+    srvc_ip = service_node_id_to_multicast_group(destination_node_id=123)
     assert (int(srvc_ip) & SNM_BIT_MASK) == SNM_BIT_MASK
 
-    # Test multicast_group_to_service_data_specifier
+    ### multicast_group_to_service_data_specifier
+    # valid multicast group
+    assert 123 == service_multicast_group_to_node_id(ip_address('239.1.0.123'))
+    assert 456 == service_multicast_group_to_node_id(ip_address('239.1.1.200'))
+    assert None == service_multicast_group_to_node_id(ip_address('239.1.255.255'))
 
-    # Test message_data_specifier_to_multicast_group
+    # invalid multicast group
+    assert None == service_multicast_group_to_node_id(ip_address('255.1.0.123'))
 
-    # Test multicast_group_to_message_data_specifier
+    ### message_data_specifier_to_multicast_group
+
+    ### multicast_group_to_message_data_specifier
