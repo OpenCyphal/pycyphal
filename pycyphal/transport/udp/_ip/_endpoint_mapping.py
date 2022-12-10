@@ -16,103 +16,87 @@ MULTICAST_PREFIX = 0b_11101111_00000000_00000000_00000000
 IPv4 address multicast prefix
 """
 
-SUBJECT_ID_MASK = 2**13 - 1
+SUBJECT_ID_MASK = 2**14 - 1
 """
-Masks the 13 least significant bits of the multicast group address (v4/v6) that represent the message-ID. (Message)
-"""
-
-NODE_ID_MASK = 0xFFFF
-"""
-Masks the 16 least significant bits of the multicast group address (v4/v6) that represent the node-ID. (Service)
+Masks the 14 least significant bits of the multicast group address (v4/v6) that represent the subject-ID. (Message)
 """
 
-SUBNET_ID_MASK = 0b_00000000_01111100_00000000_00000000
+DESTINATION_NODE_ID_MASK = 0xFFFF
 """
-Masks the 5 bits of the multicast group address that represent the subnet-ID.
-"""
-
-DATASPECIFIER_BIT_MASK = 0b_00000000_00000001_00000000_00000000
-"""
-Masks the bit that determines whether the address represents a Message (=0) or Service (=1)
+Masks the 16 least significant bits of the multicast group address (v4/v6) that represent the destination node-ID. (Service)
 """
 
-SUBJECT_PORT = 16383
+SNM_BIT_MASK = 0b_00000000_00000001_00000000_00000000
 """
-All subjects use the same fixed destination UDP port number.
-Subjects are differentiated by the IP multicast group address.
-(Message)
+Service, Not Message: Masks the bit that determines whether the address represents a Message (=0) or Service (=1)
 """
 
-SERVICE_BASE_PORT = 16384
+CYPHAL_UDP_IPV4_ADDRESS_VERSION = 0b_00000000_00100000_00000000_00000000
 """
-Service transfers use multicast IP packets.
-Services are differentiated by the destination UDP port number.
-See :func:`service_data_specifier_to_udp_port`.
+Cyphal/UDP uses this bit to isolate IP header version 0 traffic
+(note that the IP header version is not, necessarily, the same as the Cyphal Header version)
+to the 239.0.0.0/10 scope but we can enable the 239.64.0.0/10 scope in the future.
+"""
+
+DESTINATION_PORT = 9382
+"""
+All Cyphal traffic uses this port.
+This is a temporary UDP port. We'll register an official one later.
 """
 
 
-def service_data_specifier_to_multicast_group(subnet_id: int, node_id: int, ipv6_addr: bool = False) -> IPAddress:
+def service_data_specifier_to_multicast_group(destination_node_id: int | None, ipv6_addr: bool = False) -> IPAddress:
     """
-    Takes a subnet_id and node_id; returns the corresponding multicast address (for services).
+    Takes a destination node_id; returns the corresponding multicast address (for Service).
     For IPv4, the resulting address is constructed as follows::
 
-        fixed          service
-       (9 bits)  res.  selector
-       ________      ||
-      /        \     vv
-      11101111.0ddddd01.nnnnnnnn.nnnnnnnn
-      \__/      \___/   \_______________/
-    (4 bits)   (5 bits)     (16 bits)
-      IPv4     subnet-ID     node-ID
-    multicast
-     prefix
+            fixed
+          (15 bits)     
+       ______________   
+      /              \  
+      11101111.0000000x.nnnnnnnn.nnnnnnnn
+      \__/      ^     ^ \_______________/
+    (4 bits)  Cyphal snm     (16 bits)
+      IPv4     UDP           destination node-ID (Service)
+    multicast address
+     prefix   version
 
     >>> from ipaddress import ip_address
-    >>> str(service_data_specifier_to_multicast_group(0, 123))
+    >>> str(service_data_specifier_to_multicast_group(123))
     '239.1.0.123'
     >>> str(service_data_specifier_to_multicast_group(13, 456))
-    '239.53.1.200'
-    >>> str(service_data_specifier_to_multicast_group(13, None))
-    '239.53.255.255'
-    >>> str(service_data_specifier_to_multicast_group(13, int(0xFFFF)))
+    '239.1.1.200'
+    >>> str(service_data_specifier_to_multicast_group(None))
+    '239.1.255.255'
+    >>> str(service_data_specifier_to_multicast_group(int(0xFFFF)))
     Traceback (most recent call last):
       ...
     ValueError: Invalid node-ID...
-    >>> str(service_data_specifier_to_multicast_group(32, 456))
-    Traceback (most recent call last):
-      ...
-    ValueError: Invalid subnet-ID...
-    >>> str(service_data_specifier_to_multicast_group(13, 65536))
+    >>> str(service_data_specifier_to_multicast_group(65536))
     Traceback (most recent call last):
       ...
     ValueError: Invalid node-ID...
     >>> srvc_ip = service_data_specifier_to_multicast_group(0, 123)
-    >>> assert (int(srvc_ip) & DATASPECIFIER_BIT_MASK) == DATASPECIFIER_BIT_MASK, "Dataspecifier bit is 1 for service"
+    >>> assert (int(srvc_ip) & SNM_BIT_MASK) == SNM_BIT_MASK, "SNM bit is 1 for service"
     """
-    if subnet_id >= (2**5):
-        raise ValueError(f"Invalid subnet-ID: {subnet_id} is larger than 31")
-    if node_id is not None and not (0 <= node_id < NODE_ID_MASK):
-        raise ValueError(f"Invalid node-ID: {node_id} is larger than {NODE_ID_MASK}")
-    if node_id is None:
-        node_id = int(0xFFFF)
+    if destination_node_id is not None and not (0 <= destination_node_id < DESTINATION_NODE_ID_MASK):
+        raise ValueError(f"Invalid node-ID: {destination_node_id} is larger than {DESTINATION_NODE_ID_MASK}")
+    if destination_node_id is None:
+        destination_node_id = int(0xFFFF)
     ty: type
     if not ipv6_addr:
         ty = ipaddress.IPv4Address
-        fix = MULTICAST_PREFIX
-        sub = SUBNET_ID_MASK & (subnet_id << 18)  # subnet-ID
-        msb = fix | sub | DATASPECIFIER_BIT_MASK  # service selector
+        msb = MULTICAST_PREFIX | SNM_BIT_MASK  
     else:
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
-    return ty(msb | node_id)  # type: ignore
+    return ty(msb | destination_node_id)  # type: ignore
 
 
-def service_multicast_group_to_node_id(subnet_id: int, multicast_group: IPAddress) -> typing.Optional[int]:
+def service_multicast_group_to_node_id(multicast_group: IPAddress) -> typing.Optional[int]:
     """
     The inverse of :func:`service_data_specifier_to_multicast_group`.
-    The subnet_id is needed to ensure that the multicast group belongs to the correct Cyphal/UDP subnet.
     The return value is None if:
     - the multicast group is not valid per the current Cyphal/UDP specification,
-    - it belongs to a different Cyphal/UDP subnet, or
     - is an anonymous node.
 
     >>> from ipaddress import ip_address
@@ -141,19 +125,19 @@ def message_data_specifier_to_multicast_group(
     subnet_id: int, data_specifier: MessageDataSpecifier, ipv6_addr: bool = False
 ) -> IPAddress:
     r"""
-    Takes a subnet_id and data_specifier; returns the corresponding multicast address (for messages).
+    Takes a (Message) data_specifier; returns the corresponding multicast address.
     For IPv4, the resulting address is constructed as follows::
 
-        fixed   message  reserved
-       (9 bits) select.  (3 bits)
-       ________   res.|  _
-      /        \     vv / \
-      11101111.0ddddd00.000sssss.ssssssss
-      \__/      \___/      \____________/
-    (4 bits)   (5 bits)       (13 bits)
-      IPv4     subnet-ID      subject-ID
-    multicast
-     prefix
+            fixed            subject-ID (Service)
+          (15 bits)     res. (15 bits)
+       ______________   || _____________ 
+      /              \  vv/             \ 
+      11101111.0000000x.zznnnnnn.nnnnnnnn
+      \__/      ^     ^
+    (4 bits)  Cyphal snm
+      IPv4     UDP
+    multicast address
+     prefix   version
 
     >>> from pycyphal.transport import MessageDataSpecifier
     >>> from ipaddress import ip_address
@@ -188,13 +172,11 @@ def message_data_specifier_to_multicast_group(
 
 
 def multicast_group_to_message_data_specifier(
-    subnet_id: int, multicast_group: IPAddress
+    multicast_group: IPAddress
 ) -> typing.Optional[MessageDataSpecifier]:
     """
     The inverse of :func:`message_data_specifier_to_multicast_group`.
-    The subnet_id is needed to ensure that the multicast group belongs to the correct Cyphal/UDP subnet.
-    The return value is None if the multicast group is not valid per the current Cyphal/UDP specification
-    or if it belongs to a different Cyphal/UDP subnet.
+    The return value is None if the multicast group is not valid per the current Cyphal/UDP specification.
 
     >>> from ipaddress import ip_address
     >>> multicast_group_to_message_data_specifier(13, ip_address('239.52.1.200'))
@@ -214,49 +196,71 @@ def multicast_group_to_message_data_specifier(
     return None
 
 
-def service_data_specifier_to_udp_port(ds: ServiceDataSpecifier) -> int:
-    """
-    For request transfers, the destination port is computed as
-    :data:`SERVICE_BASE_PORT` plus service-ID multiplied by two.
-    For response transfers, it is as above plus one.
+# def service_data_specifier_to_udp_port(ds: ServiceDataSpecifier) -> int:
+#     """
+#     For request transfers, the destination port is computed as
+#     :data:`SERVICE_BASE_PORT` plus service-ID multiplied by two.
+#     For response transfers, it is as above plus one.
 
-    >>> service_data_specifier_to_udp_port(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.REQUEST))
-    16384
-    >>> service_data_specifier_to_udp_port(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE))
-    16385
-    >>> service_data_specifier_to_udp_port(ServiceDataSpecifier(511, ServiceDataSpecifier.Role.REQUEST))
-    17406
-    >>> service_data_specifier_to_udp_port(ServiceDataSpecifier(511, ServiceDataSpecifier.Role.RESPONSE))
-    17407
-    """
-    request = SERVICE_BASE_PORT + ds.service_id * 2
-    if ds.role == ServiceDataSpecifier.Role.REQUEST:
-        return request
-    if ds.role == ServiceDataSpecifier.Role.RESPONSE:
-        return request + 1
-    assert False
+#     >>> service_data_specifier_to_udp_port(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.REQUEST))
+#     16384
+#     >>> service_data_specifier_to_udp_port(ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE))
+#     16385
+#     >>> service_data_specifier_to_udp_port(ServiceDataSpecifier(511, ServiceDataSpecifier.Role.REQUEST))
+#     17406
+#     >>> service_data_specifier_to_udp_port(ServiceDataSpecifier(511, ServiceDataSpecifier.Role.RESPONSE))
+#     17407
+#     """
+#     request = SERVICE_BASE_PORT + ds.service_id * 2
+#     if ds.role == ServiceDataSpecifier.Role.REQUEST:
+#         return request
+#     if ds.role == ServiceDataSpecifier.Role.RESPONSE:
+#         return request + 1
+#     assert False
 
 
-def udp_port_to_service_data_specifier(port: int) -> typing.Optional[ServiceDataSpecifier]:
-    """
-    The inverse of :func:`service_data_specifier_to_udp_port`. Returns None for invalid ports.
+# def udp_port_to_service_data_specifier(port: int) -> typing.Optional[ServiceDataSpecifier]:
+#     """
+#     The inverse of :func:`service_data_specifier_to_udp_port`. Returns None for invalid ports.
 
-    >>> udp_port_to_service_data_specifier(16384)
-    ServiceDataSpecifier(service_id=0, role=...REQUEST...)
-    >>> udp_port_to_service_data_specifier(16385)
-    ServiceDataSpecifier(service_id=0, role=...RESPONSE...)
-    >>> udp_port_to_service_data_specifier(17406)
-    ServiceDataSpecifier(service_id=511, role=...REQUEST...)
-    >>> udp_port_to_service_data_specifier(17407)
-    ServiceDataSpecifier(service_id=511, role=...RESPONSE...)
-    >>> udp_port_to_service_data_specifier(50000)  # Returns None
-    >>> udp_port_to_service_data_specifier(10000)  # Returns None
-    """
-    out: typing.Optional[ServiceDataSpecifier] = None
-    try:
-        if port >= SERVICE_BASE_PORT:
-            role = ServiceDataSpecifier.Role.REQUEST if port % 2 == 0 else ServiceDataSpecifier.Role.RESPONSE
-            out = ServiceDataSpecifier((port - SERVICE_BASE_PORT) // 2, role)
-    except ValueError:
-        out = None
-    return out
+#     >>> udp_port_to_service_data_specifier(16384)
+#     ServiceDataSpecifier(service_id=0, role=...REQUEST...)
+#     >>> udp_port_to_service_data_specifier(16385)
+#     ServiceDataSpecifier(service_id=0, role=...RESPONSE...)
+#     >>> udp_port_to_service_data_specifier(17406)
+#     ServiceDataSpecifier(service_id=511, role=...REQUEST...)
+#     >>> udp_port_to_service_data_specifier(17407)
+#     ServiceDataSpecifier(service_id=511, role=...RESPONSE...)
+#     >>> udp_port_to_service_data_specifier(50000)  # Returns None
+#     >>> udp_port_to_service_data_specifier(10000)  # Returns None
+#     """
+#     out: typing.Optional[ServiceDataSpecifier] = None
+#     try:
+#         if port >= SERVICE_BASE_PORT:
+#             role = ServiceDataSpecifier.Role.REQUEST if port % 2 == 0 else ServiceDataSpecifier.Role.RESPONSE
+#             out = ServiceDataSpecifier((port - SERVICE_BASE_PORT) // 2, role)
+#     except ValueError:
+#         out = None
+#     return out
+
+# ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
+
+def _unittest_udp_endpoint_mapping() -> None:
+    from pytest import raises
+    
+    # Test service_data_specifier_to_multicast_group
+    assert '239.1.0.123' == str(service_data_specifier_to_multicast_group(destination_node_id=123))
+    assert '239.1.1.200' == str(service_data_specifier_to_multicast_group(destination_node_id=456))
+    assert '239.1.255.255' == str(service_data_specifier_to_multicast_group(destination_node_id=None))
+
+    with raises(ValueError):
+        _ = service_data_specifier_to_multicast_group(destination_node_id=int(0xFFFF))
+
+    srvc_ip = service_data_specifier_to_multicast_group(destination_node_id=123)
+    assert (int(srvc_ip) & SNM_BIT_MASK) == SNM_BIT_MASK
+
+    # Test multicast_group_to_service_data_specifier
+
+    # Test message_data_specifier_to_multicast_group
+
+    # Test multicast_group_to_message_data_specifier
