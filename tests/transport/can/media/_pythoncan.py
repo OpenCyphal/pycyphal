@@ -160,12 +160,15 @@ async def _unittest_can_pythoncan_socketcan() -> None:
     media_b.close()
 
 
+def _unittest_can_pythoncan_iface_name() -> None:
+    # multiple colons are allowed in interface names, only the first one is split
+    media = PythonCANMedia("virtual:0:0", 1_000_000)
+    assert media.interface_name == "virtual:0:0"
+
+
 def _unittest_can_pythoncan_errors() -> None:
     with pytest.raises(InvalidMediaConfigurationError, match=r".*interface:channel.*"):
         PythonCANMedia("malformed_name", 1_000_000)
-
-    with pytest.raises(InvalidMediaConfigurationError, match=r".*interface:channel.*"):
-        PythonCANMedia("mal:formed:name", 1_000_000)
 
     with pytest.raises(InvalidMediaConfigurationError, match=r".*MTU.*"):
         PythonCANMedia("virtual:", 1_000_000, mtu=60)
