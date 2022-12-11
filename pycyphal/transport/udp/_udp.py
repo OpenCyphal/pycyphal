@@ -14,7 +14,8 @@ from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPI
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
 from ._ip import SocketFactory, Sniffer, LinkLayerCapture
-from ._socket_reader import SocketReader, SocketReaderStatistics
+
+# from ._socket_reader import SocketReader, SocketReaderStatistics
 from ._tracer import UDPTracer, UDPCapture
 
 
