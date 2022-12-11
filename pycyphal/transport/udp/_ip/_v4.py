@@ -31,15 +31,15 @@ class IPv4SocketFactory(SocketFactory):
     a node-ID that maps to the broadcast address for the subnet is unavailable.
     """
 
-    def __init__(self, local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]):
+    def __init__(self, local_ip_addr: ipaddress.IPv4Address):
         self._local_ip_addr = local_ip_addr
 
     @property
     def max_nodes(self) -> int:
-        return DESTINATION_NODE_ID_MASK  # The maximum may not be available because it may be the broadcast address.
+        return DESTINATION_NODE_ID_MASK
 
     @property
-    def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+    def local_ip_address(self) -> ipaddress.IPv4Address:
         return self._local_ip_addr
 
     def make_output_socket(
@@ -64,9 +64,7 @@ class IPv4SocketFactory(SocketFactory):
             raise  # pragma: no cover
 
         if isinstance(data_specifier, MessageDataSpecifier):
-            if remote_node_id is not None:
-                s.close()
-                raise UnsupportedSessionConfigurationError("Message transfers don't require a remote_node_id.")
+            assert remote_node_id == None  # Message transfers don't require a remote_node_id.
             # Merely binding is not enough for multicast sockets. We also have to configure IP_MULTICAST_IF.
             # https://tldp.org/HOWTO/Multicast-HOWTO-6.html
             # https://stackoverflow.com/a/26988214/1007777

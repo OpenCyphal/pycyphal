@@ -16,7 +16,12 @@ MULTICAST_PREFIX = 0b_11101111_00000000_00000000_00000000
 IPv4 address multicast prefix
 """
 
-SUBJECT_ID_MASK = 2**14 - 1
+FIXED_MASK_PREFIX = 0b_11111111_11111111_00000000_00000000
+"""
+Masks the 16 most significant bits of the multicast group address. To check whether the address is Cyphal/UDP.
+"""
+
+SUBJECT_ID_MASK = 2**15 - 1
 """
 Masks the 14 least significant bits of the multicast group address (v4/v6) that represent the subject-ID. (Message)
 """
@@ -96,7 +101,7 @@ def service_multicast_group_to_node_id(multicast_group: IPAddress) -> typing.Opt
     """
     The inverse of :func:`service_node_id_to_multicast_group`.
     The return value is None if:
-    - is a broadcast multicast group, or
+    - the node-ID is not a valid Cyphal/UDP node-ID (0xFFFF), or
     - the multicast group is not valid per the current Cyphal/UDP specification.
 
     >>> from ipaddress import ip_address
@@ -104,29 +109,30 @@ def service_multicast_group_to_node_id(multicast_group: IPAddress) -> typing.Opt
     123
     >>> service_multicast_group_to_node_id(13, ip_address('239.1.1.200'))
     456
-    >>> service_multicast_group_to_node_id(13, ip_address('239.52.1.200')) # -> None (broadcast)
+    >>> service_multicast_group_to_node_id(13, ip_address('239.52.255.255')) # -> None (invalid)
     """
 
     candidate = int(multicast_group) & DESTINATION_NODE_ID_MASK
+    fix = MULTICAST_PREFIX | SNM_BIT_MASK
+    if int(multicast_group) & int(FIXED_MASK_PREFIX) != fix:
+        candidate = None
     if candidate == DESTINATION_NODE_ID_MASK:
         candidate = None
-    if service_node_id_to_multicast_group(candidate) == multicast_group:
-        return candidate
-    return None
+    return candidate
 
 
 def message_data_specifier_to_multicast_group(
     data_specifier: MessageDataSpecifier, ipv6_addr: bool = False
 ) -> IPAddress:
-    r"""
+    """
     Takes a (Message) data_specifier; returns the corresponding multicast address.
     For IPv4, the resulting address is constructed as follows::
 
             fixed            subject-ID (Service)
-          (15 bits)     res. (14 bits)
-       ______________   || _____________ 
-      /              \  vv/             \ 
-      11101111.0000000x.zznnnnnn.nnnnnnnn
+          (15 bits)     res. (15 bits)
+       ______________   | _____________ 
+      /              \  v/             \ 
+      11101111.0000000x.znnnnnnn.nnnnnnnn
       \__/      ^     ^
     (4 bits)  Cyphal snm
       IPv4     UDP
@@ -173,13 +179,11 @@ def multicast_group_to_message_data_specifier(
     >>> multicast_group_to_message_data_specifier(ip_address('240.0.0.123')) # -> None (not a multicast prefix is wrong)
     >>> multicast_group_to_message_data_specifier(ip_address('239.1.0.123')) # -> None (SNM bit is 1, thus service not message)
     """
-    try:
-        candidate = int(multicast_group) & SUBJECT_ID_MASK
-    except ValueError:
+    candidate = int(multicast_group) & SUBJECT_ID_MASK
+    fix = MULTICAST_PREFIX & ~(SNM_BIT_MASK)
+    if int(multicast_group) & int(FIXED_MASK_PREFIX) != fix:
         return None
-    if message_data_specifier_to_multicast_group(MessageDataSpecifier(subject_id=candidate)) == multicast_group:
-        return MessageDataSpecifier(subject_id=candidate)
-    return None
+    return MessageDataSpecifier(subject_id=candidate)
 
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
 

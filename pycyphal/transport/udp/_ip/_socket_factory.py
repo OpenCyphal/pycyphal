@@ -41,11 +41,11 @@ class SocketFactory(abc.ABC):
     @staticmethod
     def new(
         local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address],
-        ipv6_addr: bool = False,
     ) -> SocketFactory:
         """
         Use this factory factory to create new instances.
         """
+        ipv6_addr = isinstance(local_ip_addr, ipaddress.IPv6Address)
         if not ipv6_addr:
             from ._v4 import IPv4SocketFactory
 

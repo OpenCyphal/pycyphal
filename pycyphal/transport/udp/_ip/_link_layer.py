@@ -17,6 +17,7 @@ import dataclasses
 import pycyphal
 from pycyphal.transport import Timestamp
 
+
 _logger = logging.getLogger(__name__)
 
 
