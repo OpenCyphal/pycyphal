@@ -83,10 +83,10 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         if not isinstance(self.priority, pycyphal.transport.Priority):
             raise TypeError(f"Invalid priority: {self.priority}")  # pragma: no cover
 
-        if not (0 <= self.source_node_id <= self.NODE_ID_MASK) or self.source_node_id is None:
+        if not (self.source_node_id is None or (0 <= self.source_node_id <= self.NODE_ID_MASK)):
             raise ValueError(f"Invalid source node id: {self.source_node_id}")
 
-        if not (0 <= self.destination_node_id <= self.NODE_ID_MASK) or self.destination_node_id is None:
+        if not (self.destination_node_id is None or (0 <= self.destination_node_id <= self.NODE_ID_MASK)):
             raise ValueError(f"Invalid destination node id: {self.destination_node_id}")
 
         if self.snm:
@@ -408,6 +408,61 @@ def _unittest_udp_frame_compile() -> None:
         end_of_transfer=False,
         user_data=0,
         payload=memoryview(b"Well, I got here the same way the coin did."),
+    ).compile_header_and_payload()
+
+    # From _output_session unit test
+    assert (
+        memoryview(b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00\xec\x16"),
+        memoryview(b"onetwothree"),
+    ) == UDPFrame(
+        priority=Priority.NOMINAL,
+        source_node_id=5,
+        destination_node_id=None,
+        snm=False,
+        subject_id=3210,
+        service_id=None,
+        rnr=None,
+        transfer_id=12340,
+        index=0,
+        end_of_transfer=True,
+        user_data=0,
+        payload=memoryview(b"onetwothree"),
+    ).compile_header_and_payload()
+
+    assert (
+        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"),
+        memoryview(b"onetwothre"),
+    ) == UDPFrame(
+        priority=Priority.OPTIONAL,
+        source_node_id=6,
+        destination_node_id=2222,
+        snm=True,
+        subject_id=None,
+        service_id=321,
+        rnr=True,
+        transfer_id=54321,
+        index=0,
+        end_of_transfer=False,
+        user_data=0,
+        payload=memoryview(b"onetwothre"),
+    ).compile_header_and_payload()
+
+    assert (
+        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00\x03<"),
+        memoryview(b"e"),
+    ) == UDPFrame(
+        priority=Priority.OPTIONAL,
+        source_node_id=6,
+        destination_node_id=2222,
+        snm=True,
+        subject_id=None,
+        service_id=321,
+        rnr=True,
+        transfer_id=54321,
+        index=1,
+        end_of_transfer=True,
+        user_data=0,
+        payload=memoryview(b"e"),
     ).compile_header_and_payload()
 
 

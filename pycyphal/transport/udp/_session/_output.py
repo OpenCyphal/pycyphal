@@ -9,7 +9,7 @@ import typing
 import asyncio
 import logging
 import pycyphal
-from pycyphal.transport import Timestamp, ServiceDataSpecifier
+from pycyphal.transport import Timestamp, ServiceDataSpecifier, MessageDataSpecifier
 from .._frame import UDPFrame
 
 
@@ -91,12 +91,31 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
             raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
 
         def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> UDPFrame:
+            if isinstance(self._specifier.data_specifier, MessageDataSpecifier):
+                snm = False
+                subject_id = self._specifier.data_specifier.subject_id
+                service_id = None
+                rnr = None
+            elif isinstance(self._specifier.data_specifier, ServiceDataSpecifier):
+                snm = True
+                subject_id = None
+                service_id = self._specifier.data_specifier.service_id
+                if self._specifier.data_specifier.role is ServiceDataSpecifier.Role.REQUEST:
+                    rnr = True
+                elif self._specifier.data_specifier.role is ServiceDataSpecifier.Role.RESPONSE:
+                    rnr = False
             return UDPFrame(
                 priority=transfer.priority,
-                transfer_id=transfer.transfer_id,
                 source_node_id=self._source_node_id,
+                destination_node_id=self._specifier.remote_node_id,
+                snm=snm,
+                subject_id=subject_id,
+                service_id=service_id,
+                rnr=rnr,
+                transfer_id=transfer.transfer_id,
                 index=index,
                 end_of_transfer=end_of_transfer,
+                user_data=0,
                 payload=payload,
             )
 

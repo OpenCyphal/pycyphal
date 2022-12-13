@@ -12,12 +12,13 @@ from pycyphal.transport import OutputSessionSpecifier, MessageDataSpecifier, Pri
 from pycyphal.transport import PayloadMetadata, SessionStatistics, Feedback, Transfer
 from pycyphal.transport import Timestamp, ServiceDataSpecifier
 from pycyphal.transport.udp._session._output import UDPOutputSession, UDPFeedback
+from pycyphal.transport.udp._ip._endpoint_mapping import DESTINATION_PORT
 
 
 pytestmark = pytest.mark.asyncio
 
 
-async def _unittest_output_session() -> None:
+async def _unittest_udp_output_session() -> None:
     ts = Timestamp.now()
     loop = asyncio.get_event_loop()
     loop.slow_callback_duration = 5.0  # TODO use asyncio socket read and remove this thing.
@@ -33,7 +34,7 @@ async def _unittest_output_session() -> None:
         m = ts.monotonic_ns <= t.monotonic_ns <= now.system_ns
         return s and m
 
-    destination_endpoint = "127.0.0.1", 25406
+    destination_endpoint = "127.0.0.1", DESTINATION_PORT
 
     sock_rx = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
     sock_rx.bind(destination_endpoint)
@@ -75,8 +76,9 @@ async def _unittest_output_session() -> None:
 
     rx_data, endpoint = sock_rx.recvfrom(1000)
     assert endpoint[0] == "127.0.0.2"
+    # QUESTION: "\xec\x16" don't know where it comes from
     assert rx_data == (
-        b"\x01\x04\x05\x00\x00\x00\x00\x8040\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00\xec\x16"
         + b"one"
         + b"two"
         + b"three"
@@ -160,13 +162,13 @@ async def _unittest_output_session() -> None:
     assert data_main_a == data_redundant_a
     assert data_main_b == data_redundant_b
     assert data_main_a == (
-        b"\x01\x07\x06\x00\x00\x00\x00\x001\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
         + b"one"
         + b"two"
         + b"three"[:-1]
     )
     assert data_main_b == (
-        b"\x01\x07\x06\x00\x01\x00\x00\x801\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00V\x03"
         + b"e"
         + pycyphal.transport.commons.crc.CRC32C.new(b"one", b"two", b"three").value_as_bytes
     )
