@@ -7,6 +7,7 @@ import typing
 import struct
 import dataclasses
 import pycyphal
+from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
 
 
 @dataclasses.dataclass(frozen=True, repr=False)
@@ -53,7 +54,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         "B"  # priority, _reserved_b
         "H"  # source_node_id
         "H"  # destination_node_id
-        "H"  # data_specifier, snm
+        "H"  # subject_id, snm (if Message); service_id, rnr, snm (if Service)
         "Q"  # transfer_id
         "I"  # frame_index, end_of_transfer
         "H"  # user_data
@@ -71,10 +72,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     destination_node_id: int | None
 
     # data_specifier
-    snm: bool  # Service, Not Message
-    subject_id: int | None
-    service_id: int | None
-    rnr: bool | None  # Request, Not Response
+    data_specifier: pycyphal.transport.DataSpecifier
 
     user_data: int
 
@@ -88,16 +86,11 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         if not (self.destination_node_id is None or (0 <= self.destination_node_id <= self.NODE_ID_MASK)):
             raise ValueError(f"Invalid destination node id: {self.destination_node_id}")
 
-        if self.snm:
-            if not (0 <= self.service_id <= self.SERVICE_ID_MASK):
-                raise ValueError(f"Invalid service id: {self.service_id}")
-            if self.rnr is None:
-                raise ValueError("RNR is not set")
-        else:
-            if not (0 <= self.subject_id <= self.SUBJECT_ID_MASK):
-                raise ValueError(f"Invalid subject id: {self.subject_id}")
-            if self.rnr is not None:
-                raise ValueError("RNR is set")
+        if isinstance(self.data_specifier, pycyphal.transport.ServiceDataSpecifier) and self.source_node_id is None:
+            raise ValueError(f"Anonymous nodes cannot use service transfers: {self.data_specifier}")
+
+        if not isinstance(self.data_specifier, pycyphal.transport.DataSpecifier):
+            raise TypeError(f"Invalid data specifier: {self.data_specifier}")
 
         if not (0 <= self.transfer_id <= self.TRANSFER_ID_MASK):
             raise ValueError(f"Invalid transfer-ID: {self.transfer_id}")
@@ -121,18 +114,26 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         if self.end_of_transfer:
             header_crc = pycyphal.transport.commons.crc.CRC16CCITT.new(self.payload).value
 
-        # compute the data specifier
-        if self.snm:
-            data_specifier = self.service_id | (1 << 14 if self.rnr else 0)
+        # compute snm, subject_id, service_id, rnr (based on data_specifier)
+        # snm: bool  # Service, Not Message
+        # subject_id: int | None
+        # service_id: int | None
+        # rnr: bool | None  # Request, Not Response
+        snm = isinstance(self.data_specifier, pycyphal.transport.ServiceDataSpecifier)
+        subject_id = self.data_specifier.subject_id if not snm else None
+        service_id = self.data_specifier.service_id if snm else None
+        rnr = self.data_specifier.role == self.data_specifier.Role.REQUEST if snm else None
+        if snm:
+            id_rnr = service_id | ((1 << 14) if rnr else 0)
         else:
-            data_specifier = self.subject_id
+            id_rnr = subject_id
 
         header = self._HEADER_FORMAT.pack(
             self._VERSION,
             int(self.priority),
             self.source_node_id if self.source_node_id is not None else 0xFFFF,
             self.destination_node_id if self.destination_node_id is not None else 0xFFFF,
-            ((1 << 15) if self.snm else 0) | data_specifier,
+            ((1 << 15) if snm else 0) | id_rnr,
             self.transfer_id,
             ((1 << 31) if self.end_of_transfer else 0) | self.index,
             0,  # user_data
@@ -208,10 +209,7 @@ def _unittest_udp_frame_compile() -> None:
         priority=Priority.LOW,
         source_node_id=1,
         destination_node_id=2,
-        snm=False,
-        subject_id=0,
-        service_id=None,
-        rnr=None,
+        data_specifier=MessageDataSpecifier(subject_id=0),
         transfer_id=0,
         index=0,
         end_of_transfer=False,
@@ -225,10 +223,7 @@ def _unittest_udp_frame_compile() -> None:
             priority=Priority.LOW,
             source_node_id=2**16,
             destination_node_id=2,
-            snm=False,
-            subject_id=0,
-            service_id=None,
-            rnr=None,
+            data_specifier=MessageDataSpecifier(subject_id=0),
             transfer_id=0,
             index=0,
             end_of_transfer=False,
@@ -242,10 +237,7 @@ def _unittest_udp_frame_compile() -> None:
             priority=Priority.LOW,
             source_node_id=1,
             destination_node_id=2**16,
-            snm=False,
-            subject_id=0,
-            service_id=None,
-            rnr=None,
+            data_specifier=MessageDataSpecifier(subject_id=0),
             transfer_id=0,
             index=0,
             end_of_transfer=False,
@@ -259,10 +251,7 @@ def _unittest_udp_frame_compile() -> None:
             priority=Priority.LOW,
             source_node_id=1,
             destination_node_id=2,
-            snm=False,
-            subject_id=2**15,
-            service_id=None,
-            rnr=None,
+            data_specifier=MessageDataSpecifier(subject_id=2**15),
             transfer_id=0,
             index=0,
             end_of_transfer=False,
@@ -276,10 +265,7 @@ def _unittest_udp_frame_compile() -> None:
             priority=Priority.LOW,
             source_node_id=1,
             destination_node_id=2,
-            snm=True,
-            subject_id=None,
-            service_id=2**14,
-            rnr=False,
+            data_specifier=ServiceDataSpecifier(service_id=2**14, role=ServiceDataSpecifier.Role.RESPONSE),
             transfer_id=0,
             index=0,
             end_of_transfer=False,
@@ -293,10 +279,7 @@ def _unittest_udp_frame_compile() -> None:
             priority=Priority.LOW,
             source_node_id=1,
             destination_node_id=2,
-            snm=True,
-            subject_id=None,
-            service_id=0,
-            rnr=False,
+            data_specifier=ServiceDataSpecifier(service_id=0, role=ServiceDataSpecifier.Role.RESPONSE),
             transfer_id=2**64,
             index=0,
             end_of_transfer=False,
@@ -310,10 +293,7 @@ def _unittest_udp_frame_compile() -> None:
             priority=Priority.LOW,
             source_node_id=1,
             destination_node_id=2,
-            snm=True,
-            subject_id=None,
-            service_id=0,
-            rnr=False,
+            data_specifier=ServiceDataSpecifier(service_id=0, role=ServiceDataSpecifier.Role.RESPONSE),
             transfer_id=0,
             index=2**31,
             end_of_transfer=False,
@@ -339,10 +319,7 @@ def _unittest_udp_frame_compile() -> None:
         priority=Priority.SLOW,
         source_node_id=1,
         destination_node_id=2,
-        snm=False,
-        subject_id=3,
-        service_id=None,
-        rnr=None,
+        data_specifier=MessageDataSpecifier(subject_id=3),
         transfer_id=0x_DEAD_BEEF_C0FFEE,
         index=0x_DD_F00D,
         end_of_transfer=False,
@@ -368,10 +345,7 @@ def _unittest_udp_frame_compile() -> None:
         priority=Priority.SLOW,
         source_node_id=1,
         destination_node_id=2,
-        snm=False,
-        subject_id=3,
-        service_id=None,
-        rnr=None,
+        data_specifier=MessageDataSpecifier(subject_id=3),
         transfer_id=0x_DEAD_BEEF_C0FFEE,
         index=0x_DD_F00D,
         end_of_transfer=True,
@@ -397,10 +371,7 @@ def _unittest_udp_frame_compile() -> None:
         priority=Priority.SLOW,
         source_node_id=1,
         destination_node_id=2,
-        snm=True,
-        subject_id=None,
-        service_id=3,
-        rnr=True,
+        data_specifier=ServiceDataSpecifier(service_id=3, role=ServiceDataSpecifier.Role.REQUEST),
         transfer_id=0x_DEAD_BEEF_C0FFEE,
         index=0x_DD_F00D,
         end_of_transfer=False,
@@ -416,10 +387,7 @@ def _unittest_udp_frame_compile() -> None:
         priority=Priority.NOMINAL,
         source_node_id=5,
         destination_node_id=None,
-        snm=False,
-        subject_id=3210,
-        service_id=None,
-        rnr=None,
+        data_specifier=MessageDataSpecifier(subject_id=3210),
         transfer_id=12340,
         index=0,
         end_of_transfer=True,
@@ -434,10 +402,7 @@ def _unittest_udp_frame_compile() -> None:
         priority=Priority.OPTIONAL,
         source_node_id=6,
         destination_node_id=2222,
-        snm=True,
-        subject_id=None,
-        service_id=321,
-        rnr=True,
+        data_specifier=ServiceDataSpecifier(service_id=321, role=ServiceDataSpecifier.Role.REQUEST),
         transfer_id=54321,
         index=0,
         end_of_transfer=False,
@@ -452,10 +417,7 @@ def _unittest_udp_frame_compile() -> None:
         priority=Priority.OPTIONAL,
         source_node_id=6,
         destination_node_id=2222,
-        snm=True,
-        subject_id=None,
-        service_id=321,
-        rnr=True,
+        data_specifier=ServiceDataSpecifier(service_id=321, role=ServiceDataSpecifier.Role.REQUEST),
         transfer_id=54321,
         index=1,
         end_of_transfer=True,
