@@ -109,11 +109,6 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         allowing the caller to rely on the vectorized IO API instead (sendmsg).
         """
 
-        # compute the header CRC based on self.payload (if end_of_transfer)
-        header_crc = 0
-        if self.end_of_transfer:
-            header_crc = pycyphal.transport.commons.crc.CRC16CCITT.new(self.payload).value
-
         # compute snm, subject_id, service_id, rnr (based on data_specifier)
         # snm: bool  # Service, Not Message
         # subject_id: int | None
@@ -127,6 +122,25 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             id_rnr = service_id | ((1 << 14) if rnr else 0)
         else:
             id_rnr = subject_id
+
+        # compute the header CRC based on self.payload (if end_of_transfer)
+        header_crc = 0
+        if self.end_of_transfer:
+            # header_crc = pycyphal.transport.commons.crc.CRC16CCITT.new(self.payload).value
+            header_memory = memoryview(
+                bytes(self._VERSION)
+                + bytes(int(self.priority))
+                + bytes(self.source_node_id if self.source_node_id is not None else 0xFFFF)
+                + bytes(self.destination_node_id if self.destination_node_id is not None else 0xFFFF)
+                + bytes(((1 << 15) if snm else 0) | id_rnr)
+                + self.transfer_id.to_bytes(8, "little")
+                + bytes(((1 << 31) if self.end_of_transfer else 0) | self.index)
+                + bytes(0)  # user_data
+            )
+            assert False
+            crc = pycyphal.transport.commons.crc.CRC16CCITT()
+            crc.add(header_memory)
+            header_crc = crc.value
 
         header = self._HEADER_FORMAT.pack(
             self._VERSION,
