@@ -7,7 +7,6 @@ import typing
 import struct
 import dataclasses
 import pycyphal
-from crc import Calculator, Crc16
 
 
 @dataclasses.dataclass(frozen=True, repr=False)
@@ -120,8 +119,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         # compute the header CRC based on self.payload (if end_of_transfer)
         header_crc = 0
         if self.end_of_transfer:
-            calculator = Calculator(Crc16.CCITT, optimized=True)
-            header_crc = calculator.checksum(bytes(self.payload))
+            header_crc = pycyphal.transport.commons.crc.CRC16CCITT.new(self.payload).value
 
         # compute the data specifier
         if self.snm:
@@ -363,7 +361,7 @@ def _unittest_udp_frame_compile() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\xf7\xc7"  # header_crc '0xc7f7'
+            b"\xe2\xb8"  # header_crc
         ),
         memoryview(b"Well, I got here the same way the coin did."),
     ) == UDPFrame(
@@ -412,7 +410,7 @@ def _unittest_udp_frame_compile() -> None:
 
     # From _output_session unit test
     assert (
-        memoryview(b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00\xec\x16"),
+        memoryview(b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00\xe3\xc2"),
         memoryview(b"onetwothree"),
     ) == UDPFrame(
         priority=Priority.NOMINAL,
@@ -448,7 +446,7 @@ def _unittest_udp_frame_compile() -> None:
     ).compile_header_and_payload()
 
     assert (
-        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00\x03<"),
+        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00\xf3\xdd"),
         memoryview(b"e"),
     ) == UDPFrame(
         priority=Priority.OPTIONAL,

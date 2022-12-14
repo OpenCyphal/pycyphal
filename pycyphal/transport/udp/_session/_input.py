@@ -25,13 +25,13 @@ class UDPInputSessionStatistics(pycyphal.transport.SessionStatistics):
 
 class UDPInputSession(pycyphal.transport.InputSession):
     """
-    As you already know, the UDP port number is a function of the data specifier.
-    Hence, the input flow demultiplexing is mostly done by the UDP/IP stack implemented in the operating system
-    itself, we just need to put a few basic abstractions on top.
-    One of those abstractions is the internal socket reader class, which is not part of the API
-    but its function is important if one needs to understand how the data flow is organized inside the library::
+    The input session logic is simple because most of the work is handled by the UDP/IP
+    stack of the operating system.
 
-        [Socket] 1   --->   1 [Demultiplexer] 1   --->   * [Input session] 1   --->   1 [API]
+    Here we just wait for the frames to arrive (from the socket), reassemble them,
+    and pass the resulting transfer.
+
+        [Socket] 1 ---> 1 [Input session] 1 ---> 1 [API]
 
     *(The plurality notation is supposed to resemble UML: 1 - one, * - many.)*
 
@@ -40,53 +40,19 @@ class UDPInputSession(pycyphal.transport.InputSession):
     CRC checking for us (thank you), so we get our stuff sorted up to the OSI layer 4 inclusive.
     The processing pipeline per datagram is as follows:
 
-    - The socket reader obtains the datagram from the socket using ``recvfrom()``.
+    - The socket obtains the datagram from the socket using ``recvfrom()``.
       The contents of the Cyphal UDP frame instance is parsed which, among others, contains the source node-ID.
       If anything goes wrong here (like if the source IP address belongs to a wrong subnet or the datagram
       does not contain a valid Cyphal frame or whatever), the datagram is dropped and the appropriate statistical
       counters are updated.
 
-    - The socket reader looks up the input session instances that have subscribed for the datagram from the
-      current source node-ID (derived from the Cyphal UDP frame) and passes the frame to them.
-      By the way, remember that this is a zero-copy stack, so every subscribed input session gets a reference
-      to the same instance of the frame, although it is beside the point right now.
+    - Upon reception of the frame, the input session updates its reassembler state machine
+      and runs all that meticulous bookkeeping you can't get away from if you need to receive multi-frame transfers.
 
     - Upon reception of the frame, the input session (one of many) updates its reassembler state machine
       and runs all that meticulous bookkeeping you can't get away from if you need to receive multi-frame transfers.
 
     - If the received frame happened to complete a transfer, the input session passes it up to the higher layer.
-
-    Now, an attentive reader might exclaim:
-
-        But look! If there is more than one input session instance per source node-ID,
-        we'd be running multiple transfer reassemblers with the same input data,
-        which is inefficient!
-        Why can't we extract the task of transfer reassembly into the socket reader,
-        before the pipeline is forked, to avoid the extra workload?
-
-    That is a good question, and here's why:
-
-    - The most important reason is that the proposal would only work if the state of
-      a transfer reassembler was a function of the input frame flow only.
-      This is not the case.
-      The state of a transfer reassembler is also defined by its configuration parameters
-      which are defined per-instance, which in turn are defined per input session instance.
-      In particular, the transfer-ID timeout is configured separately per input session.
-
-    - The case where there is more than one input session per remote node-ID is uncommon.
-      In fact, it may only occur if the higher layers requested a promiscuous and a selective session
-      at the same time, which normally does not happen with Cyphal.
-      We support this use case nevertheless because this library is supposed to offer a generic and
-      flexible API due to its intended usages (read the library design goals).
-
-    - The computing load of updating the state machine of a transfer reassembler is minuscule.
-      The most intensive computation happening there is the CRC update, which is not intense at all.
-
-    The architecture of the data processing pipeline in PyCyphal is complex, but that is due to the
-    high-level requirements for the library: it has to support *all transport protocols*, a lot of
-    media layers, and be portable, so trade-offs had to be made.
-    It should be understood that actual safety-critical implementations used in production systems
-    can be far simpler because generally they do not have to be multi-transport and multi-platform.
     """
 
     DEFAULT_TRANSFER_ID_TIMEOUT = 2.0
@@ -105,7 +71,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         self._specifier = specifier
         self._payload_metadata = payload_metadata
         self._sock = sock
-        self._maybe_finalizer: typing.Optional[typing.Callable[[], None]] = finalizer
+        self._finalizer = finalizer
         assert isinstance(self._specifier, pycyphal.transport.InputSessionSpecifier)
         assert isinstance(self._payload_metadata, pycyphal.transport.PayloadMetadata)
         assert callable(self._maybe_finalizer)
