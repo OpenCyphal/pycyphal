@@ -197,33 +197,45 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             end_of_transfer = bool(frame_index_eot & (UDPFrame.INDEX_MASK + 1))
             # chech the header CRC
             if end_of_transfer:
-                calculator = Calculator(Crc16.CCITT, optimized=True)
-                if header_crc != calculator.checksum(bytes(image[UDPFrame._HEADER_FORMAT.size :])):
+                crc = pycyphal.transport.commons.crc.CRC16CCITT()
+                crc.add(image[: UDPFrame._HEADER_FORMAT_NO_CRC.size])
+                if header_crc != crc.value:
                     return None
+                # calculator = Calculator(Crc16.CCITT, optimized=True)
+                # if header_crc != calculator.checksum(bytes(image[UDPFrame._HEADER_FORMAT.size :])):
+                #     return None
 
-            # check the data specifier
+            # Service/Message specific
             snm = bool(data_specifier_snm & (1 << 15))
             if snm:
-                # service
+                ## Service
                 service_id = data_specifier_snm & UDPFrame.SERVICE_ID_MASK
                 rnr = bool(data_specifier_snm & (1 << 14))
+                # check the service ID
                 if not (0 <= service_id <= UDPFrame.SERVICE_ID_MASK):
                     return None
+                # create the data specifier
+                data_specifier = pycyphal.transport.ServiceDataSpecifier(
+                    service_id=service_id,
+                    role=pycyphal.transport.ServiceDataSpecifier.Role.REQUEST
+                    if rnr
+                    else pycyphal.transport.ServiceDataSpecifier.Role.RESPONSE,
+                )
             else:
-                # message
+                ## Message
                 subject_id = data_specifier_snm & UDPFrame.SUBJECT_ID_MASK
                 rnr = None
+                # check the subject ID
                 if not (0 <= subject_id <= UDPFrame.SUBJECT_ID_MASK):
                     return None
+                # create the data specifier
+                data_specifier = pycyphal.transport.MessageDataSpecifier(subject_id=subject_id)
 
             return UDPFrame(
                 priority=pycyphal.transport.Priority(int_priority),
                 source_node_id=source_node_id,
                 destination_node_id=destination_node_id,
-                snm=snm,
-                subject_id=subject_id if not snm else None,
-                service_id=service_id if snm else None,
-                rnr=rnr,
+                data_specifier=data_specifier,
                 transfer_id=transfer_id,
                 index=(frame_index_eot & UDPFrame.INDEX_MASK),
                 end_of_transfer=bool(frame_index_eot & (UDPFrame.INDEX_MASK + 1)),
@@ -414,6 +426,32 @@ def _unittest_udp_frame_compile() -> None:
         payload=memoryview(b"Well, I got here the same way the coin did."),
     ).compile_header_and_payload()
 
+    # Multi-frame, end of the transfer. [service]
+    assert (
+        memoryview(
+            b"\x01"  # version
+            b"\x06"  # priority
+            b"\x01\x00"  # source_node_id
+            b"\x02\x00"  # destination_node_id
+            b"\x03\xc0"  # data_specifier_snm
+            b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
+            b"\x0d\xf0\xdd\x80"  # index
+            b"\x00\x00"  # user_data
+            b"\x8f\xb7"  # header_crc
+        ),
+        memoryview(b"Well, I got here the same way the coin did."),
+    ) == UDPFrame(
+        priority=Priority.SLOW,
+        source_node_id=1,
+        destination_node_id=2,
+        data_specifier=ServiceDataSpecifier(service_id=3, role=ServiceDataSpecifier.Role.REQUEST),
+        transfer_id=0x_DEAD_BEEF_C0FFEE,
+        index=0x_DD_F00D,
+        end_of_transfer=True,
+        user_data=0,
+        payload=memoryview(b"Well, I got here the same way the coin did."),
+    ).compile_header_and_payload()
+
     # From _output_session unit test
     assert (
         memoryview(b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00rp"),
@@ -470,12 +508,9 @@ def _unittest_udp_frame_parse() -> None:
     # Multi-frame, not the end of the transfer. [subject]
     assert UDPFrame(
         priority=Priority.SLOW,
-        source_node_id=4,
-        destination_node_id=5,
-        snm=False,
-        subject_id=3,
-        service_id=None,
-        rnr=None,
+        source_node_id=1,
+        destination_node_id=2,
+        data_specifier=MessageDataSpecifier(subject_id=3),
         transfer_id=0x_DEAD_BEEF_C0FFEE,
         index=0x_DD_F00D,
         end_of_transfer=False,
@@ -485,8 +520,8 @@ def _unittest_udp_frame_parse() -> None:
         memoryview(
             b"\x01"  # version
             b"\x06"  # priority
-            b"\x04\x00"  # source_node_id
-            b"\x05\x00"  # destination_node_id
+            b"\x01\x00"  # source_node_id
+            b"\x02\x00"  # destination_node_id
             b"\x03\x00"  # data_specifier_snm
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x00"  # index
@@ -498,13 +533,10 @@ def _unittest_udp_frame_parse() -> None:
 
     # Multi-frame, end of the transfer. [subject]
     assert UDPFrame(
-        priority=Priority.OPTIONAL,
-        source_node_id=5,
-        destination_node_id=4,
-        snm=False,
-        subject_id=3,
-        service_id=None,
-        rnr=None,
+        priority=Priority.SLOW,
+        source_node_id=1,
+        destination_node_id=2,
+        data_specifier=MessageDataSpecifier(subject_id=3),
         transfer_id=0x_DEAD_BEEF_C0FFEE,
         index=0x_DD_F00D,
         end_of_transfer=True,
@@ -513,27 +545,50 @@ def _unittest_udp_frame_parse() -> None:
     ) == UDPFrame.parse(
         memoryview(
             b"\x01"  # version
-            b"\x07"  # priority
-            b"\x05\x00"  # source_node_id
-            b"\x04\x00"  # destination_node_id
+            b"\x06"  # priority
+            b"\x01\x00"  # source_node_id
+            b"\x02\x00"  # destination_node_id
             b"\x03\x00"  # data_specifier_snm
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\xf7\xc7"  # header_crc
+            b"\x94\xc9"  # header_crc
+            b"Well, I got here the same way the coin did."
+        ),
+    )
+
+    # Multi-frame, not the end of the transfer. [service]
+    assert UDPFrame(
+        priority=Priority.SLOW,
+        source_node_id=1,
+        destination_node_id=2,
+        data_specifier=ServiceDataSpecifier(service_id=3, role=ServiceDataSpecifier.Role.REQUEST),
+        transfer_id=0x_DEAD_BEEF_C0FFEE,
+        index=0x_DD_F00D,
+        end_of_transfer=False,
+        user_data=0,
+        payload=memoryview(b"Well, I got here the same way the coin did."),
+    ) == UDPFrame.parse(
+        memoryview(
+            b"\x01"  # version
+            b"\x06"  # priority
+            b"\x01\x00"  # source_node_id
+            b"\x02\x00"  # destination_node_id
+            b"\x03\xc0"  # data_specifier_snm
+            b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
+            b"\x0d\xf0\xdd\x00"  # index
+            b"\x00\x00"  # user_data
+            b"\x00\x00"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
 
     # Multi-frame, end of the transfer. [service]
     assert UDPFrame(
-        priority=Priority.OPTIONAL,
-        source_node_id=5,
-        destination_node_id=4,
-        snm=True,
-        subject_id=None,
-        service_id=3,
-        rnr=True,
+        priority=Priority.SLOW,
+        source_node_id=1,
+        destination_node_id=2,
+        data_specifier=ServiceDataSpecifier(service_id=3, role=ServiceDataSpecifier.Role.REQUEST),
         transfer_id=0x_DEAD_BEEF_C0FFEE,
         index=0x_DD_F00D,
         end_of_transfer=True,
@@ -542,30 +597,30 @@ def _unittest_udp_frame_parse() -> None:
     ) == UDPFrame.parse(
         memoryview(
             b"\x01"  # version
-            b"\x07"  # priority
-            b"\x05\x00"  # source_node_id
-            b"\x04\x00"  # destination_node_id
+            b"\x06"  # priority
+            b"\x01\x00"  # source_node_id
+            b"\x02\x00"  # destination_node_id
             b"\x03\xc0"  # data_specifier_snm
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\xf7\xc7"  # header_crc
+            b"\x8f\xb7"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
 
-    # Wrong checksum.
+    # Wrong checksum. (same as Multiframe, end of the transfer. [service], but wrong checksum)
     assert None is UDPFrame.parse(
         memoryview(
             b"\x01"  # version
-            b"\x07"  # priority
-            b"\x05\x00"  # source_node_id
-            b"\x04\x00"  # destination_node_id
+            b"\x06"  # priority
+            b"\x01\x00"  # source_node_id
+            b"\x02\x00"  # destination_node_id
             b"\x03\xc0"  # data_specifier_snm
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\xf7\xc8"  # header_crc
+            b"\x8f\xb8"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
@@ -574,14 +629,14 @@ def _unittest_udp_frame_parse() -> None:
     assert None is UDPFrame.parse(
         memoryview(
             b"\x01"  # version
-            b"\x07"  # priority
-            b"\x05\x00"  # source_node_id
-            b"\x04\x00"  # destination_node_id
+            b"\x06"  # priority
+            b"\x01\x00"  # source_node_id
+            b"\x02\x00"  # destination_node_id
             b"\x03\xc0"  # data_specifier_snm
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            # b"\xf7\xc7"  # header_crc
+            # b"\x8f\xb8"  # header_crc
             # b"Well, I got here the same way the coin did."
         ),
     )
@@ -590,14 +645,14 @@ def _unittest_udp_frame_parse() -> None:
     assert None is UDPFrame.parse(
         memoryview(
             b"\x02"  # version
-            b"\x07"  # priority
-            b"\x05\x00"  # source_node_id
-            b"\x04\x00"  # destination_node_id
+            b"\x06"  # priority
+            b"\x01\x00"  # source_node_id
+            b"\x02\x00"  # destination_node_id
             b"\x03\xc0"  # data_specifier_snm
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\xf7\xc7"  # header_crc
+            b"\x8f\xb8"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
