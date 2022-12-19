@@ -78,7 +78,7 @@ async def _unittest_udp_output_session() -> None:
     assert endpoint[0] == "127.0.0.2"
     # QUESTION: "\xec\x16" don't know where it comes from
     assert rx_data == (
-        b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00\xec\x16"
+        b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00rp"
         + b"one"
         + b"two"
         + b"three"
@@ -168,7 +168,7 @@ async def _unittest_udp_output_session() -> None:
         + b"three"[:-1]
     )
     assert data_main_b == (
-        b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00V\x03"
+        b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00<t"
         + b"e"
         + pycyphal.transport.commons.crc.CRC32C.new(b"one", b"two", b"three").value_as_bytes
     )
