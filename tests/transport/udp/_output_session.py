@@ -76,7 +76,6 @@ async def _unittest_udp_output_session() -> None:
 
     rx_data, endpoint = sock_rx.recvfrom(1000)
     assert endpoint[0] == "127.0.0.2"
-    # QUESTION: "\xec\x16" don't know where it comes from
     assert rx_data == (
         b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00rp"
         + b"one"
