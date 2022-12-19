@@ -61,6 +61,18 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         "H"  # header_crc
     )
 
+    _HEADER_FORMAT_NO_CRC = struct.Struct(
+        "<"  # little-endian
+        "B"  # version, _reserved_a
+        "B"  # priority, _reserved_b
+        "H"  # source_node_id
+        "H"  # destination_node_id
+        "H"  # subject_id, snm (if Message); service_id, rnr, snm (if Service)
+        "Q"  # transfer_id
+        "I"  # frame_index, end_of_transfer
+        "H"  # user_data
+    )
+
     _VERSION = 1
     NODE_ID_MASK = 2**16 - 1
     SUBJECT_ID_MASK = 2**15 - 1
@@ -123,36 +135,45 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         else:
             id_rnr = subject_id
 
-        # compute the header CRC based on self.payload (if end_of_transfer)
-        header_crc = 0
         if self.end_of_transfer:
-            # header_crc = pycyphal.transport.commons.crc.CRC16CCITT.new(self.payload).value
-            header_memory = memoryview(
-                bytes(self._VERSION)
-                + bytes(int(self.priority))
-                + bytes(self.source_node_id if self.source_node_id is not None else 0xFFFF)
-                + bytes(self.destination_node_id if self.destination_node_id is not None else 0xFFFF)
-                + bytes(((1 << 15) if snm else 0) | id_rnr)
-                + self.transfer_id.to_bytes(8, "little")
-                + bytes(((1 << 31) if self.end_of_transfer else 0) | self.index)
-                + bytes(0)  # user_data
+            header_crc = 0
+            header_memory = self._HEADER_FORMAT_NO_CRC.pack(
+                self._VERSION,
+                int(self.priority),
+                self.source_node_id if self.source_node_id is not None else 0xFFFF,
+                self.destination_node_id if self.destination_node_id is not None else 0xFFFF,
+                ((1 << 15) if snm else 0) | id_rnr,
+                self.transfer_id,
+                ((1 << 31) if self.end_of_transfer else 0) | self.index,
+                0,  # user_data
             )
-            assert False
             crc = pycyphal.transport.commons.crc.CRC16CCITT()
             crc.add(header_memory)
             header_crc = crc.value
+            header = self._HEADER_FORMAT.pack(
+                self._VERSION,
+                int(self.priority),
+                self.source_node_id if self.source_node_id is not None else 0xFFFF,
+                self.destination_node_id if self.destination_node_id is not None else 0xFFFF,
+                ((1 << 15) if snm else 0) | id_rnr,
+                self.transfer_id,
+                ((1 << 31) if self.end_of_transfer else 0) | self.index,
+                0,  # user_data
+                header_crc,
+            )
+        else:
+            header = self._HEADER_FORMAT.pack(
+                self._VERSION,
+                int(self.priority),
+                self.source_node_id if self.source_node_id is not None else 0xFFFF,
+                self.destination_node_id if self.destination_node_id is not None else 0xFFFF,
+                ((1 << 15) if snm else 0) | id_rnr,
+                self.transfer_id,
+                ((1 << 31) if self.end_of_transfer else 0) | self.index,
+                0,  # user_data
+                0,  # header_crc
+            )
 
-        header = self._HEADER_FORMAT.pack(
-            self._VERSION,
-            int(self.priority),
-            self.source_node_id if self.source_node_id is not None else 0xFFFF,
-            self.destination_node_id if self.destination_node_id is not None else 0xFFFF,
-            ((1 << 15) if snm else 0) | id_rnr,
-            self.transfer_id,
-            ((1 << 31) if self.end_of_transfer else 0) | self.index,
-            0,  # user_data
-            header_crc,
-        )
         return memoryview(header), self.payload
 
     @staticmethod
@@ -352,7 +373,7 @@ def _unittest_udp_frame_compile() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\xe2\xb8"  # header_crc
+            b"\x94\xc9"  # header_crc
         ),
         memoryview(b"Well, I got here the same way the coin did."),
     ) == UDPFrame(
@@ -395,7 +416,7 @@ def _unittest_udp_frame_compile() -> None:
 
     # From _output_session unit test
     assert (
-        memoryview(b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00\xe3\xc2"),
+        memoryview(b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00rp"),
         memoryview(b"onetwothree"),
     ) == UDPFrame(
         priority=Priority.NOMINAL,
@@ -425,7 +446,7 @@ def _unittest_udp_frame_compile() -> None:
     ).compile_header_and_payload()
 
     assert (
-        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00\xf3\xdd"),
+        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00<t"),
         memoryview(b"e"),
     ) == UDPFrame(
         priority=Priority.OPTIONAL,
