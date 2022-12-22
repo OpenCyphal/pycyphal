@@ -161,7 +161,7 @@ async def _unittest_udp_output_session() -> None:
     assert data_main_a == data_redundant_a
     assert data_main_b == data_redundant_b
     assert data_main_a == (
-        b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xc6\n"
         + b"one"
         + b"two"
         + b"three"[:-1]
