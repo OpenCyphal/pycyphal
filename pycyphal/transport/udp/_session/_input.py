@@ -5,8 +5,10 @@
 from __future__ import annotations
 import abc
 import copy
+import time
 import socket as socket_
 import typing
+import select
 import asyncio
 import logging
 import dataclasses
@@ -15,6 +17,8 @@ from pycyphal.transport import Timestamp
 from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
 from .._frame import UDPFrame
 
+_READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.
+# _READ_TIMEOUT = 1.0
 
 _logger = logging.getLogger(__name__)
 
@@ -46,13 +50,14 @@ class UDPInputSession(pycyphal.transport.InputSession):
       does not contain a valid Cyphal frame or whatever), the datagram is dropped and the appropriate statistical
       counters are updated.
 
-    - Upon reception of the frame, the input session updates its reassembler state machine
-      and runs all that meticulous bookkeeping you can't get away from if you need to receive multi-frame transfers.
-
     - Upon reception of the frame, the input session (one of many) updates its reassembler state machine
       and runs all that meticulous bookkeeping you can't get away from if you need to receive multi-frame transfers.
 
     - If the received frame happened to complete a transfer, the input session passes it up to the higher layer.
+
+    The input session logic is extremely simple because most of the work is handled by the UDP/IP
+    stack of the operating system.
+    Here we just need to reconstruct the transfer from the frames and pass it up to the higher layer.
     """
 
     DEFAULT_TRANSFER_ID_TIMEOUT = 2.0
@@ -67,6 +72,9 @@ class UDPInputSession(pycyphal.transport.InputSession):
         sock: socket_.socket,
         finalizer: typing.Callable[[], None],
     ):
+        """
+        Do not call this directly.
+        """
         self._closed = False
         self._specifier = specifier
         self._payload_metadata = payload_metadata
@@ -74,13 +82,30 @@ class UDPInputSession(pycyphal.transport.InputSession):
         self._finalizer = finalizer
         assert isinstance(self._specifier, pycyphal.transport.InputSessionSpecifier)
         assert isinstance(self._payload_metadata, pycyphal.transport.PayloadMetadata)
-        assert callable(self._maybe_finalizer)
+        assert callable(self._finalizer)
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._queue: asyncio.Queue[pycyphal.transport.TransferFrom] = asyncio.Queue()
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pycyphal.transport.TransferFrom]:
+        """
+        This method is used to retrieve the transfers from the queue. (Put there by the ``_process_frame()`` method.)
+        The method will block until a transfer is available or the deadline is reached.
+        If the deadline is reached, the method will return ``None``.
+        If the session is closed, the method will raise ``ResourceClosedError``.
+
+        The processing pipeline is as follows:
+
+        1) _consume: The socket obtains the datagram from the socket using ``recvfrom()``.
+        2) _consume: The contents of the Cyphal UDP frame instance is parsed.
+        3) _process_frame: Processes the frame
+        4) _process_frame: If frame is the last frame of a transfer, puts the transfer into the queue.
+        5) receive: Reads the frame from the queue, and returns it. If the queue is empty/times out, returns None.
+        """
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
+
+        consume_success = await self._consume(monotonic_deadline=monotonic_deadline)
+        assert consume_success
 
         loop = asyncio.get_running_loop()
         try:
@@ -91,7 +116,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 transfer = self._queue.get_nowait()
         except (asyncio.TimeoutError, asyncio.QueueEmpty):
             # If there are unprocessed transfers, allow the caller to read them even if the instance is closed.
-            if self._maybe_finalizer is None:
+            if self._finalizer is None:
                 raise pycyphal.transport.ResourceClosedError(f"{self} is closed") from None
             return None
         else:
@@ -99,9 +124,71 @@ class UDPInputSession(pycyphal.transport.InputSession):
             assert transfer.source_node_id == self._specifier.remote_node_id or self._specifier.remote_node_id is None
             return transfer
 
+    async def _consume(self, monotonic_deadline: float) -> bool:
+        """
+        This method is used to consume the incoming datagrams and process them.
+        Returns None if no frames could be consumed.
+        """
+        loop = asyncio.get_running_loop()
+
+        # COMMENT OUT THIS BLOCK
+        while self._sock.fileno() >= 0:
+            read_ready, _, _ = select.select([self._sock], [], [], monotonic_deadline - loop.time())
+            if self._sock in read_ready:
+                ts = pycyphal.transport.Timestamp.now()
+                data, endpoint = self._sock.recvfrom(_READ_SIZE)
+                assert len(data) < _READ_SIZE, "Datagram might have been truncated"
+                frame = UDPFrame.parse(memoryview(data))
+                _logger.debug(
+                    "%r: Received UDP packet of %d bytes from %s containing frame: %s",
+                    self,
+                    len(data),
+                    endpoint,
+                    frame,
+                )
+                loop.call_soon_threadsafe(self._process_frame, ts, frame)
+                return True
+
+        # UNCOMMENT THIS BLOCK
+        # while self._sock.fileno() >= 0:
+        #     try:
+        #         read_ready, _, _ = select.select([self._sock], [], [], 5)  # monotonic_deadline - loop.time())
+        #         if self._sock in read_ready:
+        #             # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
+        #             ts = pycyphal.transport.Timestamp.now()
+
+        #             # Notice that we MUST create a new buffer for each received datagram to avoid race conditions.
+        #             # Buffer memory cannot be shared because the rest of the stack is completely zero-copy;
+        #             # meaning that the data we allocate here, at the very bottom of the protocol stack,
+        #             # is likely to be carried all the way up to the application layer without being copied.
+        #             # await asyncio.wait_for(
+        #             #     loop.sock_recv_into(self._sock, _READ_SIZE), timeout=monotonic_deadline - loop.time()
+        #             # )
+        #             data, endpoint = self._sock.recvfrom(_READ_SIZE)
+        #             assert False
+        #             assert len(data) < _READ_SIZE, "Datagram might have been truncated"
+        #             frame = UDPFrame.parse(memoryview(data))
+        #             _logger.debug(
+        #                 "%r: Received UDP packet of %d bytes from %s containing frame: %s",
+        #                 self,
+        #                 len(data),
+        #                 endpoint,
+        #                 frame,
+        #             )
+        #             assert False
+        #             loop.call_soon_threadsafe(self._process_frame, ts, frame)
+        #             return True
+        #     except (asyncio.TimeoutError):
+        #         return False
+        #     except Exception as ex:
+        #         _logger.exception("%s: Exception while consuming UDP frames: %s", self, ex)
+        #         time.sleep(1)
+        #         assert False # <- For some reason it is giving an exception here (assert to catch in debugger)
+        #         return False
+
     def _process_frame(self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]) -> None:
         """
-        The source node-ID is always valid because anonymous transfers are not defined for the UDP transport.
+        The source node-ID is always valid.
         The frame argument may be None to indicate that the underlying transport has received a datagram
         which is valid but does not contain a Cyphal UDP frame inside. This is needed for error stats tracking.
 
@@ -115,7 +202,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         self._statistics.frames += 1
 
         source_node_id = frame.source_node_id
-        assert isinstance(source_node_id, int) and source_node_id >= 0, "Internal protocol violation"
+        assert isinstance(source_node_id, int) and 0 <= source_node_id <= 0xFFFF, "Internal protocol violation"
 
         transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
         if transfer is not None:
@@ -148,9 +235,9 @@ class UDPInputSession(pycyphal.transport.InputSession):
         return self._payload_metadata
 
     def close(self) -> None:
-        if self._maybe_finalizer is not None:
-            self._maybe_finalizer()
-            self._maybe_finalizer = None
+        if self._finalizer is not None:
+            self._finalizer()
+            self._finalizer = None
 
     @property
     def socket(self) -> socket_.socket:
@@ -158,38 +245,6 @@ class UDPInputSession(pycyphal.transport.InputSession):
         Provides access to the underlying UDP socket.
         """
         return self._sock
-
-    async def _consume(self, monotonic_deadline: float) -> None:
-        """
-        Returns None if no frames could be consumed.
-        """
-        loop = asyncio.get_running_loop()
-        while self._sock.fileno() >= 0:
-            try:
-                read_ready, _, _ = select.select([self._sock], [], [], _READ_TIMEOUT)
-                if self._sock in read_ready:
-                    # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
-                    ts = pycyphal.transport.Timestamp.now()
-
-                    # Notice that we MUST create a new buffer for each received datagram to avoid race conditions.
-                    # Buffer memory cannot be shared because the rest of the stack is completely zero-copy;
-                    # meaning that the data we allocate here, at the very bottom of the protocol stack,
-                    # is likely to be carried all the way up to the application layer without being copied.
-                    data, endpoint = self._sock.recvfrom(_READ_SIZE)
-                    assert len(data) < _READ_SIZE, "Datagram might have been truncated"
-
-                    frame = UDPFrame.parse(memoryview(data))
-                    _logger.debug(
-                        "%r: Received UDP packet of %d bytes from %s containing frame: %s",
-                        self,
-                        len(data),
-                        endpoint,
-                        frame,
-                    )
-                    loop.call_soon_threadsafe(self._process_frame, ts, frame)
-            except Exception as ex:
-                _logger.exception("%s: Exception while consuming UDP frames: %s", self, ex)
-                time.sleep(1)
 
     @property
     @abc.abstractmethod
@@ -216,6 +271,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         self,
         specifier: pycyphal.transport.InputSessionSpecifier,
         payload_metadata: pycyphal.transport.PayloadMetadata,
+        sock: socket_.socket,
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -223,7 +279,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         """
         self._statistics_impl = PromiscuousUDPInputSessionStatistics()
         self._reassemblers: typing.Dict[int, TransferReassembler] = {}
-        super().__init__(specifier=specifier, payload_metadata=payload_metadata, finalizer=finalizer)
+        super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer)
 
     def sample_statistics(self) -> PromiscuousUDPInputSessionStatistics:
         return copy.copy(self._statistics)
@@ -270,6 +326,7 @@ class SelectiveUDPInputSession(UDPInputSession):
         self,
         specifier: pycyphal.transport.InputSessionSpecifier,
         payload_metadata: pycyphal.transport.PayloadMetadata,
+        sock: socket_.socket,
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -293,7 +350,7 @@ class SelectiveUDPInputSession(UDPInputSession):
             on_error_callback=on_reassembly_error,
         )
 
-        super().__init__(specifier=specifier, payload_metadata=payload_metadata, finalizer=finalizer)
+        super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer)
 
     def sample_statistics(self) -> SelectiveUDPInputSessionStatistics:
         return copy.copy(self._statistics)
@@ -303,5 +360,6 @@ class SelectiveUDPInputSession(UDPInputSession):
         return self._statistics_impl
 
     def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
+        # THIS SHOULD BE CHANGED?
         assert source_node_id == self._reassembler.source_node_id, "Internal protocol violation"
         return self._reassembler

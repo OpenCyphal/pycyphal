@@ -5,6 +5,8 @@
 from ._socket_factory import SocketFactory as SocketFactory
 from ._socket_factory import Sniffer as Sniffer
 
+from ._v4 import IPv4SocketFactory as IPv4SocketFactory
+
 from ._endpoint_mapping import SUBJECT_ID_MASK as SUBJECT_ID_MASK
 from ._endpoint_mapping import DESTINATION_NODE_ID_MASK as DESTINATION_NODE_ID_MASK
 from ._endpoint_mapping import SNM_BIT_MASK as SNM_BIT_MASK
