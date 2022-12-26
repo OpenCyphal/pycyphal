@@ -243,6 +243,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         return self._statistics_impl
 
     def _process_frame(self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]) -> None:
+        # Check if there is a frame (at all..)
         if frame is None:
             self._statistics.errors += 1
             return

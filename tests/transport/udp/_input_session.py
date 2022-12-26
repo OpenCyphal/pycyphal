@@ -268,6 +268,54 @@ async def _unittest_udp_input_session() -> None:
         transfers=1, frames=1, payload_bytes=20, errors=0, drops=0, reassembly_errors={}
     )
 
-    assert False
-
     # 4. INVALID FRAME
+    msg_sock_tx_1.send(b"INVALID")
+
+    should_be_none = await prom_in.receive(loop.time() + 1.0)
+    assert should_be_none is None
+    should_be_none = await sel_in.receive(loop.time() + 1.0)
+    assert should_be_none is None
+
+    # check that errors has been updated in Statistics
+    assert prom_in.sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=3,
+        frames=3,
+        payload_bytes=50,
+        errors=1,
+        drops=0,
+        reassembly_errors_per_source_node_id={11: {}, 10: {}, None: {}},
+    )
+
+    assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
+        transfers=1, frames=1, payload_bytes=20, errors=1, drops=0, reassembly_errors={}
+    )
+
+    # assert False
+
+    # 5. INVALID CHECKSUM
+    # msg_sock_tx_1.send(
+    #     b"".join(
+    #         (
+    #             memoryview(
+    #                 b"\x01"  # version
+    #                 b"\x06"  # priority
+    #                 b"\x01\x00"  # source_node_id
+    #                 b"\x02\x00"  # destination_node_id
+    #                 b"\x03\x00"  # data_specifier_snm
+    #                 b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
+    #                 b"\x0d\xf0\xdd\x80"  # index
+    #                 b"\x00\x00"  # user_data
+    #                 b"\x94\xc9"  # header_crc
+    #             ),
+    #             memoryview(b"Well, I got here the same way the coin did."),
+    #         )
+    #     )
+    # )
+
+    # should_be_none = await prom_in.receive(loop.time() + 1.0)
+    # assert should_be_none is None
+    # 5. CLOSE THE PROMISCUOUS INPUT SESSION AND CHECK THAT THE SELECTIVE INPUT SESSION IS NOT AFFECTED
+
+    # 6. MAKE SURE SELECTIVE INPUT SESSION DOES NOT RECEIVE OTHER NODES' FRAMES
+
+    # 7. CLOSE SELECTIVE INPUT SESSION
