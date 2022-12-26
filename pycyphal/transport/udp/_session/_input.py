@@ -179,7 +179,13 @@ class UDPInputSession(pycyphal.transport.InputSession):
         source_node_id = frame.source_node_id
         assert isinstance(source_node_id, int) and 0 <= source_node_id <= NODE_ID_MASK, "Internal protocol violation"
 
-        transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
+        # Anonymous frame - no reconstruction needed
+        if source_node_id == NODE_ID_MASK:
+            transfer = TransferReassembler.construct_anonymous_transfer(timestamp, frame)
+        # Otherwise, fetch the reassembler and process the frame
+        else:
+            transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
+
         if transfer is not None:
             self._statistics.transfers += 1
             self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
@@ -265,30 +271,25 @@ class PromiscuousUDPInputSession(UDPInputSession):
 
     def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
         assert isinstance(source_node_id, int) and source_node_id >= 0, "Internal protocol violation"
-        # QUESTION: THIS IS A MESSY SOLUTION DUE TO TransferReassembler NOT SUPPORTING SOURCE NODE-ID = None
-        if source_node_id == NODE_ID_MASK:
-            source_node_id_None = None
-        else:
-            source_node_id_None = source_node_id
         try:
             return self._reassemblers[source_node_id]
         except LookupError:
 
             def on_reassembly_error(error: TransferReassembler.Error) -> None:
                 self._statistics.errors += 1
-                d = self._statistics.reassembly_errors_per_source_node_id[source_node_id_None]
+                d = self._statistics.reassembly_errors_per_source_node_id[source_node_id]
                 try:
                     d[error] += 1
                 except LookupError:
                     d[error] = 1
 
-            self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id_None, {})
+            self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id, {})
             reasm = TransferReassembler(
-                source_node_id=source_node_id,  # <- THIS IS THE PROBLEM
+                source_node_id=source_node_id,
                 extent_bytes=self._payload_metadata.extent_bytes,
                 on_error_callback=on_reassembly_error,
             )
-            self._reassemblers[source_node_id_None] = reasm
+            self._reassemblers[source_node_id] = reasm
             _logger.debug("%s: New %s (%d total)", self, reasm, len(self._reassemblers))
             return reasm
 

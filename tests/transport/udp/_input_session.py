@@ -245,7 +245,7 @@ async def _unittest_udp_input_session() -> None:
     rx_data = await prom_in.receive(loop.time() + 1.0)
 
     assert rx_data.priority == Priority.LOW
-    assert rx_data.source_node_id == 0xFFFF
+    assert rx_data.source_node_id == None
     assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
     assert rx_data.fragmented_payload[0] == memoryview(b"SMASHEDYOURCOROLLA")
 
@@ -257,7 +257,10 @@ async def _unittest_udp_input_session() -> None:
         payload_bytes=50,
         errors=0,
         drops=0,
-        reassembly_errors_per_source_node_id={11: {}, 10: {}, None: {}},  # should be none
+        reassembly_errors_per_source_node_id={
+            11: {},
+            10: {},
+        },  # Anonymous frames can't have reassembly errors (always single frame)
     )
 
     # check that selective has not received anything
@@ -283,7 +286,7 @@ async def _unittest_udp_input_session() -> None:
         payload_bytes=50,
         errors=1,
         drops=0,
-        reassembly_errors_per_source_node_id={11: {}, 10: {}, None: {}},
+        reassembly_errors_per_source_node_id={11: {}, 10: {}},
     )
 
     assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
@@ -323,7 +326,7 @@ async def _unittest_udp_input_session() -> None:
         payload_bytes=50,
         errors=2,
         drops=0,
-        reassembly_errors_per_source_node_id={11: {}, 10: {}, None: {}},
+        reassembly_errors_per_source_node_id={11: {}, 10: {}},
     )
 
     assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
