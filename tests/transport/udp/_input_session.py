@@ -86,7 +86,7 @@ from pycyphal.transport.udp._ip import IPv4SocketFactory
 #       drops=2
 #       reassembly_errors={11: {}, 10: {}, 65535: {}}
 # OTHER TESTS?
-#   - reassembly errors
+#   - reassembly errors, wrong checksum of the transfer
 #   - closure of the socket
 
 
@@ -99,12 +99,6 @@ async def _unittest_udp_input_session() -> None:
     def do_finalize() -> None:
         nonlocal finalized
         finalized = True
-
-    # def check_timestamp(t: Timestamp) -> bool:
-    #     now = Timestamp.now()
-    #     s = ts.system_ns <= t.system_ns <= now.system_ns
-    #     m = ts.monotonic_ns <= t.monotonic_ns <= now.monotonic_ns
-    #     return s and m
 
     # SETUP
 
@@ -179,9 +173,8 @@ async def _unittest_udp_input_session() -> None:
     assert rx_data == None
 
     assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
-        transfers=0, frames=1, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
-    # should be: (transfers=0, frames=1, payload_bytes=0, errors=0, drops=1, reassembly_errors={}) ?
 
     # 2. FRAME FOR THE SELECTIVE INPUT SESSION AND THE PROMISCUOUS INPUT SESSION
     msg_sock_tx_1.send(
@@ -218,19 +211,18 @@ async def _unittest_udp_input_session() -> None:
         reassembly_errors_per_source_node_id={11: {}, 10: {}},
     )
 
-    # rx_data = await sel_in.receive(loop.time() + 1.0) # Internal protocol violation
-    # assert False
+    rx_data = await sel_in.receive(loop.time() + 1.0)  # Internal protocol violation
 
-    # assert rx_data.priority == Priority.LOW
-    # assert rx_data.source_node_id == 10
-    # assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
-    # assert rx_data.fragmented_payload[0] == memoryview(b"SCRATCHEDYOURCOROLLA")
+    assert rx_data.priority == Priority.LOW
+    assert rx_data.source_node_id == 10
+    assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
+    assert rx_data.fragmented_payload[0] == memoryview(b"SCRATCHEDYOURCOROLLA")
 
-    # assert not finalized
-    # assert sel_in.socket.fileno() > 0
-    # assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
-    #     transfers=1, frames=1, payload_bytes=20, errors=0, drops=0, reassembly_errors=0
-    # )
+    assert not finalized
+    assert sel_in.socket.fileno() > 0
+    assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
+        transfers=1, frames=1, payload_bytes=20, errors=0, drops=0, reassembly_errors={}
+    )
 
     # 3. ANONYMOUS FRAME FOR THE PROMISCUOUS INPUT SESSION
     msg_sock_tx_1.send(
@@ -265,7 +257,7 @@ async def _unittest_udp_input_session() -> None:
         payload_bytes=50,
         errors=0,
         drops=0,
-        reassembly_errors_per_source_node_id={11: {}, 10: {}, 65535: {}},
+        reassembly_errors_per_source_node_id={11: {}, 10: {}, 65535: {}},  # should be none
     )
 
     # check that selective has not received anything
@@ -273,7 +265,9 @@ async def _unittest_udp_input_session() -> None:
     assert rx_data is None
 
     assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
-        transfers=1, frames=1, payload_bytes=0, errors=0, drops=1, reassembly_errors=0
+        transfers=1, frames=1, payload_bytes=20, errors=0, drops=0, reassembly_errors={}
     )
+
+    assert False
 
     # 4. INVALID FRAME
