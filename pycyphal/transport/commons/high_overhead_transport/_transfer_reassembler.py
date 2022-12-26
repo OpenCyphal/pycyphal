@@ -246,12 +246,18 @@ class TransferReassembler:
         Observe that this is a static method because anonymous transfers are fundamentally stateless.
         """
         if frame.single_frame_transfer:
-            return TransferFrom(
-                timestamp=timestamp,
-                priority=frame.priority,
-                transfer_id=frame.transfer_id,
-                fragmented_payload=[frame.payload],
-                source_node_id=None,
+            size_ok = frame.payload.nbytes > _CRC_SIZE_BYTES
+            crc_ok = TransferCRC.new(frame.payload).check_residue()
+            return (
+                TransferFrom(
+                    timestamp=timestamp,
+                    priority=frame.priority,
+                    transfer_id=frame.transfer_id,
+                    fragmented_payload=_drop_crc([frame.payload]),
+                    source_node_id=None,
+                )
+                if size_ok and crc_ok
+                else None
             )
         return None
 
@@ -732,13 +738,37 @@ def _unittest_transfer_reassembler() -> None:
 def _unittest_transfer_reassembler_anonymous() -> None:
     ts = Timestamp.now()
     prio = Priority.LOW
+
+    # Correct single-frame transfer.
     assert TransferReassembler.construct_anonymous_transfer(
         ts,
-        Frame(priority=prio, transfer_id=123456, index=0, end_of_transfer=True, payload=memoryview(b"abcdef")),
+        Frame(
+            priority=prio,
+            transfer_id=123456,
+            index=0,
+            end_of_transfer=True,
+            payload=memoryview(b"abcdef" + b"\xf1\xef\xbcS"),
+        ),
     ) == TransferFrom(
         timestamp=ts, priority=prio, transfer_id=123456, fragmented_payload=[memoryview(b"abcdef")], source_node_id=None
     )
 
+    # Faulthy: CRC is wrong.
+    assert (
+        TransferReassembler.construct_anonymous_transfer(
+            ts,
+            Frame(
+                priority=prio,
+                transfer_id=123456,
+                index=0,
+                end_of_transfer=True,
+                payload=memoryview(b"abcdef" + b"\xf1\xef\xbdS"),
+            ),
+        )
+        is None
+    )
+
+    # Faulthy: single transfer has index 0.
     assert (
         TransferReassembler.construct_anonymous_transfer(
             ts,
@@ -747,6 +777,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
         is None
     )
 
+    # Faulthy: single transfer has EOT flag.
     assert (
         TransferReassembler.construct_anonymous_transfer(
             ts,
