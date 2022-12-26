@@ -51,7 +51,8 @@ class UDPInputSession(pycyphal.transport.InputSession):
       does not contain a valid Cyphal frame or whatever), the datagram is dropped and the appropriate statistical
       counters are updated.
 
-    - Upon reception of the frame, the input session (one of many) updates its reassembler state machine
+    - Upon reception of the frame, the input session updates its reassembler state machine(s)
+      (many in case of PromiscuousInputSession)
       and runs all that meticulous bookkeeping you can't get away from if you need to receive multi-frame transfers.
 
     - If the received frame happened to complete a transfer, the input session passes it up to the higher layer.
@@ -74,7 +75,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         finalizer: typing.Callable[[], None],
     ):
         """
-        Do not call this directly.
+        Parent class of PromiscuousInputSession and SelectiveInputSession.
         """
         self._closed = False
         self._specifier = specifier
@@ -89,7 +90,8 @@ class UDPInputSession(pycyphal.transport.InputSession):
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pycyphal.transport.TransferFrom]:
         """
-        This method is used to retrieve the transfers from the queue. (Put there by the ``_process_frame()`` method.)
+        This method will first call ``_consume()`` to read from the socket.
+        Then it will try to retrieve the transfer from the queue.
         The method will block until a transfer is available or the deadline is reached.
         If the deadline is reached, the method will return ``None``.
         If the session is closed, the method will raise ``ResourceClosedError``.
@@ -165,6 +167,28 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 time.sleep(1)
                 return False
 
+    def _process_frame(self, timestamp: pycyphal.transport.Timestamp, frame: UDPFrame) -> None:
+        if frame is None:
+            self._statistics.errors += 1
+            return
+        if not self.specifier.is_promiscuous:
+            if frame.source_node_id != self._specifier.remote_node_id:
+                return
+        self._statistics.frames += 1
+
+        source_node_id = frame.source_node_id
+        assert isinstance(source_node_id, int) and 0 <= source_node_id <= NODE_ID_MASK, "Internal protocol violation"
+
+        transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
+        if transfer is not None:
+            self._statistics.transfers += 1
+            self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
+            _logger.debug("%s: Received transfer: %s; current stats: %s", self, transfer, self._statistics)
+            try:
+                self._queue.put_nowait(transfer)
+            except asyncio.QueueFull:
+                self._statistics.drops += len(transfer.fragmented_payload)  # queue_overflows
+
     @property
     def transfer_id_timeout(self) -> float:
         return self._transfer_id_timeout
@@ -205,10 +229,6 @@ class UDPInputSession(pycyphal.transport.InputSession):
     def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def _process_frame(self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]) -> None:
-        raise NotImplementedError
-
 
 @dataclasses.dataclass
 class PromiscuousUDPInputSessionStatistics(UDPInputSessionStatistics):
@@ -233,6 +253,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         """
         self._statistics_impl = PromiscuousUDPInputSessionStatistics()
         self._reassemblers: typing.Dict[typing.Optional[int], TransferReassembler] = {}
+        assert specifier.is_promiscuous
         super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer)
 
     def sample_statistics(self) -> PromiscuousUDPInputSessionStatistics:
@@ -241,26 +262,6 @@ class PromiscuousUDPInputSession(UDPInputSession):
     @property
     def _statistics(self) -> PromiscuousUDPInputSessionStatistics:
         return self._statistics_impl
-
-    def _process_frame(self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]) -> None:
-        # Check if there is a frame (at all..)
-        if frame is None:
-            self._statistics.errors += 1
-            return
-        self._statistics.frames += 1
-
-        source_node_id = frame.source_node_id
-        assert isinstance(source_node_id, int) and 0 <= source_node_id <= NODE_ID_MASK, "Internal protocol violation"
-
-        transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
-        if transfer is not None:
-            self._statistics.transfers += 1
-            self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
-            _logger.debug("%s: Received transfer: %s; current stats: %s", self, transfer, self._statistics)
-            try:
-                self._queue.put_nowait(transfer)
-            except asyncio.QueueFull:
-                self._statistics.drops += len(transfer.fragmented_payload)  # queue_overflows
 
     def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
         assert isinstance(source_node_id, int) and source_node_id >= 0, "Internal protocol violation"
@@ -338,28 +339,6 @@ class SelectiveUDPInputSession(UDPInputSession):
     def _statistics(self) -> SelectiveUDPInputSessionStatistics:
         return self._statistics_impl
 
-    def _process_frame(self, timestamp: Timestamp, frame: typing.Optional[UDPFrame]) -> None:
-        if frame is None:
-            self._statistics.errors += 1
-            return
-        if frame.source_node_id != self._specifier.remote_node_id:
-            return
-        self._statistics.frames += 1
-
-        source_node_id = frame.source_node_id
-        assert isinstance(source_node_id, int) and 0 <= source_node_id <= 0xFFFF, "Internal protocol violation"
-
-        transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
-        if transfer is not None:
-            self._statistics.transfers += 1
-            self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
-            _logger.debug("%s: Received transfer: %s; current stats: %s", self, transfer, self._statistics)
-            try:
-                self._queue.put_nowait(transfer)
-            except asyncio.QueueFull:
-                self._statistics.drops += len(transfer.fragmented_payload)  # queue_overflows
-
     def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
-        # THIS SHOULD BE CHANGED?
         assert source_node_id == self._reassembler.source_node_id, "Internal protocol violation"
         return self._reassembler
