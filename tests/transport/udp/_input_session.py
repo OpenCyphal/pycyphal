@@ -142,7 +142,7 @@ async def _unittest_udp_input_session() -> None:
         b"".join(
             UDPFrame(
                 priority=Priority.LOW,
-                source_node_id=11,
+                source_node_id=11,  # different from renote_node_id selective session
                 destination_node_id=1,
                 data_specifier=MessageDataSpecifier(123),
                 transfer_id=0x_DEAD_BEEF_C0FFEE,
@@ -156,6 +156,8 @@ async def _unittest_udp_input_session() -> None:
 
     # promiscuous input session should receive the frame
     rx_data = await prom_in.receive(loop.time() + 1.0)
+
+    assert False
 
     assert rx_data.priority == Priority.LOW
     assert rx_data.source_node_id == 11
@@ -240,6 +242,7 @@ async def _unittest_udp_input_session() -> None:
             ).compile_header_and_payload()
         )
     )
+    assert False
 
     # check that promiscuous has received the frame
     rx_data = await prom_in.receive(loop.time() + 1.0)

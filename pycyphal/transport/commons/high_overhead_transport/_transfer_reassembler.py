@@ -284,8 +284,10 @@ def _validate_and_finalize_transfer(
     if len(frame_payloads) > 1:
         size_ok = sum(map(len, frame_payloads)) > _CRC_SIZE_BYTES
         crc_ok = TransferCRC.new(*frame_payloads).check_residue()
-        return package(_drop_crc(frame_payloads)) if size_ok and crc_ok else None
-    return package(frame_payloads)
+    else:
+        size_ok = len(frame_payloads[0]) > _CRC_SIZE_BYTES
+        crc_ok = TransferCRC.new(frame_payloads[0]).check_residue()
+    return package(_drop_crc(frame_payloads)) if size_ok and crc_ok else None
 
 
 def _drop_crc(fragments: typing.List[memoryview]) -> typing.Sequence[memoryview]:
