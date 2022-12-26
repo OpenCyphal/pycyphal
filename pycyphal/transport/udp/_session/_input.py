@@ -18,6 +18,7 @@ from pycyphal.transport.commons.high_overhead_transport import TransferReassembl
 from .._frame import UDPFrame
 
 _READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.
+NODE_ID_MASK = UDPFrame.NODE_ID_MASK
 # _READ_TIMEOUT = 1.0
 
 _logger = logging.getLogger(__name__)
@@ -231,7 +232,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         Do not call this directly, use the factory method instead.
         """
         self._statistics_impl = PromiscuousUDPInputSessionStatistics()
-        self._reassemblers: typing.Dict[int, TransferReassembler] = {}
+        self._reassemblers: typing.Dict[typing.Optional[int], TransferReassembler] = {}
         super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer)
 
     def sample_statistics(self) -> PromiscuousUDPInputSessionStatistics:
@@ -248,7 +249,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         self._statistics.frames += 1
 
         source_node_id = frame.source_node_id
-        assert isinstance(source_node_id, int) and 0 <= source_node_id <= 0xFFFF, "Internal protocol violation"
+        assert isinstance(source_node_id, int) and 0 <= source_node_id <= NODE_ID_MASK, "Internal protocol violation"
 
         transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
         if transfer is not None:
@@ -262,25 +263,30 @@ class PromiscuousUDPInputSession(UDPInputSession):
 
     def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
         assert isinstance(source_node_id, int) and source_node_id >= 0, "Internal protocol violation"
+        # QUESTION: THIS IS A MESSY SOLUTION DUE TO TransferReassembler NOT SUPPORTING SOURCE NODE-ID = None
+        if source_node_id == NODE_ID_MASK:
+            source_node_id_None = None
+        else:
+            source_node_id_None = source_node_id
         try:
             return self._reassemblers[source_node_id]
         except LookupError:
 
             def on_reassembly_error(error: TransferReassembler.Error) -> None:
                 self._statistics.errors += 1
-                d = self._statistics.reassembly_errors_per_source_node_id[source_node_id]
+                d = self._statistics.reassembly_errors_per_source_node_id[source_node_id_None]
                 try:
                     d[error] += 1
                 except LookupError:
                     d[error] = 1
 
-            self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id, {})
+            self._statistics.reassembly_errors_per_source_node_id.setdefault(source_node_id_None, {})
             reasm = TransferReassembler(
-                source_node_id=source_node_id,
+                source_node_id=source_node_id,  # <- THIS IS THE PROBLEM
                 extent_bytes=self._payload_metadata.extent_bytes,
                 on_error_callback=on_reassembly_error,
             )
-            self._reassemblers[source_node_id] = reasm
+            self._reassemblers[source_node_id_None] = reasm
             _logger.debug("%s: New %s (%d total)", self, reasm, len(self._reassemblers))
             return reasm
 

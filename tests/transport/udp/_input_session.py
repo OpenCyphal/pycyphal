@@ -257,7 +257,7 @@ async def _unittest_udp_input_session() -> None:
         payload_bytes=50,
         errors=0,
         drops=0,
-        reassembly_errors_per_source_node_id={11: {}, 10: {}, 65535: {}},  # should be none
+        reassembly_errors_per_source_node_id={11: {}, 10: {}, None: {}},  # should be none
     )
 
     # check that selective has not received anything
