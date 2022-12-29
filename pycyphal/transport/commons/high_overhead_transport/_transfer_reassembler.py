@@ -67,6 +67,11 @@ class TransferReassembler:
         Only single-frame transfers can have empty payload.
         """
 
+        # UNIFRAME_EMPTY_FRAME = enum.auto()
+        # """
+        # A frame without payload received as part of a single-frame transfer (not permitted by Specification).
+        # """
+
         MULTIFRAME_EOT_MISPLACED = enum.auto()
         """
         The end-of-transfer flag is set in a frame with index N,
@@ -127,6 +132,10 @@ class TransferReassembler:
         if not (frame.index == 0 and frame.end_of_transfer) and not frame.payload:
             self._on_error_callback(self.Error.MULTIFRAME_EMPTY_FRAME)
             return None
+        # # DROP EMPTY FRAMES FROM SINGLE-FRAME TRANSFERS.
+        # if frame.index == 0 and frame.end_of_transfer and len(frame.payload) == _CRC_SIZE_BYTES:
+        #     self._
+        #     return None
 
         # DETECT NEW TRANSFERS. Either a newer TID or TID-timeout is reached.
         if (
@@ -285,8 +294,11 @@ def _validate_and_finalize_transfer(
         size_ok = sum(map(len, frame_payloads)) > _CRC_SIZE_BYTES
         crc_ok = TransferCRC.new(*frame_payloads).check_residue()
     else:
-        size_ok = len(frame_payloads[0]) > _CRC_SIZE_BYTES
+        # if equals _CRC_SIZE_BYTES, then it is an empty single-frame transfer
+        size_ok = len(frame_payloads[0]) >= _CRC_SIZE_BYTES
         crc_ok = TransferCRC.new(frame_payloads[0]).check_residue()
+        # print
+        _logger.debug(f"size_ok: {size_ok}, crc_ok: {crc_ok}")
     return package(_drop_crc(frame_payloads)) if size_ok and crc_ok else None
 
 
@@ -361,14 +373,21 @@ def _unittest_transfer_reassembler() -> None:
     # Valid single-frame transfer.
     assert push(
         mk_ts(1000.0),
-        mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog),
+        mk_frame(
+            transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog + TransferCRC.new(hedgehog).value_as_bytes
+        ),
     ) == mk_transfer(timestamp=mk_ts(1000.0), transfer_id=0, fragmented_payload=[hedgehog])
 
     # Same transfer-ID; transfer ignored, no error registered.
     assert (
         push(
             mk_ts(1000.0),
-            mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog),
+            mk_frame(
+                transfer_id=0,
+                index=0,
+                end_of_transfer=True,
+                payload=hedgehog + TransferCRC.new(hedgehog).value_as_bytes,
+            ),
         )
         is None
     )
@@ -377,7 +396,12 @@ def _unittest_transfer_reassembler() -> None:
     assert (
         push(
             mk_ts(1000.0),
-            mk_frame(transfer_id=0, index=0, end_of_transfer=False, payload=hedgehog),
+            mk_frame(
+                transfer_id=0,
+                index=0,
+                end_of_transfer=False,
+                payload=hedgehog + TransferCRC.new(hedgehog).value_as_bytes,
+            ),
         )
         is None
     )
@@ -535,7 +559,9 @@ def _unittest_transfer_reassembler() -> None:
     # Transfer-ID timeout. No error registered.
     assert push(
         mk_ts(2000.0),
-        mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog),
+        mk_frame(
+            transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog + TransferCRC.new(hedgehog).value_as_bytes
+        ),
     ) == mk_transfer(timestamp=mk_ts(2000.0), transfer_id=0, fragmented_payload=[hedgehog])
     assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES: 0,
@@ -726,8 +752,10 @@ def _unittest_transfer_reassembler() -> None:
     # Valid single-frame transfer with no payload.
     assert push(
         mk_ts(6000.0),
-        mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=b""),
-    ) == mk_transfer(timestamp=mk_ts(6000.0), transfer_id=0, fragmented_payload=[b""])
+        mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=b"" + TransferCRC.new(b"").value_as_bytes),
+    ) == mk_transfer(
+        timestamp=mk_ts(6000.0), transfer_id=0, fragmented_payload=[]
+    )  # fragmented_payload = [b""]?
     assert error_counters == {
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
@@ -813,8 +841,8 @@ def _unittest_validate_and_finalize_transfer() -> None:
             source_node_id=src_nid,
         )
 
-    assert call([b""]) == mk_transfer([b""])
-    assert call([b"hello world"]) == mk_transfer([b"hello world"])
+    assert call([b"" + TransferCRC.new(b"").value_as_bytes]) == mk_transfer([]) # [b""]?
+    assert call([b"hello world" + TransferCRC.new(b"hello world").value_as_bytes]) == mk_transfer([b"hello world"])
     assert call(
         [b"hello world", b"0123456789", TransferCRC.new(b"hello world", b"0123456789").value_as_bytes]
     ) == mk_transfer([b"hello world", b"0123456789"])
