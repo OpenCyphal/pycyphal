@@ -241,13 +241,13 @@ class TransferReassembler:
     def construct_anonymous_transfer(timestamp: Timestamp, frame: Frame) -> typing.Optional[TransferFrom]:
         """
         A minor helper that validates whether the frame is a valid anonymous transfer (it is if the index
-        is zero and the end-of-transfer flag is set) and constructs a transfer instance if it is.
+        is zero, the end-of-transfer flag is set and crc checks out) and constructs a transfer instance if it is.
         Otherwise, returns None.
         Observe that this is a static method because anonymous transfers are fundamentally stateless.
         """
-        if frame.single_frame_transfer:
+        if frame.single_frame_transfer:  # checks index == 0 and end-of-transfer flag
             size_ok = frame.payload.nbytes > _CRC_SIZE_BYTES
-            crc_ok = TransferCRC.new(frame.payload).check_residue()
+            crc_ok = TransferCRC.new(frame.payload).check_residue()  # checks the CRC
             return (
                 TransferFrom(
                     timestamp=timestamp,
