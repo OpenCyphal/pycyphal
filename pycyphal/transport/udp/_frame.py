@@ -170,8 +170,6 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         except struct.error:
             return None
         if version == UDPFrame._VERSION:
-
-            end_of_transfer = bool(frame_index_eot & (UDPFrame.INDEX_MASK + 1))
             # chech the header CRC
             crc = pycyphal.transport.commons.crc.CRC16CCITT()
             crc.add(image[: UDPFrame._HEADER_FORMAT_NO_CRC.size])
@@ -371,6 +369,43 @@ def _unittest_udp_frame_compile() -> None:
         end_of_transfer=True,
         user_data=0,
         payload=memoryview(b"Well, I got here the same way the coin did."),
+    ).compile_header_and_payload()
+
+    # test frame used in  _input_session
+    test_frame = UDPFrame(
+        priority=Priority.SLOW,
+        source_node_id=10,
+        destination_node_id=2,
+        data_specifier=MessageDataSpecifier(subject_id=3),
+        transfer_id=0x_DEAD_BEEF_C0FFEE,
+        index=0x1,
+        end_of_transfer=True,
+        user_data=0,
+        payload=memoryview(b"Okay, I smashed your Corolla"),
+    ).compile_header_and_payload()
+    assert (
+        memoryview(
+            b"\x01"  # version
+            b"\x06"  # priority
+            b"\n\x00"  # source_node_id
+            b"\x02\x00"  # destination_node_id
+            b"\x03\x00"  # data_specifier_snm
+            b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
+            b"\x01\x00\x00\x80"  # index
+            b"\x00\x00"  # user_data
+            b"\xc8\x8f"  # header_crc
+        ),
+        memoryview(b"Okay, I smashed your Corolla"),
+    ) == UDPFrame(
+        priority=Priority.SLOW,
+        source_node_id=10,
+        destination_node_id=2,
+        data_specifier=MessageDataSpecifier(subject_id=3),
+        transfer_id=0x_DEAD_BEEF_C0FFEE,
+        index=0x1,
+        end_of_transfer=True,
+        user_data=0,
+        payload=memoryview(b"Okay, I smashed your Corolla"),
     ).compile_header_and_payload()
 
     # Multi-frame, not the end of the transfer. [service]

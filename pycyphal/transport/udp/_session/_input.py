@@ -168,6 +168,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 return False
 
     def _process_frame(self, timestamp: pycyphal.transport.Timestamp, frame: UDPFrame) -> None:
+
         if frame is None:
             self._statistics.errors += 1
             return
@@ -179,11 +180,15 @@ class UDPInputSession(pycyphal.transport.InputSession):
         source_node_id = frame.source_node_id
         assert isinstance(source_node_id, int) and 0 <= source_node_id <= NODE_ID_MASK, "Internal protocol violation"
 
-        # Anonymous frame - no reconstruction needed
+        # Anonymous - no reconstruction needed
         if source_node_id == NODE_ID_MASK:
             transfer = TransferReassembler.construct_anonymous_transfer(timestamp, frame)
+        # # Single-frame transfer - no reconstruction needed
+        # elif frame.single_frame_transfer:
+        #     transfer = TransferReassembler.construct_uniframe_transfer(timestamp, frame)
         # Otherwise, fetch the reassembler and process the frame
         else:
+            _logger.debug("%s: Processing frame: %s", self, frame)
             transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
 
         if transfer is not None:
