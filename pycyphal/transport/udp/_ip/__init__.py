@@ -10,7 +10,7 @@ from ._v4 import IPv4SocketFactory as IPv4SocketFactory
 from ._endpoint_mapping import SUBJECT_ID_MASK as SUBJECT_ID_MASK
 from ._endpoint_mapping import DESTINATION_NODE_ID_MASK as DESTINATION_NODE_ID_MASK
 from ._endpoint_mapping import SNM_BIT_MASK as SNM_BIT_MASK
-from ._endpoint_mapping import DESTINATION_PORT as DESTINATION_PORT
+from ._endpoint_mapping import CYPHAL_PORT as CYPHAL_PORT
 from ._endpoint_mapping import service_node_id_to_multicast_group as service_node_id_to_multicast_group
 from ._endpoint_mapping import service_multicast_group_to_node_id as service_multicast_group_to_node_id
 from ._endpoint_mapping import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group

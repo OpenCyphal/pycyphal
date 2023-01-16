@@ -15,7 +15,7 @@ from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, Unsup
 from pycyphal.transport import InvalidMediaConfigurationError
 from ._socket_factory import SocketFactory, Sniffer
 
-from ._endpoint_mapping import DESTINATION_PORT
+from ._endpoint_mapping import CYPHAL_PORT
 from ._endpoint_mapping import DESTINATION_NODE_ID_MASK
 from ._endpoint_mapping import MULTICAST_PREFIX
 from ._endpoint_mapping import service_node_id_to_multicast_group, message_data_specifier_to_multicast_group
@@ -71,12 +71,12 @@ class IPv4SocketFactory(SocketFactory):
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
             remote_ip = message_data_specifier_to_multicast_group(data_specifier)
-            remote_port = DESTINATION_PORT
+            remote_port = CYPHAL_PORT
         elif isinstance(data_specifier, ServiceDataSpecifier):
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
             remote_ip = service_node_id_to_multicast_group(remote_node_id)
-            remote_port = DESTINATION_PORT
+            remote_port = CYPHAL_PORT
         else:
             assert False
 
@@ -102,7 +102,7 @@ class IPv4SocketFactory(SocketFactory):
 
         if isinstance(data_specifier, MessageDataSpecifier):
             multicast_ip = message_data_specifier_to_multicast_group(data_specifier)
-            multicast_port = DESTINATION_PORT
+            multicast_port = CYPHAL_PORT
             if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
                 # Binding to the multicast group address is necessary on GNU/Linux: https://habr.com/ru/post/141021/
                 s.bind((str(multicast_ip), multicast_port))
@@ -127,7 +127,7 @@ class IPv4SocketFactory(SocketFactory):
                 raise  # pragma: no cover
         elif isinstance(data_specifier, ServiceDataSpecifier):
             multicast_ip = service_node_id_to_multicast_group(remote_node_id)
-            multicast_port = DESTINATION_PORT
+            multicast_port = CYPHAL_PORT
             if sys.platform.startswith("linux") or sys.platform.startswith("darwin"):
                 s.bind((str(multicast_ip), multicast_port))
             else:
@@ -180,35 +180,35 @@ def _unittest_udp_socket_factory_v4() -> None:
 
     msg_output_socket = sock_fac.make_output_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(456))
     assert "239.0.1.200" == msg_output_socket.getpeername()[0]
-    assert DESTINATION_PORT == msg_output_socket.getpeername()[1]
+    assert CYPHAL_PORT == msg_output_socket.getpeername()[1]
 
     srvc_output_socket = sock_fac.make_output_socket(
         remote_node_id=123, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.RESPONSE)
     )
     assert "239.1.0.123" == srvc_output_socket.getpeername()[0]
-    assert DESTINATION_PORT == srvc_output_socket.getpeername()[1]
+    assert CYPHAL_PORT == srvc_output_socket.getpeername()[1]
 
     broadcast_srvc_output_socket = sock_fac.make_output_socket(
         remote_node_id=None, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.RESPONSE)
     )
     assert "239.1.255.255" == broadcast_srvc_output_socket.getpeername()[0]
-    assert DESTINATION_PORT == broadcast_srvc_output_socket.getpeername()[1]
+    assert CYPHAL_PORT == broadcast_srvc_output_socket.getpeername()[1]
 
     msg_input_socket = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(456))
     assert "239.0.1.200" == msg_input_socket.getsockname()[0]
-    assert DESTINATION_PORT == msg_input_socket.getsockname()[1]
+    assert CYPHAL_PORT == msg_input_socket.getsockname()[1]
 
     srvc_input_socket = sock_fac.make_input_socket(
         remote_node_id=123, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.REQUEST)
     )
     assert "239.1.0.123" == srvc_input_socket.getsockname()[0]
-    assert DESTINATION_PORT == srvc_input_socket.getsockname()[1]
+    assert CYPHAL_PORT == srvc_input_socket.getsockname()[1]
 
     broadcast_srvc_input_socket = sock_fac.make_input_socket(
         remote_node_id=None, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.REQUEST)
     )
     assert "239.1.255.255" == broadcast_srvc_input_socket.getsockname()[0]
-    assert DESTINATION_PORT == broadcast_srvc_input_socket.getsockname()[1]
+    assert CYPHAL_PORT == broadcast_srvc_input_socket.getsockname()[1]
 
     sniffer = SnifferIPv4(handler=lambda x: None)
     assert "udp and src net 239.0.0.0/15" == sniffer._link_layer._filter_expr

@@ -12,7 +12,7 @@ from pycyphal.transport import OutputSessionSpecifier, MessageDataSpecifier, Pri
 from pycyphal.transport import PayloadMetadata, SessionStatistics, Feedback, Transfer
 from pycyphal.transport import Timestamp, ServiceDataSpecifier
 from pycyphal.transport.udp._session._output import UDPOutputSession, UDPFeedback
-from pycyphal.transport.udp._ip._endpoint_mapping import DESTINATION_PORT
+from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
 
 
 pytestmark = pytest.mark.asyncio
@@ -34,7 +34,7 @@ async def _unittest_udp_output_session() -> None:
         m = ts.monotonic_ns <= t.monotonic_ns <= now.system_ns
         return s and m
 
-    destination_endpoint = "127.0.0.1", DESTINATION_PORT
+    destination_endpoint = "127.0.0.1", CYPHAL_PORT
 
     sock_rx = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
     sock_rx.bind(destination_endpoint)

@@ -43,7 +43,7 @@ Cyphal/UDP uses this bit to isolate IP header version 0 traffic
 to the 239.0.0.0/10 scope but we can enable the 239.64.0.0/10 scope in the future.
 """
 
-DESTINATION_PORT = 9382
+CYPHAL_PORT = 9382
 """
 All Cyphal traffic uses this port.
 This is a temporary UDP port. We'll register an official one later.

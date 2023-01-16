@@ -11,7 +11,7 @@ from pycyphal.transport.udp import UDPFrame
 from pycyphal.transport.udp._session._input import PromiscuousUDPInputSession, SelectiveUDPInputSession
 from pycyphal.transport.udp._session._input import PromiscuousUDPInputSessionStatistics
 from pycyphal.transport.udp._session._input import SelectiveUDPInputSessionStatistics
-from pycyphal.transport.udp._ip._endpoint_mapping import DESTINATION_PORT
+from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
 from pycyphal.transport.udp._ip import IPv4SocketFactory
 
 from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
@@ -40,11 +40,11 @@ async def _unittest_udp_input_session_uniframe() -> None:
 
     msg_sock_rx_1 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
     assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
-    assert DESTINATION_PORT == msg_sock_rx_1.getsockname()[1]
+    assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     msg_sock_rx_2 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
     assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
-    assert DESTINATION_PORT == msg_sock_rx_1.getsockname()[1]
+    assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     # create promiscuous input session, uses msg_sock_rx_1
     prom_in = PromiscuousUDPInputSession(
@@ -351,11 +351,11 @@ async def _unittest_udp_input_session_multiframe() -> None:
 
     msg_sock_rx_1 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
     assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
-    assert DESTINATION_PORT == msg_sock_rx_1.getsockname()[1]
+    assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     msg_sock_rx_2 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
     assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
-    assert DESTINATION_PORT == msg_sock_rx_1.getsockname()[1]
+    assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     # create promiscuous input session, uses msg_sock_rx_1
     prom_in = PromiscuousUDPInputSession(

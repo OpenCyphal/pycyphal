@@ -12,7 +12,7 @@ import socket
 from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
 from pycyphal.transport import InvalidMediaConfigurationError, Timestamp
 from pycyphal.transport.udp._ip._socket_factory import SocketFactory
-from pycyphal.transport.udp._ip._endpoint_mapping import DESTINATION_PORT
+from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
 from pycyphal.transport.udp._ip._v4 import SnifferIPv4, IPv4SocketFactory
 from pycyphal.transport.udp._ip import LinkLayerCapture
 from pycyphal.transport.udp import IPPacket, LinkLayerPacket, UDPIPPacket
@@ -32,7 +32,7 @@ def _unittest_socket_factory() -> None:
     ds = ServiceDataSpecifier(100, ServiceDataSpecifier.Role.REQUEST)
     test_srv_i = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     test_srv_i.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    test_srv_i.bind(("239.1.1.200" * is_linux, DESTINATION_PORT))
+    test_srv_i.bind(("239.1.1.200" * is_linux, CYPHAL_PORT))
     test_srv_i.setsockopt(
         socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.1.1.200") + socket.inet_aton("127.0.0.1")
     )
@@ -48,7 +48,7 @@ def _unittest_socket_factory() -> None:
     test_srv_o.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
 
     srv_i = fac.make_input_socket(456, ds)
-    test_srv_o.sendto(b"Duck", ("239.1.1.200", DESTINATION_PORT))
+    test_srv_o.sendto(b"Duck", ("239.1.1.200", CYPHAL_PORT))
     time.sleep(1)
     rx = srv_i.recvfrom(1024)
     assert rx[0] == b"Duck"
@@ -60,7 +60,7 @@ def _unittest_socket_factory() -> None:
     # So we set up separate sockets for input and output.
     test_msg_i = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     test_msg_i.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    test_msg_i.bind(("239.0.2.100" * is_linux, DESTINATION_PORT))
+    test_msg_i.bind(("239.0.2.100" * is_linux, CYPHAL_PORT))
     test_msg_i.setsockopt(
         socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.2.100") + socket.inet_aton("127.0.0.1")
     )
@@ -76,7 +76,7 @@ def _unittest_socket_factory() -> None:
     test_msg_o.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
 
     msg_i = fac.make_input_socket(None, MessageDataSpecifier(612))
-    test_msg_o.sendto(b"Seagull", ("239.0.2.100", DESTINATION_PORT))
+    test_msg_o.sendto(b"Seagull", ("239.0.2.100", CYPHAL_PORT))
     time.sleep(1)
     rx = msg_i.recvfrom(1024)
     assert rx[0] == b"Seagull"
