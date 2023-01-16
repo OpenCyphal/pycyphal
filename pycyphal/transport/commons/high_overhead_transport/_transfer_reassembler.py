@@ -144,6 +144,12 @@ class TransferReassembler:
             frame.transfer_id > self._transfer_id
             or timestamp.monotonic - self._timestamp.monotonic > transfer_id_timeout
         ):
+            _logger.debug("-----! new transfer !-----")
+            _logger.debug("----- transfer_id=%d, frame.transfer_id=%d", self._transfer_id, frame.transfer_id)
+            _logger.debug(
+                "----- timestamp.monotonic - self._timestamp.monotonic > transfer_id_timeout=%s",
+                timestamp.monotonic - self._timestamp.monotonic > transfer_id_timeout,
+            )
             self._restart(
                 timestamp, frame.transfer_id, self.Error.MULTIFRAME_MISSING_FRAMES if self._payloads else None
             )
@@ -213,8 +219,8 @@ class TransferReassembler:
 
         self._restart(
             timestamp,
-            frame.transfer_id + 1,
-            # frame.transfer_id,
+            # frame.transfer_id + 1,
+            frame.transfer_id,
             error,
         )
         _logger.debug("Transfer reassembly completed: %s", result)

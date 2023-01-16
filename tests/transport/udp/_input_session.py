@@ -468,7 +468,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
                 source_node_id=10,
                 destination_node_id=2,
                 data_specifier=MessageDataSpecifier(123),
-                transfer_id=0x_DEAD_BEEF_C0FFEE,
+                transfer_id=0x_DEAD_BEEF_C0FFEE + 0x1,
                 index=0,
                 end_of_transfer=False,
                 user_data=0,
@@ -483,7 +483,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
                 source_node_id=10,
                 destination_node_id=2,
                 data_specifier=MessageDataSpecifier(123),
-                transfer_id=0x_DEAD_BEEF_C0FFEE,
+                transfer_id=0x_DEAD_BEEF_C0FFEE + 0x1,
                 index=1,
                 end_of_transfer=True,
                 user_data=0,
@@ -505,13 +505,27 @@ async def _unittest_udp_input_session_multiframe() -> None:
     assert prom_in.socket.fileno() > 0
     assert prom_in.sample_statistics() == PromiscuousUDPInputSessionStatistics(
         transfers=1,
-        frames=4,  # +2
+        frames=4,
         payload_bytes=54,
-        errors=0,
+        errors=1,
         drops=0,
         reassembly_errors_per_source_node_id={
-            10: {},  # This should show up as a reassembly error
+            10: {TransferReassembler.Error.MULTIFRAME_INTEGRITY_ERROR: 1},
         },
     )
 
-    assert False
+    rx_data = await sel_in.receive(loop.time() + 1.0)
+    assert rx_data is None
+    rx_data = await sel_in.receive(loop.time() + 1.0)
+    assert rx_data is None
+
+    assert not sel_finalized
+    assert sel_in.socket.fileno() > 0
+    assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
+        transfers=1,
+        frames=4,
+        payload_bytes=54,
+        errors=1,
+        drops=0,
+        reassembly_errors={TransferReassembler.Error.MULTIFRAME_INTEGRITY_ERROR: 1},
+    )
