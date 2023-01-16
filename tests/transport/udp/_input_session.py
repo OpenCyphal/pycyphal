@@ -417,8 +417,6 @@ async def _unittest_udp_input_session_multiframe() -> None:
         )
     )
     rx_data = await prom_in.receive(loop.time() + 1.0)
-    assert rx_data is None
-    rx_data = await prom_in.receive(loop.time() + 1.0)
 
     assert rx_data.priority == Priority.LOW
     assert rx_data.source_node_id == 10
@@ -439,8 +437,6 @@ async def _unittest_udp_input_session_multiframe() -> None:
         },
     )
 
-    rx_data = await sel_in.receive(loop.time() + 1.0)
-    assert rx_data is None
     rx_data = await sel_in.receive(loop.time() + 1.0)
 
     assert rx_data.priority == Priority.LOW
@@ -498,8 +494,6 @@ async def _unittest_udp_input_session_multiframe() -> None:
     )
     rx_data = await prom_in.receive(loop.time() + 1.0)
     assert rx_data is None
-    rx_data = await prom_in.receive(loop.time() + 1.0)
-    assert rx_data is None
 
     assert not prom_finalized
     assert prom_in.socket.fileno() > 0
@@ -514,8 +508,6 @@ async def _unittest_udp_input_session_multiframe() -> None:
         },
     )
 
-    rx_data = await sel_in.receive(loop.time() + 1.0)
-    assert rx_data is None
     rx_data = await sel_in.receive(loop.time() + 1.0)
     assert rx_data is None
 

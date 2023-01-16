@@ -99,9 +99,14 @@ class UDPInputSession(pycyphal.transport.InputSession):
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
 
-        consume_success = await self._consume(monotonic_deadline=monotonic_deadline)
+        transfer_ready = False
 
-        if consume_success:
+        consume_success = await self._consume(monotonic_deadline=monotonic_deadline)
+        while consume_success:  # if something was consumed, try to consume more
+            transfer_ready = True
+            consume_success = await self._consume(monotonic_deadline=monotonic_deadline)
+
+        if transfer_ready:
             _logger.debug("%s: Consumed a datagram", self)
             loop = asyncio.get_running_loop()
             try:
@@ -158,8 +163,10 @@ class UDPInputSession(pycyphal.transport.InputSession):
                         endpoint,
                         frame,
                     )
-                    loop.call_soon_threadsafe(self._process_frame, ts, frame)
+                    self._process_frame(ts, frame)
                     return True
+                else:
+                    return False  # there was no datagram to read
             except (asyncio.TimeoutError):
                 return False
             except Exception as ex:
