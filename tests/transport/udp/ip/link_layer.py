@@ -12,6 +12,8 @@ import socket
 import libpcap as pcap  # type: ignore
 from pycyphal.transport import Timestamp
 from pycyphal.transport.udp._ip._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket, _get_codecs
+from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
+from pycyphal.transport.udp._ip._v4 import IPv4SocketFactory
 
 
 def _unittest_encode_decode_null() -> None:
@@ -119,17 +121,18 @@ def _unittest_encode_decode_ethernet() -> None:
         == b"\x00\x00\x00\x00\x11\x22" + b"\x00\x00\x00\xAA\xBB\xCC" + b"\x86\xDD" + b"abcd"
     )
 
-    assert (
-        enc(
-            LinkLayerPacket(
-                protocol=AddressFamily.AF_IRDA,  # Unsupported encapsulation
-                source=mv(b"\x11\x22"),
-                destination=mv(b"\xAA\xBB\xCC"),
-                payload=mv(b"abcd"),
+    if sys.platform != "darwin":  # Darwin doesn't support AF_IRDA
+        assert (
+            enc(
+                LinkLayerPacket(
+                    protocol=AddressFamily.AF_IRDA,  # Unsupported encapsulation
+                    source=mv(b"\x11\x22"),
+                    destination=mv(b"\xAA\xBB\xCC"),
+                    payload=mv(b"abcd"),
+                )
             )
+            is None
         )
-        is None
-    )
 
     assert dec(mv(b"")) is None
     assert dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xAA\xBB\xCC\xDD\xEE\xFF" + b"\xAA\xAA" + b"abcdef")) is None
@@ -148,7 +151,6 @@ def _unittest_find_devices() -> None:
 
 
 def _unittest_sniff() -> None:
-    ## TODO: Remove unicast since no longer used
     ts_last = Timestamp.now()
     sniffs: typing.List[LinkLayerPacket] = []
 
@@ -160,12 +162,17 @@ def _unittest_sniff() -> None:
         ts_last = lls.timestamp
         sniffs.append(lls.packet)
 
-    filter_expression = "udp and src net 127.66.0.0/16"
+    is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
+
+    filter_expression = "udp and src net 239.0.0.0/17"
     sn = LinkLayerSniffer(filter_expression, callback)
     assert sn.is_stable
+    assert sn._filter_expr == "udp and src net 239.0.0.0/17"
 
+    # output socket
     a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    a.bind(("127.0.0.1", 0))  # Bind to a random port
+    a.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
     # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback
     # multicast group for which there are no receivers may fail with the following errors:
     #   OSError: [WinError 10051]   A socket operation was attempted to an unreachable network
@@ -174,33 +181,29 @@ def _unittest_sniff() -> None:
     sink = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     try:
         sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sink.bind(("", 4444))
+        sink.bind(("239.0.1.200" * is_linux, CYPHAL_PORT))
         sink.setsockopt(
             socket.IPPROTO_IP,
             socket.IP_ADD_MEMBERSHIP,
-            socket.inet_aton("239.66.1.200") + socket.inet_aton("127.42.0.123"),
+            socket.inet_aton("239.0.1.200") + socket.inet_aton("127.0.0.1"),
         )
 
-        b.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.42.0.123"))
-        b.bind(("127.42.0.123", 0))  # Some random noise on an adjacent subnet.
-        for i in range(10):
-            b.sendto(f"{i:04x}".encode(), ("127.66.1.200", 4444))  # Ignored unicast
-            b.sendto(f"{i:04x}".encode(), ("239.66.1.200", 4444))  # Ignored multicast
+        for i in range(10):  # Some random noise on an adjacent multicast group
+            a.sendto(f"{i:04x}".encode(), ("239.2.1.200", CYPHAL_PORT))  # Ignored multicast
             time.sleep(0.1)
 
         time.sleep(1)
         assert sniffs == []  # Make sure we are not picking up any noise.
 
-        a.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.66.33.44"))
-        a.bind(("127.66.33.44", 0))  # This one is on our local subnet, it should be heard.
-        a.sendto(b"\xAA\xAA\xAA\xAA", ("127.66.1.200", 4444))  # Accepted unicast inside subnet
-        a.sendto(b"\xBB\xBB\xBB\xBB", ("127.33.1.200", 4444))  # Accepted unicast outside subnet
-        a.sendto(b"\xCC\xCC\xCC\xCC", ("239.66.1.200", 4444))  # Accepted multicast
-
-        b.sendto(b"x", ("127.66.1.200", 4444))  # Ignored unicast
-        b.sendto(b"y", ("239.66.1.200", 4444))  # Ignored multicast
+        # a.bind(("127.0.0.1", 0))
+        a.sendto(b"\xAA\xAA\xAA\xAA", ("239.0.1.199", CYPHAL_PORT))  # Accepted multicast
+        a.sendto(b"\xBB\xBB\xBB\xBB", ("239.0.1.200", CYPHAL_PORT))  # Accepted multicast
+        a.sendto(b"\xCC\xCC\xCC\xCC", ("239.0.1.201", CYPHAL_PORT))  # Accepted multicast
 
         time.sleep(3)
+
+        rx = sink.recvfrom(1024)
+        assert rx[0] == b"\xBB\xBB\xBB\xBB"
 
         # Validate the received callbacks.
         print(sniffs[0])
@@ -215,14 +218,15 @@ def _unittest_sniff() -> None:
         sniffs.clear()
         sn.close()
 
+        # Test that the sniffer is terminated.
         time.sleep(1)
-        a.sendto(b"d", ("127.66.1.100", 4321))
+        a.sendto(b"d", ("239.0.1.200", CYPHAL_PORT))
         time.sleep(1)
         assert sniffs == []  # Should be terminated.
     finally:
         sn.close()
         a.close()
-        b.close()
+        # b.close()
         sink.close()
 
 

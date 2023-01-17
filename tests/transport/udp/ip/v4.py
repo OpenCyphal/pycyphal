@@ -124,8 +124,9 @@ def _unittest_sniffer() -> None:
         assert udp_pkt is not None
         return udp_pkt
 
-    # The sniffer is expected to drop all traffic except from 127.66.0.0/16
-    fac = SocketFactory.new(ip_address("127.66.1.200"))
+    is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
+
+    fac = SocketFactory.new(ip_address("127.0.0.1"))
 
     ts_last = Timestamp.now()
     sniffs: typing.List[LinkLayerCapture] = []
@@ -137,14 +138,15 @@ def _unittest_sniffer() -> None:
         assert ts_last.system_ns <= cap.timestamp.system_ns <= now.system_ns
         ts_last = cap.timestamp
         # Make sure that all traffic from foreign networks is filtered out by the sniffer.
-        assert (int(parse_ip(cap.packet).source_destination[0]) & 0x_FFFF_0000) == (
-            int(fac.local_ip_address) & 0x_FFFF_0000
+        assert (int(parse_ip(cap.packet).source_destination[0]) & 0x_FFFE_0000) == (
+            int(fac.local_ip_address) & 0x_FFFE_0000
         )
         sniffs.append(cap)
 
+    # The sniffer is expected to drop all traffic except from 239.0.0.0/17.
     sniffer = fac.make_sniffer(sniff_sniff)
     assert isinstance(sniffer, SnifferIPv4)
-    assert sniffer._link_layer._filter_expr == "udp and src net 127.64.0.0/14"
+    assert sniffer._link_layer._filter_expr == "udp and src net 239.0.0.0/17"
 
     # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback
     # multicast group for which there are no receivers may fail with the following errors:
@@ -153,33 +155,34 @@ def _unittest_sniffer() -> None:
     #                               troubleshooting, see Windows Help
     sink = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sink.bind(("", 4444))
+    sink.bind(("239.0.1.200" * is_linux, CYPHAL_PORT))
     sink.setsockopt(
-        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.66.1.200") + socket.inet_aton("127.42.0.123")
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.200") + socket.inet_aton("127.0.0.1")
     )
 
     outside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    outside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.42.0.123"))
-    outside.bind(("127.42.0.123", 0))  # Some random noise on an adjacent subnet.
+    outside.bind(("127.0.0.1", 0))
+    outside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
     for i in range(10):
-        outside.sendto(f"{i:04x}".encode(), ("127.66.1.200", 3333))  # Ignored unicast
-        outside.sendto(f"{i:04x}".encode(), ("239.66.1.200", 4444))  # Ignored multicast
+        outside.sendto(f"{i:04x}".encode(), ("239.2.1.200", CYPHAL_PORT))  # Ignored multicast
         time.sleep(0.1)
 
     time.sleep(1)
     assert sniffs == []  # Make sure we are not picking up any noise.
 
     inside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    inside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.66.33.44"))
-    inside.bind(("127.66.33.44", 0))  # This one is on our local subnet, it should be heard.
-    inside.sendto(b"\xAA\xAA\xAA\xAA", ("127.66.1.200", 1234))  # Accepted unicast inside subnet
-    inside.sendto(b"\xBB\xBB\xBB\xBB", ("127.33.1.200", 5678))  # Accepted unicast outside subnet
-    inside.sendto(b"\xCC\xCC\xCC\xCC", ("239.66.1.200", 4444))  # Accepted multicast
+    inside.bind(("127.0.0.1", 0))
+    inside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
+    inside.sendto(b"\xAA\xAA\xAA\xAA", ("239.0.1.199", CYPHAL_PORT))  # Accepted multicast
+    inside.sendto(b"\xBB\xBB\xBB\xBB", ("239.0.1.200", CYPHAL_PORT))  # Accepted multicast
+    inside.sendto(b"\xCC\xCC\xCC\xCC", ("239.0.1.201", CYPHAL_PORT))  # Accepted multicast
 
-    outside.sendto(b"x", ("127.66.1.200", 5555))  # Ignored unicast
-    outside.sendto(b"y", ("239.66.1.200", 4444))  # Ignored multicast
+    outside.sendto(b"y", ("239.2.1.200", CYPHAL_PORT))  # Ignored multicast
 
     time.sleep(3)
+
+    rx = sink.recvfrom(1024)
+    assert rx[0] == b"\xBB\xBB\xBB\xBB"
 
     # Validate the received callbacks.
     print(sniffs[0])
@@ -192,13 +195,13 @@ def _unittest_sniffer() -> None:
     assert len(sniffs[1].packet.source) == len(sniffs[1].packet.destination)
     assert len(sniffs[2].packet.source) == len(sniffs[2].packet.destination)
 
-    assert parse_ip(sniffs[0].packet).source_destination == (ip_address("127.66.33.44"), ip_address("127.66.1.200"))
-    assert parse_ip(sniffs[1].packet).source_destination == (ip_address("127.66.33.44"), ip_address("127.33.1.200"))
-    assert parse_ip(sniffs[2].packet).source_destination == (ip_address("127.66.33.44"), ip_address("239.66.1.200"))
+    assert parse_ip(sniffs[0].packet).source_destination == (ip_address("127.0.0.1"), ip_address("239.0.1.199"))
+    assert parse_ip(sniffs[1].packet).source_destination == (ip_address("127.0.0.1"), ip_address("239.0.1.200"))
+    assert parse_ip(sniffs[2].packet).source_destination == (ip_address("127.0.0.1"), ip_address("239.0.1.201"))
 
-    assert parse_udp(sniffs[0].packet).destination_port == 1234
-    assert parse_udp(sniffs[1].packet).destination_port == 5678
-    assert parse_udp(sniffs[2].packet).destination_port == 4444
+    assert parse_udp(sniffs[0].packet).destination_port == CYPHAL_PORT
+    assert parse_udp(sniffs[1].packet).destination_port == CYPHAL_PORT
+    assert parse_udp(sniffs[2].packet).destination_port == CYPHAL_PORT
 
     assert bytes(parse_udp(sniffs[0].packet).payload) == b"\xAA\xAA\xAA\xAA"
     assert bytes(parse_udp(sniffs[1].packet).payload) == b"\xBB\xBB\xBB\xBB"
@@ -209,7 +212,7 @@ def _unittest_sniffer() -> None:
     # CLOSE and make sure we don't get any additional callbacks.
     sniffer.close()
     time.sleep(2)
-    inside.sendto(b"d", ("127.66.1.100", SUBJECT_PORT))
+    inside.sendto(b"d", ("239.0.1.200", CYPHAL_PORT))
     time.sleep(1)
     assert sniffs == []  # Should be terminated.
 

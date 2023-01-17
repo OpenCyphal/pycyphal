@@ -150,12 +150,12 @@ class IPv4SocketFactory(SocketFactory):
         return s
 
     def make_sniffer(self, handler: typing.Callable[[LinkLayerCapture], None]) -> SnifferIPv4:
-        return SnifferIPv4(self._subnet_id, handler)
+        return SnifferIPv4(handler)
 
 
 class SnifferIPv4(Sniffer):
     def __init__(self, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
-        netmask_width = IPV4LENGTH - DESTINATION_NODE_ID_MASK.bit_length() - 1
+        netmask_width = IPV4LENGTH - DESTINATION_NODE_ID_MASK.bit_length() + 1  # +1 for the snm bit
         fix = MULTICAST_PREFIX
         subnet_ip = ipaddress.IPv4Address
         subnet_ip = subnet_ip(fix)
@@ -211,4 +211,4 @@ def _unittest_udp_socket_factory_v4() -> None:
     assert CYPHAL_PORT == broadcast_srvc_input_socket.getsockname()[1]
 
     sniffer = SnifferIPv4(handler=lambda x: None)
-    assert "udp and src net 239.0.0.0/15" == sniffer._link_layer._filter_expr
+    assert "udp and src net 239.0.0.0/17" == sniffer._link_layer._filter_expr
