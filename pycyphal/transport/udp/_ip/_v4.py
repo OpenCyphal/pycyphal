@@ -211,4 +211,4 @@ def _unittest_udp_socket_factory_v4() -> None:
     assert CYPHAL_PORT == broadcast_srvc_input_socket.getsockname()[1]
 
     sniffer = SnifferIPv4(handler=lambda x: None)
-    assert "udp and src net 239.0.0.0/17" == sniffer._link_layer._filter_expr
+    assert "udp and dst net 239.0.0.0/17" == sniffer._link_layer._filter_expr
