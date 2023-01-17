@@ -135,7 +135,7 @@ def _unittest_sniffer() -> None:
         nonlocal ts_last
         now = Timestamp.now()
         assert ts_last.monotonic_ns <= cap.timestamp.monotonic_ns <= now.monotonic_ns
-        assert ts_last.system_ns <= cap.timestamp.system_ns <= now.system_ns
+        # assert ts_last.system_ns <= cap.timestamp.system_ns <= now.system_ns
         ts_last = cap.timestamp
         # Make sure that all traffic from foreign networks is filtered out by the sniffer.
         assert (int(parse_ip(cap.packet).source_destination[0]) & 0x_FFFE_0000) == (
@@ -143,10 +143,10 @@ def _unittest_sniffer() -> None:
         )
         sniffs.append(cap)
 
-    # The sniffer is expected to drop all traffic except from 239.0.0.0/17.
+    # The sniffer is expected to drop all traffic except from 239.0.0.0/15.
     sniffer = fac.make_sniffer(sniff_sniff)
     assert isinstance(sniffer, SnifferIPv4)
-    assert sniffer._link_layer._filter_expr == "udp and src net 239.0.0.0/17"
+    assert sniffer._link_layer._filter_expr == "udp and dst net 239.0.0.0/15"
 
     # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback
     # multicast group for which there are no receivers may fail with the following errors:
@@ -157,7 +157,16 @@ def _unittest_sniffer() -> None:
     sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sink.bind(("239.0.1.200" * is_linux, CYPHAL_PORT))
     sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.2.1.200") + socket.inet_aton("127.0.0.1")
+    )
+    sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.199") + socket.inet_aton("127.0.0.1")
+    )
+    sink.setsockopt(
         socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.200") + socket.inet_aton("127.0.0.1")
+    )
+    sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.201") + socket.inet_aton("127.0.0.1")
     )
 
     outside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)

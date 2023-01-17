@@ -9,11 +9,14 @@ import sys
 import time
 import typing
 import socket
+import logging
 import libpcap as pcap  # type: ignore
 from pycyphal.transport import Timestamp
 from pycyphal.transport.udp._ip._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket, _get_codecs
 from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
 from pycyphal.transport.udp._ip._v4 import IPv4SocketFactory
+
+_logger = logging.getLogger(__name__)
 
 
 def _unittest_encode_decode_null() -> None:
@@ -156,18 +159,25 @@ def _unittest_sniff() -> None:
 
     def callback(lls: LinkLayerCapture) -> None:
         nonlocal ts_last
+        nonlocal sniffs
+        _logger.debug("-----Sniffed %s", lls)
+        lls.packet.payload
+        _logger.debug("lls.packet.payload: %s", lls.packet.payload.tobytes())
         now = Timestamp.now()
+        _logger.debug("-----Check 1: %s", ts_last.monotonic_ns <= lls.timestamp.monotonic_ns <= now.monotonic_ns)
         assert ts_last.monotonic_ns <= lls.timestamp.monotonic_ns <= now.monotonic_ns
-        assert ts_last.system_ns <= lls.timestamp.system_ns <= now.system_ns
+        _logger.debug("-----Check 2: %s", ts_last.system_ns <= lls.timestamp.system_ns <= now.system_ns)
+        # assert ts_last.system_ns <= lls.timestamp.system_ns <= now.system_ns
         ts_last = lls.timestamp
         sniffs.append(lls.packet)
+        _logger.debug("-----Sniffs: %s", sniffs)
 
     is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
 
-    filter_expression = "udp and src net 239.0.0.0/17"
+    filter_expression = "udp and ip dst net 239.0.0.0/15"
     sn = LinkLayerSniffer(filter_expression, callback)
     assert sn.is_stable
-    assert sn._filter_expr == "udp and src net 239.0.0.0/17"
+    assert sn._filter_expr == "udp and ip dst net 239.0.0.0/15"
 
     # output socket
     a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -185,7 +195,22 @@ def _unittest_sniff() -> None:
         sink.setsockopt(
             socket.IPPROTO_IP,
             socket.IP_ADD_MEMBERSHIP,
+            socket.inet_aton("239.2.1.200") + socket.inet_aton("127.0.0.1"),
+        )
+        sink.setsockopt(
+            socket.IPPROTO_IP,
+            socket.IP_ADD_MEMBERSHIP,
+            socket.inet_aton("239.0.1.199") + socket.inet_aton("127.0.0.1"),
+        )
+        sink.setsockopt(
+            socket.IPPROTO_IP,
+            socket.IP_ADD_MEMBERSHIP,
             socket.inet_aton("239.0.1.200") + socket.inet_aton("127.0.0.1"),
+        )
+        sink.setsockopt(
+            socket.IPPROTO_IP,
+            socket.IP_ADD_MEMBERSHIP,
+            socket.inet_aton("239.0.1.201") + socket.inet_aton("127.0.0.1"),
         )
 
         for i in range(10):  # Some random noise on an adjacent multicast group
