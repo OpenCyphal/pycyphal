@@ -354,7 +354,9 @@ def _validate_and_finalize_transfer(
         # if equals _CRC_SIZE_BYTES, then it is an empty single-frame transfer
         size_ok = len(frame_payloads[0]) >= _CRC_SIZE_BYTES
         crc_ok = TransferCRC.new(frame_payloads[0]).check_residue()
+        _logger.debug(f"frame_payloads: {frame_payloads[0].tobytes()}")
     _logger.debug(f"size_ok: {size_ok}, crc_ok: {crc_ok}")
+
     return package(_drop_crc(frame_payloads)) if size_ok and crc_ok else None
 
 

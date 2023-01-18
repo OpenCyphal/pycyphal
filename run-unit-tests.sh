@@ -29,5 +29,5 @@ pytest -k _unittest_udp_input_session_multiframe --pdb
 pytest -k _unittest_udp_output_session --pdb
 pytest -k _unittest_output_session_no_listener --pdb
 ## udp
-#pytest -k _unittest_udp_transport_ipv4 --pdb
-#pytest -k  _unittest_udp_transport_ipv4_capture --pdb
+pytest -k _unittest_udp_transport_ipv4 --pdb
+pytest -k  _unittest_udp_transport_ipv4_capture --pdb

@@ -369,7 +369,8 @@ Inheritance diagram
 """
 
 from ._udp import UDPTransport as UDPTransport
-from ._udp import UDPTransportStatistics as UDPTransportStatistics
+
+# from ._udp import UDPTransportStatistics as UDPTransportStatistics
 
 from ._session import UDPInputSession as UDPInputSession
 from ._session import PromiscuousUDPInputSession as PromiscuousUDPInputSession

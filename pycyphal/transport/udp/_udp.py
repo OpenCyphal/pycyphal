@@ -15,21 +15,21 @@ from ._session import UDPOutputSession
 from ._frame import UDPFrame
 from ._ip import SocketFactory, Sniffer, LinkLayerCapture
 
-from ._socket_reader import SocketReader, SocketReaderStatistics
+# from ._socket_reader import SocketReader, SocketReaderStatistics
 from ._tracer import UDPTracer, UDPCapture
 
 
 _logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
-class UDPTransportStatistics(pycyphal.transport.TransportStatistics):
-    received_datagrams: typing.Dict[pycyphal.transport.DataSpecifier, SocketReaderStatistics] = dataclasses.field(
-        default_factory=dict
-    )
-    """
-    Basic input session statistics: instances of :class:`SocketReaderStatistics` keyed by data specifier.
-    """
+# @dataclasses.dataclass
+# class UDPTransportStatistics(pycyphal.transport.TransportStatistics):
+#     received_datagrams: typing.Dict[pycyphal.transport.DataSpecifier, SocketReaderStatistics] = dataclasses.field(
+#         default_factory=dict
+#     )
+#     """
+#     Basic input session statistics: instances of :class:`SocketReaderStatistics` keyed by data specifier.
+#     """
 
 
 class UDPTransport(pycyphal.transport.Transport):
@@ -57,7 +57,7 @@ class UDPTransport(pycyphal.transport.Transport):
     def __init__(
         self,
         local_ip_addr: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
-        subnet_id: int,
+        # subnet_id: int,
         local_node_id: typing.Optional[int] = 0,
         *,  # ?
         mtu: int = min(VALID_MTU_RANGE),
@@ -126,9 +126,9 @@ class UDPTransport(pycyphal.transport.Transport):
 
         assert (local_node_id is None) or (0 <= local_node_id < 0xFFFF)
 
-        self._sock_factory = SocketFactory.new(local_ip_addr, subnet_id)
+        self._sock_factory = SocketFactory.new(local_ip_addr)
         self._anonymous = local_node_id is None
-        self._subnet_id = subnet_id
+        # self._subnet_id = subnet_id
         self._local_ip_addr = local_ip_addr
         self._local_node_id = local_node_id
         self._mtu = int(mtu)
@@ -142,7 +142,7 @@ class UDPTransport(pycyphal.transport.Transport):
         if not (low <= self._mtu <= high):
             raise ValueError(f"Invalid MTU: {self._mtu} bytes")
 
-        self._socket_reader_registry: typing.Dict[pycyphal.transport.DataSpecifier, SocketReader] = {}
+        # self._socket_reader_registry: typing.Dict[pycyphal.transport.DataSpecifier, SocketReader] = {}
         self._input_registry: typing.Dict[pycyphal.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pycyphal.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
@@ -150,7 +150,7 @@ class UDPTransport(pycyphal.transport.Transport):
         self._capture_handlers: typing.List[pycyphal.transport.CaptureCallback] = []
 
         self._closed = False
-        self._statistics = UDPTransportStatistics()
+        # self._statistics = UDPTransportStatistics()
 
         _logger.debug("%s: Initialized with local node-ID %s", self, self._local_node_id)
 
@@ -182,12 +182,30 @@ class UDPTransport(pycyphal.transport.Transport):
     ) -> UDPInputSession:
         self._ensure_not_closed()
         if specifier not in self._input_registry:
-            self._setup_input_session(specifier, payload_metadata)
-        assert specifier.data_specifier in self._socket_reader_registry
+
+            def finalizer() -> None:
+                del self._input_registry[specifier]
+
+            sock = self._sock_factory.make_input_socket(self.local_node_id, specifier.data_specifier)
+            if specifier.is_promiscuous:
+                self._input_registry[specifier] = PromiscuousUDPInputSession(
+                    specifier, payload_metadata, sock, finalizer
+                )
+            elif self.local_node_id != None:
+                self._input_registry[specifier] = SelectiveUDPInputSession(specifier, payload_metadata, sock, finalizer)
+            else:
+                raise ValueError("Cannot create input session")
         out = self._input_registry[specifier]
         assert isinstance(out, UDPInputSession)
         assert out.specifier == specifier
         return out
+        # if specifier not in self._input_registry:
+        #     self._setup_input_session(specifier, payload_metadata)
+        # assert specifier.data_specifier in self._socket_reader_registry
+        # out = self._input_registry[specifier]
+        # assert isinstance(out, UDPInputSession)
+        # assert out.specifier == specifier
+        # return out
 
     def get_output_session(
         self, specifier: pycyphal.transport.OutputSessionSpecifier, payload_metadata: pycyphal.transport.PayloadMetadata
@@ -219,8 +237,8 @@ class UDPTransport(pycyphal.transport.Transport):
         assert out.specifier == specifier
         return out
 
-    def sample_statistics(self) -> UDPTransportStatistics:
-        return copy.copy(self._statistics)
+    def sample_statistics(self) -> typing.Dict[pycyphal.transport.InputSessionSpecifier, UDPInputSession]:
+        return copy.copy(self._input_registry)
 
     @property
     def input_sessions(self) -> typing.Sequence[UDPInputSession]:
@@ -234,9 +252,9 @@ class UDPTransport(pycyphal.transport.Transport):
     def local_ip_addr(self) -> int:
         return self._sock_factory._local_ip_addr
 
-    @property
-    def subnet_id(self) -> int:
-        return self._sock_factory.subnet_id
+    # @property
+    # def subnet_id(self) -> int:
+    #     return self._sock_factory.subnet_id
 
     def begin_capture(self, handler: pycyphal.transport.CaptureCallback) -> None:
         """
@@ -361,7 +379,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
     def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
         return [repr(str(self.local_ip_addr))], {
-            "subnet_id": self._subnet_id,
+            # "subnet_id": self._subnet_id,
             "local_node_id": self.local_node_id,
             "service_transfer_multiplier": self._srv_multiplier,
             "mtu": self._mtu,

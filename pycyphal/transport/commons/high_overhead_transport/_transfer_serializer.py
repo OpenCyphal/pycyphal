@@ -62,9 +62,11 @@ def serialize_transfer(
     payload_length = sum(map(len, fragmented_payload))
     if payload_length <= max_frame_payload_bytes:  # SINGLE-FRAME TRANSFER
         payload = fragmented_payload[0] if len(fragmented_payload) == 1 else memoryview(b"".join(fragmented_payload))
-        assert len(payload) == payload_length
+        crc_bytes = TransferCRC.new(payload).value_as_bytes
+        payload_with_crc = memoryview(payload.tobytes() + crc_bytes)
+        assert len(payload_with_crc) == payload_length + 4
         assert max_frame_payload_bytes >= len(payload)
-        yield frame_factory(0, True, payload)
+        yield frame_factory(0, True, payload_with_crc)
     else:  # MULTI-FRAME TRANSFER
         crc_bytes = TransferCRC.new(*fragmented_payload).value_as_bytes
         refragmented = pycyphal.transport.commons.refragment(
