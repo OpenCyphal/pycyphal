@@ -109,7 +109,7 @@ class UDPIPPacket:
     _FORMAT = struct.Struct("!HH HH")
 
     def __post_init__(self) -> None:
-        if not (self.source_port == CYPHAL_PORT):
+        if not (0 <= self.source_port <= 0xFFFF):
             raise ValueError(f"Invalid source port: {self.source_port}")
         if not (self.destination_port == CYPHAL_PORT):
             raise ValueError(f"Invalid destination port: {self.destination_port}")
