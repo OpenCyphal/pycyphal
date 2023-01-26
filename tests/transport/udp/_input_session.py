@@ -309,7 +309,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
         drops=0,
         reassembly_errors_per_source_node_id={
             11: {},
-            10: {TransferReassembler.Error.UNIFRAME_INTEGRITY_ERROR: 1},
+            10: {TransferReassembler.Error.INTEGRITY_ERROR: 1},
         },
     )
 
@@ -319,7 +319,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
         payload_bytes=22,
         errors=3,  # error count increased
         drops=0,
-        reassembly_errors={TransferReassembler.Error.UNIFRAME_INTEGRITY_ERROR: 1},
+        reassembly_errors={TransferReassembler.Error.INTEGRITY_ERROR: 1},
     )
 
     # 7. CLOSE THE PROMISCUOUS INPUT SESSION
@@ -504,7 +504,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
         errors=1,
         drops=0,
         reassembly_errors_per_source_node_id={
-            10: {TransferReassembler.Error.MULTIFRAME_INTEGRITY_ERROR: 1},
+            10: {TransferReassembler.Error.INTEGRITY_ERROR: 1},
         },
     )
 
@@ -519,5 +519,5 @@ async def _unittest_udp_input_session_multiframe() -> None:
         payload_bytes=54,
         errors=1,
         drops=0,
-        reassembly_errors={TransferReassembler.Error.MULTIFRAME_INTEGRITY_ERROR: 1},
+        reassembly_errors={TransferReassembler.Error.INTEGRITY_ERROR: 1},
     )

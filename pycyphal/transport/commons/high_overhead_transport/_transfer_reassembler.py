@@ -9,7 +9,6 @@ import logging
 import pycyphal
 from pycyphal.transport import Timestamp, Priority, TransferFrom
 
-# from pycyphal.transport.udp._frame import UDPFrame
 from ._frame import Frame
 from ._common import TransferCRC
 
@@ -53,19 +52,14 @@ class TransferReassembler:
         and a verbose report is dumped into the log at the DEBUG level.
         """
 
+        INTEGRITY_ERROR = enum.auto()
+        """
+        A transfer payload did not pass integrity checks. Transfer discarded.
+        """
+
         MULTIFRAME_MISSING_FRAMES = enum.auto()
         """
         New transfer started before the old one could be completed. Old transfer discarded.
-        """
-
-        MULTIFRAME_INTEGRITY_ERROR = enum.auto()
-        """
-        A reassembled multi-frame transfer payload did not pass integrity checks. Transfer discarded.
-        """
-
-        UNIFRAME_INTEGRITY_ERROR = enum.auto()
-        """
-        A reassembled multi-frame transfer payload did not pass integrity checks. Transfer discarded.
         """
 
         MULTIFRAME_EMPTY_FRAME = enum.auto()
@@ -134,10 +128,6 @@ class TransferReassembler:
         if not (frame.index == 0 and frame.end_of_transfer) and not frame.payload:
             self._on_error_callback(self.Error.MULTIFRAME_EMPTY_FRAME)
             return None
-        # # DROP EMPTY FRAMES FROM SINGLE-FRAME TRANSFERS.
-        # if frame.index == 0 and frame.end_of_transfer and len(frame.payload) == _CRC_SIZE_BYTES:
-        #     self._
-        #     return None
 
         # DETECT NEW TRANSFERS. Either a newer TID or TID-timeout is reached.
         if (
@@ -208,18 +198,13 @@ class TransferReassembler:
             source_node_id=self._source_node_id,
         )
 
-        # determine (possible) error
         error = None
         if result is None:
             assert len(self._payloads) >= 1
-            if len(self._payloads) > 1:
-                error = self.Error.MULTIFRAME_INTEGRITY_ERROR
-            elif len(self._payloads) == 1:
-                error = self.Error.UNIFRAME_INTEGRITY_ERROR
+            error = self.Error.INTEGRITY_ERROR
 
         self._restart(
             timestamp,
-            # frame.transfer_id + 1,
             frame.transfer_id,
             error,
         )
@@ -285,9 +270,9 @@ class TransferReassembler:
         Otherwise, returns None.
         Observe that this is a static method because anonymous transfers are fundamentally stateless.
         """
-        if frame.single_frame_transfer:  # checks index == 0 and end-of-transfer flag
+        if frame.single_frame_transfer:
             size_ok = frame.payload.nbytes > _CRC_SIZE_BYTES
-            crc_ok = TransferCRC.new(frame.payload).check_residue()  # checks the CRC
+            crc_ok = TransferCRC.new(frame.payload).check_residue()
             return (
                 TransferFrom(
                     timestamp=timestamp,
@@ -295,30 +280,6 @@ class TransferReassembler:
                     transfer_id=frame.transfer_id,
                     fragmented_payload=_drop_crc([frame.payload]),
                     source_node_id=None,
-                )
-                if size_ok and crc_ok
-                else None
-            )
-        return None
-
-    @staticmethod
-    def construct_uniframe_transfer(timestamp: Timestamp, frame: UDPFrame) -> typing.Optional[TransferFrom]:
-        """
-        A minor helper that validates whether the frame is a valid anonymous transfer (it is if the index
-        is zero, the end-of-transfer flag is set and crc checks out) and constructs a transfer instance if it is.
-        Otherwise, returns None.
-        Observe that this is a static method because anonymous transfers are fundamentally stateless.
-        """
-        if frame.single_frame_transfer:  # checks index == 0 and end-of-transfer flag
-            size_ok = frame.payload.nbytes > _CRC_SIZE_BYTES
-            crc_ok = TransferCRC.new(frame.payload).check_residue()  # checks the CRC
-            return (
-                TransferFrom(
-                    timestamp=timestamp,
-                    priority=frame.priority,
-                    transfer_id=frame.transfer_id,
-                    fragmented_payload=_drop_crc([frame.payload]),
-                    source_node_id=frame.source_node_id,
                 )
                 if size_ok and crc_ok
                 else None
@@ -354,8 +315,6 @@ def _validate_and_finalize_transfer(
         # if equals _CRC_SIZE_BYTES, then it is an empty single-frame transfer
         size_ok = len(frame_payloads[0]) >= _CRC_SIZE_BYTES
         crc_ok = TransferCRC.new(frame_payloads[0]).check_residue()
-        _logger.debug(f"frame_payloads: {frame_payloads[0].tobytes()}")
-    _logger.debug(f"size_ok: {size_ok}, crc_ok: {crc_ok}")
 
     return package(_drop_crc(frame_payloads)) if size_ok and crc_ok else None
 
