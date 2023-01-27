@@ -13,6 +13,9 @@ from pycyphal.transport import AlienTransfer, TransferFrom, Timestamp
 from pycyphal.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
 from ._frame import SerialFrame
 from ._stream_parser import StreamParser
+from pycyphal.transport.commons.crc import CRC32C
+
+TransferCRC = CRC32C
 
 
 _logger = logging.getLogger(__name__)
@@ -201,7 +204,7 @@ def _unittest_serial_tracer() -> None:
         transfer_id=1234567890,
         index=0,
         end_of_transfer=True,
-        payload=memoryview(b"abc"),
+        payload=memoryview(b"abc" + TransferCRC.new(b"abc").value_as_bytes),
         source_node_id=1111,
         destination_node_id=None,
         data_specifier=MessageDataSpecifier(6666),
@@ -231,7 +234,7 @@ def _unittest_serial_tracer() -> None:
         transfer_id=1234567890,
         index=0,
         end_of_transfer=True,
-        payload=memoryview(b"abc"),
+        payload=memoryview(b"abc" + TransferCRC.new(b"abc").value_as_bytes),
         source_node_id=None,
         destination_node_id=None,
         data_specifier=MessageDataSpecifier(6666),
@@ -272,7 +275,7 @@ def _unittest_serial_tracer() -> None:
         ).compile_into(bytearray(10_000))
     )
     assert isinstance(trace, SerialErrorTrace)
-    assert trace.error == TransferReassembler.Error.MULTIFRAME_INTEGRITY_ERROR
+    assert trace.error == TransferReassembler.Error.INTEGRITY_ERROR
 
     with raises(ValueError, match=".*delimiters.*"):
         rx(b"".join([buf, buf]))
