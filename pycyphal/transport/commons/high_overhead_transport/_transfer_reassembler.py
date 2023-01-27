@@ -164,6 +164,10 @@ class TransferReassembler:
             self._restart(timestamp, frame.transfer_id + 1, self.Error.MULTIFRAME_EOT_MISPLACED)
             return None
 
+        # DROP FRAMES WITH DUPLICATE INDEXES. This is not an error.
+        # if frame.index < len(self._payloads) and self._payloads[frame.index]:
+        #     return None
+
         # ACCEPT THE PAYLOAD. Duplicates are accepted too, assuming they carry the same payload.
         # Implicit truncation is implemented by not limiting the maximum payload size.
         # Real truncation is hard to implement if frames are delivered out-of-order, although it's not impossible:
@@ -176,7 +180,7 @@ class TransferReassembler:
 
         # CHECK IF ALL FRAMES ARE RECEIVED. If not, simply wait for next frame.
         # Single-frame transfers with empty payload are legal.
-        if self._max_index is None or (self._max_index > 0 and not all(self._payloads)):  # QUESTION: Why all() here?
+        if self._max_index is None or (self._max_index > 0 and not all(self._payloads)):
             _logger.debug("----- waiting for more frames -----")
             _logger.debug("----- max_index: %s", self._max_index)
             _logger.debug("----- not all(self._payloads): %s", not all(self._payloads))
@@ -198,15 +202,10 @@ class TransferReassembler:
             source_node_id=self._source_node_id,
         )
 
-        error = None
-        if result is None:
-            assert len(self._payloads) >= 1
-            error = self.Error.INTEGRITY_ERROR
-
         self._restart(
             timestamp,
-            frame.transfer_id,
-            error,
+            frame.transfer_id + 1,
+            self.Error.INTEGRITY_ERROR if result is None else None,
         )
         _logger.debug("Transfer reassembly completed: %s", result)
         if result is not None:
@@ -221,6 +220,12 @@ class TransferReassembler:
                     fragmented_payload=result.fragmented_payload[:-1],
                     source_node_id=result.source_node_id,
                 )
+        # print internal state
+        _logger.debug("----- internal state -----")
+        _logger.debug("transfer_id: %s", self._transfer_id)
+        _logger.debug("max_index: %s", self._max_index)
+        _logger.debug("payloads: %s", self._payloads)
+        _logger.debug("----- internal state -----")
         return result
 
     @property
@@ -581,9 +586,9 @@ def _unittest_transfer_reassembler() -> None:
         ),
     ) == mk_transfer(timestamp=mk_ts(2000.0), transfer_id=0, fragmented_payload=[hedgehog])
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 0,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -604,9 +609,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 1,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -622,9 +627,9 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=3, index=0, end_of_transfer=False, payload=horse[:50]),
     ) == mk_transfer(timestamp=mk_ts(3000.0), transfer_id=3, fragmented_payload=[horse[:50], horse[50:]])
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 1,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -645,9 +650,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -663,9 +668,9 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=3, index=0, end_of_transfer=False, payload=horse[:50]),
     ) == mk_transfer(timestamp=mk_ts(4000.0), transfer_id=3, fragmented_payload=[horse[:50], horse[50:]])
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -695,9 +700,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -727,9 +732,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -759,9 +764,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 1,
     }
@@ -774,9 +779,9 @@ def _unittest_transfer_reassembler() -> None:
         timestamp=mk_ts(6000.0), transfer_id=0, fragmented_payload=[]
     )  # fragmented_payload = [b""]?
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 1,
     }

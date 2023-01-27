@@ -248,7 +248,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics()[
         server_listener_specifier
     ].sample_statistics() == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=6, payload_bytes=7184, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=1, frames=6, payload_bytes=3592, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
     # assert tr.sample_statistics().received_datagrams[
     #     ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
