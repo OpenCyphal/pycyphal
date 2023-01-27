@@ -317,7 +317,7 @@ def _unittest_frame_parse() -> None:
     header += get_crc(header)
     assert len(header) == 32
     payload = b"Squeeze mayonnaise onto a hamster"
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + payload + get_crc(payload)))
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + payload))
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=123,
@@ -364,7 +364,7 @@ def _unittest_frame_parse() -> None:
     )
     header += get_crc(header)
     assert len(header) == 32
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b"")))
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header))
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
@@ -411,7 +411,7 @@ def _unittest_frame_parse() -> None:
     )
     header += get_crc(header)
     assert len(header) == 32
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b"")))
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header))
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
@@ -424,10 +424,10 @@ def _unittest_frame_parse() -> None:
     )
 
     # Too short
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(payload))) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:])) is None
 
-    # Bad CRC
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + payload + b"1234")) is None
+    # Bad payload CRC -> Concern moved to TransferReassembler
+    # assert SerialFrame.parse_from_unescaped_image(memoryview(header + payload + b"1234")) is None
 
     # Bad version
     header = bytes(
@@ -464,7 +464,7 @@ def _unittest_frame_parse() -> None:
     )
     header += get_crc(header)
     assert len(header) == 32
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b""))) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header)) is None
 
     # Bad fields
     header = bytes(
@@ -501,7 +501,7 @@ def _unittest_frame_parse() -> None:
     )
     header += get_crc(header)
     assert len(header) == 32
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b""))) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header)) is None
 
 
 def _unittest_frame_check() -> None:
