@@ -293,6 +293,8 @@ def _unittest_udp_tracer() -> None:
     assert trace.transfer.metadata.session_specifier.data_specifier == ds
     assert trace.transfer.fragmented_payload == [memoryview(b"Hello world!")]
 
+    assert False
+
     # ANOTHER TRANSPORT, IGNORED
     assert None is tr.update(pycyphal.transport.Capture(ts))
 

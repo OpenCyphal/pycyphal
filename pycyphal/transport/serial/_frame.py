@@ -37,7 +37,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
 
     FRAME_DELIMITER_BYTE = 0x00
 
-    # NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_SIZE + _CRC_SIZE_BYTES
+    NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_SIZE
 
     source_node_id: typing.Optional[int]
     destination_node_id: typing.Optional[int]
@@ -88,13 +88,13 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         header += pycyphal.transport.commons.crc.CRC32C.new(header).value_as_bytes
         assert len(header) == _HEADER_SIZE
 
-        payload_crc_bytes = pycyphal.transport.commons.crc.CRC32C.new(self.payload).value_as_bytes
+        # payload_crc_bytes = pycyphal.transport.commons.crc.CRC32C.new(self.payload).value_as_bytes
 
         out_buffer[0] = self.FRAME_DELIMITER_BYTE
         next_byte_index = 1
 
         # noinspection PyTypeChecker
-        packet_bytes = header + self.payload + payload_crc_bytes
+        packet_bytes = header + self.payload  # + payload_crc_bytes
         encoded_image = cobs.encode(packet_bytes)
         # place in the buffer and update next_byte_index:
         out_buffer[next_byte_index : next_byte_index + len(encoded_image)] = encoded_image
@@ -103,7 +103,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         out_buffer[next_byte_index] = self.FRAME_DELIMITER_BYTE
         next_byte_index += 1
 
-        assert (next_byte_index - 2) >= (len(header) + len(self.payload) + len(payload_crc_bytes))
+        assert (next_byte_index - 2) >= (len(header) + len(self.payload))  # + len(payload_crc_bytes))
         return memoryview(out_buffer)[:next_byte_index]
 
     @staticmethod
@@ -208,7 +208,7 @@ def _unittest_serial_frame_compile_message() -> None:
         transfer_id=1234567890123456789,
         index=1234567,
         end_of_transfer=True,
-        payload=memoryview(b"abcd\x00ef\x00"),
+        payload=memoryview(b"Who will survive in America?"),
     )
 
     buffer = bytearray(0 for _ in range(1000))
@@ -234,8 +234,7 @@ def _unittest_serial_frame_compile_message() -> None:
     # Header CRC here
 
     # Payload validation
-    assert segment[32:40] == b"abcd\x00ef\x00"
-    assert segment[40:] == pycyphal.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
+    assert segment[32:] == b"Who will survive in America?"
 
 
 def _unittest_serial_frame_compile_service() -> None:
@@ -272,8 +271,8 @@ def _unittest_serial_frame_compile_service() -> None:
     assert segment[24:28] == (1234567).to_bytes(4, "little")
     # Header CRC here
 
-    # CRC validation
-    assert segment[32:] == pycyphal.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
+    # Payload validation
+    assert segment[32:] == b""
 
 
 def _unittest_serial_frame_parse() -> None:
