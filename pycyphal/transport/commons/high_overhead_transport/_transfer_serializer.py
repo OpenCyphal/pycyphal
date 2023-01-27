@@ -87,16 +87,19 @@ def _unittest_serialize_transfer() -> None:
             priority=priority, transfer_id=transfer_id, index=index, end_of_transfer=end_of_transfer, payload=payload
         )
 
+    hello_world_crc = pycyphal.transport.commons.crc.CRC32C()
+    hello_world_crc.add(b"hello world")
+
+    empty_crc = pycyphal.transport.commons.crc.CRC32C()
+    empty_crc.add(b"")
+
     assert [
-        construct_frame(0, True, memoryview(b"hello world")),
+        construct_frame(0, True, memoryview(b"hello world" + hello_world_crc.value_as_bytes)),
     ] == list(serialize_transfer([memoryview(b"hello"), memoryview(b" "), memoryview(b"world")], 100, construct_frame))
 
     assert [
-        construct_frame(0, True, memoryview(b"")),
+        construct_frame(0, True, memoryview(b"" + empty_crc.value_as_bytes)),
     ] == list(serialize_transfer([], 100, construct_frame))
-
-    hello_world_crc = pycyphal.transport.commons.crc.CRC32C()
-    hello_world_crc.add(b"hello world")
 
     assert [
         construct_frame(0, False, memoryview(b"hello")),
