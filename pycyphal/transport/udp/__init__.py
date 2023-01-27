@@ -308,14 +308,12 @@ Create two transport instances -- one with a node-ID, one anonymous:
 >>> import asyncio
 >>> import pycyphal
 >>> import pycyphal.transport.udp
->>> tr_0 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', subnet_id=13, local_node_id=10)
->>> tr_0.subnet_id
-13
+>>> tr_0 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', local_node_id=10)
 >>> tr_0.local_ip_addr
 IPv4Address('127.0.0.1')
->>> tr_0.local_node_id # Anonymous is only for listening.
+>>> tr_0.local_node_id
 10
->>> tr_1 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', subnet_id=13, local_node_id=None)
+>>> tr_1 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', local_node_id=None) # Anonymous is only for listening.
 >>> tr_1.local_node_id is None
 True
 
@@ -325,7 +323,7 @@ Create an output and an input session:
 >>> ds = pycyphal.transport.MessageDataSpecifier(42)
 >>> pub = tr_0.get_output_session(pycyphal.transport.OutputSessionSpecifier(ds, None), pm)
 >>> pub.socket.getpeername()   # UDP port is fixed, and the multicast group address is computed as shown above.
-('239.52.0.42', 16383)
+('239.0.0.42', 9382)
 >>> sub = tr_1.get_input_session(pycyphal.transport.InputSessionSpecifier(ds, None), pm)
 
 Send a transfer from one instance to the other:

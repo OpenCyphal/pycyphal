@@ -105,11 +105,11 @@ def service_multicast_group_to_node_id(multicast_group: IPAddress) -> typing.Opt
     - the multicast group is not valid per the current Cyphal/UDP specification.
 
     >>> from ipaddress import ip_address
-    >>> service_multicast_group_to_node_id(13, ip_address('239.1.0.123'))
+    >>> service_multicast_group_to_node_id(ip_address('239.1.0.123'))
     123
-    >>> service_multicast_group_to_node_id(13, ip_address('239.1.1.200'))
+    >>> service_multicast_group_to_node_id(ip_address('239.1.1.200'))
     456
-    >>> service_multicast_group_to_node_id(13, ip_address('239.52.255.255')) # -> None (invalid)
+    >>> service_multicast_group_to_node_id(ip_address('239.52.255.255')) # -> None (invalid)
     """
 
     candidate = int(multicast_group) & DESTINATION_NODE_ID_MASK
