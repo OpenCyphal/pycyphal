@@ -196,7 +196,7 @@ There are two places:
     >>> os.environ["UAVCAN__NODE__ID"]                   = "42"
     >>> os.environ["UAVCAN__PUB__MEASURED_VOLTAGE__ID"]  = "6543"
     >>> os.environ["UAVCAN__SUB__OPTIONAL_PORT__ID"]     = "65535"
-    >>> os.environ["UAVCAN__UDP__IFACE"]                 = "127.63.0.0"
+    >>> os.environ["UAVCAN__UDP__IFACE"]                 = "127.0.0.1"
     >>> os.environ["UAVCAN__SERIAL__IFACE"]              = "socket://127.0.0.1:50905"
     >>> os.environ["UAVCAN__DIAGNOSTIC__SEVERITY"]       = "3.1"
     >>> os.environ["M__MOTOR__INDUCTANCE_DQ"]            = "0.12 0.13"
@@ -208,7 +208,7 @@ There are two places:
 UAVCAN__NODE__ID                         42
 UAVCAN__PUB__MEASURED_VOLTAGE__ID        6543
 UAVCAN__SUB__OPTIONAL_PORT__ID           65535
-UAVCAN__UDP__IFACE                       127.63.0.0
+UAVCAN__UDP__IFACE                       127.0.0.1
 UAVCAN__SERIAL__IFACE                    socket://127.0.0.1:50905
 UAVCAN__DIAGNOSTIC__SEVERITY             3.1
 M__MOTOR__INDUCTANCE_DQ                  0.12 0.13
@@ -216,7 +216,7 @@ M__MOTOR__INDUCTANCE_DQ                  0.12 0.13
 >>> node.id
 42
 >>> node.presentation.transport     # Heterogeneously redundant transport: UDP+Serial, as specified in env vars.
-RedundantTransport(UDPTransport('127.63.0.42', ...), SerialTransport('socket://127.0.0.1:50905', ...))
+RedundantTransport(UDPTransport('127.0.0.1', local_node_id=42, ...), SerialTransport('socket://127.0.0.1:50905', ...))
 >>> pub_voltage = node.make_publisher(uavcan.si.unit.voltage.Scalar_1, "measured_voltage")
 >>> pub_voltage.port_id
 6543

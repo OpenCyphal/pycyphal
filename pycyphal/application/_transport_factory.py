@@ -154,16 +154,16 @@ def make_transport(
 
     >>> from pycyphal.application.register import ValueProxy, Natural16, Natural32
     >>> reg = {
-    ...     "uavcan.udp.iface": ValueProxy("127.99.0.0"),
+    ...     "uavcan.udp.iface": ValueProxy("127.0.0.1"),
     ...     "uavcan.node.id": ValueProxy(Natural16([257])),
     ... }
     >>> tr = make_transport(reg)
     >>> tr
-    UDPTransport('127.99.1.1', local_node_id=257, ...)
+    UDPTransport('127.0.0.1', local_node_id=257, ...)
     >>> tr.close()
     >>> tr = make_transport(reg, reconfigurable=True)                   # Same but reconfigurable.
     >>> tr                                                              # Wrapped into RedundantTransport.
-    RedundantTransport(UDPTransport('127.99.1.1', local_node_id=257, ...))
+    RedundantTransport(UDPTransport('127.0.0.1', local_node_id=257, ...))
     >>> tr.close()
 
     >>> int(reg["uavcan.udp.mtu"])      # Defaults created automatically to expose all configurables.
