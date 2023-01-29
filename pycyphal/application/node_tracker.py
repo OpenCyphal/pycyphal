@@ -65,7 +65,7 @@ class NodeTracker:
     The collected data can also be accessed by direct polling synchronously.
     """
 
-    GET_INFO_PRIORITY = pycyphal.transport.Priority.OPTIONAL
+    DEFAULT_GET_INFO_PRIORITY = pycyphal.transport.Priority.OPTIONAL
     """
     The logic tolerates the loss of responses, hence the optional priority level.
     This way, we can retry without affecting high-priority communications.
@@ -93,6 +93,7 @@ class NodeTracker:
 
         self._update_handlers: List[UpdateHandler] = []
 
+        self._get_info_priority = self.DEFAULT_GET_INFO_PRIORITY
         self._get_info_timeout = self.DEFAULT_GET_INFO_TIMEOUT
         self._get_info_attempts = self.DEFAULT_GET_INFO_ATTEMPTS
 
@@ -122,6 +123,18 @@ class NodeTracker:
     @property
     def node(self) -> pycyphal.application.Node:
         return self._node
+
+    @property
+    def get_info_priority(self) -> pycyphal.transport.Priority:
+        """
+        Allows the user to override the default ``uavcan.node.GetInfo`` request priority.
+        """
+        return self._get_info_priority
+
+    @get_info_priority.setter
+    def get_info_priority(self, value: pycyphal.transport.Priority) -> None:
+        assert value in pycyphal.transport.Priority
+        self._get_info_priority = value
 
     @property
     def get_info_timeout(self) -> float:
@@ -249,7 +262,7 @@ class NodeTracker:
         async def attempt() -> bool:
             client = self.node.make_client(GetInfo, node_id)
             try:
-                client.priority = self.GET_INFO_PRIORITY
+                client.priority = self._get_info_priority
                 client.response_timeout = self._get_info_timeout
                 response = await client.call(GetInfo.Request())
                 if response is not None:
