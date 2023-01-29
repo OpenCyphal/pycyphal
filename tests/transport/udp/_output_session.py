@@ -48,7 +48,7 @@ async def _unittest_udp_output_session() -> None:
 
     def make_sock() -> socket_.socket:
         sock = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
-        sock.bind(("127.0.0.2", 0))
+        sock.bind(("127.0.0.1", 0))
         sock.connect(destination_endpoint)
         sock.setblocking(False)
         return sock
@@ -81,7 +81,7 @@ async def _unittest_udp_output_session() -> None:
     )
 
     rx_data, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.0.0.2"
+    assert endpoint[0] == "127.0.0.1"
     assert rx_data == (
         b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00rp"
         + b"one"
@@ -116,7 +116,7 @@ async def _unittest_udp_output_session() -> None:
     sos.disable_feedback()  # Idempotency check
 
     _, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.0.0.2"
+    assert endpoint[0] == "127.0.0.1"
     with raises(socket_.timeout):
         sock_rx.recvfrom(1000)
 
@@ -154,13 +154,13 @@ async def _unittest_udp_output_session() -> None:
     )
 
     data_main_a, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.0.0.2"
+    assert endpoint[0] == "127.0.0.1"
     data_main_b, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.0.0.2"
+    assert endpoint[0] == "127.0.0.1"
     data_redundant_a, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.0.0.2"
+    assert endpoint[0] == "127.0.0.1"
     data_redundant_b, endpoint = sock_rx.recvfrom(1000)
-    assert endpoint[0] == "127.0.0.2"
+    assert endpoint[0] == "127.0.0.1"
     with raises(socket_.timeout):
         sock_rx.recvfrom(1000)
 
@@ -254,9 +254,9 @@ async def _unittest_output_session_no_listener() -> None:
 
     def make_sock() -> socket_.socket:
         sock = socket_.socket(socket_.AF_INET, socket_.SOCK_DGRAM)
-        sock.bind(("127.0.0.2", 0))
+        sock.bind(("127.0.0.1", 0))
         sock.connect(("239.0.1.2", 33333))  # There is no listener on this endpoint.
-        sock.setsockopt(socket_.IPPROTO_IP, socket_.IP_MULTICAST_IF, socket_.inet_aton("127.0.0.2"))
+        sock.setsockopt(socket_.IPPROTO_IP, socket_.IP_MULTICAST_IF, socket_.inet_aton("127.0.0.1"))
         sock.setblocking(False)
         return sock
 
