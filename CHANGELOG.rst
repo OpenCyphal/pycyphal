@@ -3,6 +3,12 @@
 Changelog
 =========
 
+v1.12
+-----
+
+- Add :attr:`pycyphal.application.node_tracker.NodeTracker.get_info_priority`, to allow configuring the node tracker's
+  GetInfo request priority.
+
 v1.11
 -----
 
