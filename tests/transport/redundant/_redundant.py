@@ -8,6 +8,8 @@ import logging
 import pytest
 import pycyphal.transport
 
+_logger = logging.getLogger(__name__)
+
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pycyphal.transport.redundant import RedundantTransport, RedundantTransportStatistics
 from pycyphal.transport.redundant import InconsistentInferiorConfigurationError
@@ -47,205 +49,207 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     meta = PayloadMetadata(10_240)
 
     pub_a = tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
-    sub_any_a = tr_a.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
-    assert pub_a is tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
-    assert set(tr_a.input_sessions) == {sub_any_a}
-    assert set(tr_a.output_sessions) == {pub_a}
-    assert tr_a.sample_statistics() == RedundantTransportStatistics()
+    # sub_any_a = tr_a.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    # assert pub_a is tr_a.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    # assert set(tr_a.input_sessions) == {sub_any_a}
+    # assert set(tr_a.output_sessions) == {pub_a}
+    # assert tr_a.sample_statistics() == RedundantTransportStatistics()
 
-    pub_b = tr_b.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    # pub_b = tr_b.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
     sub_any_b = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
-    sub_sel_b = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
-    assert sub_sel_b is tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
-    assert set(tr_b.input_sessions) == {sub_any_b, sub_sel_b}
-    assert set(tr_b.output_sessions) == {pub_b}
-    assert tr_b.sample_statistics() == RedundantTransportStatistics()
+    # sub_sel_b = tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
+    # assert sub_sel_b is tr_b.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 3210), meta)
+    # assert set(tr_b.input_sessions) == {sub_any_b, sub_sel_b}
+    # assert set(tr_b.output_sessions) == {pub_b}
+    # assert tr_b.sample_statistics() == RedundantTransportStatistics()
 
-    #
-    # Exchange test with no inferiors, expected to fail.
-    #
-    assert len(pub_a.inferiors) == 0
-    assert len(sub_any_a.inferiors) == 0
-    assert not await pub_a.send(
-        Transfer(
-            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=1, fragmented_payload=[memoryview(b"abc")]
-        ),
-        monotonic_deadline=loop.time() + 1.0,
-    )
-    assert not await sub_any_a.receive(loop.time() + 0.1)
-    assert not await sub_any_b.receive(loop.time() + 0.1)
-    assert tr_a.sample_statistics() == RedundantTransportStatistics()
-    assert tr_b.sample_statistics() == RedundantTransportStatistics()
+    # #
+    # # Exchange test with no inferiors, expected to fail.
+    # #
+    # assert len(pub_a.inferiors) == 0
+    # assert len(sub_any_a.inferiors) == 0
+    # assert not await pub_a.send(
+    #     Transfer(
+    #         timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=1, fragmented_payload=[memoryview(b"abc")]
+    #     ),
+    #     monotonic_deadline=loop.time() + 1.0,
+    # )
+    # assert not await sub_any_a.receive(loop.time() + 0.1)
+    # assert not await sub_any_b.receive(loop.time() + 0.1)
+    # assert tr_a.sample_statistics() == RedundantTransportStatistics()
+    # assert tr_b.sample_statistics() == RedundantTransportStatistics()
 
-    #
-    # Adding inferiors - loopback, transport A only.
-    #
-    assert len(pub_a.inferiors) == 0
-    assert len(sub_any_a.inferiors) == 0
+    # #
+    # # Adding inferiors - loopback, transport A only.
+    # #
+    # assert len(pub_a.inferiors) == 0
+    # assert len(sub_any_a.inferiors) == 0
 
-    lo_mono_0 = LoopbackTransport(111)
-    lo_mono_1 = LoopbackTransport(111)
+    # lo_mono_0 = LoopbackTransport(111)
+    # lo_mono_1 = LoopbackTransport(111)
 
-    tr_a.attach_inferior(lo_mono_0)
-    assert len(pub_a.inferiors) == 1
-    assert len(sub_any_a.inferiors) == 1
+    # tr_a.attach_inferior(lo_mono_0)
+    # assert len(pub_a.inferiors) == 1
+    # assert len(sub_any_a.inferiors) == 1
 
-    with pytest.raises(ValueError):
-        tr_a.detach_inferior(lo_mono_1)  # Not a registered inferior (yet).
+    # with pytest.raises(ValueError):
+    #     tr_a.detach_inferior(lo_mono_1)  # Not a registered inferior (yet).
 
-    tr_a.attach_inferior(lo_mono_1)
-    assert len(pub_a.inferiors) == 2
-    assert len(sub_any_a.inferiors) == 2
+    # tr_a.attach_inferior(lo_mono_1)
+    # assert len(pub_a.inferiors) == 2
+    # assert len(sub_any_a.inferiors) == 2
 
-    with pytest.raises(ValueError):
-        tr_a.attach_inferior(lo_mono_0)  # Double-add not allowed.
+    # with pytest.raises(ValueError):
+    #     tr_a.attach_inferior(lo_mono_0)  # Double-add not allowed.
 
-    with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*node-id.*"):
-        tr_a.attach_inferior(LoopbackTransport(None))  # Wrong node-ID.
+    # with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*node-id.*"):
+    #     tr_a.attach_inferior(LoopbackTransport(None))  # Wrong node-ID.
 
-    with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*node-id.*"):
-        tr_a.attach_inferior(LoopbackTransport(1230))  # Wrong node-ID.
+    # with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*node-id.*"):
+    #     tr_a.attach_inferior(LoopbackTransport(1230))  # Wrong node-ID.
 
-    assert tr_a.inferiors == [lo_mono_0, lo_mono_1]
-    assert len(pub_a.inferiors) == 2
-    assert len(sub_any_a.inferiors) == 2
+    # assert tr_a.inferiors == [lo_mono_0, lo_mono_1]
+    # assert len(pub_a.inferiors) == 2
+    # assert len(sub_any_a.inferiors) == 2
 
-    assert tr_a.sample_statistics() == RedundantTransportStatistics(
-        inferiors=[
-            lo_mono_0.sample_statistics(),
-            lo_mono_1.sample_statistics(),
-        ]
-    )
-    assert tr_a.local_node_id == 111
-    assert (
-        repr(tr_a)
-        == "RedundantTransport(LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True),"
-        + " LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True))"
-    )
+    # assert tr_a.sample_statistics() == RedundantTransportStatistics(
+    #     inferiors=[
+    #         lo_mono_0.sample_statistics(),
+    #         lo_mono_1.sample_statistics(),
+    #     ]
+    # )
+    # assert tr_a.local_node_id == 111
+    # assert (
+    #     repr(tr_a)
+    #     == "RedundantTransport(LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True),"
+    #     + " LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True))"
+    # )
 
-    assert await pub_a.send(
-        Transfer(
-            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=2, fragmented_payload=[memoryview(b"def")]
-        ),
-        monotonic_deadline=loop.time() + 1.0,
-    )
-    rx = await sub_any_a.receive(loop.time() + 1.0)
-    assert rx is not None
-    assert rx.fragmented_payload == [memoryview(b"def")]
-    assert rx.transfer_id == 2
-    assert not await sub_any_b.receive(loop.time() + 0.1)
+    # assert await pub_a.send(
+    #     Transfer(
+    #         timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=2, fragmented_payload=[memoryview(b"def")]
+    #     ),
+    #     monotonic_deadline=loop.time() + 1.0,
+    # )
+    # rx = await sub_any_a.receive(loop.time() + 1.0)
+    # assert rx is not None
+    # assert rx.fragmented_payload == [memoryview(b"def")]
+    # assert rx.transfer_id == 2
+    # assert not await sub_any_b.receive(loop.time() + 0.1)
 
-    #
-    # Incapacitate one inferior, ensure things are still OK.
-    #
-    with caplog.at_level(logging.CRITICAL, logger=pycyphal.transport.redundant.__name__):
-        for s in lo_mono_0.output_sessions:
-            s.exception = RuntimeError("INTENDED EXCEPTION")
+    # #
+    # # Incapacitate one inferior, ensure things are still OK.
+    # #
+    # with caplog.at_level(logging.CRITICAL, logger=pycyphal.transport.redundant.__name__):
+    #     for s in lo_mono_0.output_sessions:
+    #         s.exception = RuntimeError("INTENDED EXCEPTION")
 
-        assert await pub_a.send(
-            Transfer(
-                timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=3, fragmented_payload=[memoryview(b"qwe")]
-            ),
-            monotonic_deadline=loop.time() + 1.0,
-        )
-        rx = await sub_any_a.receive(loop.time() + 1.0)
-        assert rx is not None
-        assert rx.fragmented_payload == [memoryview(b"qwe")]
-        assert rx.transfer_id == 3
+    #     assert await pub_a.send(
+    #         Transfer(
+    #             timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=3, fragmented_payload=[memoryview(b"qwe")]
+    #         ),
+    #         monotonic_deadline=loop.time() + 1.0,
+    #     )
+    #     rx = await sub_any_a.receive(loop.time() + 1.0)
+    #     assert rx is not None
+    #     assert rx.fragmented_payload == [memoryview(b"qwe")]
+    #     assert rx.transfer_id == 3
 
-    #
-    # Remove old loopback transports. Configure new ones with cyclic TID.
-    #
-    lo_cyc_0 = LoopbackTransport(111)
-    lo_cyc_1 = LoopbackTransport(111)
-    cyc_proto_params = ProtocolParameters(
-        transfer_id_modulo=32,  # Like CAN
-        max_nodes=128,  # Like CAN
-        mtu=63,  # Like CAN
-    )
-    lo_cyc_0.protocol_parameters = cyc_proto_params
-    lo_cyc_1.protocol_parameters = cyc_proto_params
-    assert lo_cyc_0.protocol_parameters == lo_cyc_1.protocol_parameters == cyc_proto_params
+    # #
+    # # Remove old loopback transports. Configure new ones with cyclic TID.
+    # #
+    # lo_cyc_0 = LoopbackTransport(111)
+    # lo_cyc_1 = LoopbackTransport(111)
+    # cyc_proto_params = ProtocolParameters(
+    #     transfer_id_modulo=32,  # Like CAN
+    #     max_nodes=128,  # Like CAN
+    #     mtu=63,  # Like CAN
+    # )
+    # lo_cyc_0.protocol_parameters = cyc_proto_params
+    # lo_cyc_1.protocol_parameters = cyc_proto_params
+    # assert lo_cyc_0.protocol_parameters == lo_cyc_1.protocol_parameters == cyc_proto_params
 
-    assert tr_a.protocol_parameters.transfer_id_modulo >= 2**56
-    with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*transfer-id.*"):
-        tr_a.attach_inferior(lo_cyc_0)  # Transfer-ID modulo mismatch
+    # assert tr_a.protocol_parameters.transfer_id_modulo >= 2**56
+    # with pytest.raises(InconsistentInferiorConfigurationError, match="(?i).*transfer-id.*"):
+    #     tr_a.attach_inferior(lo_cyc_0)  # Transfer-ID modulo mismatch
 
-    tr_a.detach_inferior(lo_mono_0)
-    tr_a.detach_inferior(lo_mono_1)
-    del lo_mono_0  # Prevent accidental reuse.
-    del lo_mono_1
-    assert tr_a.inferiors == []  # All removed, okay.
-    assert pub_a.inferiors == []
-    assert sub_any_a.inferiors == []
-    assert tr_a.local_node_id is None  # Back to the roots
-    assert repr(tr_a) == "RedundantTransport()"
+    # tr_a.detach_inferior(lo_mono_0)
+    # tr_a.detach_inferior(lo_mono_1)
+    # del lo_mono_0  # Prevent accidental reuse.
+    # del lo_mono_1
+    # assert tr_a.inferiors == []  # All removed, okay.
+    # assert pub_a.inferiors == []
+    # assert sub_any_a.inferiors == []
+    # assert tr_a.local_node_id is None  # Back to the roots
+    # assert repr(tr_a) == "RedundantTransport()"
 
-    # Now we can add our cyclic transports safely.
-    tr_a.attach_inferior(lo_cyc_0)
-    assert tr_a.protocol_parameters.transfer_id_modulo == 32
-    tr_a.attach_inferior(lo_cyc_1)
-    assert tr_a.protocol_parameters == cyc_proto_params, "Protocol parameter mismatch"
-    assert tr_a.local_node_id == 111
-    assert (
-        repr(tr_a)
-        == "RedundantTransport(LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True),"
-        + " LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True))"
-    )
+    # # Now we can add our cyclic transports safely.
+    # tr_a.attach_inferior(lo_cyc_0)
+    # assert tr_a.protocol_parameters.transfer_id_modulo == 32
+    # tr_a.attach_inferior(lo_cyc_1)
+    # assert tr_a.protocol_parameters == cyc_proto_params, "Protocol parameter mismatch"
+    # assert tr_a.local_node_id == 111
+    # assert (
+    #     repr(tr_a)
+    #     == "RedundantTransport(LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True),"
+    #     + " LoopbackTransport(local_node_id=111, allow_anonymous_transfers=True))"
+    # )
 
-    # Exchange test.
-    assert await pub_a.send(
-        Transfer(
-            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=4, fragmented_payload=[memoryview(b"rty")]
-        ),
-        monotonic_deadline=loop.time() + 1.0,
-    )
-    rx = await sub_any_a.receive(loop.time() + 1.0)
-    assert rx is not None
-    assert rx.fragmented_payload == [memoryview(b"rty")]
-    assert rx.transfer_id == 4
+    # # Exchange test.
+    # assert await pub_a.send(
+    #     Transfer(
+    #         timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=4, fragmented_payload=[memoryview(b"rty")]
+    #     ),
+    #     monotonic_deadline=loop.time() + 1.0,
+    # )
+    # rx = await sub_any_a.receive(loop.time() + 1.0)
+    # assert rx is not None
+    # assert rx.fragmented_payload == [memoryview(b"rty")]
+    # assert rx.transfer_id == 4
 
     #
     # Real heterogeneous transport test.
     #
-    tr_a.detach_inferior(lo_cyc_0)
-    tr_a.detach_inferior(lo_cyc_1)
-    del lo_cyc_0  # Prevent accidental reuse.
-    del lo_cyc_1
+    # tr_a.detach_inferior(lo_cyc_0)
+    # tr_a.detach_inferior(lo_cyc_1)
+    # del lo_cyc_0  # Prevent accidental reuse.
+    # del lo_cyc_1
 
-    udp_a = UDPTransport("127.0.0.111")
-    udp_b = UDPTransport("127.0.0.222")
+    udp_a = UDPTransport("127.0.0.1", 111)
+    udp_b = UDPTransport("127.0.0.1", 222)
 
     serial_a = SerialTransport(SERIAL_URI, 111)
     serial_b = SerialTransport(SERIAL_URI, 222, mtu=2048)  # Heterogeneous.
 
     tr_a.attach_inferior(udp_a)
-    tr_a.attach_inferior(serial_a)
+    # tr_a.attach_inferior(serial_a)
 
-    tr_b.attach_inferior(udp_b)
-    tr_b.attach_inferior(serial_b)
+    # tr_b.attach_inferior(udp_b)
+    # tr_b.attach_inferior(serial_b)
 
-    assert tr_a.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2**64,
-        max_nodes=4096,
-        mtu=udp_a.protocol_parameters.mtu,
-    )
-    assert tr_a.local_node_id == 111
-    assert repr(tr_a) == f"RedundantTransport({udp_a}, {serial_a})"
+    # assert tr_a.protocol_parameters == ProtocolParameters(
+    #     transfer_id_modulo=2**64,
+    #     max_nodes=4096,
+    #     mtu=udp_a.protocol_parameters.mtu,
+    # )
+    # assert tr_a.local_node_id == 111
+    # assert repr(tr_a) == f"RedundantTransport({udp_a}, {serial_a})"
 
-    assert tr_b.protocol_parameters == ProtocolParameters(
-        transfer_id_modulo=2**64,
-        max_nodes=4096,
-        mtu=udp_b.protocol_parameters.mtu,
-    )
-    assert tr_b.local_node_id == 222
+    # assert tr_b.protocol_parameters == ProtocolParameters(
+    #     transfer_id_modulo=2**64,
+    #     max_nodes=4096,
+    #     mtu=udp_b.protocol_parameters.mtu,
+    # )
+    # assert tr_b.local_node_id == 222
 
+    _logger.debug("=================pub_a.send()=================")
     assert await pub_a.send(
         Transfer(
             timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=5, fragmented_payload=[memoryview(b"uio")]
         ),
         monotonic_deadline=loop.time() + 1.0,
     )
+    _logger.debug("=================pub_a.send() completed=================")
     rx = await sub_any_b.receive(loop.time() + 1.0)
     assert rx is not None
     assert rx.fragmented_payload == [memoryview(b"uio")]

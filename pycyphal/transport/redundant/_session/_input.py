@@ -137,6 +137,7 @@ class RedundantInputSession(RedundantSession, pycyphal.transport.InputSession):
         until the next invocation of this method.
         """
         # First of all, handle pending errors, because removing the item from the queue might unblock reader tasks.
+        _logger.debug("======starting receive======")
         try:
             exc = self._error_queue.get_nowait()
         except asyncio.QueueEmpty:
@@ -262,6 +263,7 @@ class RedundantInputSession(RedundantSession, pycyphal.transport.InputSession):
             _logger.debug("%s: Task for inferior %016x is starting", self, iface_id)
             while self._deduplicator is not None:
                 try:
+                    _logger.debug("=====Trying to receive=====")
                     deadline = loop.time() + RedundantInputSession._READ_TIMEOUT
                     tr = await session.receive(deadline)
                     if tr is not None and self._deduplicator is not None:

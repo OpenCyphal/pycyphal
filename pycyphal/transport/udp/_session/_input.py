@@ -141,6 +141,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
 
         while self._sock.fileno() >= 0:
             try:
+                _logger.debug("monotonic_deadline-loop.time()=%s", monotonic_deadline - loop.time())
                 read_ready, _, _ = select.select([self._sock], [], [], monotonic_deadline - loop.time())
                 if self._sock in read_ready:
                     # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
