@@ -184,6 +184,7 @@ class TransferReassembler:
             _logger.debug("----- waiting for more frames -----")
             _logger.debug("----- max_index: %s", self._max_index)
             _logger.debug("----- not all(self._payloads): %s", not all(self._payloads))
+            _logger.debug("----- len(self._payloads): %s", len(self._payloads))
             return None
         else:
             _logger.debug("----- all frames have been received -----")

@@ -87,15 +87,13 @@ class UDPInputSession(pycyphal.transport.InputSession):
         assert callable(self._finalizer)
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._frame_queue: asyncio.Queue[typing.Tuple[Timestamp, UDPFrame | None]] = asyncio.Queue()
-        # # create asyncio EventLoop, if there is none
-        # try:
-        #     self._loop = asyncio.get_running_loop()
-        # except RuntimeError:
-        #     self._loop = asyncio.new_event_loop()
-        self._thread_stop = threading.Event()
-        self._thread = threading.Thread(
-            target=self._reader_thread, name=str(self), args=(self._thread_stop,), daemon=True
-        )
+        # create asyncio EventLoop, if there is none
+        try:
+            self._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._loop = asyncio.new_event_loop()
+        # self._thread_stop = threading.Event()
+        self._thread = threading.Thread(target=self._reader_thread, name=str(self), args=(self._loop,), daemon=True)
         self._thread.start()
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pycyphal.transport.TransferFrom]:
@@ -148,12 +146,12 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 _logger.debug("%s: Received transfer %s; current stats: %s", self, transfer, self._statistics)
                 return transfer
 
-    def _reader_thread(self, stop_event) -> None:
+    def _reader_thread(self, loop: asyncio.AbstractEventLoop) -> None:
         while not self._closed and self._sock.fileno() >= 0:
             try:
-                if stop_event.is_set():
-                    _logger.debug("%r: _reader_thread stop event set!", self)
-                    break
+                # if stop_event.is_set():
+                #     _logger.debug("%r: _reader_thread stop event set!", self)
+                #     break
                 read_ready, _, _ = select.select([self._sock], [], [], 0)
                 if self._sock in read_ready:
                     # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
@@ -174,7 +172,8 @@ class UDPInputSession(pycyphal.transport.InputSession):
                         frame,
                     )
                     try:
-                        self._frame_queue.put_nowait((ts, frame))
+                        # self._frame_queue.put_nowait((ts, frame))
+                        loop.call_soon_threadsafe(lambda: self._frame_queue.put_nowait((ts, frame)))
                     except asyncio.QueueFull:
                         # TODO: make the queue capacity configurable
                         _logger.error("%s: Frame queue is full", self)
@@ -227,8 +226,8 @@ class UDPInputSession(pycyphal.transport.InputSession):
             self._finalizer = None
 
         # Before closing the socket we need to terminate the reader thread. (See note above)
-        self._thread_stop.set()
-        self._thread.join()
+        # self._thread_stop.set()
+        # self._thread.join()
 
         self._sock.close()
         _logger.debug("%s: Closed", self)
