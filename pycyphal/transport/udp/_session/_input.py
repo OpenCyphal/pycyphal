@@ -88,9 +88,12 @@ class UDPInputSession(pycyphal.transport.InputSession):
         assert callable(self._finalizer)
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._frame_queue: asyncio.Queue[typing.Tuple[Timestamp, UDPFrame | None]] = asyncio.Queue()
-        self._thread = threading.Thread(
-            target=self._reader_thread, name=str(self), args=(asyncio.get_running_loop(),), daemon=True
-        )
+        # create asyncio thread if there is none
+        try:
+            self._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._reader_thread, name=str(self), args=(self._loop,), daemon=True)
         self._thread.start()
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pycyphal.transport.TransferFrom]:
@@ -103,7 +106,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         """
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
-
+        _logger.debug("receive called")
         loop = asyncio.get_running_loop()
         while True:
             timeout = monotonic_deadline - loop.time()
@@ -131,7 +134,8 @@ class UDPInputSession(pycyphal.transport.InputSession):
             # Anonymous - no reconstruction needed
             if source_node_id == NODE_ID_MASK:
                 transfer = TransferReassembler.construct_anonymous_transfer(ts, frame)
-            # # Single-frame transfer - no reconstruction needed # TODO FIXME
+            # # Single-frame transfer - no reconstruction needed # TODO FIXME -> process_frame handles both uniframe
+            #                                                                    as well as multiframe
             # elif frame.single_frame_transfer:
             #     transfer = TransferReassembler.construct_uniframe_transfer(timestamp, frame)
             # Otherwise, fetch the reassembler and process the frame
@@ -167,7 +171,10 @@ class UDPInputSession(pycyphal.transport.InputSession):
                         frame,
                     )
                     # TODO Handle QueueFull
-                    loop.call_soon_threadsafe(lambda: self._frame_queue.put_nowait((ts, frame)))
+                    # self._loop.call_soon_threadsafe(lambda: self._frame_queue.put_nowait((ts, frame)))
+                    self._frame_queue.put_nowait(
+                        (ts, frame)
+                    )  # pycyphal/transport/udp/__init__.py::pycyphal.transport.udp would fail if call_soon_threadsafe is used
             except Exception as ex:
                 _logger.exception("%s: Exception while consuming UDP frames: %s", self, ex)
 
