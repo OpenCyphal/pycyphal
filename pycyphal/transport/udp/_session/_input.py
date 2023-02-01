@@ -11,6 +11,7 @@ import typing
 import select
 import asyncio
 import logging
+import threading
 import dataclasses
 import pycyphal
 from pycyphal.transport import Timestamp
@@ -86,7 +87,11 @@ class UDPInputSession(pycyphal.transport.InputSession):
         assert isinstance(self._payload_metadata, pycyphal.transport.PayloadMetadata)
         assert callable(self._finalizer)
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
-        self._queue: asyncio.Queue[pycyphal.transport.TransferFrom] = asyncio.Queue()
+        self._frame_queue: asyncio.Queue[typing.Tuple[Timestamp, UDPFrame | None]] = asyncio.Queue()
+        self._thread = threading.Thread(
+            target=self._reader_thread, name=str(self), args=(asyncio.get_running_loop(),), daemon=True
+        )
+        self._thread.start()
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pycyphal.transport.TransferFrom]:
         """
@@ -99,50 +104,50 @@ class UDPInputSession(pycyphal.transport.InputSession):
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
 
-        transfer_ready = False
-
-        consume_success = await self._consume(monotonic_deadline=monotonic_deadline)
-        while consume_success:  # if something was consumed, try to consume more
-            transfer_ready = True
-            consume_success = await self._consume(monotonic_deadline=monotonic_deadline)
-
-        if transfer_ready:
-            _logger.debug("%s: Consumed a datagram", self)
-            loop = asyncio.get_running_loop()
+        loop = asyncio.get_running_loop()
+        while True:
+            timeout = monotonic_deadline - loop.time()
             try:
-                timeout = monotonic_deadline - loop.time()
                 if timeout > 0:
-                    transfer = await asyncio.wait_for(self._queue.get(), timeout)
+                    ts, frame = await asyncio.wait_for(self._frame_queue.get(), timeout=timeout)
                 else:
-                    transfer = self._queue.get_nowait()
+                    ts, frame = self._frame_queue.get_nowait()
             except (asyncio.TimeoutError, asyncio.QueueEmpty):
                 # If there are unprocessed transfers, allow the caller to read them even if the instance is closed.
                 if self._finalizer is None:
                     raise pycyphal.transport.ResourceClosedError(f"{self} is closed") from None
                 return None
+            if frame is None:
+                self._statistics.errors += 1
+                continue
+            if not self.specifier.is_promiscuous:
+                if frame.source_node_id != self.specifier.remote_node_id:
+                    continue
+            self._statistics.frames += 1
+            source_node_id = frame.source_node_id
+            assert (
+                isinstance(source_node_id, int) and 0 <= source_node_id <= NODE_ID_MASK
+            ), "Internal protocol violation"
+            # Anonymous - no reconstruction needed
+            if source_node_id == NODE_ID_MASK:
+                transfer = TransferReassembler.construct_anonymous_transfer(ts, frame)
+            # # Single-frame transfer - no reconstruction needed # TODO FIXME
+            # elif frame.single_frame_transfer:
+            #     transfer = TransferReassembler.construct_uniframe_transfer(timestamp, frame)
+            # Otherwise, fetch the reassembler and process the frame
             else:
-                assert isinstance(transfer, pycyphal.transport.TransferFrom), "Internal protocol violation"
-                assert (
-                    transfer.source_node_id == self._specifier.remote_node_id or self._specifier.remote_node_id is None
-                )
+                _logger.debug("%s: Processing frame %s", self, frame)
+                transfer = self._get_reassembler(source_node_id).process_frame(ts, frame, self._transfer_id_timeout)
+            if transfer is not None:
+                self._statistics.transfers += 1
+                self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
+                _logger.debug("%s: Received transfer %s; current stats: %s", self, transfer, self._statistics)
                 return transfer
-        else:  # No datagrams were consumed
-            return None
 
-    async def _consume(self, monotonic_deadline: float) -> bool:
-        """
-        This method is used to consume the datagrams from the socket.
-        The method will block until a datagram is available or the deadline is reached.
-        If a datagram is read, it will call the underlying ``_process_frame()`` method
-        of the input session (PromiscuousInputSession or SelectiveInputSession).
-        If no datagram is read and the deadline is reached, the method will return ``False``.
-        """
-        loop = asyncio.get_running_loop()
-
-        while self._sock.fileno() >= 0:
+    def _reader_thread(self, loop: asyncio.AbstractEventLoop) -> None:
+        while not self._closed and self._sock.fileno() >= 0:
             try:
-                _logger.debug("monotonic_deadline-loop.time()=%s", monotonic_deadline - loop.time())
-                read_ready, _, _ = select.select([self._sock], [], [], monotonic_deadline - loop.time())
+                read_ready, _, _ = select.select([self._sock], [], [], 0)
                 if self._sock in read_ready:
                     # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
                     ts = pycyphal.transport.Timestamp.now()
@@ -151,9 +156,6 @@ class UDPInputSession(pycyphal.transport.InputSession):
                     # Buffer memory cannot be shared because the rest of the stack is completely zero-copy;
                     # meaning that the data we allocate here, at the very bottom of the protocol stack,
                     # is likely to be carried all the way up to the application layer without being copied.
-                    # await asyncio.wait_for(
-                    #     loop.sock_recv_into(self._sock, _READ_SIZE), timeout=monotonic_deadline - loop.time()
-                    # )
                     data, endpoint = self._sock.recvfrom(_READ_SIZE)
                     assert len(data) < _READ_SIZE, "Datagram might have been truncated"
                     frame = UDPFrame.parse(memoryview(data))
@@ -164,49 +166,10 @@ class UDPInputSession(pycyphal.transport.InputSession):
                         endpoint,
                         frame,
                     )
-                    self._process_frame(ts, frame)
-                    return True
-                else:
-                    return False  # there was no datagram to read
-            except (asyncio.TimeoutError):
-                return False
+                    # TODO Handle QueueFull
+                    loop.call_soon_threadsafe(lambda: self._frame_queue.put_nowait((ts, frame)))
             except Exception as ex:
                 _logger.exception("%s: Exception while consuming UDP frames: %s", self, ex)
-                time.sleep(1)
-                return False
-
-    def _process_frame(self, timestamp: pycyphal.transport.Timestamp, frame: UDPFrame) -> None:
-
-        if frame is None:
-            self._statistics.errors += 1
-            return
-        if not self.specifier.is_promiscuous:
-            if frame.source_node_id != self._specifier.remote_node_id:
-                return
-        self._statistics.frames += 1
-
-        source_node_id = frame.source_node_id
-        assert isinstance(source_node_id, int) and 0 <= source_node_id <= NODE_ID_MASK, "Internal protocol violation"
-
-        # Anonymous - no reconstruction needed
-        if source_node_id == NODE_ID_MASK:
-            transfer = TransferReassembler.construct_anonymous_transfer(timestamp, frame)
-        # # Single-frame transfer - no reconstruction needed
-        # elif frame.single_frame_transfer:
-        #     transfer = TransferReassembler.construct_uniframe_transfer(timestamp, frame)
-        # Otherwise, fetch the reassembler and process the frame
-        else:
-            _logger.debug("%s: Processing frame: %s", self, frame)
-            transfer = self._get_reassembler(source_node_id).process_frame(timestamp, frame, self._transfer_id_timeout)
-
-        if transfer is not None:
-            self._statistics.transfers += 1
-            self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
-            _logger.debug("%s: Received transfer: %s; current stats: %s", self, transfer, self._statistics)
-            try:
-                self._queue.put_nowait(transfer)
-            except asyncio.QueueFull:
-                self._statistics.drops += len(transfer.fragmented_payload)  # queue_overflows
 
     @property
     def transfer_id_timeout(self) -> float:
@@ -228,9 +191,13 @@ class UDPInputSession(pycyphal.transport.InputSession):
         return self._payload_metadata
 
     def close(self) -> None:
+        self._closed = True
         if self._finalizer is not None:
             self._finalizer()
             self._finalizer = None
+        # TODO See https://github.com/OpenCyphal/pycyphal/blob/6a432b10c4307b006067fd0bdc867bc17790fa67/pycyphal/transport/udp/_socket_reader.py#L152-L162
+        # (EXTREMELY IMPORTANT)
+        self._sock.close()
 
     @property
     def socket(self) -> socket_.socket:

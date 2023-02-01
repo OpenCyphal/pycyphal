@@ -224,7 +224,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     tr_a.attach_inferior(udp_a)
     # tr_a.attach_inferior(serial_a)
 
-    # tr_b.attach_inferior(udp_b)
+    tr_b.attach_inferior(udp_b)
     # tr_b.attach_inferior(serial_b)
 
     # assert tr_a.protocol_parameters == ProtocolParameters(
@@ -247,7 +247,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         Transfer(
             timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=5, fragmented_payload=[memoryview(b"uio")]
         ),
-        monotonic_deadline=loop.time() + 1.0,
+        monotonic_deadline=loop.time() + 10.0,
     )
     _logger.debug("=================pub_a.send() completed=================")
     rx = await sub_any_b.receive(loop.time() + 1.0)

@@ -202,7 +202,7 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
                     timeout=monotonic_deadline - loop.time(),
                 )
                 _logger.debug("sent completed")
-                assert False
+                # assert False
                 # TODO: use socket timestamping when running on Linux (Windows does not support timestamping).
                 # Depending on the chosen approach, timestamping on Linux may require us to launch a new thread
                 # reading from the socket's error message queue and then matching the returned frames with a
