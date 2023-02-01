@@ -20,7 +20,6 @@ from .._frame import UDPFrame
 
 _READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.
 NODE_ID_MASK = UDPFrame.NODE_ID_MASK
-# _READ_TIMEOUT = 1.0
 
 _logger = logging.getLogger(__name__)
 
@@ -48,7 +47,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
 
     - The socket obtains the datagram from the socket using ``recvfrom()``.
       The contents of the Cyphal UDP frame instance is parsed which, among others, contains the source node-ID.
-      If anything goes wrong here (like if the source IP address belongs to a wrong subnet or the datagram
+      If anything goes wrong here (like if the datagram
       does not contain a valid Cyphal frame or whatever), the datagram is dropped and the appropriate statistical
       counters are updated.
 
@@ -88,19 +87,25 @@ class UDPInputSession(pycyphal.transport.InputSession):
         assert callable(self._finalizer)
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._frame_queue: asyncio.Queue[typing.Tuple[Timestamp, UDPFrame | None]] = asyncio.Queue()
-        # create asyncio thread if there is none
-        try:
-            self._loop = asyncio.get_running_loop()
-        except RuntimeError:
-            self._loop = asyncio.new_event_loop()
-        self._thread = threading.Thread(target=self._reader_thread, name=str(self), args=(self._loop,), daemon=True)
+        # # create asyncio EventLoop, if there is none
+        # try:
+        #     self._loop = asyncio.get_running_loop()
+        # except RuntimeError:
+        #     self._loop = asyncio.new_event_loop()
+        self._thread_stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._reader_thread, name=str(self), args=(self._thread_stop,), daemon=True
+        )
         self._thread.start()
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pycyphal.transport.TransferFrom]:
         """
-        This method will first call ``_consume()`` to read from the socket.
-        Then it will try to retrieve the transfer from the queue.
+        This method will wait for self._reader_thread to put a frame in the queue.
+        If a frame is available, it will retrieved and used to construct a transfer.
+        Once a complete transfer can be constructed from the frames, it will be returned.
+
         The method will block until a transfer is available or the deadline is reached.
+
         If the deadline is reached, the method will return ``None``.
         If the session is closed, the method will raise ``ResourceClosedError``.
         """
@@ -134,11 +139,6 @@ class UDPInputSession(pycyphal.transport.InputSession):
             # Anonymous - no reconstruction needed
             if source_node_id == NODE_ID_MASK:
                 transfer = TransferReassembler.construct_anonymous_transfer(ts, frame)
-            # # Single-frame transfer - no reconstruction needed # TODO FIXME -> process_frame handles both uniframe
-            #                                                                    as well as multiframe
-            # elif frame.single_frame_transfer:
-            #     transfer = TransferReassembler.construct_uniframe_transfer(timestamp, frame)
-            # Otherwise, fetch the reassembler and process the frame
             else:
                 _logger.debug("%s: Processing frame %s", self, frame)
                 transfer = self._get_reassembler(source_node_id).process_frame(ts, frame, self._transfer_id_timeout)
@@ -148,9 +148,12 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 _logger.debug("%s: Received transfer %s; current stats: %s", self, transfer, self._statistics)
                 return transfer
 
-    def _reader_thread(self, loop: asyncio.AbstractEventLoop) -> None:
+    def _reader_thread(self, stop_event) -> None:
         while not self._closed and self._sock.fileno() >= 0:
             try:
+                if stop_event.is_set():
+                    _logger.debug("%r: _reader_thread stop event set!", self)
+                    break
                 read_ready, _, _ = select.select([self._sock], [], [], 0)
                 if self._sock in read_ready:
                     # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
@@ -170,11 +173,11 @@ class UDPInputSession(pycyphal.transport.InputSession):
                         endpoint,
                         frame,
                     )
-                    # TODO Handle QueueFull
-                    # self._loop.call_soon_threadsafe(lambda: self._frame_queue.put_nowait((ts, frame)))
-                    self._frame_queue.put_nowait(
-                        (ts, frame)
-                    )  # pycyphal/transport/udp/__init__.py::pycyphal.transport.udp would fail if call_soon_threadsafe is used
+                    try:
+                        self._frame_queue.put_nowait((ts, frame))
+                    except asyncio.QueueFull:
+                        # TODO: make the queue capacity configurable
+                        _logger.error("%s: Frame queue is full", self)
             except Exception as ex:
                 _logger.exception("%s: Exception while consuming UDP frames: %s", self, ex)
 
@@ -198,13 +201,37 @@ class UDPInputSession(pycyphal.transport.InputSession):
         return self._payload_metadata
 
     def close(self) -> None:
+        """
+        Closes the instance and its socket, waits for the thread to terminate (which should happen instantly).
+
+        This method is guaranteed to not return until the socket is closed and all calls that might have been
+        blocked on it have been completed (particularly, the calls made by the worker thread).
+        THIS IS EXTREMELY IMPORTANT because if the worker thread is left on a blocking read from a closed socket,
+        the next created socket is likely to receive the same file descriptor and the worker thread would then
+        inadvertently consume the data destined for another reader.
+        Worse yet, this error may occur spuriously depending on the timing of the worker thread's access to the
+        blocking read function, causing the problem to appear and disappear at random.
+        I literally spent the whole day sifting through logs and Wireshark dumps trying to understand why the test
+        (specifically, the node tracker test, which is an application-layer entity)
+        sometimes fails to see a service response that is actually present on the wire.
+        This case is now covered by a dedicated unit test.
+
+        The lesson is to never close a file descriptor while there is a system call blocked on it. Never again.
+
+        Once closed, new listeners can no longer be added.
+        Raises :class:`RuntimeError` instead of closing if there is at least one active listener.
+        """
         self._closed = True
         if self._finalizer is not None:
             self._finalizer()
             self._finalizer = None
-        # TODO See https://github.com/OpenCyphal/pycyphal/blob/6a432b10c4307b006067fd0bdc867bc17790fa67/pycyphal/transport/udp/_socket_reader.py#L152-L162
-        # (EXTREMELY IMPORTANT)
+
+        # Before closing the socket we need to terminate the reader thread. (See note above)
+        self._thread_stop.set()
+        self._thread.join()
+
         self._sock.close()
+        _logger.debug("%s: Closed", self)
 
     @property
     def socket(self) -> socket_.socket:
