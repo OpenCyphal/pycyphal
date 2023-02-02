@@ -87,12 +87,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         assert callable(self._finalizer)
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._frame_queue: asyncio.Queue[typing.Tuple[Timestamp, UDPFrame | None]] = asyncio.Queue()
-        # create asyncio EventLoop, if there is none
-        try:
-            self._loop = asyncio.get_running_loop()
-        except RuntimeError:
-            self._loop = asyncio.new_event_loop()
-        # self._thread_stop = threading.Event()
+        self._loop = asyncio.get_running_loop()
         self._thread = threading.Thread(target=self._reader_thread, name=str(self), args=(self._loop,), daemon=True)
         self._thread.start()
 
@@ -174,6 +169,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
                     try:
                         # self._frame_queue.put_nowait((ts, frame))
                         loop.call_soon_threadsafe(lambda: self._frame_queue.put_nowait((ts, frame)))
+                        # self._frame_queue.put_nowait((ts, frame))
                     except asyncio.QueueFull:
                         # TODO: make the queue capacity configurable
                         _logger.error("%s: Frame queue is full", self)
