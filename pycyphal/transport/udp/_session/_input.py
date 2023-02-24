@@ -103,7 +103,6 @@ class UDPInputSession(pycyphal.transport.InputSession):
         """
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
-        _logger.debug("receive called")
         loop = asyncio.get_running_loop()
         while True:
             timeout = monotonic_deadline - loop.time()
@@ -143,9 +142,6 @@ class UDPInputSession(pycyphal.transport.InputSession):
     def _reader_thread(self, loop: asyncio.AbstractEventLoop) -> None:
         while not self._closed and self._sock.fileno() >= 0:
             try:
-                # if stop_event.is_set():
-                #     _logger.debug("%r: _reader_thread stop event set!", self)
-                #     break
                 read_ready, _, _ = select.select([self._sock], [], [], 0)
                 if self._sock in read_ready:
                     # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
@@ -298,7 +294,6 @@ class PromiscuousUDPInputSession(UDPInputSession):
                 on_error_callback=on_reassembly_error,
             )
             self._reassemblers[source_node_id] = reasm
-            _logger.debug("%s: New %s (%d total)", self, reasm, len(self._reassemblers))
             return reasm
 
 

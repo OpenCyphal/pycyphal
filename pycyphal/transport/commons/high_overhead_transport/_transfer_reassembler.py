@@ -134,20 +134,12 @@ class TransferReassembler:
             frame.transfer_id > self._transfer_id
             or timestamp.monotonic - self._timestamp.monotonic > transfer_id_timeout
         ):
-            _logger.debug("-----! new transfer !-----")
-            _logger.debug("----- transfer_id=%d, frame.transfer_id=%d", self._transfer_id, frame.transfer_id)
-            _logger.debug(
-                "----- timestamp.monotonic - self._timestamp.monotonic > transfer_id_timeout=%s",
-                timestamp.monotonic - self._timestamp.monotonic > transfer_id_timeout,
-            )
             self._restart(
                 timestamp, frame.transfer_id, self.Error.MULTIFRAME_MISSING_FRAMES if self._payloads else None
             )
 
         # DROP FRAMES FROM NON-MATCHING TRANSFERS. E.g., duplicates. This is not an error.
-        _logger.debug("----- transfer_id=%d, frame.transfer_id=%d -----", self._transfer_id, frame.transfer_id)
         if frame.transfer_id < self._transfer_id:
-            _logger.debug("-----! drop frame from old transfer !-----")
             return None
         assert frame.transfer_id == self._transfer_id
 
@@ -181,15 +173,7 @@ class TransferReassembler:
         # CHECK IF ALL FRAMES ARE RECEIVED. If not, simply wait for next frame.
         # Single-frame transfers with empty payload are legal.
         if self._max_index is None or (self._max_index > 0 and not all(self._payloads)):
-            _logger.debug("----- waiting for more frames -----")
-            _logger.debug("----- max_index: %s", self._max_index)
-            _logger.debug("----- not all(self._payloads): %s", not all(self._payloads))
-            _logger.debug("----- len(self._payloads): %s", len(self._payloads))
             return None
-        else:
-            _logger.debug("----- all frames have been received -----")
-            _logger.debug("----- max_index: %s", self._max_index)
-            _logger.debug("----- not all(self._payloads): %s", not all(self._payloads))
         assert self._max_index is not None
         assert self._max_index == len(self._payloads) - 1
         assert all(self._payloads) if self._max_index > 0 else True
@@ -221,12 +205,6 @@ class TransferReassembler:
                     fragmented_payload=result.fragmented_payload[:-1],
                     source_node_id=result.source_node_id,
                 )
-        # print internal state
-        _logger.debug("----- internal state -----")
-        _logger.debug("transfer_id: %s", self._transfer_id)
-        _logger.debug("max_index: %s", self._max_index)
-        _logger.debug("payloads: %s", self._payloads)
-        _logger.debug("----- internal state -----")
         return result
 
     @property
