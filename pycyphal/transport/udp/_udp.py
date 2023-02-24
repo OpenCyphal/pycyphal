@@ -193,6 +193,8 @@ class UDPTransport(pycyphal.transport.Transport):
                 )
             elif self.local_node_id != None:
                 self._input_registry[specifier] = SelectiveUDPInputSession(specifier, payload_metadata, sock, finalizer)
+            elif not specifier.is_promiscuous and self.local_node_id == None:
+                raise ValueError("Anonymous UDP Transport cannot create non-promiscuous input session (Message yes, Service no)")
             else:
                 raise ValueError("Cannot create input session")
         out = self._input_registry[specifier]
