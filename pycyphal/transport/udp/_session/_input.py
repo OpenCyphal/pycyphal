@@ -14,7 +14,7 @@ import logging
 import threading
 import dataclasses
 import pycyphal
-from pycyphal.transport import Timestamp
+from pycyphal.transport import Timestamp, MessageDataSpecifier, ServiceDataSpecifier
 from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
 from .._frame import UDPFrame
 
@@ -73,6 +73,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         payload_metadata: pycyphal.transport.PayloadMetadata,
         sock: socket_.socket,
         finalizer: typing.Callable[[], None],
+        local_node_id: typing.Optional[int],
     ):
         """
         Parent class of PromiscuousInputSession and SelectiveInputSession.
@@ -82,6 +83,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         self._payload_metadata = payload_metadata
         self._sock = sock
         self._finalizer = finalizer
+        self._local_node_id = local_node_id
         assert isinstance(self._specifier, pycyphal.transport.InputSessionSpecifier)
         assert isinstance(self._payload_metadata, pycyphal.transport.PayloadMetadata)
         assert callable(self._finalizer)
@@ -121,6 +123,8 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 continue
             # это проблема но мы это потом починим
             if frame.data_specifier != self._specifier.data_specifier:
+                continue
+            if frame.source_node_id == self._local_node_id:
                 continue
             if not self.specifier.is_promiscuous:
                 if frame.source_node_id != self.specifier.remote_node_id:
@@ -260,6 +264,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         payload_metadata: pycyphal.transport.PayloadMetadata,
         sock: socket_.socket,
         finalizer: typing.Callable[[], None],
+        local_node_id: typing.Optional[int],
     ):
         """
         Do not call this directly, use the factory method instead.
@@ -267,7 +272,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         self._statistics_impl = PromiscuousUDPInputSessionStatistics()
         self._reassemblers: typing.Dict[typing.Optional[int], TransferReassembler] = {}
         assert specifier.is_promiscuous
-        super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer)
+        super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer, local_node_id=local_node_id)
 
     def sample_statistics(self) -> PromiscuousUDPInputSessionStatistics:
         return copy.copy(self._statistics)
@@ -315,6 +320,7 @@ class SelectiveUDPInputSession(UDPInputSession):
         payload_metadata: pycyphal.transport.PayloadMetadata,
         sock: socket_.socket,
         finalizer: typing.Callable[[], None],
+        local_node_id: typing.Optional[int],
     ):
         """
         Do not call this directly, use the factory method instead.
@@ -337,7 +343,7 @@ class SelectiveUDPInputSession(UDPInputSession):
             on_error_callback=on_reassembly_error,
         )
 
-        super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer)
+        super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer, local_node_id=local_node_id)
 
     def sample_statistics(self) -> SelectiveUDPInputSessionStatistics:
         return copy.copy(self._statistics)

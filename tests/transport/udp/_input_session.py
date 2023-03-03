@@ -52,6 +52,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
         payload_metadata=PayloadMetadata(1024),
         sock=msg_sock_rx_1,
         finalizer=do_finalize_prom,
+        local_node_id=1,
     )
 
     assert prom_in.specifier.data_specifier == MessageDataSpecifier(123)
@@ -63,6 +64,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
         payload_metadata=PayloadMetadata(1024),
         sock=msg_sock_rx_2,
         finalizer=do_finalize_sel,
+        local_node_id=2,
     )
 
     assert sel_in.specifier.data_specifier == MessageDataSpecifier(123)
@@ -363,6 +365,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
         payload_metadata=PayloadMetadata(1024),
         sock=msg_sock_rx_1,
         finalizer=do_finalize_prom,
+        local_node_id=1,
     )
 
     assert prom_in.specifier.data_specifier == MessageDataSpecifier(123)
@@ -374,6 +377,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
         payload_metadata=PayloadMetadata(1024),
         sock=msg_sock_rx_2,
         finalizer=do_finalize_sel,
+        local_node_id=2,
     )
 
     assert sel_in.specifier.data_specifier == MessageDataSpecifier(123)
