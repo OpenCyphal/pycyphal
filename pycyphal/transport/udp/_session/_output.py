@@ -195,13 +195,12 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         for index, (header, payload) in enumerate(header_payload_pairs):
             try:
                 # TODO: concatenation is inefficient. Use vectorized IO via sendmsg() instead!
-                _logger.debug("sending: %s", b"".join((header, payload)))
-                _logger.debug("self._sock: %s", self._sock)
+                _logger.debug("starting send: %s, using socket: %s", b"".join((header, payload)), self._sock)
                 await asyncio.wait_for(
                     loop.sock_sendall(self._sock, b"".join((header, payload))),
                     timeout=monotonic_deadline - loop.time(),
                 )
-                _logger.debug("sent completed")
+                _logger.debug("sent completed: %s, using socket: %s", b"".join((header, payload)), self._sock)
                 # assert False
                 # TODO: use socket timestamping when running on Linux (Windows does not support timestamping).
                 # Depending on the chosen approach, timestamping on Linux may require us to launch a new thread
