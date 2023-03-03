@@ -44,6 +44,7 @@ def asyncio_allow_event_loop_access_from_top_level() -> None:
         setattr(mod, name, new)
 
     swap(asyncio, "get_event_loop", asyncio.get_event_loop_policy().get_event_loop)
+    swap(asyncio, "get_running_loop", asyncio.get_event_loop_policy().get_event_loop)
 
     def events_get_event_loop(stacklevel: int = 0) -> asyncio.AbstractEventLoop:  # pragma: no cover
         _ = stacklevel
