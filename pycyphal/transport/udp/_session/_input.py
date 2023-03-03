@@ -119,6 +119,9 @@ class UDPInputSession(pycyphal.transport.InputSession):
             if frame is None:
                 self._statistics.errors += 1
                 continue
+            # это проблема но мы это потом починим
+            if frame.data_specifier != self._specifier.data_specifier:
+                continue
             if not self.specifier.is_promiscuous:
                 if frame.source_node_id != self.specifier.remote_node_id:
                     continue
