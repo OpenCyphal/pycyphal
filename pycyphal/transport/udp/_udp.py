@@ -14,6 +14,7 @@ from ._session import UDPOutputSession
 from ._frame import UDPFrame
 from ._ip import SocketFactory, Sniffer, LinkLayerCapture
 from ._tracer import UDPTracer, UDPCapture
+from .. import OperationNotDefinedForAnonymousNodeError
 
 
 _logger = logging.getLogger(__name__)
@@ -176,10 +177,10 @@ class UDPTransport(pycyphal.transport.Transport):
                 self._input_registry[specifier] = SelectiveUDPInputSession(
                     specifier, payload_metadata, sock, finalizer, self._local_node_id
                 )
-            elif not specifier.is_promiscuous and self.local_node_id == None:
-                raise ValueError("Anonymous UDP Transport cannot create non-promiscuous input session")
             else:
-                raise ValueError("Cannot create input session")
+                raise OperationNotDefinedForAnonymousNodeError(
+                    "Anonymous UDP Transport cannot create non-promiscuous input session"
+                )
         out = self._input_registry[specifier]
         assert isinstance(out, UDPInputSession)
         assert out.specifier == specifier
