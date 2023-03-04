@@ -43,17 +43,20 @@ def asyncio_allow_event_loop_access_from_top_level() -> None:
             setattr(mod, restore, getattr(mod, name))
         setattr(mod, name, new)
 
-    swap(asyncio, "get_event_loop", asyncio.get_event_loop_policy().get_event_loop)
-    swap(asyncio, "get_running_loop", asyncio.get_event_loop_policy().get_event_loop)
-
     def events_get_event_loop(stacklevel: int = 0) -> asyncio.AbstractEventLoop:  # pragma: no cover
         _ = stacklevel
-        return asyncio.get_event_loop_policy().get_event_loop()
+        try:
+            return asyncio.get_event_loop_policy().get_event_loop()
+        except RuntimeError:
+            return asyncio.get_event_loop_policy().new_event_loop()
+
+    swap(asyncio, "get_event_loop", events_get_event_loop)
+    swap(asyncio, "get_running_loop", events_get_event_loop)
 
     try:
         swap(asyncio.events, "_get_event_loop", events_get_event_loop)
     except AttributeError:  # pragma: no cover
-        pass  # Python <3.10
+        pass  # Unsuitable Python version
 
 
 def asyncio_restore() -> None:
