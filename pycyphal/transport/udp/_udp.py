@@ -192,6 +192,12 @@ class UDPTransport(pycyphal.transport.Transport):
         self._ensure_not_closed()
         if specifier not in self._output_registry:
 
+            # check if anonymous, in that case no service transfers are allowed
+            if self._anonymous and isinstance(specifier.data_specifier, pycyphal.transport.ServiceDataSpecifier):
+                raise OperationNotDefinedForAnonymousNodeError(
+                    "Anonymous UDP Transport cannot create service output session"
+                )
+
             def finalizer() -> None:
                 del self._output_registry[specifier]
 
