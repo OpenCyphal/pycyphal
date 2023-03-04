@@ -51,7 +51,7 @@ Cyphal-specific UDP datagram header.
 |                   | Route specifier   | 17 least significant bits of the IP address                               |
 | Session specifier +-------------------+---------------------------------------------------------------------------+
 |                   | Data specifier    | For message transfers: 15 least significant bits                          |
-|                   |                   |                                            of the multicast group address.|
+|                   |                   | of the multicast group address.                                           |
 |                   |                   | For service transfers: 16 least significant bits                          |
 +-------------------+-------------------+---------------------------------------------------------------------------+
 
@@ -361,7 +361,6 @@ Inheritance diagram
                          pycyphal.transport.udp._frame
                          pycyphal.transport.udp._session._input
                          pycyphal.transport.udp._session._output
-                         pycyphal.transport.udp._socket_reader
                          pycyphal.transport.udp._tracer
    :parts: 1
 """

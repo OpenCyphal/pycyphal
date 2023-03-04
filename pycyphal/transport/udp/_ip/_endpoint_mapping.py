@@ -125,20 +125,20 @@ def service_multicast_group_to_node_id(multicast_group: IPAddress) -> typing.Opt
 def message_data_specifier_to_multicast_group(
     data_specifier: MessageDataSpecifier, ipv6_addr: bool = False
 ) -> IPAddress:
-    """
+    r"""
     Takes a (Message) data_specifier; returns the corresponding multicast address.
     For IPv4, the resulting address is constructed as follows::
 
-            fixed            subject-ID (Service)
-          (15 bits)     res. (15 bits)
-       ______________   | _____________ 
-      /              \  v/             \ 
-      11101111.0000000x.znnnnnnn.nnnnnnnn
-      \__/      ^     ^
-    (4 bits)  Cyphal SNM
-      IPv4     UDP
-    multicast address
-     prefix   version
+                fixed            subject-ID (Service)
+            (15 bits)     res. (15 bits)
+         ______________   | _____________ 
+        /              \  v/             \ 
+        11101111.0000000x.znnnnnnn.nnnnnnnn
+        \__/      ^     ^
+        (4 bits)  Cyphal SNM
+        IPv4     UDP
+        multicast address
+        prefix   version
 
     >>> from pycyphal.transport import MessageDataSpecifier
     >>> from ipaddress import ip_address
