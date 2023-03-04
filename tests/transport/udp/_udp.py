@@ -7,6 +7,7 @@ import asyncio
 import ipaddress
 import pytest
 import pycyphal.transport
+from pycyphal.transport import OperationNotDefinedForAnonymousNodeError
 
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pycyphal.transport.udp import UDPTransport
@@ -118,7 +119,7 @@ async def _unittest_udp_transport_ipv4() -> None:
 
     # Anonymous UDP Transport cannot create non-promiscuous input session (only Message, no Service)
     faulthy_specifier = InputSessionSpecifier(MessageDataSpecifier(2345), 123)
-    with pytest.raises(ValueError):
+    with pytest.raises(OperationNotDefinedForAnonymousNodeError):
         _ = anon_tr.get_input_session(faulthy_specifier, meta)
 
     subscriber_selective_specifier = InputSessionSpecifier(MessageDataSpecifier(2345), 123)
