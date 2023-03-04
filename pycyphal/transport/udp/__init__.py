@@ -349,7 +349,7 @@ from ._session import UDPFeedback as UDPFeedback
 from ._frame import UDPFrame as UDPFrame
 
 from ._ip import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group
-from ._ip import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
+from ._ip import service_node_id_to_multicast_group as service_node_id_to_multicast_group
 from ._ip import LinkLayerPacket as LinkLayerPacket
 
 from ._tracer import IPPacket as IPPacket

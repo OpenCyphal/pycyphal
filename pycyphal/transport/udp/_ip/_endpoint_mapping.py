@@ -98,30 +98,6 @@ def service_node_id_to_multicast_group(destination_node_id: int | None, ipv6_add
     return ty(msb | destination_node_id)  # type: ignore
 
 
-def service_multicast_group_to_node_id(multicast_group: IPAddress) -> typing.Optional[int]:
-    """
-    The inverse of :func:`service_node_id_to_multicast_group`.
-    The return value is None if:
-    - the node-ID is not a valid Cyphal/UDP node-ID (0xFFFF), or
-    - the multicast group is not valid per the current Cyphal/UDP specification.
-
-    >>> from ipaddress import ip_address
-    >>> service_multicast_group_to_node_id(ip_address('239.1.0.123'))
-    123
-    >>> service_multicast_group_to_node_id(ip_address('239.1.1.200'))
-    456
-    >>> service_multicast_group_to_node_id(ip_address('239.52.255.255')) # -> None (invalid)
-    """
-
-    candidate = int(multicast_group) & DESTINATION_NODE_ID_MASK
-    fix = MULTICAST_PREFIX | SNM_BIT_MASK
-    if int(multicast_group) & int(FIXED_MASK_PREFIX) != fix:
-        candidate = None
-    if candidate == DESTINATION_NODE_ID_MASK:
-        candidate = None
-    return candidate
-
-
 def message_data_specifier_to_multicast_group(
     data_specifier: MessageDataSpecifier, ipv6_addr: bool = False
 ) -> IPAddress:
@@ -163,29 +139,6 @@ def message_data_specifier_to_multicast_group(
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
     return ty(msb | data_specifier.subject_id)  # type: ignore
 
-
-def multicast_group_to_message_data_specifier(
-    multicast_group: IPAddress
-) -> typing.Optional[MessageDataSpecifier]:
-    """
-    The inverse of :func:`message_data_specifier_to_multicast_group`.
-    The return value is None if:
-    - the multicast group is not valid per the current Cyphal/UDP specification.
-
-    >>> from ipaddress import ip_address
-    >>> multicast_group_to_message_data_specifier(ip_address('239.0.0.123'))
-    MessageDataSpecifier(subject_id=123)
-    >>> multicast_group_to_message_data_specifier(ip_address('239.0.1.200'))
-    MessageDataSpecifier(subject_id=456)
-    >>> multicast_group_to_message_data_specifier(ip_address('240.0.0.123')) # -> None (not a multicast prefix is wrong)
-    >>> multicast_group_to_message_data_specifier(ip_address('239.1.0.123')) # -> None (SNM bit is 1, thus service not message)
-    """
-    candidate = int(multicast_group) & SUBJECT_ID_MASK
-    fix = MULTICAST_PREFIX & ~(SNM_BIT_MASK)
-    if int(multicast_group) & int(FIXED_MASK_PREFIX) != fix:
-        return None
-    return MessageDataSpecifier(subject_id=candidate)
-
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
 
 def _unittest_udp_endpoint_mapping() -> None:
@@ -206,15 +159,6 @@ def _unittest_udp_endpoint_mapping() -> None:
     srvc_ip = service_node_id_to_multicast_group(destination_node_id=123)
     assert (int(srvc_ip) & SNM_BIT_MASK) == SNM_BIT_MASK
 
-    ### service_multicast_group_to_node_id
-    # valid multicast group
-    assert 123 == service_multicast_group_to_node_id(ip_address('239.1.0.123'))
-    assert 456 == service_multicast_group_to_node_id(ip_address('239.1.1.200'))
-    assert None == service_multicast_group_to_node_id(ip_address('239.1.255.255'))
-
-    # invalid multicast group
-    assert None == service_multicast_group_to_node_id(ip_address('255.1.0.123'))
-
     ### message_data_specifier_to_multicast_group
     # valid data_specifier
     assert '239.0.0.123' == str(message_data_specifier_to_multicast_group(MessageDataSpecifier(123)))
@@ -227,14 +171,3 @@ def _unittest_udp_endpoint_mapping() -> None:
     # SNM bit is not set
     msg_ip = message_data_specifier_to_multicast_group(MessageDataSpecifier(123))
     assert (int(msg_ip) & SNM_BIT_MASK) == 0
-
-    ### multicast_group_to_message_data_specifier
-    # valid multicast group
-    assert MessageDataSpecifier(123) == multicast_group_to_message_data_specifier(ip_address('239.0.0.123'))
-    assert MessageDataSpecifier(456) == multicast_group_to_message_data_specifier(ip_address('239.0.1.200'))
-
-    # invalid multicast group
-    assert None == multicast_group_to_message_data_specifier(ip_address('240.0.0.123'))
-
-    # SNM bit is set
-    assert None == multicast_group_to_message_data_specifier(ip_address('239.1.0.123'))
