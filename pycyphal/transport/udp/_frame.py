@@ -38,9 +38,6 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         };
         static_assert(sizeof(struct Header) == 24, "Invalid layout");   # Fixed-size 24-byte header with natural alignment for each field ensured.
 
-    If you have any feedback concerning the frame format, please bring it to
-    https://forum.opencyphal.org/t/alternative-transport-protocols/324.
-
     +---------------+---------------+---------------+-----------------+------------------+
     |**MAC header** | **IP header** |**UDP header** |**Cyphal header**|**Cyphal payload**|
     +---------------+---------------+---------------+-----------------+------------------+

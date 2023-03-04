@@ -201,23 +201,24 @@ class UDPInputSession(pycyphal.transport.InputSession):
         """
         Closes the instance and its socket, waits for the thread to terminate (which should happen instantly).
 
-        This method is guaranteed to not return until the socket is closed and all calls that might have been
-        blocked on it have been completed (particularly, the calls made by the worker thread).
-        THIS IS EXTREMELY IMPORTANT because if the worker thread is left on a blocking read from a closed socket,
-        the next created socket is likely to receive the same file descriptor and the worker thread would then
-        inadvertently consume the data destined for another reader.
-        Worse yet, this error may occur spuriously depending on the timing of the worker thread's access to the
-        blocking read function, causing the problem to appear and disappear at random.
-        I literally spent the whole day sifting through logs and Wireshark dumps trying to understand why the test
-        (specifically, the node tracker test, which is an application-layer entity)
-        sometimes fails to see a service response that is actually present on the wire.
-        This case is now covered by a dedicated unit test.
-
-        The lesson is to never close a file descriptor while there is a system call blocked on it. Never again.
-
         Once closed, new listeners can no longer be added.
         Raises :class:`RuntimeError` instead of closing if there is at least one active listener.
         """
+
+        # This method is guaranteed to not return until the socket is closed and all calls that might have been
+        # blocked on it have been completed (particularly, the calls made by the worker thread).
+        # THIS IS EXTREMELY IMPORTANT because if the worker thread is left on a blocking read from a closed socket,
+        # the next created socket is likely to receive the same file descriptor and the worker thread would then
+        # inadvertently consume the data destined for another reader.
+        # Worse yet, this error may occur spuriously depending on the timing of the worker thread's access to the
+        # blocking read function, causing the problem to appear and disappear at random.
+        # I literally spent the whole day sifting through logs and Wireshark dumps trying to understand why the test
+        # (specifically, the node tracker test, which is an application-layer entity)
+        # sometimes fails to see a service response that is actually present on the wire.
+        # This case is now covered by a dedicated unit test.
+ 
+        # The lesson is to never close a file descriptor while there is a system call blocked on it. Never again.
+
         self._closed = True
         if self._finalizer is not None:
             self._finalizer()

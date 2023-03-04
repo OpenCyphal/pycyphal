@@ -53,7 +53,7 @@ class UDPTransport(pycyphal.transport.Transport):
         anonymous: bool = False,
     ):
         """
-        :param local_ip_address: Specifies which local IP address to use for this transport.
+        :param local_ip_address: Specifies which local network interface to use for this transport. 
 
             Using ``INADDR_ANY`` here (i.e., ``0.0.0.0`` for IPv4) is not expected to work reliably or be portable
             because this configuration is, generally, incompatible with multicast sockets (even in the anonymous mode).
@@ -64,23 +64,12 @@ class UDPTransport(pycyphal.transport.Transport):
             another node running locally on the same interface
             (because sockets are initialized with ``SO_REUSEADDR`` and ``SO_REUSEPORT``, when available).
 
-        :param local_node_id: As explained previously, the node-ID is part of the UDP Frame,
-            this parameter allows one to setup an anonymous input session.
+        :param local_node_id: As explained previously, the node-ID is part of the UDP Frame.
 
             - If the value is None, an anonymous instance will be constructed.
-              The UDP frame will then report its own :attr:`source_node_id` as None.
+              Emitted UDP frames will then report its :attr:`source_node_id` as None.
 
             - If the value is a non-negative integer, then we can setup both input and output sessions.
-
-        Examples:
-
-        +-------------------+----------------------------+--------------------------+
-        | ``remote_node_id``| Data specifier             | Multicast IP address     |
-        +===================+============================+==========================+
-        | 42                | Message                    | 239.52.0.42              |
-        +-------------------+----------------------------+--------------------------+
-        | 42                | Service                    | 239.53.0.42              |
-        +-------------------+----------------------------+--------------------------+
 
         :param mtu: The application-level MTU for outgoing packets.
             In other words, this is the maximum number of serialized bytes per Cyphal/UDP frame.

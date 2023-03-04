@@ -52,20 +52,20 @@ This is a temporary UDP port. We'll register an official one later.
 
 
 def service_node_id_to_multicast_group(destination_node_id: int | None, ipv6_addr: bool = False) -> IPAddress:
-    """
+    r"""
     Takes a destination node_id; returns the corresponding multicast address (for Service).
     For IPv4, the resulting address is constructed as follows::
 
-            fixed
-          (15 bits)     
-       ______________   
-      /              \  
-      11101111.0000000x.nnnnnnnn.nnnnnnnn
-      \__/      ^     ^ \_______________/
-    (4 bits)  Cyphal SNM     (16 bits)
-      IPv4     UDP           destination node-ID (Service)
-    multicast address
-     prefix   version
+                fixed
+              (15 bits)     
+           ______________   
+          /              \  
+          11101111.00000001.nnnnnnnn.nnnnnnnn
+          \__/      ^     ^ \_______________/
+        (4 bits)  Cyphal SNM     (16 bits)
+          IPv4     UDP           destination node-ID (Service)
+        multicast address
+         prefix   version
 
     >>> from ipaddress import ip_address
     >>> str(service_node_id_to_multicast_group(123))
@@ -129,16 +129,16 @@ def message_data_specifier_to_multicast_group(
     Takes a (Message) data_specifier; returns the corresponding multicast address.
     For IPv4, the resulting address is constructed as follows::
 
-                fixed            subject-ID (Service)
+                fixed          subject-ID (Service)
             (15 bits)     res. (15 bits)
          ______________   | _____________ 
         /              \  v/             \ 
-        11101111.0000000x.znnnnnnn.nnnnnnnn
+        11101111.00000000.znnnnnnn.nnnnnnnn
         \__/      ^     ^
-        (4 bits)  Cyphal SNM
-        IPv4     UDP
-        multicast address
-        prefix   version
+      (4 bits)  Cyphal SNM 
+        IPv4     UDP       
+      multicast address
+       prefix   version
 
     >>> from pycyphal.transport import MessageDataSpecifier
     >>> from ipaddress import ip_address
