@@ -155,7 +155,7 @@ class IPv4SocketFactory(SocketFactory):
 
 class SnifferIPv4(Sniffer):
     def __init__(self, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
-        netmask_width = IPV4LENGTH - DESTINATION_NODE_ID_MASK.bit_length() - 1  # +1 for the snm bit
+        netmask_width = IPV4LENGTH - DESTINATION_NODE_ID_MASK.bit_length() - 1  # -1 for the snm bit
         fix = MULTICAST_PREFIX
         subnet_ip = ipaddress.IPv4Address
         subnet_ip = subnet_ip(fix)

@@ -12,8 +12,6 @@ import pycyphal.util
 import pycyphal.transport
 from ._link_layer import LinkLayerCapture
 
-_logger = logging.getLogger(__name__)
-
 
 class SocketFactory(abc.ABC):
     """

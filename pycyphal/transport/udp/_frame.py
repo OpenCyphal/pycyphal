@@ -28,13 +28,13 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             uint5_t  _reserved_b;
             uint16_t source_node_id;        # 0xFFFF == anonymous transfer
             uint16_t destination_node_id;   # 0xFFFF == broadcast
-            uint15_t data_specifier;        # subject-ID | (service-ID + RNR (Request, Not Message))
-            bool     snm;                   #SNM (Service, Not Message)
+            uint15_t data_specifier;        # subject-ID | (service-ID + RNR (Request, Not Response))
+            bool     snm;                   # SNM (Service, Not Message)
             uint64_t transfer_id;
             uint31_t frame_index;
-            bool     frame_index_eot;
+            bool     frame_index_eot;       # End of transfer
             uint16_t user_data;             # Opaque application-specific data with user-defined semantics. Generic implementations should ignore
-            uint16_t header_crc;
+            uint16_t header_crc;            # Checksum of the header, excluding the CRC field itself
         };
         static_assert(sizeof(struct Header) == 24, "Invalid layout");   # Fixed-size 24-byte header with natural alignment for each field ensured.
 
@@ -83,7 +83,6 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     source_node_id: int | None
     destination_node_id: int | None
 
-    # data_specifier
     data_specifier: pycyphal.transport.DataSpecifier
 
     user_data: int
@@ -120,12 +119,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         The reason is to avoid unnecessary data copying in the user space,
         allowing the caller to rely on the vectorized IO API instead (sendmsg).
         """
-
-        # compute snm, subject_id, service_id, rnr (based on data_specifier)
-        # snm: bool  # Service, Not Message
-        # subject_id: int | None
-        # service_id: int | None
-        # rnr: bool | None  # Request, Not Response
+        
         snm = isinstance(self.data_specifier, pycyphal.transport.ServiceDataSpecifier)
         subject_id = self.data_specifier.subject_id if not snm else None
         service_id = self.data_specifier.service_id if snm else None

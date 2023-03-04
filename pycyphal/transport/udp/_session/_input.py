@@ -5,7 +5,6 @@
 from __future__ import annotations
 import abc
 import copy
-import time
 import socket as socket_
 import typing
 import select
@@ -14,7 +13,7 @@ import logging
 import threading
 import dataclasses
 import pycyphal
-from pycyphal.transport import Timestamp, MessageDataSpecifier, ServiceDataSpecifier
+from pycyphal.transport import Timestamp
 from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
 from .._frame import UDPFrame
 
@@ -36,7 +35,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
     Here we just wait for the frames to arrive (from the socket), reassemble them,
     and pass the resulting transfer.
 
-        [Socket] 1 ---> 1 [Input session] 1 ---> 1 [API]
+        [Socket] ---> [Input session] ---> [UDP API]
 
     *(The plurality notation is supposed to resemble UML: 1 - one, * - many.)*
 
@@ -145,11 +144,14 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
                 _logger.debug("%s: Received transfer %s; current stats: %s", self, transfer, self._statistics)
                 return transfer
+    
+    def put_into_queue(self, ts: pycyphal.transport.Timestamp, frame: typing.Optional[UDPFrame]):
+        self._frame_queue.put_nowait((ts, frame))
 
     def _reader_thread(self, loop: asyncio.AbstractEventLoop) -> None:
         while not self._closed and self._sock.fileno() >= 0:
             try:
-                read_ready, _, _ = select.select([self._sock], [], [], 0)
+                read_ready, _, _ = select.select([self._sock], [], [], 0.1)
                 if self._sock in read_ready:
                     # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
                     ts = pycyphal.transport.Timestamp.now()
@@ -169,9 +171,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
                         frame,
                     )
                     try:
-                        def put_into_queue(ts, frame):
-                            self._frame_queue.put_nowait((ts, frame))
-                        loop.call_soon_threadsafe(put_into_queue, ts, frame)
+                        loop.call_soon_threadsafe(self.put_into_queue, ts, frame)
                     except asyncio.QueueFull:
                         # TODO: make the queue capacity configurable
                         _logger.error("%s: Frame queue is full", self)
@@ -225,7 +225,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
 
         # Before closing the socket we need to terminate the reader thread. (See note above)
         # self._thread_stop.set()
-        # self._thread.join()
+        self._thread.join()
 
         self._sock.close()
         _logger.debug("%s: Closed", self)
@@ -272,7 +272,13 @@ class PromiscuousUDPInputSession(UDPInputSession):
         self._statistics_impl = PromiscuousUDPInputSessionStatistics()
         self._reassemblers: typing.Dict[typing.Optional[int], TransferReassembler] = {}
         assert specifier.is_promiscuous
-        super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer, local_node_id=local_node_id)
+        super().__init__(
+            specifier=specifier,
+            payload_metadata=payload_metadata,
+            sock=sock,
+            finalizer=finalizer,
+            local_node_id=local_node_id
+        )
 
     def sample_statistics(self) -> PromiscuousUDPInputSessionStatistics:
         return copy.copy(self._statistics)
@@ -343,7 +349,13 @@ class SelectiveUDPInputSession(UDPInputSession):
             on_error_callback=on_reassembly_error,
         )
 
-        super().__init__(specifier=specifier, payload_metadata=payload_metadata, sock=sock, finalizer=finalizer, local_node_id=local_node_id)
+        super().__init__(
+            specifier=specifier,
+            payload_metadata=payload_metadata,
+            sock=sock,
+            finalizer=finalizer,
+            local_node_id=local_node_id
+        )
 
     def sample_statistics(self) -> SelectiveUDPInputSessionStatistics:
         return copy.copy(self._statistics)

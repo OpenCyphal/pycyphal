@@ -6,10 +6,6 @@ r"""
 Cyphal/UDP transport overview
 +++++++++++++++++++++++++++++
 
-The Cyphal/UDP transport is experimental and is not yet part of the Cyphal specification.
-Future revisions may break wire compatibility until the transport is formally specified.
-Context: https://forum.opencyphal.org/t/324/45?u=pavel.kirienko.
-
 The Cyphal/UDP transport is essentially a trivial stateless UDP blaster based on IP multicasting.
 This transport is intended for low-latency, high-throughput switched Ethernet networks with complex topologies.
 In the spirit of Cyphal, it is designed to be simple and robust;
@@ -17,10 +13,8 @@ much of the data handling work is offloaded to the standard underlying UDP/IP st
 Both IPv4 and IPv6 are supported by this design,
 although it is expected that the advantages of IPv6 over IPv4 are less relevant in an intravehicular setting.
 
-The concept of anonymous transfer is not defined for Cyphal/UDP;
-in this transport, in order to be able to emit a transfer, the node shall have a valid node-ID value.
-This means that an anonymous Cyphal/UDP node can only listen to network traffic
-(i.e., can subscribe to subjects) but cannot transmit anything.
+Cyphal/UDP supports anonymous transfers (i.e., transfers without a source node-ID) with one limitation: 
+an anonymous node is only able to send Message transfers (but not Service transfers).
 If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
 
 This transport module contains no media sublayers because the media abstraction
@@ -54,11 +48,11 @@ Cyphal-specific UDP datagram header.
 +---------------------------------------+                                                                           |
 | Transfer-ID                           |                                                                           |
 +-------------------+-------------------+---------------------------------------------------------------------------+
-|                   | Route specifier   | 18 least significant bits of the IP address                               |
+|                   | Route specifier   | 17 least significant bits of the IP address                               |
 | Session specifier +-------------------+---------------------------------------------------------------------------+
-|                   | Data specifier    | For message transfers: 16 least significant bits of the                   |
-|                   |                   | multicast group address.                                                  |
-|                   |                   | For service transfers: UDP destination port number.                       |
+|                   | Data specifier    | For message transfers: 15 least significant bits                          |
+|                   |                   |                                            of the multicast group address.|
+|                   |                   | For service transfers: 16 least significant bits                          |
 +-------------------+-------------------+---------------------------------------------------------------------------+
 
 There are two data types that model Cyphal/UDP protocol data: :class:`UDPFrame` and :class:`RawPacket`.
@@ -82,19 +76,23 @@ Message transfers
 Message transfers are executed as IP multicast transfers.
 The IPv4 multicast group address is computed statically as follows::
 
-      fixed   message  reserved
-     (9 bits) select.  (3 bits)
-     ________   res.|  _
-    /        \     vv / \
-    11101111.0ddddd00.000sssss.ssssssss
-    \__/      \___/      \____________/
-  (4 bits)   (5 bits)       (13 bits)
-    IPv4     subnet-ID      subject-ID
-  multicast   \_______________________/
-   prefix             (23 bits)
+            fixed            subject-ID (Service)
+          (15 bits)     res. (15 bits)
+       ______________   | ______________ 
+      /              \  v/              \ 
+      11101111.0000000x.0sssssss.ssssssss
+      \__/      ^     ^
+    (4 bits)  Cyphal SNM
+      IPv4     UDP
+    multicast address
+     prefix   version
+                \_______________________/
+                       (23 bits)
               collision-free multicast
                  addressing limit of
                 Ethernet MAC for IPv4
+
+SNM: Service, not Message
 
 From the most significant bit to the least significant bit, the IPv4 multicast group address components are as follows:
 
@@ -119,22 +117,18 @@ From the most significant bit to the least significant bit, the IPv4 multicast g
     Without this limitation, an engineer deploying a network might inadvertently create a configuration that
     causes MAC-layer collisions which may be difficult to detect.
 
-- The following 5 bits are used to differentiate
-  independent Cyphal/UDP networks sharing the same physical IP network.
-  Since the 9 most significant bits of the node IP address are not represented in the multicast group address,
-  nodes whose IP addresses differ only by the 9 MSb are not distinguished by Cyphal/UDP.
-  This limitation does not appear to be significant, though, because such configurations are easy to avoid.
-  It follows that there may be up to 32 independent Cyphal/UDP networks sharing the same IP subnet.
+- The next 6 bits complete the fixed part of the multicast group address, with the most significant bit
+  defining the Cyphal UDP address version (this can be used in case we want to make changes to the endpoint
+  mapping). (Any extra explanation here? why are we not using 5 bits?)
 
-- The following 18 bits define the data specifier:
+- Last but not least, the remaining 17 bits are used to encode:
 
-  - 1 bit reserved for future use.
+  - SNM: Service, not Message (1 bit), which is used to differentiate between a Message and Service address.
+         Set to 0 in case of Message.
 
-  - 1 bit to differentiate between Message and Service address.
+  - 1 reserved bit for future use.
 
-  - 3 bits reserved for future use.
-
-  - 13 bits represent the subject-ID as-is.
+  - The 15-bit subject-ID of the Message.
 
 Per RFC 1112, the default TTL is 1, which is unacceptable.
 Therefore, publishers should use the TTL value of 16 by default,
@@ -153,43 +147,45 @@ in which case no initialization delay will take place.
 
 Example::
 
-    Fixed prefix:       11101111 0xxxxxxx xxxxxxxx xxxxxxxx 
+    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx 
 
-    Subnet-ID (=13):    xxxxxxxx x01101xx xxxxxxxx xxxxxxxx
+    Service,    :       xxxxxxxx xxxxxxx0 xxxxxxxx xxxxxxxx 
+    not Message
+    
+    Reserved:           xxxxxxxx xxxxxxxx 0xxxxxxx xxxxxxxx
 
-    Message select:     xxxxxxxx xxxxxx00 000xxxxx xxxxxxxx 
-    and reserved
+    Subject-ID (=42):   xxxxxxxx xxxxxxxx x0000000 00101010
 
-    Subject-ID (=42):   xxxxxxxx xxxxxxxx xxx00000 00101010
-
-    Multicast group:    11101111 00000100 00000000 00101010
-                             239       52        0       42
+    Multicast group:    11101111 00000000 00000000 00101010
+                             239        0        0       42
 
 
 Service transfers
 ~~~~~~~~~~~~~~~~~
 
-Service transfers are executed as IP multicast transfers.
+Service transfers are also executed as IP multicast transfers.
 The IPv4 multicast group address is computed statically as follows::
 
-      fixed          service
-     (9 bits)  res.  selector
-     ________      ||
-    /        \     vv
-    11101111.0ddddd01.nnnnnnnn.nnnnnnnn
-    \__/      \___/   \_______________/
-  (4 bits)   (5 bits)     (16 bits)
-    IPv4     subnet-ID     node-ID
-  multicast   \_______________________/
-   prefix             (23 bits)
+            fixed       
+          (15 bits)     
+       ______________   
+      /              \  
+      11101111.0000000x.ssssssss.ssssssss
+      \__/      ^     ^ \_______________/
+    (4 bits)  Cyphal SNM    (16 bits)
+      IPv4     UDP          destination node-ID (Service)
+    multicast address
+     prefix   version
+                \_______________________/
+                       (23 bits)
               collision-free multicast
                  addressing limit of
                 Ethernet MAC for IPv4
 
-The service data specifier (:class:`pycyphal.transport.ServiceDataSpecifier`)
-is manifested on the wire as the destination UDP port number;
-the mapping function is implemented in :func:`udp_port_to_service_data_specifier`.
-The source port number can be arbitrary (ephemeral), its value is ignored.
+Service transfers are distinguished from message transfers by the least significant bit of the second octet.
+The 2 last octets define the destination node-ID of the service transfer.
+
+
 
 Cyphal uses a wide range of UDP ports.
 UDP/IP stacks that comply with the IANA ephemeral port range recommendations are expected to be
@@ -198,18 +194,19 @@ This, however, is not a problem for any major modern OS.
 
 Example::
 
-    Fixed prefix:       11101111 0xxxxxxx xxxxxxxx xxxxxxxx 
+    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx 
 
-    Subnet-ID (=13):    xxxxxxxx x01101xx xxxxxxxx xxxxxxxx
+    Service,    :       xxxxxxxx xxxxxxx1 xxxxxxxx xxxxxxxx 
+    not Message
+    
+    Reserved:           xxxxxxxx xxxxxxxx 0xxxxxxx xxxxxxxx
 
-    Service select:     xxxxxxxx xxxxxx01 000xxxxx xxxxxxxx 
-    and reserved
+    Subject-ID (=42):   xxxxxxxx xxxxxxxx x0000000 00101010
 
-    Subject-ID (=42):   xxxxxxxx xxxxxxxx xxx00000 00101010
+    Multicast group:    11101111 00000000 00000000 00101010
+                             239        1        0       42
 
-    Multicast group:    11101111 00000100 00000000 00101010
-                             239       53        0       42
-
+Cyphal uses a single UDP port for all transfers (9382).                             
 
 Datagram header format
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -231,6 +228,9 @@ Also see the documentation for :class:`UDPFrame`.
 Multi-frame transfers contain four bytes of CRC32-C (Castagnoli) at the end computed over the entire transfer payload.
 For more info on multi-frame transfers, please see
 :class:`pycyphal.transport.commons.high_overhead_transport.TransferReassembler`.
+
+For more background information on how Cyphal/UDP came to be, please see the following thread in the OpenCyphal forum:
+https://forum.opencyphal.org/tcyphal-udp-architectural-issues-caused-by-the-dependency-between-the-nodes-ip-address-and-its-identity/1765
 
 
 Unreliable networks and temporal redundancy
@@ -368,8 +368,6 @@ Inheritance diagram
 
 from ._udp import UDPTransport as UDPTransport
 
-# from ._udp import UDPTransportStatistics as UDPTransportStatistics
-
 from ._session import UDPInputSession as UDPInputSession
 from ._session import PromiscuousUDPInputSession as PromiscuousUDPInputSession
 from ._session import SelectiveUDPInputSession as SelectiveUDPInputSession
@@ -383,15 +381,8 @@ from ._session import UDPFeedback as UDPFeedback
 
 from ._frame import UDPFrame as UDPFrame
 
-# from ._ip import SUBJECT_ID_MASK as SUBJECT_ID_MASK
-# from ._ip import NODE_ID_MASK as NODE_ID_MASK
-# from ._ip import SUBJECT_PORT as SUBJECT_PORT
-# from ._ip import SERVICE_BASE_PORT as SERVICE_BASE_PORT
 from ._ip import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group
 from ._ip import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
-
-# from ._ip import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
-# from ._ip import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier
 from ._ip import LinkLayerPacket as LinkLayerPacket
 
 from ._tracer import IPPacket as IPPacket

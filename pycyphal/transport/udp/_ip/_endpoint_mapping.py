@@ -61,7 +61,7 @@ def service_node_id_to_multicast_group(destination_node_id: int | None, ipv6_add
       /              \  
       11101111.0000000x.nnnnnnnn.nnnnnnnn
       \__/      ^     ^ \_______________/
-    (4 bits)  Cyphal snm     (16 bits)
+    (4 bits)  Cyphal SNM     (16 bits)
       IPv4     UDP           destination node-ID (Service)
     multicast address
      prefix   version
@@ -134,7 +134,7 @@ def message_data_specifier_to_multicast_group(
       /              \  v/             \ 
       11101111.0000000x.znnnnnnn.nnnnnnnn
       \__/      ^     ^
-    (4 bits)  Cyphal snm
+    (4 bits)  Cyphal SNM
       IPv4     UDP
     multicast address
      prefix   version

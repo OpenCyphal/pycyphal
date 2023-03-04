@@ -8,28 +8,15 @@ import asyncio
 import logging
 import warnings
 import ipaddress
-import dataclasses
 import pycyphal
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession
 from ._frame import UDPFrame
 from ._ip import SocketFactory, Sniffer, LinkLayerCapture
-
-# from ._socket_reader import SocketReader, SocketReaderStatistics
 from ._tracer import UDPTracer, UDPCapture
 
 
 _logger = logging.getLogger(__name__)
-
-
-# @dataclasses.dataclass
-# class UDPTransportStatistics(pycyphal.transport.TransportStatistics):
-#     received_datagrams: typing.Dict[pycyphal.transport.DataSpecifier, SocketReaderStatistics] = dataclasses.field(
-#         default_factory=dict
-#     )
-#     """
-#     Basic input session statistics: instances of :class:`SocketReaderStatistics` keyed by data specifier.
-#     """
 
 
 class UDPTransport(pycyphal.transport.Transport):
@@ -57,9 +44,8 @@ class UDPTransport(pycyphal.transport.Transport):
     def __init__(
         self,
         local_ip_addr: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
-        # subnet_id: int,
         local_node_id: typing.Optional[int] = 0,
-        *,  # ?
+        *,  # The following parameters are keyword-only.
         mtu: int = min(VALID_MTU_RANGE),
         service_transfer_multiplier: int = 1,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
@@ -77,18 +63,6 @@ class UDPTransport(pycyphal.transport.Transport):
             another node running locally on the same interface
             (because sockets are initialized with ``SO_REUSEADDR`` and ``SO_REUSEPORT``, when available).
 
-        :param subnet_id: Specifies which subnet the node will be associated with.
-
-        Examples:
-
-        +-----------------------+-------------------+----------------------------+--------------------------+
-        | ``subnet_id``         | ``remote_node_id``| Data specifier             | Multicast IP address     |
-        +=======================+===================+============================+==========================+
-        | 13                    | 42                | Message                    | 239.52.0.42              |
-        +-----------------------+-------------------+----------------------------+--------------------------+
-        | 13                    | 42                | Service                    | 239.53.0.42              |
-        +-----------------------+-------------------+----------------------------+--------------------------+
-
         :param local_node_id: As explained previously, the node-ID is part of the UDP Frame,
             this parameter allows one to setup an anonymous input session.
 
@@ -96,6 +70,16 @@ class UDPTransport(pycyphal.transport.Transport):
               The UDP frame will then report its own :attr:`source_node_id` as None.
 
             - If the value is a non-negative integer, then we can setup both input and output sessions.
+
+        Examples:
+
+        +-------------------+----------------------------+--------------------------+
+        | ``remote_node_id``| Data specifier             | Multicast IP address     |
+        +===================+============================+==========================+
+        | 42                | Message                    | 239.52.0.42              |
+        +-------------------+----------------------------+--------------------------+
+        | 42                | Service                    | 239.53.0.42              |
+        +-------------------+----------------------------+--------------------------+
 
         :param mtu: The application-level MTU for outgoing packets.
             In other words, this is the maximum number of serialized bytes per Cyphal/UDP frame.
@@ -128,7 +112,6 @@ class UDPTransport(pycyphal.transport.Transport):
 
         self._sock_factory = SocketFactory.new(local_ip_addr)
         self._anonymous = local_node_id is None
-        # self._subnet_id = subnet_id
         self._local_ip_addr = local_ip_addr
         self._local_node_id = local_node_id
         self._mtu = int(mtu)
@@ -142,7 +125,6 @@ class UDPTransport(pycyphal.transport.Transport):
         if not (low <= self._mtu <= high):
             raise ValueError(f"Invalid MTU: {self._mtu} bytes")
 
-        # self._socket_reader_registry: typing.Dict[pycyphal.transport.DataSpecifier, SocketReader] = {}
         self._input_registry: typing.Dict[pycyphal.transport.InputSessionSpecifier, UDPInputSession] = {}
         self._output_registry: typing.Dict[pycyphal.transport.OutputSessionSpecifier, UDPOutputSession] = {}
 
@@ -150,7 +132,6 @@ class UDPTransport(pycyphal.transport.Transport):
         self._capture_handlers: typing.List[pycyphal.transport.CaptureCallback] = []
 
         self._closed = False
-        # self._statistics = UDPTransportStatistics()
 
         _logger.debug("%s: Initialized with local node-ID %s", self, self._local_node_id)
 
@@ -192,7 +173,9 @@ class UDPTransport(pycyphal.transport.Transport):
                     specifier, payload_metadata, sock, finalizer, self._local_node_id
                 )
             elif self.local_node_id != None:
-                self._input_registry[specifier] = SelectiveUDPInputSession(specifier, payload_metadata, sock, finalizer, self._local_node_id)
+                self._input_registry[specifier] = SelectiveUDPInputSession(
+                    specifier, payload_metadata, sock, finalizer, self._local_node_id
+                )
             elif not specifier.is_promiscuous and self.local_node_id == None:
                 raise ValueError("Anonymous UDP Transport cannot create non-promiscuous input session")
             else:
@@ -201,13 +184,6 @@ class UDPTransport(pycyphal.transport.Transport):
         assert isinstance(out, UDPInputSession)
         assert out.specifier == specifier
         return out
-        # if specifier not in self._input_registry:
-        #     self._setup_input_session(specifier, payload_metadata)
-        # assert specifier.data_specifier in self._socket_reader_registry
-        # out = self._input_registry[specifier]
-        # assert isinstance(out, UDPInputSession)
-        # assert out.specifier == specifier
-        # return out
 
     def get_output_session(
         self, specifier: pycyphal.transport.OutputSessionSpecifier, payload_metadata: pycyphal.transport.PayloadMetadata
@@ -254,10 +230,6 @@ class UDPTransport(pycyphal.transport.Transport):
     def local_ip_addr(self) -> int:
         return self._sock_factory._local_ip_addr
 
-    # @property
-    # def subnet_id(self) -> int:
-    #     return self._sock_factory.subnet_id
-
     def begin_capture(self, handler: pycyphal.transport.CaptureCallback) -> None:
         """
         Reported events are of type :class:`UDPCapture`.
@@ -302,75 +274,6 @@ class UDPTransport(pycyphal.transport.Transport):
         """
         raise NotImplementedError
 
-    def _setup_input_session(
-        self, specifier: pycyphal.transport.InputSessionSpecifier, payload_metadata: pycyphal.transport.PayloadMetadata
-    ) -> None:
-        """
-        In order to set up a new input session, we have to link together a lot of objects. Tricky.
-        Also, the setup and teardown actions shall be atomic. Hence the separate method.
-        """
-        assert specifier not in self._input_registry
-        try:
-            if specifier.data_specifier not in self._socket_reader_registry:
-                _logger.debug(
-                    "%r: Setting up new socket reader for %s. Existing entries at the moment: %s",
-                    self,
-                    specifier.data_specifier,
-                    self._socket_reader_registry,
-                )
-                self._socket_reader_registry[specifier.data_specifier] = SocketReader(
-                    sock=self._sock_factory.make_input_socket(specifier.remote_node_id, specifier.data_specifier),
-                    local_node_id=self._local_node_id,
-                    statistics=self._statistics.received_datagrams.setdefault(
-                        specifier.data_specifier, SocketReaderStatistics()
-                    ),
-                )
-            cls: typing.Union[typing.Type[PromiscuousUDPInputSession], typing.Type[SelectiveUDPInputSession]] = (
-                PromiscuousUDPInputSession if specifier.is_promiscuous else SelectiveUDPInputSession
-            )
-            session = cls(
-                specifier=specifier,
-                payload_metadata=payload_metadata,
-                finalizer=lambda: self._teardown_input_session(specifier),
-            )
-            self._socket_reader_registry[specifier.data_specifier].add_listener(
-                specifier.remote_node_id, session._process_frame  # pylint: disable=protected-access
-            )
-        except Exception:
-            self._teardown_input_session(specifier)  # Rollback to ensure atomicity.
-            raise
-
-        self._input_registry[specifier] = session
-
-    def _teardown_input_session(self, specifier: pycyphal.transport.InputSessionSpecifier) -> None:
-        """
-        The finalizer may be invoked at any point during the setup process,
-        so it must be able to deconstruct the pipeline even if it is not fully set up.
-        This is why we have these try-except everywhere. Who knew that atomic transactions can be so messy?
-        """
-        # Unregister the session first.
-        try:
-            del self._input_registry[specifier]
-        except LookupError:
-            pass
-        # Remove the session from the list of socket reader listeners.
-        try:
-            demux = self._socket_reader_registry[specifier.data_specifier]
-        except LookupError:
-            pass  # The reader has not been set up yet, nothing to do.
-        else:
-            try:
-                demux.remove_listener(specifier.remote_node_id)
-            except LookupError:
-                pass
-            # Destroy the reader if there are no listeners left.
-            if not demux.has_listeners:
-                try:
-                    _logger.debug("%r: Destroying %r for %s", self, demux, specifier.data_specifier)
-                    demux.close()
-                finally:
-                    del self._socket_reader_registry[specifier.data_specifier]
-
     def _process_capture(self, capture: LinkLayerCapture) -> None:
         """This handler may be invoked from a different thread (the capture thread)."""
         pycyphal.util.broadcast(self._capture_handlers)(UDPCapture(capture.timestamp, capture.packet))
@@ -381,7 +284,6 @@ class UDPTransport(pycyphal.transport.Transport):
 
     def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
         return [repr(str(self.local_ip_addr))], {
-            # "subnet_id": self._subnet_id,
             "local_node_id": self.local_node_id,
             "service_transfer_multiplier": self._srv_multiplier,
             "mtu": self._mtu,

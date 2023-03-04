@@ -12,10 +12,6 @@ import pycyphal
 from pycyphal.transport import Timestamp, ServiceDataSpecifier, MessageDataSpecifier
 from .._frame import UDPFrame
 
-from pycyphal.transport.commons.crc import CRC32C
-
-TransferCRC = CRC32C
-
 
 _IGNORE_OS_ERROR_ON_SEND = sys.platform.startswith("win")
 r"""
@@ -107,22 +103,13 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
                 payload=payload,
             )
 
+        # payload_crc added in serialize_transfer(); header_crc added in compile_header_and_payload()
         frames = [
             fr.compile_header_and_payload()
             for fr in pycyphal.transport.commons.high_overhead_transport.serialize_transfer(
                 transfer.fragmented_payload, self._mtu, construct_frame
             )
         ]
-
-        # # calculate payload_crc based on the payload of all frames
-        # payload_crc = TransferCRC()
-        # for _, _payload in frames:
-        #     _logger.debug("payload: %s", _payload.tobytes())
-        #     payload_crc.add(_payload.tobytes())
-        # # add payload_crc to last frame
-        # new_last_payload_frame = memoryview(frames[-1][1].tobytes() + payload_crc.value.to_bytes(4, "little"))
-        # _logger.debug("new_last_payload_frame: %s", new_last_payload_frame.tobytes())
-        # frames[-1] = frames[-1][0], new_last_payload_frame
 
         _logger.debug("%s: Sending transfer: %s; current stats: %s", self, transfer, self._statistics)
         tx_timestamp = await self._emit(frames, monotonic_deadline)
