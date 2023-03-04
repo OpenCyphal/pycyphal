@@ -6,24 +6,24 @@ environment:
       PYTHON: 'C:\Python310-x64'  # YAML treats '\\' and "\\" differently.
     -
       job_group: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2204
       PYTHON: '3.10'
     -
       job_group: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2204
       PYTHON: '3.9'
     -
       job_group: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2204
       PYTHON: '3.8'
     -
       job_group: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2204
       PYTHON: '3.7'
     -
       job_name: deploy
       job_depends_on: tests
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2204
       PYTHON: '3.10'
 
   GIT_TOKEN:
@@ -70,7 +70,7 @@ for:
     matrix:
       only:
         - job_group: tests
-          APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+          APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2204
     install:
       - 'export extras_pkg="linux-*-extra-$(uname -r)"'
       # Graphviz is needed for the docs, ncat is needed for testing the Cyphal/serial transport.
