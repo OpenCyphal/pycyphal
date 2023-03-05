@@ -71,7 +71,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         specifier: pycyphal.transport.InputSessionSpecifier,
         payload_metadata: pycyphal.transport.PayloadMetadata,
         sock: socket_.socket,
-        finalizer: typing.Union[typing.Callable[[], None], None], 
+        finalizer: typing.Union[typing.Callable[[], None], None],
         local_node_id: typing.Optional[int],
     ):
         """
@@ -88,7 +88,9 @@ class UDPInputSession(pycyphal.transport.InputSession):
         assert callable(self._finalizer)
         self._transfer_id_timeout = self.DEFAULT_TRANSFER_ID_TIMEOUT
         self._frame_queue: asyncio.Queue[typing.Tuple[Timestamp, UDPFrame | None]] = asyncio.Queue()
-        self._thread = threading.Thread(target=self._reader_thread, name=str(self), args=(asyncio.get_running_loop(),), daemon=True)
+        self._thread = threading.Thread(
+            target=self._reader_thread, name=str(self), args=(asyncio.get_running_loop(),), daemon=True
+        )
         self._thread.start()
 
     async def receive(self, monotonic_deadline: float) -> typing.Optional[pycyphal.transport.TransferFrom]:
@@ -144,7 +146,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 self._statistics.payload_bytes += sum(map(len, transfer.fragmented_payload))
                 _logger.debug("%s: Received transfer %s; current stats: %s", self, transfer, self._statistics)
                 return transfer
-    
+
     def put_into_queue(self, ts: pycyphal.transport.Timestamp, frame: typing.Optional[UDPFrame]) -> None:
         self._frame_queue.put_nowait((ts, frame))
 
@@ -216,7 +218,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         # (specifically, the node tracker test, which is an application-layer entity)
         # sometimes fails to see a service response that is actually present on the wire.
         # This case is now covered by a dedicated unit test.
- 
+
         # The lesson is to never close a file descriptor while there is a system call blocked on it. Never again.
 
         self._closed = True
@@ -278,7 +280,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
             payload_metadata=payload_metadata,
             sock=sock,
             finalizer=finalizer,
-            local_node_id=local_node_id
+            local_node_id=local_node_id,
         )
 
     def sample_statistics(self) -> PromiscuousUDPInputSessionStatistics:
@@ -355,7 +357,7 @@ class SelectiveUDPInputSession(UDPInputSession):
             payload_metadata=payload_metadata,
             sock=sock,
             finalizer=finalizer,
-            local_node_id=local_node_id
+            local_node_id=local_node_id,
         )
 
     def sample_statistics(self) -> SelectiveUDPInputSessionStatistics:

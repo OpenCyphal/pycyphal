@@ -29,7 +29,8 @@ Masks the 14 least significant bits of the multicast group address (v4/v6) that 
 
 DESTINATION_NODE_ID_MASK = 0xFFFF
 """
-Masks the 16 least significant bits of the multicast group address (v4/v6) that represent the destination node-ID. (Service)
+Masks the 16 least significant bits of the multicast group address (v4/v6) that represent the destination node-ID.
+(Service)
 """
 
 SNM_BIT_MASK = 0b_00000000_00000001_00000000_00000000
@@ -57,9 +58,9 @@ def service_node_id_to_multicast_group(destination_node_id: int | None, ipv6_add
     For IPv4, the resulting address is constructed as follows::
 
                 fixed
-              (15 bits)     
-           ______________   
-          /              \  
+              (15 bits)
+           ______________
+          /              \
           11101111.00000001.nnnnnnnn.nnnnnnnn
           \__/      ^     ^ \_______________/
         (4 bits)  Cyphal SNM     (16 bits)
@@ -92,7 +93,7 @@ def service_node_id_to_multicast_group(destination_node_id: int | None, ipv6_add
     ty: type
     if not ipv6_addr:
         ty = ipaddress.IPv4Address
-        msb = MULTICAST_PREFIX | SNM_BIT_MASK  
+        msb = MULTICAST_PREFIX | SNM_BIT_MASK
     else:
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
     return ty(msb | destination_node_id)
@@ -107,12 +108,12 @@ def message_data_specifier_to_multicast_group(
 
                 fixed          subject-ID (Service)
             (15 bits)     res. (15 bits)
-         ______________   | _____________ 
-        /              \  v/             \ 
+         ______________   | _____________
+        /              \  v/             \
         11101111.00000000.znnnnnnn.nnnnnnnn
         \__/      ^     ^
-      (4 bits)  Cyphal SNM 
-        IPv4     UDP       
+      (4 bits)  Cyphal SNM
+        IPv4     UDP
       multicast address
        prefix   version
 
@@ -139,17 +140,19 @@ def message_data_specifier_to_multicast_group(
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
     return ty(msb | data_specifier.subject_id)
 
+
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
+
 
 def _unittest_udp_endpoint_mapping() -> None:
     from pytest import raises
     from ipaddress import ip_address
-    
+
     ### service_node_id_to_multicast_group
     # valid service IDs
-    assert '239.1.0.123' == str(service_node_id_to_multicast_group(destination_node_id=123))
-    assert '239.1.1.200' == str(service_node_id_to_multicast_group(destination_node_id=456))
-    assert '239.1.255.255' == str(service_node_id_to_multicast_group(destination_node_id=None))
+    assert "239.1.0.123" == str(service_node_id_to_multicast_group(destination_node_id=123))
+    assert "239.1.1.200" == str(service_node_id_to_multicast_group(destination_node_id=456))
+    assert "239.1.255.255" == str(service_node_id_to_multicast_group(destination_node_id=None))
 
     # invalid destination_node_id
     with raises(ValueError):
@@ -161,13 +164,13 @@ def _unittest_udp_endpoint_mapping() -> None:
 
     ### message_data_specifier_to_multicast_group
     # valid data_specifier
-    assert '239.0.0.123' == str(message_data_specifier_to_multicast_group(MessageDataSpecifier(123)))
-    assert '239.0.1.200' == str(message_data_specifier_to_multicast_group(MessageDataSpecifier(456)))
+    assert "239.0.0.123" == str(message_data_specifier_to_multicast_group(MessageDataSpecifier(123)))
+    assert "239.0.1.200" == str(message_data_specifier_to_multicast_group(MessageDataSpecifier(456)))
 
     # invalid data_specifier
     with raises(ValueError):
         _ = message_data_specifier_to_multicast_group(MessageDataSpecifier(2**14))
-    
+
     # SNM bit is not set
     msg_ip = message_data_specifier_to_multicast_group(MessageDataSpecifier(123))
     assert (int(msg_ip) & SNM_BIT_MASK) == 0

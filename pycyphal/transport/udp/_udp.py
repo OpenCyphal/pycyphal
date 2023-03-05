@@ -23,9 +23,9 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pycyphal.transport.TransportStatistics):
-    received_datagrams: typing.Dict[pycyphal.transport.DataSpecifier, typing.List[UDPInputSessionStatistics]] = dataclasses.field(
-        default_factory=dict
-    )
+    received_datagrams: typing.Dict[
+        pycyphal.transport.DataSpecifier, typing.List[UDPInputSessionStatistics]
+    ] = dataclasses.field(default_factory=dict)
     """
     Basic input session statistics: instances of :class:`UDPInputSessionStatistics` keyed by their data specifier.
     """
@@ -64,7 +64,7 @@ class UDPTransport(pycyphal.transport.Transport):
         anonymous: bool = False,
     ):
         """
-        :param local_ip_address: Specifies which local network interface to use for this transport. 
+        :param local_ip_address: Specifies which local network interface to use for this transport.
 
             Using ``INADDR_ANY`` here (i.e., ``0.0.0.0`` for IPv4) is not expected to work reliably or be portable
             because this configuration is, generally, incompatible with multicast sockets (even in the anonymous mode).
@@ -227,7 +227,7 @@ class UDPTransport(pycyphal.transport.Transport):
     def sample_statistics(self) -> UDPTransportStatistics:
         # Update statistics for all keys in self._statistics.received_datagrams
         for key in self._statistics.received_datagrams.keys():
-            self._statistics.received_datagrams[key] = [] # Clear the old data
+            self._statistics.received_datagrams[key] = []  # Clear the old data
             for session in self._input_registry.values():
                 if session.specifier.data_specifier == key:
                     self._statistics.received_datagrams[key].append(copy.copy(session._statistics))
