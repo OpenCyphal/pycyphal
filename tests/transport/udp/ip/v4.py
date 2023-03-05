@@ -25,6 +25,7 @@ def _unittest_socket_factory() -> None:
     is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
 
     fac = SocketFactory.new(IPv4Address("127.0.0.1"))
+    assert isinstance(fac, IPv4SocketFactory)
     assert fac.max_nodes == 0xFFFF
     assert str(fac.local_ip_address) == "127.0.0.1"
 
@@ -127,6 +128,7 @@ def _unittest_sniffer() -> None:
     is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
 
     fac = SocketFactory.new(ip_address("127.0.0.1"))
+    assert isinstance(fac, IPv4SocketFactory)
 
     ts_last = Timestamp.now()
     sniffs: typing.List[LinkLayerCapture] = []
@@ -138,6 +140,7 @@ def _unittest_sniffer() -> None:
         # assert ts_last.system_ns <= cap.timestamp.system_ns <= now.system_ns
         ts_last = cap.timestamp
         # Make sure that all traffic from foreign networks is filtered out by the sniffer.
+        assert isinstance(fac, IPv4SocketFactory)
         assert (int(parse_ip(cap.packet).source_destination[0]) & 0x_FFFE_0000) == (
             int(fac.local_ip_address) & 0x_FFFE_0000
         )

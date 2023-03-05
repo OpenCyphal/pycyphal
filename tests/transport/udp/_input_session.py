@@ -4,7 +4,7 @@
 
 import asyncio
 import ipaddress
-from pycyphal.transport import Timestamp
+from pycyphal.transport import TransferFrom
 from pycyphal.transport import Priority, PayloadMetadata
 from pycyphal.transport import InputSessionSpecifier, MessageDataSpecifier
 from pycyphal.transport.udp import UDPFrame
@@ -95,6 +95,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
     # promiscuous input session should receive the frame
     rx_data = await prom_in.receive(loop.time() + 1.0)
 
+    assert isinstance(rx_data, TransferFrom)
     assert rx_data.priority == Priority.LOW
     assert rx_data.source_node_id == 11
     assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
@@ -135,6 +136,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
 
     rx_data = await prom_in.receive(loop.time() + 1.0)
 
+    assert isinstance(rx_data, TransferFrom)
     assert rx_data.priority == Priority.LOW
     assert rx_data.source_node_id == 10
     assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
@@ -153,6 +155,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
 
     rx_data = await sel_in.receive(loop.time() + 1.0)
 
+    assert isinstance(rx_data, TransferFrom)
     assert rx_data.priority == Priority.LOW
     assert rx_data.source_node_id == 10
     assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
@@ -186,6 +189,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
     # check that promiscuous has received the frame
     rx_data = await prom_in.receive(loop.time() + 1.0)
 
+    assert isinstance(rx_data, TransferFrom)
     assert rx_data.priority == Priority.LOW
     assert rx_data.source_node_id == None
     assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
@@ -422,6 +426,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
     )
     rx_data = await prom_in.receive(loop.time() + 1.0)
 
+    assert isinstance(rx_data, TransferFrom)
     assert rx_data.priority == Priority.LOW
     assert rx_data.source_node_id == 10
     assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
@@ -443,6 +448,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
 
     rx_data = await sel_in.receive(loop.time() + 1.0)
 
+    assert isinstance(rx_data, TransferFrom)
     assert rx_data.priority == Priority.LOW
     assert rx_data.source_node_id == 10
     assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
