@@ -8,9 +8,10 @@ import asyncio
 import logging
 import warnings
 import ipaddress
+import dataclasses
 import pycyphal
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
-from ._session import UDPOutputSession
+from ._session import UDPOutputSession, UDPInputSessionStatistics
 from ._frame import UDPFrame
 from ._ip import SocketFactory, Sniffer, LinkLayerCapture, IPv4SocketFactory
 from ._tracer import UDPTracer, UDPCapture
@@ -18,6 +19,16 @@ from .. import OperationNotDefinedForAnonymousNodeError
 
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass
+class UDPTransportStatistics(pycyphal.transport.TransportStatistics):
+    received_datagrams: typing.Dict[pycyphal.transport.DataSpecifier, typing.List[UDPInputSessionStatistics]] = dataclasses.field(
+        default_factory=dict
+    )
+    """
+    Basic input session statistics: instances of :class:`UDPInputSessionStatistics` keyed by their data specifier.
+    """
 
 
 class UDPTransport(pycyphal.transport.Transport):
@@ -122,6 +133,7 @@ class UDPTransport(pycyphal.transport.Transport):
         self._capture_handlers: typing.List[pycyphal.transport.CaptureCallback] = []
 
         self._closed = False
+        self._statistics = UDPTransportStatistics()
 
         _logger.debug("%s: Initialized with local node-ID %s", self, self._local_node_id)
 
@@ -170,6 +182,7 @@ class UDPTransport(pycyphal.transport.Transport):
                 raise OperationNotDefinedForAnonymousNodeError(
                     "Anonymous UDP Transport cannot create non-promiscuous input session"
                 )
+            self._statistics.received_datagrams[specifier.data_specifier] = []
         out = self._input_registry[specifier]
         assert isinstance(out, UDPInputSession)
         assert out.specifier == specifier
@@ -211,8 +224,14 @@ class UDPTransport(pycyphal.transport.Transport):
         assert out.specifier == specifier
         return out
 
-    def sample_statistics(self) -> typing.Dict[pycyphal.transport.InputSessionSpecifier, UDPInputSession]:
-        return copy.copy(self._input_registry)
+    def sample_statistics(self) -> UDPTransportStatistics:
+        # Update statistics for all keys in self._statistics.received_datagrams
+        for key in self._statistics.received_datagrams.keys():
+            self._statistics.received_datagrams[key] = [] # Clear the old data
+            for session in self._input_registry.values():
+                if session.specifier.data_specifier == key:
+                    self._statistics.received_datagrams[key].append(copy.copy(session._statistics))
+        return copy.copy(self._statistics)
 
     @property
     def input_sessions(self) -> typing.Sequence[UDPInputSession]:
