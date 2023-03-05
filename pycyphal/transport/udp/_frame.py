@@ -175,6 +175,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
 
             # Service/Message specific
             snm = bool(data_specifier_snm & (1 << 15))
+            data_specifier: pycyphal.transport.DataSpecifier
             if snm:
                 ## Service
                 service_id = data_specifier_snm & UDPFrame.SERVICE_ID_MASK
