@@ -36,8 +36,6 @@ def asyncio_allow_event_loop_access_from_top_level() -> None:
 
     This function shall be invoked per test, because the test suite undoes its effect before starting the next test.
     """
-    if sys.version_info < (3, 10):
-        return
     _logger.info("asyncio_allow_event_loop_access_from_top_level()")
 
     def swap(mod: Any, name: str, new: Any) -> None:
