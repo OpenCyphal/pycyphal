@@ -6,7 +6,6 @@ from __future__ import annotations
 import abc
 import typing
 import socket
-import logging
 import ipaddress
 import pycyphal.util
 import pycyphal.transport
@@ -43,14 +42,14 @@ class SocketFactory(abc.ABC):
         """
         Use this factory factory to create new instances.
         """
-        ipv6_addr = isinstance(local_ip_addr, ipaddress.IPv6Address)
-        if not ipv6_addr:
+        if isinstance(local_ip_addr, ipaddress.IPv4Address):
             from ._v4 import IPv4SocketFactory
 
             return IPv4SocketFactory(local_ip_addr)
-
-        else:
+        elif isinstance(local_ip_addr, ipaddress.IPv6Address):
             raise NotImplementedError("Sorry, IPv6 is not yet supported by this implementation.")
+        else:
+            raise TypeError(f"Invalid IP address type: {type(local_ip_addr)}")
 
     @property
     @abc.abstractmethod
