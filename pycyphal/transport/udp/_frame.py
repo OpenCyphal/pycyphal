@@ -116,15 +116,21 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         The reason is to avoid unnecessary data copying in the user space,
         allowing the caller to rely on the vectorized IO API instead (sendmsg).
         """
-        
-        snm = isinstance(self.data_specifier, pycyphal.transport.ServiceDataSpecifier)
-        subject_id = self.data_specifier.subject_id if not snm else None
-        service_id = self.data_specifier.service_id if snm else None
-        rnr = self.data_specifier.role == self.data_specifier.Role.REQUEST if snm else None
-        if snm:
+
+        if isinstance(self.data_specifier, pycyphal.transport.ServiceDataSpecifier):
+            snm = True
+            subject_id = None
+            service_id = self.data_specifier.service_id
+            rnr = self.data_specifier.role == self.data_specifier.Role.REQUEST
             id_rnr = service_id | ((1 << 14) if rnr else 0)
-        else:
+        elif isinstance(self.data_specifier, pycyphal.transport.MessageDataSpecifier):
+            snm = False
+            subject_id = self.data_specifier.subject_id
+            service_id = None
+            rnr = None
             id_rnr = subject_id
+        else:
+            raise TypeError(f"Invalid data specifier: {self.data_specifier}")
 
         header_crc = 0
         header_memory = self._HEADER_FORMAT_NO_CRC.pack(
