@@ -52,7 +52,9 @@ This is a temporary UDP port. We'll register an official one later.
 """
 
 
-def service_node_id_to_multicast_group(destination_node_id: int | None, ipv6_addr: bool = False) -> IPAddress:
+def service_node_id_to_multicast_group(
+    destination_node_id: int | None, ipv6_addr: bool = False, cy_addr_version: int = 0
+) -> IPAddress:
     r"""
     Takes a destination node_id; returns the corresponding multicast address (for Service).
     For IPv4, the resulting address is constructed as follows::
@@ -96,11 +98,13 @@ def service_node_id_to_multicast_group(destination_node_id: int | None, ipv6_add
         msb = MULTICAST_PREFIX | SNM_BIT_MASK
     else:
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
+    if not cy_addr_version == 0:
+        raise NotImplementedError("Only Cyphal address version 0 is currently in use")
     return ty(msb | destination_node_id)
 
 
 def message_data_specifier_to_multicast_group(
-    data_specifier: MessageDataSpecifier, ipv6_addr: bool = False
+    data_specifier: MessageDataSpecifier, ipv6_addr: bool = False, cy_addr_version: int = 0
 ) -> IPAddress:
     r"""
     Takes a (Message) data_specifier; returns the corresponding multicast address.
@@ -138,6 +142,8 @@ def message_data_specifier_to_multicast_group(
         msb = MULTICAST_PREFIX & ~(SNM_BIT_MASK)
     else:
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
+    if not cy_addr_version == 0:
+        raise NotImplementedError("Only Cyphal address version 0 is currently in use")
     return ty(msb | data_specifier.subject_id)
 
 
@@ -158,6 +164,10 @@ def _unittest_udp_endpoint_mapping() -> None:
     with raises(ValueError):
         _ = service_node_id_to_multicast_group(destination_node_id=int(0xFFFF))
 
+    # invalid Cyphal address version
+    with raises(NotImplementedError):
+        _ = service_node_id_to_multicast_group(destination_node_id=123, cy_addr_version=1)
+
     # SNM bit is set
     srvc_ip = service_node_id_to_multicast_group(destination_node_id=123)
     assert (int(srvc_ip) & SNM_BIT_MASK) == SNM_BIT_MASK
@@ -170,6 +180,10 @@ def _unittest_udp_endpoint_mapping() -> None:
     # invalid data_specifier
     with raises(ValueError):
         _ = message_data_specifier_to_multicast_group(MessageDataSpecifier(2**14))
+
+    # invalid Cyphal address version
+    with raises(NotImplementedError):
+        _ = message_data_specifier_to_multicast_group(MessageDataSpecifier(123), cy_addr_version=1)
 
     # SNM bit is not set
     msg_ip = message_data_specifier_to_multicast_group(MessageDataSpecifier(123))
