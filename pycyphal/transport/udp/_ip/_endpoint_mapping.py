@@ -95,7 +95,7 @@ def service_node_id_to_multicast_group(destination_node_id: int | None, ipv6_add
         msb = MULTICAST_PREFIX | SNM_BIT_MASK  
     else:
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
-    return ty(msb | destination_node_id)  # type: ignore
+    return ty(msb | destination_node_id)
 
 
 def message_data_specifier_to_multicast_group(
@@ -137,7 +137,7 @@ def message_data_specifier_to_multicast_group(
         msb = MULTICAST_PREFIX & ~(SNM_BIT_MASK)
     else:
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
-    return ty(msb | data_specifier.subject_id)  # type: ignore
+    return ty(msb | data_specifier.subject_id)
 
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
 
