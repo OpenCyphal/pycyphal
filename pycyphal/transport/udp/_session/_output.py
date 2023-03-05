@@ -64,7 +64,7 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         mtu: int,
         multiplier: int,
         sock: socket_.socket,
-        source_node_id: int,
+        source_node_id: typing.Optional[int],
         finalizer: typing.Callable[[], None],
     ):
         """
