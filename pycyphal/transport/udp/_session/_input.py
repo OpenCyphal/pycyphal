@@ -71,7 +71,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         specifier: pycyphal.transport.InputSessionSpecifier,
         payload_metadata: pycyphal.transport.PayloadMetadata,
         sock: socket_.socket,
-        finalizer: typing.Callable[[], None],
+        finalizer: typing.Union[typing.Callable[[], None], None], 
         local_node_id: typing.Optional[int],
     ):
         """
@@ -145,7 +145,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 _logger.debug("%s: Received transfer %s; current stats: %s", self, transfer, self._statistics)
                 return transfer
     
-    def put_into_queue(self, ts: pycyphal.transport.Timestamp, frame: typing.Optional[UDPFrame]):
+    def put_into_queue(self, ts: pycyphal.transport.Timestamp, frame: typing.Optional[UDPFrame]) -> None:
         self._frame_queue.put_nowait((ts, frame))
 
     def _reader_thread(self, loop: asyncio.AbstractEventLoop) -> None:
