@@ -193,11 +193,32 @@ encoded in the little-endian byte order, expressed here in the DSDL notation::
     uint64 transfer_id      # The transfer-ID never overflows.
     void64                  # This space may be used later for runtime type identification.
 
-The 31 least significant bits of the field ``frame_index_eot`` contain the frame index within the current transfer;
-the most significant bit (31st) is set if the current frame is the last frame of the transfer.
+    uint4 version                   # <- 1
+    void4
+    uint3 priority                  # Duplicates QoS for ease of access; 0 -- highest, 7 -- lowest.
+    void5
+    uint16 source_node_id
+    uint16 destination_node_id
+    uint16 data_specifier           # Like in Cyphal/serial: subject-ID | (service-ID + RNR (Request, Not Response))
+    uint64 transfer_id
+    uint31 frame_index              # Index of the current frame within the current transfer.
+    bool end_of_transfer
+    uint16 user_data
+    # Opaque application-specific data with user-defined semantics. Generic implementations should ignore
+    uint16 header_crc
+    @assert _offset_ / 8 == {24}    # Fixed-size 24-byte header with natural alignment for each field ensured.
+    @sealed
+
+In the case of a Message frame, the ``data_specifier`` field contains the subject-ID of the message (15 least significant
+bits) and the remaining most significant bit represents SNM.
+
+In the case of a Service frame, the ``data_specifier`` field contains the service-ID of the service (14 least significant
+bits) and the remaining two most significant bits represent RNR and SNM (second and most significant bits respectively).
+
 Also see the documentation for :class:`UDPFrame`.
 
-Multi-frame transfers contain four bytes of CRC32-C (Castagnoli) at the end computed over the entire transfer payload.
+Please note: in addition to ``header_crc``, multi-frame transfers contain four bytes of CRC32-C (Castagnoli)
+at the end of the payload computed over the entire transfer payload (payload_crc).
 For more info on multi-frame transfers, please see
 :class:`pycyphal.transport.commons.high_overhead_transport.TransferReassembler`.
 
