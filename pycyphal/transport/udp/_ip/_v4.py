@@ -157,8 +157,7 @@ class SnifferIPv4(Sniffer):
     def __init__(self, handler: typing.Callable[[LinkLayerCapture], None]) -> None:
         netmask_width = IPV4LENGTH - DESTINATION_NODE_ID_MASK.bit_length() - 1  # -1 for the snm bit
         fix = MULTICAST_PREFIX
-        subnet_ip = ipaddress.IPv4Address
-        subnet_ip = subnet_ip(fix)
+        subnet_ip = ipaddress.IPv4Address(fix)
         subnet = ip_network(f"{subnet_ip}/{netmask_width}", strict=False)
         filter_expression = f"udp and dst net {subnet}"
         _logger.debug("Constructed BPF filter expression: %r", filter_expression)
