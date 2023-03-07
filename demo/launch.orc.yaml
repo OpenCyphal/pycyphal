@@ -3,15 +3,13 @@
 
 # Shared environment variables for all nodes/processes (can be overridden or selectively removed in local scopes).
 CYPHAL_PATH: "./public_regulated_data_types;./custom_data_types"
-PYCYPHAL_PATH: ".pycyphal_generated"
-YAKUT_COMPILE_OUTPUT: .yakut_compiled
-YAKUT_PATH: .yakut_compiled
+PYCYPHAL_PATH: ".pycyphal_generated"  # This one is optional; the default is "~/.pycyphal".
 
 # Shared registers for all nodes/processes (can be overridden or selectively removed in local scopes).
 # See the docs for pycyphal.application.make_node() to see which registers can be used here.
 uavcan:
-  # Use Cyphal/UDP:
-  udp.iface: 127.9.0.0
+  # Use Cyphal/UDP via localhost:
+  udp.iface: 127.0.0.1
   # If you have Ncat or some other TCP broker, you can use Cyphal/serial tunneled over TCP (in a heterogeneous
   # redundant configuration with UDP or standalone). Ncat launch example: ncat --broker --listen --source-port 50905
   serial.iface: "" # socket://127.0.0.1:50905
@@ -25,17 +23,10 @@ uavcan:
 
 # Keys with "=" define imperatives rather than registers or environment variables.
 $=:
-- ?=: '[ ! -d $YAKUT_COMPILE_OUTPUT ]'  # If the output directory does not exist, run the Yakut DSDL compiler.
-  $=:                                   # All script statements run concurrently.
-  - echo "Compiling DSDL, this may take a while"
-  - yakut compile custom_data_types/sirius_cyber_corp public_regulated_data_types/uavcan
-
-- # An empty statement is a join statement -- wait for the previously launched processes to exit before continuing.
-
 - $=:
-  # Wait a bit to let the diagnostic subscribers get ready (they are launched below).
-  - sleep 1
-  - # Remember, everything runs concurrently by default, but this join statement waits for the sleep to exit.
+  # Wait a bit to let the diagnostic subscriber get ready (it is launched below).
+  - sleep 2
+  - # An empty statement is a join statement -- wait for the previously launched processes to exit before continuing.
 
   # Launch the demo app that implements the thermostat.
   - $=: python demo_app.py
