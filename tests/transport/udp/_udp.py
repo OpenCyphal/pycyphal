@@ -60,7 +60,7 @@ async def _unittest_udp_transport_ipv4() -> None:
         mtu=9000,
     )
 
-    default_mtu = min(UDPTransport.VALID_MTU_RANGE)
+    default_mtu = min(UDPTransport.VALID_MTU_RANGE) 
     assert "127.0.0.1" in repr(tr2)
     assert tr2.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
@@ -78,11 +78,13 @@ async def _unittest_udp_transport_ipv4() -> None:
     empty_stats = UDPTransportStatistics()
     assert tr.sample_statistics() == tr2.sample_statistics() == anon_tr.sample_statistics() == empty_stats
 
-    payload_single = [_mem("qwertyui"), _mem("01234567")] * (default_mtu // 16)
-    assert sum(map(len, payload_single)) == default_mtu
+    payload_single = [_mem("ab"), _mem("12")] * ((default_mtu-4) // 4) # 4 bytes necessary for payload_crc
+    assert sum(map(len, payload_single)) == default_mtu - 4
 
-    payload_x3 = (payload_single * 3)[:-1]
-    payload_x3_size_bytes = default_mtu * 3 - 8
+    payload_no_crc = [_mem("ab"), _mem("12")] * ((default_mtu) // 4)
+    payload_with_crc = payload_single
+    payload_x3 = (payload_no_crc * 2 + payload_with_crc)
+    payload_x3_size_bytes = default_mtu * 3 - 4
     assert sum(map(len, payload_x3)) == payload_x3_size_bytes
 
     #
@@ -233,7 +235,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics().received_datagrams[MessageDataSpecifier(2345)][
         0
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=1, frames=1, payload_bytes=1200, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=1, frames=1, payload_bytes=1196, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     # anon_sub_promiscuous
@@ -246,7 +248,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert anon_tr.sample_statistics().received_datagrams[MessageDataSpecifier(2345)][
         0
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=1, frames=1, payload_bytes=1200, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=1, frames=1, payload_bytes=1196, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     assert tr.sample_statistics().received_datagrams[ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)][
@@ -287,7 +289,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert anon_tr.sample_statistics().received_datagrams[MessageDataSpecifier(2345)][
         0
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=2, payload_bytes=2400, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     rx_transfer = await subscriber_promiscuous.receive(get_monotonic() + 5.0)
@@ -299,7 +301,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics().received_datagrams[MessageDataSpecifier(2345)][
         0
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=2, payload_bytes=2400, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
@@ -334,12 +336,12 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics().received_datagrams[MessageDataSpecifier(2345)][
         0
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=2, payload_bytes=2400, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
     assert tr.sample_statistics().received_datagrams[ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)][
         0
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=1, frames=6, payload_bytes=3592, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=1, frames=6, payload_bytes=3596, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     print("tr2:", tr2.sample_statistics())

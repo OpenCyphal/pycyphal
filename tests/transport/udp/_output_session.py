@@ -54,7 +54,7 @@ async def _unittest_udp_output_session() -> None:
     sos = UDPOutputSession(
         specifier=OutputSessionSpecifier(MessageDataSpecifier(3210), None),
         payload_metadata=PayloadMetadata(1024),
-        mtu=11,
+        mtu=15,
         multiplier=1,
         sock=make_sock(),
         source_node_id=5,
