@@ -33,10 +33,12 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             uint64_t transfer_id;
             uint31_t frame_index;
             bool     frame_index_eot;       # End of transfer
-            uint16_t user_data;             # Opaque application-specific data with user-defined semantics. Generic implementations should ignore
+            uint16_t user_data;             # Opaque application-specific data with user-defined semantics.
+                                              Generic implementations should ignore
             uint16_t header_crc;            # Checksum of the header, excluding the CRC field itself
         };
-        static_assert(sizeof(struct Header) == 24, "Invalid layout");   # Fixed-size 24-byte header with natural alignment for each field ensured.
+        static_assert(sizeof(struct Header) == 24, "Invalid layout");   # Fixed-size 24-byte header with
+                                                                          natural alignment for each field ensured.
 
     +---------------+---------------+---------------+-----------------+------------------+
     |**MAC header** | **IP header** |**UDP header** |**Cyphal header**|**Cyphal payload**|
@@ -369,18 +371,7 @@ def _unittest_udp_frame_compile() -> None:
         payload=memoryview(b"Well, I got here the same way the coin did."),
     ).compile_header_and_payload()
 
-    # test frame used in  _input_session
-    test_frame = UDPFrame(
-        priority=Priority.SLOW,
-        source_node_id=10,
-        destination_node_id=2,
-        data_specifier=MessageDataSpecifier(subject_id=3),
-        transfer_id=0x_DEAD_BEEF_C0FFEE,
-        index=0x1,
-        end_of_transfer=True,
-        user_data=0,
-        payload=memoryview(b"Okay, I smashed your Corolla"),
-    ).compile_header_and_payload()
+    # test frame used in _input_session
     assert (
         memoryview(
             b"\x01"  # version

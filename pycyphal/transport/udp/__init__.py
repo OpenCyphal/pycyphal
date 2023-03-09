@@ -13,7 +13,7 @@ much of the data handling work is offloaded to the standard underlying UDP/IP st
 Both IPv4 and IPv6 are supported by this design,
 although it is expected that the advantages of IPv6 over IPv4 are less relevant in an intravehicular setting.
 
-Cyphal/UDP supports anonymous transfers (i.e., transfers without a source node-ID) with one limitation: 
+Cyphal/UDP supports anonymous transfers (i.e., transfers without a source node-ID) with one limitation:
 an anonymous node is only able to send Message transfers (but not Service transfers).
 
 This transport module contains no media sublayers because the media abstraction
@@ -59,8 +59,8 @@ The IPv4 multicast group address is computed statically as follows::
 
             fixed            subject-ID (Message)
           (15 bits)     res. (15 bits)
-       ______________   | ______________ 
-      /              \  v/              \ 
+       ______________   | ______________
+      /              \  v/              \
       11101111.00000000.0sssssss.ssssssss
       \__/      ^     ^
     (4 bits)  Cyphal SNM
@@ -128,11 +128,11 @@ in which case no initialization delay will take place.
 
 Example::
 
-    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx 
+    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx
 
-    Service,    :       xxxxxxxx xxxxxxx0 xxxxxxxx xxxxxxxx 
+    Service,    :       xxxxxxxx xxxxxxx0 xxxxxxxx xxxxxxxx
     not Message
-    
+
     Reserved:           xxxxxxxx xxxxxxxx 0xxxxxxx xxxxxxxx
 
     Subject-ID (=42):   xxxxxxxx xxxxxxxx x0000000 00101010
@@ -147,10 +147,10 @@ Service transfers
 Service transfers are also executed as IP multicast transfers.
 The IPv4 multicast group address is computed statically as follows::
 
-            fixed       
-          (15 bits)     
-       ______________   
-      /              \  
+            fixed
+          (15 bits)
+       ______________
+      /              \
       11101111.00000001.ssssssss.ssssssss
       \__/      ^     ^ \_______________/
     (4 bits)  Cyphal SNM    (16 bits)
@@ -168,17 +168,17 @@ The 2 last octets define the destination node-ID of the service transfer.
 
 Example::
 
-    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx 
+    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx
 
-    Service,    :       xxxxxxxx xxxxxxx1 xxxxxxxx xxxxxxxx 
+    Service,    :       xxxxxxxx xxxxxxx1 xxxxxxxx xxxxxxxx
     not Message
-    
+
     Reserved:           xxxxxxxx xxxxxxxx 0xxxxxxx xxxxxxxx
 
     Subject-ID (=42):   xxxxxxxx xxxxxxxx x0000000 00101010
 
     Multicast group:    11101111 00000000 00000000 00101010
-                             239        1        0       42                             
+                             239        1        0       42
 
 Datagram header format
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -209,11 +209,12 @@ encoded in the little-endian byte order, expressed here in the DSDL notation::
     @assert _offset_ / 8 == {24}    # Fixed-size 24-byte header with natural alignment for each field ensured.
     @sealed
 
-In the case of a Message frame, the ``data_specifier`` field contains the subject-ID of the message (15 least significant
-bits) and the remaining most significant bit represents SNM.
+In the case of a Message frame, the ``data_specifier`` field contains the subject-ID of the message
+(15 least significant bits) and the remaining most significant bit represents SNM.
 
-In the case of a Service frame, the ``data_specifier`` field contains the service-ID of the service (14 least significant
-bits) and the remaining two most significant bits represent RNR and SNM (second and most significant bits respectively).
+In the case of a Service frame, the ``data_specifier`` field contains the service-ID of the service
+(14 least significant bits) and the remaining two most significant bits represent RNR and SNM
+(second and most significant bits respectively).
 
 Also see the documentation for :class:`UDPFrame`.
 

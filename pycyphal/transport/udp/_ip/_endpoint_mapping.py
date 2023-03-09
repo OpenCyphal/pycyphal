@@ -98,7 +98,7 @@ def service_node_id_to_multicast_group(
         msb = MULTICAST_PREFIX | SNM_BIT_MASK
     else:
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
-    if not cy_addr_version == 0:
+    if cy_addr_version != 0:
         raise NotImplementedError("Only Cyphal address version 0 is currently in use")
     return ty(msb | destination_node_id)
 
@@ -142,7 +142,7 @@ def message_data_specifier_to_multicast_group(
         msb = MULTICAST_PREFIX & ~(SNM_BIT_MASK)
     else:
         raise NotImplementedError("IPv6 is not yet supported; please, submit patches!")
-    if not cy_addr_version == 0:
+    if cy_addr_version != 0:
         raise NotImplementedError("Only Cyphal address version 0 is currently in use")
     return ty(msb | data_specifier.subject_id)
 
@@ -152,7 +152,6 @@ def message_data_specifier_to_multicast_group(
 
 def _unittest_udp_endpoint_mapping() -> None:
     from pytest import raises
-    from ipaddress import ip_address
 
     ### service_node_id_to_multicast_group
     # valid service IDs

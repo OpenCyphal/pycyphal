@@ -9,7 +9,7 @@ import typing
 import asyncio
 import logging
 import pycyphal
-from pycyphal.transport import Timestamp, ServiceDataSpecifier, MessageDataSpecifier
+from pycyphal.transport import Timestamp
 from .._frame import UDPFrame
 
 

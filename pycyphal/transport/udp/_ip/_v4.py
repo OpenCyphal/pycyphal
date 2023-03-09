@@ -11,7 +11,7 @@ import logging
 import ipaddress
 from ipaddress import IPV4LENGTH, ip_network
 import pycyphal
-from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
+from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
 from pycyphal.transport import InvalidMediaConfigurationError
 from ._socket_factory import SocketFactory, Sniffer
 
@@ -64,7 +64,7 @@ class IPv4SocketFactory(SocketFactory):
             raise  # pragma: no cover
 
         if isinstance(data_specifier, MessageDataSpecifier):
-            assert remote_node_id == None  # Message transfers don't require a remote_node_id.
+            assert remote_node_id is None  # Message transfers don't require a remote_node_id.
             # Merely binding is not enough for multicast sockets. We also have to configure IP_MULTICAST_IF.
             # https://tldp.org/HOWTO/Multicast-HOWTO-6.html
             # https://stackoverflow.com/a/26988214/1007777

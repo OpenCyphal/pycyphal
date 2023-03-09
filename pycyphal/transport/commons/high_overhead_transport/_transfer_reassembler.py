@@ -287,11 +287,11 @@ def _validate_and_finalize_transfer(
         )
 
     if len(frame_payloads) > 1:
-        _logger.debug(f"Finalizing multiframe transfer...")
+        _logger.debug("Finalizing multiframe transfer...")
         size_ok = sum(map(len, frame_payloads)) > _CRC_SIZE_BYTES
         crc_ok = TransferCRC.new(*frame_payloads).check_residue()
     else:
-        _logger.debug(f"Finalizing uniframe transfer...")
+        _logger.debug("Finalizing uniframe transfer...")
         # if equals _CRC_SIZE_BYTES, then it is an empty single-frame transfer
         size_ok = len(frame_payloads[0]) >= _CRC_SIZE_BYTES
         crc_ok = TransferCRC.new(frame_payloads[0]).check_residue()

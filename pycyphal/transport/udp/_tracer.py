@@ -108,7 +108,7 @@ class UDPIPPacket:
     def __post_init__(self) -> None:
         if not (0 <= self.source_port <= 0xFFFF):
             raise ValueError(f"Invalid source port: {self.source_port}")
-        if not (self.destination_port == CYPHAL_PORT):
+        if self.destination_port != CYPHAL_PORT:
             raise ValueError(f"Invalid destination port: {self.destination_port}")
 
     @staticmethod
@@ -225,7 +225,6 @@ def _unittest_udp_tracer() -> None:
     from ipaddress import ip_address
     from pycyphal.transport import Priority, ServiceDataSpecifier
     from pycyphal.transport.udp import UDPTransport
-    from ._ip import CYPHAL_PORT
 
     tr = UDPTransport.make_tracer()
     ts = Timestamp.now()

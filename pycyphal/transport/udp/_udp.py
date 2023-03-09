@@ -174,7 +174,7 @@ class UDPTransport(pycyphal.transport.Transport):
                 self._input_registry[specifier] = PromiscuousUDPInputSession(
                     specifier, payload_metadata, sock, finalizer, self._local_node_id
                 )
-            elif self.local_node_id != None:
+            elif self.local_node_id is not None:
                 self._input_registry[specifier] = SelectiveUDPInputSession(
                     specifier, payload_metadata, sock, finalizer, self._local_node_id
                 )
@@ -226,11 +226,11 @@ class UDPTransport(pycyphal.transport.Transport):
 
     def sample_statistics(self) -> UDPTransportStatistics:
         # Update statistics for all keys in self._statistics.received_datagrams
-        for key in self._statistics.received_datagrams.keys():
+        for key in self._statistics.received_datagrams:
             self._statistics.received_datagrams[key] = []  # Clear the old data
             for session in self._input_registry.values():
                 if session.specifier.data_specifier == key:
-                    self._statistics.received_datagrams[key].append(copy.copy(session._statistics))
+                    self._statistics.received_datagrams[key].append(session.sample_statistics())
         return copy.copy(self._statistics)
 
     @property
