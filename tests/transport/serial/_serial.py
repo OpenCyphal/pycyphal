@@ -345,7 +345,7 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
 
     tr = SerialTransport(serial_port="loop://", local_node_id=42, mtu=1024, service_transfer_multiplier=2)
     sft_capacity = 1024
-    
+
     payload_single = [_mem("ab"), _mem("12")] * ((sft_capacity - 4) // 4)  # 4 bytes necessary for payload_crc
     assert sum(map(len, payload_single)) == sft_capacity - 4
 
