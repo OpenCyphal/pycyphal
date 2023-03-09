@@ -60,7 +60,7 @@ async def _unittest_udp_transport_ipv4() -> None:
         mtu=9000,
     )
 
-    default_mtu = min(UDPTransport.VALID_MTU_RANGE) 
+    default_mtu = min(UDPTransport.VALID_MTU_RANGE)
     assert "127.0.0.1" in repr(tr2)
     assert tr2.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
@@ -78,12 +78,12 @@ async def _unittest_udp_transport_ipv4() -> None:
     empty_stats = UDPTransportStatistics()
     assert tr.sample_statistics() == tr2.sample_statistics() == anon_tr.sample_statistics() == empty_stats
 
-    payload_single = [_mem("ab"), _mem("12")] * ((default_mtu-4) // 4) # 4 bytes necessary for payload_crc
+    payload_single = [_mem("ab"), _mem("12")] * ((default_mtu - 4) // 4)  # 4 bytes necessary for payload_crc
     assert sum(map(len, payload_single)) == default_mtu - 4
 
     payload_no_crc = [_mem("ab"), _mem("12")] * ((default_mtu) // 4)
     payload_with_crc = payload_single
-    payload_x3 = (payload_no_crc * 2 + payload_with_crc)
+    payload_x3 = payload_no_crc * 2 + payload_with_crc
     payload_x3_size_bytes = default_mtu * 3 - 4
     assert sum(map(len, payload_x3)) == payload_x3_size_bytes
 

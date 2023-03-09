@@ -16,7 +16,6 @@ from ._frame import SerialFrame
 from ._stream_parser import StreamParser
 
 
-
 _logger = logging.getLogger(__name__)
 
 

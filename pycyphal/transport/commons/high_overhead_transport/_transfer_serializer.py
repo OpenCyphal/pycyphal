@@ -58,7 +58,7 @@ def serialize_transfer(
     >>> bytes(frames[1].payload)    # The stuff at the end is the four bytes of multi-frame transfer CRC.
     b'in the fog?:\xff\xd1\xdd'
 
-    >>> single_frame = list(serialize_transfer( 
+    >>> single_frame = list(serialize_transfer(
     ...     fragmented_payload=[
     ...         memoryview(b'FOUR'),
     ...         ],
@@ -73,9 +73,9 @@ def serialize_transfer(
     assert max_frame_payload_bytes > 0
     payload_length = sum(map(len, fragmented_payload))
     # SINGLE-FRAME TRANSFER
-    if payload_length <= max_frame_payload_bytes - 4: # 4 bytes for crc!
+    if payload_length <= max_frame_payload_bytes - 4:  # 4 bytes for crc!
         crc_bytes = TransferCRC.new(*fragmented_payload).value_as_bytes
-        payload_with_crc = memoryview(b"".join(fragmented_payload + [crc_bytes]))   
+        payload_with_crc = memoryview(b"".join(fragmented_payload + [crc_bytes]))
         assert len(payload_with_crc) == payload_length + 4
         assert max_frame_payload_bytes >= len(payload_with_crc)
         yield frame_factory(0, True, payload_with_crc)

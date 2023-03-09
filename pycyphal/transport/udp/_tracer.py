@@ -17,7 +17,6 @@ from ._frame import UDPFrame
 from ._ip import LinkLayerPacket, CYPHAL_PORT
 
 
-
 @dataclasses.dataclass(frozen=True)
 class IPPacket:
     protocol: int

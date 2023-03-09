@@ -247,7 +247,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         ),
         monotonic_deadline=loop.time() + 10.0,
     )
-    
+
     rx = await sub_any_b.receive(loop.time() + 1.0)
     assert rx is not None
     assert rx.fragmented_payload == [memoryview(b"uio")]
