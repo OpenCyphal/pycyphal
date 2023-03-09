@@ -12,7 +12,7 @@ from pycyphal.transport.udp._session._input import PromiscuousUDPInputSession, S
 from pycyphal.transport.udp._session._input import PromiscuousUDPInputSessionStatistics
 from pycyphal.transport.udp._session._input import SelectiveUDPInputSessionStatistics
 from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
-from pycyphal.transport.udp._ip import IPv4SocketFactory
+from pycyphal.transport.udp._ip._v4 import IPv4SocketFactory
 from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
 from pycyphal.transport.commons.high_overhead_transport import TransferCRC
 

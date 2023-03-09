@@ -13,7 +13,7 @@ import pycyphal
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession, UDPInputSessionStatistics
 from ._frame import UDPFrame
-from ._ip import SocketFactory, Sniffer, LinkLayerCapture, IPv4SocketFactory
+from ._ip import SocketFactory, Sniffer, LinkLayerCapture
 from ._tracer import UDPTracer, UDPCapture
 from .. import OperationNotDefinedForAnonymousNodeError
 
@@ -243,7 +243,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
     @property
     def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
-        assert isinstance(self._sock_factory, IPv4SocketFactory)
+        assert isinstance(self._sock_factory, SocketFactory)
         return self._sock_factory.local_ip_address
 
     def begin_capture(self, handler: pycyphal.transport.CaptureCallback) -> None:
