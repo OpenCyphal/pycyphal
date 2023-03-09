@@ -37,19 +37,19 @@ class SocketFactory(abc.ABC):
 
     @staticmethod
     def new(
-        local_ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address],
+        local_ip_address: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address],
     ) -> SocketFactory:
         """
         Use this factory factory to create new instances.
         """
-        if isinstance(local_ip_addr, ipaddress.IPv4Address):
+        if isinstance(local_ip_address, ipaddress.IPv4Address):
             from ._v4 import IPv4SocketFactory
 
-            return IPv4SocketFactory(local_ip_addr)
-        elif isinstance(local_ip_addr, ipaddress.IPv6Address):
+            return IPv4SocketFactory(local_ip_address)
+        elif isinstance(local_ip_address, ipaddress.IPv6Address):
             raise NotImplementedError("Sorry, IPv6 is not yet supported by this implementation.")
         else:
-            raise TypeError(f"Invalid IP address type: {type(local_ip_addr)}")
+            raise TypeError(f"Invalid IP address type: {type(local_ip_address)}")
 
     @property
     @abc.abstractmethod

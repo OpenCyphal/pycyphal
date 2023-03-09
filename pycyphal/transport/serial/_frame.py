@@ -88,8 +88,6 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         header += pycyphal.transport.commons.crc.CRC32C.new(header).value_as_bytes
         assert len(header) == _HEADER_SIZE
 
-        # payload_crc_bytes = pycyphal.transport.commons.crc.CRC32C.new(self.payload).value_as_bytes
-
         out_buffer[0] = self.FRAME_DELIMITER_BYTE
         next_byte_index = 1
 
@@ -146,10 +144,6 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             return None
 
         payload = header_payload_image[_HEADER_SIZE:]
-        # payload_with_crc = header_payload_crc_image[_HEADER_SIZE:]
-        # if not pycyphal.transport.commons.crc.CRC32C.new(payload_with_crc).check_residue():
-        #     return None
-        # payload = payload_with_crc[:-_CRC_SIZE_BYTES]
 
         # noinspection PyTypeChecker
         (
@@ -425,9 +419,6 @@ def _unittest_serial_frame_parse() -> None:
 
     # Too short
     assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:])) is None
-
-    # Bad payload CRC -> Concern moved to TransferReassembler
-    # assert SerialFrame.parse_from_unescaped_image(memoryview(header + payload + b"1234")) is None
 
     # Bad version
     header = bytes(

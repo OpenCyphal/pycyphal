@@ -12,12 +12,10 @@ import pycyphal.transport.udp
 from pycyphal.transport import Trace, TransferTrace, Capture, AlienSessionSpecifier, AlienTransferMetadata
 from pycyphal.transport import AlienTransfer, TransferFrom, Timestamp
 from pycyphal.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
+from pycyphal.transport.commons.high_overhead_transport import TransferCRC
 from ._frame import UDPFrame
 from ._ip import LinkLayerPacket, CYPHAL_PORT
 
-from pycyphal.transport.commons.crc import CRC32C
-
-TransferCRC = CRC32C
 
 
 @dataclasses.dataclass(frozen=True)

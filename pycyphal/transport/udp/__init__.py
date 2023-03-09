@@ -297,12 +297,12 @@ Create two transport instances -- one with a node-ID, one anonymous:
 >>> import asyncio
 >>> import pycyphal
 >>> import pycyphal.transport.udp
->>> tr_0 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', local_node_id=10)
->>> tr_0.local_ip_addr
+>>> tr_0 = pycyphal.transport.udp.UDPTransport(local_ip_address='127.0.0.1', local_node_id=10)
+>>> tr_0.local_ip_address
 IPv4Address('127.0.0.1')
 >>> tr_0.local_node_id
 10
->>> tr_1 = pycyphal.transport.udp.UDPTransport(local_ip_addr='127.0.0.1', local_node_id=None) # Anonymous is only for listening.
+>>> tr_1 = pycyphal.transport.udp.UDPTransport(local_ip_address='127.0.0.1', local_node_id=None) # Anonymous is only for listening.
 >>> tr_1.local_node_id is None
 True
 

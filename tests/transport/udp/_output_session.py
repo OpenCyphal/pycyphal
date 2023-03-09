@@ -14,9 +14,7 @@ from pycyphal.transport import PayloadMetadata, SessionStatistics, Feedback, Tra
 from pycyphal.transport import Timestamp, ServiceDataSpecifier
 from pycyphal.transport.udp._session._output import UDPOutputSession, UDPFeedback
 from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
-from pycyphal.transport.commons.crc import CRC32C
-
-TransferCRC = CRC32C
+from pycyphal.transport.commons.high_overhead_transport import TransferCRC
 
 _logger = logging.getLogger(__name__)
 

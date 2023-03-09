@@ -31,8 +31,8 @@ class IPv4SocketFactory(SocketFactory):
     a node-ID that maps to the broadcast address for the subnet is unavailable.
     """
 
-    def __init__(self, local_ip_addr: ipaddress.IPv4Address):
-        self._local_ip_addr = local_ip_addr
+    def __init__(self, local_ip_address: ipaddress.IPv4Address):
+        self._local_ip_address = local_ip_address
 
     @property
     def max_nodes(self) -> int:
@@ -40,7 +40,7 @@ class IPv4SocketFactory(SocketFactory):
 
     @property
     def local_ip_address(self) -> ipaddress.IPv4Address:
-        return self._local_ip_addr
+        return self._local_ip_address
 
     def make_output_socket(
         self, remote_node_id: typing.Optional[int], data_specifier: pycyphal.transport.DataSpecifier
@@ -54,12 +54,12 @@ class IPv4SocketFactory(SocketFactory):
             # Output sockets shall be bound, too, in order to ensure that outgoing packets have the correct
             # source IP address specified. This is particularly important for localhost; an unbound socket
             # there emits all packets from 127.0.0.1 which is certainly not what we need.
-            s.bind((str(self._local_ip_addr), 0))  # Bind to an ephemeral port.
+            s.bind((str(self._local_ip_address), 0))  # Bind to an ephemeral port.
         except OSError as ex:
             s.close()
             if ex.errno == errno.EADDRNOTAVAIL:
                 raise InvalidMediaConfigurationError(
-                    f"Bad IP configuration: cannot bind output socket to {self._local_ip_addr} [{errno.errorcode[ex.errno]}]"
+                    f"Bad IP configuration: cannot bind output socket to {self._local_ip_address} [{errno.errorcode[ex.errno]}]"
                 ) from None
             raise  # pragma: no cover
 
@@ -68,12 +68,12 @@ class IPv4SocketFactory(SocketFactory):
             # Merely binding is not enough for multicast sockets. We also have to configure IP_MULTICAST_IF.
             # https://tldp.org/HOWTO/Multicast-HOWTO-6.html
             # https://stackoverflow.com/a/26988214/1007777
-            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_address.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
             remote_ip = message_data_specifier_to_multicast_group(data_specifier)
             remote_port = CYPHAL_PORT
         elif isinstance(data_specifier, ServiceDataSpecifier):
-            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_addr.packed)
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, self._local_ip_address.packed)
             s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, IPv4SocketFactory.MULTICAST_TTL)
             remote_ip = service_node_id_to_multicast_group(remote_node_id)
             remote_port = CYPHAL_PORT
@@ -115,13 +115,13 @@ class IPv4SocketFactory(SocketFactory):
                 # it means "choose one automatically"; see https://tldp.org/HOWTO/Multicast-HOWTO-6.html
                 # This is why we have to specify the interface explicitly here.
                 s.setsockopt(
-                    socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_addr.packed
+                    socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_address.packed
                 )
             except OSError as ex:
                 s.close()
                 if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
                     raise InvalidMediaConfigurationError(
-                        f"Could not register multicast group membership {multicast_ip} via {self._local_ip_addr} using {s} "
+                        f"Could not register multicast group membership {multicast_ip} via {self._local_ip_address} using {s} "
                         f"[{errno.errorcode[ex.errno]}]"
                     ) from None
                 raise  # pragma: no cover
@@ -134,13 +134,13 @@ class IPv4SocketFactory(SocketFactory):
                 s.bind(("", multicast_port))
             try:
                 s.setsockopt(
-                    socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_addr.packed
+                    socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, multicast_ip.packed + self._local_ip_address.packed
                 )
             except OSError as ex:
                 s.close()
                 if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
                     raise InvalidMediaConfigurationError(
-                        f"Could not register multicast group membership {multicast_ip} via {self._local_ip_addr} using {s} "
+                        f"Could not register multicast group membership {multicast_ip} via {self._local_ip_address} using {s} "
                         f"[{errno.errorcode[ex.errno]}]"
                     ) from None
                 raise  # pragma: no cover
@@ -174,7 +174,7 @@ class SnifferIPv4(Sniffer):
 
 
 def _unittest_udp_socket_factory_v4() -> None:
-    sock_fac = IPv4SocketFactory(local_ip_addr=ipaddress.IPv4Address("127.0.0.1"))
+    sock_fac = IPv4SocketFactory(local_ip_address=ipaddress.IPv4Address("127.0.0.1"))
     assert sock_fac.local_ip_address == ipaddress.IPv4Address("127.0.0.1")
 
     msg_output_socket = sock_fac.make_output_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(456))

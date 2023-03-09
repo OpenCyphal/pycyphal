@@ -13,11 +13,8 @@ from pycyphal.transport.udp._session._input import PromiscuousUDPInputSessionSta
 from pycyphal.transport.udp._session._input import SelectiveUDPInputSessionStatistics
 from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
 from pycyphal.transport.udp._ip import IPv4SocketFactory
-
 from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
-from pycyphal.transport.commons.crc import CRC32C
-
-TransferCRC = CRC32C
+from pycyphal.transport.commons.high_overhead_transport import TransferCRC
 
 
 async def _unittest_udp_input_session_uniframe() -> None:
@@ -36,7 +33,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
 
     # SETUP
 
-    sock_fac = IPv4SocketFactory(local_ip_addr=ipaddress.IPv4Address("127.0.0.1"))
+    sock_fac = IPv4SocketFactory(local_ip_address=ipaddress.IPv4Address("127.0.0.1"))
 
     msg_sock_rx_1 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
     assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
@@ -353,7 +350,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
 
     # SETUP
 
-    sock_fac = IPv4SocketFactory(local_ip_addr=ipaddress.IPv4Address("127.0.0.1"))
+    sock_fac = IPv4SocketFactory(local_ip_address=ipaddress.IPv4Address("127.0.0.1"))
 
     msg_sock_rx_1 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
     assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]

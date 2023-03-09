@@ -156,10 +156,6 @@ class TransferReassembler:
             self._restart(timestamp, frame.transfer_id + 1, self.Error.MULTIFRAME_EOT_MISPLACED)
             return None
 
-        # DROP FRAMES WITH DUPLICATE INDEXES. This is not an error.
-        # if frame.index < len(self._payloads) and self._payloads[frame.index]:
-        #     return None
-
         # ACCEPT THE PAYLOAD. Duplicates are accepted too, assuming they carry the same payload.
         # Implicit truncation is implemented by not limiting the maximum payload size.
         # Real truncation is hard to implement if frames are delivered out-of-order, although it's not impossible:

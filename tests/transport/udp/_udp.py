@@ -42,9 +42,9 @@ async def _unittest_udp_transport_ipv4() -> None:
     tr2 = UDPTransport("127.0.0.1", local_node_id=222, service_transfer_multiplier=2)
     anon_tr = UDPTransport("127.0.0.1", local_node_id=None)
 
-    assert tr.local_ip_addr == ipaddress.ip_address("127.0.0.1")
-    assert tr2.local_ip_addr == ipaddress.ip_address("127.0.0.1")
-    assert anon_tr.local_ip_addr == ipaddress.ip_address("127.0.0.1")
+    assert tr.local_ip_address == ipaddress.ip_address("127.0.0.1")
+    assert tr2.local_ip_address == ipaddress.ip_address("127.0.0.1")
+    assert anon_tr.local_ip_address == ipaddress.ip_address("127.0.0.1")
 
     assert tr.local_node_id == 111
     assert tr2.local_node_id == 222

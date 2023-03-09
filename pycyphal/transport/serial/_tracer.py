@@ -11,11 +11,10 @@ import pycyphal.transport.serial
 from pycyphal.transport import Trace, TransferTrace, Capture, AlienSessionSpecifier, AlienTransferMetadata
 from pycyphal.transport import AlienTransfer, TransferFrom, Timestamp
 from pycyphal.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
+from pycyphal.transport.commons.high_overhead_transport import TransferCRC
 from ._frame import SerialFrame
 from ._stream_parser import StreamParser
-from pycyphal.transport.commons.crc import CRC32C
 
-TransferCRC = CRC32C
 
 
 _logger = logging.getLogger(__name__)

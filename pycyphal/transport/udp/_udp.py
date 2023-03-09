@@ -55,7 +55,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
     def __init__(
         self,
-        local_ip_addr: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
+        local_ip_address: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
         local_node_id: typing.Optional[int] = 0,
         *,  # The following parameters are keyword-only.
         mtu: int = min(VALID_MTU_RANGE),
@@ -105,15 +105,15 @@ class UDPTransport(pycyphal.transport.Transport):
         if loop:
             warnings.warn("The loop parameter is deprecated.", DeprecationWarning)
 
-        if not isinstance(local_ip_addr, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
-            local_ip_addr = ipaddress.ip_address(local_ip_addr)
-        assert not isinstance(local_ip_addr, str)
+        if not isinstance(local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+            local_ip_address = ipaddress.ip_address(local_ip_address)
+        assert not isinstance(local_ip_address, str)
 
         assert (local_node_id is None) or (0 <= local_node_id < 0xFFFF)
 
-        self._sock_factory = SocketFactory.new(local_ip_addr)
+        self._sock_factory = SocketFactory.new(local_ip_address)
         self._anonymous = local_node_id is None
-        self._local_ip_addr = local_ip_addr
+        self._local_ip_address = local_ip_address
         self._local_node_id = local_node_id
         self._mtu = int(mtu)
         self._srv_multiplier = int(service_transfer_multiplier)
@@ -242,7 +242,7 @@ class UDPTransport(pycyphal.transport.Transport):
         return list(self._output_registry.values())
 
     @property
-    def local_ip_addr(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+    def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
         assert isinstance(self._sock_factory, IPv4SocketFactory)
         return self._sock_factory.local_ip_address
 
@@ -299,7 +299,7 @@ class UDPTransport(pycyphal.transport.Transport):
             raise pycyphal.transport.ResourceClosedError(f"{self} is closed")
 
     def _get_repr_fields(self) -> typing.Tuple[typing.List[typing.Any], typing.Dict[str, typing.Any]]:
-        return [repr(str(self.local_ip_addr))], {
+        return [repr(str(self.local_ip_address))], {
             "local_node_id": self.local_node_id,
             "service_transfer_multiplier": self._srv_multiplier,
             "mtu": self._mtu,

@@ -63,9 +63,9 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert set(tr_b.output_sessions) == {pub_b}
     assert tr_b.sample_statistics() == RedundantTransportStatistics()
 
-    # #
-    # # Exchange test with no inferiors, expected to fail.
-    # #
+    #
+    # Exchange test with no inferiors, expected to fail.
+    #
     assert len(pub_a.inferiors) == 0
     assert len(sub_any_a.inferiors) == 0
     assert not await pub_a.send(
@@ -241,19 +241,18 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     )
     assert tr_b.local_node_id == 222
 
-    _logger.debug("=================pub_a.send()=================")
     assert await pub_a.send(
         Transfer(
             timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=5, fragmented_payload=[memoryview(b"uio")]
         ),
         monotonic_deadline=loop.time() + 10.0,
     )
-    _logger.debug("=================pub_a.send() completed=================")
+    
     rx = await sub_any_b.receive(loop.time() + 1.0)
     assert rx is not None
     assert rx.fragmented_payload == [memoryview(b"uio")]
     assert rx.transfer_id == 5
-    # assert not await sub_any_a.receive(loop.time() + 0.1)
+    assert not await sub_any_a.receive(loop.time() + 0.1)
     assert not await sub_any_b.receive(loop.time() + 0.1)
     assert not await sub_sel_b.receive(loop.time() + 0.1)
 
