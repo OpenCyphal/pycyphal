@@ -75,7 +75,7 @@ def serialize_transfer(
     # SINGLE-FRAME TRANSFER
     if payload_length <= max_frame_payload_bytes - 4:  # 4 bytes for crc!
         crc_bytes = TransferCRC.new(*fragmented_payload).value_as_bytes
-        payload_with_crc = memoryview(b"".join(fragmented_payload + [crc_bytes]))
+        payload_with_crc = memoryview(b"".join(fragmented_payload + [crc_bytes]))  # type: ignore
         assert len(payload_with_crc) == payload_length + 4
         assert max_frame_payload_bytes >= len(payload_with_crc)
         yield frame_factory(0, True, payload_with_crc)

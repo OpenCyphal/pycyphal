@@ -246,6 +246,15 @@ class UDPInputSession(pycyphal.transport.InputSession):
         raise NotImplementedError
 
     @abc.abstractmethod
+    def sample_statistics(self) -> UDPInputSessionStatistics:
+        """
+        Samples and returns the approximated statistics.
+        We say "approximated" because implementations are not required to sample the counters atomically,
+        although normally they should strive to do so when possible.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def _get_reassembler(self, source_node_id: int) -> TransferReassembler:
         raise NotImplementedError
 

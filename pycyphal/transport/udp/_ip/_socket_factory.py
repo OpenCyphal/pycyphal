@@ -60,6 +60,10 @@ class SocketFactory(abc.ABC):
         """
         raise NotImplementedError
 
+    @property
+    def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+        raise NotImplementedError
+
     @abc.abstractmethod
     def make_output_socket(
         self, remote_node_id: typing.Optional[int], data_specifier: pycyphal.transport.DataSpecifier
