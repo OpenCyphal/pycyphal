@@ -137,7 +137,7 @@ def _unittest_sniffer() -> None:
         nonlocal ts_last
         now = Timestamp.now()
         assert ts_last.monotonic_ns <= cap.timestamp.monotonic_ns <= now.monotonic_ns
-        # assert ts_last.system_ns <= cap.timestamp.system_ns <= now.system_ns
+        assert ts_last.system_ns <= cap.timestamp.system_ns <= now.system_ns
         ts_last = cap.timestamp
         # Make sure that all traffic from foreign networks is filtered out by the sniffer.
         assert isinstance(fac, IPv4SocketFactory)

@@ -160,20 +160,11 @@ def _unittest_sniff() -> None:
     def callback(lls: LinkLayerCapture) -> None:
         nonlocal ts_last
         nonlocal sniffs
-        _logger.debug("-----Sniffed %s", lls)
-        lls.packet.payload
-        _logger.debug("lls.packet.payload: %s", lls.packet.payload.tobytes())
         now = Timestamp.now()
-        _logger.debug("-----Check 1: %s", ts_last.monotonic_ns <= lls.timestamp.monotonic_ns <= now.monotonic_ns)
         assert ts_last.monotonic_ns <= lls.timestamp.monotonic_ns <= now.monotonic_ns
-        _logger.debug("-----Check 2: %s", ts_last.system_ns <= lls.timestamp.system_ns <= now.system_ns)
-        _logger.debug("ts_last.system_ns: %s", ts_last.system_ns)
-        _logger.debug("lls.timestamp.system_ns: %s", lls.timestamp.system_ns)
-        _logger.debug("now.system_ns: %s", now.system_ns)
-        # assert ts_last.system_ns <= lls.timestamp.system_ns <= now.system_ns
+        assert ts_last.system_ns <= lls.timestamp.system_ns <= now.system_ns
         ts_last = lls.timestamp
         sniffs.append(lls.packet)
-        _logger.debug("-----Sniffs: %s", sniffs)
 
     is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
 
