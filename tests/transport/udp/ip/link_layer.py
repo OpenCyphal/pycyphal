@@ -14,7 +14,6 @@ import libpcap as pcap  # type: ignore
 from pycyphal.transport import Timestamp
 from pycyphal.transport.udp._ip._link_layer import LinkLayerCapture, LinkLayerSniffer, LinkLayerPacket, _get_codecs
 from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
-from pycyphal.transport.udp._ip._v4 import IPv4SocketFactory
 
 _logger = logging.getLogger(__name__)
 

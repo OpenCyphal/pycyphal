@@ -58,7 +58,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
     )
 
     assert prom_in.specifier.data_specifier == MessageDataSpecifier(123)
-    assert prom_in.specifier.remote_node_id == None
+    assert prom_in.specifier.remote_node_id is None
 
     # create selective input session, uses msg_sock_rx_2
     sel_in = SelectiveUDPInputSession(
@@ -111,7 +111,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
 
     # selective input session should not receive the frame
     rx_data = await sel_in.receive(loop.time() + 1.0)
-    assert rx_data == None
+    assert rx_data is None
 
     assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
@@ -193,7 +193,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
 
     assert isinstance(rx_data, TransferFrom)
     assert rx_data.priority == Priority.LOW
-    assert rx_data.source_node_id == None
+    assert rx_data.source_node_id is None
     assert rx_data.transfer_id == 0x_DEAD_BEEF_C0FFEE
     assert rx_data.fragmented_payload[0] == memoryview(b"When I park my Range Rover")
 
@@ -378,7 +378,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
     )
 
     assert prom_in.specifier.data_specifier == MessageDataSpecifier(123)
-    assert prom_in.specifier.remote_node_id == None
+    assert prom_in.specifier.remote_node_id is None
 
     # create selective input session, uses msg_sock_rx_2
     sel_in = SelectiveUDPInputSession(

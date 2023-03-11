@@ -9,7 +9,7 @@ import sys
 import time
 import typing
 import socket
-from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
+from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
 from pycyphal.transport import InvalidMediaConfigurationError, Timestamp
 from pycyphal.transport.udp._ip._socket_factory import SocketFactory
 from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT

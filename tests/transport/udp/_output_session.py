@@ -5,10 +5,10 @@
 import asyncio
 import socket as socket_
 import typing
+import logging
 import pytest
 from pytest import raises
 import pycyphal
-import logging
 from pycyphal.transport import OutputSessionSpecifier, MessageDataSpecifier, Priority
 from pycyphal.transport import PayloadMetadata, SessionStatistics, Feedback, Transfer
 from pycyphal.transport import Timestamp, ServiceDataSpecifier
