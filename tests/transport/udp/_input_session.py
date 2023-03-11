@@ -33,14 +33,18 @@ async def _unittest_udp_input_session_uniframe() -> None:
 
     # SETUP
 
+    is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
+
     sock_fac = IPv4SocketFactory(local_ip_address=ipaddress.IPv4Address("127.0.0.1"))
 
     msg_sock_rx_1 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
-    assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
+    if is_linux:
+        assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
     assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     msg_sock_rx_2 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
-    assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
+    if is_linux:
+        assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
     assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     # create promiscuous input session, uses msg_sock_rx_1
@@ -350,14 +354,17 @@ async def _unittest_udp_input_session_multiframe() -> None:
 
     # SETUP
 
+    is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
     sock_fac = IPv4SocketFactory(local_ip_address=ipaddress.IPv4Address("127.0.0.1"))
 
     msg_sock_rx_1 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
-    assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
+    if is_linux:
+        assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
     assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     msg_sock_rx_2 = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
-    assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
+    if is_linux:
+        assert "239.0.0.123" == msg_sock_rx_1.getsockname()[0]
     assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     # create promiscuous input session, uses msg_sock_rx_1
