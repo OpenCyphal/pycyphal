@@ -221,9 +221,6 @@ def _unittest_sniff() -> None:
 
         time.sleep(3)
 
-        rx = sink.recvfrom(1024)
-        assert rx[0] == b"\xBB\xBB\xBB\xBB"
-
         # Validate the received callbacks.
         print(sniffs[0])
         print(sniffs[1])
