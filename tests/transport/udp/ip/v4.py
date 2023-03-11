@@ -151,6 +151,27 @@ def _unittest_sniffer() -> None:
     assert isinstance(sniffer, SnifferIPv4)
     assert sniffer._link_layer._filter_expr == "udp and dst net 239.0.0.0/15"
 
+    # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback
+    # multicast group for which there are no receivers may fail with the following errors:
+    #   OSError: [WinError 10051]   A socket operation was attempted to an unreachable network
+    #   OSError: [WinError 1231]    The network location cannot be reached. For information about network
+    #                               troubleshooting, see Windows Help
+    sink = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sink.bind(("239.0.1.200" * is_linux, CYPHAL_PORT))
+    sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.2.1.200") + socket.inet_aton("127.0.0.1")
+    )
+    sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.199") + socket.inet_aton("127.0.0.1")
+    )
+    sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.200") + socket.inet_aton("127.0.0.1")
+    )
+    sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.201") + socket.inet_aton("127.0.0.1")
+    )
+
     outside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     outside.bind(("127.0.0.1", 0))
     outside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
@@ -171,6 +192,9 @@ def _unittest_sniffer() -> None:
     outside.sendto(b"y", ("239.2.1.200", CYPHAL_PORT))  # Ignored multicast
 
     time.sleep(3)
+
+    rx = sink.recvfrom(1024)
+    assert rx[0] == b"\xBB\xBB\xBB\xBB"
 
     # Validate the received callbacks.
     print(sniffs[0])
@@ -208,3 +232,4 @@ def _unittest_sniffer() -> None:
     sniffer.close()
     outside.close()
     inside.close()
+    sink.close()
