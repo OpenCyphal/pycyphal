@@ -2,6 +2,7 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
+import sys
 import asyncio
 import ipaddress
 from pycyphal.transport import TransferFrom
