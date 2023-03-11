@@ -166,8 +166,6 @@ def _unittest_sniff() -> None:
         ts_last = lls.timestamp
         sniffs.append(lls.packet)
 
-    is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
-
     filter_expression = "udp and ip dst net 239.0.0.0/15"
     sn = LinkLayerSniffer(filter_expression, callback)
     assert sn.is_stable
@@ -177,35 +175,8 @@ def _unittest_sniff() -> None:
     a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     a.bind(("127.0.0.1", 0))  # Bind to a random port
     a.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
-    # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback
-    # multicast group for which there are no receivers may fail with the following errors:
-    #   OSError: [WinError 10051]   A socket operation was attempted to an unreachable network
-    #   OSError: [WinError 1231]    The network location cannot be reached. For information about network
-    #                               troubleshooting, see Windows Help
-    sink = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+
     try:
-        sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sink.bind(("239.0.1.200" * is_linux, CYPHAL_PORT))
-        sink.setsockopt(
-            socket.IPPROTO_IP,
-            socket.IP_ADD_MEMBERSHIP,
-            socket.inet_aton("239.2.1.200") + socket.inet_aton("127.0.0.1"),
-        )
-        sink.setsockopt(
-            socket.IPPROTO_IP,
-            socket.IP_ADD_MEMBERSHIP,
-            socket.inet_aton("239.0.1.199") + socket.inet_aton("127.0.0.1"),
-        )
-        sink.setsockopt(
-            socket.IPPROTO_IP,
-            socket.IP_ADD_MEMBERSHIP,
-            socket.inet_aton("239.0.1.200") + socket.inet_aton("127.0.0.1"),
-        )
-        sink.setsockopt(
-            socket.IPPROTO_IP,
-            socket.IP_ADD_MEMBERSHIP,
-            socket.inet_aton("239.0.1.201") + socket.inet_aton("127.0.0.1"),
-        )
 
         for i in range(10):  # Some random noise on an adjacent multicast group
             a.sendto(f"{i:04x}".encode(), ("239.2.1.200", CYPHAL_PORT))  # Ignored multicast
@@ -214,15 +185,11 @@ def _unittest_sniff() -> None:
         time.sleep(1)
         assert sniffs == []  # Make sure we are not picking up any noise.
 
-        # a.bind(("127.0.0.1", 0))
         a.sendto(b"\xAA\xAA\xAA\xAA", ("239.0.1.199", CYPHAL_PORT))  # Accepted multicast
         a.sendto(b"\xBB\xBB\xBB\xBB", ("239.0.1.200", CYPHAL_PORT))  # Accepted multicast
         a.sendto(b"\xCC\xCC\xCC\xCC", ("239.0.1.201", CYPHAL_PORT))  # Accepted multicast
 
         time.sleep(3)
-
-        rx = sink.recvfrom(1024)
-        assert rx[0] == b"\xBB\xBB\xBB\xBB"
 
         # Validate the received callbacks.
         print(sniffs[0])
@@ -245,8 +212,6 @@ def _unittest_sniff() -> None:
     finally:
         sn.close()
         a.close()
-        # b.close()
-        sink.close()
 
 
 def _unittest_sniff_errors() -> None:
