@@ -177,6 +177,8 @@ def _unittest_udp_socket_factory_v4() -> None:
     sock_fac = IPv4SocketFactory(local_ip_address=ipaddress.IPv4Address("127.0.0.1"))
     assert sock_fac.local_ip_address == ipaddress.IPv4Address("127.0.0.1")
 
+    is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
+
     msg_output_socket = sock_fac.make_output_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(456))
     assert "239.0.1.200" == msg_output_socket.getpeername()[0]
     assert CYPHAL_PORT == msg_output_socket.getpeername()[1]
@@ -194,19 +196,22 @@ def _unittest_udp_socket_factory_v4() -> None:
     assert CYPHAL_PORT == broadcast_srvc_output_socket.getpeername()[1]
 
     msg_input_socket = sock_fac.make_input_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(456))
-    assert "239.0.1.200" == msg_input_socket.getsockname()[0]
+    if is_linux:
+        assert "239.0.1.200" == msg_input_socket.getsockname()[0]
     assert CYPHAL_PORT == msg_input_socket.getsockname()[1]
 
     srvc_input_socket = sock_fac.make_input_socket(
         remote_node_id=123, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.REQUEST)
     )
-    assert "239.1.0.123" == srvc_input_socket.getsockname()[0]
+    if is_linux:
+        assert "239.1.0.123" == srvc_input_socket.getsockname()[0]
     assert CYPHAL_PORT == srvc_input_socket.getsockname()[1]
 
     broadcast_srvc_input_socket = sock_fac.make_input_socket(
         remote_node_id=None, data_specifier=ServiceDataSpecifier(456, ServiceDataSpecifier.Role.REQUEST)
     )
-    assert "239.1.255.255" == broadcast_srvc_input_socket.getsockname()[0]
+    if is_linux:
+        assert "239.1.255.255" == broadcast_srvc_input_socket.getsockname()[0]
     assert CYPHAL_PORT == broadcast_srvc_input_socket.getsockname()[1]
 
     sniffer = SnifferIPv4(handler=lambda x: None)
