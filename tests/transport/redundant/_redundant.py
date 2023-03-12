@@ -79,9 +79,9 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert tr_a.sample_statistics() == RedundantTransportStatistics()
     assert tr_b.sample_statistics() == RedundantTransportStatistics()
 
-    # #
-    # # Adding inferiors - loopback, transport A only.
-    # #
+    #
+    # Adding inferiors - loopback, transport A only.
+    #
     assert len(pub_a.inferiors) == 0
     assert len(sub_any_a.inferiors) == 0
 
