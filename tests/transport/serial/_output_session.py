@@ -42,7 +42,7 @@ async def _unittest_output_session() -> None:
         SerialOutputSession(
             specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 1111),
             payload_metadata=PayloadMetadata(1024),
-            mtu=10,
+            mtu=15,
             local_node_id=None,
             send_handler=do_send,
             finalizer=do_finalize,
@@ -51,7 +51,7 @@ async def _unittest_output_session() -> None:
     sos = SerialOutputSession(
         specifier=OutputSessionSpecifier(MessageDataSpecifier(3210), None),
         payload_metadata=PayloadMetadata(1024),
-        mtu=11,
+        mtu=15,
         local_node_id=None,
         send_handler=do_send,
         finalizer=do_finalize,
@@ -122,7 +122,7 @@ async def _unittest_output_session() -> None:
     sos = SerialOutputSession(
         specifier=OutputSessionSpecifier(ServiceDataSpecifier(321, ServiceDataSpecifier.Role.REQUEST), 2222),
         payload_metadata=PayloadMetadata(1024),
-        mtu=10,
+        mtu=11,
         local_node_id=1234,
         send_handler=do_send,
         finalizer=do_finalize,

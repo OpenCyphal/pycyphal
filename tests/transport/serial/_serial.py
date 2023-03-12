@@ -52,11 +52,13 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 
     sft_capacity = 1024
 
-    payload_single = [_mem("qwertyui"), _mem("01234567")] * (sft_capacity // 16)
-    assert sum(map(len, payload_single)) == sft_capacity
+    payload_single = [_mem("ab"), _mem("12")] * ((sft_capacity - 4) // 4)  # 4 bytes necessary for payload_crc
+    assert sum(map(len, payload_single)) == sft_capacity - 4
 
-    payload_x3 = (payload_single * 3)[:-1]
-    payload_x3_size_bytes = sft_capacity * 3 - 8
+    payload_no_crc = [_mem("ab"), _mem("12")] * ((sft_capacity) // 4)
+    payload_with_crc = payload_single
+    payload_x3 = payload_no_crc * 2 + payload_with_crc
+    payload_x3_size_bytes = sft_capacity * 3 - 4
     assert sum(map(len, payload_x3)) == payload_x3_size_bytes
 
     #
@@ -343,10 +345,14 @@ async def _unittest_serial_transport_capture(caplog: typing.Any) -> None:
 
     tr = SerialTransport(serial_port="loop://", local_node_id=42, mtu=1024, service_transfer_multiplier=2)
     sft_capacity = 1024
-    payload_single = [_mem("qwertyui"), _mem("01234567")] * (sft_capacity // 16)
-    assert sum(map(len, payload_single)) == sft_capacity
-    payload_x3 = (payload_single * 3)[:-1]
-    payload_x3_size_bytes = sft_capacity * 3 - 8
+
+    payload_single = [_mem("ab"), _mem("12")] * ((sft_capacity - 4) // 4)  # 4 bytes necessary for payload_crc
+    assert sum(map(len, payload_single)) == sft_capacity - 4
+
+    payload_no_crc = [_mem("ab"), _mem("12")] * ((sft_capacity) // 4)
+    payload_with_crc = payload_single
+    payload_x3 = payload_no_crc * 2 + payload_with_crc
+    payload_x3_size_bytes = sft_capacity * 3 - 4
     assert sum(map(len, payload_x3)) == payload_x3_size_bytes
 
     broadcaster = tr.get_output_session(

@@ -27,11 +27,11 @@ async def _unittest_file(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInf
     root_b = mkdtemp(".file", "b.")
     srv_node = make_node(
         NodeInfo(name="org.opencyphal.pycyphal.test.file.server"),
-        transport=UDPTransport("127.63.0.0", 222, service_transfer_multiplier=2),
+        transport=UDPTransport("127.0.0.1", 222, service_transfer_multiplier=2),
     )
     cln_node = make_node(
         NodeInfo(name="org.opencyphal.pycyphal.test.file.client"),
-        transport=UDPTransport("127.63.0.0", 223, service_transfer_multiplier=2),
+        transport=UDPTransport("127.0.0.1", 223, service_transfer_multiplier=2),
     )
     try:
         srv_node.start()

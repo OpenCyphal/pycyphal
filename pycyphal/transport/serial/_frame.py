@@ -37,7 +37,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
 
     FRAME_DELIMITER_BYTE = 0x00
 
-    NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_SIZE + _CRC_SIZE_BYTES
+    NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_SIZE
 
     source_node_id: typing.Optional[int]
     destination_node_id: typing.Optional[int]
@@ -88,13 +88,11 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         header += pycyphal.transport.commons.crc.CRC32C.new(header).value_as_bytes
         assert len(header) == _HEADER_SIZE
 
-        payload_crc_bytes = pycyphal.transport.commons.crc.CRC32C.new(self.payload).value_as_bytes
-
         out_buffer[0] = self.FRAME_DELIMITER_BYTE
         next_byte_index = 1
 
         # noinspection PyTypeChecker
-        packet_bytes = header + self.payload + payload_crc_bytes
+        packet_bytes = header + self.payload
         encoded_image = cobs.encode(packet_bytes)
         # place in the buffer and update next_byte_index:
         out_buffer[next_byte_index : next_byte_index + len(encoded_image)] = encoded_image
@@ -103,7 +101,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         out_buffer[next_byte_index] = self.FRAME_DELIMITER_BYTE
         next_byte_index += 1
 
-        assert (next_byte_index - 2) >= (len(header) + len(self.payload) + len(payload_crc_bytes))
+        assert (next_byte_index - 2) >= (len(header) + len(self.payload))
         return memoryview(out_buffer)[:next_byte_index]
 
     @staticmethod
@@ -134,21 +132,18 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         return SerialFrame.parse_from_unescaped_image(memoryview(unescaped_image))
 
     @staticmethod
-    def parse_from_unescaped_image(header_payload_crc_image: memoryview) -> typing.Optional[SerialFrame]:
+    def parse_from_unescaped_image(header_payload_image: memoryview) -> typing.Optional[SerialFrame]:
         """
         :returns: Frame or None if the image is invalid.
         """
-        if len(header_payload_crc_image) < SerialFrame.NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING:
+        if len(header_payload_image) < _HEADER_SIZE:
             return None
 
-        header = header_payload_crc_image[:_HEADER_SIZE]
+        header = header_payload_image[:_HEADER_SIZE]
         if not pycyphal.transport.commons.crc.CRC32C.new(header).check_residue():
             return None
 
-        payload_with_crc = header_payload_crc_image[_HEADER_SIZE:]
-        if not pycyphal.transport.commons.crc.CRC32C.new(payload_with_crc).check_residue():
-            return None
-        payload = payload_with_crc[:-_CRC_SIZE_BYTES]
+        payload = header_payload_image[_HEADER_SIZE:]
 
         # noinspection PyTypeChecker
         (
@@ -196,7 +191,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
 # ----------------------------------------  TESTS GO BELOW THIS LINE  ----------------------------------------
 
 
-def _unittest_frame_compile_message() -> None:
+def _unittest_serial_frame_compile_message() -> None:
     from pycyphal.transport import Priority, MessageDataSpecifier
 
     f = SerialFrame(
@@ -207,7 +202,7 @@ def _unittest_frame_compile_message() -> None:
         transfer_id=1234567890123456789,
         index=1234567,
         end_of_transfer=True,
-        payload=memoryview(b"abcd\x00ef\x00"),
+        payload=memoryview(b"Who will survive in America?"),
     )
 
     buffer = bytearray(0 for _ in range(1000))
@@ -233,11 +228,10 @@ def _unittest_frame_compile_message() -> None:
     # Header CRC here
 
     # Payload validation
-    assert segment[32:40] == b"abcd\x00ef\x00"
-    assert segment[40:] == pycyphal.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
+    assert segment[32:] == b"Who will survive in America?"
 
 
-def _unittest_frame_compile_service() -> None:
+def _unittest_serial_frame_compile_service() -> None:
     from pycyphal.transport import Priority, ServiceDataSpecifier
 
     f = SerialFrame(
@@ -271,11 +265,11 @@ def _unittest_frame_compile_service() -> None:
     assert segment[24:28] == (1234567).to_bytes(4, "little")
     # Header CRC here
 
-    # CRC validation
-    assert segment[32:] == pycyphal.transport.commons.crc.CRC32C.new(f.payload).value_as_bytes
+    # Payload validation
+    assert segment[32:] == b""
 
 
-def _unittest_frame_parse() -> None:
+def _unittest_serial_frame_parse() -> None:
     from pycyphal.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier
 
     def get_crc(*blocks: typing.Union[bytes, memoryview]) -> bytes:
@@ -317,7 +311,7 @@ def _unittest_frame_parse() -> None:
     header += get_crc(header)
     assert len(header) == 32
     payload = b"Squeeze mayonnaise onto a hamster"
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + payload + get_crc(payload)))
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header + payload))
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=123,
@@ -364,7 +358,7 @@ def _unittest_frame_parse() -> None:
     )
     header += get_crc(header)
     assert len(header) == 32
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b"")))
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header))
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
@@ -411,7 +405,7 @@ def _unittest_frame_parse() -> None:
     )
     header += get_crc(header)
     assert len(header) == 32
-    f = SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b"")))
+    f = SerialFrame.parse_from_unescaped_image(memoryview(header))
     assert f == SerialFrame(
         priority=Priority.LOW,
         source_node_id=1,
@@ -424,10 +418,7 @@ def _unittest_frame_parse() -> None:
     )
 
     # Too short
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:] + get_crc(payload))) is None
-
-    # Bad CRC
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + payload + b"1234")) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header[1:])) is None
 
     # Bad version
     header = bytes(
@@ -464,7 +455,7 @@ def _unittest_frame_parse() -> None:
     )
     header += get_crc(header)
     assert len(header) == 32
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b""))) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header)) is None
 
     # Bad fields
     header = bytes(
@@ -501,10 +492,10 @@ def _unittest_frame_parse() -> None:
     )
     header += get_crc(header)
     assert len(header) == 32
-    assert SerialFrame.parse_from_unescaped_image(memoryview(header + get_crc(b""))) is None
+    assert SerialFrame.parse_from_unescaped_image(memoryview(header)) is None
 
 
-def _unittest_frame_check() -> None:
+def _unittest_serial_frame_check() -> None:
     from pytest import raises
     from pycyphal.transport import Priority, MessageDataSpecifier, ServiceDataSpecifier
 

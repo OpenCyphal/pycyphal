@@ -356,6 +356,8 @@ class ClientImpl(Closable, Generic[T]):
                         fut.set_result((response, transfer))
         except asyncio.CancelledError:
             _logger.debug("Cancelling the task of %s", self)
+        except pycyphal.transport.ResourceClosedError as ex:
+            _logger.debug("Cancelling the task of %s because the underlying resource is closed: %s", self, ex)
         except Exception as ex:
             exception = ex
             # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger

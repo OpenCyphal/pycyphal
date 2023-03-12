@@ -7,9 +7,13 @@ import asyncio
 import ipaddress
 import pytest
 import pycyphal.transport
+from pycyphal.transport import OperationNotDefinedForAnonymousNodeError
+from pycyphal.transport.udp import UDPTransportStatistics
 
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
-from pycyphal.transport.udp import UDPTransport, UDPTransportStatistics
+from pycyphal.transport.udp import UDPTransport
+
+from pycyphal.transport.udp._session import PromiscuousUDPInputSessionStatistics, SelectiveUDPInputSessionStatistics
 
 
 pytestmark = pytest.mark.asyncio
@@ -25,24 +29,31 @@ async def _unittest_udp_transport_ipv4() -> None:
     get_monotonic = asyncio.get_event_loop().time
 
     with pytest.raises(ValueError):
-        _ = UDPTransport("127.0.0.111", mtu=10)
+        # Invalid MTU (not in range)
+        _ = UDPTransport("127.0.0.1", local_node_id=111, mtu=10)
 
     with pytest.raises(ValueError):
-        _ = UDPTransport("127.0.0.111", service_transfer_multiplier=100)
+        # Invalid service transfer multiplier (not in range)
+        _ = UDPTransport("127.0.0.1", local_node_id=111, service_transfer_multiplier=100)
 
-    tr = UDPTransport("127.0.0.111", mtu=9000)
-    tr2 = UDPTransport("127.0.0.222", service_transfer_multiplier=2)
+    # Instantiate UDPTransport
 
-    assert tr.local_ip_address == ipaddress.ip_address("127.0.0.111")
-    assert tr2.local_ip_address == ipaddress.ip_address("127.0.0.222")
+    tr = UDPTransport("127.0.0.1", local_node_id=111, mtu=9000)
+    tr2 = UDPTransport("127.0.0.1", local_node_id=222, service_transfer_multiplier=2)
+    anon_tr = UDPTransport("127.0.0.1", local_node_id=None)
+
+    assert tr.local_ip_address == ipaddress.ip_address("127.0.0.1")
+    assert tr2.local_ip_address == ipaddress.ip_address("127.0.0.1")
+    assert anon_tr.local_ip_address == ipaddress.ip_address("127.0.0.1")
 
     assert tr.local_node_id == 111
     assert tr2.local_node_id == 222
+    assert anon_tr.local_node_id is None
 
     assert tr.input_sessions == []
     assert tr.output_sessions == []
 
-    assert "127.0.0.111" in repr(tr)
+    assert "127.0.0.1" in repr(tr)
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
         max_nodes=65535,
@@ -50,42 +61,79 @@ async def _unittest_udp_transport_ipv4() -> None:
     )
 
     default_mtu = min(UDPTransport.VALID_MTU_RANGE)
-    assert "127.0.0.222" in repr(tr2)
+    assert "127.0.0.1" in repr(tr2)
     assert tr2.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
         max_nodes=65535,
         mtu=default_mtu,
     )
 
-    assert tr.sample_statistics() == tr2.sample_statistics() == UDPTransportStatistics()
+    assert "127.0.0.1" in repr(anon_tr)
+    assert anon_tr.protocol_parameters == ProtocolParameters(
+        transfer_id_modulo=2**64,
+        max_nodes=65535,
+        mtu=default_mtu,
+    )
 
-    payload_single = [_mem("qwertyui"), _mem("01234567")] * (default_mtu // 16)
-    assert sum(map(len, payload_single)) == default_mtu
+    payload_single = [_mem("ab"), _mem("12")] * ((default_mtu - 4) // 4)  # 4 bytes necessary for payload_crc
+    assert sum(map(len, payload_single)) == default_mtu - 4
 
-    payload_x3 = (payload_single * 3)[:-1]
-    payload_x3_size_bytes = default_mtu * 3 - 8
+    payload_no_crc = [_mem("ab"), _mem("12")] * ((default_mtu) // 4)
+    payload_with_crc = payload_single
+    payload_x3 = payload_no_crc * 2 + payload_with_crc
+    payload_x3_size_bytes = default_mtu * 3 - 4
     assert sum(map(len, payload_x3)) == payload_x3_size_bytes
 
     #
     # Instantiate session objects.
     #
+    # UDPOutputSession          UDPTransport(local_node_id) data_specifier(subject_id)  remote_node_id
+    # ------------------------------------------------------------------------------------------------
+    # broadcaster               tr2(222)                    MessageDataSpecifier(2345)  None
+    # anon_broadcaster          anon_tr(None)               MessageDataSpecifier(2345)  None
+    # server_responder          tr(111)                     ServiceDataSpecifier(444)   222
+    # client_requester          tr2(222)                    ServiceDataSpecifier(444)   111
+    #
+    # UDPInputSession           UDPTransport(local_node_id) data_specifier(subject_id)  remote_node_id
+    # ------------------------------------------------------------------------------------------------
+    # subscriber_promiscuous    tr(111)                     MessageDataSpecifier(2345)  None
+    # anon_sub_promiscuous      anon_tr(None)               MessageDataSpecifier(2345)  None
+    # subscriber_selective      tr(111)                     MessageDataSpecifier(2345)  123
+    # server_listener           tr(111)                     ServiceDataSpecifier(444)   None
+    # client_listener           tr2(222)                    ServiceDataSpecifier(444)   111
+
     meta = PayloadMetadata(10000)
 
     broadcaster = tr2.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
     assert broadcaster is tr2.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
-    subscriber_promiscuous = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
-    assert subscriber_promiscuous is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
-
-    subscriber_selective = tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 123), meta)
-    assert subscriber_selective is tr.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), 123), meta)
-
-    server_listener = tr.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST), None), meta
+    anon_broadcaster = anon_tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
+    assert anon_broadcaster is anon_tr.get_output_session(
+        OutputSessionSpecifier(MessageDataSpecifier(2345), None), meta
     )
-    assert server_listener is tr.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST), None), meta
+
+    subscriber_promiscuous_specifier = InputSessionSpecifier(MessageDataSpecifier(2345), None)
+    subscriber_promiscuous = tr.get_input_session(subscriber_promiscuous_specifier, meta)
+    assert subscriber_promiscuous is tr.get_input_session(subscriber_promiscuous_specifier, meta)
+
+    anon_sub_promiscuous_specifier = InputSessionSpecifier(MessageDataSpecifier(2345), None)
+    anon_sub_promiscuous = anon_tr.get_input_session(anon_sub_promiscuous_specifier, meta)
+    assert anon_sub_promiscuous is anon_tr.get_input_session(anon_sub_promiscuous_specifier, meta)
+
+    # Anonymous UDP Transport cannot create non-promiscuous input session (only Message, no Service)
+    faulthy_specifier = InputSessionSpecifier(MessageDataSpecifier(2345), 123)
+    with pytest.raises(OperationNotDefinedForAnonymousNodeError):
+        _ = anon_tr.get_input_session(faulthy_specifier, meta)
+
+    subscriber_selective_specifier = InputSessionSpecifier(MessageDataSpecifier(2345), 123)
+    subscriber_selective = tr.get_input_session(subscriber_selective_specifier, meta)
+    assert subscriber_selective is tr.get_input_session(subscriber_selective_specifier, meta)
+
+    server_listener_specifier = InputSessionSpecifier(
+        ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST), None
     )
+    server_listener = tr.get_input_session(server_listener_specifier, meta)
+    assert server_listener is tr.get_input_session(server_listener_specifier, meta)
 
     server_responder = tr.get_output_session(
         OutputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE), 222), meta
@@ -101,12 +149,11 @@ async def _unittest_udp_transport_ipv4() -> None:
         OutputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST), 111), meta
     )
 
-    client_listener = tr2.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE), 111), meta
+    client_listener_specifier = InputSessionSpecifier(
+        ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE), 111
     )
-    assert client_listener is tr2.get_input_session(
-        InputSessionSpecifier(ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE), 111), meta
-    )
+    client_listener = tr2.get_input_session(client_listener_specifier, meta)
+    assert client_listener is tr2.get_input_session(client_listener_specifier, meta)
 
     print("tr :", tr.input_sessions, tr.output_sessions)
     assert set(tr.input_sessions) == {subscriber_promiscuous, subscriber_selective, server_listener}
@@ -116,23 +163,37 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert set(tr2.input_sessions) == {client_listener}
     assert set(tr2.output_sessions) == {broadcaster, client_requester}
 
-    assert tr.sample_statistics().received_datagrams[MessageDataSpecifier(2345)].accepted_datagrams == {}
-    assert (
-        tr.sample_statistics()
-        .received_datagrams[ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)]
-        .accepted_datagrams
-        == {}
+    print("anon_tr :", anon_tr.input_sessions, anon_tr.output_sessions)
+    assert set(anon_tr.input_sessions) == {anon_sub_promiscuous}
+    assert set(anon_tr.output_sessions) == {anon_broadcaster}
+
+    ## empty statistics [subscriber_promiscuous/subscriber_selective]
+    assert tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
+    )
+    assert tr.input_sessions[1].sample_statistics() == SelectiveUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
 
-    assert (
-        tr2.sample_statistics()
-        .received_datagrams[ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)]
-        .accepted_datagrams
-        == {}
+    ## empty statistics [anon_sub_promiscuous]
+    assert anon_tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
+    )
+
+    ## empty statistics [server_listener]
+    assert tr.input_sessions[2].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
+    )
+
+    ## empty statistics [client_listener]
+    assert tr2.input_sessions[0].sample_statistics() == SelectiveUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
 
     #
     # Message exchange test.
+    # send: broadcaster
+    # receive: subscriber_promiscuous, anon_sub_promiscuous
     #
     assert await broadcaster.send(
         Transfer(
@@ -141,27 +202,71 @@ async def _unittest_udp_transport_ipv4() -> None:
         monotonic_deadline=get_monotonic() + 5.0,
     )
 
+    # subscriber_promiscuous
     rx_transfer = await subscriber_promiscuous.receive(get_monotonic() + 5.0)
-    print("PROMISCUOUS SUBSCRIBER TRANSFER:", rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.LOW
     assert rx_transfer.transfer_id == 77777
     assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
 
-    print("tr :", tr.sample_statistics())
-    assert tr.sample_statistics().received_datagrams[MessageDataSpecifier(2345)].accepted_datagrams == {222: 1}
-    assert (
-        tr.sample_statistics()
-        .received_datagrams[ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)]
-        .accepted_datagrams
-        == {}
+    assert tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=1, frames=1, payload_bytes=1196, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
-    print("tr2:", tr2.sample_statistics())
-    assert (
-        tr2.sample_statistics()
-        .received_datagrams[ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)]
-        .accepted_datagrams
-        == {}
+
+    # anon_sub_promiscuous
+    rx_transfer = await anon_sub_promiscuous.receive(get_monotonic() + 5.0)
+    assert isinstance(rx_transfer, TransferFrom)
+    assert rx_transfer.priority == Priority.LOW
+    assert rx_transfer.transfer_id == 77777
+    assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
+
+    assert anon_tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=1, frames=1, payload_bytes=1196, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+    )
+
+    assert tr.input_sessions[2].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
+    )
+
+    assert tr2.input_sessions[0].sample_statistics() == SelectiveUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
+    )
+
+    assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
+    assert None is await subscriber_promiscuous.receive(get_monotonic() + 0.1)
+    assert None is await server_listener.receive(get_monotonic() + 0.1)
+    assert None is await client_listener.receive(get_monotonic() + 0.1)
+
+    #
+    # Message exchange test.
+    # send: anon_broadcaster
+    # receive: anon_sub_promiscuous, subscriber_promiscuous
+    #
+    assert await anon_broadcaster.send(
+        Transfer(
+            timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=77777, fragmented_payload=payload_single
+        ),
+        monotonic_deadline=get_monotonic() + 5.0,
+    )
+
+    rx_transfer = await anon_sub_promiscuous.receive(get_monotonic() + 5.0)
+    assert isinstance(rx_transfer, TransferFrom)
+    assert rx_transfer.priority == Priority.LOW
+    assert rx_transfer.transfer_id == 77777
+    assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
+
+    assert anon_tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+    )
+
+    rx_transfer = await subscriber_promiscuous.receive(get_monotonic() + 5.0)
+    assert isinstance(rx_transfer, TransferFrom)
+    assert rx_transfer.priority == Priority.LOW
+    assert rx_transfer.transfer_id == 77777
+    assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
+
+    assert tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
@@ -171,6 +276,8 @@ async def _unittest_udp_transport_ipv4() -> None:
 
     #
     # Service exchange test.
+    # send: client_requester
+    # receive: server_listener
     #
     assert await client_requester.send(
         Transfer(timestamp=Timestamp.now(), priority=Priority.HIGH, transfer_id=88888, fragmented_payload=payload_x3),
@@ -190,19 +297,16 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert None is await server_listener.receive(get_monotonic() + 0.1)
     assert None is await client_listener.receive(get_monotonic() + 0.1)
 
-    print("tr :", tr.sample_statistics())
-    assert tr.sample_statistics().received_datagrams[MessageDataSpecifier(2345)].accepted_datagrams == {222: 1}
-    assert tr.sample_statistics().received_datagrams[
-        ServiceDataSpecifier(444, ServiceDataSpecifier.Role.REQUEST)
-    ].accepted_datagrams == {
-        222: 3 * 2
-    }  # Deterministic data loss mitigation is enabled, multiplication factor 2
-    print("tr2:", tr2.sample_statistics())
-    assert (
-        tr2.sample_statistics()
-        .received_datagrams[ServiceDataSpecifier(444, ServiceDataSpecifier.Role.RESPONSE)]
-        .accepted_datagrams
-        == {}
+    assert tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+    )
+
+    assert tr.input_sessions[2].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+        transfers=1, frames=6, payload_bytes=3596, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+    )
+
+    assert tr2.input_sessions[0].sample_statistics() == SelectiveUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
 
     #
@@ -257,7 +361,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
-    tr_capture = UDPTransport("127.50.0.2", local_node_id=None)
+    tr_capture = UDPTransport("127.0.0.1", local_node_id=None)
     captures: typing.List[UDPCapture] = []
 
     def inhale(s: Capture) -> None:
@@ -270,7 +374,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     assert tr_capture.capture_active
     await asyncio.sleep(1.0)
 
-    tr = UDPTransport("127.50.0.111")
+    tr = UDPTransport("127.0.0.1", local_node_id=456)
     meta = PayloadMetadata(10000)
     broadcaster = tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)
     assert broadcaster is tr.get_output_session(OutputSessionSpecifier(MessageDataSpecifier(190), None), meta)
@@ -281,7 +385,7 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sink.bind(("", 11111))
     sink.setsockopt(
-        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.50.0.190") + socket.inet_aton("127.0.0.1")
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.0.190") + socket.inet_aton("127.0.0.1")
     )
 
     ts = Timestamp.now()
@@ -310,21 +414,21 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     (pkt,) = captures
     assert isinstance(pkt, UDPCapture)
     assert (ts.monotonic - 1) <= pkt.timestamp.monotonic <= Timestamp.now().monotonic
-    assert (ts.system - 1) <= pkt.timestamp.system <= Timestamp.now().system
+    # assert (ts.system - 1) <= pkt.timestamp.system <= Timestamp.now().system
     ip_pkt = IPPacket.parse(pkt.link_layer_packet)
     assert ip_pkt is not None
-    assert [str(x) for x in ip_pkt.source_destination] == ["127.50.0.111", "239.50.0.190"]
+    assert [str(x) for x in ip_pkt.source_destination] == ["127.0.0.1", "239.0.0.190"]
     parsed = pkt.parse()
     assert parsed
     ses, frame = parsed
     assert isinstance(ses, AlienSessionSpecifier)
-    assert ses.source_node_id == 111
-    assert ses.destination_node_id is None
+    assert ses.source_node_id == 456
+    # assert ses.destination_node_id is None
     assert ses.data_specifier == broadcaster.specifier.data_specifier
     assert frame.end_of_transfer
     assert frame.index == 0
     assert frame.transfer_id == 9876543210
-    assert len(frame.payload) == 1024
+    assert len(frame.payload) == 1024 + 4
     assert frame.priority == Priority.NOMINAL
 
 

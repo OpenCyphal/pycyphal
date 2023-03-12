@@ -113,7 +113,7 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
         def one(nid: typing.Optional[int]) -> UDPTransport:
             return UDPTransport("127.0.0.1", local_node_id=nid)
 
-        yield lambda nid_a, nid_b: (one(nid_a), one(nid_b), False)
+        yield lambda nid_a, nid_b: (one(nid_a), one(nid_b), True)
 
     yield udp_loopback
 
@@ -130,7 +130,7 @@ def _generate() -> typing.Iterator[typing.Callable[[], typing.Iterator[Transport
             print("UDP+SERIAL:", red)
             return red
 
-        yield lambda nid_a, nid_b: (one(nid_a), one(nid_b), False)
+        yield lambda nid_a, nid_b: (one(nid_a), one(nid_b), True)
 
     yield heterogeneous_udp_serial
 

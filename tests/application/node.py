@@ -86,7 +86,7 @@ async def _unittest_slow_node(compiled: typing.List[pycyphal.dsdl.GeneratedPacka
         assert None is await remote_hb_sub.receive_for(2.0)
 
         assert trans.local_node_id is None
-        trans.attach_inferior(UDPTransport("127.1.1.2"))
+        trans.attach_inferior(UDPTransport("127.0.0.1", local_node_id=258))
         assert trans.local_node_id == 258
 
         for _ in range(2):

@@ -68,7 +68,14 @@ async def _unittest_input_session() -> None:
 
     # ANONYMOUS TRANSFERS.
     sis._process_frame(  # pylint: disable=protected-access
-        ts, mk_frame(transfer_id=0, index=0, end_of_transfer=False, payload=nihil_supernum, source_node_id=None)
+        ts,
+        mk_frame(
+            transfer_id=0,
+            index=0,
+            end_of_transfer=False,
+            payload=nihil_supernum + TransferCRC.new(nihil_supernum).value_as_bytes,
+            source_node_id=None,
+        ),
     )
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         frames=1,
@@ -76,7 +83,14 @@ async def _unittest_input_session() -> None:
     )
 
     sis._process_frame(  # pylint: disable=protected-access
-        ts, mk_frame(transfer_id=0, index=1, end_of_transfer=True, payload=nihil_supernum, source_node_id=None)
+        ts,
+        mk_frame(
+            transfer_id=0,
+            index=1,
+            end_of_transfer=True,
+            payload=nihil_supernum + TransferCRC.new(nihil_supernum).value_as_bytes,
+            source_node_id=None,
+        ),
     )
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         frames=2,
@@ -84,7 +98,14 @@ async def _unittest_input_session() -> None:
     )
 
     sis._process_frame(  # pylint: disable=protected-access
-        ts, mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=nihil_supernum, source_node_id=None)
+        ts,
+        mk_frame(
+            transfer_id=0,
+            index=0,
+            end_of_transfer=True,
+            payload=nihil_supernum + TransferCRC.new(nihil_supernum).value_as_bytes,
+            source_node_id=None,
+        ),
     )
     assert sis.sample_statistics() == SerialInputSessionStatistics(
         transfers=1,
@@ -100,11 +121,25 @@ async def _unittest_input_session() -> None:
 
     # VALID TRANSFERS. Notice that they are unordered on purpose. The reassembler can deal with that.
     sis._process_frame(  # pylint: disable=protected-access
-        ts, mk_frame(transfer_id=0, index=1, end_of_transfer=False, payload=nihil_supernum, source_node_id=1111)
+        ts,
+        mk_frame(
+            transfer_id=0,
+            index=1,
+            end_of_transfer=False,
+            payload=nihil_supernum,
+            source_node_id=1111,
+        ),
     )
 
     sis._process_frame(  # pylint: disable=protected-access
-        ts, mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=nihil_supernum, source_node_id=2222)
+        ts,
+        mk_frame(
+            transfer_id=0,
+            index=0,
+            end_of_transfer=True,
+            payload=nihil_supernum + TransferCRC.new(nihil_supernum).value_as_bytes,
+            source_node_id=2222,
+        ),
     )  # COMPLETED FIRST
 
     assert sis.sample_statistics() == SerialInputSessionStatistics(

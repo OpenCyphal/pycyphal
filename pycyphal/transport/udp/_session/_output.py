@@ -9,7 +9,7 @@ import typing
 import asyncio
 import logging
 import pycyphal
-from pycyphal.transport import Timestamp, ServiceDataSpecifier
+from pycyphal.transport import Timestamp
 from .._frame import UDPFrame
 
 
@@ -64,6 +64,7 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         mtu: int,
         multiplier: int,
         sock: socket_.socket,
+        source_node_id: typing.Optional[int],
         finalizer: typing.Callable[[], None],
     ):
         """
@@ -76,19 +77,14 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         self._mtu = int(mtu)
         self._multiplier = int(multiplier)
         self._sock = sock
+        self._source_node_id = source_node_id
         self._finalizer = finalizer
         self._feedback_handler: typing.Optional[typing.Callable[[pycyphal.transport.Feedback], None]] = None
         self._statistics = pycyphal.transport.SessionStatistics()
         if self._multiplier < 1:  # pragma: no cover
             raise ValueError(f"Invalid transfer multiplier: {self._multiplier}")
-        assert (
-            specifier.remote_node_id is None
-            if isinstance(specifier.data_specifier, pycyphal.transport.MessageDataSpecifier)
-            else True
-        ), "Internal protocol violation: cannot unicast a message transfer"
-        assert (
-            specifier.remote_node_id is not None if isinstance(specifier.data_specifier, ServiceDataSpecifier) else True
-        ), "Internal protocol violation: cannot broadcast a service transfer"
+
+        assert (self._source_node_id is None) or (0 <= self._source_node_id <= 0xFFFE)
 
     async def send(self, transfer: pycyphal.transport.Transfer, monotonic_deadline: float) -> bool:
         if self._closed:
@@ -97,18 +93,24 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         def construct_frame(index: int, end_of_transfer: bool, payload: memoryview) -> UDPFrame:
             return UDPFrame(
                 priority=transfer.priority,
+                source_node_id=self._source_node_id,
+                destination_node_id=self._specifier.remote_node_id,
+                data_specifier=self._specifier.data_specifier,
                 transfer_id=transfer.transfer_id,
                 index=index,
                 end_of_transfer=end_of_transfer,
+                user_data=0,
                 payload=payload,
             )
 
+        # payload_crc added in serialize_transfer(); header_crc added in compile_header_and_payload()
         frames = [
             fr.compile_header_and_payload()
             for fr in pycyphal.transport.commons.high_overhead_transport.serialize_transfer(
                 transfer.fragmented_payload, self._mtu, construct_frame
             )
         ]
+
         _logger.debug("%s: Sending transfer: %s; current stats: %s", self, transfer, self._statistics)
         tx_timestamp = await self._emit(frames, monotonic_deadline)
         if tx_timestamp is None:
@@ -180,11 +182,13 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
         for index, (header, payload) in enumerate(header_payload_pairs):
             try:
                 # TODO: concatenation is inefficient. Use vectorized IO via sendmsg() instead!
+                combined_payload = b"".join((header, payload))
+                _logger.debug("%s: sending: %s", self, combined_payload)
                 await asyncio.wait_for(
-                    loop.sock_sendall(self._sock, b"".join((header, payload))),
+                    loop.sock_sendall(self._sock, combined_payload),
                     timeout=monotonic_deadline - loop.time(),
                 )
-
+                _logger.debug("%s: sent", self)
                 # TODO: use socket timestamping when running on Linux (Windows does not support timestamping).
                 # Depending on the chosen approach, timestamping on Linux may require us to launch a new thread
                 # reading from the socket's error message queue and then matching the returned frames with a

@@ -9,10 +9,10 @@ import sys
 import time
 import typing
 import socket
-from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, UnsupportedSessionConfigurationError
+from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
 from pycyphal.transport import InvalidMediaConfigurationError, Timestamp
 from pycyphal.transport.udp._ip._socket_factory import SocketFactory
-from pycyphal.transport.udp._ip._endpoint_mapping import SUBJECT_PORT, service_data_specifier_to_udp_port
+from pycyphal.transport.udp._ip._endpoint_mapping import CYPHAL_PORT
 from pycyphal.transport.udp._ip._v4 import SnifferIPv4, IPv4SocketFactory
 from pycyphal.transport.udp._ip import LinkLayerCapture
 from pycyphal.transport.udp import IPPacket, LinkLayerPacket, UDPIPPacket
@@ -22,63 +22,74 @@ def _unittest_socket_factory() -> None:
     from pytest import raises
     from ipaddress import IPv4Address
 
-    is_linux = sys.platform.startswith("linux")
+    is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
 
-    fac = SocketFactory.new(IPv4Address("127.42.1.200"))
+    fac = SocketFactory.new(IPv4Address("127.0.0.1"))
+    assert isinstance(fac, IPv4SocketFactory)
     assert fac.max_nodes == 0xFFFF
-    assert str(fac.local_ip_address) == "127.42.1.200"
+    assert str(fac.local_ip_address) == "127.0.0.1"
 
-    # SERVICE SOCKET TEST (unicast)
+    # SERVICE SOCKET TEST
     ds = ServiceDataSpecifier(100, ServiceDataSpecifier.Role.REQUEST)
-    test_u = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    test_u.bind(("127.42.0.123", service_data_specifier_to_udp_port(ds)))
+    test_srv_i = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_srv_i.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    test_srv_i.bind(("239.1.1.200" * is_linux, CYPHAL_PORT))
+    test_srv_i.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.1.1.200") + socket.inet_aton("127.0.0.1")
+    )
 
-    srv_o = fac.make_output_socket(123, ds)
+    srv_o = fac.make_output_socket(456, ds)
     srv_o.send(b"Goose")
-    rx = test_u.recvfrom(1024)
+    rx = test_srv_i.recvfrom(1024)
     assert rx[0] == b"Goose"
-    assert rx[1][0] == "127.42.1.200"
+    assert rx[1][0] == "127.0.0.1"
 
-    srv_i = fac.make_input_socket(ds)
-    test_u.sendto(b"Duck", ("127.42.1.200", service_data_specifier_to_udp_port(ds)))
+    test_srv_o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_srv_o.bind(("127.0.0.1", 0))
+    test_srv_o.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
+
+    srv_i = fac.make_input_socket(456, ds)
+    test_srv_o.sendto(b"Duck", ("239.1.1.200", CYPHAL_PORT))
+    time.sleep(1)
     rx = srv_i.recvfrom(1024)
     assert rx[0] == b"Duck"
-    assert rx[1][0] == "127.42.0.123"
-    test_u.close()
+    assert rx[1][0] == "127.0.0.1"
 
     # MESSAGE SOCKET TEST (multicast)
     # Note that Windows does not permit using the same socket for both sending to and receiving from a unicast group
     # because in order to specify a particular output interface the socket must be bound to a unicast address.
     # So we set up separate sockets for input and output.
-    test_i = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    test_i.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    test_i.bind(("239.42.2.100" * is_linux, SUBJECT_PORT))
-    test_i.setsockopt(
-        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.42.2.100") + socket.inet_aton("127.42.0.123")
+    test_msg_i = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_msg_i.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    test_msg_i.bind(("239.0.2.100" * is_linux, CYPHAL_PORT))
+    test_msg_i.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.2.100") + socket.inet_aton("127.0.0.1")
     )
 
-    msg_o = fac.make_output_socket(None, MessageDataSpecifier(612))  # 612 = (2 << 8) + 100
+    msg_o = fac.make_output_socket(None, MessageDataSpecifier(612))
     msg_o.send(b"Eagle")
-    rx = test_i.recvfrom(1024)
+    rx = test_msg_i.recvfrom(1024)
     assert rx[0] == b"Eagle"
-    assert rx[1][0] == "127.42.1.200"
+    assert rx[1][0] == "127.0.0.1"
 
-    test_o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    test_o.bind(("127.42.0.123", 0))
-    test_o.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.42.0.123"))
-    msg_i = fac.make_input_socket(MessageDataSpecifier(612))
-    test_o.sendto(b"Seagull", ("239.42.2.100", SUBJECT_PORT))
+    test_msg_o = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    test_msg_o.bind(("127.0.0.1", 0))
+    test_msg_o.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
+
+    msg_i = fac.make_input_socket(None, MessageDataSpecifier(612))
+    test_msg_o.sendto(b"Seagull", ("239.0.2.100", CYPHAL_PORT))
+    time.sleep(1)
     rx = msg_i.recvfrom(1024)
     assert rx[0] == b"Seagull"
-    assert rx[1][0] == "127.42.0.123"  # Same address we just bound to.
+    assert rx[1][0] == "127.0.0.1"  # Same address we just bound to.
 
     # ERRORS
     with raises(InvalidMediaConfigurationError):
         IPv4SocketFactory(IPv4Address("1.2.3.4")).make_input_socket(
-            ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
+            456, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
         )
     with raises(InvalidMediaConfigurationError):
-        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_input_socket(MessageDataSpecifier(0))
+        IPv4SocketFactory(IPv4Address("1.2.3.4")).make_input_socket(None, MessageDataSpecifier(0))
     with raises(InvalidMediaConfigurationError):
         IPv4SocketFactory(IPv4Address("1.2.3.4")).make_output_socket(
             1, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE)
@@ -86,15 +97,15 @@ def _unittest_socket_factory() -> None:
     with raises(InvalidMediaConfigurationError):
         IPv4SocketFactory(IPv4Address("1.2.3.4")).make_output_socket(1, MessageDataSpecifier(0))
 
-    with raises(UnsupportedSessionConfigurationError):
+    with raises(AssertionError):
         fac.make_output_socket(1, MessageDataSpecifier(0))
-    with raises(UnsupportedSessionConfigurationError):
-        fac.make_output_socket(None, ServiceDataSpecifier(0, ServiceDataSpecifier.Role.RESPONSE))
 
     # CLEAN UP
-    test_u.close()
-    test_i.close()
-    test_o.close()
+    # test_u.close()
+    test_srv_i.close()
+    test_srv_o.close()
+    test_msg_i.close()
+    test_msg_o.close()
     srv_o.close()
     srv_i.close()
     msg_o.close()
@@ -114,8 +125,10 @@ def _unittest_sniffer() -> None:
         assert udp_pkt is not None
         return udp_pkt
 
-    # The sniffer is expected to drop all traffic except from 127.66.0.0/16
-    fac = SocketFactory.new(ip_address("127.66.1.200"))
+    is_linux = sys.platform.startswith("linux") or sys.platform.startswith("darwin")
+
+    fac = SocketFactory.new(ip_address("127.0.0.1"))
+    assert isinstance(fac, IPv4SocketFactory)
 
     ts_last = Timestamp.now()
     sniffs: typing.List[LinkLayerCapture] = []
@@ -127,14 +140,16 @@ def _unittest_sniffer() -> None:
         assert ts_last.system_ns <= cap.timestamp.system_ns <= now.system_ns
         ts_last = cap.timestamp
         # Make sure that all traffic from foreign networks is filtered out by the sniffer.
-        assert (int(parse_ip(cap.packet).source_destination[0]) & 0x_FFFF_0000) == (
-            int(fac.local_ip_address) & 0x_FFFF_0000
+        assert isinstance(fac, IPv4SocketFactory)
+        assert (int(parse_ip(cap.packet).source_destination[0]) & 0x_FFFE_0000) == (
+            int(fac.local_ip_address) & 0x_FFFE_0000
         )
         sniffs.append(cap)
 
+    # The sniffer is expected to drop all traffic except from 239.0.0.0/15.
     sniffer = fac.make_sniffer(sniff_sniff)
     assert isinstance(sniffer, SnifferIPv4)
-    assert sniffer._link_layer._filter_expr == "udp and src net 127.66.0.0/16"
+    assert sniffer._link_layer._filter_expr == "udp and dst net 239.0.0.0/15"
 
     # The sink socket is needed for compatibility with Windows. On Windows, an attempt to transmit to a loopback
     # multicast group for which there are no receivers may fail with the following errors:
@@ -143,31 +158,38 @@ def _unittest_sniffer() -> None:
     #                               troubleshooting, see Windows Help
     sink = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sink.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sink.bind(("", 4444))
+    sink.bind(("239.0.1.200" * is_linux, CYPHAL_PORT))
     sink.setsockopt(
-        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.66.1.200") + socket.inet_aton("127.42.0.123")
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.2.1.200") + socket.inet_aton("127.0.0.1")
+    )
+    sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.199") + socket.inet_aton("127.0.0.1")
+    )
+    sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.200") + socket.inet_aton("127.0.0.1")
+    )
+    sink.setsockopt(
+        socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton("239.0.1.201") + socket.inet_aton("127.0.0.1")
     )
 
     outside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    outside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.42.0.123"))
-    outside.bind(("127.42.0.123", 0))  # Some random noise on an adjacent subnet.
+    outside.bind(("127.0.0.1", 0))
+    outside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
     for i in range(10):
-        outside.sendto(f"{i:04x}".encode(), ("127.66.1.200", 3333))  # Ignored unicast
-        outside.sendto(f"{i:04x}".encode(), ("239.66.1.200", 4444))  # Ignored multicast
+        outside.sendto(f"{i:04x}".encode(), ("239.2.1.200", CYPHAL_PORT))  # Ignored multicast
         time.sleep(0.1)
 
     time.sleep(1)
     assert sniffs == []  # Make sure we are not picking up any noise.
 
     inside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    inside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.66.33.44"))
-    inside.bind(("127.66.33.44", 0))  # This one is on our local subnet, it should be heard.
-    inside.sendto(b"\xAA\xAA\xAA\xAA", ("127.66.1.200", 1234))  # Accepted unicast inside subnet
-    inside.sendto(b"\xBB\xBB\xBB\xBB", ("127.33.1.200", 5678))  # Accepted unicast outside subnet
-    inside.sendto(b"\xCC\xCC\xCC\xCC", ("239.66.1.200", 4444))  # Accepted multicast
+    inside.bind(("127.0.0.1", 0))
+    inside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
+    inside.sendto(b"\xAA\xAA\xAA\xAA", ("239.0.1.199", CYPHAL_PORT))  # Accepted multicast
+    inside.sendto(b"\xBB\xBB\xBB\xBB", ("239.0.1.200", CYPHAL_PORT))  # Accepted multicast
+    inside.sendto(b"\xCC\xCC\xCC\xCC", ("239.0.1.201", CYPHAL_PORT))  # Accepted multicast
 
-    outside.sendto(b"x", ("127.66.1.200", 5555))  # Ignored unicast
-    outside.sendto(b"y", ("239.66.1.200", 4444))  # Ignored multicast
+    outside.sendto(b"y", ("239.2.1.200", CYPHAL_PORT))  # Ignored multicast
 
     time.sleep(3)
 
@@ -182,13 +204,13 @@ def _unittest_sniffer() -> None:
     assert len(sniffs[1].packet.source) == len(sniffs[1].packet.destination)
     assert len(sniffs[2].packet.source) == len(sniffs[2].packet.destination)
 
-    assert parse_ip(sniffs[0].packet).source_destination == (ip_address("127.66.33.44"), ip_address("127.66.1.200"))
-    assert parse_ip(sniffs[1].packet).source_destination == (ip_address("127.66.33.44"), ip_address("127.33.1.200"))
-    assert parse_ip(sniffs[2].packet).source_destination == (ip_address("127.66.33.44"), ip_address("239.66.1.200"))
+    assert parse_ip(sniffs[0].packet).source_destination == (ip_address("127.0.0.1"), ip_address("239.0.1.199"))
+    assert parse_ip(sniffs[1].packet).source_destination == (ip_address("127.0.0.1"), ip_address("239.0.1.200"))
+    assert parse_ip(sniffs[2].packet).source_destination == (ip_address("127.0.0.1"), ip_address("239.0.1.201"))
 
-    assert parse_udp(sniffs[0].packet).destination_port == 1234
-    assert parse_udp(sniffs[1].packet).destination_port == 5678
-    assert parse_udp(sniffs[2].packet).destination_port == 4444
+    assert parse_udp(sniffs[0].packet).destination_port == CYPHAL_PORT
+    assert parse_udp(sniffs[1].packet).destination_port == CYPHAL_PORT
+    assert parse_udp(sniffs[2].packet).destination_port == CYPHAL_PORT
 
     assert bytes(parse_udp(sniffs[0].packet).payload) == b"\xAA\xAA\xAA\xAA"
     assert bytes(parse_udp(sniffs[1].packet).payload) == b"\xBB\xBB\xBB\xBB"
@@ -199,7 +221,7 @@ def _unittest_sniffer() -> None:
     # CLOSE and make sure we don't get any additional callbacks.
     sniffer.close()
     time.sleep(2)
-    inside.sendto(b"d", ("127.66.1.100", SUBJECT_PORT))
+    inside.sendto(b"d", ("239.0.1.200", CYPHAL_PORT))
     time.sleep(1)
     assert sniffs == []  # Should be terminated.
 

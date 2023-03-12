@@ -142,7 +142,7 @@ def _unittest_stream_parser() -> None:
         end_of_transfer=True,
         payload=memoryview(bytes(f1.compile_into(bytearray(1000))) * 2),
     )
-    assert len(f2.payload) == 43 * 2  # Cobs escaping
+    assert len(f2.payload) == 39 * 2  # Cobs escaping
     ((tsa, buf, a),) = proc(f2.compile_into(bytearray(1000)))
     assert tsa == ts
     assert a is None

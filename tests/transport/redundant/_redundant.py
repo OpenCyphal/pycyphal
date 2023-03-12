@@ -8,6 +8,8 @@ import logging
 import pytest
 import pycyphal.transport
 
+_logger = logging.getLogger(__name__)
+
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pycyphal.transport.redundant import RedundantTransport, RedundantTransportStatistics
 from pycyphal.transport.redundant import InconsistentInferiorConfigurationError
@@ -205,16 +207,15 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
     assert rx.fragmented_payload == [memoryview(b"rty")]
     assert rx.transfer_id == 4
 
-    #
     # Real heterogeneous transport test.
-    #
+
     tr_a.detach_inferior(lo_cyc_0)
     tr_a.detach_inferior(lo_cyc_1)
     del lo_cyc_0  # Prevent accidental reuse.
     del lo_cyc_1
 
-    udp_a = UDPTransport("127.0.0.111")
-    udp_b = UDPTransport("127.0.0.222")
+    udp_a = UDPTransport("127.0.0.1", 111)
+    udp_b = UDPTransport("127.0.0.1", 222)
 
     serial_a = SerialTransport(SERIAL_URI, 111)
     serial_b = SerialTransport(SERIAL_URI, 222, mtu=2048)  # Heterogeneous.
@@ -244,8 +245,9 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
         Transfer(
             timestamp=Timestamp.now(), priority=Priority.LOW, transfer_id=5, fragmented_payload=[memoryview(b"uio")]
         ),
-        monotonic_deadline=loop.time() + 1.0,
+        monotonic_deadline=loop.time() + 10.0,
     )
+
     rx = await sub_any_b.receive(loop.time() + 1.0)
     assert rx is not None
     assert rx.fragmented_payload == [memoryview(b"uio")]

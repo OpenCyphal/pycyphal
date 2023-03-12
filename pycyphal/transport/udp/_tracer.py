@@ -12,9 +12,9 @@ import pycyphal.transport.udp
 from pycyphal.transport import Trace, TransferTrace, Capture, AlienSessionSpecifier, AlienTransferMetadata
 from pycyphal.transport import AlienTransfer, TransferFrom, Timestamp
 from pycyphal.transport.commons.high_overhead_transport import AlienTransferReassembler, TransferReassembler
+from pycyphal.transport.commons.high_overhead_transport import TransferCRC
 from ._frame import UDPFrame
-from ._ip import LinkLayerPacket, SUBJECT_PORT
-from ._ip import unicast_ip_to_node_id, udp_port_to_service_data_specifier, multicast_group_to_message_data_specifier
+from ._ip import LinkLayerPacket, CYPHAL_PORT
 
 
 @dataclasses.dataclass(frozen=True)
@@ -108,7 +108,7 @@ class UDPIPPacket:
     def __post_init__(self) -> None:
         if not (0 <= self.source_port <= 0xFFFF):
             raise ValueError(f"Invalid source port: {self.source_port}")
-        if not (0 <= self.destination_port <= 0xFFFF):
+        if self.destination_port != CYPHAL_PORT:
             raise ValueError(f"Invalid destination port: {self.destination_port}")
 
     @staticmethod
@@ -135,39 +135,23 @@ class UDPCapture(Capture):
     def parse(self) -> typing.Optional[typing.Tuple[pycyphal.transport.AlienSessionSpecifier, UDPFrame]]:
         """
         The parsed representation is only defined if the packet is a valid Cyphal/UDP frame.
-        The source node-ID is never None.
+        The source node-ID can be None in the case of anonymous messages.
         """
         ip_packet = IPPacket.parse(self.link_layer_packet)
         if ip_packet is None:
             return None
-        ip_source, ip_destination = ip_packet.source_destination
 
         udp_packet = UDPIPPacket.parse(ip_packet)
         if udp_packet is None:
-            return None
-
-        dst_nid: typing.Optional[int]
-        data_spec: typing.Optional[pycyphal.transport.DataSpecifier]
-        if ip_destination.is_multicast:
-            if udp_packet.destination_port != SUBJECT_PORT:
-                return None
-            dst_nid = None  # Broadcast
-            data_spec = multicast_group_to_message_data_specifier(ip_source, ip_destination)
-        else:
-            dst_nid = unicast_ip_to_node_id(ip_source, ip_destination)
-            if dst_nid is None:  # The packet crosses the Cyphal/UDP subnet boundary, invalid.
-                return None
-            data_spec = udp_port_to_service_data_specifier(udp_packet.destination_port)
-
-        if data_spec is None:
             return None
 
         frame = UDPFrame.parse(udp_packet.payload)
         if frame is None:
             return None
 
-        src_nid = unicast_ip_to_node_id(ip_source, ip_source)
-        assert src_nid is not None
+        src_nid = frame.source_node_id
+        dst_nid = frame.destination_node_id
+        data_spec = frame.data_specifier
         ses_spec = pycyphal.transport.AlienSessionSpecifier(
             source_node_id=src_nid, destination_node_id=dst_nid, data_specifier=data_spec
         )
@@ -241,11 +225,10 @@ def _unittest_udp_tracer() -> None:
     from ipaddress import ip_address
     from pycyphal.transport import Priority, ServiceDataSpecifier
     from pycyphal.transport.udp import UDPTransport
-    from ._ip import service_data_specifier_to_udp_port
 
     tr = UDPTransport.make_tracer()
     ts = Timestamp.now()
-    ds = ServiceDataSpecifier(11, ServiceDataSpecifier.Role.RESPONSE)
+    ds = ServiceDataSpecifier(service_id=11, role=ServiceDataSpecifier.Role.REQUEST)
 
     # VALID SERVICE FRAME
     llp = LinkLayerPacket(
@@ -257,39 +240,44 @@ def _unittest_udp_tracer() -> None:
                 [
                     # IPv4
                     b"\x45\x00",
-                    (20 + 8 + 24 + 12).to_bytes(2, "big"),  # Total length (incl. the 20 bytes of the IP header)
+                    (20 + 8 + 24 + 12 + 4).to_bytes(2, "big"),  # Total length (incl. the 20 bytes of the IP header)
                     b"\x7e\x50\x40\x00\x40",  # ID, flags, fragment offset, TTL
                     b"\x11",  # Protocol (UDP)
                     b"\x00\x00",  # IP checksum (unset)
-                    ip_address("127.0.0.42").packed,  # Source
-                    ip_address("127.0.0.63").packed,  # Destination
+                    ip_address("127.0.0.1").packed,  # Source
+                    ip_address("239.1.0.63").packed,  # Destination
                     # UDP/IP
-                    (12345).to_bytes(2, "big"),  # Source port
-                    service_data_specifier_to_udp_port(ds).to_bytes(2, "big"),  # Destination port
-                    (8 + 24 + 12).to_bytes(2, "big"),  # Total length (incl. the 8 bytes of the UDP header)
+                    CYPHAL_PORT.to_bytes(2, "big"),  # Source port
+                    CYPHAL_PORT.to_bytes(2, "big"),  # Destination port
+                    (8 + 24 + 12 + 4).to_bytes(2, "big"),  # Total length (incl. the 8 bytes of the UDP header)
                     b"\x00\x00",  # UDP checksum (unset)
                     # Cyphal/UDP
                     b"".join(
                         UDPFrame(
                             priority=Priority.SLOW,
+                            source_node_id=42,
+                            destination_node_id=63,
+                            data_specifier=ds,
                             transfer_id=1234567890,
                             index=0,
                             end_of_transfer=True,
-                            payload=memoryview(b"Hello world!"),
+                            user_data=0,
+                            payload=memoryview(b"Hello world!" + TransferCRC.new(b"Hello world!").value_as_bytes),
                         ).compile_header_and_payload()
                     ),
                 ]
             )
         ),
     )
+
     ip_packet = IPPacket.parse(llp)
     assert ip_packet is not None
-    assert ip_packet.source_destination == (ip_address("127.0.0.42"), ip_address("127.0.0.63"))
+    assert ip_packet.source_destination == (ip_address("127.0.0.1"), ip_address("239.1.0.63"))
     assert ip_packet.protocol == 0x11
     udp_packet = UDPIPPacket.parse(ip_packet)
     assert udp_packet is not None
-    assert udp_packet.source_port == 12345
-    assert udp_packet.destination_port == service_data_specifier_to_udp_port(ds)
+    assert udp_packet.source_port == CYPHAL_PORT
+    assert udp_packet.destination_port == CYPHAL_PORT
     trace = tr.update(UDPCapture(ts, llp))
     assert isinstance(trace, TransferTrace)
     assert trace.timestamp == ts
@@ -319,10 +307,10 @@ def _unittest_udp_tracer() -> None:
                     b"\x11",  # Protocol (UDP)
                     b"\x00\x00",  # IP checksum (unset)
                     ip_address("127.0.0.42").packed,  # Source
-                    ip_address("127.0.0.63").packed,  # Destination
+                    ip_address("239.1.0.63").packed,  # Destination
                     # UDP/IP
-                    (1).to_bytes(2, "big"),  # Source port
-                    (1).to_bytes(2, "big"),  # Destination port
+                    CYPHAL_PORT.to_bytes(2, "big"),  # Source port
+                    CYPHAL_PORT.to_bytes(2, "big"),  # Destination port
                     (8).to_bytes(2, "big"),  # Total length (incl. the 8 bytes of the UDP header)
                     b"\x00\x00",  # UDP checksum (unset)
                     # Cyphal/UDP is missing
@@ -332,10 +320,10 @@ def _unittest_udp_tracer() -> None:
     )
     ip_packet = IPPacket.parse(llp)
     assert ip_packet is not None
-    assert ip_packet.source_destination == (ip_address("127.0.0.42"), ip_address("127.0.0.63"))
+    assert ip_packet.source_destination == (ip_address("127.0.0.42"), ip_address("239.1.0.63"))
     assert ip_packet.protocol == 0x11
     udp_packet = UDPIPPacket.parse(ip_packet)
     assert udp_packet is not None
-    assert udp_packet.source_port == 1
-    assert udp_packet.destination_port == 1
+    assert udp_packet.source_port == CYPHAL_PORT
+    assert udp_packet.destination_port == CYPHAL_PORT
     assert None is tr.update(UDPCapture(ts, llp))

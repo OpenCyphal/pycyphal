@@ -8,6 +8,7 @@ import typing
 import logging
 import pycyphal
 from pycyphal.transport import Timestamp, Priority, TransferFrom
+
 from ._frame import Frame
 from ._common import TransferCRC
 
@@ -51,14 +52,14 @@ class TransferReassembler:
         and a verbose report is dumped into the log at the DEBUG level.
         """
 
+        INTEGRITY_ERROR = enum.auto()
+        """
+        A transfer payload did not pass integrity checks. Transfer discarded.
+        """
+
         MULTIFRAME_MISSING_FRAMES = enum.auto()
         """
         New transfer started before the old one could be completed. Old transfer discarded.
-        """
-
-        MULTIFRAME_INTEGRITY_ERROR = enum.auto()
-        """
-        A reassembled multi-frame transfer payload did not pass integrity checks. Transfer discarded.
         """
 
         MULTIFRAME_EMPTY_FRAME = enum.auto()
@@ -181,9 +182,13 @@ class TransferReassembler:
             frame_payloads=self._payloads,
             source_node_id=self._source_node_id,
         )
+
         self._restart(
-            timestamp, frame.transfer_id + 1, self.Error.MULTIFRAME_INTEGRITY_ERROR if result is None else None
+            timestamp,
+            frame.transfer_id + 1,
+            self.Error.INTEGRITY_ERROR if result is None else None,
         )
+        _logger.debug("Transfer reassembly completed: %s", result)
         if result is not None:
             # Late implicit truncation. Normally, it should be done on-the-fly, by not storing payload fragments
             # above the maximum expected size, but it is hard to combine with out-of-order frame acceptance.
@@ -241,17 +246,23 @@ class TransferReassembler:
     def construct_anonymous_transfer(timestamp: Timestamp, frame: Frame) -> typing.Optional[TransferFrom]:
         """
         A minor helper that validates whether the frame is a valid anonymous transfer (it is if the index
-        is zero and the end-of-transfer flag is set) and constructs a transfer instance if it is.
+        is zero, the end-of-transfer flag is set and crc checks out) and constructs a transfer instance if it is.
         Otherwise, returns None.
         Observe that this is a static method because anonymous transfers are fundamentally stateless.
         """
         if frame.single_frame_transfer:
-            return TransferFrom(
-                timestamp=timestamp,
-                priority=frame.priority,
-                transfer_id=frame.transfer_id,
-                fragmented_payload=[frame.payload],
-                source_node_id=None,
+            size_ok = frame.payload.nbytes > _CRC_SIZE_BYTES
+            crc_ok = TransferCRC.new(frame.payload).check_residue()
+            return (
+                TransferFrom(
+                    timestamp=timestamp,
+                    priority=frame.priority,
+                    transfer_id=frame.transfer_id,
+                    fragmented_payload=_drop_crc([frame.payload]),
+                    source_node_id=None,
+                )
+                if size_ok and crc_ok
+                else None
             )
         return None
 
@@ -276,10 +287,16 @@ def _validate_and_finalize_transfer(
         )
 
     if len(frame_payloads) > 1:
+        _logger.debug("Finalizing multiframe transfer...")
         size_ok = sum(map(len, frame_payloads)) > _CRC_SIZE_BYTES
         crc_ok = TransferCRC.new(*frame_payloads).check_residue()
-        return package(_drop_crc(frame_payloads)) if size_ok and crc_ok else None
-    return package(frame_payloads)
+    else:
+        _logger.debug("Finalizing uniframe transfer...")
+        # if equals _CRC_SIZE_BYTES, then it is an empty single-frame transfer
+        size_ok = len(frame_payloads[0]) >= _CRC_SIZE_BYTES
+        crc_ok = TransferCRC.new(frame_payloads[0]).check_residue()
+
+    return package(_drop_crc(frame_payloads)) if size_ok and crc_ok else None
 
 
 def _drop_crc(fragments: typing.List[memoryview]) -> typing.Sequence[memoryview]:
@@ -353,14 +370,21 @@ def _unittest_transfer_reassembler() -> None:
     # Valid single-frame transfer.
     assert push(
         mk_ts(1000.0),
-        mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog),
+        mk_frame(
+            transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog + TransferCRC.new(hedgehog).value_as_bytes
+        ),
     ) == mk_transfer(timestamp=mk_ts(1000.0), transfer_id=0, fragmented_payload=[hedgehog])
 
     # Same transfer-ID; transfer ignored, no error registered.
     assert (
         push(
             mk_ts(1000.0),
-            mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog),
+            mk_frame(
+                transfer_id=0,
+                index=0,
+                end_of_transfer=True,
+                payload=hedgehog + TransferCRC.new(hedgehog).value_as_bytes,
+            ),
         )
         is None
     )
@@ -369,7 +393,12 @@ def _unittest_transfer_reassembler() -> None:
     assert (
         push(
             mk_ts(1000.0),
-            mk_frame(transfer_id=0, index=0, end_of_transfer=False, payload=hedgehog),
+            mk_frame(
+                transfer_id=0,
+                index=0,
+                end_of_transfer=False,
+                payload=hedgehog + TransferCRC.new(hedgehog).value_as_bytes,
+            ),
         )
         is None
     )
@@ -527,12 +556,14 @@ def _unittest_transfer_reassembler() -> None:
     # Transfer-ID timeout. No error registered.
     assert push(
         mk_ts(2000.0),
-        mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog),
+        mk_frame(
+            transfer_id=0, index=0, end_of_transfer=True, payload=hedgehog + TransferCRC.new(hedgehog).value_as_bytes
+        ),
     ) == mk_transfer(timestamp=mk_ts(2000.0), transfer_id=0, fragmented_payload=[hedgehog])
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 0,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -553,9 +584,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 1,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -571,9 +602,9 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=3, index=0, end_of_transfer=False, payload=horse[:50]),
     ) == mk_transfer(timestamp=mk_ts(3000.0), transfer_id=3, fragmented_payload=[horse[:50], horse[50:]])
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 1,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -594,9 +625,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -612,9 +643,9 @@ def _unittest_transfer_reassembler() -> None:
         mk_frame(transfer_id=3, index=0, end_of_transfer=False, payload=horse[:50]),
     ) == mk_transfer(timestamp=mk_ts(4000.0), transfer_id=3, fragmented_payload=[horse[:50], horse[50:]])
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 0,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -644,9 +675,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -676,9 +707,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
@@ -708,9 +739,9 @@ def _unittest_transfer_reassembler() -> None:
         is None
     )
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 1,
     }
@@ -718,12 +749,14 @@ def _unittest_transfer_reassembler() -> None:
     # Valid single-frame transfer with no payload.
     assert push(
         mk_ts(6000.0),
-        mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=b""),
-    ) == mk_transfer(timestamp=mk_ts(6000.0), transfer_id=0, fragmented_payload=[b""])
+        mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=b"" + TransferCRC.new(b"").value_as_bytes),
+    ) == mk_transfer(
+        timestamp=mk_ts(6000.0), transfer_id=0, fragmented_payload=[]
+    )  # fragmented_payload = [b""]?
     assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
-        ta.Error.MULTIFRAME_INTEGRITY_ERROR: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 1,
     }
@@ -732,13 +765,37 @@ def _unittest_transfer_reassembler() -> None:
 def _unittest_transfer_reassembler_anonymous() -> None:
     ts = Timestamp.now()
     prio = Priority.LOW
+
+    # Correct single-frame transfer.
     assert TransferReassembler.construct_anonymous_transfer(
         ts,
-        Frame(priority=prio, transfer_id=123456, index=0, end_of_transfer=True, payload=memoryview(b"abcdef")),
+        Frame(
+            priority=prio,
+            transfer_id=123456,
+            index=0,
+            end_of_transfer=True,
+            payload=memoryview(b"abcdef" + b"\xf1\xef\xbcS"),
+        ),
     ) == TransferFrom(
         timestamp=ts, priority=prio, transfer_id=123456, fragmented_payload=[memoryview(b"abcdef")], source_node_id=None
     )
 
+    # Faulthy: CRC is wrong.
+    assert (
+        TransferReassembler.construct_anonymous_transfer(
+            ts,
+            Frame(
+                priority=prio,
+                transfer_id=123456,
+                index=0,
+                end_of_transfer=True,
+                payload=memoryview(b"abcdef" + b"\xf1\xef\xbdS"),
+            ),
+        )
+        is None
+    )
+
+    # Faulthy: single transfer has index 0.
     assert (
         TransferReassembler.construct_anonymous_transfer(
             ts,
@@ -747,6 +804,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
         is None
     )
 
+    # Faulthy: single transfer has EOT flag.
     assert (
         TransferReassembler.construct_anonymous_transfer(
             ts,
@@ -780,8 +838,8 @@ def _unittest_validate_and_finalize_transfer() -> None:
             source_node_id=src_nid,
         )
 
-    assert call([b""]) == mk_transfer([b""])
-    assert call([b"hello world"]) == mk_transfer([b"hello world"])
+    assert call([b"" + TransferCRC.new(b"").value_as_bytes]) == mk_transfer([])  # [b""]?
+    assert call([b"hello world" + TransferCRC.new(b"hello world").value_as_bytes]) == mk_transfer([b"hello world"])
     assert call(
         [b"hello world", b"0123456789", TransferCRC.new(b"hello world", b"0123456789").value_as_bytes]
     ) == mk_transfer([b"hello world", b"0123456789"])

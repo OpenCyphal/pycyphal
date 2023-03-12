@@ -6,10 +6,6 @@ r"""
 Cyphal/UDP transport overview
 +++++++++++++++++++++++++++++
 
-The Cyphal/UDP transport is experimental and is not yet part of the Cyphal specification.
-Future revisions may break wire compatibility until the transport is formally specified.
-Context: https://forum.opencyphal.org/t/324/45?u=pavel.kirienko.
-
 The Cyphal/UDP transport is essentially a trivial stateless UDP blaster based on IP multicasting.
 This transport is intended for low-latency, high-throughput switched Ethernet networks with complex topologies.
 In the spirit of Cyphal, it is designed to be simple and robust;
@@ -17,11 +13,8 @@ much of the data handling work is offloaded to the standard underlying UDP/IP st
 Both IPv4 and IPv6 are supported by this design,
 although it is expected that the advantages of IPv6 over IPv4 are less relevant in an intravehicular setting.
 
-The concept of anonymous transfer is not defined for Cyphal/UDP;
-in this transport, in order to be able to emit a transfer, the node shall have a valid node-ID value.
-This means that an anonymous Cyphal/UDP node can only listen to network traffic
-(i.e., can subscribe to subjects) but cannot transmit anything.
-If address auto-configuration is desired, lower-level solutions should be used, such as DHCP.
+Cyphal/UDP supports anonymous transfers (i.e., transfers without a source node-ID) with one limitation:
+an anonymous node is only able to send Message transfers (but not Service transfers).
 
 This transport module contains no media sublayers because the media abstraction
 is handled directly by the standard UDP/IP stack of the underlying operating system.
@@ -29,7 +22,7 @@ is handled directly by the standard UDP/IP stack of the underlying operating sys
 Per the Cyphal transport model provided in the Cyphal specification, the following transfer categories are supported:
 
 +--------------------+--------------------------+---------------------------+
-| Supported transfers| Unicast                  | Broadcast                 |
+| Supported transfers| Point-to-point           | Point-to-many             |
 +====================+==========================+===========================+
 |**Message**         | No                       | Yes                       |
 +--------------------+--------------------------+---------------------------+
@@ -45,45 +38,18 @@ is reified through the standard UDP/IP stack without any special extensions.
 The transfer-ID, transfer priority, and the multi-frame transfer reassembly metadata are allocated in the
 Cyphal-specific UDP datagram header.
 
-+---------------------------------------+---------------------------------------------------------------------------+
-| Parameter                             | Manifested in                                                             |
-+=======================================+===========================================================================+
-| Transfer priority                     |                                                                           |
-+---------------------------------------+ UDP datagram payload (frame header)                                       |
-| Transfer-ID                           |                                                                           |
-+-------------------+-------------------+---------------------------------------------------------------------------+
-|                   | Route specifier   | 16 least significant bits of the IP address                               |
-| Session specifier +-------------------+---------------------------------------------------------------------------+
-|                   | Data specifier    | For message transfers: 16 least significant bits of the                   |
-|                   |                   | multicast group address.                                                  |
-|                   |                   | For service transfers: UDP destination port number.                       |
-+-------------------+-------------------+---------------------------------------------------------------------------+
-
 There are two data types that model Cyphal/UDP protocol data: :class:`UDPFrame` and :class:`RawPacket`.
 The latter is never used during normal operation but only during on-line capture sessions
 for reporting captured packets (see :class:`UDPCaptured`).
 
+Cyphal uses a single UDP port for all transfers (9382).
+
+For more background information on how Cyphal/UDP came to be, please see the following thread in the OpenCyphal forum:
+https://forum.opencyphal.org/t/1765
+
 
 IP address mapping
-~~~~~~~~~~~~~~~~~~
-
-The IPv4 address of a node is structured as follows::
-
-   xxxxxxxx.xddddddd.nnnnnnnn.nnnnnnnn
-   \________/\_____/ \_______________/
-    (9 bits) (7 bits)     (16 bits)
-     prefix  subnet-ID     node-ID
-
-Incoming traffic from IP addresses whose 16 most significant bits are different is rejected;
-this behavior enables co-existence of multiple independent Cyphal/UDP networks along with other UDP protocols
-on the same network.
-
-The *subnet-ID* is used to differentiate independent Cyphal/UDP transport networks sharing the same IP network
-(e.g., multiple Cyphal/UDP networks running on localhost or on some physical network).
-This is similar to the domain identifier in DDS.
-This value is not used anywhere else in the protocol other than in the construction of the multicast group address,
-as will be shown below.
-
+++++++++++++++++++
 
 Message transfers
 ~~~~~~~~~~~~~~~~~
@@ -91,19 +57,23 @@ Message transfers
 Message transfers are executed as IP multicast transfers.
 The IPv4 multicast group address is computed statically as follows::
 
-       fixed         reserved
-      (9 bits)       (3 bits)
-      ________          _
-     /        \        / \
-     11101111.0ddddddd.000sssss.ssssssss
-     \__/      \_____/    \____________/
-   (4 bits)    (7 bits)      (13 bits)
-     IPv4      subnet-ID     subject-ID
-   multicast   \_______________________/
-    prefix             (23 bits)
-               collision-free multicast
-                  addressing limit of
-                 Ethernet MAC for IPv4
+            fixed            subject-ID (Message)
+          (15 bits)     res. (15 bits)
+       ______________   | ______________
+      /              \  v/              \
+      11101111.00000000.0sssssss.ssssssss
+      \__/      ^     ^
+    (4 bits)  Cyphal SNM
+      IPv4     UDP
+    multicast address
+     prefix   version
+                \_______________________/
+                       (23 bits)
+              collision-free multicast
+                 addressing limit of
+                Ethernet MAC for IPv4
+
+SNM: Service, not Message
 
 From the most significant bit to the least significant bit, the IPv4 multicast group address components are as follows:
 
@@ -128,18 +98,18 @@ From the most significant bit to the least significant bit, the IPv4 multicast g
     Without this limitation, an engineer deploying a network might inadvertently create a configuration that
     causes MAC-layer collisions which may be difficult to detect.
 
-- The following 7 bits (the least significant bits of the second octet) are used to differentiate
-  independent Cyphal/UDP networks sharing the same physical IP network.
-  Since the 9 most significant bits of the node IP address are not represented in the multicast group address,
-  nodes whose IP addresses differ only by the 9 MSb are not distinguished by Cyphal/UDP.
-  This limitation does not appear to be significant, though, because such configurations are easy to avoid.
-  It follows that there may be up to 128 independent Cyphal/UDP networks sharing the same IP subnet.
+- The next 6 bits complete the fixed part of the multicast group address, with the most significant bit
+  defining the Cyphal UDP address version (this can be used in case we want to make changes to the endpoint
+  mapping).
 
-- The following 16 bits define the data specifier:
+- Last but not least, the remaining 17 bits are used to encode:
 
-  - 3 bits reserved for future use.
+  - SNM: Service, not Message (1 bit), which is used to differentiate between a Message and Service address.
+    Set to zero in case of Message.
 
-  - 13 bits represent the subject-ID as-is.
+  - 1 reserved bit for future use.
+
+  - The 15-bit subject-ID of the Message.
 
 Per RFC 1112, the default TTL is 1, which is unacceptable.
 Therefore, publishers should use the TTL value of 16 by default,
@@ -158,40 +128,57 @@ in which case no initialization delay will take place.
 
 Example::
 
-    Node IP address:    01111111 00000010 00000000 00001000
-                             127        2        0        8
+    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx
 
-    Subject-ID:                              00010 00101010
+    Service,    :       xxxxxxxx xxxxxxx0 xxxxxxxx xxxxxxxx
+    not Message
 
-    Multicast group:    11101111 00000010 00000010 00101010
-                             239        2        2       42
+    Reserved:           xxxxxxxx xxxxxxxx 0xxxxxxx xxxxxxxx
 
-Example::
+    Subject-ID (=42):   xxxxxxxx xxxxxxxx x0000000 00101010
 
-    Node IP address:    11000000 10101000 00000000 00000001
-                             192      168        0        1
-
-    Subject-ID:                              00010 00101010
-
-    Multicast group:    11101111 00101000 00000010 00101010
-                             239       40        2       42
+    Multicast group:    11101111 00000000 00000000 00101010
+                             239        0        0       42
 
 
 Service transfers
 ~~~~~~~~~~~~~~~~~
 
-Service transfers are executed as regular IP unicast transfers.
+Service transfers are also executed as IP multicast transfers.
+The IPv4 multicast group address is computed statically as follows::
 
-The service data specifier (:class:`pycyphal.transport.ServiceDataSpecifier`)
-is manifested on the wire as the destination UDP port number;
-the mapping function is implemented in :func:`udp_port_from_data_specifier`.
-The source port number can be arbitrary (ephemeral), its value is ignored.
+            fixed
+          (15 bits)
+       ______________
+      /              \
+      11101111.00000001.ssssssss.ssssssss
+      \__/      ^     ^ \_______________/
+    (4 bits)  Cyphal SNM    (16 bits)
+      IPv4     UDP          destination node-ID
+    multicast address
+     prefix   version
+                \_______________________/
+                       (23 bits)
+              collision-free multicast
+                 addressing limit of
+                Ethernet MAC for IPv4
 
-Cyphal uses a wide range of UDP ports.
-UDP/IP stacks that comply with the IANA ephemeral port range recommendations are expected to be
-compatible with this; otherwise, there may be port assignment conflicts.
-This, however, is not a problem for any major modern OS.
+Service transfers are distinguished from message transfers by the least significant bit of the second octet.
+The 2 last octets define the destination node-ID of the service transfer.
 
+Example::
+
+    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx
+
+    Service,    :       xxxxxxxx xxxxxxx1 xxxxxxxx xxxxxxxx
+    not Message
+
+    Reserved:           xxxxxxxx xxxxxxxx 0xxxxxxx xxxxxxxx
+
+    Subject-ID (=42):   xxxxxxxx xxxxxxxx x0000000 00101010
+
+    Multicast group:    11101111 00000000 00000000 00101010
+                             239        1        0       42
 
 Datagram header format
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -199,21 +186,42 @@ Datagram header format
 Every Cyphal/UDP frame contains the following header before the payload,
 encoded in the little-endian byte order, expressed here in the DSDL notation::
 
-    uint8 version           # =0 in this revision; ignore frame otherwise.
+    uint8 version           # =1 in this revision; ignore frame otherwise.
     uint8 priority          # Like in CAN: 0 -- highest priority, 7 -- lowest priority.
-    void16                  # Set to zero when transmitting, ignore when receiving.
+    uint16 source_node_id   # Cyphal node-ID of the origin.
     uint32 frame_index_eot  # MSB is set if the current frame is the last frame of the transfer.
     uint64 transfer_id      # The transfer-ID never overflows.
     void64                  # This space may be used later for runtime type identification.
 
-The 31 least significant bits of the field ``frame_index_eot`` contain the frame index within the current transfer;
-the most significant bit (31st) is set if the current frame is the last frame of the transfer.
+    uint4 version                   # <- 1
+    void4
+    uint3 priority                  # Duplicates QoS for ease of access; 0 -- highest, 7 -- lowest.
+    void5
+    uint16 source_node_id
+    uint16 destination_node_id
+    uint16 data_specifier           # Like in Cyphal/serial: subject-ID | (service-ID + RNR (Request, Not Response))
+    uint64 transfer_id
+    uint31 frame_index              # Index of the current frame within the current transfer.
+    bool end_of_transfer
+    uint16 user_data
+    # Opaque application-specific data with user-defined semantics. Generic implementations should ignore
+    uint16 header_crc
+    @assert _offset_ / 8 == {24}    # Fixed-size 24-byte header with natural alignment for each field ensured.
+    @sealed
+
+In the case of a Message frame, the ``data_specifier`` field contains the subject-ID of the message
+(15 least significant bits) and the remaining most significant bit represents SNM.
+
+In the case of a Service frame, the ``data_specifier`` field contains the service-ID of the service
+(14 least significant bits) and the remaining two most significant bits represent RNR and SNM
+(second and most significant bits respectively).
+
 Also see the documentation for :class:`UDPFrame`.
 
-Multi-frame transfers contain four bytes of CRC32-C (Castagnoli) at the end computed over the entire transfer payload.
+Please note: in addition to ``header_crc``, multi-frame transfers contain four bytes of CRC32-C (Castagnoli)
+at the end of the payload computed over the entire transfer payload (payload_crc).
 For more info on multi-frame transfers, please see
 :class:`pycyphal.transport.commons.high_overhead_transport.TransferReassembler`.
-
 
 Unreliable networks and temporal redundancy
 +++++++++++++++++++++++++++++++++++++++++++
@@ -275,12 +283,6 @@ about the state of other agents involved in data exchange).
 Implementation-specific details
 +++++++++++++++++++++++++++++++
 
-Applications relying on this particular transport implementation will be unable to detect a node-ID conflict on
-the bus because the implementation discards all traffic originating from its own IP address.
-This is a very environment-specific edge case resulting from certain peculiarities of the Berkeley socket API.
-Other implementations of Cyphal/UDP (particularly those for embedded systems) may not have this limitation.
-
-
 Usage
 +++++
 
@@ -296,27 +298,29 @@ Create two transport instances -- one with a node-ID, one anonymous:
 >>> import asyncio
 >>> import pycyphal
 >>> import pycyphal.transport.udp
->>> tr_0 = pycyphal.transport.udp.UDPTransport('127.9.1.42')
->>> tr_0.local_node_id                                             # Derived from the IP address: (1 << 8) + 42 = 298.
-298
->>> tr_1 = pycyphal.transport.udp.UDPTransport('127.9.15.254', local_node_id=None)  # Anonymous is only for listening.
+>>> tr_0 = pycyphal.transport.udp.UDPTransport(local_ip_address='127.0.0.1', local_node_id=10)
+>>> tr_0.local_ip_address
+IPv4Address('127.0.0.1')
+>>> tr_0.local_node_id
+10
+>>> tr_1 = pycyphal.transport.udp.UDPTransport(local_ip_address='127.0.0.1', local_node_id=None) # Anonymous is only for listening.
 >>> tr_1.local_node_id is None
 True
 
 Create an output and an input session:
 
 >>> pm = pycyphal.transport.PayloadMetadata(1024)
->>> ds = pycyphal.transport.MessageDataSpecifier(111)
+>>> ds = pycyphal.transport.MessageDataSpecifier(42)
 >>> pub = tr_0.get_output_session(pycyphal.transport.OutputSessionSpecifier(ds, None), pm)
 >>> pub.socket.getpeername()   # UDP port is fixed, and the multicast group address is computed as shown above.
-('239.9.0.111', 16383)
+('239.0.0.42', 9382)
 >>> sub = tr_1.get_input_session(pycyphal.transport.InputSessionSpecifier(ds, None), pm)
 
 Send a transfer from one instance to the other:
 
 >>> doctest_await(pub.send(pycyphal.transport.Transfer(pycyphal.transport.Timestamp.now(),
 ...                                                    pycyphal.transport.Priority.LOW,
-...                                                    1111,
+...                                                    transfer_id=1111,
 ...                                                    fragmented_payload=[]),
 ...                        asyncio.get_event_loop().time() + 1.0))
 True
@@ -324,6 +328,8 @@ True
 TransferFrom(..., transfer_id=1111, ...)
 >>> tr_0.close()
 >>> tr_1.close()
+
+TODO Add Service example
 
 
 Tooling
@@ -345,7 +351,6 @@ Inheritance diagram
                          pycyphal.transport.udp._frame
                          pycyphal.transport.udp._session._input
                          pycyphal.transport.udp._session._output
-                         pycyphal.transport.udp._socket_reader
                          pycyphal.transport.udp._tracer
    :parts: 1
 """
@@ -366,14 +371,8 @@ from ._session import UDPFeedback as UDPFeedback
 
 from ._frame import UDPFrame as UDPFrame
 
-from ._ip import IP_ADDRESS_NODE_ID_MASK as IP_ADDRESS_NODE_ID_MASK
-from ._ip import SUBJECT_PORT as SUBJECT_PORT
-from ._ip import node_id_to_unicast_ip as node_id_to_unicast_ip
-from ._ip import unicast_ip_to_node_id as unicast_ip_to_node_id
 from ._ip import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group
-from ._ip import multicast_group_to_message_data_specifier as multicast_group_to_message_data_specifier
-from ._ip import service_data_specifier_to_udp_port as service_data_specifier_to_udp_port
-from ._ip import udp_port_to_service_data_specifier as udp_port_to_service_data_specifier
+from ._ip import service_node_id_to_multicast_group as service_node_id_to_multicast_group
 from ._ip import LinkLayerPacket as LinkLayerPacket
 
 from ._tracer import IPPacket as IPPacket

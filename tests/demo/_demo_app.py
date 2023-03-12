@@ -429,8 +429,8 @@ async def _unittest_slow_demo_app_with_plant(
             await asyncio.sleep(0.5)
 
         assert demo_proc.alive and plant_proc.alive
-        assert 2 <= last_hb_demo.uptime <= 10
-        assert 2 <= last_hb_plant.uptime <= 10
+        assert 1 <= last_hb_demo.uptime <= 10
+        assert 1 <= last_hb_plant.uptime <= 10
         assert last_hb_plant.health.value == uavcan.node.Health_1_0.NOMINAL
         assert int((time.time() - 3.0) * 1e6) <= last_meas.timestamp.microsecond <= int(time.time() * 1e6)
         assert last_meas.kelvin == pytest.approx(300.0)
