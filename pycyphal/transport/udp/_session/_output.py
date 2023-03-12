@@ -187,8 +187,7 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
                     loop.sock_sendall(self._sock, b"".join((header, payload))),
                     timeout=monotonic_deadline - loop.time(),
                 )
-                _logger.debug("sent completed: %s, using socket: %s", b"".join((header, payload)), self._sock)
-                # assert False
+                _logger.debug("%s: sent", self)
                 # TODO: use socket timestamping when running on Linux (Windows does not support timestamping).
                 # Depending on the chosen approach, timestamping on Linux may require us to launch a new thread
                 # reading from the socket's error message queue and then matching the returned frames with a
