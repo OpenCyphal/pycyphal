@@ -60,17 +60,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         "H"  # header_crc
     )
 
-    _HEADER_FORMAT_NO_CRC = struct.Struct(
-        "<"  # little-endian
-        "B"  # version, _reserved_a
-        "B"  # priority, _reserved_b
-        "H"  # source_node_id
-        "H"  # destination_node_id
-        "H"  # subject_id, snm (if Message); service_id, rnr, snm (if Service)
-        "Q"  # transfer_id
-        "I"  # frame_index, end_of_transfer
-        "H"  # user_data
-    )
+    _HEADER_FORMAT_NO_CRC = struct.Struct(_HEADER_FORMAT.format[:-1])
 
     _VERSION = 1
     NODE_ID_MASK = 2**16 - 1
