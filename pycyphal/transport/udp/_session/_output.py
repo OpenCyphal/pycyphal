@@ -185,7 +185,7 @@ class UDPOutputSession(pycyphal.transport.OutputSession):
                 combined_payload = b"".join((header, payload))
                 _logger.debug("%s: sending: %s", self, combined_payload)
                 await asyncio.wait_for(
-                    loop.sock_sendall(self._sock, b"".join((header, payload))),
+                    loop.sock_sendall(self._sock, combined_payload),
                     timeout=monotonic_deadline - loop.time(),
                 )
                 _logger.debug("%s: sent", self)
