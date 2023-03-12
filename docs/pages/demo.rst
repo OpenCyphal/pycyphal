@@ -101,7 +101,7 @@ We can resolve this by passing the correct register values via environment varia
 ..  code-block:: sh
 
     export UAVCAN__NODE__ID=42                           # Set the local node-ID 42 (anonymous by default)
-    export UAVCAN__UDP__IFACE=127.9.0.0                  # Use Cyphal/UDP transport via 127.9.0.42 (sic!)
+    export UAVCAN__UDP__IFACE=127.0.0.1                  # Use Cyphal/UDP transport via localhost
     export UAVCAN__SUB__TEMPERATURE_SETPOINT__ID=2345    # Subject "temperature_setpoint"    on ID 2345
     export UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID=2346 # Subject "temperature_measurement" on ID 2346
     export UAVCAN__PUB__HEATER_VOLTAGE__ID=2347          # Subject "heater_voltage"          on ID 2347
@@ -113,17 +113,6 @@ We can resolve this by passing the correct register values via environment varia
 The snippet is valid for sh/bash/zsh; if you are using PowerShell on Windows, replace ``export`` with ``$env:``
 and take values into double quotes.
 Further snippets will not include this remark.
-
-.. tip:: macOS loopback addresses
-
-    macOS does not properly adhere to RFC3330 such that you will need to manually create aliases for each
-    iface + node-ID used.
-    In our example, with iface being ``127.9.0.0`` and node-ID being ``42`` this would be
-    ``sudo ifconfig lo0 alias 127.9.0.42 up``
-    (see `this <https://superuser.com/questions/458875>`_ superuser article for more details).
-
-    If you come across ``InvalidMediaConfigurationError`` that usually means you haven't set the right alias,
-    you can verify this using ``ifconfig``.
 
 An environment variable ``UAVCAN__SUB__TEMPERATURE_SETPOINT__ID`` sets register ``uavcan.sub.temperature_setpoint.id``,
 and so on.
@@ -183,19 +172,19 @@ If you decided to change the working directory or move the compilation outputs,
 make sure to export the ``YAKUT_PATH`` environment variable pointing to the correct location.
 
 The commands shown later need to operate on the same network as the demo.
-Earlier we configured the demo to use Cyphal/UDP via 127.9.0.42.
+Earlier we configured the demo to use Cyphal/UDP via the localhost interface.
 So, for Yakut, we can export this configuration to let it run on the same network anonymously:
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IFACE=127.9.0.0  # We don't export the node-ID, so it will remain anonymous.
+    export UAVCAN__UDP__IFACE=127.0.0.1  # We don't export the node-ID, so it will remain anonymous.
 
 To listen to the demo's heartbeat and diagnostics,
 launch the following in a new terminal and leave it running (``y`` is a convenience shortcut for ``yakut``):
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IFACE=127.9.0.0
+    export UAVCAN__UDP__IFACE=127.0.0.1
     y sub --with-metadata uavcan.node.heartbeat uavcan.diagnostic.record    # You should see heartbeats
 
 Now let's see how the simple thermostat node is operating.
@@ -203,15 +192,15 @@ Launch another subscriber to see the published voltage command (it is not going 
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IFACE=127.9.0.0
+    export UAVCAN__UDP__IFACE=127.0.0.1
     y sub 2347:uavcan.si.unit.voltage.scalar --redraw       # Prints nothing.
 
 And publish the setpoint along with the measurement (process variable):
 
 ..  code-block:: sh
 
-    export UAVCAN__UDP__IFACE=127.9.0.0
-    export UAVCAN__NODE__ID=111         # We need a node-ID to publish messages
+    export UAVCAN__UDP__IFACE=127.0.0.1
+    export UAVCAN__NODE__ID=111         # We need a node-ID to publish messages properly
     y pub --count=10 2345:uavcan.si.unit.temperature.scalar   250 \
                      2346:uavcan.si.sample.temperature.scalar 'kelvin: 240'
 
