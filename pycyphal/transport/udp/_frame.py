@@ -38,7 +38,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             uint16_t header_crc;            # Checksum of the header, excluding the CRC field itself
         };
         static_assert(sizeof(struct Header) == 24, "Invalid layout");   # Fixed-size 24-byte header with
-                                                                          natural alignment for each field ensured.
+                                                                        # natural alignment for each field ensured.
 
     +---------------+---------------+---------------+-----------------+------------------+
     |**MAC header** | **IP header** |**UDP header** |**Cyphal header**|**Cyphal payload**|
