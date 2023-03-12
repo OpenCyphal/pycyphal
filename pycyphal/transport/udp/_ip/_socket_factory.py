@@ -9,6 +9,7 @@ import socket
 import ipaddress
 import pycyphal.util
 import pycyphal.transport
+from ._endpoint_mapping import IPAddress
 from ._link_layer import LinkLayerCapture
 
 
@@ -37,7 +38,7 @@ class SocketFactory(abc.ABC):
 
     @staticmethod
     def new(
-        local_ip_address: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address],
+        local_ip_address: IPAddress,
     ) -> SocketFactory:
         """
         Use this factory factory to create new instances.
@@ -61,7 +62,8 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     @property
-    def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+    @abc.abstractmethod
+    def local_ip_address(self) -> IPAddress:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -122,7 +124,7 @@ class SocketFactory(abc.ABC):
         raise NotImplementedError
 
     def __repr__(self) -> str:
-        return pycyphal.util.repr_attributes(self)
+        return pycyphal.util.repr_attributes(self, local_ip_address=str(self.local_ip_address))
 
 
 class Sniffer(abc.ABC):

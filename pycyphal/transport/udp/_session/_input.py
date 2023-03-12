@@ -70,7 +70,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         self,
         specifier: pycyphal.transport.InputSessionSpecifier,
         payload_metadata: pycyphal.transport.PayloadMetadata,
-        sock: socket_.socket,
+        socket: socket_.socket,
         finalizer: typing.Union[typing.Callable[[], None], None],
         local_node_id: typing.Optional[int],
     ):
@@ -80,7 +80,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         self._closed = False
         self._specifier = specifier
         self._payload_metadata = payload_metadata
-        self._sock = sock
+        self._socket = socket
         self._finalizer = finalizer
         self._local_node_id = local_node_id
         assert isinstance(self._specifier, pycyphal.transport.InputSessionSpecifier)
@@ -147,17 +147,17 @@ class UDPInputSession(pycyphal.transport.InputSession):
                 _logger.debug("%s: Received transfer %s; current stats: %s", self, transfer, self._statistics)
                 return transfer
 
-    def put_into_queue(self, ts: pycyphal.transport.Timestamp, frame: typing.Optional[UDPFrame]) -> None:
+    def _put_into_queue(self, ts: pycyphal.transport.Timestamp, frame: typing.Optional[UDPFrame]) -> None:
         self._frame_queue.put_nowait((ts, frame))
 
     def _reader_thread(self, loop: asyncio.AbstractEventLoop) -> None:
-        while not self._closed and self._sock.fileno() >= 0:
+        while not self._closed and self._socket.fileno() >= 0:
             try:
                 # TODO: add a dedicated socket for aborting the select call
                 # when self.close() is invoked to avoid blocking on
                 # self._thread.join() in self.close().
-                read_ready, _, _ = select.select([self._sock], [], [], 0.1)
-                if self._sock in read_ready:
+                read_ready, _, _ = select.select([self._socket], [], [], 0.1)
+                if self._socket in read_ready:
                     # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
                     ts = pycyphal.transport.Timestamp.now()
 
@@ -165,7 +165,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
                     # Buffer memory cannot be shared because the rest of the stack is completely zero-copy;
                     # meaning that the data we allocate here, at the very bottom of the protocol stack,
                     # is likely to be carried all the way up to the application layer without being copied.
-                    data, endpoint = self._sock.recvfrom(_READ_SIZE)
+                    data, endpoint = self._socket.recvfrom(_READ_SIZE)
                     assert len(data) < _READ_SIZE, "Datagram might have been truncated"
                     frame = UDPFrame.parse(memoryview(data))
                     _logger.debug(
@@ -176,7 +176,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
                         frame,
                     )
                     try:
-                        loop.call_soon_threadsafe(self.put_into_queue, ts, frame)
+                        loop.call_soon_threadsafe(self._put_into_queue, ts, frame)
                     except asyncio.QueueFull:
                         # TODO: make the queue capacity configurable
                         _logger.error("%s: Frame queue is full", self)
@@ -233,15 +233,8 @@ class UDPInputSession(pycyphal.transport.InputSession):
         # self._thread_stop.set()
         self._thread.join()
 
-        self._sock.close()
+        self._socket.close()
         _logger.debug("%s: Closed", self)
-
-    @property
-    def socket(self) -> socket_.socket:
-        """
-        Provides access to the underlying UDP socket.
-        """
-        return self._sock
 
     @property
     @abc.abstractmethod
@@ -272,7 +265,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         self,
         specifier: pycyphal.transport.InputSessionSpecifier,
         payload_metadata: pycyphal.transport.PayloadMetadata,
-        sock: socket_.socket,
+        socket: socket_.socket,
         finalizer: typing.Callable[[], None],
         local_node_id: typing.Optional[int],
     ):
@@ -285,7 +278,7 @@ class PromiscuousUDPInputSession(UDPInputSession):
         super().__init__(
             specifier=specifier,
             payload_metadata=payload_metadata,
-            sock=sock,
+            socket=socket,
             finalizer=finalizer,
             local_node_id=local_node_id,
         )
@@ -334,7 +327,7 @@ class SelectiveUDPInputSession(UDPInputSession):
         self,
         specifier: pycyphal.transport.InputSessionSpecifier,
         payload_metadata: pycyphal.transport.PayloadMetadata,
-        sock: socket_.socket,
+        socket: socket_.socket,
         finalizer: typing.Callable[[], None],
         local_node_id: typing.Optional[int],
     ):
@@ -362,7 +355,7 @@ class SelectiveUDPInputSession(UDPInputSession):
         super().__init__(
             specifier=specifier,
             payload_metadata=payload_metadata,
-            sock=sock,
+            socket=socket,
             finalizer=finalizer,
             local_node_id=local_node_id,
         )

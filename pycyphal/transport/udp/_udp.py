@@ -13,7 +13,7 @@ import pycyphal
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
 from ._session import UDPOutputSession, UDPInputSessionStatistics
 from ._frame import UDPFrame
-from ._ip import SocketFactory, Sniffer, LinkLayerCapture
+from ._ip import SocketFactory, Sniffer, LinkLayerCapture, IPAddress
 from ._tracer import UDPTracer, UDPCapture
 from .. import OperationNotDefinedForAnonymousNodeError
 
@@ -55,7 +55,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
     def __init__(
         self,
-        local_ip_address: typing.Union[str, ipaddress.IPv4Address, ipaddress.IPv6Address],
+        local_ip_address: IPAddress,
         local_node_id: typing.Optional[int] = 0,
         *,  # The following parameters are keyword-only.
         mtu: int = min(VALID_MTU_RANGE),
@@ -105,7 +105,7 @@ class UDPTransport(pycyphal.transport.Transport):
         if loop:
             warnings.warn("The loop parameter is deprecated.", DeprecationWarning)
 
-        if not isinstance(local_ip_address, (ipaddress.IPv4Address, ipaddress.IPv6Address)):
+        if not isinstance(local_ip_address, IPAddress):
             local_ip_address = ipaddress.ip_address(local_ip_address)
         assert not isinstance(local_ip_address, str)
 
@@ -242,7 +242,7 @@ class UDPTransport(pycyphal.transport.Transport):
         return list(self._output_registry.values())
 
     @property
-    def local_ip_address(self) -> typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]:
+    def local_ip_address(self) -> IPAddress:
         assert isinstance(self._sock_factory, SocketFactory)
         return self._sock_factory.local_ip_address
 

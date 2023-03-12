@@ -5,6 +5,7 @@
 from ._socket_factory import SocketFactory as SocketFactory
 from ._socket_factory import Sniffer as Sniffer
 
+from ._endpoint_mapping import IPAddress as IPAddress
 from ._endpoint_mapping import CYPHAL_PORT as CYPHAL_PORT
 from ._endpoint_mapping import service_node_id_to_multicast_group as service_node_id_to_multicast_group
 from ._endpoint_mapping import message_data_specifier_to_multicast_group as message_data_specifier_to_multicast_group

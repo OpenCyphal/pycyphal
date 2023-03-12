@@ -52,7 +52,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
     prom_in = PromiscuousUDPInputSession(
         specifier=InputSessionSpecifier(data_specifier=MessageDataSpecifier(123), remote_node_id=None),
         payload_metadata=PayloadMetadata(1024),
-        sock=msg_sock_rx_1,
+        socket=msg_sock_rx_1,
         finalizer=do_finalize_prom,
         local_node_id=1,
     )
@@ -64,7 +64,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
     sel_in = SelectiveUDPInputSession(
         specifier=InputSessionSpecifier(data_specifier=MessageDataSpecifier(123), remote_node_id=10),
         payload_metadata=PayloadMetadata(1024),
-        sock=msg_sock_rx_2,
+        socket=msg_sock_rx_2,
         finalizer=do_finalize_sel,
         local_node_id=2,
     )
@@ -104,7 +104,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
     assert rx_data.fragmented_payload[0] == memoryview(b"Bitch I'm back out my coma")
 
     assert not prom_finalized
-    assert prom_in.socket.fileno() > 0
+    assert prom_in._socket.fileno() > 0
     assert prom_in.sample_statistics() == PromiscuousUDPInputSessionStatistics(
         transfers=1, frames=1, payload_bytes=26, errors=0, drops=0, reassembly_errors_per_source_node_id={11: {}}
     )
@@ -145,7 +145,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
     assert rx_data.fragmented_payload[0] == memoryview(b"Waking up on your sofa")
 
     assert not prom_finalized
-    assert prom_in.socket.fileno() > 0
+    assert prom_in._socket.fileno() > 0
     assert prom_in.sample_statistics() == PromiscuousUDPInputSessionStatistics(
         transfers=2,
         frames=2,
@@ -164,7 +164,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
     assert rx_data.fragmented_payload[0] == memoryview(b"Waking up on your sofa")
 
     assert not sel_finalized
-    assert sel_in.socket.fileno() > 0
+    assert sel_in._socket.fileno() > 0
     assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
         transfers=1, frames=1, payload_bytes=22, errors=0, drops=0, reassembly_errors={}
     )
@@ -198,7 +198,7 @@ async def _unittest_udp_input_session_uniframe() -> None:
     assert rx_data.fragmented_payload[0] == memoryview(b"When I park my Range Rover")
 
     assert not prom_finalized
-    assert prom_in.socket.fileno() > 0
+    assert prom_in._socket.fileno() > 0
     assert prom_in.sample_statistics() == PromiscuousUDPInputSessionStatistics(
         transfers=3,
         frames=3,
@@ -372,7 +372,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
     prom_in = PromiscuousUDPInputSession(
         specifier=InputSessionSpecifier(data_specifier=MessageDataSpecifier(123), remote_node_id=None),
         payload_metadata=PayloadMetadata(1024),
-        sock=msg_sock_rx_1,
+        socket=msg_sock_rx_1,
         finalizer=do_finalize_prom,
         local_node_id=1,
     )
@@ -384,7 +384,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
     sel_in = SelectiveUDPInputSession(
         specifier=InputSessionSpecifier(data_specifier=MessageDataSpecifier(123), remote_node_id=10),
         payload_metadata=PayloadMetadata(1024),
-        sock=msg_sock_rx_2,
+        socket=msg_sock_rx_2,
         finalizer=do_finalize_sel,
         local_node_id=2,
     )
@@ -439,7 +439,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
     assert rx_data.fragmented_payload[1] == memoryview(b"But this man can't handle his weed")
 
     assert not prom_finalized
-    assert prom_in.socket.fileno() > 0
+    assert prom_in._socket.fileno() > 0
     assert prom_in.sample_statistics() == PromiscuousUDPInputSessionStatistics(
         transfers=1,  # +1
         frames=2,  # +2
@@ -461,7 +461,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
     assert rx_data.fragmented_payload[1] == memoryview(b"But this man can't handle his weed")
 
     assert not sel_finalized
-    assert sel_in.socket.fileno() > 0
+    assert sel_in._socket.fileno() > 0
     assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
         transfers=1,  # +1
         frames=2,  # +2
@@ -511,7 +511,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
     assert rx_data is None
 
     assert not prom_finalized
-    assert prom_in.socket.fileno() > 0
+    assert prom_in._socket.fileno() > 0
     assert prom_in.sample_statistics() == PromiscuousUDPInputSessionStatistics(
         transfers=1,
         frames=4,
@@ -527,7 +527,7 @@ async def _unittest_udp_input_session_multiframe() -> None:
     assert rx_data is None
 
     assert not sel_finalized
-    assert sel_in.socket.fileno() > 0
+    assert sel_in._socket.fileno() > 0
     assert sel_in.sample_statistics() == SelectiveUDPInputSessionStatistics(
         transfers=1,
         frames=4,
