@@ -224,7 +224,7 @@ class UDPTransport(pycyphal.transport.Transport):
         return out
 
     def sample_statistics(self) -> UDPTransportStatistics:
-        raise NotImplementedError
+        return copy.copy(self._statistics)  # TODO https://github.com/OpenCyphal/pycyphal/issues/279
 
     @property
     def input_sessions(self) -> typing.Sequence[UDPInputSession]:
