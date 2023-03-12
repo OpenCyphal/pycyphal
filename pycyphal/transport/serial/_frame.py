@@ -101,7 +101,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         out_buffer[next_byte_index] = self.FRAME_DELIMITER_BYTE
         next_byte_index += 1
 
-        assert (next_byte_index - 2) >= (len(header) + len(self.payload))  # + len(payload_crc_bytes))
+        assert (next_byte_index - 2) >= (len(header) + len(self.payload))
         return memoryview(out_buffer)[:next_byte_index]
 
     @staticmethod
