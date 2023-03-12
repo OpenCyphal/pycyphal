@@ -3,6 +3,7 @@
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
+import copy
 import typing
 import asyncio
 import logging
