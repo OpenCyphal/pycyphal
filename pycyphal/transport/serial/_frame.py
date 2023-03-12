@@ -92,7 +92,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         next_byte_index = 1
 
         # noinspection PyTypeChecker
-        packet_bytes = header + self.payload  # + payload_crc_bytes
+        packet_bytes = header + self.payload
         encoded_image = cobs.encode(packet_bytes)
         # place in the buffer and update next_byte_index:
         out_buffer[next_byte_index : next_byte_index + len(encoded_image)] = encoded_image
