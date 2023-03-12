@@ -153,6 +153,9 @@ class UDPInputSession(pycyphal.transport.InputSession):
     def _reader_thread(self, loop: asyncio.AbstractEventLoop) -> None:
         while not self._closed and self._sock.fileno() >= 0:
             try:
+                # TODO: add a dedicated socket for aborting the select call
+                # when self.close() is invoked to avoid blocking on
+                # self._thread.join() in self.close().
                 read_ready, _, _ = select.select([self._sock], [], [], 0.1)
                 if self._sock in read_ready:
                     # TODO: use socket timestamping when running on GNU/Linux (Windows does not support timestamping).
