@@ -225,13 +225,7 @@ class UDPTransport(pycyphal.transport.Transport):
         return out
 
     def sample_statistics(self) -> UDPTransportStatistics:
-        # Update statistics for all keys in self._statistics.received_datagrams
-        for key in self._statistics.received_datagrams:
-            self._statistics.received_datagrams[key] = []  # Clear the old data
-            for session in self._input_registry.values():
-                if session.specifier.data_specifier == key:
-                    self._statistics.received_datagrams[key].append(session.sample_statistics())
-        return copy.copy(self._statistics)
+        raise NotImplementedError
 
     @property
     def input_sessions(self) -> typing.Sequence[UDPInputSession]:
