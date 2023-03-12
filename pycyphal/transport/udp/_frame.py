@@ -34,7 +34,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             uint31_t frame_index;
             bool     frame_index_eot;       # End of transfer
             uint16_t user_data;             # Opaque application-specific data with user-defined semantics.
-                                              Generic implementations should ignore
+                                            # Generic implementations should ignore
             uint16_t header_crc;            # Checksum of the header, excluding the CRC field itself
         };
         static_assert(sizeof(struct Header) == 24, "Invalid layout");   # Fixed-size 24-byte header with
