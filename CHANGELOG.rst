@@ -3,6 +3,12 @@
 Changelog
 =========
 
+v1.13
+-----
+
+- Cyphal/UDP: Service transfer are also multicast now. Make sure to take into account the updated IP mapping specifications.
+  See (`post <https://forum.opencyphal.org/t/cyphal-udp-architectural-issues-caused-by-the-dependency-between-the-nodes-ip-address-and-its-identity/1765>`_).
+
 v1.12
 -----
 
