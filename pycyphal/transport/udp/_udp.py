@@ -2,7 +2,6 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
-import copy
 import typing
 import asyncio
 import logging
@@ -55,7 +54,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
     def __init__(
         self,
-        local_ip_address: IPAddress,
+        local_ip_address: IPAddress | str,
         local_node_id: typing.Optional[int] = 0,
         *,  # The following parameters are keyword-only.
         mtu: int = min(VALID_MTU_RANGE),
@@ -105,9 +104,8 @@ class UDPTransport(pycyphal.transport.Transport):
         if loop:
             warnings.warn("The loop parameter is deprecated.", DeprecationWarning)
 
-        if not isinstance(local_ip_address, IPAddress):
+        if isinstance(local_ip_address, str):
             local_ip_address = ipaddress.ip_address(local_ip_address)
-        assert not isinstance(local_ip_address, str)
 
         assert (local_node_id is None) or (0 <= local_node_id < 0xFFFF)
 
