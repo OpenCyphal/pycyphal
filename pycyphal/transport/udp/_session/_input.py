@@ -268,11 +268,12 @@ class PromiscuousUDPInputSession(UDPInputSession):
         socket: socket_.socket,
         finalizer: typing.Callable[[], None],
         local_node_id: typing.Optional[int],
+        statistics: PromiscuousUDPInputSessionStatistics,
     ):
         """
         Do not call this directly, use the factory method instead.
         """
-        self._statistics_impl = PromiscuousUDPInputSessionStatistics()
+        self._statistics_impl = statistics
         self._reassemblers: typing.Dict[typing.Optional[int], TransferReassembler] = {}
         assert specifier.is_promiscuous
         super().__init__(
@@ -330,11 +331,12 @@ class SelectiveUDPInputSession(UDPInputSession):
         socket: socket_.socket,
         finalizer: typing.Callable[[], None],
         local_node_id: typing.Optional[int],
+        statistics: SelectiveUDPInputSessionStatistics,
     ):
         """
         Do not call this directly, use the factory method instead.
         """
-        self._statistics_impl = SelectiveUDPInputSessionStatistics()
+        self._statistics_impl = statistics
 
         source_node_id = specifier.remote_node_id
         assert source_node_id is not None, "Internal protocol violation"
