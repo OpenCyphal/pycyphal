@@ -155,38 +155,43 @@ async def _unittest_udp_transport_ipv4() -> None:
     client_listener = tr2.get_input_session(client_listener_specifier, meta)
     assert client_listener is tr2.get_input_session(client_listener_specifier, meta)
 
-    print("tr :", tr.input_sessions, tr.output_sessions)
     assert set(tr.input_sessions) == {subscriber_promiscuous, subscriber_selective, server_listener}
     assert set(tr.output_sessions) == {server_responder}
 
-    print("tr2:", tr2.input_sessions, tr2.output_sessions)
     assert set(tr2.input_sessions) == {client_listener}
     assert set(tr2.output_sessions) == {broadcaster, client_requester}
 
-    print("anon_tr :", anon_tr.input_sessions, anon_tr.output_sessions)
     assert set(anon_tr.input_sessions) == {anon_sub_promiscuous}
     assert set(anon_tr.output_sessions) == {anon_broadcaster}
 
-    ## empty statistics [subscriber_promiscuous/subscriber_selective]
-    assert tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+    ## empty statistics [subscriber_promiscuous]
+    assert tr.sample_statistics().received_datagrams[
+        subscriber_promiscuous_specifier
+    ] == PromiscuousUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
     )
-    assert tr.input_sessions[1].sample_statistics() == SelectiveUDPInputSessionStatistics(
+
+    ## empty statistics [subscriber_selective]
+    assert tr.sample_statistics().received_datagrams[
+        subscriber_selective_specifier
+    ] == SelectiveUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
 
     ## empty statistics [anon_sub_promiscuous]
-    assert anon_tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+    assert anon_tr.sample_statistics().received_datagrams[
+        anon_sub_promiscuous_specifier
+    ] == PromiscuousUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
     )
 
     ## empty statistics [server_listener]
-    assert tr.input_sessions[2].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+    assert tr.sample_statistics().received_datagrams[server_listener_specifier] == PromiscuousUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
     )
 
     ## empty statistics [client_listener]
-    assert tr2.input_sessions[0].sample_statistics() == SelectiveUDPInputSessionStatistics(
+    assert tr2.sample_statistics().received_datagrams[client_listener_specifier] == SelectiveUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
 
@@ -209,7 +214,9 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert rx_transfer.transfer_id == 77777
     assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
 
-    assert tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+    assert tr.sample_statistics().received_datagrams[
+        subscriber_promiscuous_specifier
+    ] == PromiscuousUDPInputSessionStatistics(
         transfers=1, frames=1, payload_bytes=1196, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
@@ -220,15 +227,19 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert rx_transfer.transfer_id == 77777
     assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
 
-    assert anon_tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+    assert anon_tr.sample_statistics().received_datagrams[
+        anon_sub_promiscuous_specifier
+    ] == PromiscuousUDPInputSessionStatistics(
         transfers=1, frames=1, payload_bytes=1196, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
-    assert tr.input_sessions[2].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+    # server_listener, doesn't receive anything
+    assert tr.sample_statistics().received_datagrams[server_listener_specifier] == PromiscuousUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
     )
 
-    assert tr2.input_sessions[0].sample_statistics() == SelectiveUDPInputSessionStatistics(
+    # client_listener, doesn't receive anything
+    assert tr2.sample_statistics().received_datagrams[client_listener_specifier] == SelectiveUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
 
@@ -255,7 +266,9 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert rx_transfer.transfer_id == 77777
     assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
 
-    assert anon_tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+    assert anon_tr.sample_statistics().received_datagrams[
+        anon_sub_promiscuous_specifier
+    ] == PromiscuousUDPInputSessionStatistics(
         transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
@@ -265,7 +278,9 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert rx_transfer.transfer_id == 77777
     assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
 
-    assert tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+    assert tr.sample_statistics().received_datagrams[
+        subscriber_promiscuous_specifier
+    ] == PromiscuousUDPInputSessionStatistics(
         transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
@@ -285,7 +300,6 @@ async def _unittest_udp_transport_ipv4() -> None:
     )
 
     rx_transfer = await server_listener.receive(get_monotonic() + 5.0)
-    print("SERVER LISTENER TRANSFER:", rx_transfer)
     assert isinstance(rx_transfer, TransferFrom)
     assert rx_transfer.priority == Priority.HIGH
     assert rx_transfer.transfer_id == 88888
@@ -297,15 +311,20 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert None is await server_listener.receive(get_monotonic() + 0.1)
     assert None is await client_listener.receive(get_monotonic() + 0.1)
 
-    assert tr.input_sessions[0].sample_statistics() == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
-    )
-
-    assert tr.input_sessions[2].sample_statistics() == PromiscuousUDPInputSessionStatistics(
+    # server_listener, 3*2 frames due to service_transfer_multiplier = 2
+    assert tr.sample_statistics().received_datagrams[server_listener_specifier] == PromiscuousUDPInputSessionStatistics(
         transfers=1, frames=6, payload_bytes=3596, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
-    assert tr2.input_sessions[0].sample_statistics() == SelectiveUDPInputSessionStatistics(
+    # subscriber_promiscuous, doesn't receive anything
+    assert tr.sample_statistics().received_datagrams[
+        subscriber_promiscuous_specifier
+    ] == PromiscuousUDPInputSessionStatistics(
+        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+    )
+
+    # client_listener, doesn't receive anything
+    assert tr2.sample_statistics().received_datagrams[client_listener_specifier] == SelectiveUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
 
@@ -349,6 +368,34 @@ async def _unittest_udp_transport_ipv4() -> None:
     with pytest.raises(pycyphal.transport.ResourceClosedError):
         _ = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
+    # check that statistics are still available after session closure
+    ## tr, subscriber_promiscuous
+    assert tr.sample_statistics().received_datagrams[
+        subscriber_promiscuous_specifier
+    ] == PromiscuousUDPInputSessionStatistics(
+        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+    )
+    ## tr, subscriber_selective
+    assert tr.sample_statistics().received_datagrams[
+        subscriber_selective_specifier
+    ] == SelectiveUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
+    )
+    ## tr, server_listener
+    assert tr.sample_statistics().received_datagrams[server_listener_specifier] == PromiscuousUDPInputSessionStatistics(
+        transfers=1, frames=6, payload_bytes=3596, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+    )
+    ## tr2, client_listener
+    assert tr2.sample_statistics().received_datagrams[client_listener_specifier] == SelectiveUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
+    )
+    ## anon_tr, anon_sub_promiscuous
+    assert anon_tr.sample_statistics().received_datagrams[
+        anon_sub_promiscuous_specifier
+    ] == PromiscuousUDPInputSessionStatistics(
+        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+    )
+
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
 
 
@@ -365,7 +412,6 @@ async def _unittest_udp_transport_ipv4_capture() -> None:
     captures: typing.List[UDPCapture] = []
 
     def inhale(s: Capture) -> None:
-        print("CAPTURED:", s)
         assert isinstance(s, UDPCapture)
         captures.append(s)
 

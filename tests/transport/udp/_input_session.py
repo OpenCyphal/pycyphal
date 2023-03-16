@@ -49,28 +49,38 @@ async def _unittest_udp_input_session_uniframe() -> None:
     assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     # create promiscuous input session, uses msg_sock_rx_1
+    prom_in_stats = PromiscuousUDPInputSessionStatistics()
     prom_in = PromiscuousUDPInputSession(
         specifier=InputSessionSpecifier(data_specifier=MessageDataSpecifier(123), remote_node_id=None),
         payload_metadata=PayloadMetadata(1024),
         socket=msg_sock_rx_1,
         finalizer=do_finalize_prom,
         local_node_id=1,
+        statistics=prom_in_stats,
     )
 
     assert prom_in.specifier.data_specifier == MessageDataSpecifier(123)
     assert prom_in.specifier.remote_node_id is None
+    assert prom_in_stats == PromiscuousUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
+    )
 
     # create selective input session, uses msg_sock_rx_2
+    sel_in_stats = SelectiveUDPInputSessionStatistics()
     sel_in = SelectiveUDPInputSession(
         specifier=InputSessionSpecifier(data_specifier=MessageDataSpecifier(123), remote_node_id=10),
         payload_metadata=PayloadMetadata(1024),
         socket=msg_sock_rx_2,
         finalizer=do_finalize_sel,
         local_node_id=2,
+        statistics=sel_in_stats,
     )
 
     assert sel_in.specifier.data_specifier == MessageDataSpecifier(123)
     assert sel_in.specifier.remote_node_id == 10
+    assert sel_in_stats == SelectiveUDPInputSessionStatistics(
+        transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
+    )
 
     # create output socket
     msg_sock_tx_1 = sock_fac.make_output_socket(remote_node_id=None, data_specifier=MessageDataSpecifier(123))
@@ -369,24 +379,28 @@ async def _unittest_udp_input_session_multiframe() -> None:
     assert CYPHAL_PORT == msg_sock_rx_1.getsockname()[1]
 
     # create promiscuous input session, uses msg_sock_rx_1
+    prom_in_stats = PromiscuousUDPInputSessionStatistics()
     prom_in = PromiscuousUDPInputSession(
         specifier=InputSessionSpecifier(data_specifier=MessageDataSpecifier(123), remote_node_id=None),
         payload_metadata=PayloadMetadata(1024),
         socket=msg_sock_rx_1,
         finalizer=do_finalize_prom,
         local_node_id=1,
+        statistics=prom_in_stats,
     )
 
     assert prom_in.specifier.data_specifier == MessageDataSpecifier(123)
     assert prom_in.specifier.remote_node_id is None
 
     # create selective input session, uses msg_sock_rx_2
+    sel_in_stats = SelectiveUDPInputSessionStatistics()
     sel_in = SelectiveUDPInputSession(
         specifier=InputSessionSpecifier(data_specifier=MessageDataSpecifier(123), remote_node_id=10),
         payload_metadata=PayloadMetadata(1024),
         socket=msg_sock_rx_2,
         finalizer=do_finalize_sel,
         local_node_id=2,
+        statistics=sel_in_stats,
     )
 
     assert sel_in.specifier.data_specifier == MessageDataSpecifier(123)

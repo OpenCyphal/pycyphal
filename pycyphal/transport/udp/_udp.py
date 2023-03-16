@@ -12,6 +12,7 @@ import ipaddress
 import dataclasses
 import pycyphal
 from ._session import UDPInputSession, SelectiveUDPInputSession, PromiscuousUDPInputSession
+from ._session import PromiscuousUDPInputSessionStatistics, SelectiveUDPInputSessionStatistics
 from ._session import UDPOutputSession, UDPInputSessionStatistics
 from ._frame import UDPFrame
 from ._ip import SocketFactory, Sniffer, LinkLayerCapture, IPAddress
@@ -25,7 +26,7 @@ _logger = logging.getLogger(__name__)
 @dataclasses.dataclass
 class UDPTransportStatistics(pycyphal.transport.TransportStatistics):
     received_datagrams: typing.Dict[
-        pycyphal.transport.DataSpecifier, typing.List[UDPInputSessionStatistics]
+        pycyphal.transport.InputSessionSpecifier, UDPInputSessionStatistics
     ] = dataclasses.field(default_factory=dict)
     """
     Basic input session statistics: instances of :class:`UDPInputSessionStatistics` keyed by their data specifier.
@@ -171,18 +172,31 @@ class UDPTransport(pycyphal.transport.Transport):
 
             sock = self._sock_factory.make_input_socket(self.local_node_id, specifier.data_specifier)
             if specifier.is_promiscuous:
+                prom_stats = PromiscuousUDPInputSessionStatistics()
+                self._statistics.received_datagrams[specifier] = prom_stats
                 self._input_registry[specifier] = PromiscuousUDPInputSession(
-                    specifier, payload_metadata, sock, finalizer, self._local_node_id
+                    specifier,
+                    payload_metadata,
+                    sock,
+                    finalizer,
+                    self._local_node_id,
+                    prom_stats,
                 )
             elif self.local_node_id is not None:
+                sel_stats = SelectiveUDPInputSessionStatistics()
+                self._statistics.received_datagrams[specifier] = sel_stats
                 self._input_registry[specifier] = SelectiveUDPInputSession(
-                    specifier, payload_metadata, sock, finalizer, self._local_node_id
+                    specifier,
+                    payload_metadata,
+                    sock,
+                    finalizer,
+                    self._local_node_id,
+                    sel_stats,
                 )
             else:
                 raise OperationNotDefinedForAnonymousNodeError(
                     "Anonymous UDP Transport cannot create non-promiscuous input session"
                 )
-            self._statistics.received_datagrams[specifier.data_specifier] = []
         out = self._input_registry[specifier]
         assert isinstance(out, UDPInputSession)
         assert out.specifier == specifier
@@ -225,7 +239,7 @@ class UDPTransport(pycyphal.transport.Transport):
         return out
 
     def sample_statistics(self) -> UDPTransportStatistics:
-        return copy.copy(self._statistics)  # TODO https://github.com/OpenCyphal/pycyphal/issues/279
+        return copy.copy(self._statistics)
 
     @property
     def input_sessions(self) -> typing.Sequence[UDPInputSession]:
