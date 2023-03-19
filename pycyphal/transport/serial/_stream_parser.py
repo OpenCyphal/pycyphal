@@ -117,13 +117,14 @@ def _unittest_stream_parser() -> None:
     # Valid frame.
     f1 = SerialFrame(
         priority=Priority.HIGH,
-        source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
-        destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
-        data_specifier=MessageDataSpecifier(2345),
         transfer_id=1234567890123456789,
         index=1234567,
         end_of_transfer=True,
         payload=memoryview(b"ab\x9E\x8E"),
+        source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
+        destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
+        data_specifier=MessageDataSpecifier(2345),
+        user_data=0,
     )  # 4 bytes of payload.
     ((tsa, buf, a),) = proc(f1.compile_into(bytearray(100)))
     assert tsa == ts
@@ -134,15 +135,16 @@ def _unittest_stream_parser() -> None:
     # Second valid frame is too long.
     f2 = SerialFrame(
         priority=Priority.HIGH,
-        source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
-        destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
-        data_specifier=MessageDataSpecifier(2345),
         transfer_id=1234567890123456789,
         index=1234567,
         end_of_transfer=True,
         payload=memoryview(bytes(f1.compile_into(bytearray(1000))) * 2),
+        source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
+        destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
+        data_specifier=MessageDataSpecifier(2345),
+        user_data=0,
     )
-    assert len(f2.payload) == 39 * 2  # Cobs escaping
+    assert len(f2.payload) == 31 * 2  # Cobs escaping (24 header + 4 payload + 3 delimiters)
     ((tsa, buf, a),) = proc(f2.compile_into(bytearray(1000)))
     assert tsa == ts
     assert a is None

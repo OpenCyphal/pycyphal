@@ -6,11 +6,6 @@
 Cyphal/Serial transport overview
 ++++++++++++++++++++++++++++++++
 
-The Cyphal/Serial transport is experimental and is not yet part of the Cyphal specification.
-Future revisions may break wire compatibility until the transport is formally specified.
-Context: https://forum.opencyphal.org/t/alternative-transport-protocols/324, also see the discussion at
-https://forum.opencyphal.org/t/yukon-design-megathread/390/115?u=pavel.kirienko.
-
 The Cyphal/Serial transport is designed for OSI L1 byte-level duplex serial links and tunnels:
 
 - UART, RS-422/485/232 (duplex); the recommended rates are: 115200 bps, 921600 bps, 3 Mbps, 10 Mbps, 100 Mbps.
@@ -41,25 +36,33 @@ Protocol definition
 The packet header is defined as follows (byte/bit ordering in this definition follow the DSDL specification:
 least significant first)::
 
-    uint8   version              # Always zero. Discard the frame if not.
-    uint8   priority             # 0 = highest, 7 = lowest; the rest are unused.
-    uint16  source node ID       # 0xFFFF = anonymous.
-    uint16  destination node ID  # 0xFFFF = broadcast.
-    uint16  data specifier
+    uint4 version                # = 1, Discard the frame if not.
+    void4
 
-    void64                       # Reserved; later may be leveraged for runtime type identification.
-    uint64  transfer-ID
+    uint3 priority               # 0 = highest, 7 = lowest; the rest are unused.
+    void5
 
-    uint32  frame index EOT      # MSB set if last frame of the transfer; i.e., 0x8000_0000 if single-frame transfer.
-    uint32  header CRC           # CRC-32C (Castagnoli) of the header (all fields above).
+    uint16 source_node_id        # 0xFFFF = anonymous.
+    uint16 destination_node_id   # 0xFFFF = broadcast.
+    uint16 data_specifier        # subject-ID | (service-ID + RNR (Request, Not Response))
+
+    uint64 transfer_id
+
+    uint31 frame_index
+    bool   end_of_transfer       # Set if last frame of the transfer
+
+    uint16 user_data             # Opaque application-specific data with user-defined semantics.
+                                 # Generic implementations should ignore
+
+    uint16 header_crc            # CRC-16-CCITT of the header (all fields above).
 
 For message frames, the data specifier field contains the subject-ID value,
 so that the most significant bit is always cleared.
 For service frames, the most significant bit (15th) is always set,
-and the second-to-most-significant bit (14th) is set for response transfers only;
+and the second-to-most-significant bit (14th) is set for request transfers only;
 the remaining 14 least significant bits contain the service-ID value.
 
-Total header size: 32 bytes (256 bits).
+Total header size: 24 bytes (192 bits).
 
 The header is prepended before the frame payload; the resulting structure is
 encoded into its serialized form using the following packet format:
@@ -67,7 +70,7 @@ encoded into its serialized form using the following packet format:
 +-------------------------+--------------+---------------+--------------------------------+-------------------------+
 | Frame delimiter **0x00**|Escaped header|Escaped payload| Escaped CRC-32C of the payload | Frame delimiter **0x00**|
 +=========================+==============+===============+================================+=========================+
-| 1 byte                  | 32 bytes     | >=0 bytes     | 4 bytes                        | 1 byte                  |
+| 1 byte                  | 24 bytes     | >=0 bytes     | 4 bytes                        | 1 byte                  |
 +-------------------------+--------------+---------------+--------------------------------+-------------------------+
 | Single-byte frame       |                              | Four bytes long, little-endian | Same frame delimiter as |
 | delimiter **0x00**.     |                              | byte order; The CRC is         | at the start.           |

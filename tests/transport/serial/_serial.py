@@ -113,7 +113,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert rx_transfer.fragmented_payload == [b"".join(payload_single)]
 
     print(tr.sample_statistics())
-    assert tr.sample_statistics().in_bytes >= 32 + sft_capacity + 2
+    assert tr.sample_statistics().in_bytes >= 24 + sft_capacity + 2
     assert tr.sample_statistics().in_frames == 1
     assert tr.sample_statistics().in_out_of_band_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
@@ -208,7 +208,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert None is await client_listener.receive(get_monotonic() + 0.1)
 
     print(tr.sample_statistics())
-    assert tr.sample_statistics().in_bytes >= (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
+    assert tr.sample_statistics().in_bytes >= (24 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
     assert tr.sample_statistics().in_frames == 3 * service_multiplication_factor
     assert tr.sample_statistics().in_out_of_band_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes
@@ -232,7 +232,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
     assert None is await client_listener.receive(get_monotonic() + 0.1)
 
     print(tr.sample_statistics())
-    assert tr.sample_statistics().in_bytes >= (32 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
+    assert tr.sample_statistics().in_bytes >= (24 * 3 + payload_x3_size_bytes + 2) * service_multiplication_factor
     assert tr.sample_statistics().in_frames == 3 * service_multiplication_factor
     assert tr.sample_statistics().in_out_of_band_bytes == 0
     assert tr.sample_statistics().out_bytes == tr.sample_statistics().in_bytes

@@ -64,6 +64,7 @@ async def _unittest_input_session() -> None:
             source_node_id=source_node_id,
             destination_node_id=dst_nid,
             data_specifier=session_spec.data_specifier,
+            user_data=0,
         )
 
     # ANONYMOUS TRANSFERS.

@@ -308,6 +308,7 @@ class SerialTransport(pycyphal.transport.Transport):
                 source_node_id=src,
                 destination_node_id=dst,
                 data_specifier=ss.data_specifier,
+                user_data=0,
             )
 
         frames = list(

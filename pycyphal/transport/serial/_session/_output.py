@@ -88,6 +88,7 @@ class SerialOutputSession(SerialSession, pycyphal.transport.OutputSession):
                 source_node_id=self._local_node_id,
                 destination_node_id=self._specifier.remote_node_id,
                 data_specifier=self._specifier.data_specifier,
+                user_data=0,
             )
 
         frames = list(
