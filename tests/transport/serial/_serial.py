@@ -44,7 +44,7 @@ async def _unittest_serial_transport(caplog: typing.Any) -> None:
 
     assert tr.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
-        max_nodes=4096,
+        max_nodes=65536,
         mtu=1024,
     )
 
