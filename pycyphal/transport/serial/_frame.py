@@ -40,7 +40,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     INDEX_MASK = 2**31 - 1
 
     NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_FORMAT.size
-    NODE_ID_RANGE = range(NODE_ID_MASK + 1)
+    NODE_ID_RANGE = range(NODE_ID_MASK)
     FRAME_DELIMITER_BYTE = 0x00
 
     source_node_id: typing.Optional[int]

@@ -228,7 +228,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
 
     assert tr_a.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
-        max_nodes=4096,
+        max_nodes=65535,
         mtu=udp_a.protocol_parameters.mtu,
     )
     assert tr_a.local_node_id == 111
@@ -236,7 +236,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
 
     assert tr_b.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
-        max_nodes=4096,
+        max_nodes=65535,
         mtu=udp_b.protocol_parameters.mtu,
     )
     assert tr_b.local_node_id == 222
