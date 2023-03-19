@@ -6,6 +6,12 @@ Changelog
 v1.13
 -----
 
+- Updated the Serial frame format to match the UDP frame format.
+  See (`#266 <https://github.com/OpenCyphal/pycyphal/issues/266>`_) for a general description of the changes.
+
+v1.13
+-----
+
 - Cyphal/UDP: Service transfer are also multicast now. Make sure to take into account the updated IP mapping specifications.
   See (`post <https://forum.opencyphal.org/t/cyphal-udp-architectural-issues-caused-by-the-dependency-between-the-nodes-ip-address-and-its-identity/1765>`_).
 
