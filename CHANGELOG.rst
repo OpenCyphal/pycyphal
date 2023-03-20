@@ -3,7 +3,7 @@
 Changelog
 =========
 
-v1.13
+v1.14
 -----
 
 - Updated the Serial frame format to match the UDP frame format.
