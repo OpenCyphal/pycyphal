@@ -108,10 +108,8 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             0,  # user_data
         )
 
-        crc = pycyphal.transport.commons.crc.CRC16CCITT()
-        crc.add(header_memory)
-        header_crc = crc.value
-        header = header_memory + header_crc.to_bytes(2, "little")
+        header = header_memory + pycyphal.transport.commons.crc.CRC16CCITT.new(header_memory).value_as_bytes
+        assert len(header) == _HEADER_FORMAT.size
 
         out_buffer[0] = SerialFrame.FRAME_DELIMITER_BYTE
         next_byte_index = 1
@@ -171,17 +169,15 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
                 transfer_id,
                 frame_index_eot,
                 user_data,
-                header_crc,
+                _,  # header CRC
             ) = _HEADER_FORMAT.unpack_from(image)
         except struct.error:
             return None
 
         try:
             if version == SerialFrame.VERSION:
-                crc = pycyphal.transport.commons.crc.CRC16CCITT()
-                crc.add(image[: _HEADER_FORMAT_NO_CRC.size])
-                if header_crc != crc.value:
-                    print("header CRC mismatch")
+                header = image[: _HEADER_FORMAT.size]
+                if not pycyphal.transport.commons.crc.CRC16CCITT.new(header).check_residue():
                     return None
 
                 # Service/Message specific
@@ -317,10 +313,8 @@ def _unittest_serial_frame_parse() -> None:
     from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
 
     def get_crc(blocks: bytes) -> bytes:
-        crc = pycyphal.transport.commons.crc.CRC16CCITT()
-        crc.add(blocks)
-        header_crc = crc.value
-        return header_crc.to_bytes(2, "little")
+        crc = pycyphal.transport.commons.crc.CRC16CCITT().new(blocks).value_as_bytes
+        return crc
 
     # Valid message with payload
     header = bytes(
