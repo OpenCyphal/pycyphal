@@ -10,7 +10,7 @@ from cobs import cobs  # type: ignore
 import pycyphal
 from pycyphal.transport import Priority
 
-_HEADER_FORMAT = struct.Struct(
+_HEADER_FORMAT_NO_CRC = struct.Struct(
     "<"  # little-endian
     "B"  # version, _reserved_a
     "B"  # priority, _reserved_b
@@ -20,11 +20,10 @@ _HEADER_FORMAT = struct.Struct(
     "Q"  # transfer_id
     "I"  # frame_index, end_of_transfer
     "H"  # user_data
-    "H"  # header_crc
 )
-assert _HEADER_FORMAT.size == 24
+assert _HEADER_FORMAT_NO_CRC.size == 22
+_HEADER_FORMAT_SIZE = _HEADER_FORMAT_NO_CRC.size + 2
 
-_HEADER_FORMAT_NO_CRC = struct.Struct(_HEADER_FORMAT.format[:-1])
 _ANONYMOUS_NODE_ID = 0xFFFF  # Same value represents broadcast node ID when transmitting.
 
 _SUBJECT_ID_MASK = 2**15 - 1
@@ -39,7 +38,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     TRANSFER_ID_MASK = 2**64 - 1
     INDEX_MASK = 2**31 - 1
 
-    NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_FORMAT.size
+    NUM_OVERHEAD_BYTES_EXCEPT_DELIMITERS_AND_ESCAPING = _HEADER_FORMAT_SIZE
     NODE_ID_RANGE = range(NODE_ID_MASK)
     FRAME_DELIMITER_BYTE = 0x00
 
@@ -109,7 +108,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         )
 
         header = header_memory + pycyphal.transport.commons.crc.CRC16CCITT.new(header_memory).value_as_bytes
-        assert len(header) == _HEADER_FORMAT.size
+        assert len(header) == _HEADER_FORMAT_SIZE
 
         out_buffer[0] = SerialFrame.FRAME_DELIMITER_BYTE
         next_byte_index = 1
@@ -169,14 +168,13 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
                 transfer_id,
                 frame_index_eot,
                 user_data,
-                _,  # header CRC
-            ) = _HEADER_FORMAT.unpack_from(image)
+            ) = _HEADER_FORMAT_NO_CRC.unpack_from(image)
         except struct.error:
             return None
 
         try:
             if version == SerialFrame.VERSION:
-                header = image[: _HEADER_FORMAT.size]
+                header = image[:_HEADER_FORMAT_SIZE]
                 if not pycyphal.transport.commons.crc.CRC16CCITT.new(header).check_residue():
                     return None
 
@@ -219,7 +217,7 @@ class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
                     index=(frame_index_eot & SerialFrame.INDEX_MASK),
                     end_of_transfer=bool(frame_index_eot & (SerialFrame.INDEX_MASK + 1)),
                     user_data=user_data,
-                    payload=image[_HEADER_FORMAT.size :],
+                    payload=image[_HEADER_FORMAT_SIZE:],
                 )
             return None
         except ValueError:
