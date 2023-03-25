@@ -47,7 +47,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     +-----------------------------------------------+------------------------------------+
     """
 
-    _HEADER_FORMAT = struct.Struct(
+    _HEADER_FORMAT_NO_CRC = struct.Struct(
         "<"  # little-endian
         "B"  # version, _reserved_a
         "B"  # priority, _reserved_b
@@ -57,10 +57,8 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         "Q"  # transfer_id
         "I"  # frame_index, end_of_transfer
         "H"  # user_data
-        "H"  # header_crc
     )
-
-    _HEADER_FORMAT_NO_CRC = struct.Struct(_HEADER_FORMAT.format[:-1])
+    _HEADER_FORMAT_SIZE = _HEADER_FORMAT_NO_CRC.size + 2  # 2 bytes for CRC
 
     _VERSION = 1
     NODE_ID_MASK = 2**16 - 1
@@ -124,7 +122,6 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         else:
             raise TypeError(f"Invalid data specifier: {self.data_specifier}")
 
-        header_crc = 0
         header_memory = self._HEADER_FORMAT_NO_CRC.pack(
             self._VERSION,
             int(self.priority),
@@ -135,10 +132,9 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             ((1 << 31) if self.end_of_transfer else 0) | self.index,
             0,  # user_data
         )
-        crc = pycyphal.transport.commons.crc.CRC16CCITT()
-        crc.add(header_memory)
-        header_crc = crc.value
-        header = header_memory + header_crc.to_bytes(2, "little")
+
+        header = header_memory + pycyphal.transport.commons.crc.CRC16CCITT.new(header_memory).value_as_bytes
+        assert len(header) == self._HEADER_FORMAT_SIZE
 
         return memoryview(header), self.payload
 
@@ -154,15 +150,13 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
                 transfer_id,
                 frame_index_eot,
                 user_data,
-                header_crc,
-            ) = UDPFrame._HEADER_FORMAT.unpack_from(image)
+            ) = UDPFrame._HEADER_FORMAT_NO_CRC.unpack_from(image)
         except struct.error:
             return None
         if version == UDPFrame._VERSION:
-            # chech the header CRC
-            crc = pycyphal.transport.commons.crc.CRC16CCITT()
-            crc.add(image[: UDPFrame._HEADER_FORMAT_NO_CRC.size])
-            if header_crc != crc.value:
+            # check the header CRC
+            header = image[: UDPFrame._HEADER_FORMAT_SIZE]
+            if not pycyphal.transport.commons.crc.CRC16CCITT.new(header).check_residue():
                 return None
 
             # Service/Message specific
@@ -201,7 +195,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
                 index=(frame_index_eot & UDPFrame.INDEX_MASK),
                 end_of_transfer=bool(frame_index_eot & (UDPFrame.INDEX_MASK + 1)),
                 user_data=user_data,
-                payload=image[UDPFrame._HEADER_FORMAT.size :],
+                payload=image[UDPFrame._HEADER_FORMAT_SIZE :],
             )
         return None
 
@@ -320,7 +314,7 @@ def _unittest_udp_frame_compile() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x00"  # index
             b"\x00\x00"  # user_data
-            b"\xce\xf2"  # header_crc
+            b"\xf2\xce"  # header_crc
         ),
         memoryview(b"Well, I got here the same way the coin did."),
     ) == UDPFrame(
@@ -346,7 +340,7 @@ def _unittest_udp_frame_compile() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\x94\xc9"  # header_crc
+            b"\xc9\x94"  # header_crc
         ),
         memoryview(b"Well, I got here the same way the coin did."),
     ) == UDPFrame(
@@ -372,7 +366,7 @@ def _unittest_udp_frame_compile() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x01\x00\x00\x80"  # index
             b"\x00\x00"  # user_data
-            b"\xc8\x8f"  # header_crc
+            b"\x8f\xc8"  # header_crc
         ),
         memoryview(b"Okay, I smashed your Corolla"),
     ) == UDPFrame(
@@ -398,7 +392,7 @@ def _unittest_udp_frame_compile() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x00"  # index
             b"\x00\x00"  # user_data
-            b"\xd5\x8c"  # header_crc
+            b"\x8c\xd5"  # header_crc
         ),
         memoryview(b"Well, I got here the same way the coin did."),
     ) == UDPFrame(
@@ -424,7 +418,7 @@ def _unittest_udp_frame_compile() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\x8f\xb7"  # header_crc
+            b"\xb7\x8f"  # header_crc
         ),
         memoryview(b"Well, I got here the same way the coin did."),
     ) == UDPFrame(
@@ -441,7 +435,7 @@ def _unittest_udp_frame_compile() -> None:
 
     # From _output_session unit test
     assert (
-        memoryview(b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00rp"),
+        memoryview(b"\x01\x04\x05\x00\xff\xff\x8a\x0c40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x00\x00pr"),
         memoryview(b"onetwothree"),
     ) == UDPFrame(
         priority=Priority.NOMINAL,
@@ -456,7 +450,7 @@ def _unittest_udp_frame_compile() -> None:
     ).compile_header_and_payload()
 
     assert (
-        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xc6\n"),
+        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\n\xc6"),
         memoryview(b"onetwothre"),
     ) == UDPFrame(
         priority=Priority.OPTIONAL,
@@ -471,7 +465,7 @@ def _unittest_udp_frame_compile() -> None:
     ).compile_header_and_payload()
 
     assert (
-        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00<t"),
+        memoryview(b"\x01\x07\x06\x00\xae\x08A\xc11\xd4\x00\x00\x00\x00\x00\x00\x01\x00\x00\x80\x00\x00t<"),
         memoryview(b"e"),
     ) == UDPFrame(
         priority=Priority.OPTIONAL,
@@ -513,7 +507,7 @@ def _unittest_udp_frame_parse() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x00"  # index
             b"\x00\x00"  # user_data
-            b"\xce\xf2"  # header_crc
+            b"\xf2\xce"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
@@ -539,7 +533,7 @@ def _unittest_udp_frame_parse() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\x94\xc9"  # header_crc
+            b"\xc9\x94"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
@@ -565,7 +559,7 @@ def _unittest_udp_frame_parse() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x00"  # index
             b"\x00\x00"  # user_data
-            b"\xd5\x8c"  # header_crc
+            b"\x8c\xd5"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
@@ -591,7 +585,7 @@ def _unittest_udp_frame_parse() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\x8f\xb7"  # header_crc
+            b"\xb7\x8f"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
@@ -607,7 +601,7 @@ def _unittest_udp_frame_parse() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\x8f\xb8"  # header_crc
+            b"\xb8\x8f"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
@@ -623,7 +617,7 @@ def _unittest_udp_frame_parse() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            # b"\x8f\xb8"  # header_crc
+            # b"\xb8\x8f"  # header_crc
             # b"Well, I got here the same way the coin did."
         ),
     )
@@ -639,7 +633,7 @@ def _unittest_udp_frame_parse() -> None:
             b"\xee\xff\xc0\xef\xbe\xad\xde\x00"  # transfer_id
             b"\x0d\xf0\xdd\x80"  # index
             b"\x00\x00"  # user_data
-            b"\x8f\xb8"  # header_crc
+            b"\xb8\x8f"  # header_crc
             b"Well, I got here the same way the coin did."
         ),
     )
