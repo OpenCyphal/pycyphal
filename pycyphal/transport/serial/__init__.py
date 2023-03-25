@@ -54,7 +54,8 @@ least significant first)::
     uint16 user_data             # Opaque application-specific data with user-defined semantics.
                                  # Generic implementations should ignore
 
-    uint16 header_crc            # CRC-16-CCITT of the header (all fields above).
+    uint16 header_crc_be         # CRC-16-CCITT of the header (all fields above).
+                                 # Most significant byte first.
 
 For message frames, the data specifier field contains the subject-ID value,
 so that the most significant bit is always cleared.
