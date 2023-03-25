@@ -47,7 +47,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     +-----------------------------------------------+------------------------------------+
     """
 
-    _HEADER_FORMAT = struct.Struct(
+    _HEADER_FORMAT_NO_CRC = struct.Struct(
         "<"  # little-endian
         "B"  # version, _reserved_a
         "B"  # priority, _reserved_b
@@ -57,10 +57,8 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         "Q"  # transfer_id
         "I"  # frame_index, end_of_transfer
         "H"  # user_data
-        "H"  # header_crc
     )
-
-    _HEADER_FORMAT_NO_CRC = struct.Struct(_HEADER_FORMAT.format[:-1])
+    _HEADER_FORMAT_SIZE = _HEADER_FORMAT_NO_CRC.size + 2  # 2 bytes for CRC
 
     _VERSION = 1
     NODE_ID_MASK = 2**16 - 1
@@ -136,7 +134,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         )
 
         header = header_memory + pycyphal.transport.commons.crc.CRC16CCITT.new(header_memory).value_as_bytes
-        assert len(header) == self._HEADER_FORMAT.size
+        assert len(header) == self._HEADER_FORMAT_SIZE
 
         return memoryview(header), self.payload
 
@@ -152,13 +150,12 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
                 transfer_id,
                 frame_index_eot,
                 user_data,
-                _,  # header_crc
-            ) = UDPFrame._HEADER_FORMAT.unpack_from(image)
+            ) = UDPFrame._HEADER_FORMAT_NO_CRC.unpack_from(image)
         except struct.error:
             return None
         if version == UDPFrame._VERSION:
             # check the header CRC
-            header = image[: UDPFrame._HEADER_FORMAT.size]
+            header = image[: UDPFrame._HEADER_FORMAT_SIZE]
             if not pycyphal.transport.commons.crc.CRC16CCITT.new(header).check_residue():
                 return None
 
@@ -198,7 +195,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
                 index=(frame_index_eot & UDPFrame.INDEX_MASK),
                 end_of_transfer=bool(frame_index_eot & (UDPFrame.INDEX_MASK + 1)),
                 user_data=user_data,
-                payload=image[UDPFrame._HEADER_FORMAT.size :],
+                payload=image[UDPFrame._HEADER_FORMAT_SIZE :],
             )
         return None
 
