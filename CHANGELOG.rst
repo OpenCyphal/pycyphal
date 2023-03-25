@@ -3,6 +3,12 @@
 Changelog
 =========
 
+v1.14
+-----
+
+- Updated the Serial frame format to match the UDP frame format.
+  See (`#266 <https://github.com/OpenCyphal/pycyphal/issues/266>`_) for a general description of the changes.
+
 v1.13
 -----
 

@@ -206,6 +206,7 @@ def _unittest_serial_tracer() -> None:
         source_node_id=1111,
         destination_node_id=None,
         data_specifier=MessageDataSpecifier(6666),
+        user_data=0,
     ).compile_into(bytearray(100))
     head, tail = buf[:10], buf[10:]
 
@@ -236,6 +237,7 @@ def _unittest_serial_tracer() -> None:
         source_node_id=None,
         destination_node_id=None,
         data_specifier=MessageDataSpecifier(6666),
+        user_data=0,
     ).compile_into(bytearray(100))
 
     trace = rx(buf)
@@ -257,6 +259,7 @@ def _unittest_serial_tracer() -> None:
             source_node_id=3333,
             destination_node_id=None,
             data_specifier=MessageDataSpecifier(6666),
+            user_data=0,
         ).compile_into(bytearray(10_000))
     )
     assert trace is None
@@ -270,6 +273,7 @@ def _unittest_serial_tracer() -> None:
             source_node_id=3333,
             destination_node_id=None,
             data_specifier=MessageDataSpecifier(6666),
+            user_data=0,
         ).compile_into(bytearray(10_000))
     )
     assert isinstance(trace, SerialErrorTrace)
