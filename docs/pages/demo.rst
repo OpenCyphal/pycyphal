@@ -241,8 +241,9 @@ We can use the very same interface to query or modify the configuration paramete
 For example, we can change the PID gains of the thermostat:
 
 ..  code-block:: sh
-
-    y r thermostat.pid.gains 2 0 0
+    y r 42 thermostat.pid.gains       # read current values
+    y r 42 thermostat.pid.gains 2 0 0 # new values
+    y r 42 thermostat.pid.gains       # check values
 
 Which returns ``[2.0, 0.0, 0.0]``, meaning that the new value was assigned successfully.
 Observe that the register server does implicit type conversion to the type specified by the application (our script).
