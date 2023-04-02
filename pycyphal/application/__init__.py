@@ -95,7 +95,7 @@ RPC-service clients and servers
 
 Define an RPC-service of an application-specific type:
 
->>> from sirius_cyber_corp import PerformLinearLeastSquaresFit_1    # An application-specific DSDL definition.
+>>> from arasaka_cyber_corp import PerformLinearLeastSquaresFit_1    # An application-specific DSDL definition.
 >>> async def solve_linear_least_squares(                           # Refer to the Demo chapter for the DSDL sources.
 ...     request: PerformLinearLeastSquaresFit_1.Request,
 ...     metadata: pycyphal.presentation.ServiceRequestMetadata,
@@ -110,7 +110,7 @@ Define an RPC-service of an application-specific type:
 
 Invoke the service we defined above assuming that it is served by node 42:
 
->>> from sirius_cyber_corp import PointXY_1
+>>> from arasaka_cyber_corp import PointXY_1
 >>> cln_least_sq = node.make_client(PerformLinearLeastSquaresFit_1, 42, "least_squares")
 >>> req = PerformLinearLeastSquaresFit_1.Request([PointXY_1(10, 1), PointXY_1(20, 2)])
 >>> response = doctest_await(cln_least_sq(req))                         # None if timed out.

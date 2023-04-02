@@ -55,7 +55,7 @@ def compile() -> typing.List[pycyphal.dsdl.GeneratedPackageInfo]:  # pylint: dis
         out = pycyphal.dsdl.compile_all(
             [
                 DEMO_DIR / "public_regulated_data_types" / "uavcan",
-                DEMO_DIR / "custom_data_types" / "sirius_cyber_corp",
+                DEMO_DIR / "custom_data_types" / "arasaka_cyber_corp",
                 SELF_DIR / "test_dsdl_namespace",
             ],
             DESTINATION_DIR,

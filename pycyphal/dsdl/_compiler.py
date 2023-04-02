@@ -280,19 +280,19 @@ def compile_all(
     >>> compiled_dsdl_dir.mkdir(parents=True, exist_ok=True)
     >>> sys.path.insert(0, str(compiled_dsdl_dir))
     >>> try:
-    ...     import sirius_cyber_corp
+    ...     import arasaka_cyber_corp
     ...     import uavcan.si.sample.volumetric_flow_rate
     ... except (ImportError, AttributeError):
     ...     _ = pycyphal.dsdl.compile_all(
     ...         [
-    ...             DEMO_DIR / "custom_data_types/sirius_cyber_corp",
+    ...             DEMO_DIR / "custom_data_types/arasaka_cyber_corp",
     ...             DEMO_DIR / "public_regulated_data_types/uavcan",
     ...             DEMO_DIR / "public_regulated_data_types/reg/",
     ...         ],
     ...         output_directory=compiled_dsdl_dir,
     ...     )
     ...     importlib.invalidate_caches()
-    ...     import sirius_cyber_corp
+    ...     import arasaka_cyber_corp
     ...     import uavcan.si.sample.volumetric_flow_rate
 
     ..  doctest::
