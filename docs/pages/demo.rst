@@ -125,7 +125,7 @@ and so on.
     (this is similar to Python virtualenv).
     See Yakut user manual for practical examples.
 
-In PyCyphal, registers are normally stored in the *register file*, in our case it's ``my_registers.db``
+In PyCyphal, registers are normally stored in the *register file*, in our case it's ``demo_app.db``
 (the Cyphal Specification does not regulate how the registers are to be stored, this is an implementation detail).
 Once you started the application with a specific configuration, it will store the values in the register file,
 so the next time you can run it without passing any environment variables at all.
@@ -187,7 +187,7 @@ launch the following in a new terminal and leave it running (``y`` is a convenie
     export UAVCAN__UDP__IFACE=127.0.0.1
     y sub --with-metadata uavcan.node.heartbeat uavcan.diagnostic.record    # You should see heartbeats
 
-Now let's see how the simple thermostat node is operating.
+Now let's see how the simple heater_voltage (Message) operates.
 Launch another subscriber to see the published voltage command (it is not going to print anything yet):
 
 ..  code-block:: sh
