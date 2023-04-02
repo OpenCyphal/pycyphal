@@ -84,6 +84,129 @@ Here comes ``demo_app.py``:
 .. literalinclude:: /../demo/demo_app.py
    :linenos:
 
+The following graph should give a rough visual overview of how the applications within the ``demo_app`` node are structured:
+
+.. mermaid::
+
+  ---
+  title: demo_app.py
+  ---
+  flowchart TB
+      subgraph 42:org.opencyphal.pycyphal.demo.demo_app
+          direction TB
+          subgraph heartbeat_publisher
+              direction TB
+              heartbeat_publisher_1[/uavcan.node.Heartbeat.1.0\]
+          end
+          heartbeat_publisher --> uavcan.node.heartbeat
+          subgraph temperature_setpoint
+              direction TB
+              temperature_setpoint_1[\uavcan.si.unit.temperature.Scalar_1/]
+          end
+          2345:uavcan.si.sample.temperature.Scalar --> temperature_setpoint
+          subgraph temperature_measurement
+              direction TB
+              temperature_measurement_1[\uavcan.si.sample.temperature.Scalar_1/]
+              
+          end
+          2346:uavcan.si.unit.voltage.Scalar --> temperature_measurement
+          subgraph heater_voltage
+              direction TB
+              heater_voltage_1[/uavcan.si.unit.voltage.Scalar_1\]
+          end
+          heater_voltage --> 2347:uavcan.si.unit.voltage.Scalar
+          subgraph least_squares
+              direction TB
+              least_squares_1{{sirius_cyber_corp.PerformLinearLeastSquaresFit_1}}
+          end
+          123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request --> least_squares
+          least_squares --> 123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response
+      end
+
+.. mermaid::
+
+  ---
+  title: Legend
+  ---
+  flowchart TB
+      id1[/Message-publisher\]
+      id2[\Message-subscriber/]
+      id3{{Service}}
+      id4[subject_or_service_id:type]
+
+.. toggle-header::
+    :header: Graph explanation
+
+        * ``42:org.opencyphal.pycyphal.demo.demo_app``:
+
+          * ``42``: set by ``UAVCAN__NODE__ID``
+
+          * ``org.opencyphal.pycyphal.demo.demo_app``: defined in ``demo_app.py``
+
+        * ``heartbeat_publisher``
+
+          * all heartbeats are published by default to ``uavcan.node.heartbeat``
+
+            * defined in ``public_regulated_data_types``
+
+        * ``temperature_setpoint``
+
+          * ``2345:uavcan.si.unit.temperature.Scalar_1``
+
+            * subscribes to a ``uavcan.si.unit.temperature.Scalar_1`` type Message
+
+              * defined in ``public_regulated_data_types``
+
+            * from Subject ID 2345
+
+              * set by ``UAVCAN__SUB__TEMPERATURE_SETPOINT_ID``
+
+        * ``temperature_measurement``
+
+          * ``2346:uavcan.si.unit.voltage.Scalar``
+
+            * subscribes to a ``uavcan.si.sample.temperature.Scalar_1`` type Message
+
+              * defined in ``public_regulated_data_types``
+
+            * from Subject ID 2346
+
+              * set by ``UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID``
+
+        * ``heater_voltage``
+
+            * ``2347:uavcan.si.unit.voltage.Scalar_1``
+
+              * publishes a ``uavcan.si.unit.voltage.Scalar_1`` type Message
+
+                * defined in ``public_regulated_data_types``
+                
+              * to Subject ID 2347
+
+                * set by ``UAVCAN__PUB__HEATER_VOLTAGE__ID``
+
+        * ``least_squares``
+
+          * ``123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request``
+          
+            * subscribes to a ``sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request`` type Service-request
+
+              * defined in ``sirius_cyber_corp``
+
+            * from Subject ID 123
+
+              * set by ``UAVCAN__SRV__LEAST_SQUARES__ID``
+
+          * ``123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response``
+          
+            * publishes a ``sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request`` type Service-response
+
+              * defined in ``sirius_cyber_corp``
+
+            * to Subject ID 123
+
+              * set by ``UAVCAN__SRV__LEAST_SQUARES__ID``
+
 If you just run the script as-is,
 you will notice that it fails with an error referring to some *missing registers*.
 
@@ -241,8 +364,9 @@ We can use the very same interface to query or modify the configuration paramete
 For example, we can change the PID gains of the thermostat:
 
 ..  code-block:: sh
+
     y r 42 thermostat.pid.gains       # read current values
-    y r 42 thermostat.pid.gains 2 0 0 # new values
+    y r 42 thermostat.pid.gains 2 0 0 # write new values
     y r 42 thermostat.pid.gains       # check values
 
 Which returns ``[2.0, 0.0, 0.0]``, meaning that the new value was assigned successfully.
@@ -279,6 +403,34 @@ Put the following into ``plant.py`` in the same directory:
 
 .. literalinclude:: /../demo/plant.py
    :linenos:
+
+In graph form, the new node looks as follows:
+
+.. mermaid::
+
+  ---
+  title: plant.py
+  ---
+  flowchart TB
+      subgraph 43:org.opencyphal.pycyphal.demo.plant
+          direction TB
+          subgraph heartbeat_publisher
+              direction TB
+              heartbeat_publisher_1[/uavcan.node.Heartbeat.1.0\]
+          end
+          heartbeat_publisher --> uavcan.node.heartbeat
+          subgraph temperature
+              direction TB
+              temperature_publisher_1[/uavcan.si.sample.temperature.Scalar_1\]
+          end
+          temperature --> 2346:uavcan.si.sample.temperature.Scalar
+          subgraph voltage
+              direction TB
+              voltage_1[\uavcan.si.unit.voltage.Scalar_1/]
+              
+          end
+          2347:uavcan.si.unit.voltage.Scalar --> voltage
+      end
 
 You may launch it if you want, but you will notice that tinkering with registers by way of manual configuration
 gets old fast.
