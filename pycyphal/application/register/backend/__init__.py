@@ -8,7 +8,7 @@ import abc
 from typing import Optional, Union
 import dataclasses
 import pycyphal
-from uavcan.register import Value_1 as Value
+from uavcan.register import Value_1 as Value  # pylint: disable=wrong-import-order
 
 if sys.version_info >= (3, 9):
     from collections.abc import MutableMapping

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 import enum
+import dataclasses
 from typing import Sequence
 import pycyphal
 from pycyphal.transport import Timestamp, TransferFrom
@@ -24,15 +25,25 @@ class TransferReassemblyErrorID(enum.Enum):
 
 
 class TransferReassembler:
+    @dataclasses.dataclass
+    class _State:
+        crc: pycyphal.transport.commons.crc.CRC16CCITT = dataclasses.field(
+            default_factory=pycyphal.transport.commons.crc.CRC16CCITT
+        )
+        truncated: bool = False
+        payload: list[memoryview] = dataclasses.field(default_factory=list)
+
+        @property
+        def payload_size(self) -> int:
+            return sum(map(len, self.payload))
+
     def __init__(self, source_node_id: int, extent_bytes: int):
         self._source_node_id = int(source_node_id)
-        self._timestamp = Timestamp(0, 0)
         self._transfer_id = 0
         self._toggle_bit = False
         self._max_payload_size_bytes_with_crc = int(extent_bytes) + TRANSFER_CRC_LENGTH_BYTES
-        self._crc = pycyphal.transport.commons.crc.CRC16CCITT()
-        self._payload_truncated = False
-        self._fragmented_payload: list[memoryview] = []
+        self._state: TransferReassembler._State | None = None
+        self._ts: Timestamp | None = None
 
     def process_frame(
         self,
@@ -49,14 +60,12 @@ class TransferReassembler:
         """
         # FIRST STAGE - DETECTION OF NEW TRANSFERS.
         # Decide if we need to begin a new transfer.
-        tid_timed_out = (
-            timestamp.monotonic_ns - self._timestamp.monotonic_ns > transfer_id_timeout_ns
-            or self._timestamp.monotonic_ns == 0
+        tid_timed_out = self._ts is None or (
+            timestamp.monotonic_ns - self._ts.monotonic_ns > transfer_id_timeout_ns or self._ts.monotonic_ns == 0
         )
-
         not_previous_tid = compute_transfer_id_forward_distance(frame.transfer_id, self._transfer_id) > 1
-
         if tid_timed_out or (frame.start_of_transfer and not_previous_tid):
+            self._state = None
             self._transfer_id = frame.transfer_id
             self._toggle_bit = frame.toggle_bit
             if not frame.start_of_transfer:
@@ -67,76 +76,72 @@ class TransferReassembler:
         # We combat these issues by checking the transfer ID and the toggle bit.
         if frame.transfer_id != self._transfer_id:
             return TransferReassemblyErrorID.UNEXPECTED_TRANSFER_ID
-
         if frame.toggle_bit != self._toggle_bit:
             return TransferReassemblyErrorID.UNEXPECTED_TOGGLE_BIT
 
         # THIRD STAGE - PAYLOAD REASSEMBLY AND VERIFICATION.
         # Collect the data and check its correctness.
         if frame.start_of_transfer:
-            self._crc = pycyphal.transport.commons.crc.CRC16CCITT()
-            self._payload_truncated = False
-            self._fragmented_payload.clear()
-            self._timestamp = timestamp  # Initialization from the first frame
+            self._ts = timestamp  # Timestamp inited from the first frame.
+            self._state = TransferReassembler._State()
 
-        if self._timestamp.monotonic_ns > timestamp.monotonic_ns or self._timestamp.system_ns > timestamp.system_ns:
-            # The timestamping algorithm may have corrected the time error since the first frame, accept lower value
-            self._timestamp = Timestamp.combine_oldest(self._timestamp, timestamp)
+        # Drop the frame if it's not the first one and the transfer is not yet started.
+        # This condition protects against a TID wraparound mid-transfer,
+        # see https://github.com/OpenCyphal/pycyphal/issues/198.
+        # This happens when the reassembler that has just been reset is fed with the last frame of another
+        # transfer, whose TOGGLE and TRANSFER-ID happen to match the expectations of the reassembler:
+        #   1. Wait for the reassembler to be reset. Let: expected transfer-ID = X, expected toggle bit = Y.
+        #   2. Construct a frame with SOF=0, EOF=1, TID=X, TOGGLE=Y.
+        #   3. Feed the frame into the reassembler.
+        # See https://github.com/OpenCyphal/pycyphal/issues/198. There is a dedicated test covering this case.
+        if not self._state:
+            return TransferReassemblyErrorID.MISSED_START_OF_TRANSFER
+        assert self._state
+        # The timestamping algorithm may have corrected the time error since the first frame, accept lower values.
+        assert self._ts is not None
+        self._ts = Timestamp.combine_oldest(self._ts, timestamp)
 
         self._toggle_bit = not self._toggle_bit
         # Implicit truncation rule - discard the unexpected data at the end of the payload but compute the CRC anyway.
-        self._crc.add(frame.padded_payload)
-        if sum(map(len, self._fragmented_payload)) < self._max_payload_size_bytes_with_crc:
-            self._fragmented_payload.append(frame.padded_payload)
+        self._state.crc.add(frame.padded_payload)
+        if self._state.payload_size < self._max_payload_size_bytes_with_crc:
+            self._state.payload.append(frame.padded_payload)
         else:
-            self._payload_truncated = True
+            self._state.truncated = True
 
         if frame.end_of_transfer:
-            fragmented_payload = self._fragmented_payload.copy()
-            self._prepare_for_next_transfer()
-            self._fragmented_payload.clear()
-
+            fin, self._state = self._state, None
+            self._transfer_id = (self._transfer_id + 1) % TRANSFER_ID_MODULO
+            self._toggle_bit = True
+            assert self._state is None and fin is not None
             if frame.start_of_transfer:
-                assert len(fragmented_payload) == 1  # Single-frame transfer, additional checks not needed
+                assert len(fin.payload) == 1  # Single-frame transfer, additional checks not needed
             else:
-                # Multi-frame transfer, check and remove the trailing CRC.
-                # We don't bother checking the CRC if we received fewer than 2 frames because that implies that there
-                # was a TID wraparound mid-transfer.
-                # This happens when the reassembler that has just been reset is fed with the last frame of another
-                # transfer, whose TOGGLE and TRANSFER-ID happen to match the expectations of the reassembler:
-                #   1. Wait for the reassembler to be reset. Let: expected transfer-ID = X, expected toggle bit = Y.
-                #   2. Construct a frame with SOF=0, EOF=1, TID=X, TOGGLE=Y.
-                #   3. Feed the frame into the reassembler.
-                # See https://github.com/OpenCyphal/pycyphal/issues/198. There is a dedicated test covering this case.
-                if len(fragmented_payload) < 2 or not self._crc.check_residue():
+                if not fin.crc.check_residue():
                     return TransferReassemblyErrorID.TRANSFER_CRC_MISMATCH
-
                 # Cut off the CRC, unless it's already been removed by the implicit payload truncation rule.
-                if not self._payload_truncated:
-                    expected_length = sum(map(len, fragmented_payload)) - TRANSFER_CRC_LENGTH_BYTES
-                    if len(fragmented_payload[-1]) > TRANSFER_CRC_LENGTH_BYTES:
-                        fragmented_payload[-1] = fragmented_payload[-1][:-TRANSFER_CRC_LENGTH_BYTES]
+                if not fin.truncated:
+                    assert len(fin.payload) >= 2
+                    expected_length = fin.payload_size - TRANSFER_CRC_LENGTH_BYTES
+                    if len(fin.payload[-1]) > TRANSFER_CRC_LENGTH_BYTES:
+                        fin.payload[-1] = fin.payload[-1][:-TRANSFER_CRC_LENGTH_BYTES]
                     else:
-                        cutoff = TRANSFER_CRC_LENGTH_BYTES - len(fragmented_payload[-1])
+                        cutoff = TRANSFER_CRC_LENGTH_BYTES - len(fin.payload[-1])
                         assert cutoff >= 0
-                        fragmented_payload = fragmented_payload[:-1]  # Drop the last fragment
+                        fin.payload = fin.payload[:-1]  # Drop the last fragment
                         if cutoff > 0:
-                            fragmented_payload[-1] = fragmented_payload[-1][:-cutoff]  # Truncate the previous fragment
-                    assert expected_length == sum(map(len, fragmented_payload))
+                            fin.payload[-1] = fin.payload[-1][:-cutoff]  # Truncate previous
+                    assert expected_length == fin.payload_size
 
             return TransferFrom(
-                timestamp=self._timestamp,
+                timestamp=self._ts,
                 priority=priority,
                 transfer_id=frame.transfer_id,
-                fragmented_payload=fragmented_payload,
+                fragmented_payload=fin.payload,
                 source_node_id=self._source_node_id,
             )
 
         return None  # Expect more frames to come
-
-    def _prepare_for_next_transfer(self) -> None:
-        self._transfer_id = (self._transfer_id + 1) % TRANSFER_ID_MODULO
-        self._toggle_bit = True
 
 
 def _unittest_can_transfer_reassembler_manual() -> None:
@@ -343,5 +348,52 @@ def _unittest_issue_198() -> None:
             frame=mk_frame("456", 1, False, True, True),
             transfer_id_timeout_ns=transfer_id_timeout_ns,
         )
-        == TransferReassemblyErrorID.TRANSFER_CRC_MISMATCH
+        == TransferReassemblyErrorID.MISSED_START_OF_TRANSFER
     )
+
+
+def _unittest_issue_288() -> None:  # https://github.com/OpenCyphal/pycyphal/issues/288
+    from pytest import approx
+
+    source_node_id = 127
+    transfer_id_timeout_ns = int(2 * 1e9)
+
+    def mk_frame(can_id: int, hex_string: str) -> CyphalFrame:
+        from ..media import DataFrame, FrameFormat
+
+        df = DataFrame(FrameFormat.EXTENDED, can_id, bytearray(bytes.fromhex(hex_string)))
+        out = CyphalFrame.parse(df)
+        assert out is not None
+        return out
+
+    # In the original repo instructions, the subscription type was uavcan.primitive.scalar.Real16 with extent 2 bytes.
+    rx = TransferReassembler(source_node_id, 2)
+
+    def process_frame(time_s: float, frame: CyphalFrame) -> None | TransferReassemblyErrorID | TransferFrom:
+        return rx.process_frame(
+            timestamp=Timestamp(system_ns=0, monotonic_ns=int(time_s * 1e9)),
+            priority=pycyphal.transport.Priority.SLOW,
+            frame=frame,
+            transfer_id_timeout_ns=transfer_id_timeout_ns,
+        )
+
+    # Feed the frames from the capture one by one.
+    assert None is process_frame(1681243583.288644, mk_frame(0x10644C7F, "09 30 00 00 00 00 00 B1"))
+    assert None is process_frame(1681243583.291624, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 11"))
+    assert None is process_frame(1681243583.294662, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 31"))
+    assert None is process_frame(1681243583.297647, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 11"))
+    assert None is process_frame(1681243583.300635, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 31"))
+    assert None is process_frame(1681243583.303616, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 11"))
+    assert None is process_frame(1681243583.306614, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 31"))
+    assert None is process_frame(1681243583.309578, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 11"))
+    assert None is process_frame(1681243583.312569, mk_frame(0x10644C7F, "00 00 00 00 00 00 10 31"))
+    transfer = process_frame(1681243583.315564, mk_frame(0x10644C7F, "4A 51"))
+
+    # The reassembler should have returned a valid transfer.
+    assert isinstance(transfer, TransferFrom)
+    assert transfer.source_node_id == source_node_id
+    assert transfer.transfer_id == 17
+    assert len(transfer.fragmented_payload) == 1
+    assert bytes(transfer.fragmented_payload[0]).startswith(b"\x09\x30")
+    assert float(transfer.timestamp.monotonic) == approx(1681243583.288644, abs=1e-6)
+    assert transfer.priority == pycyphal.transport.Priority.SLOW
