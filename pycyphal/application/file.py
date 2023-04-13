@@ -13,6 +13,8 @@ import itertools
 import numpy as np
 import pycyphal
 import pycyphal.application
+
+# pylint: disable=wrong-import-order
 import uavcan.file
 import uavcan.primitive
 

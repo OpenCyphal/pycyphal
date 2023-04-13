@@ -59,7 +59,8 @@ class IPv4SocketFactory(SocketFactory):
             s.close()
             if ex.errno == errno.EADDRNOTAVAIL:
                 raise InvalidMediaConfigurationError(
-                    f"Bad IP configuration: cannot bind output socket to {self._local_ip_address} [{errno.errorcode[ex.errno]}]"
+                    f"Bad IP configuration: cannot bind output socket to {self._local_ip_address}"
+                    f" [{errno.errorcode[ex.errno]}]"
                 ) from None
             raise  # pragma: no cover
 
@@ -121,8 +122,8 @@ class IPv4SocketFactory(SocketFactory):
                 s.close()
                 if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
                     raise InvalidMediaConfigurationError(
-                        f"Could not register multicast group membership {multicast_ip} via {self._local_ip_address} using {s} "
-                        f"[{errno.errorcode[ex.errno]}]"
+                        f"Could not register multicast group membership {multicast_ip} via"
+                        f" {self._local_ip_address} using {s} [{errno.errorcode[ex.errno]}]"
                     ) from None
                 raise  # pragma: no cover
         elif isinstance(data_specifier, ServiceDataSpecifier):
@@ -140,8 +141,8 @@ class IPv4SocketFactory(SocketFactory):
                 s.close()
                 if ex.errno in (errno.EADDRNOTAVAIL, errno.ENODEV):
                     raise InvalidMediaConfigurationError(
-                        f"Could not register multicast group membership {multicast_ip} via {self._local_ip_address} using {s} "
-                        f"[{errno.errorcode[ex.errno]}]"
+                        f"Could not register multicast group membership {multicast_ip} via"
+                        f" {self._local_ip_address} using {s} [{errno.errorcode[ex.errno]}]"
                     ) from None
                 raise  # pragma: no cover
         else:

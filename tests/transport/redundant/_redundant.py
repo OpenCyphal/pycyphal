@@ -11,6 +11,7 @@ import pycyphal.transport
 _logger = logging.getLogger(__name__)
 
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
+# pylint: disable=wrong-import-position
 from pycyphal.transport.redundant import RedundantTransport, RedundantTransportStatistics
 from pycyphal.transport.redundant import InconsistentInferiorConfigurationError
 from pycyphal.transport.loopback import LoopbackTransport
