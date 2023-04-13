@@ -63,7 +63,8 @@ if _log_level_from_env is not None:
 
 
 # The sub-packages are imported in the order of their interdependency.
-import pycyphal.util as util  # pylint: disable=R0402,C0413  # noqa
-import pycyphal.dsdl as dsdl  # pylint: disable=R0402,C0413  # noqa
-import pycyphal.transport as transport  # pylint: disable=R0402,C0413  # noqa
-import pycyphal.presentation as presentation  # pylint: disable=R0402,C0413  # noqa
+# pylint: disable=wrong-import-order,consider-using-from-import,wrong-import-position
+import pycyphal.util as util  # noqa
+import pycyphal.dsdl as dsdl  # noqa
+import pycyphal.transport as transport  # noqa
+import pycyphal.presentation as presentation  # noqa

@@ -17,6 +17,8 @@ from pycyphal.transport.udp._ip._v4 import IPv4SocketFactory
 from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
 from pycyphal.transport.commons.high_overhead_transport import TransferCRC
 
+# pylint: disable=protected-access
+
 
 async def _unittest_udp_input_session_uniframe() -> None:
     loop = asyncio.get_event_loop()

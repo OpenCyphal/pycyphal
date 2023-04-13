@@ -8,6 +8,8 @@ import logging
 import pycyphal
 import pycyphal.application
 from pycyphal.presentation import ServiceRequestMetadata
+
+# pylint: disable=wrong-import-order
 from uavcan.register import Access_1 as Access
 from uavcan.register import List_1 as List
 from uavcan.register import Name_1 as Name

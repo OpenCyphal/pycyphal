@@ -94,6 +94,7 @@ class TransferReassembler:
             Payload that exceeds this size limit may be implicitly truncated (in the Specification this behavior
             is described as "implicit truncation rule").
             This value can be derived from the corresponding DSDL definition.
+            Note that the reassembled payload may still be larger than this value.
 
         :param on_error_callback: The callback is invoked whenever an error is detected.
             This is intended for diagnostic purposes only; the error information is not actionable.
@@ -189,18 +190,9 @@ class TransferReassembler:
             self.Error.INTEGRITY_ERROR if result is None else None,
         )
         _logger.debug("Transfer reassembly completed: %s", result)
-        if result is not None:
-            # Late implicit truncation. Normally, it should be done on-the-fly, by not storing payload fragments
-            # above the maximum expected size, but it is hard to combine with out-of-order frame acceptance.
-            while result.fragmented_payload and sum(map(len, result.fragmented_payload[:-1])) > self._extent_bytes:
-                # TODO: a minor refactoring is needed to avoid re-creating the transfer instance here.
-                result = TransferFrom(
-                    timestamp=result.timestamp,
-                    priority=result.priority,
-                    transfer_id=result.transfer_id,
-                    fragmented_payload=result.fragmented_payload[:-1],
-                    source_node_id=result.source_node_id,
-                )
+        # This implementation does not perform implicit truncation yet.
+        # This may be changed in the future if it is found to benefit the performance.
+        # The API contract does not provide any guarantees about whether the returned transfer is truncated or not.
         return result
 
     @property
@@ -289,13 +281,11 @@ def _validate_and_finalize_transfer(
     if len(frame_payloads) > 1:
         _logger.debug("Finalizing multiframe transfer...")
         size_ok = sum(map(len, frame_payloads)) > _CRC_SIZE_BYTES
-        crc_ok = TransferCRC.new(*frame_payloads).check_residue()
     else:
         _logger.debug("Finalizing uniframe transfer...")
         # if equals _CRC_SIZE_BYTES, then it is an empty single-frame transfer
         size_ok = len(frame_payloads[0]) >= _CRC_SIZE_BYTES
-        crc_ok = TransferCRC.new(frame_payloads[0]).check_residue()
-
+    crc_ok = TransferCRC.new(*frame_payloads).check_residue()
     return package(_drop_crc(frame_payloads)) if size_ok and crc_ok else None
 
 
@@ -519,7 +509,11 @@ def _unittest_transfer_reassembler() -> None:
             end_of_transfer=True,
             payload=hedgehog + TransferCRC.new(hedgehog * 4).value_as_bytes,
         ),
-    ) == mk_transfer(timestamp=mk_ts(1000.0), transfer_id=102, fragmented_payload=[hedgehog] * 2)
+    ) == mk_transfer(
+        timestamp=mk_ts(1000.0),
+        transfer_id=102,
+        fragmented_payload=[hedgehog] * 4,  # This implementation does not truncate the payload yet.
+    )
 
     # Same as above, but the frames are reordered.
     assert (
@@ -551,7 +545,11 @@ def _unittest_transfer_reassembler() -> None:
     assert push(
         mk_ts(1000.0),
         mk_frame(transfer_id=103, index=0, end_of_transfer=False, payload=horse),
-    ) == mk_transfer(timestamp=mk_ts(1000.0), transfer_id=103, fragmented_payload=[horse] * 2)
+    ) == mk_transfer(
+        timestamp=mk_ts(1000.0),
+        transfer_id=103,
+        fragmented_payload=[horse] * 4,  # This implementation does not truncate the payload yet.
+    )
 
     # Transfer-ID timeout. No error registered.
     assert push(

@@ -8,7 +8,6 @@ import ipaddress
 import pytest
 import pycyphal.transport
 from pycyphal.transport import OperationNotDefinedForAnonymousNodeError
-from pycyphal.transport.udp import UDPTransportStatistics
 
 # Shouldn't import a transport from inside a coroutine because it triggers debug warnings.
 from pycyphal.transport.udp import UDPTransport
