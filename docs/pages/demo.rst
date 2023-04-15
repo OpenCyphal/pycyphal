@@ -34,23 +34,23 @@ Grab your copy from git::
 
     git clone https://github.com/OpenCyphal/public_regulated_data_types
 
-The demo relies on two vendor-specific data types located in the root namespace ``arasaka_cyber_corp``.
+The demo relies on two vendor-specific data types located in the root namespace ``sirius_cyber_corp``.
 The root namespace directory layout is as follows::
 
-    arasaka_cyber_corp/                              # root namespace directory
+    sirius_cyber_corp/                              # root namespace directory
         PerformLinearLeastSquaresFit.1.0.dsdl       # service type definition
         PointXY.1.0.dsdl                            # nested message type definition
 
-Type ``arasaka_cyber_corp.PerformLinearLeastSquaresFit.1.0``,
-file ``arasaka_cyber_corp/PerformLinearLeastSquaresFit.1.0.dsdl``:
+Type ``sirius_cyber_corp.PerformLinearLeastSquaresFit.1.0``,
+file ``sirius_cyber_corp/PerformLinearLeastSquaresFit.1.0.dsdl``:
 
-.. literalinclude:: /../demo/custom_data_types/arasaka_cyber_corp/PerformLinearLeastSquaresFit.1.0.dsdl
+.. literalinclude:: /../demo/custom_data_types/sirius_cyber_corp/PerformLinearLeastSquaresFit.1.0.dsdl
    :linenos:
 
-Type ``arasaka_cyber_corp.PointXY.1.0``,
-file ``arasaka_cyber_corp/PointXY.1.0.dsdl``:
+Type ``sirius_cyber_corp.PointXY.1.0``,
+file ``sirius_cyber_corp/PointXY.1.0.dsdl``:
 
-.. literalinclude:: /../demo/custom_data_types/arasaka_cyber_corp/PointXY.1.0.dsdl
+.. literalinclude:: /../demo/custom_data_types/sirius_cyber_corp/PointXY.1.0.dsdl
    :linenos:
 
 
@@ -58,12 +58,12 @@ First node
 ----------
 
 Copy-paste the source code given below into a file named ``demo_app.py``.
-For the sake of clarity, move the custom DSDL root namespace directory ``arasaka_cyber_corp/``
+For the sake of clarity, move the custom DSDL root namespace directory ``sirius_cyber_corp/``
 that we created above into ``custom_data_types/``.
 You should end up with the following directory structure::
 
     custom_data_types/
-        arasaka_cyber_corp/                          # Created in the previous section
+        sirius_cyber_corp/                          # Created in the previous section
             PerformLinearLeastSquaresFit.1.0.dsdl
             PointXY.1.0.dsdl
     public_regulated_data_types/                    # Clone from git
@@ -117,10 +117,10 @@ The following graph should give a rough visual overview of how the applications 
           heater_voltage --> 2347:uavcan.si.unit.voltage.Scalar
           subgraph least_squares
               direction TB
-              least_squares_1{{arasaka_cyber_corp.PerformLinearLeastSquaresFit_1}}
+              least_squares_1{{sirius_cyber_corp.PerformLinearLeastSquaresFit_1}}
           end
-          123:arasaka_cyber_corp.PerformLinearLeastSquaresFit_1.Request --> least_squares
-          least_squares --> 123:arasaka_cyber_corp.PerformLinearLeastSquaresFit_1.Response
+          123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request --> least_squares
+          least_squares --> 123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response
       end
 
 .. mermaid::
@@ -187,21 +187,21 @@ The following graph should give a rough visual overview of how the applications 
 
         * ``least_squares``
 
-          * ``123:arasaka_cyber_corp.PerformLinearLeastSquaresFit_1.Request``
+          * ``123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request``
           
-            * subscribes to a ``arasaka_cyber_corp.PerformLinearLeastSquaresFit_1.Request`` type Service-request
+            * subscribes to a ``sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request`` type Service-request
 
-              * defined in ``arasaka_cyber_corp``
+              * defined in ``sirius_cyber_corp``
 
             * from Subject ID 123
 
               * set by ``UAVCAN__SRV__LEAST_SQUARES__ID``
 
-          * ``123:arasaka_cyber_corp.PerformLinearLeastSquaresFit_1.Response``
+          * ``123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response``
           
-            * publishes a ``arasaka_cyber_corp.PerformLinearLeastSquaresFit_1.Request`` type Service-response
+            * publishes a ``sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request`` type Service-response
 
-              * defined in ``arasaka_cyber_corp``
+              * defined in ``sirius_cyber_corp``
 
             * to Subject ID 123
 
@@ -288,7 +288,7 @@ Yakut requires us to compile our DSDL namespaces beforehand using ``yakut compil
 
 .. code-block:: sh
 
-    yakut compile  custom_data_types/arasaka_cyber_corp  public_regulated_data_types/uavcan
+    yakut compile  custom_data_types/sirius_cyber_corp  public_regulated_data_types/uavcan
 
 The outputs will be stored in the current working directory.
 If you decided to change the working directory or move the compilation outputs,
@@ -381,7 +381,7 @@ Now let's try the linear regression service:
 .. code-block:: sh
 
     # The following commands do the same thing but differ in verbosity/explicitness:
-    y call 42 123:arasaka_cyber_corp.PerformLinearLeastSquaresFit 'points: [{x: 10, y: 3}, {x: 20, y: 4}]'
+    y call 42 123:sirius_cyber_corp.PerformLinearLeastSquaresFit 'points: [{x: 10, y: 3}, {x: 20, y: 4}]'
     y q 42 least_squares '[[10, 3], [20, 4]]'
 
 The response should look like:
@@ -460,7 +460,7 @@ Those familiar with ROS may find it somewhat similar to *roslaunch*.
 
 The following orchestration file (orc-file) ``launch.orc.yaml`` does this:
 
-- Compiles two DSDL namespaces: the standard ``uavcan`` and the custom ``arasaka_cyber_corp``.
+- Compiles two DSDL namespaces: the standard ``uavcan`` and the custom ``sirius_cyber_corp``.
   If they are already compiled, this step is skipped.
 
 - When compilation is done, the two applications are launched.

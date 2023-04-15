@@ -25,7 +25,7 @@ class BuildPy(distutils.command.build_py.build_py):
         pycyphal.dsdl.compile_all(
             [
                 "public_regulated_data_types/uavcan",  # All Cyphal applications need the standard namespace, always.
-                "custom_data_types/arasaka_cyber_corp",
+                "custom_data_types/sirius_cyber_corp",
                 # "public_regulated_data_types/reg",  # Many applications also need the non-standard regulated DSDL.
             ],
             output_directory=Path(self.build_lib, NAME, ".demo_dsdl_compiled"),  # Store in the build output archive.

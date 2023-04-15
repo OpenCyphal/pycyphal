@@ -102,7 +102,7 @@ async def _unittest_slow_demo_app(
     import uavcan.si.sample.temperature
     import uavcan.si.unit.temperature
     import uavcan.si.unit.voltage
-    import arasaka_cyber_corp
+    import sirius_cyber_corp
     import pycyphal.application  # pylint: disable=redefined-outer-name
 
     asyncio.get_running_loop().slow_callback_duration = 3.0
@@ -172,7 +172,7 @@ async def _unittest_slow_demo_app(
         pub_measurement = node.make_publisher(uavcan.si.sample.temperature.Scalar_1_0, "temperature_measurement")
         sub_heater_voltage = node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "heater_voltage")
         cln_least_squares = node.make_client(
-            arasaka_cyber_corp.PerformLinearLeastSquaresFit_1_0, DEMO_APP_NODE_ID, "least_squares"
+            sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0, DEMO_APP_NODE_ID, "least_squares"
         )
 
         # At the first run, the usage demo might take a long time to start because it has to compile DSDL.
@@ -206,10 +206,10 @@ async def _unittest_slow_demo_app(
 
         # Test the linear regression service.
         solution_transfer = await cln_least_squares.call(
-            arasaka_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request(
+            sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request(
                 points=[
-                    arasaka_cyber_corp.PointXY_1_0(x=1, y=2),
-                    arasaka_cyber_corp.PointXY_1_0(x=10, y=20),
+                    sirius_cyber_corp.PointXY_1_0(x=1, y=2),
+                    sirius_cyber_corp.PointXY_1_0(x=10, y=20),
                 ]
             )
         )
@@ -219,15 +219,15 @@ async def _unittest_slow_demo_app(
         assert transfer.source_node_id == DEMO_APP_NODE_ID
         assert transfer.transfer_id == 0
         assert transfer.priority == pycyphal.transport.Priority.NOMINAL
-        assert isinstance(solution, arasaka_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response)
+        assert isinstance(solution, sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response)
         assert solution.slope == pytest.approx(2.0)
         assert solution.y_intercept == pytest.approx(0.0)
 
-        solution_transfer = await cln_least_squares.call(arasaka_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request())
+        solution_transfer = await cln_least_squares.call(sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request())
         print("LINEAR REGRESSION RESPONSE:", solution_transfer)
         assert solution_transfer
         solution, _ = solution_transfer
-        assert isinstance(solution, arasaka_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response)
+        assert isinstance(solution, sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response)
         assert not math.isfinite(solution.slope)
         assert not math.isfinite(solution.y_intercept)
         del solution_transfer
