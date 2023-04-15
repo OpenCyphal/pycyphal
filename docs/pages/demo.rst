@@ -251,7 +251,7 @@ launch the following in a new terminal and leave it running (``y`` is a convenie
     export UAVCAN__UDP__IFACE=127.0.0.1
     y sub --with-metadata uavcan.node.heartbeat uavcan.diagnostic.record    # You should see heartbeats
 
-Now let's see how the simple heater_voltage (Message-publisher) operates.
+Now let's see how the simple thermostat node operates.
 Launch another subscriber to see the published voltage command (it is not going to print anything yet):
 
 ..  code-block:: sh
