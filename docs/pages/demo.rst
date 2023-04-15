@@ -86,126 +86,67 @@ Here comes ``demo_app.py``:
 
 The following graph should give a rough visual overview of how the applications within the ``demo_app`` node are structured:
 
-.. mermaid::
+.. graphviz::
 
-  ---
-  title: demo_app.py
-  ---
-  flowchart TB
-      subgraph 42:org.opencyphal.pycyphal.demo.demo_app
-          direction TB
-          subgraph heartbeat_publisher
-              direction TB
-              heartbeat_publisher_1[/uavcan.node.Heartbeat.1.0\]
-          end
-          heartbeat_publisher --> uavcan.node.heartbeat
-          subgraph temperature_setpoint
-              direction TB
-              temperature_setpoint_1[\uavcan.si.unit.temperature.Scalar_1/]
-          end
-          2345:uavcan.si.sample.temperature.Scalar --> temperature_setpoint
-          subgraph temperature_measurement
-              direction TB
-              temperature_measurement_1[\uavcan.si.sample.temperature.Scalar_1/]
-              
-          end
-          2346:uavcan.si.unit.voltage.Scalar --> temperature_measurement
-          subgraph heater_voltage
-              direction TB
-              heater_voltage_1[/uavcan.si.unit.voltage.Scalar_1\]
-          end
-          heater_voltage --> 2347:uavcan.si.unit.voltage.Scalar
-          subgraph least_squares
-              direction TB
-              least_squares_1{{sirius_cyber_corp.PerformLinearLeastSquaresFit_1}}
-          end
-          123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request --> least_squares
-          least_squares --> 123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response
-      end
+    digraph G {
+        subgraph cluster {
+            label = "42:org:opencyphal.pycyphal.demo.demo_app";
+            node [shape=box]
 
-.. mermaid::
+            subgraph cluster_5 {
+                label = "least_squares";
+                least_squares_service[label="sirius_cyber_corp.PerformLinearLeastSquaresFit_1", shape=hexagon, style=filled]
+                sirius_cyber_corp_PerformLinearLeastSquaresFit_1_Request_123[label="123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request", style=filled]
+                sirius_cyber_corp_PerformLinearLeastSquaresFit_1_Response_123[label="123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response", style=filled]
+            }
+            sirius_cyber_corp_PerformLinearLeastSquaresFit_1_Request_123 -> least_squares_service
+            least_squares_service -> sirius_cyber_corp_PerformLinearLeastSquaresFit_1_Response_123
 
-  ---
-  title: Legend
-  ---
-  flowchart TB
-      id1[/Message-publisher\]
-      id2[\Message-subscriber/]
-      id3{{Service}}
-      id4[subject_or_service_id:type]
+            subgraph cluster_4 {
+                label = "heater_voltage";
+                heater_voltage_node[label="uavcan.si.unit.voltage.Scalar_1", shape=trapezium, style=filled]
+                uavcan_si_unit_voltage_Scalar[label="2347:uavcan.si.unit.voltage.Scalar", style=filled]
+            }
+            heater_voltage_node -> uavcan_si_unit_voltage_Scalar
 
-.. toggle-header::
-    :header: Graph explanation
+            subgraph cluster_3 {
+                label = "temperature_measurement";
+                uavcan_si_unit_voltage_scalar_2346[label="2346:uavcan.si.unit.voltage.Scalar",style=filled]
+                temperature_measurement_node[label="uavcan.si.sample.temperature.Scalar_1", shape=invtrapezium, style=filled]
+            }
+            uavcan_si_unit_voltage_scalar_2346 -> temperature_measurement_node
 
-        * ``42:org.opencyphal.pycyphal.demo.demo_app``:
+            subgraph cluster_2 {
+                label = "temperature_setpoint";
+                uavcan_si_sample_temperature_scalar_2345[label="2345:uavcan.si.sample.temperature.Scalar",style=filled]
+                temperature_setpoint_node[label="uavcan.si.unit.temperature.Scalar_1", shape=invtrapezium, style=filled]
+            }
+            uavcan_si_sample_temperature_scalar_2345 -> temperature_setpoint_node
 
-          * ``42``: set by ``UAVCAN__NODE__ID``
+            subgraph cluster_1 {
+                label = "heartbeat_publisher";
+                heartbeat_publisher_node[label="uavcan.node.Hearbeat.1.0", shape=trapezium, style=filled]
+                uavcan_node_heartbeat[label="uavcan.node.heartbeat",style=filled]
+            }
+            heartbeat_publisher_node -> uavcan_node_heartbeat
+            
 
-          * ``org.opencyphal.pycyphal.demo.demo_app``: defined in ``demo_app.py``
+        }
+        
+    }
 
-        * ``heartbeat_publisher``
+.. graphviz::
+    :caption: Legend
 
-          * all heartbeats are published by default to ``uavcan.node.heartbeat``
+      digraph G {
+          node [shape=box]
 
-            * defined in ``public_regulated_data_types``
-
-        * ``temperature_setpoint``
-
-          * ``2345:uavcan.si.unit.temperature.Scalar_1``
-
-            * subscribes to a ``uavcan.si.unit.temperature.Scalar_1`` type Message
-
-              * defined in ``public_regulated_data_types``
-
-            * from Subject ID 2345
-
-              * set by ``UAVCAN__SUB__TEMPERATURE_SETPOINT_ID``
-
-        * ``temperature_measurement``
-
-          * ``2346:uavcan.si.unit.voltage.Scalar``
-
-            * subscribes to a ``uavcan.si.sample.temperature.Scalar_1`` type Message
-
-              * defined in ``public_regulated_data_types``
-
-            * from Subject ID 2346
-
-              * set by ``UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID``
-
-        * ``heater_voltage``
-
-            * ``2347:uavcan.si.unit.voltage.Scalar_1``
-
-              * publishes a ``uavcan.si.unit.voltage.Scalar_1`` type Message
-
-                * defined in ``public_regulated_data_types``
-                
-              * to Subject ID 2347
-
-                * set by ``UAVCAN__PUB__HEATER_VOLTAGE__ID``
-
-        * ``least_squares``
-
-          * ``123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request``
+          message_publisher_node[label="Message-publisher", shape=trapezium, style=filled]
+          message_subscriber_node[label="Message-subscriber", shape=invtrapezium, style=filled]
+          service_node[label="Service", shape=hexagon, style=filled]
+          type_node[label="subject/service id:type", style=filled]
           
-            * subscribes to a ``sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request`` type Service-request
-
-              * defined in ``sirius_cyber_corp``
-
-            * from Subject ID 123
-
-              * set by ``UAVCAN__SRV__LEAST_SQUARES__ID``
-
-          * ``123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response``
-          
-            * publishes a ``sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request`` type Service-response
-
-              * defined in ``sirius_cyber_corp``
-
-            * to Subject ID 123
-
-              * set by ``UAVCAN__SRV__LEAST_SQUARES__ID``
+      }
 
 If you just run the script as-is,
 you will notice that it fails with an error referring to some *missing registers*.
@@ -367,7 +308,6 @@ For example, we can change the PID gains of the thermostat:
 
     y r 42 thermostat.pid.gains       # read current values
     y r 42 thermostat.pid.gains 2 0 0 # write new values
-    y r 42 thermostat.pid.gains       # check values
 
 Which returns ``[2.0, 0.0, 0.0]``, meaning that the new value was assigned successfully.
 Observe that the register server does implicit type conversion to the type specified by the application (our script).
@@ -406,31 +346,38 @@ Put the following into ``plant.py`` in the same directory:
 
 In graph form, the new node looks as follows:
 
-.. mermaid::
+.. graphviz::
 
-  ---
-  title: plant.py
-  ---
-  flowchart TB
-      subgraph 43:org.opencyphal.pycyphal.demo.plant
-          direction TB
-          subgraph heartbeat_publisher
-              direction TB
-              heartbeat_publisher_1[/uavcan.node.Heartbeat.1.0\]
-          end
-          heartbeat_publisher --> uavcan.node.heartbeat
-          subgraph temperature
-              direction TB
-              temperature_publisher_1[/uavcan.si.sample.temperature.Scalar_1\]
-          end
-          temperature --> 2346:uavcan.si.sample.temperature.Scalar
-          subgraph voltage
-              direction TB
-              voltage_1[\uavcan.si.unit.voltage.Scalar_1/]
-              
-          end
-          2347:uavcan.si.unit.voltage.Scalar --> voltage
-      end
+    digraph G {
+
+        subgraph cluster {
+            label = "43:org:opencyphal.pycyphal.demo.plant";
+            node [shape=box]
+
+            subgraph cluster_3 {
+                label = "voltage";
+                uavcan_si_unit_voltage_scalar_2347[label="2347:uavcan.si.unit.voltage.Scalar",style=filled]
+                voltage_node[label="uavcan.si.sample.voltage.Scalar_1", shape=invtrapezium, style=filled]
+            }
+            uavcan_si_unit_voltage_scalar_2347 -> voltage_node
+
+            subgraph cluster_2 {
+                label = "temperature";
+                temperature_setpoint_node[label="uavcan.si.unit.temperature.Scalar_1", shape=trapezium, style=filled]
+                uavcan_si_sample_temperature_scalar_2346[label="2346:uavcan.si.sample.temperature.Scalar",style=filled]
+            }
+            temperature_setpoint_node -> uavcan_si_sample_temperature_scalar_2346
+
+            subgraph cluster_1 {
+                label = "heartbeat_publisher";
+                heartbeat_publisher_node[label="uavcan.node.Hearbeat.1.0", shape=trapezium, style=filled]
+                uavcan_node_heartbeat[label="uavcan.node.heartbeat", style=filled]
+            }
+            heartbeat_publisher_node -> uavcan_node_heartbeat
+          
+        }
+        
+    }
 
 You may launch it if you want, but you will notice that tinkering with registers by way of manual configuration
 gets old fast.
