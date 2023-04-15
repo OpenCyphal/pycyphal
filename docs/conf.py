@@ -82,8 +82,6 @@ extensions = [
     "sphinx.ext.graphviz",
     "sphinx_computron",
     "ref_fixer_hack",
-    "sphinxcontrib.mermaid",
-    "sphinxcontrib.contentui",
 ]
 sys.path.append(str(DOC_ROOT))  # This is for the hack to be importable
 
