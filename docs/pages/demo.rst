@@ -84,7 +84,8 @@ Here comes ``demo_app.py``:
 .. literalinclude:: /../demo/demo_app.py
    :linenos:
 
-The following graph should give a rough visual overview of how the applications within the ``demo_app`` node are structured:
+The following graph should give a rough visual overview of how the applications within the ``demo_app`` node
+are structured:
 
 .. graphviz::
 
@@ -129,10 +130,9 @@ The following graph should give a rough visual overview of how the applications 
                 uavcan_node_heartbeat[label="uavcan.node.heartbeat",style=filled]
             }
             heartbeat_publisher_node -> uavcan_node_heartbeat
-            
 
         }
-        
+
     }
 
 .. graphviz::
@@ -145,7 +145,7 @@ The following graph should give a rough visual overview of how the applications 
           message_subscriber_node[label="Message-subscriber", shape=invtrapezium, style=filled]
           service_node[label="Service", shape=hexagon, style=filled]
           type_node[label="subject/service id:type", style=filled]
-          
+
       }
 
 If you just run the script as-is,
@@ -374,9 +374,9 @@ In graph form, the new node looks as follows:
                 uavcan_node_heartbeat[label="uavcan.node.heartbeat", style=filled]
             }
             heartbeat_publisher_node -> uavcan_node_heartbeat
-          
+
         }
-        
+
     }
 
 You may launch it if you want, but you will notice that tinkering with registers by way of manual configuration
