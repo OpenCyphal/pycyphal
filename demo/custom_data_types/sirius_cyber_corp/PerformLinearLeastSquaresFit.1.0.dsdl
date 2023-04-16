@@ -3,11 +3,11 @@
 
 PointXY.1.0[<64] points
 
-@extent 16 * 2 * 64 * 4
+@extent 1024 * 8
 
 ---
 
 float64 slope
 float64 y_intercept
 
-@extent 64 * 2 * 4
+@extent 64 * 8
