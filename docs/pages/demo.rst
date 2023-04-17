@@ -84,6 +84,70 @@ Here comes ``demo_app.py``:
 .. literalinclude:: /../demo/demo_app.py
    :linenos:
 
+The following graph should give a rough visual overview of how the applications within the ``demo_app`` node
+are structured:
+
+.. graphviz::
+
+    digraph G {
+        subgraph cluster {
+            label = "42:org:opencyphal.pycyphal.demo.demo_app";
+            node [shape=box]
+
+            subgraph cluster_5 {
+                label = "least_squares";
+                least_squares_service[label="sirius_cyber_corp.PerformLinearLeastSquaresFit_1", shape=hexagon, style=filled]
+                sirius_cyber_corp_PerformLinearLeastSquaresFit_1_Request_123[label="123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request", style=filled]
+                sirius_cyber_corp_PerformLinearLeastSquaresFit_1_Response_123[label="123:sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response", style=filled]
+            }
+            sirius_cyber_corp_PerformLinearLeastSquaresFit_1_Request_123 -> least_squares_service
+            least_squares_service -> sirius_cyber_corp_PerformLinearLeastSquaresFit_1_Response_123
+
+            subgraph cluster_4 {
+                label = "heater_voltage";
+                heater_voltage_node[label="uavcan.si.unit.voltage.Scalar_1", shape=trapezium, style=filled]
+                uavcan_si_unit_voltage_Scalar[label="2347:uavcan.si.unit.voltage.Scalar", style=filled]
+            }
+            heater_voltage_node -> uavcan_si_unit_voltage_Scalar
+
+            subgraph cluster_3 {
+                label = "temperature_measurement";
+                uavcan_si_unit_voltage_scalar_2346[label="2346:uavcan.si.unit.voltage.Scalar",style=filled]
+                temperature_measurement_node[label="uavcan.si.sample.temperature.Scalar_1", shape=invtrapezium, style=filled]
+            }
+            uavcan_si_unit_voltage_scalar_2346 -> temperature_measurement_node
+
+            subgraph cluster_2 {
+                label = "temperature_setpoint";
+                uavcan_si_sample_temperature_scalar_2345[label="2345:uavcan.si.sample.temperature.Scalar",style=filled]
+                temperature_setpoint_node[label="uavcan.si.unit.temperature.Scalar_1", shape=invtrapezium, style=filled]
+            }
+            uavcan_si_sample_temperature_scalar_2345 -> temperature_setpoint_node
+
+            subgraph cluster_1 {
+                label = "heartbeat_publisher";
+                heartbeat_publisher_node[label="uavcan.node.Hearbeat.1.0", shape=trapezium, style=filled]
+                uavcan_node_heartbeat[label="uavcan.node.heartbeat",style=filled]
+            }
+            heartbeat_publisher_node -> uavcan_node_heartbeat
+
+        }
+
+    }
+
+.. graphviz::
+    :caption: Legend
+
+      digraph G {
+          node [shape=box]
+
+          message_publisher_node[label="Message-publisher", shape=trapezium, style=filled]
+          message_subscriber_node[label="Message-subscriber", shape=invtrapezium, style=filled]
+          service_node[label="Service", shape=hexagon, style=filled]
+          type_node[label="subject/service id:type", style=filled]
+
+      }
+
 If you just run the script as-is,
 you will notice that it fails with an error referring to some *missing registers*.
 
@@ -125,7 +189,7 @@ and so on.
     (this is similar to Python virtualenv).
     See Yakut user manual for practical examples.
 
-In PyCyphal, registers are normally stored in the *register file*, in our case it's ``my_registers.db``
+In PyCyphal, registers are normally stored in the *register file*, in our case it's ``demo_app.db``
 (the Cyphal Specification does not regulate how the registers are to be stored, this is an implementation detail).
 Once you started the application with a specific configuration, it will store the values in the register file,
 so the next time you can run it without passing any environment variables at all.
@@ -187,7 +251,7 @@ launch the following in a new terminal and leave it running (``y`` is a convenie
     export UAVCAN__UDP__IFACE=127.0.0.1
     y sub --with-metadata uavcan.node.heartbeat uavcan.diagnostic.record    # You should see heartbeats
 
-Now let's see how the simple thermostat node is operating.
+Now let's see how the simple thermostat node operates.
 Launch another subscriber to see the published voltage command (it is not going to print anything yet):
 
 ..  code-block:: sh
@@ -242,7 +306,8 @@ For example, we can change the PID gains of the thermostat:
 
 ..  code-block:: sh
 
-    y r thermostat.pid.gains 2 0 0
+    y r 42 thermostat.pid.gains       # read current values
+    y r 42 thermostat.pid.gains 2 0 0 # write new values
 
 Which returns ``[2.0, 0.0, 0.0]``, meaning that the new value was assigned successfully.
 Observe that the register server does implicit type conversion to the type specified by the application (our script).
@@ -278,6 +343,41 @@ Put the following into ``plant.py`` in the same directory:
 
 .. literalinclude:: /../demo/plant.py
    :linenos:
+
+In graph form, the new node looks as follows:
+
+.. graphviz::
+
+    digraph G {
+
+        subgraph cluster {
+            label = "43:org:opencyphal.pycyphal.demo.plant";
+            node [shape=box]
+
+            subgraph cluster_3 {
+                label = "voltage";
+                uavcan_si_unit_voltage_scalar_2347[label="2347:uavcan.si.unit.voltage.Scalar",style=filled]
+                voltage_node[label="uavcan.si.sample.voltage.Scalar_1", shape=invtrapezium, style=filled]
+            }
+            uavcan_si_unit_voltage_scalar_2347 -> voltage_node
+
+            subgraph cluster_2 {
+                label = "temperature";
+                temperature_setpoint_node[label="uavcan.si.unit.temperature.Scalar_1", shape=trapezium, style=filled]
+                uavcan_si_sample_temperature_scalar_2346[label="2346:uavcan.si.sample.temperature.Scalar",style=filled]
+            }
+            temperature_setpoint_node -> uavcan_si_sample_temperature_scalar_2346
+
+            subgraph cluster_1 {
+                label = "heartbeat_publisher";
+                heartbeat_publisher_node[label="uavcan.node.Hearbeat.1.0", shape=trapezium, style=filled]
+                uavcan_node_heartbeat[label="uavcan.node.heartbeat", style=filled]
+            }
+            heartbeat_publisher_node -> uavcan_node_heartbeat
+
+        }
+
+    }
 
 You may launch it if you want, but you will notice that tinkering with registers by way of manual configuration
 gets old fast.
