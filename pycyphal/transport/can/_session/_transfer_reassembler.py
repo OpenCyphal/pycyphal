@@ -58,33 +58,27 @@ class TransferReassembler:
         timestamp values are monotonically increasing. The timestamp of a transfer will be the lowest (earliest)
         timestamp value of its frames (ignoring frames with mismatching transfer ID or toggle bit).
         """
-        # FIRST STAGE - DETECTION OF NEW TRANSFERS.
-        # Decide if we need to begin a new transfer.
         tid_timed_out = self._ts is None or (
             timestamp.monotonic_ns - self._ts.monotonic_ns > transfer_id_timeout_ns or self._ts.monotonic_ns == 0
         )
         not_previous_tid = compute_transfer_id_forward_distance(frame.transfer_id, self._transfer_id) > 1
-        if tid_timed_out or (frame.start_of_transfer and not_previous_tid):
+        need_restart = frame.start_of_transfer and (tid_timed_out or not_previous_tid)
+        # Restarting the transfer reassembly only makes sense if the new frame is a start of transfer.
+        # Otherwise, the new transfer would be impossible to reassemble anyway since the first frame is lost.
+        if need_restart:
             self._state = None
             self._transfer_id = frame.transfer_id
             self._toggle_bit = frame.toggle_bit
-            if not frame.start_of_transfer:
-                return TransferReassemblyErrorID.MISSED_START_OF_TRANSFER
-
-        # SECOND STAGE - DROP UNEXPECTED FRAMES.
+            assert frame.start_of_transfer
         # A properly functioning CAN bus may occasionally replicate frames (see the Specification for background).
         # We combat these issues by checking the transfer ID and the toggle bit.
         if frame.transfer_id != self._transfer_id:
             return TransferReassemblyErrorID.UNEXPECTED_TRANSFER_ID
         if frame.toggle_bit != self._toggle_bit:
             return TransferReassemblyErrorID.UNEXPECTED_TOGGLE_BIT
-
-        # THIRD STAGE - PAYLOAD REASSEMBLY AND VERIFICATION.
-        # Collect the data and check its correctness.
         if frame.start_of_transfer:
             self._ts = timestamp  # Timestamp inited from the first frame.
             self._state = TransferReassembler._State()
-
         # Drop the frame if it's not the first one and the transfer is not yet started.
         # This condition protects against a TID wraparound mid-transfer,
         # see https://github.com/OpenCyphal/pycyphal/issues/198.
@@ -96,19 +90,17 @@ class TransferReassembler:
         # See https://github.com/OpenCyphal/pycyphal/issues/198. There is a dedicated test covering this case.
         if not self._state:
             return TransferReassemblyErrorID.MISSED_START_OF_TRANSFER
-        assert self._state
         # The timestamping algorithm may have corrected the time error since the first frame, accept lower values.
         assert self._ts is not None
         self._ts = Timestamp.combine_oldest(self._ts, timestamp)
-
         self._toggle_bit = not self._toggle_bit
         # Implicit truncation rule - discard the unexpected data at the end of the payload but compute the CRC anyway.
+        assert self._state
         self._state.crc.add(frame.padded_payload)
         if self._state.payload_size < self._max_payload_size_bytes_with_crc:
             self._state.payload.append(frame.padded_payload)
         else:
             self._state.truncated = True
-
         if frame.end_of_transfer:
             fin, self._state = self._state, None
             self._transfer_id = (self._transfer_id + 1) % TRANSFER_ID_MODULO
@@ -132,7 +124,6 @@ class TransferReassembler:
                         if cutoff > 0:
                             fin.payload[-1] = fin.payload[-1][:-cutoff]  # Truncate previous
                     assert expected_length == fin.payload_size
-
             return TransferFrom(
                 timestamp=self._ts,
                 priority=priority,
@@ -140,7 +131,6 @@ class TransferReassembler:
                 fragmented_payload=fin.payload,
                 source_node_id=self._source_node_id,
             )
-
         return None  # Expect more frames to come
 
 
@@ -248,8 +238,10 @@ def _unittest_can_transfer_reassembler_manual() -> None:
     )
     assert proc(2202, frm(b"\x00", 8, False, True, True)) == err.TRANSFER_CRC_MISMATCH
 
-    # Transfer ID timeout and the new frame is not a start of new transfer --> missed start error
-    assert proc(4000, frm(b"123456", 8, False, False, True)) == err.MISSED_START_OF_TRANSFER
+    # Unexpected transfer-ID after a timeout; timeout ignored because not a new transfer.
+    assert proc(4000, frm(b"123456", 8, False, False, True)) == err.UNEXPECTED_TRANSFER_ID
+    # Unexpected toggle after a timeout; timeout ignored because not a new transfer.
+    assert proc(4000, frm(b"123456", 9, False, False, False)) == err.UNEXPECTED_TOGGLE_BIT
 
     # New transfer; same TID is accepted anyway due to the timeout condition; repeated frames (bad toggles)
     assert proc(4000, frm(b"\x00\x01\x02\x03\x04\x05\x06", 8, True, False, True)) is None
