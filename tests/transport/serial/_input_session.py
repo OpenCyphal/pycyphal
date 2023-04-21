@@ -13,6 +13,7 @@ from pycyphal.transport.serial._session._input import SerialInputSession
 from pycyphal.transport.serial import SerialFrame, SerialInputSessionStatistics
 from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
 
+# pylint: disable=protected-access
 pytestmark = pytest.mark.asyncio
 
 
@@ -45,8 +46,8 @@ async def _unittest_input_session() -> None:
         sis.transfer_id_timeout = 0.0
     assert sis.transfer_id_timeout == approx(1.0)
 
-    assert await (sis.receive(get_monotonic() + 0.1)) is None
-    assert await (sis.receive(0.0)) is None
+    assert await sis.receive(get_monotonic() + 0.1) is None
+    assert await sis.receive(0.0) is None
 
     def mk_frame(
         transfer_id: int,
@@ -68,7 +69,7 @@ async def _unittest_input_session() -> None:
         )
 
     # ANONYMOUS TRANSFERS.
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts,
         mk_frame(
             transfer_id=0,
@@ -83,7 +84,7 @@ async def _unittest_input_session() -> None:
         errors=1,
     )
 
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts,
         mk_frame(
             transfer_id=0,
@@ -98,7 +99,7 @@ async def _unittest_input_session() -> None:
         errors=2,
     )
 
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts,
         mk_frame(
             transfer_id=0,
@@ -114,14 +115,14 @@ async def _unittest_input_session() -> None:
         payload_bytes=len(nihil_supernum),
         errors=2,
     )
-    assert await (sis.receive(0)) == TransferFrom(
+    assert await sis.receive(0) == TransferFrom(
         timestamp=ts, priority=prio, transfer_id=0, fragmented_payload=[memoryview(nihil_supernum)], source_node_id=None
     )
-    assert await (sis.receive(get_monotonic() + 0.1)) is None
-    assert await (sis.receive(0.0)) is None
+    assert await sis.receive(get_monotonic() + 0.1) is None
+    assert await sis.receive(0.0) is None
 
     # VALID TRANSFERS. Notice that they are unordered on purpose. The reassembler can deal with that.
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts,
         mk_frame(
             transfer_id=0,
@@ -132,7 +133,7 @@ async def _unittest_input_session() -> None:
         ),
     )
 
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts,
         mk_frame(
             transfer_id=0,
@@ -154,7 +155,7 @@ async def _unittest_input_session() -> None:
         },
     )
 
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts,
         mk_frame(
             transfer_id=0,
@@ -165,11 +166,11 @@ async def _unittest_input_session() -> None:
         ),
     )
 
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts, mk_frame(transfer_id=0, index=0, end_of_transfer=False, payload=nihil_supernum, source_node_id=1111)
     )
 
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts, mk_frame(transfer_id=0, index=2, end_of_transfer=False, payload=nihil_supernum, source_node_id=1111)
     )  # COMPLETED SECOND
 
@@ -184,28 +185,28 @@ async def _unittest_input_session() -> None:
         },
     )
 
-    assert await (sis.receive(0)) == TransferFrom(
+    assert await sis.receive(0) == TransferFrom(
         timestamp=ts, priority=prio, transfer_id=0, fragmented_payload=[memoryview(nihil_supernum)], source_node_id=2222
     )
-    assert await (sis.receive(0)) == TransferFrom(
+    assert await sis.receive(0) == TransferFrom(
         timestamp=ts,
         priority=prio,
         transfer_id=0,
         fragmented_payload=[memoryview(nihil_supernum)] * 3,
         source_node_id=1111,
     )
-    assert await (sis.receive(get_monotonic() + 0.1)) is None
-    assert await (sis.receive(0.0)) is None
+    assert await sis.receive(get_monotonic() + 0.1) is None
+    assert await sis.receive(0.0) is None
 
     # TRANSFERS WITH REASSEMBLY ERRORS.
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts,
         mk_frame(
             transfer_id=1, index=0, end_of_transfer=False, payload=b"", source_node_id=1111  # EMPTY IN MULTIFRAME
         ),
     )
 
-    sis._process_frame(  # pylint: disable=protected-access
+    sis._process_frame(
         ts,
         mk_frame(
             transfer_id=2, index=0, end_of_transfer=False, payload=b"", source_node_id=1111  # EMPTY IN MULTIFRAME

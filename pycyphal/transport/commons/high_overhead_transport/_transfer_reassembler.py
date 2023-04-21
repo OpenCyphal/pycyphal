@@ -57,6 +57,11 @@ class TransferReassembler:
         A transfer payload did not pass integrity checks. Transfer discarded.
         """
 
+        UNEXPECTED_TRANSFER_ID = enum.auto()
+        """
+        The transfer-ID of a frame does not match the anticipated value.
+        """
+
         MULTIFRAME_MISSING_FRAMES = enum.auto()
         """
         New transfer started before the old one could be completed. Old transfer discarded.
@@ -110,7 +115,7 @@ class TransferReassembler:
         # Internal state.
         self._payloads: typing.List[memoryview] = []  # Payload fragments from the received frames.
         self._max_index: typing.Optional[int] = None  # Max frame index in transfer, None if unknown.
-        self._timestamp = Timestamp(0, 0)  # First frame timestamp.
+        self._ts = Timestamp(0, 0)
         self._transfer_id = 0  # Transfer-ID of the current transfer.
 
     def process_frame(
@@ -126,36 +131,46 @@ class TransferReassembler:
         :raises: Nothing.
         """
         # DROP MALFORMED FRAMES. A multi-frame transfer cannot contain frames with no payload.
-        if not (frame.index == 0 and frame.end_of_transfer) and not frame.payload:
+        if not frame.single_frame_transfer and not frame.payload:
             self._on_error_callback(self.Error.MULTIFRAME_EMPTY_FRAME)
             return None
 
         # DETECT NEW TRANSFERS. Either a newer TID or TID-timeout is reached.
-        if (
-            frame.transfer_id > self._transfer_id
-            or timestamp.monotonic - self._timestamp.monotonic > transfer_id_timeout
-        ):
-            self._restart(
-                timestamp, frame.transfer_id, self.Error.MULTIFRAME_MISSING_FRAMES if self._payloads else None
-            )
-
-        # DROP FRAMES FROM NON-MATCHING TRANSFERS. E.g., duplicates. This is not an error.
-        if frame.transfer_id < self._transfer_id:
+        # Restarting the transfer reassembly only makes sense if the new frame is a start of transfer.
+        # Otherwise, the new transfer would be impossible to reassemble anyway since the first frame is lost.
+        # As we can reassemble transfers with out-of-order frames, we need to also take into account the case
+        # when the first frame arrives when we already have some data from this transfer stored,
+        # in which case we must suppress the transfer-ID condition.
+        is_future_transfer_id = frame.transfer_id > self._transfer_id
+        is_tid_timeout = (
+            frame.index == 0
+            and frame.transfer_id != self._transfer_id
+            and timestamp.monotonic - self._ts.monotonic > transfer_id_timeout
+        )
+        if is_future_transfer_id or is_tid_timeout:
+            self._restart(frame.transfer_id, self.Error.MULTIFRAME_MISSING_FRAMES if self._payloads else None)
+        if frame.transfer_id != self._transfer_id:
+            self._on_error_callback(self.Error.UNEXPECTED_TRANSFER_ID)
             return None
         assert frame.transfer_id == self._transfer_id
 
         # DETERMINE MAX FRAME INDEX FOR THIS TRANSFER. Frame N with EOT, then frame M with EOT, where N != M.
         if frame.end_of_transfer:
             if self._max_index is not None and self._max_index != frame.index:
-                self._restart(timestamp, frame.transfer_id + 1, self.Error.MULTIFRAME_EOT_INCONSISTENT)
+                self._restart(frame.transfer_id + 1, self.Error.MULTIFRAME_EOT_INCONSISTENT)
                 return None
             assert self._max_index is None or self._max_index == frame.index
             self._max_index = frame.index
 
         # DETECT UNEXPECTED FRAMES PAST THE END OF TRANSFER. If EOT is set on index N, then indexes > N are invalid.
         if self._max_index is not None and max(frame.index, len(self._payloads) - 1) > self._max_index:
-            self._restart(timestamp, frame.transfer_id + 1, self.Error.MULTIFRAME_EOT_MISPLACED)
+            self._restart(frame.transfer_id + 1, self.Error.MULTIFRAME_EOT_MISPLACED)
             return None
+
+        # DETERMINE THE TRANSFER TIMESTAMP. It is the timestamp of the first frame in this implementation.
+        # It may also be defined as the timestamp of the earliest frame in the transfer.
+        if frame.index == 0:
+            self._ts = timestamp
 
         # ACCEPT THE PAYLOAD. Duplicates are accepted too, assuming they carry the same payload.
         # Implicit truncation is implemented by not limiting the maximum payload size.
@@ -177,18 +192,14 @@ class TransferReassembler:
 
         # FINALIZE THE TRANSFER. All frames are received here.
         result = _validate_and_finalize_transfer(
-            timestamp=self._timestamp,
+            timestamp=self._ts,
             priority=frame.priority,
             transfer_id=frame.transfer_id,
             frame_payloads=self._payloads,
             source_node_id=self._source_node_id,
         )
 
-        self._restart(
-            timestamp,
-            frame.transfer_id + 1,
-            self.Error.INTEGRITY_ERROR if result is None else None,
-        )
+        self._restart(frame.transfer_id + 1, self.Error.INTEGRITY_ERROR if result is None else None)
         _logger.debug("Transfer reassembly completed: %s", result)
         # This implementation does not perform implicit truncation yet.
         # This may be changed in the future if it is found to benefit the performance.
@@ -199,14 +210,12 @@ class TransferReassembler:
     def source_node_id(self) -> int:
         return self._source_node_id
 
-    def _restart(
-        self, timestamp: Timestamp, transfer_id: int, error: typing.Optional[TransferReassembler.Error] = None
-    ) -> None:
+    def _restart(self, transfer_id: int, error: typing.Optional[TransferReassembler.Error] = None) -> None:
         if error is not None:
             self._on_error_callback(error)
             if _logger.isEnabledFor(logging.DEBUG):  # pragma: no branch
                 context = {
-                    "ts": self._timestamp,
+                    "ts": self._ts,
                     "tid": self._transfer_id,
                     "max_idx": self._max_index,
                     "payload": f"{len(list(x for x in self._payloads if x))}/{len(self._payloads)}",
@@ -216,7 +225,6 @@ class TransferReassembler:
                 )
         # The error must be processed before the state is reset because when the state is destroyed
         # the useful diagnostic information becomes unavailable.
-        self._timestamp = timestamp
         self._transfer_id = transfer_id
         self._max_index = None
         self._payloads = []
@@ -560,6 +568,7 @@ def _unittest_transfer_reassembler() -> None:
     ) == mk_transfer(timestamp=mk_ts(2000.0), transfer_id=0, fragmented_payload=[hedgehog])
     assert error_counters == {
         ta.Error.INTEGRITY_ERROR: 0,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 4,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 0,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
@@ -583,6 +592,7 @@ def _unittest_transfer_reassembler() -> None:
     )
     assert error_counters == {
         ta.Error.INTEGRITY_ERROR: 0,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 4,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 1,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
@@ -601,6 +611,7 @@ def _unittest_transfer_reassembler() -> None:
     ) == mk_transfer(timestamp=mk_ts(3000.0), transfer_id=3, fragmented_payload=[horse[:50], horse[50:]])
     assert error_counters == {
         ta.Error.INTEGRITY_ERROR: 0,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 4,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 1,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
@@ -608,6 +619,7 @@ def _unittest_transfer_reassembler() -> None:
     }
 
     # Start a transfer, then start a new one with lower TID when a TID timeout is reached.
+    # The new one will not be accepted.
     assert (
         push(
             mk_ts(3000.0),  # Middle of a new transfer.
@@ -617,13 +629,14 @@ def _unittest_transfer_reassembler() -> None:
     )
     assert (
         push(
-            mk_ts(4000.0),  # Another transfer! The old one is discarded.
-            mk_frame(transfer_id=3, index=1, end_of_transfer=False, payload=horse[50:]),
+            mk_ts(4000.0),  # Another transfer! Its TID is greater so it takes over.
+            mk_frame(transfer_id=11, index=1, end_of_transfer=False, payload=horse[50:]),
         )
         is None
     )
     assert error_counters == {
         ta.Error.INTEGRITY_ERROR: 0,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 4,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
@@ -632,33 +645,73 @@ def _unittest_transfer_reassembler() -> None:
     assert (
         push(
             mk_ts(4000.0),
-            mk_frame(transfer_id=3, index=2, end_of_transfer=True, payload=TransferCRC.new(horse).value_as_bytes),
+            mk_frame(transfer_id=11, index=2, end_of_transfer=True, payload=TransferCRC.new(horse).value_as_bytes),
         )
         is None
     )
     assert push(
         mk_ts(4000.0),
-        mk_frame(transfer_id=3, index=0, end_of_transfer=False, payload=horse[:50]),
-    ) == mk_transfer(timestamp=mk_ts(4000.0), transfer_id=3, fragmented_payload=[horse[:50], horse[50:]])
+        mk_frame(transfer_id=11, index=0, end_of_transfer=False, payload=horse[:50]),
+    ) == mk_transfer(timestamp=mk_ts(4000.0), transfer_id=11, fragmented_payload=[horse[:50], horse[50:]])
     assert error_counters == {
         ta.Error.INTEGRITY_ERROR: 0,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 4,
         ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
     }
 
+    # Start a transfer, then start a new one with lower TID when a TID timeout is reached.
+    # The new one will not be accepted.
+    assert (
+        push(
+            mk_ts(5000.0),  # Middle of a new transfer.
+            mk_frame(transfer_id=13, index=1, end_of_transfer=False, payload=hedgehog),
+        )
+        is None
+    )
+    assert (
+        push(
+            mk_ts(6000.0),  # Another transfer! It is still ignored though because SOT is not set.
+            mk_frame(transfer_id=3, index=1, end_of_transfer=False, payload=horse[50:]),
+        )
+        is None
+    )
+    assert error_counters == {
+        ta.Error.INTEGRITY_ERROR: 0,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 5,
+        ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
+        ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
+        ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
+        ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
+    }
+    assert (
+        push(
+            mk_ts(6000.0),
+            mk_frame(transfer_id=3, index=2, end_of_transfer=True, payload=TransferCRC.new(horse).value_as_bytes),
+        )
+        is None
+    )
+    assert (
+        push(
+            mk_ts(6000.0),
+            mk_frame(transfer_id=3, index=0, end_of_transfer=False, payload=horse[:50]),
+        )
+        is None
+    )
+
     # Multi-frame transfer with bad CRC.
     assert (
         push(
-            mk_ts(5000.0),
+            mk_ts(7000.0),
             mk_frame(transfer_id=10, index=1, end_of_transfer=False, payload=hedgehog[50:]),
         )
         is None
     )
     assert (
         push(
-            mk_ts(5000.0),  # LAST FRAME
+            mk_ts(7000.0),  # LAST FRAME
             mk_frame(
                 transfer_id=10, index=2, end_of_transfer=True, payload=TransferCRC.new(hedgehog).value_as_bytes[::-1]
             ),  # Bad CRC here.
@@ -667,14 +720,15 @@ def _unittest_transfer_reassembler() -> None:
     )
     assert (
         push(
-            mk_ts(5000.0),  # FIRST FRAME
+            mk_ts(7000.0),  # FIRST FRAME
             mk_frame(transfer_id=10, index=0, end_of_transfer=False, payload=hedgehog[:50]),
         )
         is None
     )
     assert error_counters == {
         ta.Error.INTEGRITY_ERROR: 1,
-        ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 6,
+        ta.Error.MULTIFRAME_MISSING_FRAMES: 4,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 0,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
@@ -683,21 +737,21 @@ def _unittest_transfer_reassembler() -> None:
     # Frame past end of transfer.
     assert (
         push(
-            mk_ts(5000.0),
+            mk_ts(8000.0),
             mk_frame(transfer_id=11, index=1, end_of_transfer=False, payload=hedgehog[50:]),
         )
         is None
     )
     assert (
         push(
-            mk_ts(5000.0),  # PAST THE END OF TRANSFER
+            mk_ts(8000.0),  # PAST THE END OF TRANSFER
             mk_frame(transfer_id=11, index=3, end_of_transfer=False, payload=horse),
         )
         is None
     )
     assert (
         push(
-            mk_ts(5000.0),  # LAST FRAME
+            mk_ts(8000.0),  # LAST FRAME
             mk_frame(
                 transfer_id=11, index=2, end_of_transfer=True, payload=TransferCRC.new(hedgehog + horse).value_as_bytes
             ),
@@ -706,7 +760,8 @@ def _unittest_transfer_reassembler() -> None:
     )
     assert error_counters == {
         ta.Error.INTEGRITY_ERROR: 1,
-        ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 6,
+        ta.Error.MULTIFRAME_MISSING_FRAMES: 4,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 0,
@@ -715,14 +770,14 @@ def _unittest_transfer_reassembler() -> None:
     # Inconsistent end-of-transfer flag.
     assert (
         push(
-            mk_ts(5000.0),
+            mk_ts(9000.0),
             mk_frame(transfer_id=12, index=0, end_of_transfer=False, payload=hedgehog[:50]),
         )
         is None
     )
     assert (
         push(
-            mk_ts(5000.0),  # LAST FRAME A
+            mk_ts(9000.0),  # LAST FRAME A
             mk_frame(
                 transfer_id=12, index=2, end_of_transfer=True, payload=TransferCRC.new(hedgehog + horse).value_as_bytes
             ),
@@ -731,14 +786,15 @@ def _unittest_transfer_reassembler() -> None:
     )
     assert (
         push(
-            mk_ts(5000.0),  # LAST FRAME B
+            mk_ts(9000.0),  # LAST FRAME B
             mk_frame(transfer_id=12, index=3, end_of_transfer=True, payload=horse),
         )
         is None
     )
     assert error_counters == {
         ta.Error.INTEGRITY_ERROR: 1,
-        ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 6,
+        ta.Error.MULTIFRAME_MISSING_FRAMES: 4,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 1,
@@ -746,14 +802,15 @@ def _unittest_transfer_reassembler() -> None:
 
     # Valid single-frame transfer with no payload.
     assert push(
-        mk_ts(6000.0),
+        mk_ts(10000.0),
         mk_frame(transfer_id=0, index=0, end_of_transfer=True, payload=b"" + TransferCRC.new(b"").value_as_bytes),
     ) == mk_transfer(
-        timestamp=mk_ts(6000.0), transfer_id=0, fragmented_payload=[]
+        timestamp=mk_ts(10000.0), transfer_id=0, fragmented_payload=[]
     )  # fragmented_payload = [b""]?
     assert error_counters == {
         ta.Error.INTEGRITY_ERROR: 1,
-        ta.Error.MULTIFRAME_MISSING_FRAMES: 2,
+        ta.Error.UNEXPECTED_TRANSFER_ID: 6,
+        ta.Error.MULTIFRAME_MISSING_FRAMES: 4,
         ta.Error.MULTIFRAME_EMPTY_FRAME: 1,
         ta.Error.MULTIFRAME_EOT_MISPLACED: 1,
         ta.Error.MULTIFRAME_EOT_INCONSISTENT: 1,
