@@ -819,12 +819,9 @@ def _unittest_transfer_reassembler() -> None:
 
 def _unittest_issue_290() -> None:
     src_nid = 1234
-    prio = Priority.SLOW
+    prio = Priority.HIGH
     transfer_id_timeout = 1e-6  # A very low value.
     error_counters = {e: 0 for e in TransferReassembler.Error}
-
-    def on_error_callback(error: TransferReassembler.Error) -> None:
-        error_counters[error] += 1
 
     def mk_frame(
         transfer_id: int, index: int, end_of_transfer: bool, payload: typing.Union[bytes, memoryview]
@@ -851,6 +848,9 @@ def _unittest_issue_290() -> None:
     def mk_ts(monotonic: float) -> Timestamp:
         monotonic_ns = round(monotonic * 1e9)
         return Timestamp(system_ns=monotonic_ns + 10**12, monotonic_ns=monotonic_ns)
+
+    def on_error_callback(error: TransferReassembler.Error) -> None:
+        error_counters[error] += 1
 
     ta = TransferReassembler(source_node_id=src_nid, extent_bytes=100, on_error_callback=on_error_callback)
     assert ta.source_node_id == src_nid

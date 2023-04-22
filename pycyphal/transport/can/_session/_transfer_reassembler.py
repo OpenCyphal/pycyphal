@@ -396,14 +396,6 @@ def _unittest_issue_290() -> None:
     source_node_id = 127
     transfer_id_timeout_ns = 1  # A very low value.
 
-    def mk_frame(can_id: int, hex_string: str) -> CyphalFrame:
-        from ..media import DataFrame, FrameFormat
-
-        df = DataFrame(FrameFormat.EXTENDED, can_id, bytearray(bytes.fromhex(hex_string)))
-        out = CyphalFrame.parse(df)
-        assert out is not None
-        return out
-
     rx = TransferReassembler(source_node_id, 2)
 
     def process_frame(time_s: float, frame: CyphalFrame) -> None | TransferReassemblyErrorID | TransferFrom:
@@ -413,6 +405,14 @@ def _unittest_issue_290() -> None:
             frame=frame,
             transfer_id_timeout_ns=transfer_id_timeout_ns,
         )
+
+    def mk_frame(can_id: int, hex_string: str) -> CyphalFrame:
+        from ..media import DataFrame, FrameFormat
+
+        df = DataFrame(FrameFormat.EXTENDED, can_id, bytearray(bytes.fromhex(hex_string)))
+        out = CyphalFrame.parse(df)
+        assert out is not None
+        return out
 
     # Feed a transfer with a large time interval between its frames. Ensure it is accepted.
     assert None is process_frame(1681243583, mk_frame(0x10644C7F, "09 30 00 00 00 00 00 B1"))
