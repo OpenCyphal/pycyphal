@@ -303,7 +303,7 @@ async def _unittest_redundant_transport(caplog: typing.Any) -> None:
 @pytest.mark.asyncio
 async def _unittest_redundant_transport_capture() -> None:
     from threading import Lock
-    from pycyphal.transport import Capture, Trace, TransferTrace, Priority, ServiceDataSpecifier
+    from pycyphal.transport import Capture, Trace, TransferTrace, Priority, ServiceDataSpecifier, ErrorTrace
     from pycyphal.transport import AlienTransfer, AlienTransferMetadata, AlienSessionSpecifier
     from pycyphal.transport.redundant import RedundantDuplicateTransferTrace, RedundantCapture
     from tests.transport.can.media.mock import MockMedia as CANMockMedia
@@ -381,8 +381,10 @@ async def _unittest_redundant_transport_capture() -> None:
     assert await tr.spoof(transfer, monotonic_deadline=asyncio.get_event_loop().time() + 1.0)
     await wait(2)
     with lock:
-        assert None is traces.pop(0)
-        assert None is traces.pop(0)
+        poo = traces.pop(0)
+        assert poo is None or isinstance(poo, ErrorTrace)
+        poo = traces.pop(0)
+        assert poo is None or isinstance(poo, ErrorTrace)
         assert not traces
 
     # But if we change ONLY destination, deduplication will not take place.

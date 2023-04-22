@@ -58,8 +58,9 @@ class TransferReassembler:
         timestamp values are monotonically increasing. The timestamp of a transfer will be the lowest (earliest)
         timestamp value of its frames (ignoring frames with mismatching transfer ID or toggle bit).
         """
-        tid_timed_out = (frame.transfer_id != self._transfer_id) and (
-            self._ts is None or timestamp.monotonic_ns - self._ts.monotonic_ns > transfer_id_timeout_ns
+        tid_timed_out = self._ts is None or (
+            (frame.transfer_id != self._transfer_id)
+            and (timestamp.monotonic_ns - self._ts.monotonic_ns > transfer_id_timeout_ns)
         )
         not_previous_tid = compute_transfer_id_forward_distance(frame.transfer_id, self._transfer_id) > 1
         need_restart = frame.start_of_transfer and (tid_timed_out or not_previous_tid)
