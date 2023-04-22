@@ -102,7 +102,7 @@ class MonotonicClusteringSynchronizer(pycyphal.presentation.subscription_synchro
     >>> _ = doctest_await(pub_a.publish(Integer64_1(741)))
     >>> _ = doctest_await(pub_b.publish(Integer64_1(852)))
     >>> _ = doctest_await(pub_c.publish(Bit_1(True)))
-    >>> doctest_await(asyncio.sleep(0.1))
+    >>> doctest_await(asyncio.sleep(1.0))
 
     Now the synchronizer will automatically sort our messages into well-defined synchronized groups:
 
