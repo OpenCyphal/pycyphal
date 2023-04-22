@@ -817,6 +817,136 @@ def _unittest_transfer_reassembler() -> None:
     }
 
 
+def _unittest_issue_290() -> None:
+    src_nid = 1234
+    prio = Priority.SLOW
+    transfer_id_timeout = 1e-6  # A very low value.
+    error_counters = {e: 0 for e in TransferReassembler.Error}
+
+    def on_error_callback(error: TransferReassembler.Error) -> None:
+        error_counters[error] += 1
+
+    def mk_frame(
+        transfer_id: int, index: int, end_of_transfer: bool, payload: typing.Union[bytes, memoryview]
+    ) -> Frame:
+        return Frame(
+            priority=prio,
+            transfer_id=transfer_id,
+            index=index,
+            end_of_transfer=end_of_transfer,
+            payload=memoryview(payload),
+        )
+
+    def mk_transfer(
+        timestamp: Timestamp, transfer_id: int, fragmented_payload: typing.Sequence[typing.Union[bytes, memoryview]]
+    ) -> TransferFrom:
+        return TransferFrom(
+            timestamp=timestamp,
+            priority=prio,
+            transfer_id=transfer_id,
+            fragmented_payload=list(map(memoryview, fragmented_payload)),
+            source_node_id=src_nid,
+        )
+
+    def mk_ts(monotonic: float) -> Timestamp:
+        monotonic_ns = round(monotonic * 1e9)
+        return Timestamp(system_ns=monotonic_ns + 10**12, monotonic_ns=monotonic_ns)
+
+    ta = TransferReassembler(source_node_id=src_nid, extent_bytes=100, on_error_callback=on_error_callback)
+    assert ta.source_node_id == src_nid
+
+    def push(timestamp: Timestamp, frame: Frame) -> typing.Optional[TransferFrom]:
+        return ta.process_frame(timestamp, frame, transfer_id_timeout=transfer_id_timeout)
+
+    solipsism = b"The word you are looking for is Solipsism. But you are mistaken. This is not solipsism."
+
+    # Valid multi-frame transfer with large interval between its frames (enough to trigger a TID timeout).
+    assert (
+        push(
+            mk_ts(1000.0),
+            mk_frame(transfer_id=2, index=0, end_of_transfer=False, payload=solipsism[:50]),
+        )
+        is None
+    )
+    assert push(
+        mk_ts(1001.0),
+        mk_frame(
+            transfer_id=2,
+            index=1,
+            end_of_transfer=True,
+            payload=solipsism[50:] + TransferCRC.new(solipsism).value_as_bytes,
+        ),
+    ) == mk_transfer(timestamp=mk_ts(1000.0), transfer_id=2, fragmented_payload=[solipsism[:50], solipsism[50:]])
+
+    # Same as above, but the frame ordering is reversed.
+    assert (
+        push(
+            mk_ts(1002.0),  # LAST FRAME
+            mk_frame(transfer_id=10, index=2, end_of_transfer=True, payload=TransferCRC.new(solipsism).value_as_bytes),
+        )
+        is None
+    )
+    assert (
+        push(
+            mk_ts(1003.0),
+            mk_frame(transfer_id=10, index=1, end_of_transfer=False, payload=solipsism[50:]),
+        )
+        is None
+    )
+    assert push(
+        mk_ts(2000.0),  # FIRST FRAME
+        mk_frame(transfer_id=10, index=0, end_of_transfer=False, payload=solipsism[:50]),
+    ) == mk_transfer(timestamp=mk_ts(2000.0), transfer_id=10, fragmented_payload=[solipsism[:50], solipsism[50:]])
+
+    # Same as above, but one frame is duplicated and one is ignored with old TID, plus an empty frame in the middle.
+    assert (
+        push(
+            mk_ts(3000.0),
+            mk_frame(transfer_id=11, index=1, end_of_transfer=False, payload=solipsism[50:]),
+        )
+        is None
+    )
+    assert (
+        push(
+            mk_ts(3010.0),  # OLD TID
+            mk_frame(transfer_id=0, index=0, end_of_transfer=False, payload=solipsism[50:]),
+        )
+        is None
+    )
+    assert (
+        push(
+            mk_ts(3020.0),  # LAST FRAME
+            mk_frame(transfer_id=11, index=2, end_of_transfer=True, payload=TransferCRC.new(solipsism).value_as_bytes),
+        )
+        is None
+    )
+    assert (
+        push(
+            mk_ts(3030.0),  # DUPLICATE OF INDEX 1
+            mk_frame(transfer_id=11, index=1, end_of_transfer=False, payload=solipsism[50:]),
+        )
+        is None
+    )
+    assert (
+        push(
+            mk_ts(3040.0),  # OLD TID
+            mk_frame(transfer_id=10, index=1, end_of_transfer=False, payload=solipsism[50:]),
+        )
+        is None
+    )
+    assert (
+        push(
+            mk_ts(3050.0),  # MALFORMED FRAME (no payload), ignored
+            mk_frame(transfer_id=9999999999, index=0, end_of_transfer=False, payload=b""),
+        )
+        is None
+    )
+    assert push(
+        mk_ts(3060.0),  # FIRST FRAME
+        mk_frame(transfer_id=11, index=0, end_of_transfer=False, payload=solipsism[:50]),
+    ) == mk_transfer(timestamp=mk_ts(3060.0), transfer_id=11, fragmented_payload=[solipsism[:50], solipsism[50:]])
+
+
 def _unittest_transfer_reassembler_anonymous() -> None:
     ts = Timestamp.now()
     prio = Priority.LOW
@@ -835,7 +965,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
         timestamp=ts, priority=prio, transfer_id=123456, fragmented_payload=[memoryview(b"abcdef")], source_node_id=None
     )
 
-    # Faulthy: CRC is wrong.
+    # Faulty: CRC is wrong.
     assert (
         TransferReassembler.construct_anonymous_transfer(
             ts,
@@ -850,7 +980,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
         is None
     )
 
-    # Faulthy: single transfer has index 0.
+    # Faulty: single transfer has index 0.
     assert (
         TransferReassembler.construct_anonymous_transfer(
             ts,
@@ -859,7 +989,7 @@ def _unittest_transfer_reassembler_anonymous() -> None:
         is None
     )
 
-    # Faulthy: single transfer has EOT flag.
+    # Faulty: single transfer has EOT flag.
     assert (
         TransferReassembler.construct_anonymous_transfer(
             ts,

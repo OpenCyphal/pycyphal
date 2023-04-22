@@ -390,3 +390,46 @@ def _unittest_issue_288() -> None:  # https://github.com/OpenCyphal/pycyphal/iss
     assert bytes(transfer.fragmented_payload[0]).startswith(b"\x09\x30")
     assert float(transfer.timestamp.monotonic) == approx(1681243583.288644, abs=1e-6)
     assert transfer.priority == pycyphal.transport.Priority.SLOW
+
+
+def _unittest_issue_290() -> None:
+    source_node_id = 127
+    transfer_id_timeout_ns = 1  # A very low value.
+
+    def mk_frame(can_id: int, hex_string: str) -> CyphalFrame:
+        from ..media import DataFrame, FrameFormat
+
+        df = DataFrame(FrameFormat.EXTENDED, can_id, bytearray(bytes.fromhex(hex_string)))
+        out = CyphalFrame.parse(df)
+        assert out is not None
+        return out
+
+    rx = TransferReassembler(source_node_id, 2)
+
+    def process_frame(time_s: float, frame: CyphalFrame) -> None | TransferReassemblyErrorID | TransferFrom:
+        return rx.process_frame(
+            timestamp=Timestamp(system_ns=0, monotonic_ns=int(time_s * 1e9)),
+            priority=pycyphal.transport.Priority.SLOW,
+            frame=frame,
+            transfer_id_timeout_ns=transfer_id_timeout_ns,
+        )
+
+    # Feed a transfer with a large time interval between its frames. Ensure it is accepted.
+    assert None is process_frame(1681243583, mk_frame(0x10644C7F, "09 30 00 00 00 00 00 B1"))
+    assert None is process_frame(1681243584, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 11"))
+    assert None is process_frame(1681243585, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 31"))
+    assert None is process_frame(1681243586, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 11"))
+    assert None is process_frame(1681243587, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 31"))
+    assert None is process_frame(1681243588, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 11"))
+    assert None is process_frame(1681243589, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 31"))
+    assert None is process_frame(1681243590, mk_frame(0x10644C7F, "00 00 00 00 00 00 00 11"))
+    assert None is process_frame(1681243591, mk_frame(0x10644C7F, "00 00 00 00 00 00 10 31"))
+    transfer = process_frame(1681243592, mk_frame(0x10644C7F, "4A 51"))
+
+    # The reassembler should have returned a valid transfer.
+    assert isinstance(transfer, TransferFrom)
+    assert transfer.source_node_id == source_node_id
+    assert transfer.transfer_id == 17
+    assert len(transfer.fragmented_payload) == 1
+    assert bytes(transfer.fragmented_payload[0]).startswith(b"\x09\x30")
+    assert transfer.priority == pycyphal.transport.Priority.SLOW
