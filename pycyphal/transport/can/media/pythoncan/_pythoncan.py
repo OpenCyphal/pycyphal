@@ -3,6 +3,8 @@
 # Author: Alex Kiselev <a.kiselev@volz-servos.com>, Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
+import queue
+import sys
 import time
 import typing
 import asyncio
@@ -13,6 +15,8 @@ import dataclasses
 import collections
 import concurrent.futures
 import warnings
+import psutil
+import os
 
 import can
 from pycyphal.transport import Timestamp, ResourceClosedError, InvalidMediaConfigurationError
@@ -20,6 +24,18 @@ from pycyphal.transport.can.media import Media, FilterConfiguration, Envelope, F
 
 
 _logger = logging.getLogger(__name__)
+
+if sys.platform.startswith("win"):
+    import ctypes
+
+    # Reconfigure the system timer to run at a higher resolution. This is desirable for the real-time tests.
+    t = ctypes.c_ulong()
+    ctypes.WinDLL("NTDLL.DLL").NtSetTimerResolution(5000, 1, ctypes.byref(t))
+    p = psutil.Process(os.getpid())
+    p.nice(psutil.REALTIME_PRIORITY_CLASS)
+elif sys.platform.startswith("linux"):
+    p = psutil.Process(os.getpid())
+    p.nice(20)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -189,6 +205,22 @@ class PythonCANMedia(Media):
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self._loop = asyncio.get_running_loop()
+        # This is for communication with a thread that handles the call to _bus.send
+        self._tx_queue = queue.Queue()
+
+        def transmit_thread_worker(_tx_queue):
+            while not self._closed:
+                tx_tuple = _tx_queue.get()
+                if self._closed and tx_tuple == False:
+                    return
+                message: can.Message = tx_tuple[0]
+                timeout: float = tx_tuple[1]
+                future: asyncio.Future = tx_tuple[2]
+                self._bus.send(message, timeout)
+                self._loop.call_soon_threadsafe(lambda: future.set_result(False))
+
+        self._tx_thread = threading.Thread(target=transmit_thread_worker, args=(self._tx_queue,), daemon=True)
 
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
         if self._is_fd:
@@ -231,6 +263,7 @@ class PythonCANMedia(Media):
         return self._is_fd
 
     def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
+        self._tx_thread.start()
         if self._maybe_thread is None:
             self._rx_handler = handler
             self._maybe_thread = threading.Thread(
@@ -269,10 +302,15 @@ class PythonCANMedia(Media):
             )
             try:
                 desired_timeout = monotonic_deadline - loop.time()
-                await loop.run_in_executor(
-                    self._background_executor,
-                    functools.partial(self._bus.send, message, timeout=max(desired_timeout, 0)),
+                received_future = asyncio.Future()
+                self._tx_queue.put(
+                    (
+                        message,
+                        max(desired_timeout, 0),
+                        received_future,
+                    )
                 )
+                await received_future
             except (asyncio.TimeoutError, can.CanError):  # CanError is also used to report timeouts (weird).
                 break
             else:
@@ -286,6 +324,7 @@ class PythonCANMedia(Media):
 
     def close(self) -> None:
         self._closed = True
+        self._tx_queue.put(False)
         try:
             if self._maybe_thread is not None:
                 self._maybe_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
