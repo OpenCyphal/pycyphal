@@ -188,7 +188,6 @@ class PythonCANMedia(Media):
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
-        self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # This is for communication with a thread that handles the call to _bus.send
         self._tx_queue: queue.Queue[
             typing.Optional[typing.Tuple[can.Message, float, asyncio.Future[None], asyncio.AbstractEventLoop]]
