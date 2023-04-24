@@ -211,6 +211,21 @@ Here's how to do it on Windows::
     mypy --strict pycyphal tests .nox\test-3-10\tmp\.compiled
 
 
+Running pylint
+.........................
+
+Warning, this might be obsolete.
+
+Sometimes it is useful to run pylint directly, for instance, to check the code quality without waiting for a very long time
+for the tests to finish.
+
+Here's how to do it on Windows::
+
+    .nox\test-3-10\Scripts\activate
+    pip install pylint
+    pylint pycyphal tests .nox\test-3-10\tmp\.compiled
+
+
 Running a subset of tests
 .........................
 
