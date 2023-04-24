@@ -25,7 +25,6 @@ from pycyphal.transport.can.media import Media, FilterConfiguration, Envelope, F
 _logger = logging.getLogger(__name__)
 
 
-
 @dataclasses.dataclass(frozen=True)
 class PythonCANBusOptions:
     hardware_loopback: bool = False
@@ -193,11 +192,12 @@ class PythonCANMedia(Media):
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        self._loop = asyncio.get_running_loop()
         # This is for communication with a thread that handles the call to _bus.send
         self._tx_queue = queue.Queue()
 
-        def transmit_thread_worker(_tx_queue):
+        def transmit_thread_worker(
+            _tx_queue,
+        ):
             while not self._closed:
                 tx_tuple = _tx_queue.get()
                 if self._closed and tx_tuple == False:
@@ -205,8 +205,9 @@ class PythonCANMedia(Media):
                 message: can.Message = tx_tuple[0]
                 timeout: float = tx_tuple[1]
                 future: asyncio.Future = tx_tuple[2]
+                loop: asyncio.AbstractEventLoop = tx_tuple[3]
                 self._bus.send(message, timeout)
-                self._loop.call_soon_threadsafe(lambda: future.set_result(False))
+                loop.call_soon_threadsafe(lambda: future.set_result(False))
 
         self._tx_thread = threading.Thread(target=transmit_thread_worker, args=(self._tx_queue,), daemon=True)
 
@@ -296,6 +297,7 @@ class PythonCANMedia(Media):
                         message,
                         max(desired_timeout, 0),
                         received_future,
+                        asyncio.get_running_loop(),
                     )
                 )
                 await received_future
