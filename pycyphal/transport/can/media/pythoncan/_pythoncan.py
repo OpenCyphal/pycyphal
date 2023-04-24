@@ -15,7 +15,6 @@ import dataclasses
 import collections
 import concurrent.futures
 import warnings
-import psutil
 import os
 
 import can
@@ -26,7 +25,7 @@ from pycyphal.transport.can.media import Media, FilterConfiguration, Envelope, F
 _logger = logging.getLogger(__name__)
 
 if sys.platform.startswith("win"):
-    import ctypes
+    import ctypes, psutil
 
     # Reconfigure the system timer to run at a higher resolution. This is desirable for the real-time tests.
     t = ctypes.c_ulong()
