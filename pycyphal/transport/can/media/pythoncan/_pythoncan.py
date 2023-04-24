@@ -11,7 +11,6 @@ import logging
 import threading
 import dataclasses
 import collections
-import concurrent.futures
 import warnings
 
 import can
@@ -193,30 +192,7 @@ class PythonCANMedia(Media):
             typing.Optional[typing.Tuple[can.Message, float, asyncio.Future[None], asyncio.AbstractEventLoop]]
         ] = queue.Queue()
 
-        def transmit_thread_worker() -> None:
-            try:
-                while not self._closed:
-                    tx_tuple = self._tx_queue.get(block=True)
-                    try:
-                        if self._closed or tx_tuple is None:
-                            return
-
-                        message: can.Message = tx_tuple[0]
-                        timeout: float = tx_tuple[1]
-                        future: asyncio.Future[None] = tx_tuple[2]
-                        loop: asyncio.AbstractEventLoop = tx_tuple[3]
-                        self._bus.send(message, timeout)
-                        loop.call_soon_threadsafe(lambda: future.set_result(None))
-                    except Exception as ex:
-                        loop.call_soon_threadsafe(lambda: future.set_exception(ex))
-            except Exception as ex:
-                _logger.critical(
-                    "Unhandled exception in transmit thread, transmission thread stopped and transmission is no longer possible: %s",
-                    ex,
-                    exc_info=True,
-                )
-
-        self._tx_thread = threading.Thread(target=transmit_thread_worker, daemon=True)
+        self._tx_thread = threading.Thread(target=self.transmit_thread_worker, daemon=True)
 
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
         if self._is_fd:
@@ -234,7 +210,7 @@ class PythonCANMedia(Media):
         except can.CanError as ex:
             raise InvalidMediaConfigurationError(f"Could not initialize PythonCAN: {ex}") from ex
         super().__init__()
-
+    
     @property
     def interface_name(self) -> str:
         return ":".join(self._conn_name)
@@ -283,6 +259,28 @@ class PythonCANMedia(Media):
         _logger.debug("%s: Acceptance filters activated: %s", self, ", ".join(map(str, configuration)))
         self._bus.set_filters(filters)
 
+    def transmit_thread_worker(self) -> None:
+        try:
+            while not self._closed:
+                tx_tuple = self._tx_queue.get(block=True)
+                try:
+                    if self._closed or tx_tuple is None:
+                        return
+
+                    message: can.Message = tx_tuple[0]
+                    timeout: float = tx_tuple[1]
+                    future: asyncio.Future[None] = tx_tuple[2]
+                    loop: asyncio.AbstractEventLoop = tx_tuple[3]
+                    self._bus.send(message, timeout)
+                    loop.call_soon_threadsafe(lambda: future.set_result(None))
+                except Exception as ex:
+                    loop.call_soon_threadsafe(lambda: future.set_exception(ex))
+        except Exception as ex:
+            _logger.critical(
+                "Unhandled exception in transmit thread, transmission thread stopped and transmission is no longer possible: %s",
+                ex,
+                exc_info=True,
+            )
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         num_sent = 0
         loopback: typing.List[typing.Tuple[Timestamp, Envelope]] = []
