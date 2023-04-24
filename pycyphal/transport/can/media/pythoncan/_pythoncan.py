@@ -24,17 +24,6 @@ from pycyphal.transport.can.media import Media, FilterConfiguration, Envelope, F
 
 _logger = logging.getLogger(__name__)
 
-if sys.platform.startswith("win"):
-    import ctypes, psutil
-
-    # Reconfigure the system timer to run at a higher resolution. This is desirable for the real-time tests.
-    t = ctypes.c_ulong()
-    ctypes.WinDLL("NTDLL.DLL").NtSetTimerResolution(5000, 1, ctypes.byref(t))
-    p = psutil.Process(os.getpid())
-    p.nice(psutil.REALTIME_PRIORITY_CLASS)
-elif sys.platform.startswith("linux"):
-    p = psutil.Process(os.getpid())
-    p.nice(20)
 
 
 @dataclasses.dataclass(frozen=True)
