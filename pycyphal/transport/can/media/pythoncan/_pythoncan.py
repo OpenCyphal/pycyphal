@@ -210,7 +210,7 @@ class PythonCANMedia(Media):
         except can.CanError as ex:
             raise InvalidMediaConfigurationError(f"Could not initialize PythonCAN: {ex}") from ex
         super().__init__()
-    
+
     @property
     def interface_name(self) -> str:
         return ":".join(self._conn_name)
@@ -281,6 +281,7 @@ class PythonCANMedia(Media):
                 ex,
                 exc_info=True,
             )
+
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         num_sent = 0
         loopback: typing.List[typing.Tuple[Timestamp, Envelope]] = []
