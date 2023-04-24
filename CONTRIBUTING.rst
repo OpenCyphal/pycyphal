@@ -208,7 +208,7 @@ Here's how to do it on Windows::
     
     .nox\test-3-10\Scripts\activate
     pip install mypy
-    mypy pycyphal tests .nox\test-3-10\tmp\.compiled
+    mypy --strict pycyphal tests .nox\test-3-10\tmp\.compiled
 
 
 Running a subset of tests

@@ -193,21 +193,28 @@ class PythonCANMedia(Media):
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # This is for communication with a thread that handles the call to _bus.send
-        self._tx_queue: queue.Queue = queue.Queue()
+        self._tx_queue: queue.Queue[typing.Optional[typing.Tuple[can.Message, float, asyncio.Future[None], asyncio.AbstractEventLoop]]] = queue.Queue()
 
         def transmit_thread_worker(
-            _tx_queue: queue.Queue,
+            _tx_queue: queue.Queue[typing.Optional[typing.Tuple[can.Message, float, asyncio.Future[None], asyncio.AbstractEventLoop]]],
         ) -> None:
-            while not self._closed:
-                tx_tuple = _tx_queue.get()
-                if self._closed and tx_tuple == False:
-                    return
-                message: can.Message = tx_tuple[0]
-                timeout: float = tx_tuple[1]
-                future: asyncio.Future = tx_tuple[2]
-                loop: asyncio.AbstractEventLoop = tx_tuple[3]
-                self._bus.send(message, timeout)
-                loop.call_soon_threadsafe(lambda: future.set_result(None))
+            try:
+                while not self._closed:
+                    try:
+                        tx_tuple = _tx_queue.get()
+                        if self._closed or tx_tuple is None:
+                            return
+                        
+                        message: can.Message = tx_tuple[0]
+                        timeout: float = tx_tuple[1]
+                        future: asyncio.Future[None] = tx_tuple[2]
+                        loop: asyncio.AbstractEventLoop = tx_tuple[3]
+                        self._bus.send(message, timeout)
+                        loop.call_soon_threadsafe(lambda: future.set_result(None))
+                    except Exception as ex:
+                        loop.call_soon_threadsafe(lambda: future.set_exception(ex))
+            except Exception as ex:
+                _logger.critical("Unhandled exception in transmit thread, transmission thread stopped and transmission is no longer possible: %s", ex, exc_info=True)
 
         self._tx_thread = threading.Thread(target=transmit_thread_worker, args=(self._tx_queue,), daemon=True)
 
@@ -314,7 +321,7 @@ class PythonCANMedia(Media):
 
     def close(self) -> None:
         self._closed = True
-        self._tx_queue.put(False)
+        self._tx_queue.put(None)
         try:
             if self._maybe_thread is not None:
                 self._maybe_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
