@@ -193,11 +193,11 @@ class PythonCANMedia(Media):
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         # This is for communication with a thread that handles the call to _bus.send
-        self._tx_queue = queue.Queue()
+        self._tx_queue: queue.Queue = queue.Queue()
 
         def transmit_thread_worker(
-            _tx_queue,
-        ):
+            _tx_queue: queue.Queue,
+        ) -> None:
             while not self._closed:
                 tx_tuple = _tx_queue.get()
                 if self._closed and tx_tuple == False:
@@ -207,7 +207,7 @@ class PythonCANMedia(Media):
                 future: asyncio.Future = tx_tuple[2]
                 loop: asyncio.AbstractEventLoop = tx_tuple[3]
                 self._bus.send(message, timeout)
-                loop.call_soon_threadsafe(lambda: future.set_result(False))
+                loop.call_soon_threadsafe(lambda: future.set_result(None))
 
         self._tx_thread = threading.Thread(target=transmit_thread_worker, args=(self._tx_queue,), daemon=True)
 
@@ -291,7 +291,7 @@ class PythonCANMedia(Media):
             )
             try:
                 desired_timeout = monotonic_deadline - loop.time()
-                received_future = asyncio.Future()
+                received_future: asyncio.Future[None] = asyncio.Future()
                 self._tx_queue.put(
                     (
                         message,
