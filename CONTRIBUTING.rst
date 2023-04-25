@@ -203,9 +203,9 @@ Running MyPy
 Warning, this might be obsolete.
 
 Sometimes it is useful to run MyPy directly, for instance, to check the types without waiting for a very long time
-for the tests to finish. 
+for the tests to finish.
 Here's how to do it on Windows::
-    
+
     .nox\test-3-10\Scripts\activate
     pip install mypy
     mypy --strict pycyphal tests .nox\test-3-10\tmp\.compiled
@@ -216,8 +216,8 @@ Running pylint
 
 Warning, this might be obsolete.
 
-Sometimes it is useful to run pylint directly, for instance, to check the code quality without waiting for a very long time
-for the tests to finish.
+Sometimes it is useful to run pylint directly, for instance, to check the code quality without waiting
+for a very long time for the tests to finish.
 
 Here's how to do it on Windows::
 
@@ -231,14 +231,14 @@ Running black
 
 Warning, this might be obsolete.
 
-Sometimes it is useful to run black directly, for instance, to check the code formatting without waiting for a very long time
-for the tests to finish.
+Sometimes it is useful to run black directly, for instance, to check the code formatting
+without waiting for a very long time for the tests to finish.
 
 Here's how to do it on Windows::
 
     .nox\test-3-10\Scripts\activate
     pip install black==22.*
-    black pycyphal tests .nox\test-3-10\tmp\.compiled   
+    black pycyphal tests .nox\test-3-10\tmp\.compiled
 
 
 Running a subset of tests
