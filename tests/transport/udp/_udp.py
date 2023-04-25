@@ -22,6 +22,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier, PayloadMetadata, Transfer, TransferFrom
     from pycyphal.transport import Priority, Timestamp, InputSessionSpecifier, OutputSessionSpecifier
     from pycyphal.transport import ProtocolParameters
+    from pycyphal.transport.commons.high_overhead_transport import TransferReassembler
 
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
@@ -163,33 +164,33 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert set(anon_tr.input_sessions) == {anon_sub_promiscuous}
     assert set(anon_tr.output_sessions) == {anon_broadcaster}
 
-    ## empty statistics [subscriber_promiscuous]
+    # empty statistics [subscriber_promiscuous]
     assert tr.sample_statistics().received_datagrams[
         subscriber_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
     )
 
-    ## empty statistics [subscriber_selective]
+    # empty statistics [subscriber_selective]
     assert tr.sample_statistics().received_datagrams[
         subscriber_selective_specifier
     ] == SelectiveUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
 
-    ## empty statistics [anon_sub_promiscuous]
+    # empty statistics [anon_sub_promiscuous]
     assert anon_tr.sample_statistics().received_datagrams[
         anon_sub_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
     )
 
-    ## empty statistics [server_listener]
+    # empty statistics [server_listener]
     assert tr.sample_statistics().received_datagrams[server_listener_specifier] == PromiscuousUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors_per_source_node_id={}
     )
 
-    ## empty statistics [client_listener]
+    # empty statistics [client_listener]
     assert tr2.sample_statistics().received_datagrams[client_listener_specifier] == SelectiveUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
@@ -312,7 +313,16 @@ async def _unittest_udp_transport_ipv4() -> None:
 
     # server_listener, 3*2 frames due to service_transfer_multiplier = 2
     assert tr.sample_statistics().received_datagrams[server_listener_specifier] == PromiscuousUDPInputSessionStatistics(
-        transfers=1, frames=6, payload_bytes=3596, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=1,
+        frames=6,
+        payload_bytes=3596,
+        errors=3,
+        drops=0,
+        reassembly_errors_per_source_node_id={
+            222: {
+                TransferReassembler.Error.UNEXPECTED_TRANSFER_ID: 3,
+            }
+        },
     )
 
     # subscriber_promiscuous, doesn't receive anything
@@ -368,27 +378,36 @@ async def _unittest_udp_transport_ipv4() -> None:
         _ = tr2.get_input_session(InputSessionSpecifier(MessageDataSpecifier(2345), None), meta)
 
     # check that statistics are still available after session closure
-    ## tr, subscriber_promiscuous
+    # tr, subscriber_promiscuous
     assert tr.sample_statistics().received_datagrams[
         subscriber_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
         transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
-    ## tr, subscriber_selective
+    # tr, subscriber_selective
     assert tr.sample_statistics().received_datagrams[
         subscriber_selective_specifier
     ] == SelectiveUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
-    ## tr, server_listener
+    # tr, server_listener
     assert tr.sample_statistics().received_datagrams[server_listener_specifier] == PromiscuousUDPInputSessionStatistics(
-        transfers=1, frames=6, payload_bytes=3596, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=1,
+        frames=6,
+        payload_bytes=3596,
+        errors=3,
+        drops=0,
+        reassembly_errors_per_source_node_id={
+            222: {
+                TransferReassembler.Error.UNEXPECTED_TRANSFER_ID: 3,
+            }
+        },
     )
-    ## tr2, client_listener
+    # tr2, client_listener
     assert tr2.sample_statistics().received_datagrams[client_listener_specifier] == SelectiveUDPInputSessionStatistics(
         transfers=0, frames=0, payload_bytes=0, errors=0, drops=0, reassembly_errors={}
     )
-    ## anon_tr, anon_sub_promiscuous
+    # anon_tr, anon_sub_promiscuous
     assert anon_tr.sample_statistics().received_datagrams[
         anon_sub_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
