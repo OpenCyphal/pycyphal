@@ -35,7 +35,7 @@ Imports fail with ``AttributeError: module 'uavcan...' has no attribute '...'``.
     Read the :ref:`installation` guide for details.
 
 
-I am experiencing slow SLCAN writes on Windows. What can I do?
+I am experiencing slow SLCAN read/write performance on Windows. What can I do?
     Increasing the process priority to REALTIME (available if the application has administrator privileges) will help.
     Without administrator privileges, the HIGH priority set by this code will also help with delays in SLCAN performance.
     Here's an example::
@@ -50,4 +50,4 @@ I am experiencing slow SLCAN writes on Windows. What can I do?
             p.nice(psutil.REALTIME_PRIORITY_CLASS)
         elif sys.platform.startswith("linux"):
             p = psutil.Process(os.getpid())
-            p.nice(20)
+            p.nice(-20)

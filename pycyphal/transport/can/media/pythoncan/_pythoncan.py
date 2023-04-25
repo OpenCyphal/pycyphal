@@ -22,6 +22,14 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclasses.dataclass(frozen=True)
+class _TxItem:
+    msg: can.Message
+    timeout: float
+    future: asyncio.Future[None]
+    loop: asyncio.AbstractEventLoop
+
+
+@dataclasses.dataclass(frozen=True)
 class PythonCANBusOptions:
     hardware_loopback: bool = False
     """
@@ -188,9 +196,7 @@ class PythonCANMedia(Media):
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         # This is for communication with a thread that handles the call to _bus.send
-        self._tx_queue: queue.Queue[
-            typing.Optional[typing.Tuple[can.Message, float, asyncio.Future[None], asyncio.AbstractEventLoop]]
-        ] = queue.Queue()
+        self._tx_queue: queue.Queue[_TxItem | None] = queue.Queue()
 
         self._tx_thread = threading.Thread(target=self.transmit_thread_worker, daemon=True)
 
@@ -267,14 +273,17 @@ class PythonCANMedia(Media):
                     if self._closed or tx_tuple is None:
                         return
 
-                    message: can.Message = tx_tuple[0]
-                    timeout: float = tx_tuple[1]
-                    future: asyncio.Future[None] = tx_tuple[2]
-                    loop: asyncio.AbstractEventLoop = tx_tuple[3]
+                    message: can.Message = tx_tuple.msg
+                    timeout: float = tx_tuple.timeout
+                    future: asyncio.Future[None] = tx_tuple.future
+                    loop: asyncio.AbstractEventLoop = tx_tuple.loop
                     self._bus.send(message, timeout)
                     loop.call_soon_threadsafe(lambda: future.set_result(None))
                 except Exception as ex:
-                    loop.call_soon_threadsafe(lambda: future.set_exception(ex))
+                    if future:
+                        loop.call_soon_threadsafe(lambda: future.set_exception(ex))
+                    else:
+                        _logger.debug("Future is None, cannot set exception: %s", ex, exc_info=True)
         except Exception as ex:
             _logger.critical(
                 "Unhandled exception in transmit thread, transmission thread stopped and transmission is no longer possible: %s",
@@ -299,7 +308,7 @@ class PythonCANMedia(Media):
                 desired_timeout = monotonic_deadline - loop.time()
                 received_future: asyncio.Future[None] = asyncio.Future()
                 self._tx_queue.put(
-                    (
+                    _TxItem(
                         message,
                         max(desired_timeout, 0),
                         received_future,
@@ -320,8 +329,9 @@ class PythonCANMedia(Media):
 
     def close(self) -> None:
         self._closed = True
-        self._tx_queue.put(None)
         try:
+            self._tx_queue.put(None)
+            self._tx_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
             if self._maybe_thread is not None:
                 self._maybe_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
                 self._maybe_thread = None
