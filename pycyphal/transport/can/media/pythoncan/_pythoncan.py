@@ -272,18 +272,10 @@ class PythonCANMedia(Media):
                 try:
                     if self._closed or tx_tuple is None:
                         return
-
-                    message: can.Message = tx_tuple.msg
-                    timeout: float = tx_tuple.timeout
-                    future: asyncio.Future[None] = tx_tuple.future
-                    loop: asyncio.AbstractEventLoop = tx_tuple.loop
-                    self._bus.send(message, timeout)
-                    loop.call_soon_threadsafe(lambda: future.set_result(None))
+                    self._bus.send(tx_tuple.msg, tx_tuple.timeout)
+                    tx_tuple.loop.call_soon_threadsafe(lambda: tx_tuple.future.set_result(None))
                 except Exception as ex:
-                    if future:
-                        loop.call_soon_threadsafe(lambda: future.set_exception(ex))
-                    else:
-                        _logger.debug("Future is None, cannot set exception: %s", ex, exc_info=True)
+                    tx_tuple.loop.call_soon_threadsafe(lambda: tx_tuple.future.set_exception(ex))
         except Exception as ex:
             _logger.critical(
                 "Unhandled exception in transmit thread, transmission thread stopped and transmission is no longer possible: %s",
@@ -307,7 +299,7 @@ class PythonCANMedia(Media):
             try:
                 desired_timeout = monotonic_deadline - loop.time()
                 received_future: asyncio.Future[None] = asyncio.Future()
-                self._tx_queue.put(
+                self._tx_queue.put_nowait(
                     _TxItem(
                         message,
                         max(desired_timeout, 0),

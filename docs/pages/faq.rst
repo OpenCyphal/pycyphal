@@ -35,7 +35,7 @@ Imports fail with ``AttributeError: module 'uavcan...' has no attribute '...'``.
     Read the :ref:`installation` guide for details.
 
 
-I am experiencing slow SLCAN read/write performance on Windows. What can I do?
+I am experiencing poor SLCAN read/write performance on Windows. What can I do?
     Increasing the process priority to REALTIME
     (available if the application has administrator privileges) will help.
     Without administrator privileges, the HIGH priority set by this code,
