@@ -9,6 +9,7 @@ import typing
 import asyncio
 import logging
 import threading
+from functools import partial
 import dataclasses
 import collections
 import warnings
@@ -267,14 +268,14 @@ class PythonCANMedia(Media):
     def transmit_thread_worker(self) -> None:
         try:
             while not self._closed:
-                tx_tuple = self._tx_queue.get(block=True)
+                tx = self._tx_queue.get(block=True)
+                if self._closed or tx is None:
+                    break
                 try:
-                    if self._closed or tx_tuple is None:
-                        return
-                    self._bus.send(tx_tuple.msg, tx_tuple.timeout)
-                    tx_tuple.loop.call_soon_threadsafe(lambda: tx_tuple.future.set_result(None))
+                    self._bus.send(tx.msg, tx.timeout)
+                    tx.loop.call_soon_threadsafe(partial(tx.future.set_result, None))
                 except Exception as ex:
-                    tx_tuple.loop.call_soon_threadsafe(lambda: tx_tuple.future.set_exception(ex))
+                    tx.loop.call_soon_threadsafe(partial(tx.future.set_exception, ex))
         except Exception as ex:
             _logger.critical(
                 "Unhandled exception in transmit thread, transmission thread stopped and transmission is no longer possible: %s",
