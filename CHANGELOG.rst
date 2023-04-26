@@ -3,6 +3,11 @@
 Changelog
 =========
 
+v1.15
+-----
+
+- Made PythonCAN support better.
+
 v1.14
 -----
 

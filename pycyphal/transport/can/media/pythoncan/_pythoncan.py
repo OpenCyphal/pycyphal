@@ -3,15 +3,15 @@
 # Author: Alex Kiselev <a.kiselev@volz-servos.com>, Pavel Kirienko <pavel@opencyphal.org>
 
 from __future__ import annotations
+import queue
 import time
 import typing
 import asyncio
 import logging
 import threading
-import functools
+from functools import partial
 import dataclasses
 import collections
-import concurrent.futures
 import warnings
 
 import can
@@ -20,6 +20,14 @@ from pycyphal.transport.can.media import Media, FilterConfiguration, Envelope, F
 
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass(frozen=True)
+class _TxItem:
+    msg: can.Message
+    timeout: float
+    future: asyncio.Future[None]
+    loop: asyncio.AbstractEventLoop
 
 
 @dataclasses.dataclass(frozen=True)
@@ -188,7 +196,9 @@ class PythonCANMedia(Media):
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
-        self._background_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        # This is for communication with a thread that handles the call to _bus.send
+        self._tx_queue: queue.Queue[_TxItem | None] = queue.Queue()
+        self._tx_thread = threading.Thread(target=self.transmit_thread_worker, daemon=True)
 
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
         if self._is_fd:
@@ -231,6 +241,7 @@ class PythonCANMedia(Media):
         return self._is_fd
 
     def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
+        self._tx_thread.start()
         if self._maybe_thread is None:
             self._rx_handler = handler
             self._maybe_thread = threading.Thread(
@@ -254,6 +265,24 @@ class PythonCANMedia(Media):
         _logger.debug("%s: Acceptance filters activated: %s", self, ", ".join(map(str, configuration)))
         self._bus.set_filters(filters)
 
+    def transmit_thread_worker(self) -> None:
+        try:
+            while not self._closed:
+                tx = self._tx_queue.get(block=True)
+                if self._closed or tx is None:
+                    break
+                try:
+                    self._bus.send(tx.msg, tx.timeout)
+                    tx.loop.call_soon_threadsafe(partial(tx.future.set_result, None))
+                except Exception as ex:
+                    tx.loop.call_soon_threadsafe(partial(tx.future.set_exception, ex))
+        except Exception as ex:
+            _logger.critical(
+                "Unhandled exception in transmit thread, transmission thread stopped and transmission is no longer possible: %s",
+                ex,
+                exc_info=True,
+            )
+
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         num_sent = 0
         loopback: typing.List[typing.Tuple[Timestamp, Envelope]] = []
@@ -269,10 +298,16 @@ class PythonCANMedia(Media):
             )
             try:
                 desired_timeout = monotonic_deadline - loop.time()
-                await loop.run_in_executor(
-                    self._background_executor,
-                    functools.partial(self._bus.send, message, timeout=max(desired_timeout, 0)),
+                received_future: asyncio.Future[None] = asyncio.Future()
+                self._tx_queue.put_nowait(
+                    _TxItem(
+                        message,
+                        max(desired_timeout, 0),
+                        received_future,
+                        asyncio.get_running_loop(),
+                    )
                 )
+                await received_future
             except (asyncio.TimeoutError, can.CanError):  # CanError is also used to report timeouts (weird).
                 break
             else:
@@ -287,6 +322,8 @@ class PythonCANMedia(Media):
     def close(self) -> None:
         self._closed = True
         try:
+            self._tx_queue.put(None)
+            self._tx_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
             if self._maybe_thread is not None:
                 self._maybe_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
                 self._maybe_thread = None
