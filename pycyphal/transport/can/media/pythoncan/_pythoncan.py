@@ -197,7 +197,6 @@ class PythonCANMedia(Media):
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         # This is for communication with a thread that handles the call to _bus.send
         self._tx_queue: queue.Queue[_TxItem | None] = queue.Queue()
-
         self._tx_thread = threading.Thread(target=self.transmit_thread_worker, daemon=True)
 
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
