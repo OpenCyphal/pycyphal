@@ -65,6 +65,13 @@ def _configure_host_environment() -> None:
         ctypes.WinDLL("NTDLL.DLL").NtSetTimerResolution(5000, 1, ctypes.byref(t))
         _logger.info("System timer resolution: %.3f ms", t.value / 10e3)
 
+    if sys.platform.startswith("darwin") or sys.platform.startswith("linux"):
+        import psutil
+        import os
+
+        p = psutil.Process(os.getpid())
+        p.nice(-20)
+
 
 @pytest.fixture(autouse=True)
 def _revert_asyncio_monkeypatch() -> None:
