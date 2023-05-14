@@ -50,6 +50,20 @@ There are two kinds of 3rd-party dependencies used by this library:
   instead, they are registered as *package extras*. Please read the detailed documentation and the applicable
   conventions in the user documentation and in ``setup.cfg``.
 
+..  tip:: asyncio
+
+    The pycyphal code relies pretty heavily on asyncio. If you're not familiar with this library, it is recommended to take a look at the following links:
+
+    - `A general introduction <https://realpython.com/async-io-python/>`_
+
+    - Asyncio API documentation:
+
+        - `Coroutines and Tasks <https://docs.python.org/3/library/asyncio-task.html>`_
+
+        - `Queues <https://docs.python.org/3/library/asyncio-queue.html>`_
+
+        - `Event Loop <https://docs.python.org/3/library/asyncio-eventloop.html>`_
+
 
 Coding conventions
 ------------------
