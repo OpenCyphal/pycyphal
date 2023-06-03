@@ -93,7 +93,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
             The default value is the smallest valid value for reasons of compatibility.
 
-        :param service_transfer_multiplier: Deterministic data loss mitigation is disabled by default.
+        :param service_transfer_multiplier: Forward error correction is disabled by default.
             This parameter specifies the number of times each outgoing service transfer will be repeated.
             This setting does not affect message transfers.
 
@@ -207,7 +207,6 @@ class UDPTransport(pycyphal.transport.Transport):
     ) -> UDPOutputSession:
         self._ensure_not_closed()
         if specifier not in self._output_registry:
-
             # check if anonymous, in that case no service transfers are allowed
             if self._anonymous and isinstance(specifier.data_specifier, pycyphal.transport.ServiceDataSpecifier):
                 raise OperationNotDefinedForAnonymousNodeError(

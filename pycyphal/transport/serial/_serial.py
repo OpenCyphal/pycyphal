@@ -99,7 +99,7 @@ class SerialTransport(pycyphal.transport.Transport):
             This setting does not affect transfer reception -- the RX MTU is always set to the maximum valid MTU
             (i.e., practically unlimited).
 
-        :param service_transfer_multiplier: Deterministic data loss mitigation for service transfers.
+        :param service_transfer_multiplier: Forward error correction for service transfers.
             This parameter specifies the number of times each outgoing service transfer will be repeated.
             This setting does not affect message transfers.
 

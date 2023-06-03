@@ -13,32 +13,11 @@ from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
 @dataclasses.dataclass(frozen=True, repr=False)
 class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     """
-    The header format is up to debate until it's frozen in Specification.
-
     An important thing to keep in mind is that the minimum size of an UDP/IPv4 payload when transferred over
     100M Ethernet is 18 bytes, due to the minimum Ethernet frame size limit. That is, if the application
     payload requires less space, the missing bytes will be padded out to the minimum size.
 
-    The current header format enables encoding by trivial memory aliasing on any conventional little-endian platform::
-
-        struct Header {
-            uint4_t  version;               # <- 1
-            uint4_t  _reserved_a;
-            uint3_t  priority;              # Duplicates QoS for ease of access; 0 -- highest, 7 -- lowest.
-            uint5_t  _reserved_b;
-            uint16_t source_node_id;        # 0xFFFF == anonymous transfer
-            uint16_t destination_node_id;   # 0xFFFF == broadcast
-            uint15_t data_specifier;        # subject-ID | (service-ID + RNR (Request, Not Response))
-            bool     snm;                   # SNM (Service, Not Message)
-            uint64_t transfer_id;
-            uint31_t frame_index;
-            bool     frame_index_eot;       # End of transfer
-            uint16_t user_data;             # Opaque application-specific data with user-defined semantics.
-                                            # Generic implementations should ignore
-            uint16_t header_crc;            # Checksum of the header, excluding the CRC field itself
-        };
-        static_assert(sizeof(struct Header) == 24, "Invalid layout");   # Fixed-size 24-byte header with
-                                                                        # natural alignment for each field ensured.
+    The current header format enables encoding by trivial memory aliasing on any conventional little-endian platform.
 
     +---------------+---------------+---------------+-----------------+------------------+
     |**MAC header** | **IP header** |**UDP header** |**Cyphal header**|**Cyphal payload**|
