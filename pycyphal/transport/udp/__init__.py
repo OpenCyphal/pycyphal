@@ -6,240 +6,26 @@ r"""
 Cyphal/UDP transport overview
 +++++++++++++++++++++++++++++
 
-The Cyphal/UDP transport is essentially a trivial stateless UDP blaster based on IP multicasting.
-This transport is intended for low-latency, high-throughput switched Ethernet networks with complex topologies.
-In the spirit of Cyphal, it is designed to be simple and robust;
-much of the data handling work is offloaded to the standard underlying UDP/IP stack.
-Both IPv4 and IPv6 are supported by this design,
-although it is expected that the advantages of IPv6 over IPv4 are less relevant in an intravehicular setting.
-
-Cyphal/UDP supports anonymous transfers (i.e., transfers without a source node-ID) with one limitation:
-an anonymous node is only able to send Message transfers (but not Service transfers).
+Please refer to the appropriate section of the `Cyphal Specification <https://opencyphal.org/specification>`_
+for the definition of the Cyphal/UDP transport.
 
 This transport module contains no media sublayers because the media abstraction
 is handled directly by the standard UDP/IP stack of the underlying operating system.
 
-Per the Cyphal transport model provided in the Cyphal specification, the following transfer categories are supported:
 
-+--------------------+--------------------------+---------------------------+
-| Supported transfers| Point-to-point           | Point-to-many             |
-+====================+==========================+===========================+
-|**Message**         | No                       | Yes                       |
-+--------------------+--------------------------+---------------------------+
-|**Service**         | Yes                      | Banned by Specification   |
-+--------------------+--------------------------+---------------------------+
+Forward error correction (FEC)
+++++++++++++++++++++++++++++++
 
-
-Protocol definition
-+++++++++++++++++++
-
-The entirety of the session specifier (:class:`pycyphal.transport.SessionSpecifier`)
-is reified through the standard UDP/IP stack without any special extensions.
-The transfer-ID, transfer priority, and the multi-frame transfer reassembly metadata are allocated in the
-Cyphal-specific UDP datagram header.
-
-There are two data types that model Cyphal/UDP protocol data: :class:`UDPFrame` and :class:`RawPacket`.
-The latter is never used during normal operation but only during on-line capture sessions
-for reporting captured packets (see :class:`UDPCaptured`).
-
-Cyphal uses a single UDP port for all transfers (9382).
-
-For more background information on how Cyphal/UDP came to be, please see the following thread in the OpenCyphal forum:
-https://forum.opencyphal.org/t/1765
-
-
-IP address mapping
-++++++++++++++++++
-
-Message transfers
-~~~~~~~~~~~~~~~~~
-
-Message transfers are executed as IP multicast transfers.
-The IPv4 multicast group address is computed statically as follows::
-
-            fixed            subject-ID (Message)
-          (15 bits)     res. (15 bits)
-       ______________   | ______________
-      /              \  v/              \
-      11101111.00000000.0sssssss.ssssssss
-      \__/      ^     ^
-    (4 bits)  Cyphal SNM
-      IPv4     UDP
-    multicast address
-     prefix   version
-                \_______________________/
-                       (23 bits)
-              collision-free multicast
-                 addressing limit of
-                Ethernet MAC for IPv4
-
-SNM: Service, not Message
-
-From the most significant bit to the least significant bit, the IPv4 multicast group address components are as follows:
-
-- IPv4 multicast prefix is defined by RFC 1112.
-
-- The following 5 bits are set to 0b11110 by this Specification. The motivation is as follows:
-
-  - Setting the four least significant bits of the most significant byte to 0b1111 moves the address range
-    into the administratively-scoped range (239.0.0.0/8, RFC 2365),
-    which ensures that there may be no conflicts with well-known multicast groups.
-
-  - Setting the most significant bit of the second octet to zero ensures that there may be no conflict
-    with reserved sub-ranges within the administratively-scoped range.
-    The resulting range 239.0.0.0/9 is entirely ad-hoc defined.
-
-  - Fixing the 5+4=9 most significant bits of the multicast group address ensures that the variability
-    is confined to the 23 least significant bits of the address only,
-    which is desirable because the IPv4 Ethernet MAC layer does not differentiate beyond the
-    23 least significant bits of the multicast group address
-    (i.e., addresses that differ only in the 9 MSb collide at the MAC layer,
-    which is unacceptable in a real-time system; see RFC 1112 section 6.4).
-    Without this limitation, an engineer deploying a network might inadvertently create a configuration that
-    causes MAC-layer collisions which may be difficult to detect.
-
-- The next 6 bits complete the fixed part of the multicast group address, with the most significant bit
-  defining the Cyphal UDP address version (this can be used in case we want to make changes to the endpoint
-  mapping).
-
-- Last but not least, the remaining 17 bits are used to encode:
-
-  - SNM: Service, not Message (1 bit), which is used to differentiate between a Message and Service address.
-    Set to zero in case of Message.
-
-  - 1 reserved bit for future use.
-
-  - The 15-bit subject-ID of the Message.
-
-Per RFC 1112, the default TTL is 1, which is unacceptable.
-Therefore, publishers should use the TTL value of 16 by default,
-which is chosen as a sensible default suitable for any intravehicular network.
-
-Per RFC 1112, in order to emit a multicast packet, a limited level-1 implementation without the full support of
-IGMP and multicast-specific packet handling policies is sufficient.
-
-Due to the dependency on the dynamic IGMP configuration,
-a newly configured subscriber may not immediately receive data from the subject --
-a brief *subscription initialization latency* may occur (typically it is well under one second).
-This is because the underlying IP stack needs to inform the network switch/router about its interest in a particular
-multicast group by sending an IGMP membership report first.
-A high-integrity application may choose to rely on a static switch configuration,
-in which case no initialization delay will take place.
-
-Example::
-
-    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx
-
-    Service,    :       xxxxxxxx xxxxxxx0 xxxxxxxx xxxxxxxx
-    not Message
-
-    Reserved:           xxxxxxxx xxxxxxxx 0xxxxxxx xxxxxxxx
-
-    Subject-ID (=42):   xxxxxxxx xxxxxxxx x0000000 00101010
-
-    Multicast group:    11101111 00000000 00000000 00101010
-                             239        0        0       42
-
-
-Service transfers
-~~~~~~~~~~~~~~~~~
-
-Service transfers are also executed as IP multicast transfers.
-The IPv4 multicast group address is computed statically as follows::
-
-            fixed
-          (15 bits)
-       ______________
-      /              \
-      11101111.00000001.ssssssss.ssssssss
-      \__/      ^     ^ \_______________/
-    (4 bits)  Cyphal SNM    (16 bits)
-      IPv4     UDP          destination node-ID
-    multicast address
-     prefix   version
-                \_______________________/
-                       (23 bits)
-              collision-free multicast
-                 addressing limit of
-                Ethernet MAC for IPv4
-
-Service transfers are distinguished from message transfers by the least significant bit of the second octet.
-The 2 last octets define the destination node-ID of the service transfer.
-
-Example::
-
-    Fixed prefix:       11101111 0000000x xxxxxxxx xxxxxxxx
-
-    Service,    :       xxxxxxxx xxxxxxx1 xxxxxxxx xxxxxxxx
-    not Message
-
-    Reserved:           xxxxxxxx xxxxxxxx 0xxxxxxx xxxxxxxx
-
-    Subject-ID (=42):   xxxxxxxx xxxxxxxx x0000000 00101010
-
-    Multicast group:    11101111 00000000 00000000 00101010
-                             239        1        0       42
-
-Datagram header format
-~~~~~~~~~~~~~~~~~~~~~~
-
-Every Cyphal/UDP frame contains the following header before the payload,
-encoded in the little-endian byte order, expressed here in the DSDL notation::
-
-    uint8 version           # =1 in this revision; ignore frame otherwise.
-    uint8 priority          # Like in CAN: 0 -- highest priority, 7 -- lowest priority.
-    uint16 source_node_id   # Cyphal node-ID of the origin.
-    uint32 frame_index_eot  # MSB is set if the current frame is the last frame of the transfer.
-    uint64 transfer_id      # The transfer-ID never overflows.
-    void64                  # This space may be used later for runtime type identification.
-
-    uint4 version                   # <- 1
-    void4
-    uint3 priority                  # Duplicates QoS for ease of access; 0 -- highest, 7 -- lowest.
-    void5
-    uint16 source_node_id
-    uint16 destination_node_id
-    uint16 data_specifier           # Like in Cyphal/serial: subject-ID | (service-ID + RNR (Request, Not Response))
-    uint64 transfer_id
-    uint31 frame_index              # Index of the current frame within the current transfer.
-    bool end_of_transfer
-    uint16 user_data
-    # Opaque application-specific data with user-defined semantics. Generic implementations should ignore
-    uint16 header_crc
-    @assert _offset_ / 8 == {24}    # Fixed-size 24-byte header with natural alignment for each field ensured.
-    @sealed
-
-In the case of a Message frame, the ``data_specifier`` field contains the subject-ID of the message
-(15 least significant bits) and the remaining most significant bit represents SNM.
-
-In the case of a Service frame, the ``data_specifier`` field contains the service-ID of the service
-(14 least significant bits) and the remaining two most significant bits represent RNR and SNM
-(second and most significant bits respectively).
-
-Also see the documentation for :class:`UDPFrame`.
-
-Please note: in addition to ``header_crc``, multi-frame transfers contain four bytes of CRC32-C (Castagnoli)
-at the end of the payload computed over the entire transfer payload (payload_crc).
-For more info on multi-frame transfers, please see
-:class:`pycyphal.transport.commons.high_overhead_transport.TransferReassembler`.
-
-Unreliable networks and temporal redundancy
-+++++++++++++++++++++++++++++++++++++++++++
-
-For unreliable networks, deterministic data loss mitigation is supported.
+For unreliable networks, optional forward error correction (FEC) is supported by this implementation.
 This measure is only available for service transfers, not for message transfers due to their different semantics.
 If the probability of a frame loss exceeds the desired reliability threshold,
 the transport can be configured to repeat every outgoing service transfer a specified number of times,
 on the assumption that the probability of losing any given frame is uncorrelated (or weakly correlated)
 with that of its neighbors.
-
 Assuming that the probability of transfer loss ``P`` is time-invariant,
-the influence of the multiplier ``M`` can be approximated as ``P' = P^M``.
-For example, given a network that successfully delivers 99% of transfers,
-and the probabilities of adjacent transfer loss are uncorrelated,
-the multiplication factor of 2 can increase the link reliability up to ``100% - (100% - 99%)^2 = 99.99%``.
+the influence of the FEC multiplier ``M`` can be approximated as ``P' = P^M``.
 
-The duplicates are emitted immediately following the original transfer.
+Duplicates are emitted immediately following the original transfer.
 For example, suppose that a service transfer contains three frames, F0 to F2,
 and the service transfer multiplication factor is two,
 then the resulting frame sequence would be as follows::
@@ -272,16 +58,13 @@ In the following example, the frames F0 and F2 of the main copy are lost, but th
                                                  transfer
 
 Removal of duplicate transfers at the opposite end of the link is natively guaranteed by the Cyphal protocol;
-no special activities are needed there (read the Cyphal Specification for background).
+no special activities are needed there (refer to the Cyphal Specification for background).
 
 For time-deterministic (real-time) networks this strategy is preferred over the conventional
 confirmation-retry approach (e.g., the TCP model) because it results in more predictable
 network load, lower worst-case latency, and is stateless (participants do not make assumptions
 about the state of other agents involved in data exchange).
 
-
-Implementation-specific details
-+++++++++++++++++++++++++++++++
 
 Usage
 +++++
@@ -330,13 +113,11 @@ TransferFrom(..., transfer_id=1111, ...)
 >>> tr_0.close()
 >>> tr_1.close()
 
-TODO Add Service example
-
 
 Tooling
 +++++++
 
-Run Cyphal networks on the local loopback interface (``127.x.y.z/8``) or create virtual interfaces for testing.
+Run Cyphal networks on the local loopback interface (``127.0.0.1``) or create virtual interfaces for testing.
 
 Use Wireshark for monitoring and inspection.
 
