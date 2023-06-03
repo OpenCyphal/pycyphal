@@ -1,0 +1,50 @@
+name: 'PyCyphal application builder'
+
+# Builds OpenCyphal PyCyphal release
+
+on:
+  push:
+    branches:
+      - main
+      - issue-259
+
+# Ensures that only one workflow is running at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  #
+  # PyCyphal test
+  #
+  pycyphal-test:
+    name: Test PyCyphal
+    if: startsWith(github.ref, 'refs/heads/')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04]
+        python: ['3.7', '3.8', '3.9', '3.10']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checking out
+        uses: actions/checkout@v3
+
+      - name: Installing Python3
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Installing dependencies
+        run: |
+          sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
+          git submodule update --init --recursive
+          python -m pip install --upgrade pip setuptools nox
+
+      - name: Run nox tests
+        run: |
+          nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
+          nox --non-interactive --session demo check_style docs
+
+      - name: Diagnostics aid
+        run: ip link show
