@@ -3,118 +3,28 @@
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
 """
-Cyphal/Serial transport overview
+Cyphal/serial transport overview
 ++++++++++++++++++++++++++++++++
 
-The Cyphal/Serial transport is designed for OSI L1 byte-level duplex serial links and tunnels:
+The Cyphal/serial transport is designed for byte-level communication channels, such as:
 
-- UART, RS-422/485/232 (duplex); the recommended rates are: 115200 bps, 921600 bps, 3 Mbps, 10 Mbps, 100 Mbps.
-- USB CDC ACM.
-- TCP/IP encapsulation.
+- TCP/IP
+- UART, RS-422/232
+- USB CDC ACM
 
-It may also be suited for raw transport log storage, because one-dimensional flat binary files are structurally
-similar to serial byte-level links.
+It may also be suited for raw transport log storage.
 
 This transport module contains no media sublayers because the media abstraction
 is handled directly by the `PySerial <https://pypi.org/project/pyserial>`_
 library and the underlying operating system.
 
-The serial transport supports all transfer categories:
-
-+--------------------+--------------------------+---------------------------+
-| Supported transfers| Unicast                  | Broadcast                 |
-+====================+==========================+===========================+
-|**Message**         | Yes, non-spec extension  | Yes                       |
-+--------------------+--------------------------+---------------------------+
-|**Service**         | Yes                      | Banned by Specification   |
-+--------------------+--------------------------+---------------------------+
+For the full protocol definition, please refer to the `Cyphal Specification <https://opencyphal.org/specification>`_.
 
 
-Protocol definition
-+++++++++++++++++++
+Forward error correction (FEC)
+++++++++++++++++++++++++++++++
 
-The packet header is defined as follows (byte/bit ordering in this definition follow the DSDL specification:
-least significant first)::
-
-    uint4 version                # = 1, Discard the frame if not.
-    void4
-
-    uint3 priority               # 0 = highest, 7 = lowest; the rest are unused.
-    void5
-
-    uint16 source_node_id        # 0xFFFF = anonymous.
-    uint16 destination_node_id   # 0xFFFF = broadcast.
-    uint16 data_specifier        # subject-ID | (service-ID + RNR (Request, Not Response))
-
-    uint64 transfer_id
-
-    uint31 frame_index
-    bool   end_of_transfer       # Set if last frame of the transfer
-
-    uint16 user_data             # Opaque application-specific data with user-defined semantics.
-                                 # Generic implementations should ignore
-
-    uint8[2] header_crc_be       # CRC-16-CCITT of the header (all fields above).
-                                 # Most significant byte first.
-
-For message frames, the data specifier field contains the subject-ID value,
-so that the most significant bit is always cleared.
-For service frames, the most significant bit (15th) is always set,
-and the second-to-most-significant bit (14th) is set for request transfers only;
-the remaining 14 least significant bits contain the service-ID value.
-
-Total header size: 24 bytes (192 bits).
-
-The header is prepended before the frame payload; the resulting structure is
-encoded into its serialized form using the following packet format:
-
-+-------------------------+--------------+---------------+--------------------------------+-------------------------+
-| Frame delimiter **0x00**|Escaped header|Escaped payload| Escaped CRC-32C of the payload | Frame delimiter **0x00**|
-+=========================+==============+===============+================================+=========================+
-| 1 byte                  | 24 bytes     | >=0 bytes     | 4 bytes                        | 1 byte                  |
-+-------------------------+--------------+---------------+--------------------------------+-------------------------+
-| Single-byte frame       |                              | Four bytes long, little-endian | Same frame delimiter as |
-| delimiter **0x00**.     |                              | byte order; The CRC is         | at the start.           |
-| Begins a new frame and  |                              | computed over the unescaped    | Terminates the current  |
-| possibly terminates the |                              | (i.e., original form) payload, | frame and possibly      |
-| previous frame.         |                              | not including the header       | begins the next frame.  |
-|                         |                              | (because the header has a      |                         |
-|                         |                              | dedicated CRC).                |                         |
-|                         +------------------------------+--------------------------------+                         |
-|                         | This part is escaped using COBS alorithm by Chesire and Baker |                         |
-|                         | http://www.stuartcheshire.org/papers/COBSforToN.pdf.          |                         |
-|                         | A frame delimiter (0) is guaranteed to never occur here.      |                         |
-+-------------------------+------------------------------+--------------------------------+-------------------------+
-
-The frame encoding overhead is 1 byte in every 254 bytes of the header+payload+CRC, which is about ~0.4%.
-There is a somewhat relevant discussion at
-https://forum.opencyphal.org/t/uavcan-serial-issues-with-dma-friendliness-and-bandwidth-overhead/846.
-
-The last four bytes of a multi-frame transfer payload contain the CRC32C (Castagnoli) hash of the transfer
-payload in little-endian byte order.
-The multi-frame transfer logic (decomposition and reassembly) is implemented in a separate
-transport-agnostic module :mod:`pycyphal.transport.commons.high_overhead_transport`.
-**Despite the fact that the support for multi-frame transfers is built into this transport,
-it should not be relied on and it may be removed later.**
-The reason is that serial links do not have native support for framing, and as such,
-it is possible to configure the MTU to be arbitrarily high to avoid multi-frame transfers completely.
-The lack of multi-frame transfers simplifies implementations drastically, which is important for
-deeply-embedded systems. As such, all serial transfers should be single-frame transfers.
-
-Note that we use CRC-32C (Castagnoli) as the header/frame CRC instead of CRC-32K2 (Koopman-2)
-which is superior at short data blocks offering the Hamming distance of 6 as opposed to 4.
-This is because Castagnoli is superior for transfer CRC which is often sufficiently long
-to flip the balance in favor of Castagnoli rather than Koopman.
-We could use Koopman for the header/frame CRC and keep Castagnoli for the transfer CRC,
-but such diversity is harmful because it would require implementers to keep two separate CRC tables
-which may be costly in embedded applications and may deteriorate the performance of CPU caches.
-
-
-Unreliable links and temporal redundancy
-++++++++++++++++++++++++++++++++++++++++
-
-The serial transport supports the deterministic data loss mitigation option,
-where a transfer can be repeated several times to reduce the probability of its loss.
+This transport supports optional FEC through full duplication of transfers.
 This feature is discussed in detail in the documentation for the UDP transport :mod:`pycyphal.transport.udp`.
 
 

@@ -52,7 +52,7 @@ def make_transport(
 
         * - ``uavcan.udp.duplicate_service_transfers``
           - ``bit[1]``
-          - Apply deterministic data loss mitigation to RPC-service transfers by setting multiplication factor = 2.
+          - Apply forward error correction to RPC-service transfers by setting multiplication factor = 2.
 
         * - ``uavcan.udp.mtu``
           - ``natural16[1]``
@@ -73,7 +73,7 @@ def make_transport(
 
         * - ``uavcan.serial.duplicate_service_transfers``
           - ``bit[1]``
-          - Apply deterministic data loss mitigation to RPC-service transfers by setting multiplication factor = 2.
+          - Apply forward error correction to RPC-service transfers by setting multiplication factor = 2.
 
         * - ``uavcan.serial.baudrate``
           - ``natural32[1]``

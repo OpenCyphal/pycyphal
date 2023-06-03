@@ -47,7 +47,7 @@ class RedundantCapture(pycyphal.transport.Capture):
 class RedundantDuplicateTransferTrace(pycyphal.transport.Trace):
     """
     Indicates that the last capture object completed a valid transfer that was discarded as a duplicate
-    (either received from another redundant interface or deterministic data loss mitigation (DDLM) is employed).
+    (either received from another redundant interface or forward error correction is employed).
 
     Observe that it is NOT a subclass of :class:`pycyphal.transport.TransferTrace`!
     It shall not be one because duplicates should not be processed normally.

@@ -207,7 +207,7 @@ class Transport(abc.ABC):
         Technically, the capture protocol, as you can see, does not present any requirements to the emitted events,
         so an implementation that pretends to enter the capture mode while not actually doing anything is compliant.
 
-        Since capture reflects actual network events, deterministic data loss mitigation will make the instance emit
+        Since capture reflects actual network events, FEC will make the instance emit
         duplicate frames for affected transfers (although this is probably obvious enough without this elaboration).
 
         It is not possible to disable capture. Once enabled, it will go on until the transport instance is destroyed.
