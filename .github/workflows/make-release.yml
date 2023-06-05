@@ -23,28 +23,54 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04]
+        os: [ubuntu-20.04, windows-2019-npcap]
         python: ['3.7', '3.8', '3.9', '3.10']
+        exclude:
+          - os: windows-2019-npcap
+            python: '3.8'
+          - os: windows-2019-npcap
+            python: '3.9'
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checking out
+      # Checkout code from GitHub
+      - name: Check out
         uses: actions/checkout@v3
 
-      - name: Installing Python3
+      # Install Python version needed for test
+      - name: Install Python3
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Installing dependencies
+      # Log Python version
+      - name: Log Python version
+        run: python --version
+
+      # Install test dependencies
+      - name: Install dependencies
         run: |
-          sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
+          fi
           git submodule update --init --recursive
           python -m pip install --upgrade pip setuptools nox
+        shell: bash
 
+      # Log system and network configurations
+      - name: Collect Linux diagnostic data
+        if: ${{ runner.os == 'Linux' }}
+        run: ip link show
+
+      - name: Collect Windows diagnostic data
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          systeminfo
+          route print
+          ipconfig /all
+
+      # Run test suite
       - name: Run nox tests
         run: |
           nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
           nox --non-interactive --session demo check_style docs
 
-      - name: Diagnostics aid
-        run: ip link show
