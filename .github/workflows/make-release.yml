@@ -25,11 +25,6 @@ jobs:
       matrix:
         os: [ubuntu-20.04, windows-2019-npcap]
         python: ['3.7', '3.8', '3.9', '3.10']
-        exclude:
-          - os: windows-2019-npcap
-            python: '3.8'
-          - os: windows-2019-npcap
-            python: '3.9'
     runs-on: ${{ matrix.os }}
     steps:
       # Checkout code from GitHub
@@ -73,4 +68,47 @@ jobs:
         run: |
           nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
           nox --non-interactive --session demo check_style docs
+
+      # Save test logs
+      - name: Save logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: PyCyphal-${{ matrix.os }}-python-${{ matrix.python }}
+          path: .nox/*/*/*.log
+          retention-days: 7
+
+  #
+  # Create release
+  #
+  pycyphal-release:
+    name: Release PyCyphal
+    if: startsWith(github.ref, 'refs/heads/')
+    needs: pycyphal-test
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout code from GitHub
+      - name: Check out
+        uses: actions/checkout@v3
+
+      # Build distribution from source
+      - name: Install dependencies
+        run: |
+          git submodule update --init --recursive
+          python -m pip install --upgrade pip setuptools wheel twine
+          python setup.py sdist bdist_wheel
+
+      # Upload distribution to pypi.org
+      - name: Upload distribution
+        run: |
+          # python -m twin upload dist/*
+          ls -l dist/*
+
+      # Tag release
+      # - name: Push version tag
+      #   id: tag_version
+      #   uses: mathieudutour/github-tag-action@v6.1
+      #   with:
+      #     github_token: ${{ secrets.OPENCYPHAL_TOKEN }}
+      #     custom_tag: ${{ inputs.version }}
+      #     tag_prefix: ''
 
