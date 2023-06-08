@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - main
-      - issue-259
 
 # Ensures that only one workflow is running at a time
 concurrency:
@@ -97,18 +96,20 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel twine
           python setup.py sdist bdist_wheel
 
+      # Obtain release version number
+      - name: Get release version
+        run: |
+          cd pycyphal
+          echo "pycyphal_version=$(python -c 'from _version import __version__; print(__version__)')" >> $GITHUB_ENV
+
       # Upload distribution to pypi.org
       - name: Upload distribution
-        run: |
-          # python -m twin upload dist/*
-          ls -l dist/*
+        run: python -m twin upload dist/*
 
       # Tag release
-      # - name: Push version tag
-      #   id: tag_version
-      #   uses: mathieudutour/github-tag-action@v6.1
-      #   with:
-      #     github_token: ${{ secrets.OPENCYPHAL_TOKEN }}
-      #     custom_tag: ${{ inputs.version }}
-      #     tag_prefix: ''
-
+      - name: Push version tag
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          custom_tag: ${{ env.pycyphal_version }}
+          tag_prefix: ''
