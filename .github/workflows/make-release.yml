@@ -6,7 +6,6 @@ on:
   push:
     branches:
       - master
-      - issue-259
 
 # Ensures that only one workflow is running at a time
 concurrency:
@@ -65,7 +64,6 @@ jobs:
 
       # Run build and test suite
       - name: Run build and test
-        if: false
         run: |
           nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
           nox --non-interactive --session demo check_style docs
@@ -110,8 +108,7 @@ jobs:
           python -m twine upload dist/*
         env:
           TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN_GLOBAL }}
-          TWINE_REPOSITORY: testpypi
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN_GLOBAL }}
 
       # Tag release
       - name: Push version tag
@@ -120,4 +117,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           custom_tag: ${{ env.pycyphal_version }}
           tag_prefix: ''
-          dry_run: true
+          dry_run: false
