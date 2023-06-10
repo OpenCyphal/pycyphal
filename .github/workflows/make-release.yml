@@ -5,7 +5,7 @@ name: 'PyCyphal application builder'
 on:
   push:
     branches:
-      - main
+      - master
 
 # Ensures that only one workflow is running at a time
 concurrency:
@@ -104,7 +104,7 @@ jobs:
 
       # Upload distribution to pypi.org
       - name: Upload distribution
-        run: python -m twin upload dist/*
+        run: python -m twine upload dist/*
 
       # Tag release
       - name: Push version tag
