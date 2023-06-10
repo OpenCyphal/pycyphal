@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - master
+      - issue-259
 
 # Ensures that only one workflow is running at a time
 concurrency:
@@ -62,13 +63,14 @@ jobs:
           route print
           ipconfig /all
 
-      # Run test suite
-      - name: Run nox tests
+      # Run build and test suite
+      - name: Run build and test
+        if: false
         run: |
           nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
           nox --non-interactive --session demo check_style docs
 
-      # Save test logs
+      # Save logs
       - name: Save logs
         uses: actions/upload-artifact@v3
         with:
@@ -104,7 +106,12 @@ jobs:
 
       # Upload distribution to pypi.org
       - name: Upload distribution
-        run: python -m twine upload dist/*
+        run: |
+          python -m twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TEST_API_TOKEN_GLOBAL }}
+          TWINE_REPOSITORY: testpypi
 
       # Tag release
       - name: Push version tag
@@ -113,3 +120,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           custom_tag: ${{ env.pycyphal_version }}
           tag_prefix: ''
+          dry_run: true
