@@ -1,9 +1,11 @@
 name: 'PyCyphal application builder'
 
 # Builds OpenCyphal PyCyphal release
-
 on:
   push:
+    branches:
+      - master
+  pull_request:
     branches:
       - master
 
@@ -18,7 +20,6 @@ jobs:
   #
   pycyphal-test:
     name: Test PyCyphal
-    if: startsWith(github.ref, 'refs/heads/')
     strategy:
       fail-fast: false
       matrix:
@@ -81,7 +82,7 @@ jobs:
   #
   pycyphal-release:
     name: Release PyCyphal
-    if: startsWith(github.ref, 'refs/heads/')
+    if: github.event_name == 'push'
     needs: pycyphal-test
     runs-on: ubuntu-latest
     steps:
@@ -108,7 +109,7 @@ jobs:
           python -m twine upload dist/*
         env:
           TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN_GLOBAL }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN_PYCYPHAL }}
 
       # Tag release
       - name: Push version tag
@@ -117,4 +118,3 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           custom_tag: ${{ env.pycyphal_version }}
           tag_prefix: ''
-          dry_run: false
