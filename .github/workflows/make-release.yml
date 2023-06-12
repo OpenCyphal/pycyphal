@@ -27,7 +27,7 @@ jobs:
         python: ['3.7', '3.8', '3.9', '3.10']
     runs-on: ${{ matrix.os }}
     steps:
-      # Checkout code from GitHub
+      # Checkout pycyphal repository
       - name: Check out
         uses: actions/checkout@v3
 
@@ -82,7 +82,7 @@ jobs:
   #
   pycyphal-release:
     name: Release PyCyphal
-    if: github.event_name == 'push'
+    if: (github.event_name == 'push') && (github.ref == 'refs/heads/master')
     needs: pycyphal-test
     runs-on: ubuntu-latest
     steps:
