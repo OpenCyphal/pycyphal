@@ -79,6 +79,8 @@ class PythonCANMedia(Media):
         iface_name: str,
         bitrate: typing.Union[int, typing.Tuple[int, int]],
         mtu: typing.Optional[int] = None,
+        host: typing.Optional[str] = None,
+        port: typing.Optional[int] = None,
         *,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
@@ -127,6 +129,10 @@ class PythonCANMedia(Media):
               Example: ``gs_usb:0``
               Note: this interface currently requires unreleased `python-can` version from git.
 
+            - Interface ``socketcand`` is described in https://github.com/linux-can/socketcand
+              uses two extra variables than normal, host and port. Default port is 29536. 
+              Channel is a CAN interface, commonly can0. 
+
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
             - A single integer selects Classic CAN.
@@ -141,6 +147,15 @@ class PythonCANMedia(Media):
 
             - If `bitrate` is a single integer: classic CAN is assumed, MTU defaults to 8 bytes.
             - If `bitrate` is two integers: CAN FD is assumed, MTU defaults to 64 bytes.
+
+        :param host: Only for socketcand interface, ip addr of computer running socketcand
+            Should be in ip address format like '123.123.1.123'
+            Not needed for any interface besides socketcand
+
+        :param port: Only for socketcand, the port your socketcand is connected too
+            Default is 29536 if not provided and running socketcand
+            If different than default the format should just be the port number
+            Not needed for interfaces besides socketcand
 
         :param loop: Deprecated.
 
@@ -192,7 +207,17 @@ class PythonCANMedia(Media):
         self._is_fd = (self._mtu > min(self.VALID_MTU_SET) or not single_bitrate) and not (
             self._mtu == min(self.VALID_MTU_SET) and bitrate[0] == bitrate[1]
         )
-
+        
+        # For socketcand implimentation
+        self._is_socketcand = (host is not None) and (self._conn_name[0] == "socketcand")
+        if (self._conn_name[0] == "socketcand")and not (self._is_socketcand):
+            raise InvalidMediaConfigurationError(
+                f"Missing arguments for socketcand host, you had host={host}"
+            )
+        if (self._is_socketcand) and (port is None):
+            port = 29536
+            
+            
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
@@ -203,11 +228,13 @@ class PythonCANMedia(Media):
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
         if self._is_fd:
             params = _FDInterfaceParameters(
-                interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate
+                interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate,
+                host_name=host, port_name=port
             )
         else:
             params = _ClassicInterfaceParameters(
-                interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate[0]
+                interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate[0],
+                host_name=host, port_name=port
             )
         try:
             bus_options, bus = _CONSTRUCTORS[self._conn_name[0]](params)
@@ -401,16 +428,17 @@ class PythonCANMedia(Media):
 class _InterfaceParameters:
     interface_name: str
     channel_name: str
+    host_name: typing.Optional[str] = None
+    port_name: typing.Optional[int] = None
 
 
 @dataclasses.dataclass(frozen=True)
 class _ClassicInterfaceParameters(_InterfaceParameters):
-    bitrate: int
-
+    bitrate: typing.Optional[int] = None
 
 @dataclasses.dataclass(frozen=True)
 class _FDInterfaceParameters(_InterfaceParameters):
-    bitrate: typing.Tuple[int, int]
+    bitrate: typing.Tuple[int, int] = None
 
 
 def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
@@ -589,6 +617,33 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
     assert False, "Internal error"
 
+def _construct_socketcand(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                host=parameters.host_name,
+                port=parameters.port_name,
+                channel=parameters.channel_name,
+                bitrate=parameters.bitrate
+            ),
+        )
+    if isinstance(parameters, _FDInterfaceParameters):
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                host=parameters.host_name,
+                port=parameters.port_name,
+                channel=parameters.channel_name,
+                bitrate=parameters.bitrate[0],
+                fd=True,
+                data_bitrate=parameters.bitrate[1],
+            ),
+        )
+    assert False, "Internal error"    
+
 
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     raise InvalidMediaConfigurationError(f"Interface not supported yet: {parameters.interface_name}")
@@ -608,5 +663,6 @@ _CONSTRUCTORS: typing.DefaultDict[
         "canalystii": _construct_canalystii,
         "seeedstudio": _construct_seeedstudio,
         "gs_usb": _construct_gs_usb,
+        "socketcand": _construct_socketcand
     },
 )
