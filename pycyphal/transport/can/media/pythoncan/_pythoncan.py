@@ -227,8 +227,8 @@ class PythonCANMedia(Media):
             )
         elif self._is_socketcand:
             params = _SocketcandInterfaceParameters(
-                interface_name=self._conn_name[0], channel_name=self._sktcndvars[0], bitrate=bitrate,
-                host=self._sktcndvars[1], port=int(self._sktcndvars[2])
+                interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate,
+                host=host, port=port
             )
         else:
             params = _ClassicInterfaceParameters(
