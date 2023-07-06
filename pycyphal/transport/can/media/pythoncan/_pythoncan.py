@@ -194,25 +194,18 @@ class PythonCANMedia(Media):
         self._is_fd = (self._mtu > min(self.VALID_MTU_SET) or not single_bitrate) and not (
             self._mtu == min(self.VALID_MTU_SET) and bitrate[0] == bitrate[1]
         )
-        # For socketcand implimentation
         
+        # For socketcand implimentation
         self._is_socketcand = (host is not None and port is not None) and (self._conn_name[0] == "socketcand")
         if (self._conn_name[0] == "socketcand")and not (self._is_socketcand):
             raise InvalidMediaConfigurationError(
                 f"Missing arguments for socketcand host and port, you had host={host} and port={port}"
             )
-            
-            
-        """
-        self._sktcndvars= str(self._conn_name[1]).split("|")
-        self._is_socketcand = len(self._sktcndvars) == 3 and (self._conn_name[0] == "socketcand")
-        if (self._conn_name[0] == "socketcand")and not (self._is_socketcand):
+        if (self._conn_name[0] == "socketcand") and self._is_fd:
             raise InvalidMediaConfigurationError(
-                f"Missing arguments for socketcand host and port, you had host={self._sktcndvars[1]} and port={self._sktcndvars[2]}"
+                f"Socketcand does not function with CAN FD, _is_fd={self._is_fd}"
             )
-        """
-
-
+            
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
