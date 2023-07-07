@@ -214,7 +214,7 @@ class PythonCANMedia(Media):
         if self._is_fd:
             params = _FDInterfaceParameters(
                 interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate,
-                host = host, port = port
+                host_name=host, port_name=port
             )
         else:
             params = _ClassicInterfaceParameters(
@@ -425,6 +425,8 @@ class _ClassicInterfaceParameters(_InterfaceParameters):
 @dataclasses.dataclass(frozen=True)
 class _FDInterfaceParameters(_InterfaceParameters):
     bitrate: typing.Tuple[int, int]
+    host_name: typing.Optional[str] = None
+    port_name: typing.Optional[int] = None
 
 
 def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
