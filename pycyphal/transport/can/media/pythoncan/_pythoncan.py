@@ -80,7 +80,7 @@ class PythonCANMedia(Media):
         bitrate: typing.Union[int, typing.Tuple[int, int]],
         mtu: typing.Optional[int] = None,
         host: typing.Optional[str] = None,
-        port: typing.Optional[int] = None,
+        port: typing.Optional[int] = 29536,
         *,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
@@ -196,15 +196,12 @@ class PythonCANMedia(Media):
         )
         
         # For socketcand implimentation
-        self._is_socketcand = (host is not None and port is not None) and (self._conn_name[0] == "socketcand")
+        self._is_socketcand = (host is not None) and (self._conn_name[0] == "socketcand")
         if (self._conn_name[0] == "socketcand")and not (self._is_socketcand):
             raise InvalidMediaConfigurationError(
-                f"Missing arguments for socketcand host and port, you had host={host} and port={port}"
+                f"Missing arguments for socketcand host, you had host={host}"
             )
-        if (self._conn_name[0] == "socketcand") and self._is_fd:
-            raise InvalidMediaConfigurationError(
-                f"Socketcand does not function with CAN FD, _is_fd={self._is_fd}"
-            )
+        
             
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
@@ -216,16 +213,13 @@ class PythonCANMedia(Media):
         params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters, _SocketcandInterfaceParameters]
         if self._is_fd:
             params = _FDInterfaceParameters(
-                interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate
-            )
-        elif self._is_socketcand:
-            params = _SocketcandInterfaceParameters(
                 interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate,
-                host=host, port=port
+                host = host, port = port
             )
         else:
             params = _ClassicInterfaceParameters(
-                interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate[0]
+                interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate[0],
+                host_name=host, port_name=port
             )
         try:
             bus_options, bus = _CONSTRUCTORS[self._conn_name[0]](params)
@@ -424,17 +418,13 @@ class _InterfaceParameters:
 @dataclasses.dataclass(frozen=True)
 class _ClassicInterfaceParameters(_InterfaceParameters):
     bitrate: int
+    host_name: typing.Optional[str] = None
+    port_name: typing.Optional[int] = None
 
 
 @dataclasses.dataclass(frozen=True)
 class _FDInterfaceParameters(_InterfaceParameters):
     bitrate: typing.Tuple[int, int]
-
-@dataclasses.dataclass(frozen=True)
-class _SocketcandInterfaceParameters(_InterfaceParameters):
-    bitrate: int
-    host: str
-    port: str
 
 
 def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
@@ -614,7 +604,7 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     assert False, "Internal error"
 
 def _construct_socketcand(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    if isinstance(parameters, _SocketcandInterfaceParameters):
+    if isinstance(parameters, _ClassicInterfaceParameters):
         return (
             PythonCANBusOptions(),
             can.ThreadSafeBus(
@@ -625,12 +615,19 @@ def _construct_socketcand(parameters: _InterfaceParameters) -> can.ThreadSafeBus
                 bitrate=parameters.bitrate
             ),
         )
-    
-    if isinstance(parameters, _ClassicInterfaceParameters):
-        raise InvalidMediaConfigurationError(f"Interface does not support CAN: {parameters.interface_name}")
-    
     if isinstance(parameters, _FDInterfaceParameters):
-        raise InvalidMediaConfigurationError(f"Interface does not support CAN FD: {parameters.interface_name}")
+        return (
+            PythonCANBusOptions(),
+            can.ThreadSafeBus(
+                interface=parameters.interface_name,
+                host=parameters.host,
+                port=parameters.port,
+                channel=parameters.channel_name,
+                bitrate=parameters.bitrate[0],
+                fd=True,
+                data_bitrate=parameters.bitrate[1],
+            ),
+        )
     assert False, "Internal error"    
 
 
