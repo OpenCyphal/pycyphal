@@ -78,9 +78,9 @@ class PythonCANMedia(Media):
         self,
         iface_name: str,
         bitrate: typing.Union[int, typing.Tuple[int, int]],
+        mtu: typing.Optional[int] = None,
         host: typing.Optional[str] = None,
         port: typing.Optional[int] = None,
-        mtu: typing.Optional[int] = None,
         *,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
