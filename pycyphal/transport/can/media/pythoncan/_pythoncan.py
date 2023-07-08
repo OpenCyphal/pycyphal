@@ -129,6 +129,10 @@ class PythonCANMedia(Media):
               Example: ``gs_usb:0``
               Note: this interface currently requires unreleased `python-can` version from git.
 
+            - Interface ``socketcand`` is described in https://github.com/linux-can/socketcand
+              uses two extra variables than normal, host and port. Default port is 29536. 
+              Channel is a CAN interface, commonly can0. 
+
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
             - A single integer selects Classic CAN.
@@ -143,6 +147,15 @@ class PythonCANMedia(Media):
 
             - If `bitrate` is a single integer: classic CAN is assumed, MTU defaults to 8 bytes.
             - If `bitrate` is two integers: CAN FD is assumed, MTU defaults to 64 bytes.
+
+        :param host: Only for socketcand interface, ip addr of computer running socketcand
+            Should be in ip address format like '123.123.1.123'
+            Not needed for any interface besides socketcand
+
+        :param port: Only for socketcand, the port your socketcand is connected too
+            Default is 29536 if not provided and running socketcand
+            If different than default the format should just be the port number
+            Not needed for interfaces besides socketcand
 
         :param loop: Deprecated.
 
