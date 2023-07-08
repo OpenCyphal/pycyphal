@@ -210,7 +210,7 @@ class PythonCANMedia(Media):
         self._tx_queue: queue.Queue[_TxItem | None] = queue.Queue()
         self._tx_thread = threading.Thread(target=self.transmit_thread_worker, daemon=True)
 
-        params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters, _SocketcandInterfaceParameters]
+        params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
         if self._is_fd:
             params = _FDInterfaceParameters(
                 interface_name=self._conn_name[0], channel_name=self._conn_name[1], bitrate=bitrate,
@@ -611,8 +611,8 @@ def _construct_socketcand(parameters: _InterfaceParameters) -> can.ThreadSafeBus
             PythonCANBusOptions(),
             can.ThreadSafeBus(
                 interface=parameters.interface_name,
-                host=parameters.host,
-                port=parameters.port,
+                host=parameters.host_name,
+                port=parameters.port_name,
                 channel=parameters.channel_name,
                 bitrate=parameters.bitrate
             ),
@@ -622,8 +622,8 @@ def _construct_socketcand(parameters: _InterfaceParameters) -> can.ThreadSafeBus
             PythonCANBusOptions(),
             can.ThreadSafeBus(
                 interface=parameters.interface_name,
-                host=parameters.host,
-                port=parameters.port,
+                host=parameters.host_name,
+                port=parameters.port_name,
                 channel=parameters.channel_name,
                 bitrate=parameters.bitrate[0],
                 fd=True,
