@@ -428,20 +428,17 @@ class PythonCANMedia(Media):
 class _InterfaceParameters:
     interface_name: str
     channel_name: str
+    host_name: typing.Optional[str] = None
+    port_name: typing.Optional[int] = None
 
 
 @dataclasses.dataclass(frozen=True)
 class _ClassicInterfaceParameters(_InterfaceParameters):
-    bitrate: int
-    host_name: typing.Optional[str] = None
-    port_name: typing.Optional[int] = None
-
+    bitrate: typing.Optional[int] = None
 
 @dataclasses.dataclass(frozen=True)
 class _FDInterfaceParameters(_InterfaceParameters):
-    bitrate: typing.Tuple[int, int]
-    host_name: typing.Optional[str] = None
-    port_name: typing.Optional[int] = None
+    bitrate: typing.Tuple[int, int] = None
 
 
 def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
