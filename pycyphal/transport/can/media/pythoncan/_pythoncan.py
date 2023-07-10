@@ -80,7 +80,7 @@ class PythonCANMedia(Media):
         bitrate: typing.Union[int, typing.Tuple[int, int]],
         mtu: typing.Optional[int] = None,
         host: typing.Optional[str] = None,
-        port: typing.Optional[int] = 29536,
+        port: typing.Optional[int] = None,
         *,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
@@ -214,7 +214,9 @@ class PythonCANMedia(Media):
             raise InvalidMediaConfigurationError(
                 f"Missing arguments for socketcand host, you had host={host}"
             )
-        
+        if (self._is_socketcand) and (port is None):
+            port = 29536
+            
             
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
