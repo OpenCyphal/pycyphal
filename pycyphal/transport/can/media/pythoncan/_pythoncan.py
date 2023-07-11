@@ -438,7 +438,7 @@ class _ClassicInterfaceParameters(_InterfaceParameters):
 
 @dataclasses.dataclass(frozen=True)
 class _FDInterfaceParameters(_InterfaceParameters):
-    bitrate: typing.Tuple[int, int] = None
+    bitrate: typing.Optional[typing.Tuple[int, int]] = None
 
 
 def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
