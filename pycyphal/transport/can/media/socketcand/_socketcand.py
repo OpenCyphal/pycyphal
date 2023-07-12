@@ -56,36 +56,27 @@ class PythonCANBusOptions:
 class SocketcandMedia(Media):
     # pylint: disable=line-too-long
     """
-    
-    Media interface adapter for `Socketcand <https://github.com/linux-can/socketcand/tree/master>` using the 
+    Media interface adapter for `Socketcand <https://github.com/linux-can/socketcand/tree/master>` using the
     built in interface compatibility from `Python-CAN <https://python-can.readthedocs.io/>`.
-    Please refer to the Socketcand documentation and the Python-CAN documentation for information about 
+    Please refer to the Socketcand documentation and the Python-CAN documentation for information about
     supported hardware, configuration, and installation instructions.
 
     This media interface supports both Classic CAN and CAN FD. The selection logic is documented below.
 
-    Here is a basic usage example based on the Yakut CLI tool. 
-    Suppose you have two computers: 
-    One connected to a CAN capable device and that computer is able to connect and recieve CAN data from the 
-    CAN device. Using socketcand with a command such as `socketcand -v -i [CAN_INTERFACE] -l [NETWORK_INTERFACE]`
+    Here is a basic usage example based on the Yakut CLI tool.
+    Suppose you have two computers:
+    One connected to a CAN capable device and that computer is able to connect and recieve CAN data from the
+    CAN device. Using socketcand with a command such as `socketcand -v -i can0 -l 123.123.1.123`
     on this first computer will bind it too a socket (default port for socketcand is 29536, so it is also default here).
-    
-    On your second computer, launch Yakut to listen for messages using the socketcand adapter::
 
-        yakut --transport "CAN(can.media.socketcand.SocketcandMedia('[CAN_INTERFACE]',[BITRATE],'[NETWORK_INTERFACE]',
-        [PORT]),99)" call 18 uavcan.node.GetInfo.1.0 '{}'
-    OR
-        yakut --transport "CAN(can.media.socketcand.SocketcandMedia('[CAN_INTERFACE]',[BITRATE],[NETWORK_INTERFACE]),99)" 
-        call 18 uavcan.node.GetInfo.1.0 '{}'
+    On your second computer:
 
-    With example parameter values, CAN_INTERFACE='can0', BITRATE=500000, NETWORK_INTERFACE=123.123.1.123,
-    PORT=29536, this is what a yakut command using this Media type would look like:
+        export UAVCAN__CAN__IFACE="socketcand:can0:123.123.1.123"
+        export UAVCAN__CAN__BITRATE='500000'
+        export UAVCAN__CAN__MTU=8
+        yakut sub 33:uavcan.si.unit.voltage.scalar
 
-        yakut --transport "CAN(can.media.socketcand.SocketcandMedia('can0',500000,'123.123.1.123',
-        29536),99)" call 18 uavcan.node.GetInfo.1.0 '{}'
-
-    This will allow you to wirelessly recieve CAN data on computer 2 using socketcand, yakut, and pycyphal
-    
+    This will allow you to wirelessly recieve CAN data on computer two through the wired connection on computer 1.
 
     """
 
@@ -93,27 +84,20 @@ class SocketcandMedia(Media):
 
     def __init__(
         self,
-        can_Iface: str,
+        iface_name: str,
         bitrate: typing.Union[int, typing.Tuple[int, int]],
-        host: str,
-        port: typing.Optional[int] =29536,
         mtu: typing.Optional[int] = None,
         *,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
         """
-        :param can_Iface: Name of CAN interface that remote computer is connected through via the socketcand library:
-            - Often is can0
-            - When creating socketcand socket, this is the name following -I (name)
-        
-        :param host: IP addr of remote computer:
-            - Should be in ip address format like '123.123.1.123'
-
-        :param port: Port of socket that remote computer is bound too:
-            - Always an int
-            - Default is 29536 (this is the default put by the socketcand library as well)
+        :param iface_name: Name of CAN interface that remote computer is connected through via the socketcand library:
+            This holds the can channel, host ip addr, and port of the socket.
+            It must be in the form: "socketcand:[CAN_CHANNEL]:[HOST_IP]:[PORT]"
+            or without port: "socketcand:[CAN_CHANNEL]:[HOST_IP]" (default port is 29536).
 
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
+
             - A single integer selects Classic CAN.
             - A tuple of two selects CAN FD, where the first integer defines the arbitration (nominal) bit rate
               and the second one defines the data phase bit rate.
@@ -132,16 +116,23 @@ class SocketcandMedia(Media):
         :raises: :class:`InvalidMediaConfigurationError` if the specified media instance
             could not be constructed, the interface name is unknown,
             or if the underlying library raised a :class:`can.CanError`.
-
         """
-        if ":" in can_Iface:
-            socketcand_iface = str(can_Iface).split(":",1)
-            self._can = socketcand_iface[1]
+
+        self._conn_name = str(iface_name).split(":")
+
+        if (len(self._conn_name) == 3) or (len(self._conn_name) == 4):
+            self._iface = self._conn_name[0]
+            self._can_channel = self._conn_name[1]
+            self._host = self._conn_name[2]
+            if len(self._conn_name) == 4:
+                self._port = self._conn_name[3]
+            else:
+                self._port = 29536
         else:
-            self._can = can_Iface
-        self._host = host
-        self._port = port
-        
+            raise InvalidMediaConfigurationError(
+                f"Interface name {iface_name!r} does not match the format 'interface:channel:host:port' or 'interface:channel:host'"
+            )
+
         if loop:
             warnings.warn("The loop argument is deprecated", DeprecationWarning)
 
@@ -156,9 +147,7 @@ class SocketcandMedia(Media):
         self._is_fd = (self._mtu > min(self.VALID_MTU_SET) or not single_bitrate) and not (
             self._mtu == min(self.VALID_MTU_SET) and bitrate[0] == bitrate[1]
         )
-        
-        
-            
+
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
@@ -166,19 +155,17 @@ class SocketcandMedia(Media):
         self._tx_queue: queue.Queue[_TxItem | None] = queue.Queue()
         self._tx_thread = threading.Thread(target=self.transmit_thread_worker, daemon=True)
 
-        params: typing.Union[_FDInterfaceParameters, _ClassicInterfaceParameters]
-        if self._is_fd:
-            params = _FDInterfaceParameters(
-                iface_name=self._can, host_name=self._host, port_name=self._port, bitrate=bitrate,
-            )
-        else:
-            params = _ClassicInterfaceParameters(
-                
-                iface_name=self._can, host_name=self._host, port_name=self._port, bitrate=bitrate[0],
-            )
         try:
-            bus_options, bus = _construct_socketcand(params)
-            self._bus_options: PythonCANBusOptions = bus_options
+            bus = can.ThreadSafeBus(
+                interface="socketcand",
+                host=self._host,
+                port=self._port,
+                channel=self._can_channel,
+                bitrate=bitrate,
+                fd=self.is_fd,
+                data_bitrate=bitrate[1],
+            )
+
             self._bus: can.ThreadSafeBus = bus
         except can.CanError as ex:
             raise InvalidMediaConfigurationError(f"Could not initialize PythonCAN: {ex}") from ex
@@ -186,13 +173,13 @@ class SocketcandMedia(Media):
 
     @property
     def interface_name(self) -> str:
-        return self._can
-    
+        return self._can_channel
+
     @property
     def host_name(self) -> str:
         return self._host
-    
-    @property 
+
+    @property
     def port_name(self) -> int:
         return self._port
 
@@ -290,7 +277,7 @@ class SocketcandMedia(Media):
                 if f.loopback:
                     loopback.append((Timestamp.now(), f))
         # Fake received frames if hardware does not support loopback
-        if loopback and not self._bus_options.hardware_loopback:
+        if loopback:
             loop.call_soon(self._invoke_rx_handler, loopback)
         return num_sent
 
@@ -352,14 +339,11 @@ class SocketcandMedia(Media):
             if msg is None:
                 break
 
-            mono_ns = msg.timestamp * 1e9 if self._bus_options.hardware_timestamp else time.monotonic_ns()
-            timestamp = Timestamp(system_ns=time.time_ns(), monotonic_ns=mono_ns)
-
-            loopback = self._bus_options.hardware_loopback and (not msg.is_rx)
+            timestamp = Timestamp(system_ns=time.time_ns(), monotonic_ns=time.monotonic_ns())
 
             frame = self._parse_native_frame(msg)
             if frame is not None:
-                batch.append((timestamp, Envelope(frame, loopback)))
+                batch.append((timestamp, Envelope(frame, False)))
         return batch
 
     @staticmethod
@@ -370,47 +354,3 @@ class SocketcandMedia(Media):
         frame_format = FrameFormat.EXTENDED if msg.is_extended_id else FrameFormat.BASE
         data = msg.data
         return DataFrame(frame_format, msg.arbitration_id, data)
-
-
-@dataclasses.dataclass(frozen=True)
-class _InterfaceParameters:
-    iface_name: str
-    host_name: str
-    port_name: int 
-
-
-@dataclasses.dataclass(frozen=True)
-class _ClassicInterfaceParameters(_InterfaceParameters):
-    bitrate: int
-
-@dataclasses.dataclass(frozen=True)
-class _FDInterfaceParameters(_InterfaceParameters):
-    bitrate: typing.Tuple[int, int]
-
-def _construct_socketcand(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    if isinstance(parameters, _ClassicInterfaceParameters):
-        return (
-            PythonCANBusOptions(),
-            can.ThreadSafeBus(
-                interface='socketcand',
-                host=parameters.host_name,
-                port=parameters.port_name,
-                channel=parameters.iface_name,
-                bitrate=parameters.bitrate
-            ),
-        )
-    if isinstance(parameters, _FDInterfaceParameters):
-        return (
-            PythonCANBusOptions(),
-            can.ThreadSafeBus(
-                interface='socketcand',
-                host=parameters.host_name,
-                port=parameters.port_name,
-                channel=parameters.iface_name,
-                bitrate=parameters.bitrate[0],
-                fd=True,
-                data_bitrate=parameters.bitrate[1],
-            ),
-        )
-    assert False, "Internal error"    
-
