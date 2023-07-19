@@ -300,7 +300,14 @@ def _make_can(
             elif iface.lower().startswith("socketcand:"):
                 from pycyphal.transport.can.media.socketcand import SocketcandMedia
 
-                media = SocketcandMedia(iface, br_arb if br_arb == br_data else (br_arb, br_data), mtu)
+                params = iface.split(":")
+                channel = params[1]
+                host = params[2]
+                port = 29536
+                if len(params) == 4:
+                    port = int(params[3])
+
+                media = SocketcandMedia(channel, host, port)
             else:
                 from pycyphal.transport.can.media.pythoncan import PythonCANMedia
 

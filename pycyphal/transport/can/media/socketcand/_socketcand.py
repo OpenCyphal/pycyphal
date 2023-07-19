@@ -2,14 +2,6 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Alex Kiselev <a.kiselev@volz-servos.com>, Pavel Kirienko <pavel@opencyphal.org>
 
-"""
-Note: This Media interface functions almost indentically to PythonCANMedia, the only reason
-    for a completely different Media type is due to extra two variables, host and port, that none
-    of the other PythonCAN compatible interfaces take. In the future, hopefully this Media type
-    will be implimented without the use of PythonCAN at all.
-
-"""
-
 from __future__ import annotations
 import queue
 import time
@@ -19,7 +11,6 @@ import logging
 import threading
 from functools import partial
 import dataclasses
-import warnings
 
 import can
 from pycyphal.transport import Timestamp, ResourceClosedError, InvalidMediaConfigurationError
@@ -37,22 +28,6 @@ class _TxItem:
     loop: asyncio.AbstractEventLoop
 
 
-@dataclasses.dataclass(frozen=True)
-class PythonCANBusOptions:
-    hardware_loopback: bool = False
-    """
-    Hardware loopback support.
-        If True, loopback is handled by the supported hardware.
-        If False, loopback is emulated with software.
-    """
-    hardware_timestamp: bool = False
-    """
-    Hardware timestamp support.
-        If True, timestamp returned by the hardware is used.
-        If False, approximate timestamp is captured by software.
-    """
-
-
 class SocketcandMedia(Media):
     # pylint: disable=line-too-long
     """
@@ -65,15 +40,14 @@ class SocketcandMedia(Media):
 
     Here is a basic usage example based on the Yakut CLI tool.
     Suppose you have two computers:
+
     One connected to a CAN capable device and that computer is able to connect and recieve CAN data from the
     CAN device. Using socketcand with a command such as `socketcand -v -i can0 -l 123.123.1.123`
     on this first computer will bind it too a socket (default port for socketcand is 29536, so it is also default here).
 
-    On your second computer:
+    Then, on your second computer::
 
         export UAVCAN__CAN__IFACE="socketcand:can0:123.123.1.123"
-        export UAVCAN__CAN__BITRATE='500000'
-        export UAVCAN__CAN__MTU=8
         yakut sub 33:uavcan.si.unit.voltage.scalar
 
     This will allow you to wirelessly recieve CAN data on computer two through the wired connection on computer 1.
@@ -82,88 +56,41 @@ class SocketcandMedia(Media):
 
     _MAXIMAL_TIMEOUT_SEC = 0.1
 
-    def __init__(
-        self,
-        iface_name: str,
-        bitrate: typing.Union[int, typing.Tuple[int, int]],
-        mtu: typing.Optional[int] = None,
-        *,
-        loop: typing.Optional[asyncio.AbstractEventLoop] = None,
-    ) -> None:
-        """
-        :param iface_name: Name of CAN interface that remote computer is connected through via the socketcand library:
-            This holds the can channel, host ip addr, and port of the socket.
-            It must be in the form: "socketcand:[CAN_CHANNEL]:[HOST_IP]:[PORT]"
-            or without port: "socketcand:[CAN_CHANNEL]:[HOST_IP]" (default port is 29536).
-
-        :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
-
-            - A single integer selects Classic CAN.
-            - A tuple of two selects CAN FD, where the first integer defines the arbitration (nominal) bit rate
-              and the second one defines the data phase bit rate.
-            - If MTU (see below) is given and is greater than 8 bytes, CAN FD is used regardless of the above.
-            - An MTU of 8 bytes and a tuple of two identical bit rates selects Classic CAN.
-
-        :param mtu: The maximum CAN data field size in bytes.
-            If provided, this value must belong to :attr:`Media.VALID_MTU_SET`.
-            If not provided, the default is determined as follows:
-
-            - If `bitrate` is a single integer: classic CAN is assumed, MTU defaults to 8 bytes.
-            - If `bitrate` is two integers: CAN FD is assumed, MTU defaults to 64 bytes.
-
-        :param loop: Deprecated.
-
-        :raises: :class:`InvalidMediaConfigurationError` if the specified media instance
-            could not be constructed, the interface name is unknown,
-            or if the underlying library raised a :class:`can.CanError`.
+    def __init__(self, channel: str, host: str, port: int = 29536) -> None:
         """
 
-        self._conn_name = str(iface_name).split(":")
+        :param channel: Name of the CAN channel/interface that your remote computer is connected too:
+            Often can0, or vcan0.
+            Comes after the -i in the socketcand command
 
-        if (len(self._conn_name) == 3) or (len(self._conn_name) == 4):
-            self._iface = self._conn_name[0]
-            self._can_channel = self._conn_name[1]
-            self._host = self._conn_name[2]
-            if len(self._conn_name) == 4:
-                self._port = self._conn_name[3]
-            else:
-                self._port = 29536
-        else:
-            raise InvalidMediaConfigurationError(
-                f"Interface name {iface_name!r} does not match the format 'interface:channel:host:port' or 'interface:channel:host'"
-            )
+        :param host: Name of the remote IP address of the computer running socketcand:
+            Should be in the format '123.123.1.123'.
+            In the socketcand command, this is the ip addr after -l.
 
-        if loop:
-            warnings.warn("The loop argument is deprecated", DeprecationWarning)
+        :param port: Name of the port the socket is bound too:
+            As per socketcand's default value, here the default is also 29536.
 
-        single_bitrate = isinstance(bitrate, (int, float))
-        bitrate = (int(bitrate), int(bitrate)) if single_bitrate else (int(bitrate[0]), int(bitrate[1]))  # type: ignore
 
-        default_mtu = min(self.VALID_MTU_SET) if single_bitrate else 64
-        self._mtu = int(mtu) if mtu is not None else default_mtu
-        if self._mtu not in self.VALID_MTU_SET:
-            raise InvalidMediaConfigurationError(f"Wrong MTU value: {mtu}")
+        """
 
-        self._is_fd = (self._mtu > min(self.VALID_MTU_SET) or not single_bitrate) and not (
-            self._mtu == min(self.VALID_MTU_SET) and bitrate[0] == bitrate[1]
-        )
+        self._iface = "socketcand"
+        self._host = host
+        self._port = port
+        self._can_channel = channel
 
         self._closed = False
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._rx_handler: typing.Optional[Media.ReceivedFramesHandler] = None
         # This is for communication with a thread that handles the call to _bus.send
         self._tx_queue: queue.Queue[_TxItem | None] = queue.Queue()
-        self._tx_thread = threading.Thread(target=self.transmit_thread_worker, daemon=True)
+        self._tx_thread = threading.Thread(target=self._transmit_thread_worker, daemon=True)
 
         try:
             bus = can.ThreadSafeBus(
-                interface="socketcand",
+                interface=self._iface,
                 host=self._host,
                 port=self._port,
                 channel=self._can_channel,
-                bitrate=bitrate,
-                fd=self.is_fd,
-                data_bitrate=bitrate[1],
             )
 
             self._bus: can.ThreadSafeBus = bus
@@ -173,6 +100,10 @@ class SocketcandMedia(Media):
 
     @property
     def interface_name(self) -> str:
+        return self._iface
+
+    @property
+    def channel_name(self) -> str:
         return self._can_channel
 
     @property
@@ -183,9 +114,10 @@ class SocketcandMedia(Media):
     def port_name(self) -> int:
         return self._port
 
+    # Python-CAN's wrapper for socketcand does not support FD frames, so mtu will always be 8 for now
     @property
     def mtu(self) -> int:
-        return self._mtu
+        return 8
 
     @property
     def number_of_acceptance_filters(self) -> int:
@@ -194,13 +126,6 @@ class SocketcandMedia(Media):
         TODO: obtain the number of acceptance filters from Python-CAN.
         """
         return 1
-
-    @property
-    def is_fd(self) -> bool:
-        """
-        Introspection helper. The value is True if the underlying interface operates in CAN FD mode.
-        """
-        return self._is_fd
 
     def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
         self._tx_thread.start()
@@ -227,7 +152,7 @@ class SocketcandMedia(Media):
         _logger.debug("%s: Acceptance filters activated: %s", self, ", ".join(map(str, configuration)))
         self._bus.set_filters(filters)
 
-    def transmit_thread_worker(self) -> None:
+    def _transmit_thread_worker(self) -> None:
         try:
             while not self._closed:
                 tx = self._tx_queue.get(block=True)
@@ -256,7 +181,6 @@ class SocketcandMedia(Media):
                 arbitration_id=f.frame.identifier,
                 is_extended_id=(f.frame.format == FrameFormat.EXTENDED),
                 data=f.frame.data,
-                is_fd=self._is_fd,
             )
             try:
                 desired_timeout = monotonic_deadline - loop.time()
