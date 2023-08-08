@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - master
+      - issue-259
   pull_request:
     branches:
       - master
@@ -23,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, windows-2019-npcap]
+        os: [ubuntu-latest, windows-2019-npcap]
         python: ['3.7', '3.8', '3.9', '3.10']
     runs-on: ${{ matrix.os }}
     steps:
