@@ -1,0 +1,66 @@
+name: 'Test PyCyphal'
+
+# Test OpenCyphal PyCyphal release
+on: push
+#  pull_request:
+#   branches:
+#      - master
+
+# Ensures that only one workflow is running at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pycyphal-test:
+    name: Test PyCyphal
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2019-npcap]
+        python: ['3.7', '3.8', '3.9', '3.10']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v3
+
+      - name: Install Python3
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Log Python version
+        run: python --version
+
+      - name: Install dependencies
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
+          fi
+          git submodule update --init --recursive
+          python -m pip install --upgrade pip setuptools nox
+        shell: bash
+
+      - name: Collect Linux diagnostic data
+        if: ${{ runner.os == 'Linux' }}
+        run: ip link show
+
+      - name: Collect Windows diagnostic data
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          systeminfo
+          route print
+          ipconfig /all
+
+      - name: Run build and test
+        run: |
+          nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
+          nox --non-interactive --session demo check_style docs
+
+      - name: Save logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: PyCyphal-${{ matrix.os }}-python-${{ matrix.python }}
+          path: .nox/*/*/*.log
+          retention-days: 7
+
