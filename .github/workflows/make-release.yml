@@ -1,8 +1,8 @@
 name: 'Release PyCyphal Workflow'
 on:
   push:
-    branch: [ master, issue-259 ]
-    tag: [ '#release' ]
+    branches: [ master ]
+    tags: [ '#release' ]
 
 # Ensures that only one workflow is running at a time
 concurrency:
@@ -39,15 +39,15 @@ jobs:
 
       - name: Upload distribution
         run: |
-          echo 'python -m twine upload dist/*'
+          python -m twine upload dist/*
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN_PYCYPHAL }}
 
-#      - name: Push version tag
-#        uses: mathieudutour/github-tag-action@v6.1
-#        with:
-#          github_token: ${{ secrets.GITHUB_TOKEN }}
-#          custom_tag: ${{ env.pycyphal_version }}
-#          tag_prefix: ''
+      - name: Push version tag
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          custom_tag: ${{ env.pycyphal_version }}
+          tag_prefix: ''
 

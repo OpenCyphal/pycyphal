@@ -49,7 +49,7 @@ jobs:
 
       - name: Run build and test
         run: |
-          #nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
+          nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
           nox --non-interactive --session demo check_style docs
 
       - name: Save logs
