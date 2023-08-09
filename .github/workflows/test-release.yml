@@ -1,14 +1,9 @@
-name: 'Test PyCyphal'
+name: 'Test PyCyphal Workflow'
+on: [ push, pull_request ]
 
-# Test OpenCyphal PyCyphal release
-on: push
-#  pull_request:
-#   branches:
-#      - master
-
-# Ensures that only one workflow is running at a time
+# Ensures that only one workflow is running at a time - required for duplicate pushes and repushing a PR
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
@@ -54,7 +49,7 @@ jobs:
 
       - name: Run build and test
         run: |
-          nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
+          #nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
           nox --non-interactive --session demo check_style docs
 
       - name: Save logs

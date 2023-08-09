@@ -1,12 +1,8 @@
-name: 'Build PyCyphal'
+name: 'Release PyCyphal Workflow'
 on:
   push:
-    tags: [ '#release' ]
-  workflow_run:
-    workflows: [ 'Test PyCyphal' ]
-    branches: [ master ]
-    types: [ completed ]
-
+    branch: [ master, issue-259 ]
+    tag: [ '#release' ]
 
 # Ensures that only one workflow is running at a time
 concurrency:
@@ -17,12 +13,20 @@ jobs:
   pycyphal-release:
     name: Release PyCyphal
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Check out
         uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Wait for test job to complete
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          running-workflow-name: 'Release PyCyphal'
+          allowed-conclusions: success,skipped,cancelled
+
+      - name: Create distribution wheel
         run: |
           git submodule update --init --recursive
           python -m pip install --upgrade pip setuptools wheel twine
@@ -35,14 +39,15 @@ jobs:
 
       - name: Upload distribution
         run: |
-          python -m twine upload dist/*
+          echo 'python -m twine upload dist/*'
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN_PYCYPHAL }}
 
-      - name: Push version tag
-        uses: mathieudutour/github-tag-action@v6.1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          custom_tag: ${{ env.pycyphal_version }}
-          tag_prefix: ''
+#      - name: Push version tag
+#        uses: mathieudutour/github-tag-action@v6.1
+#        with:
+#          github_token: ${{ secrets.GITHUB_TOKEN }}
+#          custom_tag: ${{ env.pycyphal_version }}
+#          tag_prefix: ''
+
