@@ -1,5 +1,5 @@
 name: 'Test and Release PyCyphal'
-on: [ push, pull_request ]
+on: push
 
 # Ensures that only one workflow is running at a time - required for duplicate pushes and repushing a PR
 concurrency:
