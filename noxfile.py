@@ -133,14 +133,14 @@ def test(session):
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
-    if sys.platform.startswith("linux") and is_latest_python(session) and session.env.get("COVERALLS_REPO_TOKEN"):
+    if sys.platform.startswith("linux") and is_latest_python(session) and session.env.get("GITHUB_TOKEN"):
         session.install("coveralls")
         session.run("coveralls")
     else:
         session.log("Coveralls skipped")
 
     # Submit analysis to SonarCloud. This also has to be run from the test session to access the coverage files.
-    sonarcloud_token = session.env.get("SONARCLOUD_TOKEN")
+    sonarcloud_token = session.env.get("SONAR_TOKEN")
     if sys.platform.startswith("linux") and is_latest_python(session) and sonarcloud_token:
         session.run("coverage", "xml", "-i", "-o", str(ROOT_DIR / ".coverage.xml"))
 
