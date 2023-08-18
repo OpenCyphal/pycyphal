@@ -24,7 +24,7 @@ _logger = logging.getLogger(__name__)
 
 @pytest.fixture(scope="session", autouse=True)
 def _configure_host_environment() -> None:
-    def execute(*cmd: typing.Any, ensure_success: bool = True, cwd=typing.Optional[str] = None) -> typing.Tuple[int, str, str]:
+    def execute(*cmd: typing.Any, ensure_success: bool = True, cwd: typing.Optional[str] = None) -> typing.Tuple[int, str, str]:
         cmd = tuple(map(str, cmd))
         out = None
         if cwd == None:
@@ -64,7 +64,7 @@ def _configure_host_environment() -> None:
         execute("./configure", cwd="socketcand")
         execute("make", cwd="socketcand")
         execute("make", "install", cwd="socketcand")
-        
+
         # Set up virtual SocketCAN interfaces.
         execute("sudo", "modprobe", "can")
         execute("sudo", "modprobe", "can_raw")
