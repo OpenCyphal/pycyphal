@@ -24,14 +24,25 @@ _logger = logging.getLogger(__name__)
 
 @pytest.fixture(scope="session", autouse=True)
 def _configure_host_environment() -> None:
-    def execute(*cmd: typing.Any, ensure_success: bool = True) -> typing.Tuple[int, str, str]:
+    def execute(*cmd: typing.Any, ensure_success: bool = True, cwd=typing.Optional[str] = None) -> typing.Tuple[int, str, str]:
         cmd = tuple(map(str, cmd))
-        out = subprocess.run(  # pylint: disable=subprocess-run-check
-            cmd,
-            encoding="utf8",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        out = None
+        if cwd == None:
+            out = subprocess.run(  # pylint: disable=subprocess-run-check
+                cmd,
+                encoding="utf8",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, 
+            )
+        else:
+            out = subprocess.run(  # pylint: disable=subprocess-run-check
+                cmd,
+                encoding="utf8",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd = cwd 
+            )
+
         stdout, stderr = out.stdout, out.stderr
         _logger.debug("%s stdout:\n%s", cmd, stdout)
         _logger.debug("%s stderr:\n%s", cmd, stderr)
@@ -49,11 +60,11 @@ def _configure_host_environment() -> None:
         # build and install socketcand
         execute("sudo", "apt-get", "install", "-y", "autoconf")
         execute("git", "clone", "https://github.com/linux-can/socketcand.git")
-        execute("cd", "socketcand")
-        execute("./autogen.sh")
-        execute("./configure")
-        execute("make")
-
+        execute("./autogen.sh", cwd="socketcand")
+        execute("./configure", cwd="socketcand")
+        execute("make", cwd="socketcand")
+        execute("make", "install", cwd="socketcand")
+        
         # Set up virtual SocketCAN interfaces.
         execute("sudo", "modprobe", "can")
         execute("sudo", "modprobe", "can_raw")
