@@ -3,6 +3,9 @@ import typing
 import asyncio
 import pytest
 
+import logging
+import subprocess
+
 
 if sys.platform != "linux":  # pragma: no cover
     pytest.skip("Socketcand test skipped because the system is not GNU/Linux", allow_module_level=True)
@@ -10,17 +13,70 @@ if sys.platform != "linux":  # pragma: no cover
 pytestmark = pytest.mark.asyncio
 
 
-async def _unittest_can_socketcan() -> None:
+GIBIBYTE = 1024**3
+
+MEMORY_LIMIT = 8 * GIBIBYTE
+"""
+The test suite artificially limits the amount of consumed memory in order to avoid triggering the OOM killer
+should a test go crazy and eat all memory.
+"""
+
+_logger = logging.getLogger(__name__)
+
+
+@pytest.fixture
+def _configure_host_environment() -> None:
+    def execute(*cmd: typing.Any, ensure_success: bool = True) -> typing.Tuple[int, str, str]:
+        cmd = tuple(map(str, cmd))
+        out = subprocess.run(  # pylint: disable=subprocess-run-check
+            cmd,
+            encoding="utf8",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        stdout, stderr = out.stdout, out.stderr
+        _logger.debug("%s stdout:\n%s", cmd, stdout)
+        _logger.debug("%s stderr:\n%s", cmd, stderr)
+        if out.returncode != 0 and ensure_success:  # pragma: no cover
+            raise subprocess.CalledProcessError(out.returncode, cmd, stdout, stderr)
+        assert isinstance(stdout, str) and isinstance(stderr, str)
+        return out.returncode, stdout, stderr
+
+    if sys.platform.startswith("linux"):
+        import resource  # pylint: disable=import-error
+
+        _logger.info("Limiting process memory usage to %.1f GiB", MEMORY_LIMIT / GIBIBYTE)
+        resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT, MEMORY_LIMIT))
+        
+        #build and install socketcand
+        execute("sudo", "apt-get", "install", "-y", "autoconf")
+        execute("git", "clone", "https://github.com/linux-can/socketcand.git")
+        execute("cd", "socketcand")
+        execute("./autogen.sh")
+        execute("./configure")
+        execute("make")
+
+        # Set up virtual SocketCAN interfaces.
+        execute("sudo", "modprobe", "can")
+        execute("sudo", "modprobe", "can_raw")
+        execute("sudo", "modprobe", "vcan")
+        execute("sudo", "ip", "link", "add", "dev", "vcan3", "type", "vcan", ensure_success=False)
+        execute("sudo", "ip", "link", "set", "vcan3", "mtu", 72)  # Enable both Classic CAN and CAN FD.
+        execute("sudo", "ip", "link", "set", "up", "vcan3")
+
+        execute("socketcand", "-i", "vcan3", "-l", "lo")
+
+async def _unittest_can_socketcan(_configure_host_environment) -> None:
     from pycyphal.transport import Timestamp
     from pycyphal.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
 
     from pycyphal.transport.can.media.socketcand import SocketcandMedia
 
-    media_a = SocketcandMedia("vcan0", "192.168.1.103")
+    media_a = SocketcandMedia("vcan0", "0.0.0.0")
 
     assert media_a.interface_name == "socketcand"
     assert media_a.channel_name == "vcan0"
-    assert media_a.host_name == "192.168.1.103"
+    assert media_a.host_name == "127.0.0.1"
     assert media_a.port_name == 29536
     assert media_a.mtu == 8
     assert media_a.number_of_acceptance_filters == 1
