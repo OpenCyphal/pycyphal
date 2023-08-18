@@ -47,8 +47,8 @@ def _configure_host_environment() -> None:
 
         _logger.info("Limiting process memory usage to %.1f GiB", MEMORY_LIMIT / GIBIBYTE)
         resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT, MEMORY_LIMIT))
-        
-        #build and install socketcand
+
+        # build and install socketcand
         execute("sudo", "apt-get", "install", "-y", "autoconf")
         execute("git", "clone", "https://github.com/linux-can/socketcand.git")
         execute("cd", "socketcand")
@@ -65,6 +65,7 @@ def _configure_host_environment() -> None:
         execute("sudo", "ip", "link", "set", "up", "vcan3")
 
         execute("socketcand", "-i", "vcan3", "-l", "lo")
+
 
 async def _unittest_can_socketcan(_configure_host_environment) -> None:
     from pycyphal.transport import Timestamp
