@@ -1,11 +1,9 @@
 import sys
 import typing
 import asyncio
-import pytest
-
 import logging
 import subprocess
-
+import pytest
 
 if sys.platform != "linux":  # pragma: no cover
     pytest.skip("Socketcand test skipped because the system is not GNU/Linux", allow_module_level=True)
@@ -24,7 +22,7 @@ should a test go crazy and eat all memory.
 _logger = logging.getLogger(__name__)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session", autouse=True)
 def _configure_host_environment() -> None:
     def execute(*cmd: typing.Any, ensure_success: bool = True) -> typing.Tuple[int, str, str]:
         cmd = tuple(map(str, cmd))
@@ -67,7 +65,7 @@ def _configure_host_environment() -> None:
         execute("socketcand", "-i", "vcan3", "-l", "lo")
 
 
-async def _unittest_can_socketcan(_configure_host_environment) -> None:
+async def _unittest_can_socketcand() -> None:
     from pycyphal.transport import Timestamp
     from pycyphal.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
 
