@@ -29,7 +29,7 @@ def _configure_host_environment() -> None:
     ) -> typing.Tuple[int, str, str]:
         cmd = tuple(map(str, cmd))
         out = None
-        if cwd == None:
+        if cwd is None:
             out = subprocess.run(  # pylint: disable=subprocess-run-check
                 cmd,
                 encoding="utf8",
@@ -61,7 +61,7 @@ def _configure_host_environment() -> None:
         execute("./autogen.sh", cwd="socketcand")
         execute("./configure", cwd="socketcand")
         execute("make", cwd="socketcand")
-        execute("make", "install", cwd="socketcand")
+        execute("sudo", "make", "install", cwd="socketcand")
 
         # Set up virtual SocketCAN interfaces.
         execute("sudo", "modprobe", "can")
