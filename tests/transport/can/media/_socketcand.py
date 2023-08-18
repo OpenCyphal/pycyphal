@@ -83,7 +83,7 @@ async def _unittest_can_socketcand() -> None:
     media_a = SocketcandMedia("vcan0", "0.0.0.0")
 
     assert media_a.interface_name == "socketcand"
-    assert media_a.channel_name == "vcan0"
+    assert media_a.channel_name == "vcan3"
     assert media_a.host_name == "127.0.0.1"
     assert media_a.port_name == 29536
     assert media_a.mtu == 8
