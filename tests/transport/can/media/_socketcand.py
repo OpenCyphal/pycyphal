@@ -80,7 +80,7 @@ async def _unittest_can_socketcand() -> None:
 
     from pycyphal.transport.can.media.socketcand import SocketcandMedia
 
-    media_a = SocketcandMedia("vcan0", "0.0.0.0")
+    media_a = SocketcandMedia("vcan3", "0.0.0.0")
 
     assert media_a.interface_name == "socketcand"
     assert media_a.channel_name == "vcan3"
