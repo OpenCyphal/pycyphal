@@ -1,0 +1,100 @@
+name: 'Test and Release PyCyphal'
+on: push
+
+# Ensures that only one workflow is running at a time
+concurrency:
+  group: ${{ github.workflow_sha }}
+  cancel-in-progress: true
+
+jobs:
+  pycyphal-test:
+    name: Test PyCyphal
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-20.04, windows-2019-npcap ]
+        python: [ '3.7', '3.8', '3.9', '3.10' ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v3
+
+      - name: Install Python3
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Log Python version
+        run: python --version
+
+      - name: Install dependencies
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get --ignore-missing update || true
+            sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
+          fi
+          git submodule update --init --recursive
+          python -m pip install --upgrade pip setuptools nox
+        shell: bash
+
+      - name: Collect Linux diagnostic data
+        if: ${{ runner.os == 'Linux' }}
+        run: ip link show
+
+      - name: Collect Windows diagnostic data
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          systeminfo
+          route print
+          ipconfig /all
+
+      - name: Run build and test
+        run: |
+          nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
+          nox --non-interactive --session demo check_style docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        shell: bash
+
+      - name: Save logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: PyCyphal-${{ matrix.os }}-python-${{ matrix.python }}
+          path: .nox/*/*/*.log
+          retention-days: 7
+
+  pycyphal-release:
+    name: Release PyCyphal
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '#release') || contains(github.ref, '/master')
+    needs: pycyphal-test
+    steps:
+      - name: Check out
+        uses: actions/checkout@v3
+
+      - name: Create distribution wheel
+        run: |
+          git submodule update --init --recursive
+          python -m pip install --upgrade pip setuptools wheel twine
+          python setup.py sdist bdist_wheel
+
+      - name: Get release version
+        run: |
+          cd pycyphal
+          echo "pycyphal_version=$(python -c 'from _version import __version__; print(__version__)')" >> $GITHUB_ENV
+
+      - name: Upload distribution
+        run: |
+          python -m twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN_PYCYPHAL }}
+
+      - name: Push version tag
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          custom_tag: ${{ env.pycyphal_version }}
+          tag_prefix: ''
+
