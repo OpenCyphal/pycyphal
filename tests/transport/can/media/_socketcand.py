@@ -15,8 +15,6 @@ if sys.platform != "linux":  # pragma: no cover
     pytest.skip("Socketcand test skipped because the system is not GNU/Linux", allow_module_level=True)
 
 
-
-
 GIBIBYTE = 1024**3
 
 MEMORY_LIMIT = 8 * GIBIBYTE
@@ -28,17 +26,19 @@ should a test go crazy and eat all memory.
 _logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
+
 @pytest.fixture()
 def configure_host_environment() -> None:
     print("configurng host environment")
+
     def execute(
-        *cmd: typing.Any, ensure_success: bool = True, cwd: typing.Optional[str] = None,
-    daemon: bool=False) -> typing.Tuple[int, str, str]:
+        *cmd: typing.Any, ensure_success: bool = True, cwd: typing.Optional[str] = None, daemon: bool = False
+    ) -> typing.Tuple[int, str, str]:
         cmd = tuple(map(str, cmd))
         if daemon:
-            subprocess.Popen(cmd, shell=True) #start subproccess without waiting for output
+            subprocess.Popen(cmd, shell=True)  # start subproccess without waiting for output
             return 0
-        
+
         out = None
         if cwd is None:
             out = subprocess.run(  # pylint: disable=subprocess-run-check
@@ -74,8 +74,6 @@ def configure_host_environment() -> None:
         execute("sudo", "ip", "link", "set", "vcan3", "mtu", 72)  # Enable both Classic CAN and CAN FD.
         execute("sudo", "ip", "link", "set", "up", "vcan3")
 
-        
-
         # build and install socketcand
         execute("sudo", "apt-get", "install", "-y", "autoconf")
         execute("git", "clone", "https://github.com/linux-can/socketcand.git")
@@ -84,18 +82,13 @@ def configure_host_environment() -> None:
         execute("make", cwd="socketcand")
         execute("sudo", "make", "install", cwd="socketcand")
 
-        
         execute("socketcand", "-i", "vcan3", "-l", "lo", daemon=True)
-
-
 
 
 @pytest.mark.asyncio
 async def _unittest_can_socketcand(configure_host_environment) -> None:
-    
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
-    
     media_a = SocketcandMedia("vcan3", "127.0.0.1")
 
     assert media_a.interface_name == "socketcand"
@@ -105,7 +98,7 @@ async def _unittest_can_socketcand(configure_host_environment) -> None:
     assert media_a.mtu == 8
     assert media_a.number_of_acceptance_filters == 1
     assert media_a._maybe_thread is None  # pylint: disable=protected-access
-       
+
     media_a.configure_acceptance_filters([FilterConfiguration.new_promiscuous()])
 
     rx_a: typing.List[typing.Tuple[Timestamp, Envelope]] = []
@@ -120,7 +113,7 @@ async def _unittest_can_socketcand(configure_host_environment) -> None:
 
     assert media_a._maybe_thread is not None  # pylint: disable=protected-access
     await asyncio.sleep(2.0)  # This wait is needed to ensure that the RX thread handles select() timeout properly
-    
+
     ts_begin = Timestamp.now()
     await media_a.send(
         [
@@ -168,7 +161,7 @@ async def _unittest_can_socketcand(configure_host_environment) -> None:
     assert rx_external[2].identifier == 0x1FF45678
     assert rx_external[2].data == bytearray(range(0))
     assert rx_external[2].format == FrameFormat.EXTENDED
-        
+
     media_a.close()
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
