@@ -3,8 +3,6 @@ import typing
 import asyncio
 import logging
 import subprocess
-import contextlib
-import os
 import pytest
 
 from pycyphal.transport import Timestamp
@@ -36,7 +34,9 @@ def configure_host_environment() -> None:
     ) -> typing.Tuple[int, str, str]:
         cmd = tuple(map(str, cmd))
         if daemon:
-            subprocess.Popen(cmd, shell=True)  # start subproccess without waiting for output
+            subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
+            )  # start subproccess without waiting for output
             return 0
 
         out = None
@@ -82,7 +82,10 @@ def configure_host_environment() -> None:
         execute("make", cwd="socketcand")
         execute("sudo", "make", "install", cwd="socketcand")
 
-        execute("socketcand", "-i", "vcan3", "-l", "lo", daemon=True)
+        subprocess.Popen(["socketcand", "-i", "vcan3", "-l", "lo"])
+
+        # execute("socketcand", "-i", "vcan3", "-l", "lo", cwd = None, daemon=True)
+        # execute("socketcand", "-i", "vcan3", "-l", "lo", "-p", "8080")
 
 
 @pytest.mark.asyncio
