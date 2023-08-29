@@ -30,7 +30,7 @@ async def _unittest_udp_transport_ipv4() -> None:
 
     with pytest.raises(ValueError):
         # Invalid MTU (not in range)
-        _ = UDPTransport("127.0.0.1", local_node_id=111, mtu=10)
+        _ = UDPTransport("127.0.0.1", local_node_id=111, mtu=1)
 
     with pytest.raises(ValueError):
         # Invalid service transfer multiplier (not in range)

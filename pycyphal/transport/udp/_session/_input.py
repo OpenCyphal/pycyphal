@@ -124,7 +124,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
             # это проблема но мы это потом починим
             if frame.data_specifier != self._specifier.data_specifier:
                 continue
-            if frame.source_node_id == self._local_node_id:
+            if (self._local_node_id is not None) and (frame.source_node_id == self._local_node_id):
                 continue
             if not self.specifier.is_promiscuous:
                 if frame.source_node_id != self.specifier.remote_node_id:
