@@ -62,31 +62,27 @@ async def _unittest_output_session() -> None:
     assert sos.payload_metadata == PayloadMetadata(1024)
     assert sos.sample_statistics() == SessionStatistics()
 
-    assert await (
-        sos.send(
-            Transfer(
-                timestamp=ts,
-                priority=Priority.NOMINAL,
-                transfer_id=12340,
-                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-            ),
-            999999999.999,
-        )
+    assert await sos.send(
+        Transfer(
+            timestamp=ts,
+            priority=Priority.NOMINAL,
+            transfer_id=12340,
+            fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+        ),
+        999999999.999,
     )
     assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 1
 
     with raises(pycyphal.transport.OperationNotDefinedForAnonymousNodeError):
-        await (
-            sos.send(
-                Transfer(
-                    timestamp=ts,
-                    priority=Priority.NOMINAL,
-                    transfer_id=12340,
-                    fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three four five")],
-                ),
-                loop.time() + 10.0,
-            )
+        await sos.send(
+            Transfer(
+                timestamp=ts,
+                priority=Priority.NOMINAL,
+                transfer_id=12340,
+                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three four five")],
+            ),
+            loop.time() + 10.0,
         )
 
     last_feedback: typing.Optional[Feedback] = None
@@ -98,10 +94,8 @@ async def _unittest_output_session() -> None:
     sos.enable_feedback(feedback_handler)
 
     assert last_feedback is None
-    assert await (
-        sos.send(
-            Transfer(timestamp=ts, priority=Priority.NOMINAL, transfer_id=12340, fragmented_payload=[]), 999999999.999
-        )
+    assert await sos.send(
+        Transfer(timestamp=ts, priority=Priority.NOMINAL, transfer_id=12340, fragmented_payload=[]), 999999999.999
     )
     assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 1
@@ -130,16 +124,14 @@ async def _unittest_output_session() -> None:
 
     # Induced failure
     tx_timestamp = None
-    assert not await (
-        sos.send(
-            Transfer(
-                timestamp=ts,
-                priority=Priority.NOMINAL,
-                transfer_id=12340,
-                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-            ),
-            999999999.999,
-        )
+    assert not await sos.send(
+        Transfer(
+            timestamp=ts,
+            priority=Priority.NOMINAL,
+            transfer_id=12340,
+            fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+        ),
+        999999999.999,
     )
     assert last_monotonic_deadline == approx(999999999.999)
     assert len(last_sent_frames) == 2
@@ -148,16 +140,14 @@ async def _unittest_output_session() -> None:
 
     tx_exception = RuntimeError()
     with raises(RuntimeError):
-        _ = await (
-            sos.send(
-                Transfer(
-                    timestamp=ts,
-                    priority=Priority.NOMINAL,
-                    transfer_id=12340,
-                    fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-                ),
-                loop.time() + 10.0,
-            )
+        _ = await sos.send(
+            Transfer(
+                timestamp=ts,
+                priority=Priority.NOMINAL,
+                transfer_id=12340,
+                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+            ),
+            loop.time() + 10.0,
         )
 
     assert sos.sample_statistics() == SessionStatistics(transfers=0, frames=0, payload_bytes=0, errors=1, drops=2)
@@ -168,14 +158,12 @@ async def _unittest_output_session() -> None:
     sos.close()  # Idempotency
 
     with raises(pycyphal.transport.ResourceClosedError):
-        await (
-            sos.send(
-                Transfer(
-                    timestamp=ts,
-                    priority=Priority.NOMINAL,
-                    transfer_id=12340,
-                    fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-                ),
-                loop.time() + 10.0,
-            )
+        await sos.send(
+            Transfer(
+                timestamp=ts,
+                priority=Priority.NOMINAL,
+                transfer_id=12340,
+                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+            ),
+            loop.time() + 10.0,
         )

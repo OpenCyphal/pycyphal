@@ -32,7 +32,6 @@ _SERVICE_ID_MASK = 2**14 - 1
 
 @dataclasses.dataclass(frozen=True, repr=False)
 class SerialFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
-
     VERSION = 1
     NODE_ID_MASK = 2**16 - 1
     TRANSFER_ID_MASK = 2**64 - 1

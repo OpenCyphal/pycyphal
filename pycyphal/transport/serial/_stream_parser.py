@@ -153,7 +153,10 @@ def _unittest_stream_parser() -> None:
     # Create new instance with much larger frame size limit; feed both frames but let the first one be incomplete.
     sp = StreamParser(lambda ts, buf, item: outputs.append((ts, buf, item)), 10**6)
     assert [] == proc(f1.compile_into(bytearray(200))[:-2])  # First one is ended abruptly.
-    (tsa, _, a), (tsb, _, b), = proc(
+    (
+        (tsa, _, a),
+        (tsb, _, b),
+    ) = proc(
         f2.compile_into(bytearray(200))
     )  # Then the second frame begins.
     assert tsa == ts

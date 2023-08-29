@@ -66,16 +66,14 @@ async def _unittest_udp_output_session() -> None:
     assert sos.payload_metadata == PayloadMetadata(1024)
     assert sos.sample_statistics() == SessionStatistics()
 
-    assert await (
-        sos.send(
-            Transfer(
-                timestamp=ts,
-                priority=Priority.NOMINAL,
-                transfer_id=12340,
-                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-            ),
-            loop.time() + 10.0,
-        )
+    assert await sos.send(
+        Transfer(
+            timestamp=ts,
+            priority=Priority.NOMINAL,
+            transfer_id=12340,
+            fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+        ),
+        loop.time() + 10.0,
     )
 
     rx_data, endpoint = sock_rx.recvfrom(1000)
@@ -100,11 +98,9 @@ async def _unittest_udp_output_session() -> None:
     sos.enable_feedback(feedback_handler)
 
     assert last_feedback is None
-    assert await (
-        sos.send(
-            Transfer(timestamp=ts, priority=Priority.NOMINAL, transfer_id=12340, fragmented_payload=[]),
-            loop.time() + 10.0,
-        )
+    assert await sos.send(
+        Transfer(timestamp=ts, priority=Priority.NOMINAL, transfer_id=12340, fragmented_payload=[]),
+        loop.time() + 10.0,
     )
     assert last_feedback is not None
     assert last_feedback.original_transfer_timestamp == ts
@@ -139,16 +135,14 @@ async def _unittest_udp_output_session() -> None:
         source_node_id=6,
         finalizer=do_finalize,
     )
-    assert await (
-        sos.send(
-            Transfer(
-                timestamp=ts,
-                priority=Priority.OPTIONAL,
-                transfer_id=54321,
-                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-            ),
-            loop.time() + 10.0,
-        )
+    assert await sos.send(
+        Transfer(
+            timestamp=ts,
+            priority=Priority.OPTIONAL,
+            transfer_id=54321,
+            fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+        ),
+        loop.time() + 10.0,
     )
 
     data_main_a, endpoint = sock_rx.recvfrom(1000)
@@ -188,16 +182,14 @@ async def _unittest_udp_output_session() -> None:
     )
 
     # Induced timeout
-    assert not await (
-        sos.send(
-            Transfer(
-                timestamp=ts,
-                priority=Priority.NOMINAL,
-                transfer_id=12340,
-                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-            ),
-            loop.time() - 0.1,  # Expired on arrival
-        )
+    assert not await sos.send(
+        Transfer(
+            timestamp=ts,
+            priority=Priority.NOMINAL,
+            transfer_id=12340,
+            fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+        ),
+        loop.time() - 0.1,  # Expired on arrival
     )
 
     assert sos.sample_statistics() == SessionStatistics(
@@ -207,16 +199,14 @@ async def _unittest_udp_output_session() -> None:
     # Induced failure
     sos.socket.close()
     with raises(OSError):
-        assert not await (
-            sos.send(
-                Transfer(
-                    timestamp=ts,
-                    priority=Priority.NOMINAL,
-                    transfer_id=12340,
-                    fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-                ),
-                loop.time() + 10.0,
-            )
+        assert not await sos.send(
+            Transfer(
+                timestamp=ts,
+                priority=Priority.NOMINAL,
+                transfer_id=12340,
+                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+            ),
+            loop.time() + 10.0,
         )
 
     assert sos.sample_statistics() == SessionStatistics(transfers=0, frames=0, payload_bytes=0, errors=1, drops=2)
@@ -227,16 +217,14 @@ async def _unittest_udp_output_session() -> None:
     sos.close()  # Idempotency
 
     with raises(pycyphal.transport.ResourceClosedError):
-        await (
-            sos.send(
-                Transfer(
-                    timestamp=ts,
-                    priority=Priority.NOMINAL,
-                    transfer_id=12340,
-                    fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-                ),
-                loop.time() + 10.0,
-            )
+        await sos.send(
+            Transfer(
+                timestamp=ts,
+                priority=Priority.NOMINAL,
+                transfer_id=12340,
+                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+            ),
+            loop.time() + 10.0,
         )
 
     sock_rx.close()
@@ -267,16 +255,14 @@ async def _unittest_output_session_no_listener() -> None:
         source_node_id=1,
         finalizer=lambda: None,
     )
-    assert await (
-        sos.send(
-            Transfer(
-                timestamp=ts,
-                priority=Priority.NOMINAL,
-                transfer_id=12340,
-                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-            ),
-            loop.time() + 10.0,
-        )
+    assert await sos.send(
+        Transfer(
+            timestamp=ts,
+            priority=Priority.NOMINAL,
+            transfer_id=12340,
+            fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+        ),
+        loop.time() + 10.0,
     )
     sos.close()
 
@@ -299,16 +285,14 @@ async def _unittest_output_session_no_listener() -> None:
     )
     sos.enable_feedback(feedback_handler)
     assert last_feedback is None
-    assert await (
-        sos.send(
-            Transfer(
-                timestamp=ts,
-                priority=Priority.OPTIONAL,
-                transfer_id=54321,
-                fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
-            ),
-            loop.time() + 10.0,
-        )
+    assert await sos.send(
+        Transfer(
+            timestamp=ts,
+            priority=Priority.OPTIONAL,
+            transfer_id=54321,
+            fragmented_payload=[memoryview(b"one"), memoryview(b"two"), memoryview(b"three")],
+        ),
+        loop.time() + 10.0,
     )
     print("last_feedback:", last_feedback)
     assert isinstance(last_feedback, UDPFeedback)

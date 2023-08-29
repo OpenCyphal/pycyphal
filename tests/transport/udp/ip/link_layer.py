@@ -5,6 +5,7 @@
 # pylint: disable=protected-access
 
 from __future__ import annotations
+import re
 import sys
 import time
 import typing
@@ -30,7 +31,10 @@ def _unittest_encode_decode_null() -> None:
     assert llp.source == b""
     assert llp.destination == b""
     assert llp.payload == b"abcd"
-    assert str(llp) == "LinkLayerPacket(protocol=AddressFamily.AF_INET, source=, destination=, payload=61626364)"
+    assert re.match(
+        r"LinkLayerPacket\(protocol=[^,]+, source=, destination=, payload=61626364\)",
+        str(llp),
+    )
 
     llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, sys.byteorder)))
     assert isinstance(llp, LinkLayerPacket)
@@ -65,7 +69,10 @@ def _unittest_encode_decode_loop() -> None:
     assert llp.source == b""
     assert llp.destination == b""
     assert llp.payload == b"abcd"
-    assert str(llp) == "LinkLayerPacket(protocol=AddressFamily.AF_INET, source=, destination=, payload=61626364)"
+    assert re.match(
+        r"LinkLayerPacket\(protocol=[^,]+, source=, destination=, payload=61626364\)",
+        str(llp),
+    )
 
     llp = dec(mv(AddressFamily.AF_INET.to_bytes(4, "big")))
     assert isinstance(llp, LinkLayerPacket)
@@ -100,9 +107,9 @@ def _unittest_encode_decode_ethernet() -> None:
     assert llp.source == b"\x11\x22\x33\x44\x55\x66"
     assert llp.destination == b"\xAA\xBB\xCC\xDD\xEE\xFF"
     assert llp.payload == b"abcd"
-    assert str(llp) == (
-        "LinkLayerPacket(protocol=AddressFamily.AF_INET, "
-        + "source=112233445566, destination=aabbccddeeff, payload=61626364)"
+    assert re.match(
+        r"LinkLayerPacket\(protocol=[^,]+, source=112233445566, destination=aabbccddeeff, payload=61626364\)",
+        str(llp),
     )
 
     llp = dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xAA\xBB\xCC\xDD\xEE\xFF" + b"\x08\x00"))

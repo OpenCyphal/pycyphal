@@ -24,7 +24,7 @@ CONFIG.read("setup.cfg")
 EXTRAS_REQUIRE = dict(CONFIG["options.extras_require"])
 assert EXTRAS_REQUIRE, "Config could not be read correctly"
 
-PYTHONS = ["3.7", "3.8", "3.9", "3.10"]
+PYTHONS = ["3.8", "3.9", "3.10", "3.11"]
 """The newest supported Python shall be listed last."""
 
 nox.options.error_on_external_run = True
@@ -96,15 +96,13 @@ def test(session):
         # Application-layer tests are run separately after the main test suite because they require DSDL for
         # "uavcan" to be transpiled first. That namespace is transpiled as a side-effect of running the main suite.
         pytest("--ignore", str(postponed), *map(str, src_dirs))
-        if is_latest_python(session):
-            # FIXME HACK Python 3.10 segfaults at exit. This is reproducible up to at least 3.10.10.
+        python_version = session.run("python", "-V", silent=True)
+        if "3.10." in python_version or "3.11." in python_version:
+            # FIXME HACK Python 3.10 & 3.11 segfault at exit. This is reproducible with at least 3.10.10.
             # #0  0x00007fd9c0fa0702 in raise () from /usr/lib/libpthread.so.0
             # #1  <signal handler called>
             # #2  PyVectorcall_Function (callable=0x0) at ./Include/cpython/abstract.h:69
-            pytest(
-                str(postponed),
-                success_codes=[0, -11, 0xC0000005],
-            )
+            pytest(str(postponed), success_codes=[0, -11, 0xC0000005])
         else:
             pytest(str(postponed))
     finally:
@@ -160,7 +158,7 @@ def demo(session):
     Test the demo app orchestration example.
     This is a separate session because it is dependent on Yakut.
     """
-    if sys.platform.startswith("win") or "3.7" in session.run("python", "-V", silent=True):  # Drop 3.7 check when EOLed
+    if sys.platform.startswith("win"):
         session.log("This session cannot be run on in this environment")
         return 0
 
@@ -180,7 +178,7 @@ def demo(session):
         else:
             shutil.copy(s, tmp_dir)
 
-    session.env["STOP_AFTER"] = "10"
+    session.env["STOP_AFTER"] = "12"
     session.run("yakut", "orc", "launch.orc.yaml", success_codes=[111])
 
 
@@ -205,7 +203,7 @@ def pristine(session):
 
 @nox.session(reuse_venv=True)
 def check_style(session):
-    session.install("black == 22.*")
+    session.install("black == 23.*")
     session.run("black", "--check", ".")
 
 
@@ -220,7 +218,17 @@ def docs(session):
     session.install("-r", "docs/requirements.txt")
     out_dir = Path(session.create_tmp()).resolve()
     session.cd("docs")
-    sphinx_args = ["-b", "html", "-W", "--keep-going", f"-j{os.cpu_count() or 1}", ".", str(out_dir)]
+    # We used to have "-W" here to turn warnings into errors, but it breaks with Python 3.11 because Sphinx there
+    # emits nonsensical warnings about redefinition of typing.Any. Here's what they look like (line breaks inserted):
+    #
+    # /usr/lib/python3.11/typing.py:docstring of typing.Any:1: WARNING:
+    #   duplicate object description of typing.Any, other instance in
+    #   api/pycyphal.application.plug_and_play, use :noindex: for one of them
+    #
+    # /usr/lib/python3.11/typing.py:docstring of typing.Any:1: WARNING:
+    #   duplicate object description of typing.Any, other instance in
+    #   api/pycyphal.presentation.subscription_synchronizer.monotonic_clustering, use :noindex: for one of them
+    sphinx_args = ["-b", "html", "--keep-going", f"-j{os.cpu_count() or 1}", ".", str(out_dir)]
     session.run("sphinx-build", *sphinx_args)
     session.log(f"DOCUMENTATION BUILD OUTPUT: file://{out_dir}/index.html")
 
