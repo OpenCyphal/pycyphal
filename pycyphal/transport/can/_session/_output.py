@@ -48,7 +48,7 @@ class _PendingFeedbackKey:
 
 
 # noinspection PyAbstractClass
-class CANOutputSession(CANSession, pycyphal.transport.OutputSession):
+class CANOutputSession(CANSession, pycyphal.transport.OutputSession):  # pylint: disable=abstract-method
     """
     This is actually an abstract class, but its concrete inheritors are hidden from the API.
     The implementation is chosen according to the type of the session requested: broadcast or unicast.
