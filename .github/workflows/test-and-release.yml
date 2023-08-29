@@ -1,5 +1,5 @@
 name: 'Test and Release PyCyphal'
-on: push
+on: [ push, pull_request ]
 
 # Ensures that only one workflow is running at a time
 concurrency:
@@ -9,10 +9,11 @@ concurrency:
 jobs:
   pycyphal-test:
     name: Test PyCyphal
+    if: (github.event_name == 'push') || contains(github.event.head_commit.message, '#test')
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-20.04, windows-2019-npcap ]
+        os: [ ubuntu-latest, windows-2019-npcap ]
         python: [ '3.8', '3.9', '3.10' ]
     runs-on: ${{ matrix.os }}
     steps:
@@ -68,7 +69,9 @@ jobs:
   pycyphal-release:
     name: Release PyCyphal
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.message, '#release') || contains(github.ref, '/master')
+    if: >
+      (github.event_name == 'push') &&
+      (contains(github.event.head_commit.message, '#release') || contains(github.ref, '/master'))
     needs: pycyphal-test
     steps:
       - name: Check out
