@@ -339,8 +339,7 @@ Supporting newer versions of Python
 Normally, this should be done a few months after a new version of CPython is released:
 
 1. Update the CI/CD pipelines to enable the new Python version.
-2. Update the CD configuration to make sure that the library is released using the newest version of Python.
-3. Bump the version number using the ``.dev`` suffix to indicate that it is not release-ready until tested.
+2. Bump the version number using the ``.dev`` suffix to indicate that it is not release-ready until tested.
 
 When the CI/CD pipelines pass, you are all set.
 

@@ -24,7 +24,7 @@ CONFIG.read("setup.cfg")
 EXTRAS_REQUIRE = dict(CONFIG["options.extras_require"])
 assert EXTRAS_REQUIRE, "Config could not be read correctly"
 
-PYTHONS = ["3.7", "3.8", "3.9", "3.10"]
+PYTHONS = ["3.8", "3.9", "3.10"]
 """The newest supported Python shall be listed last."""
 
 nox.options.error_on_external_run = True
