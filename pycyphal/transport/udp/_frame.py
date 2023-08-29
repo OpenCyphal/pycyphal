@@ -46,6 +46,12 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
     TRANSFER_ID_MASK = 2**64 - 1
     INDEX_MASK = 2**31 - 1
 
+    NODE_ID_MAX = 0xFFFE
+    """
+    Cyphal/UDP supports 65535 nodes per logical network, from 0 to 65534 inclusive.
+    65535 is reserved for the anonymous/broadcast ID.
+    """
+
     source_node_id: int | None
     destination_node_id: int | None
 
@@ -57,10 +63,10 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
         if not isinstance(self.priority, pycyphal.transport.Priority):
             raise TypeError(f"Invalid priority: {self.priority}")  # pragma: no cover
 
-        if not (self.source_node_id is None or (0 <= self.source_node_id <= self.NODE_ID_MASK)):
+        if not (self.source_node_id is None or (0 <= self.source_node_id <= self.NODE_ID_MAX)):
             raise ValueError(f"Invalid source node id: {self.source_node_id}")
 
-        if not (self.destination_node_id is None or (0 <= self.destination_node_id <= self.NODE_ID_MASK)):
+        if not (self.destination_node_id is None or (0 <= self.destination_node_id <= self.NODE_ID_MAX)):
             raise ValueError(f"Invalid destination node id: {self.destination_node_id}")
 
         if isinstance(self.data_specifier, pycyphal.transport.ServiceDataSpecifier) and self.source_node_id is None:
@@ -88,16 +94,12 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
 
         if isinstance(self.data_specifier, pycyphal.transport.ServiceDataSpecifier):
             snm = True
-            subject_id = None
             service_id = self.data_specifier.service_id
             rnr = self.data_specifier.role == self.data_specifier.Role.REQUEST
             id_rnr = service_id | ((1 << 14) if rnr else 0)
         elif isinstance(self.data_specifier, pycyphal.transport.MessageDataSpecifier):
             snm = False
-            subject_id = self.data_specifier.subject_id
-            service_id = None
-            rnr = None
-            id_rnr = subject_id
+            id_rnr = self.data_specifier.subject_id
         else:
             raise TypeError(f"Invalid data specifier: {self.data_specifier}")
 
@@ -142,7 +144,7 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
             snm = bool(data_specifier_snm & (1 << 15))
             data_specifier: pycyphal.transport.DataSpecifier
             if snm:
-                ## Service
+                # Service
                 service_id = data_specifier_snm & UDPFrame.SERVICE_ID_MASK
                 rnr = bool(data_specifier_snm & (1 << 14))
                 # check the service ID
@@ -156,9 +158,8 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
                     else pycyphal.transport.ServiceDataSpecifier.Role.RESPONSE,
                 )
             else:
-                ## Message
+                # Message
                 subject_id = data_specifier_snm & UDPFrame.SUBJECT_ID_MASK
-                rnr = None
                 # check the subject ID
                 if not (0 <= subject_id <= UDPFrame.SUBJECT_ID_MASK):
                     return None
@@ -167,8 +168,8 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
 
             return UDPFrame(
                 priority=pycyphal.transport.Priority(int_priority),
-                source_node_id=source_node_id,
-                destination_node_id=destination_node_id,
+                source_node_id=source_node_id if source_node_id <= UDPFrame.NODE_ID_MAX else None,
+                destination_node_id=destination_node_id if destination_node_id <= UDPFrame.NODE_ID_MAX else None,
                 data_specifier=data_specifier,
                 transfer_id=transfer_id,
                 index=(frame_index_eot & UDPFrame.INDEX_MASK),

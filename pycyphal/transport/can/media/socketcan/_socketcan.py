@@ -141,6 +141,8 @@ class SocketCANMedia(Media):
                     loop.sock_sendall(self._sock, self._compile_native_frame(f.frame)),
                     timeout=monotonic_deadline - loop.time(),
                 )
+            except asyncio.TimeoutError:
+                break
             except OSError as err:
                 if self._closed:  # https://github.com/OpenCyphal/pycyphal/issues/204
                     break
@@ -152,8 +154,6 @@ class SocketCANMedia(Media):
                     ) from err
                 self._closed = self._closed or err.errno in self._errno_unrecoverable
                 raise err
-            except asyncio.TimeoutError:
-                break
             else:
                 num_sent += 1
         return num_sent
