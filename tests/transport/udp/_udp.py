@@ -217,7 +217,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics().received_datagrams[
         subscriber_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=1, frames=1, payload_bytes=1196, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=1, frames=1, payload_bytes=1404, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     # anon_sub_promiscuous
@@ -230,7 +230,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert anon_tr.sample_statistics().received_datagrams[
         anon_sub_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=1, frames=1, payload_bytes=1196, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=1, frames=1, payload_bytes=1404, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     # server_listener, doesn't receive anything
@@ -269,7 +269,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert anon_tr.sample_statistics().received_datagrams[
         anon_sub_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=2, frames=2, payload_bytes=2808, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     rx_transfer = await subscriber_promiscuous.receive(get_monotonic() + 5.0)
@@ -281,7 +281,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics().received_datagrams[
         subscriber_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=2, frames=2, payload_bytes=2808, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     assert None is await subscriber_selective.receive(get_monotonic() + 0.1)
@@ -315,7 +315,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics().received_datagrams[server_listener_specifier] == PromiscuousUDPInputSessionStatistics(
         transfers=1,
         frames=6,
-        payload_bytes=3596,
+        payload_bytes=4220,
         errors=3,
         drops=0,
         reassembly_errors_per_source_node_id={
@@ -329,7 +329,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics().received_datagrams[
         subscriber_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=2, frames=2, payload_bytes=2808, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     # client_listener, doesn't receive anything
@@ -382,7 +382,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics().received_datagrams[
         subscriber_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=2, frames=2, payload_bytes=2808, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
     # tr, subscriber_selective
     assert tr.sample_statistics().received_datagrams[
@@ -394,7 +394,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert tr.sample_statistics().received_datagrams[server_listener_specifier] == PromiscuousUDPInputSessionStatistics(
         transfers=1,
         frames=6,
-        payload_bytes=3596,
+        payload_bytes=4220,
         errors=3,
         drops=0,
         reassembly_errors_per_source_node_id={
@@ -411,7 +411,7 @@ async def _unittest_udp_transport_ipv4() -> None:
     assert anon_tr.sample_statistics().received_datagrams[
         anon_sub_promiscuous_specifier
     ] == PromiscuousUDPInputSessionStatistics(
-        transfers=2, frames=2, payload_bytes=2392, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
+        transfers=2, frames=2, payload_bytes=2808, errors=0, drops=0, reassembly_errors_per_source_node_id={222: {}}
     )
 
     await asyncio.sleep(1)  # Let all pending tasks finalize properly to avoid stack traces in the output.
