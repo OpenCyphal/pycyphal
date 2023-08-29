@@ -42,15 +42,21 @@ class UDPTransport(pycyphal.transport.Transport):
 
     TRANSFER_ID_MODULO = UDPFrame.TRANSFER_ID_MASK + 1
 
-    VALID_MTU_RANGE = 1200, 9000
+    MTU_MIN = 4
     """
-    The minimum is based on the IPv6 specification, which guarantees that the path MTU is at least 1280 bytes large.
-    This value is also acceptable for virtually all IPv4 local or real-time networks.
-    Lower MTU values shall not be used because they may lead to multi-frame transfer fragmentation where this is
-    not expected by the designer, possibly violating the real-time constraints.
+    This is the application-level MTU, not including the Cyphal/UDP header and other overheads.
+
+    The Cyphal/UDP protocol does not limit the maximum MTU value, but the minimum is restricted to 4 bytes
+    because it is necessary provide space at least for the transfer-CRC.
 
     A conventional Ethernet jumbo frame can carry up to 9 KiB (9216 bytes).
-    These are the application-level MTU values, so we take overheads into account.
+    """
+
+    MTU_DEFAULT = 1408
+    """
+    This is the application-level MTU, not including the Cyphal/UDP header and other overheads. The value derived as:
+
+        1500B Ethernet MTU (RFC 894) - 60B IPv4 max header - 8B UDP Header - 24B Cyphal header = 1408B payload.
     """
 
     VALID_SERVICE_TRANSFER_MULTIPLIER_RANGE = (1, 5)
@@ -60,7 +66,7 @@ class UDPTransport(pycyphal.transport.Transport):
         local_ip_address: IPAddress | str,
         local_node_id: typing.Optional[int] = 0,
         *,  # The following parameters are keyword-only.
-        mtu: int = min(VALID_MTU_RANGE),
+        mtu: int = MTU_DEFAULT,
         service_transfer_multiplier: int = 1,
         loop: typing.Optional[asyncio.AbstractEventLoop] = None,
         anonymous: bool = False,
@@ -86,12 +92,9 @@ class UDPTransport(pycyphal.transport.Transport):
 
         :param mtu: The application-level MTU for outgoing packets.
             In other words, this is the maximum number of serialized bytes per Cyphal/UDP frame.
-            Transfers where the number of payload bytes does not exceed this value will be single-frame transfers,
-            otherwise, multi-frame transfers will be used.
-            This setting affects only outgoing frames;
-            the MTU of incoming frames is fixed at a sufficiently large value to accept any meaningful UDP frame.
-
-            The default value is the smallest valid value for reasons of compatibility.
+            Transfers where the number of payload bytes does not exceed this value minus 4 bytes for the CRC
+            will be single-frame transfers; otherwise, multi-frame transfers will be used.
+            This setting affects only outgoing frames; incoming frames of any MTU are always accepted.
 
         :param service_transfer_multiplier: Forward error correction is disabled by default.
             This parameter specifies the number of times each outgoing service transfer will be repeated.
@@ -123,8 +126,7 @@ class UDPTransport(pycyphal.transport.Transport):
         if not (low <= self._srv_multiplier <= high):
             raise ValueError(f"Invalid service transfer multiplier: {self._srv_multiplier}")
 
-        low, high = self.VALID_MTU_RANGE
-        if not (low <= self._mtu <= high):
+        if self._mtu < self.MTU_MIN:
             raise ValueError(f"Invalid MTU: {self._mtu} bytes")
 
         self._input_registry: typing.Dict[pycyphal.transport.InputSessionSpecifier, UDPInputSession] = {}

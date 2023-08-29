@@ -60,7 +60,7 @@ async def _unittest_udp_transport_ipv4() -> None:
         mtu=9000,
     )
 
-    default_mtu = min(UDPTransport.VALID_MTU_RANGE)
+    default_mtu = UDPTransport.MTU_DEFAULT
     assert "127.0.0.1" in repr(tr2)
     assert tr2.protocol_parameters == ProtocolParameters(
         transfer_id_modulo=2**64,
