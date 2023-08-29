@@ -218,7 +218,17 @@ def docs(session):
     session.install("-r", "docs/requirements.txt")
     out_dir = Path(session.create_tmp()).resolve()
     session.cd("docs")
-    sphinx_args = ["-b", "html", "-W", "--keep-going", f"-j{os.cpu_count() or 1}", ".", str(out_dir)]
+    # We used to have "-W" here to turn warnings into errors, but it breaks with Python 3.11 because Sphinx there
+    # emits nonsensical warnings about redefinition of typing.Any. Here's what they look like (line breaks inserted):
+    #
+    # /usr/lib/python3.11/typing.py:docstring of typing.Any:1: WARNING:
+    #   duplicate object description of typing.Any, other instance in
+    #   api/pycyphal.application.plug_and_play, use :noindex: for one of them
+    #
+    # /usr/lib/python3.11/typing.py:docstring of typing.Any:1: WARNING:
+    #   duplicate object description of typing.Any, other instance in
+    #   api/pycyphal.presentation.subscription_synchronizer.monotonic_clustering, use :noindex: for one of them
+    sphinx_args = ["-b", "html", "--keep-going", f"-j{os.cpu_count() or 1}", ".", str(out_dir)]
     session.run("sphinx-build", *sphinx_args)
     session.log(f"DOCUMENTATION BUILD OUTPUT: file://{out_dir}/index.html")
 
