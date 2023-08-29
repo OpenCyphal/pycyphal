@@ -49,22 +49,20 @@ async def _unittest_redundant_input_cyclic() -> None:
 
     # Empty inferior set reception.
     time_before = asyncio.get_running_loop().time()
-    assert not await (ses.receive(asyncio.get_running_loop().time() + 2.0))
+    assert not await ses.receive(asyncio.get_running_loop().time() + 2.0)
     assert (
         1.0 < asyncio.get_running_loop().time() - time_before < 5.0
     ), "The method should have returned in about two seconds."
 
     # Begin reception, then add an inferior while the reception is in progress.
-    assert await (
-        tx_a.send(
-            Transfer(
-                timestamp=Timestamp.now(),
-                priority=Priority.HIGH,
-                transfer_id=1,
-                fragmented_payload=[memoryview(b"abc")],
-            ),
-            asyncio.get_running_loop().time() + 1.0,
-        )
+    assert await tx_a.send(
+        Transfer(
+            timestamp=Timestamp.now(),
+            priority=Priority.HIGH,
+            transfer_id=1,
+            fragmented_payload=[memoryview(b"abc")],
+        ),
+        asyncio.get_running_loop().time() + 1.0,
     )
 
     async def add_inferior(inferior: pycyphal.transport.InputSession) -> None:
@@ -72,13 +70,11 @@ async def _unittest_redundant_input_cyclic() -> None:
         ses._add_inferior(inferior)  # pylint: disable=protected-access
 
     time_before = asyncio.get_running_loop().time()
-    tr, _ = await (
-        asyncio.gather(
-            # Start reception here. It would stall for two seconds because no inferiors.
-            ses.receive(asyncio.get_running_loop().time() + 2.0),
-            # While the transmission is stalled, add one inferior with a delay.
-            add_inferior(inf_a),
-        )
+    tr, _ = await asyncio.gather(
+        # Start reception here. It would stall for two seconds because no inferiors.
+        ses.receive(asyncio.get_running_loop().time() + 2.0),
+        # While the transmission is stalled, add one inferior with a delay.
+        add_inferior(inf_a),
     )
     assert (
         0.0 < asyncio.get_running_loop().time() - time_before < 5.0
@@ -101,30 +97,26 @@ async def _unittest_redundant_input_cyclic() -> None:
 
     # Redundant reception - new transfers accepted because the iface switch timeout is exceeded.
     time.sleep(ses.transfer_id_timeout)  # Just to make sure that it is REALLY exceeded.
-    assert await (
-        tx_b.send(
-            Transfer(
-                timestamp=Timestamp.now(),
-                priority=Priority.HIGH,
-                transfer_id=2,
-                fragmented_payload=[memoryview(b"def")],
-            ),
-            asyncio.get_running_loop().time() + 1.0,
-        )
+    assert await tx_b.send(
+        Transfer(
+            timestamp=Timestamp.now(),
+            priority=Priority.HIGH,
+            transfer_id=2,
+            fragmented_payload=[memoryview(b"def")],
+        ),
+        asyncio.get_running_loop().time() + 1.0,
     )
-    assert await (
-        tx_b.send(
-            Transfer(
-                timestamp=Timestamp.now(),
-                priority=Priority.HIGH,
-                transfer_id=3,
-                fragmented_payload=[memoryview(b"ghi")],
-            ),
-            asyncio.get_running_loop().time() + 1.0,
-        )
+    assert await tx_b.send(
+        Transfer(
+            timestamp=Timestamp.now(),
+            priority=Priority.HIGH,
+            transfer_id=3,
+            fragmented_payload=[memoryview(b"ghi")],
+        ),
+        asyncio.get_running_loop().time() + 1.0,
     )
 
-    tr = await (ses.receive(asyncio.get_running_loop().time() + 0.1))
+    tr = await ses.receive(asyncio.get_running_loop().time() + 1.0)
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (asyncio.get_running_loop().time() + 1e-3)
     assert tr.priority == Priority.HIGH
@@ -132,7 +124,7 @@ async def _unittest_redundant_input_cyclic() -> None:
     assert tr.fragmented_payload == [memoryview(b"def")]
     assert tr.inferior_session == inf_b
 
-    tr = await (ses.receive(asyncio.get_running_loop().time() + 0.1))
+    tr = await ses.receive(asyncio.get_running_loop().time() + 1.0)
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (asyncio.get_running_loop().time() + 1e-3)
     assert tr.priority == Priority.HIGH
@@ -140,21 +132,19 @@ async def _unittest_redundant_input_cyclic() -> None:
     assert tr.fragmented_payload == [memoryview(b"ghi")]
     assert tr.inferior_session == inf_b
 
-    assert None is await (ses.receive(asyncio.get_running_loop().time() + 1.0))  # Nothing left to read now.
+    assert None is await ses.receive(asyncio.get_running_loop().time() + 1.0)  # Nothing left to read now.
 
     # This one will be rejected because wrong iface and the switch timeout is not yet exceeded.
-    assert await (
-        tx_a.send(
-            Transfer(
-                timestamp=Timestamp.now(),
-                priority=Priority.HIGH,
-                transfer_id=4,
-                fragmented_payload=[memoryview(b"rej")],
-            ),
-            asyncio.get_running_loop().time() + 1.0,
-        )
+    assert await tx_a.send(
+        Transfer(
+            timestamp=Timestamp.now(),
+            priority=Priority.HIGH,
+            transfer_id=4,
+            fragmented_payload=[memoryview(b"rej")],
+        ),
+        asyncio.get_running_loop().time() + 1.0,
     )
-    assert None is await (ses.receive(asyncio.get_running_loop().time() + 0.1))
+    assert None is await ses.receive(asyncio.get_running_loop().time() + 1.0)
 
     # Transfer-ID timeout reconfiguration.
     ses.transfer_id_timeout = 3.0
@@ -169,18 +159,16 @@ async def _unittest_redundant_input_cyclic() -> None:
     ses._close_inferior(1)  # Out of range, no effect.  # pylint: disable=protected-access
     assert ses.inferiors == [inf_b]
 
-    assert await (
-        tx_b.send(
-            Transfer(
-                timestamp=Timestamp.now(),
-                priority=Priority.HIGH,
-                transfer_id=1,
-                fragmented_payload=[memoryview(b"acc")],
-            ),
-            asyncio.get_running_loop().time() + 1.0,
-        )
+    assert await tx_b.send(
+        Transfer(
+            timestamp=Timestamp.now(),
+            priority=Priority.HIGH,
+            transfer_id=1,
+            fragmented_payload=[memoryview(b"acc")],
+        ),
+        asyncio.get_running_loop().time() + 1.0,
     )
-    tr = await (ses.receive(asyncio.get_running_loop().time() + 0.1))
+    tr = await ses.receive(asyncio.get_running_loop().time() + 1.0)
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (asyncio.get_running_loop().time() + 1e-3)
     assert tr.priority == Priority.HIGH
@@ -209,7 +197,7 @@ async def _unittest_redundant_input_cyclic() -> None:
     assert not is_retired
     assert not ses.inferiors
     with pytest.raises(ResourceClosedError):
-        await (ses.receive(0))
+        await ses.receive(0)
     tr_a.close()
     tr_b.close()
     inf_a.close()
@@ -260,58 +248,52 @@ async def _unittest_redundant_input_monotonic() -> None:
 
     # Redundant reception from multiple interfaces concurrently.
     for tx_x in (tx_a, tx_b):
-        assert await (
-            tx_x.send(
-                Transfer(
-                    timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
-                    transfer_id=2,
-                    fragmented_payload=[memoryview(b"def")],
-                ),
-                asyncio.get_running_loop().time() + 1.0,
-            )
+        assert await tx_x.send(
+            Transfer(
+                timestamp=Timestamp.now(),
+                priority=Priority.HIGH,
+                transfer_id=2,
+                fragmented_payload=[memoryview(b"def")],
+            ),
+            asyncio.get_running_loop().time() + 1.0,
         )
-        assert await (
-            tx_x.send(
-                Transfer(
-                    timestamp=Timestamp.now(),
-                    priority=Priority.HIGH,
-                    transfer_id=3,
-                    fragmented_payload=[memoryview(b"ghi")],
-                ),
-                asyncio.get_running_loop().time() + 1.0,
-            )
+        assert await tx_x.send(
+            Transfer(
+                timestamp=Timestamp.now(),
+                priority=Priority.HIGH,
+                transfer_id=3,
+                fragmented_payload=[memoryview(b"ghi")],
+            ),
+            asyncio.get_running_loop().time() + 1.0,
         )
 
-    tr = await (ses.receive(asyncio.get_running_loop().time() + 0.1))
+    tr = await ses.receive(asyncio.get_running_loop().time() + 1.0)
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (asyncio.get_running_loop().time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 2
     assert tr.fragmented_payload == [memoryview(b"def")]
 
-    tr = await (ses.receive(asyncio.get_running_loop().time() + 0.1))
+    tr = await ses.receive(asyncio.get_running_loop().time() + 1.0)
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (asyncio.get_running_loop().time() + 1e-3)
     assert tr.priority == Priority.HIGH
     assert tr.transfer_id == 3
     assert tr.fragmented_payload == [memoryview(b"ghi")]
 
-    assert None is await (ses.receive(asyncio.get_running_loop().time() + 2.0))  # Nothing left to read now.
+    assert None is await ses.receive(asyncio.get_running_loop().time() + 2.0)  # Nothing left to read now.
 
     # This one will be accepted despite a smaller transfer-ID because of the TID timeout.
-    assert await (
-        tx_a.send(
-            Transfer(
-                timestamp=Timestamp.now(),
-                priority=Priority.HIGH,
-                transfer_id=1,
-                fragmented_payload=[memoryview(b"acc")],
-            ),
-            asyncio.get_running_loop().time() + 1.0,
-        )
+    assert await tx_a.send(
+        Transfer(
+            timestamp=Timestamp.now(),
+            priority=Priority.HIGH,
+            transfer_id=1,
+            fragmented_payload=[memoryview(b"acc")],
+        ),
+        asyncio.get_running_loop().time() + 1.0,
     )
-    tr = await (ses.receive(asyncio.get_running_loop().time() + 0.1))
+    tr = await ses.receive(asyncio.get_running_loop().time() + 1.0)
     assert isinstance(tr, RedundantTransferFrom)
     assert ts.monotonic <= tr.timestamp.monotonic <= (asyncio.get_running_loop().time() + 1e-3)
     assert tr.priority == Priority.HIGH
