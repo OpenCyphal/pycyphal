@@ -200,13 +200,18 @@ class UDPTracer(pycyphal.transport.Tracer):
 
 class _AlienSession:
     def __init__(self, specifier: AlienSessionSpecifier) -> None:
-        assert specifier.source_node_id is not None
         self._specifier = specifier
-        self._reassembler = AlienTransferReassembler(specifier.source_node_id)
+        src = specifier.source_node_id
+        self._reassembler = AlienTransferReassembler(src) if src is not None else None
 
     def update(self, timestamp: Timestamp, frame: UDPFrame) -> typing.Optional[Trace]:
-        tid_timeout = self._reassembler.transfer_id_timeout
-        tr = self._reassembler.process_frame(timestamp, frame)
+        reasm = self._reassembler
+        tid_timeout = reasm.transfer_id_timeout if reasm is not None else 0.0
+        tr: TransferFrom | TransferReassembler.Error | None
+        if reasm is not None:
+            tr = reasm.process_frame(timestamp, frame)
+        else:
+            tr = TransferReassembler.construct_anonymous_transfer(timestamp, frame)
         if isinstance(tr, TransferReassembler.Error):
             return UDPErrorTrace(timestamp=timestamp, error=tr)
         if isinstance(tr, TransferFrom):

@@ -18,7 +18,6 @@ from pycyphal.transport.commons.high_overhead_transport import TransferReassembl
 from .._frame import UDPFrame
 
 _READ_SIZE = 0xFFFF  # Per libpcap documentation, this is to be sufficient always.
-NODE_ID_MASK = UDPFrame.NODE_ID_MASK
 
 _logger = logging.getLogger(__name__)
 
@@ -132,11 +131,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
                     continue
             self._statistics.frames += 1
             source_node_id = frame.source_node_id
-            assert (
-                isinstance(source_node_id, int) and 0 <= source_node_id <= NODE_ID_MASK
-            ), "Internal protocol violation"
-            # Anonymous - no reconstruction needed
-            if source_node_id == NODE_ID_MASK:
+            if source_node_id is None:  # Anonymous - no reconstruction needed
                 transfer = TransferReassembler.construct_anonymous_transfer(ts, frame)
             else:
                 _logger.debug("%s: Processing frame %s", self, frame)
