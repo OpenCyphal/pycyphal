@@ -178,7 +178,7 @@ def demo(session):
         else:
             shutil.copy(s, tmp_dir)
 
-    session.env["STOP_AFTER"] = "10"
+    session.env["STOP_AFTER"] = "12"
     session.run("yakut", "orc", "launch.orc.yaml", success_codes=[111])
 
 
