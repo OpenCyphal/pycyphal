@@ -38,6 +38,18 @@ jobs:
           python -m pip install --upgrade pip setuptools nox
         shell: bash
 
+      - name: Build and Install Socketcand
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          sudo apt-get install -y autoconf
+          git clone https://github.com/linux-can/socketcand.git
+          cd socketcand
+          ./autogen.sh
+          ./configure
+          make
+          sudo make install
+        shell: bash
+
       - name: Collect Linux diagnostic data
         if: ${{ runner.os == 'Linux' }}
         run: ip link show

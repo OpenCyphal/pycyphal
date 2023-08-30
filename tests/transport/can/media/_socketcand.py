@@ -12,93 +12,46 @@ from pycyphal.transport.can.media.socketcand import SocketcandMedia
 if sys.platform != "linux":  # pragma: no cover
     pytest.skip("Socketcand test skipped because the system is not GNU/Linux", allow_module_level=True)
 
-
-GIBIBYTE = 1024**3
-
-MEMORY_LIMIT = 8 * GIBIBYTE
-"""
-The test suite artificially limits the amount of consumed memory in order to avoid triggering the OOM killer
-should a test go crazy and eat all memory.
-"""
-
 _logger = logging.getLogger(__name__)
 
-socketcand = None
-
-
 @pytest.fixture()
-def _configure_host_environment() -> None:
-    print("configurng host environment")
+def _start_socketcand() -> None:
 
-    def execute(
-        *cmd: typing.Any, ensure_success: bool = True, cwd: typing.Optional[str] = None, daemon: bool = False
-    ) -> typing.Tuple[int, str, str]:
-        cmd = tuple(map(str, cmd))
-        out = None
-        if cwd is None:
-            out = subprocess.run(  # pylint: disable=subprocess-run-check
-                cmd,
-                encoding="utf8",
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-        else:
-            out = subprocess.run(  # pylint: disable=subprocess-run-check
-                cmd, encoding="utf8", stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd
-            )
+    # starting a socketcand daemon in background
+    cmd = ["socketcand", "-i", "vcan0", "-l", "lo", "-p", "29536"]
 
-        stdout, stderr = out.stdout, out.stderr
-        _logger.debug("%s stdout:\n%s", cmd, stdout)
-        _logger.debug("%s stderr:\n%s", cmd, stderr)
-        if out.returncode != 0 and ensure_success:  # pragma: no cover
-            raise subprocess.CalledProcessError(out.returncode, cmd, stdout, stderr)
-        assert isinstance(stdout, str) and isinstance(stderr, str)
-        return out.returncode, stdout, stderr
+    socketcand = subprocess.Popen(
+        cmd,
+        encoding="utf8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
-    if sys.platform.startswith("linux"):
-        import resource  # pylint: disable=import-error
+    stdout, stderr = socketcand.stdout, socketcand.stderr
+    _logger.debug("%s stdout:\n%s", cmd, stdout)
+    _logger.debug("%s stderr:\n%s", cmd, stderr)
 
-        _logger.info("Limiting process memory usage to %.1f GiB", MEMORY_LIMIT / GIBIBYTE)
-        resource.setrlimit(resource.RLIMIT_AS, (MEMORY_LIMIT, MEMORY_LIMIT))
-
-        # Set up virtual SocketCAN interfaces.
-        execute("sudo", "modprobe", "can")
-        execute("sudo", "modprobe", "can_raw")
-        execute("sudo", "modprobe", "vcan")
-        execute("sudo", "ip", "link", "add", "dev", "vcan3", "type", "vcan", ensure_success=False)
-        execute("sudo", "ip", "link", "set", "vcan3", "mtu", 72)  # Enable both Classic CAN and CAN FD.
-        execute("sudo", "ip", "link", "set", "up", "vcan3")
-
-        # build and install socketcand
-        execute("sudo", "apt-get", "install", "-y", "autoconf")
-        execute("git", "clone", "https://github.com/linux-can/socketcand.git")
-        execute("./autogen.sh", cwd="socketcand")
-        execute("./configure", cwd="socketcand")
-        execute("make", cwd="socketcand")
-        execute("sudo", "make", "install", cwd="socketcand")
-
-        # start socketcand daemon in background so test can continue
-        socketcand = subprocess.Popen(["socketcand", "-i", "vcan3", "-l", "lo"])
-
+    if socketcand.returncode is not None:  # pragma: no cover
+        raise subprocess.CalledProcessError(socketcand.returncode, cmd, stdout, stderr)
+    
     yield None
     if sys.platform.startswith("linux"):
         socketcand.kill()
-        execute("sudo", "rm", "-r", "socketcand")
-
-
+    
+        
 @pytest.mark.asyncio
-async def _unittest_can_socketcand(_configure_host_environment) -> None:
+async def _unittest_can_socketcand(_start_socketcand) -> None:
     asyncio.get_running_loop().slow_callback_duration = 5.0
 
-    media_a = SocketcandMedia("vcan3", "127.0.0.1")
-    media_b = SocketcandMedia("vcan3", "127.0.0.1")
+    media_a = SocketcandMedia("vcan0", "127.0.0.1")
+    media_b = SocketcandMedia("vcan0", "127.0.0.1")
 
     assert media_a.mtu == 8
     assert media_b.mtu == 8
     assert media_a.interface_name == "socketcand"
     assert media_b.interface_name == "socketcand"
-    assert media_a.channel_name == "vcan3"
-    assert media_b.channel_name == "vcan3"
+    assert media_a.channel_name == "vcan0"
+    assert media_b.channel_name == "vcan0"
     assert media_a.host_name == "127.0.0.1"
     assert media_b.host_name == "127.0.0.1"
     assert media_a.port_name == 29536

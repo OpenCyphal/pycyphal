@@ -29,20 +29,18 @@ class _TxItem:
 
 
 class SocketcandMedia(Media):
-    # pylint: disable=line-too-long
     """
     Media interface adapter for `Socketcand <https://github.com/linux-can/socketcand/tree/master>` using the
     built in interface compatibility from `Python-CAN <https://python-can.readthedocs.io/>`.
-    Please refer to the Socketcand documentation and the Python-CAN documentation for information about
-    supported hardware, configuration, and installation instructions.
+    Please refer to the Socketcand documentation for information about supported hardware, 
+    configuration, and installation instructions.
 
-    This media interface supports both Classic CAN and CAN FD. The selection logic is documented below.
+    This media interface supports only Classic CAN. 
 
     Here is a basic usage example based on the Yakut CLI tool.
     Suppose you have two computers:
-
     One connected to a CAN capable device and that computer is able to connect and recieve CAN data from the
-    CAN device. Using socketcand with a command such as `socketcand -v -i can0 -l 123.123.1.123`
+    CAN device. Using socketcand with a command such as ``socketcand -v -i can0 -l 123.123.1.123``
     on this first computer will bind it too a socket (default port for socketcand is 29536, so it is also default here).
 
     Then, on your second computer::
