@@ -31,7 +31,7 @@ class _TxItem:
 class SocketcandMedia(Media):
     """
     Media interface adapter for `Socketcand <https://github.com/linux-can/socketcand/tree/master>` using the
-    built in interface compatibility from `Python-CAN <https://python-can.readthedocs.io/>`.
+    built-in interface from `Python-CAN <https://python-can.readthedocs.io/>`.
     Please refer to the Socketcand documentation for information about supported hardware,
     configuration, and installation instructions.
 
@@ -39,7 +39,7 @@ class SocketcandMedia(Media):
 
     Here is a basic usage example based on the Yakut CLI tool.
     Suppose you have two computers:
-    One connected to a CAN capable device and that computer is able to connect and recieve CAN data from the
+    One connected to a CAN-capable device and that computer is able to connect and receive CAN data from the
     CAN device. Using socketcand with a command such as ``socketcand -v -i can0 -l 123.123.1.123``
     on this first computer will bind it too a socket (default port for socketcand is 29536, so it is also default here).
 
@@ -48,27 +48,23 @@ class SocketcandMedia(Media):
         export UAVCAN__CAN__IFACE="socketcand:can0:123.123.1.123"
         yakut sub 33:uavcan.si.unit.voltage.scalar
 
-    This will allow you to wirelessly recieve CAN data on computer two through the wired connection on computer 1.
-
+    This will allow you to remotely receive CAN data on computer two through the wired connection on computer 1.
     """
 
     _MAXIMAL_TIMEOUT_SEC = 0.1
 
     def __init__(self, channel: str, host: str, port: int = 29536) -> None:
         """
+        :param channel: Name of the CAN channel/interface that your remote computer is connected to;
+            often ``can0`` or ``vcan0``.
+            Comes after the ``-i`` in the socketcand command.
 
-        :param channel: Name of the CAN channel/interface that your remote computer is connected too:
-            Often can0, or vcan0.
-            Comes after the -i in the socketcand command
+        :param host: Name of the remote IP address of the computer running socketcand;
+            should be in the format ``123.123.1.123``.
+            In the socketcand command, this is the IP address after ``-l``.
 
-        :param host: Name of the remote IP address of the computer running socketcand:
-            Should be in the format '123.123.1.123'.
-            In the socketcand command, this is the ip addr after -l.
-
-        :param port: Name of the port the socket is bound too:
-            As per socketcand's default value, here the default is also 29536.
-
-
+        :param port: Name of the port the socket is bound too.
+            As per socketcand's default value, here, the default is also 29536.
         """
 
         self._iface = "socketcand"
@@ -84,21 +80,19 @@ class SocketcandMedia(Media):
         self._tx_thread = threading.Thread(target=self._transmit_thread_worker, daemon=True)
 
         try:
-            bus = can.ThreadSafeBus(
+            self._bus = can.ThreadSafeBus(
                 interface=self._iface,
                 host=self._host,
                 port=self._port,
                 channel=self._can_channel,
             )
-
-            self._bus: can.ThreadSafeBus = bus
         except can.CanError as ex:
             raise InvalidMediaConfigurationError(f"Could not initialize PythonCAN: {ex}") from ex
         super().__init__()
 
     @property
     def interface_name(self) -> str:
-        return self._iface
+        return f"{self._iface}:{self._can_channel}:{self._host}:{self._port}"
 
     @property
     def channel_name(self) -> str:
@@ -147,8 +141,8 @@ class SocketcandMedia(Media):
             if f.format is not None:  # Per Python-CAN docs, if "extended" is not set, both base/ext will be accepted.
                 d["extended"] = f.format == FrameFormat.EXTENDED
             filters.append(d)
-        _logger.debug("%s: Acceptance filters activated: %s", self, ", ".join(map(str, configuration)))
         self._bus.set_filters(filters)
+        _logger.debug("%s: Acceptance filters activated: %s", self, ", ".join(map(str, configuration)))
 
     def _transmit_thread_worker(self) -> None:
         try:
