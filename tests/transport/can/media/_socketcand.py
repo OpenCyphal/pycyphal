@@ -27,6 +27,11 @@ def _start_socketcand() -> typing.Generator[None, None, None]:
         stderr=subprocess.PIPE,
     )
 
+    try:
+        stdout, stderr = socketcand.communicate(timeout=1)
+    except subprocess.TimeoutExpired:
+        ...
+
     if socketcand.returncode is not None:
         socketcand.kill()
         stdout, stderr = socketcand.communicate()
