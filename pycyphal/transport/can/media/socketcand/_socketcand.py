@@ -32,10 +32,10 @@ class SocketcandMedia(Media):
     """
     Media interface adapter for `Socketcand <https://github.com/linux-can/socketcand/tree/master>` using the
     built in interface compatibility from `Python-CAN <https://python-can.readthedocs.io/>`.
-    Please refer to the Socketcand documentation for information about supported hardware, 
+    Please refer to the Socketcand documentation for information about supported hardware,
     configuration, and installation instructions.
 
-    This media interface supports only Classic CAN. 
+    This media interface supports only Classic CAN.
 
     Here is a basic usage example based on the Yakut CLI tool.
     Suppose you have two computers:

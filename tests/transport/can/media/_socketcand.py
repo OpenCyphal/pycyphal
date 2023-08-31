@@ -14,9 +14,9 @@ if sys.platform != "linux":  # pragma: no cover
 
 _logger = logging.getLogger(__name__)
 
+
 @pytest.fixture()
 def _start_socketcand() -> typing.Generator[None, None, None]:
-
     # starting a socketcand daemon in background
     cmd = ["socketcand", "-i", "vcan0", "-l", "lo", "-p", "29536"]
 
@@ -27,21 +27,21 @@ def _start_socketcand() -> typing.Generator[None, None, None]:
         stderr=subprocess.PIPE,
     )
 
-    if socketcand.returncode is not None:  # pragma: no cover
+    if socketcand.returncode is not None:
         socketcand.kill()
         stdout, stderr = socketcand.communicate()
         _logger.debug("%s stdout:\n%s", cmd, stdout)
         _logger.debug("%s stderr:\n%s", cmd, stderr)
         raise subprocess.CalledProcessError(socketcand.returncode, cmd, stdout, stderr)
-    
+
     yield None
     if sys.platform.startswith("linux"):
         socketcand.kill()
         stdout, stderr = socketcand.communicate()
         _logger.debug("%s stdout:\n%s", cmd, stdout)
         _logger.debug("%s stderr:\n%s", cmd, stderr)
-    
-        
+
+
 @pytest.mark.asyncio
 async def _unittest_can_socketcand(_start_socketcand: None) -> None:
     asyncio.get_running_loop().slow_callback_duration = 5.0
