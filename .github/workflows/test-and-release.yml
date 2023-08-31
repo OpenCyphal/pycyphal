@@ -10,7 +10,7 @@ jobs:
   pycyphal-test:
     name: Test PyCyphal
     # Run on push OR on 3rd-party PR.
-    if: (github.event_name == 'push') || (github.event.pull_request.author_association == "NONE")
+    if: (github.event_name == 'push') || (github.event.pull_request.author_association == 'NONE')
     strategy:
       fail-fast: false
       matrix:
