@@ -34,7 +34,7 @@ def _start_socketcand() -> typing.Generator[None, None, None]:
 
     if socketcand.returncode is not None:
         socketcand.kill()
-        stdout, stderr = socketcand.communicate()
+        stdout, stderr = socketcand.communicate(timeout=1)
         _logger.debug("%s stdout:\n%s", cmd, stdout)
         _logger.debug("%s stderr:\n%s", cmd, stderr)
         raise subprocess.CalledProcessError(socketcand.returncode, cmd, stdout, stderr)
@@ -42,9 +42,6 @@ def _start_socketcand() -> typing.Generator[None, None, None]:
     yield None
     if sys.platform.startswith("linux"):
         socketcand.kill()
-        stdout, stderr = socketcand.communicate()
-        _logger.debug("%s stdout:\n%s", cmd, stdout)
-        _logger.debug("%s stderr:\n%s", cmd, stderr)
 
 
 @pytest.mark.asyncio
@@ -56,8 +53,8 @@ async def _unittest_can_socketcand(_start_socketcand: None) -> None:
 
     assert media_a.mtu == 8
     assert media_b.mtu == 8
-    assert media_a.interface_name == "socketcand"
-    assert media_b.interface_name == "socketcand"
+    assert media_a.interface_name == "socketcand:vcan0:127.0.0.1:29536"
+    assert media_b.interface_name == "socketcand:vcan0:127.0.0.1:29536"
     assert media_a.channel_name == "vcan0"
     assert media_b.channel_name == "vcan0"
     assert media_a.host_name == "127.0.0.1"
