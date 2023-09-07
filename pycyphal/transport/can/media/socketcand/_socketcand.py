@@ -30,8 +30,8 @@ class _TxItem:
 
 class SocketcandMedia(Media):
     """
-    Media interface adapter for `Socketcand <https://github.com/linux-can/socketcand/tree/master>` using the
-    built-in interface from `Python-CAN <https://python-can.readthedocs.io/>`.
+    Media interface adapter for `Socketcand <https://github.com/linux-can/socketcand/tree/master>_` using the
+    built-in interface from `Python-CAN <https://python-can.readthedocs.io/>`_.
     Please refer to the Socketcand documentation for information about supported hardware,
     configuration, and installation instructions.
 

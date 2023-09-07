@@ -1,3 +1,6 @@
+# Copyright (c) 2023 OpenCyphal
+# This software is distributed under the terms of the MIT License.
+
 import sys
 import typing
 import asyncio
@@ -30,18 +33,14 @@ def _start_socketcand() -> typing.Generator[None, None, None]:
     try:
         stdout, stderr = socketcand.communicate(timeout=1)
     except subprocess.TimeoutExpired:
-        ...
-
-    if socketcand.returncode is not None:
-        socketcand.kill()
-        stdout, stderr = socketcand.communicate(timeout=1)
+        pass  # Successful liftoff
+    else:
         _logger.debug("%s stdout:\n%s", cmd, stdout)
         _logger.debug("%s stderr:\n%s", cmd, stderr)
         raise subprocess.CalledProcessError(socketcand.returncode, cmd, stdout, stderr)
 
     yield None
-    if sys.platform.startswith("linux"):
-        socketcand.kill()
+    socketcand.kill()
 
 
 @pytest.mark.asyncio

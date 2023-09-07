@@ -49,7 +49,6 @@ jobs:
           ./configure
           make
           sudo make install
-        shell: bash
 
       - name: Collect Linux diagnostic data
         if: ${{ runner.os == 'Linux' }}
