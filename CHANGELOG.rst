@@ -3,6 +3,12 @@
 Changelog
 =========
 
+v1.16
+-----
+
+- Added support for the Socketcand interface. 
+  See (`#306 <https://github.com/OpenCyphal/pycyphal/pull/306>`_) for details on the changes. 
+
 v1.15
 -----
 

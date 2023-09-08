@@ -9,7 +9,8 @@ concurrency:
 jobs:
   pycyphal-test:
     name: Test PyCyphal
-    if: (github.event_name == 'push') || contains(github.event.head_commit.message, '#test')
+    # Run on push OR on 3rd-party PR.
+    if: (github.event_name == 'push') || (github.event.pull_request.author_association == 'NONE')
     strategy:
       fail-fast: false
       matrix:
@@ -37,6 +38,17 @@ jobs:
           git submodule update --init --recursive
           python -m pip install --upgrade pip setuptools nox
         shell: bash
+
+      - name: Build and Install Socketcand
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          sudo apt-get install -y autoconf
+          git clone https://github.com/linux-can/socketcand.git
+          cd socketcand
+          ./autogen.sh
+          ./configure
+          make
+          sudo make install
 
       - name: Collect Linux diagnostic data
         if: ${{ runner.os == 'Linux' }}
