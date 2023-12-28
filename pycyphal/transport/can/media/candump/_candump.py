@@ -240,8 +240,7 @@ class CandumpMedia(Media):
 
 
 _RE_REC_REMOTE = re.compile(r"(?a)^\s*\((\d+\.\d+)\)\s+([\w-]+)\s+([\da-fA-F]+)#R")
-_RE_REC_DATA = re.compile(r"(?a)^\s*\((\d+\.\d+)\)\s+([\w-]+)\s+([\da-fA-F]+)#([\da-fA-F]*)")
-
+_RE_REC_DATA = re.compile(r"(?a)^\s*\((\d+\.\d+)\)\s+([\w-]+)\s+([\da-fA-F]+)#(#\d)?([\da-fA-F]*)")
 
 @dataclasses.dataclass(frozen=True)
 class Record:
@@ -253,7 +252,14 @@ class Record:
             match = _RE_REC_DATA.match(line)
             if not match:
                 return None
-            s_ts, iface_name, s_canid, s_data = match.groups()
+            s_ts, iface_name, s_canid, s_flags, s_data = match.groups()
+            if s_flags is None:
+                s_flags = "#0"
+            if s_data is None:
+                s_data = ""
+            if len(s_data) % 2 != 0:
+                return UnsupportedRecord() # Must be an even number of nibbles
+            # _logger.info(f"Received {s_ts} from {iface_name} with ID {s_canid} and flags {s_flags} data {s_data}")
             return DataFrameRecord(
                 ts=Timestamp(
                     system_ns=int(Decimal(s_ts) * Decimal("1e9")),
@@ -263,6 +269,7 @@ class Record:
                 fmt=FrameFormat.EXTENDED if len(s_canid) > 3 else FrameFormat.BASE,
                 can_id=int(s_canid, 16),
                 can_payload=bytes.fromhex(s_data),
+                can_flags=int(s_flags[1:], 16) # skip over #
             )
         except ValueError as ex:
             _logger.debug("Cannot convert values from line %r: %r", line, ex)
@@ -281,6 +288,7 @@ class DataFrameRecord(Record):
     fmt: FrameFormat
     can_id: int
     can_payload: bytes
+    can_flags: int
 
     def __str__(self) -> str:
         if self.fmt == FrameFormat.EXTENDED:
@@ -311,6 +319,29 @@ def _unittest_record_parse() -> None:
     assert rec.can_payload == bytes()
     print(rec)
 
+    rec = Record.parse("(1703173569.357659) can0 0C7D5522##556000000000000EB\n")
+    assert isinstance(rec, DataFrameRecord)
+    assert rec.ts.system_ns == 1703173569_357659000
+    assert rec.iface_name == "can0"
+    assert rec.fmt == FrameFormat.EXTENDED
+    assert rec.can_id == 0x0C7D5522
+    assert rec.can_flags == 5
+    assert rec.can_payload == bytes.fromhex("56000000000000EB")
+    print(rec)
+
+    rec = Record.parse("(1703173569.357659) can0 0C7D5522##3\n")
+    assert isinstance(rec, DataFrameRecord)
+    assert rec.ts.system_ns == 1703173569_357659000
+    assert rec.iface_name == "can0"
+    assert rec.fmt == FrameFormat.EXTENDED
+    assert rec.can_id == 0x0C7D5522
+    assert rec.can_flags == 3
+    assert rec.can_payload == bytes()
+    print(rec)
+    
+    rec = Record.parse("(1703173569.357659) can0 0C7D5522##3210\n")
+    assert isinstance(rec, UnsupportedRecord)
+    
     rec = Record.parse("(1657805304.099792) slcan0 123#R\n")
     assert isinstance(rec, UnsupportedRecord)
 
