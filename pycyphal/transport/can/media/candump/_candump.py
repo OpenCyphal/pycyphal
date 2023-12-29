@@ -258,9 +258,6 @@ class Record:
                 s_flags = "#0"
             if s_data is None:
                 s_data = ""
-            if len(s_data) % 2 != 0:
-                return UnsupportedRecord()  # Must be an even number of nibbles
-            # _logger.info(f"Received {s_ts} from {iface_name} with ID {s_canid} and flags {s_flags} data {s_data}")
             return DataFrameRecord(
                 ts=Timestamp(
                     system_ns=int(Decimal(s_ts) * Decimal("1e9")),
@@ -341,7 +338,7 @@ def _unittest_record_parse() -> None:
     print(rec)
 
     rec = Record.parse("(1703173569.357659) can0 0C7D5522##3210\n")
-    assert isinstance(rec, UnsupportedRecord)
+    assert rec is None
 
     rec = Record.parse("(1657805304.099792) slcan0 123#R\n")
     assert isinstance(rec, UnsupportedRecord)
