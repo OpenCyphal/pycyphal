@@ -226,20 +226,11 @@ You will need to open a couple of new terminal sessions now.
 
 If you don't have Yakut installed on your system yet, install it now by following its documentation.
 
-Yakut requires us to compile our DSDL namespaces beforehand using ``yakut compile``:
+Yakut (also) needs to know where the DSDL files are located, this is done via the ``CYPHAL_PATH`` environment variable:
 
 .. code-block:: sh
 
-    cd ~/pycyphal-demo
-    yakut compile  custom_data_types/sirius_cyber_corp  public_regulated_data_types/uavcan -O .cyphal
-
-The outputs will be stored in ``.cyphal``.
-If you decided to change the working directory or move the compilation outputs,
-make sure to export the ``YAKUT_PATH`` environment variable pointing to the correct location:
-
-.. code-block:: sh
-
-    export YAKUT_PATH="$HOME/pycyphal-demo/.cyphal"
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
 
 The commands shown later need to operate on the same network as the demo.
 Earlier we configured the demo to use Cyphal/UDP via the localhost interface.
@@ -254,7 +245,7 @@ launch the following in a new terminal and leave it running (``y`` is a convenie
 
 ..  code-block:: sh
 
-    export YAKUT_PATH="$HOME/pycyphal-demo/.cyphal"
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
     export UAVCAN__UDP__IFACE=127.0.0.1
     y sub --with-metadata uavcan.node.heartbeat uavcan.diagnostic.record    # You should see heartbeats
 
@@ -263,7 +254,7 @@ Launch another subscriber to see the published voltage command (it is not going 
 
 ..  code-block:: sh
 
-    export YAKUT_PATH="$HOME/pycyphal-demo/.cyphal"
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
     export UAVCAN__UDP__IFACE=127.0.0.1
     y sub 2347:uavcan.si.unit.voltage.scalar --redraw       # Prints nothing.
 
@@ -271,7 +262,7 @@ And publish the setpoint along with the measurement (process variable):
 
 ..  code-block:: sh
 
-    export YAKUT_PATH="$HOME/pycyphal-demo/.cyphal"
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
     export UAVCAN__UDP__IFACE=127.0.0.1
     export UAVCAN__NODE__ID=111         # We need a node-ID to publish messages properly
     y pub --count=10 2345:uavcan.si.unit.temperature.scalar   250 \
