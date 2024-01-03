@@ -22,7 +22,8 @@ The document is arranged as follows:
 You are expected to be familiar with terms like *Cyphal node*, *DSDL*, *subject-ID*, *RPC-service*.
 If not, skim through the `Cyphal Guide <https://opencyphal.org/guide>`_ first.
 
-If you want to follow along, :ref:`install PyCyphal <installation>` and switch to a new directory (``~/pycyphal-demo``) before continuing.
+If you want to follow along, :ref:`install PyCyphal <installation>` and
+switch to a new directory (``~/pycyphal-demo``) before continuing.
 
 
 DSDL definitions
