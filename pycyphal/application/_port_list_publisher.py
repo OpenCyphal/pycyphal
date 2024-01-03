@@ -10,6 +10,7 @@ from typing import Optional, Set, Any
 import pydsdl
 import pycyphal.application
 from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
+import pycyphal.dsdl
 
 # pylint: disable=wrong-import-order
 from uavcan.node.port import List_0 as List
@@ -17,6 +18,7 @@ from uavcan.node.port import SubjectIDList_0 as SubjectIDList
 from uavcan.node.port import ServiceIDList_0 as ServiceIDList
 from uavcan.node.port import SubjectID_1 as SubjectID
 
+import nunavut_support
 
 @dataclasses.dataclass(frozen=True)
 class _State:
@@ -130,7 +132,7 @@ def _make_port_list(state: _State, packet_capture_mode: bool) -> List:
 
 
 def _make_subject_id_list(ports: Set[int]) -> SubjectIDList:
-    sparse_list_type = pycyphal.dsdl.get_model(SubjectIDList)["sparse_list"].data_type
+    sparse_list_type = nunavut_support.get_model(SubjectIDList)["sparse_list"].data_type
     assert isinstance(sparse_list_type, pydsdl.ArrayType)
 
     if len(ports) <= sparse_list_type.capacity:

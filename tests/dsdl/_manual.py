@@ -29,13 +29,14 @@ def _unittest_slow_manual_assignment(compiled: typing.List[pycyphal.dsdl.Generat
 # noinspection PyUnusedLocal
 def _unittest_slow_manual_del(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     import test_dsdl_namespace.if_
+    import nunavut_support
 
     # Implicit zero extension
-    ize = pycyphal.dsdl.deserialize(test_dsdl_namespace.if_.del_1_0, [memoryview(b"")])
+    ize = nunavut_support.deserialize(test_dsdl_namespace.if_.del_1_0, [memoryview(b"")])
     assert ize is not None
     assert repr(ize) == repr(test_dsdl_namespace.if_.del_1_0())
 
-    obj = pycyphal.dsdl.deserialize(
+    obj = nunavut_support.deserialize(
         test_dsdl_namespace.if_.del_1_0,
         _compile_serialized_representation(
             # void8
@@ -78,24 +79,25 @@ def _unittest_slow_manual_del(compiled: typing.List[pycyphal.dsdl.GeneratedPacka
     assert len(obj.raise_) == 0
 
     with pytest.raises(AttributeError, match="nonexistent"):
-        pycyphal.dsdl.get_attribute(obj, "nonexistent")
+        nunavut_support.get_attribute(obj, "nonexistent")
 
     with pytest.raises(AttributeError, match="nonexistent"):
-        pycyphal.dsdl.set_attribute(obj, "nonexistent", 123)
+        nunavut_support.set_attribute(obj, "nonexistent", 123)
 
 
 # noinspection PyUnusedLocal
 def _unittest_slow_manual_heartbeat(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     import uavcan.node
+    import nunavut_support
 
     # Implicit zero extension
-    ize = pycyphal.dsdl.deserialize(uavcan.node.Heartbeat_1_0, [memoryview(b"")])
+    ize = nunavut_support.deserialize(uavcan.node.Heartbeat_1_0, [memoryview(b"")])
     assert ize is not None
     assert repr(ize) == repr(uavcan.node.Heartbeat_1_0())
     assert ize.uptime == 0
     assert ize.vendor_specific_status_code == 0
 
-    obj = pycyphal.dsdl.deserialize(
+    obj = nunavut_support.deserialize(
         uavcan.node.Heartbeat_1_0,
         _compile_serialized_representation(
             _bin(0xEFBE_ADDE, 32),  # uptime dead beef in little-endian byte order
@@ -111,10 +113,10 @@ def _unittest_slow_manual_heartbeat(compiled: typing.List[pycyphal.dsdl.Generate
     assert obj.vendor_specific_status_code == 0b10101111
 
     with pytest.raises(AttributeError, match="nonexistent"):
-        pycyphal.dsdl.get_attribute(obj, "nonexistent")
+        nunavut_support.get_attribute(obj, "nonexistent")
 
     with pytest.raises(AttributeError, match="nonexistent"):
-        pycyphal.dsdl.set_attribute(obj, "nonexistent", 123)
+        nunavut_support.set_attribute(obj, "nonexistent", 123)
 
 
 def _unittest_minor_alias(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
@@ -132,6 +134,7 @@ def _unittest_slow_delimited(compiled: typing.List[pycyphal.dsdl.GeneratedPackag
 
     from test_dsdl_namespace.delimited import A_1_0, A_1_1, BDelimited_1_0, BDelimited_1_1
     from test_dsdl_namespace.delimited import CFixed_1_0, CFixed_1_1, CVariable_1_0, CVariable_1_1
+    import nunavut_support
 
     def u8(x: int) -> bytes:
         return int(x).to_bytes(1, "little")
@@ -147,7 +150,7 @@ def _unittest_slow_delimited(compiled: typing.List[pycyphal.dsdl.GeneratedPackag
         ),
     )
     print("object below:\n", o)
-    sr = b"".join(pycyphal.dsdl.serialize(o))
+    sr = b"".join(nunavut_support.serialize(o))
     del o
     ref = (
         u8(1)  # | Union tag of del
@@ -171,7 +174,7 @@ def _unittest_slow_delimited(compiled: typing.List[pycyphal.dsdl.GeneratedPackag
     assert sr == ref
 
     # Deserialize using a DIFFERENT MINOR VERSION which requires the implicit zero extension/truncation rules to work.
-    q = pycyphal.dsdl.deserialize(A_1_1, [memoryview(sr)])
+    q = nunavut_support.deserialize(A_1_1, [memoryview(sr)])
     assert q
     assert q.del_ is not None
     assert len(q.del_.var) == 2
@@ -188,10 +191,10 @@ def _unittest_slow_delimited(compiled: typing.List[pycyphal.dsdl.GeneratedPackag
             fix=[CFixed_1_1([5, 6, 7], 8), CFixed_1_1([100, 200, 123], 99)],
         ),
     )
-    sr = b"".join(pycyphal.dsdl.serialize(q))
+    sr = b"".join(nunavut_support.serialize(q))
     del q
     print(" ".join(f"{b:02x}" for b in sr))
-    p = pycyphal.dsdl.deserialize(A_1_0, [memoryview(sr)])
+    p = nunavut_support.deserialize(A_1_0, [memoryview(sr)])
     assert p
     assert p.del_ is not None
     assert len(p.del_.var) == 1
@@ -202,7 +205,7 @@ def _unittest_slow_delimited(compiled: typing.List[pycyphal.dsdl.GeneratedPackag
     assert list(p.del_.fix[1].a) == [100, 200]  # 3rd is implicitly truncated, b is implicitly truncated
 
     # Delimiter header too large.
-    assert None is pycyphal.dsdl.deserialize(A_1_1, [memoryview(b"\x01" + b"\xFF" * 4)])
+    assert None is nunavut_support.deserialize(A_1_1, [memoryview(b"\x01" + b"\xFF" * 4)])
 
 
 def _compile_serialized_representation(*binary_chunks: str) -> typing.Sequence[memoryview]:

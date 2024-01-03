@@ -15,6 +15,7 @@ import pytest
 import pydsdl
 
 import pycyphal.dsdl
+import nunavut_support
 from . import _util
 
 
@@ -62,11 +63,11 @@ def _unittest_slow_random(compiled: typing.List[pycyphal.dsdl.GeneratedPackageIn
             if not isinstance(model, pydsdl.ServiceType):
                 performance[model] = _test_type(model, _NUM_RANDOM_SAMPLES)
             else:
-                dtype = pycyphal.dsdl.get_class(model)
+                dtype = nunavut_support.get_class(model)
                 with pytest.raises(TypeError):
-                    assert list(pycyphal.dsdl.serialize(dtype()))
+                    assert list(nunavut_support.serialize(dtype()))
                 with pytest.raises(TypeError):
-                    pycyphal.dsdl.deserialize(dtype, [memoryview(b"")])
+                    nunavut_support.deserialize(dtype, [memoryview(b"")])
 
     _logger.info("Tested types ordered by serialization speed, %d random samples per type", _NUM_RANDOM_SAMPLES)
     _logger.info(
@@ -90,7 +91,7 @@ def _unittest_slow_random(compiled: typing.List[pycyphal.dsdl.GeneratedPackageIn
 
 def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTestStatistics:
     _logger.debug("Roundtrip serialization test of %s with %d random samples", model, num_random_samples)
-    dtype = pycyphal.dsdl.get_class(model)
+    dtype = nunavut_support.get_class(model)
     samples: typing.List[typing.Tuple[float, float]] = [_serialize_deserialize(dtype())]
     rand_sr_validness: typing.List[bool] = []
 
@@ -105,8 +106,8 @@ def _test_type(model: pydsdl.CompositeType, num_random_samples: int) -> _TypeTes
         sample_ser = once(_util.make_random_object(model))
 
         # Reverse test: get random serialized representation, deserialize; if successful, serialize again and compare
-        sr = _make_random_fragmented_serialized_representation(pycyphal.dsdl.get_model(dtype).bit_length_set)
-        ob = pycyphal.dsdl.deserialize(dtype, sr)
+        sr = _make_random_fragmented_serialized_representation(nunavut_support.get_model(dtype).bit_length_set)
+        ob = nunavut_support.deserialize(dtype, sr)
         rand_sr_validness.append(ob is not None)
         sample_des: typing.Optional[typing.Tuple[float, float]] = None
         if ob:
@@ -136,25 +137,25 @@ def _serialize_deserialize(obj: object) -> typing.Tuple[float, float]:
     gc.disable()  # Must be disabled, otherwise it induces spurious false-positive performance warnings
 
     ts = time.process_time()
-    chunks = list(pycyphal.dsdl.serialize(obj))  # GC must be disabled while we're in the timed context
+    chunks = list(nunavut_support.serialize(obj))  # GC must be disabled while we're in the timed context
     ser_sample = time.process_time() - ts
 
     ts = time.process_time()
-    d = pycyphal.dsdl.deserialize(type(obj), chunks)  # GC must be disabled while we're in the timed context
+    d = nunavut_support.deserialize(type(obj), chunks)  # GC must be disabled while we're in the timed context
     des_sample = time.process_time() - ts
 
     gc.enable()
 
     assert d is not None
     assert type(obj) is type(d)
-    assert pycyphal.dsdl.get_model(obj) == pycyphal.dsdl.get_model(d)
+    assert nunavut_support.get_model(obj) == nunavut_support.get_model(d)
 
-    if not _util.are_close(pycyphal.dsdl.get_model(obj), obj, d):  # pragma: no cover
+    if not _util.are_close(nunavut_support.get_model(obj), obj, d):  # pragma: no cover
         assert False, f"{obj} != {d}; sr: {bytes().join(chunks).hex()}"  # Branched for performance reasons
 
     # Similar floats may produce drastically different string representations, so if there is at least one float inside,
     # we skip the string representation equality check.
-    if pydsdl.FloatType.__name__ not in repr(pycyphal.dsdl.get_model(d)):
+    if pydsdl.FloatType.__name__ not in repr(nunavut_support.get_model(d)):
         assert str(obj) == str(d)
         assert repr(obj) == repr(d)
 

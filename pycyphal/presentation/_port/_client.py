@@ -12,6 +12,7 @@ import pycyphal.transport
 from ._base import T, ServicePort, PortFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError, RequestTransferIDVariabilityExhaustedError
+import nunavut_support
 
 
 # Shouldn't be too large as this value defines how quickly the task will detect that the underlying transport is closed.
@@ -199,7 +200,7 @@ class ClientImpl(Closable, Generic[T]):
         transfer_id_modulo_factory: Callable[[], int],
         finalizer: PortFinalizer,
     ):
-        if not pycyphal.dsdl.is_service_type(dtype):
+        if not nunavut_support.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
 
         self.dtype = dtype
@@ -228,8 +229,8 @@ class ClientImpl(Closable, Generic[T]):
 
         self._request_dtype = self.dtype.Request  # type: ignore
         self._response_dtype = self.dtype.Response  # type: ignore
-        assert pycyphal.dsdl.is_serializable(self._request_dtype)
-        assert pycyphal.dsdl.is_serializable(self._response_dtype)
+        assert nunavut_support.is_serializable(self._request_dtype)
+        assert nunavut_support.is_serializable(self._response_dtype)
 
     @property
     def is_closed(self) -> bool:
@@ -320,7 +321,7 @@ class ClientImpl(Closable, Generic[T]):
             )
 
         timestamp = pycyphal.transport.Timestamp.now()
-        fragmented_payload = list(pycyphal.dsdl.serialize(request))
+        fragmented_payload = list(nunavut_support.serialize(request))
         transfer = pycyphal.transport.Transfer(
             timestamp=timestamp, priority=priority, transfer_id=transfer_id, fragmented_payload=fragmented_payload
         )
@@ -335,7 +336,7 @@ class ClientImpl(Closable, Generic[T]):
                 if transfer is None:
                     continue
 
-                response = pycyphal.dsdl.deserialize(self._response_dtype, transfer.fragmented_payload)
+                response = nunavut_support.deserialize(self._response_dtype, transfer.fragmented_payload)
                 _logger.debug("%r received response: %r", self, response)
                 if response is None:
                     self.deserialization_failure_count += 1
@@ -389,7 +390,7 @@ class ClientImpl(Closable, Generic[T]):
     def __repr__(self) -> str:
         return pycyphal.util.repr_attributes_noexcept(
             self,
-            dtype=str(pycyphal.dsdl.get_model(self.dtype)),
+            dtype=str(nunavut_support.get_model(self.dtype)),
             input_transport_session=self.input_transport_session,
             output_transport_session=self.output_transport_session,
             proxy_count=self._proxy_count,

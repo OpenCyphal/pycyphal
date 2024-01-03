@@ -5,6 +5,7 @@
 import typing
 import pydsdl
 import pycyphal.dsdl
+import nunavut_support
 from . import _util
 
 
@@ -16,7 +17,7 @@ def _unittest_slow_textual(compiled: typing.List[pycyphal.dsdl.GeneratedPackageI
                 # In unions only the active field is printed.
                 # The active field may contain nested fields which  may be named similarly to other fields
                 # in the current union, so we can't easily ensure lack of non-active fields in the output.
-                field_active = pycyphal.dsdl.get_attribute(obj, f.name) is not None
+                field_active = nunavut_support.get_attribute(obj, f.name) is not None
                 if field_active:
                     assert field_present, f"{f.name}: {s}"
             else:

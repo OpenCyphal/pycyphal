@@ -13,10 +13,14 @@ import itertools
 import numpy as np
 import pycyphal
 import pycyphal.application
+import pycyphal.dsdl
+
 
 # pylint: disable=wrong-import-order
 import uavcan.file
 import uavcan.primitive
+
+import nunavut_support
 
 # import X as Y is not an accepted form; see https://github.com/python/mypy/issues/11706
 Path = uavcan.file.Path_2
@@ -52,7 +56,7 @@ class FileServer:
         self._roots = [pathlib.Path(x).resolve() for x in roots]
 
         # noinspection PyUnresolvedReferences
-        self._data_transfer_capacity = int(pycyphal.dsdl.get_model(Unstructured)["value"].data_type.capacity)
+        self._data_transfer_capacity = int(nunavut_support.get_model(Unstructured)["value"].data_type.capacity)
 
         s_ls = node.get_server(List)
         s_if = node.get_server(GetInfo)
@@ -293,7 +297,7 @@ class FileClient:
         self._clients: typing.Dict[typing.Type[object], pycyphal.presentation.Client[object]] = {}
 
         # noinspection PyUnresolvedReferences
-        self._data_transfer_capacity = int(pycyphal.dsdl.get_model(Unstructured)["value"].data_type.capacity)
+        self._data_transfer_capacity = int(nunavut_support.get_model(Unstructured)["value"].data_type.capacity)
 
     @property
     def data_transfer_capacity(self) -> int:

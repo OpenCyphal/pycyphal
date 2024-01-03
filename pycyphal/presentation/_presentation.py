@@ -14,6 +14,7 @@ from ._port import Publisher, PublisherImpl
 from ._port import Subscriber, SubscriberImpl
 from ._port import Client, ClientImpl
 from ._port import Server
+import nunavut_support
 
 
 T = typing.TypeVar("T")
@@ -107,7 +108,7 @@ class Presentation:
 
         See :class:`Publisher` for further information about publishers.
         """
-        if not pycyphal.dsdl.is_message_type(dtype):
+        if not nunavut_support.is_message_type(dtype):
             raise TypeError(f"Not a message type: {dtype}")
 
         self._raise_if_closed()
@@ -155,7 +156,7 @@ class Presentation:
 
         See :class:`Subscriber` for further information about subscribers.
         """
-        if not pycyphal.dsdl.is_message_type(dtype):
+        if not nunavut_support.is_message_type(dtype):
             raise TypeError(f"Not a message type: {dtype}")
 
         self._raise_if_closed()
@@ -201,7 +202,7 @@ class Presentation:
 
         See :class:`Client` for further information about clients.
         """
-        if not pycyphal.dsdl.is_service_type(dtype):
+        if not nunavut_support.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
         # https://github.com/python/mypy/issues/7121
         request_dtype = dtype.Request  # type: ignore
@@ -268,7 +269,7 @@ class Presentation:
 
         See :class:`Server` for further information about servers.
         """
-        if not pycyphal.dsdl.is_service_type(dtype):
+        if not nunavut_support.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
         # https://github.com/python/mypy/issues/7121
         request_dtype = dtype.Request  # type: ignore
@@ -399,7 +400,7 @@ class Presentation:
 
     @staticmethod
     def _make_payload_metadata(dtype: typing.Type[object]) -> pycyphal.transport.PayloadMetadata:
-        extent_bytes = pycyphal.dsdl.get_extent_bytes(dtype)
+        extent_bytes = nunavut_support.get_extent_bytes(dtype)
         return pycyphal.transport.PayloadMetadata(extent_bytes=extent_bytes)
 
     def _raise_if_closed(self) -> None:
@@ -408,7 +409,7 @@ class Presentation:
 
     @staticmethod
     def _get_fixed_port_id(dtype: typing.Type[object]) -> int:
-        port_id = pycyphal.dsdl.get_fixed_port_id(dtype)
+        port_id = nunavut_support.get_fixed_port_id(dtype)
         if port_id is None:
             raise TypeError(f"{dtype} has no fixed port-ID")
         return port_id

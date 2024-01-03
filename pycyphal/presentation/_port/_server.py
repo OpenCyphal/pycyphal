@@ -12,6 +12,7 @@ import pycyphal.transport
 import pycyphal.util
 from ._base import T, ServicePort, PortFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError
+import nunavut_support
 
 
 # Shouldn't be too large as this value defines how quickly the serving task will detect that the underlying
@@ -95,7 +96,7 @@ class Server(ServicePort[T]):
         """
         Do not call this directly! Use :meth:`Presentation.get_server`.
         """
-        if not pycyphal.dsdl.is_service_type(dtype):
+        if not nunavut_support.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
 
         self._dtype = dtype
@@ -114,8 +115,8 @@ class Server(ServicePort[T]):
         self._deserialization_failure_count = 0
         self._malformed_request_count = 0
 
-        assert pycyphal.dsdl.is_serializable(self._request_dtype)
-        assert pycyphal.dsdl.is_serializable(self._response_dtype)
+        assert nunavut_support.is_serializable(self._request_dtype)
+        assert nunavut_support.is_serializable(self._response_dtype)
 
     # ----------------------------------------  MAIN API  ----------------------------------------
 
@@ -283,7 +284,7 @@ class Server(ServicePort[T]):
                     transfer_id=transfer.transfer_id,
                     client_node_id=transfer.source_node_id,
                 )
-                request = pycyphal.dsdl.deserialize(self._request_dtype, transfer.fragmented_payload)
+                request = nunavut_support.deserialize(self._request_dtype, transfer.fragmented_payload)
                 _logger.debug("%r received request: %r", self, request)
                 if request is not None:
                     return request, meta
@@ -299,7 +300,7 @@ class Server(ServicePort[T]):
         monotonic_deadline: float,
     ) -> bool:
         timestamp = pycyphal.transport.Timestamp.now()
-        fragmented_payload = list(pycyphal.dsdl.serialize(response))
+        fragmented_payload = list(nunavut_support.serialize(response))
         transfer = pycyphal.transport.Transfer(
             timestamp=timestamp,
             priority=metadata.priority,

@@ -12,6 +12,7 @@ import pycyphal.transport
 from ._base import MessagePort, OutgoingTransferIDCounter, T, Closable
 from ._base import DEFAULT_PRIORITY, PortFinalizer
 from ._error import PortClosedError
+import nunavut_support
 
 
 _logger = logging.getLogger(__name__)
@@ -169,7 +170,7 @@ class PublisherImpl(Closable, typing.Generic[T]):
         transfer_id_counter: OutgoingTransferIDCounter,
         finalizer: PortFinalizer,
     ):
-        assert pycyphal.dsdl.is_message_type(dtype)
+        assert nunavut_support.is_message_type(dtype)
         self.dtype = dtype
         self.transport_session = transport_session
         self.transfer_id_counter = transfer_id_counter
@@ -186,7 +187,7 @@ class PublisherImpl(Closable, typing.Generic[T]):
             if not self.up:
                 raise PortClosedError(repr(self))
             timestamp = pycyphal.transport.Timestamp.now()
-            fragmented_payload = list(pycyphal.dsdl.serialize(message))
+            fragmented_payload = list(nunavut_support.serialize(message))
             transfer = pycyphal.transport.Transfer(
                 timestamp=timestamp,
                 priority=priority,
@@ -230,7 +231,7 @@ class PublisherImpl(Closable, typing.Generic[T]):
     def __repr__(self) -> str:
         return pycyphal.util.repr_attributes_noexcept(
             self,
-            dtype=str(pycyphal.dsdl.get_model(self.dtype)),
+            dtype=str(nunavut_support.get_model(self.dtype)),
             transport_session=self.transport_session,
             proxy_count=self._proxy_count,
         )

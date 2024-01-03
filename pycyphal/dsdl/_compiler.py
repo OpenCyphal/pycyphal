@@ -6,25 +6,18 @@ from __future__ import annotations
 import os
 import sys
 import time
-import gzip
-import typing
 from typing import Sequence, Iterable, Optional, Union
-import pickle
-import base64
 import pathlib
 import logging
-import itertools
 import dataclasses
 
 import pydsdl
 import nunavut
+import nunavut.lang
 import nunavut.jinja
-import nunavut.postprocessors
 
 
 _AnyPath = Union[str, pathlib.Path]
-
-_TEMPLATE_DIRECTORY: pathlib.Path = pathlib.Path(__file__).absolute().parent / pathlib.Path("_templates")
 
 _OUTPUT_FILE_PERMISSIONS = 0o444
 """
@@ -81,9 +74,9 @@ def compile(  # pylint: disable=redefined-builtin
     A small subset of applications may require access to a generated entity without knowing in advance whether
     its name is a reserved identifier or not (i.e., whether it's stropped or not). To simplify usage,
     this submodule provides helper functions
-    :func:`pycyphal.dsdl.get_attribute` and :func:`pycyphal.dsdl.set_attribute` that provide access to generated
+    :func:`nunavut_support.get_attribute` and :func:`nunavut_support.set_attribute` that provide access to generated
     class/object attributes using their original names before stropping.
-    Likewise, the function :func:`pycyphal.dsdl.get_model` can find a generated type even if any of its name
+    Likewise, the function :func:`nunavut_support.get_model` can find a generated type even if any of its name
     components are stropped; e.g., a DSDL type ``str.Type.1.0`` would be imported as ``str_.Type_1_0``.
     None of it, however, is relevant for an application that does not require genericity (vast majority of
     applications don't), so a much easier approach in that case is just to look at the generated code and see
@@ -179,41 +172,32 @@ def compile(  # pylint: disable=redefined-builtin
     (root_namespace_name,) = set(map(lambda x: x.root_namespace, composite_types))  # type: ignore
     _logger.info("Read %d definitions from root namespace %r", len(composite_types), root_namespace_name)
 
-    # Template primitives
-    filters = {
-        "pickle": _pickle_object,
-        "numpy_scalar_type": _numpy_scalar_type,
-        "newest_minor_version_aliases": _newest_minor_version_aliases,
-    }
-
     # Generate code
     assert isinstance(output_directory, pathlib.Path)
-    language_context = nunavut.lang.LanguageContext("py", namespace_output_stem="__init__")
+    language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
     root_ns = nunavut.build_namespace_tree(
         types=composite_types,
         root_namespace_dir=str(root_namespace_directory),
         output_dir=str(output_directory),
         language_context=language_context,
     )
-    generator = nunavut.jinja.DSDLCodeGenerator(
+    code_generator = nunavut.jinja.DSDLCodeGenerator(
         namespace=root_ns,
         generate_namespace_types=nunavut.YesNoDefault.YES,
-        templates_dir=_TEMPLATE_DIRECTORY,
         followlinks=True,
-        additional_filters=filters,
-        post_processors=[
-            nunavut.postprocessors.SetFileMode(_OUTPUT_FILE_PERMISSIONS),
-            nunavut.postprocessors.LimitEmptyLines(2),
-            nunavut.postprocessors.TrimTrailingWhitespace(),
-        ],
     )
-    generator.generate_all()
+    code_generator.generate_all()
     _logger.info(
         "Generated %d types from the root namespace %r in %.1f seconds",
         len(composite_types),
         root_namespace_name,
         time.monotonic() - started_at,
     )
+
+    support_generator = nunavut.jinja.SupportGenerator(
+        namespace=root_ns,
+    )
+    support_generator.generate_all()
 
     # A minor UX improvement; see https://github.com/OpenCyphal/pycyphal/issues/115
     for p in sys.path:
@@ -238,6 +222,45 @@ def compile(  # pylint: disable=redefined-builtin
         models=composite_types,
         name=root_namespace_name,
     )
+
+
+def support(  # pylint: disable=redefined-builtin
+    output_directory: Optional[_AnyPath] = None,
+) -> Optional[GeneratedPackageInfo]:
+    """
+    This function runs the DSDL compiler, generating the ``nunavut_support.py`` file needed to use the transpilied python packages.
+    This support file is automatically generated when using the ``pycyphal.dsdl.compile`` function, but can be manually generated when needed.
+
+
+    :param output_directory:
+        The generated nunavut support python file will be placed into this directory.
+        If not specified or None, the current working directory is used.
+        The directory tree will be created automatically if it does not exist (like ``mkdir -p``).
+        If the destination exists, it will be silently written over.
+
+    :raises:
+        :class:`OSError` if required operations on the file system could not be performed;
+        :class:`pydsdl.InvalidDefinitionError` if the source DSDL definitions are invalid;
+        :class:`pydsdl.InternalError` if there is a bug in the DSDL processing front-end;
+        :class:`ValueError` if any of the arguments are otherwise invalid.
+
+    """
+    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
+
+    # Generate code
+    assert isinstance(output_directory, pathlib.Path)
+    language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
+    root_ns = nunavut.build_namespace_tree(
+        types=[],
+        root_namespace_dir=str(""),
+        output_dir=str(output_directory),
+        language_context=language_context,
+    )
+
+    support_generator = nunavut.jinja.SupportGenerator(
+        namespace=root_ns,
+    )
+    support_generator.generate_all()
 
 
 def compile_all(
@@ -312,47 +335,3 @@ def compile_all(
         if gpi is not None:
             out.append(gpi)
     return out
-
-
-def _pickle_object(x: typing.Any) -> str:
-    pck: str = base64.b85encode(gzip.compress(pickle.dumps(x, protocol=4))).decode().strip()
-    segment_gen = map("".join, itertools.zip_longest(*([iter(pck)] * 100), fillvalue=""))
-    return "\n".join(repr(x) for x in segment_gen)
-
-
-def _numpy_scalar_type(t: pydsdl.Any) -> str:
-    def pick_width(w: int) -> int:
-        for o in [8, 16, 32, 64]:
-            if w <= o:
-                return o
-        raise ValueError(f"Invalid bit width: {w}")  # pragma: no cover
-
-    if isinstance(t, pydsdl.BooleanType):
-        return "_np_.bool_"
-    if isinstance(t, pydsdl.SignedIntegerType):
-        return f"_np_.int{pick_width(t.bit_length)}"
-    if isinstance(t, pydsdl.UnsignedIntegerType):
-        return f"_np_.uint{pick_width(t.bit_length)}"
-    if isinstance(t, pydsdl.FloatType):
-        return f"_np_.float{pick_width(t.bit_length)}"
-    assert not isinstance(t, pydsdl.PrimitiveType), "Forgot to handle some primitive types"
-    return "_np_.object_"
-
-
-def _newest_minor_version_aliases(
-    tys: Iterable[pydsdl.CompositeType],
-) -> Sequence[tuple[str, pydsdl.CompositeType]]:
-    """
-    Implementation of https://github.com/OpenCyphal/nunavut/issues/193
-    """
-    tys = list(tys)
-    return [
-        (
-            f"{name}_{major}",
-            max(
-                (t for t in tys if t.short_name == name and t.version.major == major),
-                key=lambda x: int(x.version.minor),
-            ),
-        )
-        for name, major in sorted({(x.short_name, x.version.major) for x in tys})
-    ]

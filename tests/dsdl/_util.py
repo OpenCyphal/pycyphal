@@ -12,6 +12,7 @@ import numpy
 import pydsdl
 
 import pycyphal.dsdl
+import nunavut_support
 
 
 def expand_service_types(
@@ -85,17 +86,17 @@ def make_random_object(model: pydsdl.SerializableType) -> typing.Any:
         return out
 
     if isinstance(model, pydsdl.StructureType):
-        o = pycyphal.dsdl.get_class(model)()
+        o = nunavut_support.get_class(model)()
         for f in model.fields_except_padding:
             v = make_random_object(f.data_type)
-            pycyphal.dsdl.set_attribute(o, f.name, v)
+            nunavut_support.set_attribute(o, f.name, v)
         return o
 
     if isinstance(model, pydsdl.UnionType):
         f = random.choice(model.fields)
         v = make_random_object(f.data_type)
-        o = pycyphal.dsdl.get_class(model)()
-        pycyphal.dsdl.set_attribute(o, f.name, v)
+        o = nunavut_support.get_class(model)()
+        nunavut_support.set_attribute(o, f.name, v)
         return o
 
     if isinstance(model, pydsdl.DelimitedType):
@@ -116,9 +117,9 @@ def are_close(model: pydsdl.SerializableType, a: typing.Any, b: typing.Any) -> b
     if isinstance(model, pydsdl.CompositeType):
         if type(a) != type(b):  # pragma: no cover  # pylint: disable=unidiomatic-typecheck
             return False
-        for f in pycyphal.dsdl.get_model(a).fields_except_padding:  # pragma: no cover
+        for f in nunavut_support.get_model(a).fields_except_padding:  # pragma: no cover
             if not are_close(
-                f.data_type, pycyphal.dsdl.get_attribute(a, f.name), pycyphal.dsdl.get_attribute(b, f.name)
+                f.data_type, nunavut_support.get_attribute(a, f.name), nunavut_support.get_attribute(b, f.name)
             ):
                 return False
         return True  # Empty objects of same type compare equal

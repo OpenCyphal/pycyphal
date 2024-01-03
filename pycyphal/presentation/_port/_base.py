@@ -8,6 +8,7 @@ import typing
 import pycyphal.util
 import pycyphal.dsdl
 import pycyphal.transport
+import nunavut_support
 
 
 DEFAULT_PRIORITY = pycyphal.transport.Priority.NOMINAL
@@ -131,7 +132,7 @@ class MessagePort(Port[T]):
 
     def __repr__(self) -> str:
         return pycyphal.util.repr_attributes(
-            self, dtype=str(pycyphal.dsdl.get_model(self.dtype)), transport_session=self.transport_session
+            self, dtype=str(nunavut_support.get_model(self.dtype)), transport_session=self.transport_session
         )
 
 
@@ -154,5 +155,5 @@ class ServicePort(Port[T]):
 
     def __repr__(self) -> str:
         return pycyphal.util.repr_attributes(
-            self, dtype=str(pycyphal.dsdl.get_model(self.dtype)), input_transport_session=self.input_transport_session
+            self, dtype=str(nunavut_support.get_model(self.dtype)), input_transport_session=self.input_transport_session
         )
