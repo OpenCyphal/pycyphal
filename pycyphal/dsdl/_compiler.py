@@ -155,6 +155,8 @@ def compile(  # pylint: disable=redefined-builtin
 
     language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
 
+    root_namespace_name: str = ""
+
     if root_namespace_directory is not None:
         root_namespace_directory = pathlib.Path(root_namespace_directory).resolve()
         if root_namespace_directory.parent == output_directory:
@@ -173,7 +175,6 @@ def compile(  # pylint: disable=redefined-builtin
         if not composite_types:
             _logger.info("Root namespace directory %r does not contain DSDL definitions", root_namespace_directory)
             return None
-        root_namespace_name: str
         (root_namespace_name,) = set(map(lambda x: x.root_namespace, composite_types))  # type: ignore
         _logger.info("Read %d definitions from root namespace %r", len(composite_types), root_namespace_name)
 
