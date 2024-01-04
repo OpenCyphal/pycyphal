@@ -95,7 +95,7 @@ def get_attribute(obj: Any, name: str) -> Any:
     """
     import nunavut_support
 
-    return nunavut_support.get_attribute(obj)
+    return nunavut_support.get_attribute(obj, name)
 
 
 def set_attribute(obj: Any, name: str, value: Any) -> None:
@@ -105,7 +105,7 @@ def set_attribute(obj: Any, name: str, value: Any) -> None:
     """
     import nunavut_support
 
-    return nunavut_support.set_attribute(obj)
+    return nunavut_support.set_attribute(obj, name, value)
 
 
 def is_serializable(dtype: Any) -> bool:
