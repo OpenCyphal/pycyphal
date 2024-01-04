@@ -48,7 +48,7 @@ class GeneratedPackageInfo:
 
 
 def compile(  # pylint: disable=redefined-builtin
-    root_namespace_directory: _AnyPath,
+    root_namespace_directory: Optional[_AnyPath] = None,
     lookup_directories: Optional[list[_AnyPath]] = None,
     output_directory: Optional[_AnyPath] = None,
     allow_unregulated_fixed_port_id: bool = False,
