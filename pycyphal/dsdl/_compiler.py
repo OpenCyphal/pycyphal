@@ -156,6 +156,7 @@ def compile(  # pylint: disable=redefined-builtin
     language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
 
     root_namespace_name: str = ""
+    composite_types: list[pydsdl.CompositeType] = []
 
     if root_namespace_directory is not None:
         root_namespace_directory = pathlib.Path(root_namespace_directory).resolve()
