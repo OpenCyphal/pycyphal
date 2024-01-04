@@ -12,7 +12,6 @@ import pycyphal.transport
 from ._base import MessagePort, OutgoingTransferIDCounter, T, Closable
 from ._base import DEFAULT_PRIORITY, PortFinalizer
 from ._error import PortClosedError
-import nunavut_support
 
 
 _logger = logging.getLogger(__name__)
@@ -170,6 +169,8 @@ class PublisherImpl(Closable, typing.Generic[T]):
         transfer_id_counter: OutgoingTransferIDCounter,
         finalizer: PortFinalizer,
     ):
+        import nunavut_support
+
         assert nunavut_support.is_message_type(dtype)
         self.dtype = dtype
         self.transport_session = transport_session
@@ -180,6 +181,8 @@ class PublisherImpl(Closable, typing.Generic[T]):
         self._underlying_session_closed = False
 
     async def publish(self, message: T, priority: pycyphal.transport.Priority, monotonic_deadline: float) -> bool:
+        import nunavut_support
+
         if not isinstance(message, self.dtype):
             raise TypeError(f"Expected a message object of type {self.dtype}, found this: {message}")
 
@@ -229,6 +232,8 @@ class PublisherImpl(Closable, typing.Generic[T]):
         return self._maybe_finalizer is not None and not self._underlying_session_closed
 
     def __repr__(self) -> str:
+        import nunavut_support
+
         return pycyphal.util.repr_attributes_noexcept(
             self,
             dtype=str(nunavut_support.get_model(self.dtype)),

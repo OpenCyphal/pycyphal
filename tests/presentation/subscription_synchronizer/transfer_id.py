@@ -11,7 +11,6 @@ from pycyphal.transport import TransferFrom
 from pycyphal.transport.loopback import LoopbackTransport, LoopbackInputSession
 from pycyphal.presentation import Presentation
 from pycyphal.presentation.subscription_synchronizer.transfer_id import TransferIDSynchronizer
-import pycyphal.dsdl
 import nunavut_support
 
 

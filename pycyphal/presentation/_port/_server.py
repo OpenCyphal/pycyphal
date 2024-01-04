@@ -12,7 +12,6 @@ import pycyphal.transport
 import pycyphal.util
 from ._base import T, ServicePort, PortFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError
-import nunavut_support
 
 
 # Shouldn't be too large as this value defines how quickly the serving task will detect that the underlying
@@ -96,6 +95,8 @@ class Server(ServicePort[T]):
         """
         Do not call this directly! Use :meth:`Presentation.get_server`.
         """
+        import nunavut_support
+
         if not nunavut_support.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
 
@@ -273,6 +274,8 @@ class Server(ServicePort[T]):
     async def _receive(
         self, monotonic_deadline: float
     ) -> typing.Optional[typing.Tuple[object, ServiceRequestMetadata]]:
+        import nunavut_support
+
         while True:
             transfer = await self._input_transport_session.receive(monotonic_deadline)
             if transfer is None:
@@ -299,6 +302,8 @@ class Server(ServicePort[T]):
         session: pycyphal.transport.OutputSession,
         monotonic_deadline: float,
     ) -> bool:
+        import nunavut_support
+
         timestamp = pycyphal.transport.Timestamp.now()
         fragmented_payload = list(nunavut_support.serialize(response))
         transfer = pycyphal.transport.Transfer(

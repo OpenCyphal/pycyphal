@@ -12,7 +12,6 @@ import pycyphal.dsdl
 import pycyphal.transport
 from ._base import MessagePort, T, PortFinalizer, Closable
 from ._error import PortClosedError
-import nunavut_support
 
 
 # Shouldn't be too large as this value defines how quickly the task will detect that the underlying transport is closed.
@@ -304,6 +303,8 @@ class SubscriberImpl(Closable, Generic[T]):
         transport_session: pycyphal.transport.InputSession,
         finalizer: PortFinalizer,
     ):
+        import nunavut_support
+
         assert nunavut_support.is_message_type(dtype)
         self.dtype = dtype
         self.transport_session = transport_session
@@ -317,6 +318,8 @@ class SubscriberImpl(Closable, Generic[T]):
         return self._maybe_finalizer is None
 
     async def _task_function(self) -> None:
+        import nunavut_support
+
         exception: Optional[Exception] = None
         loop = asyncio.get_running_loop()
         try:  # pylint: disable=too-many-nested-blocks
@@ -370,6 +373,8 @@ class SubscriberImpl(Closable, Generic[T]):
             self.close()
 
     def __repr__(self) -> str:
+        import nunavut_support
+
         return pycyphal.util.repr_attributes_noexcept(
             self,
             dtype=str(nunavut_support.get_model(self.dtype)),

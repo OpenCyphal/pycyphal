@@ -73,7 +73,7 @@ def compile(  # pylint: disable=redefined-builtin
     the compiler applies stropping by suffixing such entities with an underscore ``_``.
     A small subset of applications may require access to a generated entity without knowing in advance whether
     its name is a reserved identifier or not (i.e., whether it's stropped or not). To simplify usage,
-    this submodule provides helper functions
+    the Nunavut-generated module ``nunavut_support.py`` provides helper functions
     :func:`nunavut_support.get_attribute` and :func:`nunavut_support.set_attribute` that provide access to generated
     class/object attributes using their original names before stropping.
     Likewise, the function :func:`nunavut_support.get_model` can find a generated type even if any of its name
@@ -96,6 +96,7 @@ def compile(  # pylint: disable=redefined-builtin
         The source DSDL root namespace directory path. The last component of the path
         is the name of the root namespace. For example, to generate package for the root namespace ``uavcan``,
         the path would be like ``foo/bar/uavcan``.
+        If set to None, only nunavut_support will be generated
 
     :param lookup_directories:
         An iterable of DSDL root namespace directory paths where to search for referred DSDL
@@ -151,48 +152,58 @@ def compile(  # pylint: disable=redefined-builtin
         raise TypeError(f"Lookup directories shall be an iterable of paths, not {type(lookup_directories).__name__}")
 
     output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
-    root_namespace_directory = pathlib.Path(root_namespace_directory).resolve()
-    if root_namespace_directory.parent == output_directory:
-        # https://github.com/OpenCyphal/pycyphal/issues/133 and https://github.com/OpenCyphal/pycyphal/issues/127
-        raise ValueError(
-            "The specified destination may overwrite the DSDL root namespace directory. "
-            "Consider specifying a different output directory instead."
-        )
 
-    # Read the DSDL definitions
-    composite_types = pydsdl.read_namespace(
-        root_namespace_directory=str(root_namespace_directory),
-        lookup_directories=list(map(str, lookup_directories or [])),
-        allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id,
-    )
-    if not composite_types:
-        _logger.info("Root namespace directory %r does not contain DSDL definitions", root_namespace_directory)
-        return None
-    root_namespace_name: str
-    (root_namespace_name,) = set(map(lambda x: x.root_namespace, composite_types))  # type: ignore
-    _logger.info("Read %d definitions from root namespace %r", len(composite_types), root_namespace_name)
-
-    # Generate code
-    assert isinstance(output_directory, pathlib.Path)
     language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
-    root_ns = nunavut.build_namespace_tree(
-        types=composite_types,
-        root_namespace_dir=str(root_namespace_directory),
-        output_dir=str(output_directory),
-        language_context=language_context,
-    )
-    code_generator = nunavut.jinja.DSDLCodeGenerator(
-        namespace=root_ns,
-        generate_namespace_types=nunavut.YesNoDefault.YES,
-        followlinks=True,
-    )
-    code_generator.generate_all()
-    _logger.info(
-        "Generated %d types from the root namespace %r in %.1f seconds",
-        len(composite_types),
-        root_namespace_name,
-        time.monotonic() - started_at,
-    )
+
+    if root_namespace_directory is not None:
+        root_namespace_directory = pathlib.Path(root_namespace_directory).resolve()
+        if root_namespace_directory.parent == output_directory:
+            # https://github.com/OpenCyphal/pycyphal/issues/133 and https://github.com/OpenCyphal/pycyphal/issues/127
+            raise ValueError(
+                "The specified destination may overwrite the DSDL root namespace directory. "
+                "Consider specifying a different output directory instead."
+            )
+
+        # Read the DSDL definitions
+        composite_types = pydsdl.read_namespace(
+            root_namespace_directory=str(root_namespace_directory),
+            lookup_directories=list(map(str, lookup_directories or [])),
+            allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id,
+        )
+        if not composite_types:
+            _logger.info("Root namespace directory %r does not contain DSDL definitions", root_namespace_directory)
+            return None
+        root_namespace_name: str
+        (root_namespace_name,) = set(map(lambda x: x.root_namespace, composite_types))  # type: ignore
+        _logger.info("Read %d definitions from root namespace %r", len(composite_types), root_namespace_name)
+
+        # Generate code
+        assert isinstance(output_directory, pathlib.Path)
+        root_ns = nunavut.build_namespace_tree(
+            types=composite_types,
+            root_namespace_dir=str(root_namespace_directory),
+            output_dir=str(output_directory),
+            language_context=language_context,
+        )
+        code_generator = nunavut.jinja.DSDLCodeGenerator(
+            namespace=root_ns,
+            generate_namespace_types=nunavut.YesNoDefault.YES,
+            followlinks=True,
+        )
+        code_generator.generate_all()
+        _logger.info(
+            "Generated %d types from the root namespace %r in %.1f seconds",
+            len(composite_types),
+            root_namespace_name,
+            time.monotonic() - started_at,
+        )
+    else:
+        root_ns = nunavut.build_namespace_tree(
+            types=[],
+            root_namespace_dir=str(""),
+            output_dir=str(output_directory),
+            language_context=language_context,
+        )
 
     support_generator = nunavut.jinja.SupportGenerator(
         namespace=root_ns,
@@ -222,45 +233,6 @@ def compile(  # pylint: disable=redefined-builtin
         models=composite_types,
         name=root_namespace_name,
     )
-
-
-def support(  # pylint: disable=redefined-builtin
-    output_directory: Optional[_AnyPath] = None,
-) -> Optional[GeneratedPackageInfo]:
-    """
-    This function runs the DSDL compiler, generating the ``nunavut_support.py`` file needed to use the transpilied python packages.
-    This support file is automatically generated when using the ``pycyphal.dsdl.compile`` function, but can be manually generated when needed.
-
-
-    :param output_directory:
-        The generated nunavut support python file will be placed into this directory.
-        If not specified or None, the current working directory is used.
-        The directory tree will be created automatically if it does not exist (like ``mkdir -p``).
-        If the destination exists, it will be silently written over.
-
-    :raises:
-        :class:`OSError` if required operations on the file system could not be performed;
-        :class:`pydsdl.InvalidDefinitionError` if the source DSDL definitions are invalid;
-        :class:`pydsdl.InternalError` if there is a bug in the DSDL processing front-end;
-        :class:`ValueError` if any of the arguments are otherwise invalid.
-
-    """
-    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
-
-    # Generate code
-    assert isinstance(output_directory, pathlib.Path)
-    language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
-    root_ns = nunavut.build_namespace_tree(
-        types=[],
-        root_namespace_dir=str(""),
-        output_dir=str(output_directory),
-        language_context=language_context,
-    )
-
-    support_generator = nunavut.jinja.SupportGenerator(
-        namespace=root_ns,
-    )
-    support_generator.generate_all()
 
 
 def compile_all(

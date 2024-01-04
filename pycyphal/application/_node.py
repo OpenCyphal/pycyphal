@@ -9,7 +9,6 @@ import asyncio
 import logging
 import uavcan.node
 import pycyphal
-import pycyphal.dsdl
 import nunavut_support
 from pycyphal.presentation import Presentation, ServiceRequestMetadata, Publisher, Subscriber, Server, Client
 from . import heartbeat_publisher

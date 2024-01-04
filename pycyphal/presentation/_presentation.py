@@ -14,8 +14,6 @@ from ._port import Publisher, PublisherImpl
 from ._port import Subscriber, SubscriberImpl
 from ._port import Client, ClientImpl
 from ._port import Server
-import nunavut_support
-
 
 T = typing.TypeVar("T")
 
@@ -108,6 +106,8 @@ class Presentation:
 
         See :class:`Publisher` for further information about publishers.
         """
+        import nunavut_support
+
         if not nunavut_support.is_message_type(dtype):
             raise TypeError(f"Not a message type: {dtype}")
 
@@ -156,6 +156,8 @@ class Presentation:
 
         See :class:`Subscriber` for further information about subscribers.
         """
+        import nunavut_support
+
         if not nunavut_support.is_message_type(dtype):
             raise TypeError(f"Not a message type: {dtype}")
 
@@ -202,6 +204,8 @@ class Presentation:
 
         See :class:`Client` for further information about clients.
         """
+        import nunavut_support
+
         if not nunavut_support.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
         # https://github.com/python/mypy/issues/7121
@@ -269,6 +273,8 @@ class Presentation:
 
         See :class:`Server` for further information about servers.
         """
+        import nunavut_support
+
         if not nunavut_support.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
         # https://github.com/python/mypy/issues/7121
@@ -400,6 +406,8 @@ class Presentation:
 
     @staticmethod
     def _make_payload_metadata(dtype: typing.Type[object]) -> pycyphal.transport.PayloadMetadata:
+        import nunavut_support
+
         extent_bytes = nunavut_support.get_extent_bytes(dtype)
         return pycyphal.transport.PayloadMetadata(extent_bytes=extent_bytes)
 
@@ -409,6 +417,8 @@ class Presentation:
 
     @staticmethod
     def _get_fixed_port_id(dtype: typing.Type[object]) -> int:
+        import nunavut_support
+
         port_id = nunavut_support.get_fixed_port_id(dtype)
         if port_id is None:
             raise TypeError(f"{dtype} has no fixed port-ID")

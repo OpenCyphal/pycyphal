@@ -20,6 +20,7 @@ from uavcan.node.port import SubjectID_1 as SubjectID
 
 import nunavut_support
 
+
 @dataclasses.dataclass(frozen=True)
 class _State:
     pub: Set[int]

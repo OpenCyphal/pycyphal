@@ -19,7 +19,6 @@ The main entity of this module is the function :func:`compile`.
 
 from ._compiler import compile as compile  # pylint: disable=redefined-builtin
 from ._compiler import compile_all as compile_all
-from ._compiler import support as support
 from ._compiler import GeneratedPackageInfo as GeneratedPackageInfo
 
 from ._import_hook import install_import_hook as install_import_hook

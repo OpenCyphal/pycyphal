@@ -12,7 +12,6 @@ import pycyphal.transport
 from ._base import T, ServicePort, PortFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError, RequestTransferIDVariabilityExhaustedError
-import nunavut_support
 
 
 # Shouldn't be too large as this value defines how quickly the task will detect that the underlying transport is closed.
@@ -200,6 +199,8 @@ class ClientImpl(Closable, Generic[T]):
         transfer_id_modulo_factory: Callable[[], int],
         finalizer: PortFinalizer,
     ):
+        import nunavut_support
+
         if not nunavut_support.is_service_type(dtype):
             raise TypeError(f"Not a service type: {dtype}")
 
@@ -314,6 +315,8 @@ class ClientImpl(Closable, Generic[T]):
         priority: pycyphal.transport.Priority,
         monotonic_deadline: float,
     ) -> bool:
+        import nunavut_support
+
         if not isinstance(request, self._request_dtype):
             raise TypeError(
                 f"Invalid request object: expected an instance of {self._request_dtype}, "
@@ -328,6 +331,8 @@ class ClientImpl(Closable, Generic[T]):
         return await self.output_transport_session.send(transfer, monotonic_deadline)
 
     async def _task_function(self) -> None:
+        import nunavut_support
+
         exception: Optional[Exception] = None
         loop = asyncio.get_running_loop()
         try:
@@ -388,6 +393,8 @@ class ClientImpl(Closable, Generic[T]):
                 pass
 
     def __repr__(self) -> str:
+        import nunavut_support
+
         return pycyphal.util.repr_attributes_noexcept(
             self,
             dtype=str(nunavut_support.get_model(self.dtype)),

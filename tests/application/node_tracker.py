@@ -23,7 +23,6 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
     from pycyphal.application.node_tracker import NodeTracker, Entry
     import nunavut_support
 
-
     assert compiled
     asyncio.get_running_loop().slow_callback_duration = 3.0
 
