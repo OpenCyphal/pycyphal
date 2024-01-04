@@ -73,10 +73,10 @@ def compile(  # pylint: disable=redefined-builtin
     the compiler applies stropping by suffixing such entities with an underscore ``_``.
     A small subset of applications may require access to a generated entity without knowing in advance whether
     its name is a reserved identifier or not (i.e., whether it's stropped or not). To simplify usage,
-    the Nunavut-generated module ``nunavut_support.py`` provides helper functions
-    :func:`nunavut_support.get_attribute` and :func:`nunavut_support.set_attribute` that provide access to generated
+    ``pycyphal.dsdl`` provides wrapper functions for the Nunavut-generated module ``nunavut_support.py`` helper functions
+    :func:`pycyphal.dsdl.get_attribute` and :func:`pycyphal.dsdl.set_attribute` that provide access to generated
     class/object attributes using their original names before stropping.
-    Likewise, the function :func:`nunavut_support.get_model` can find a generated type even if any of its name
+    Likewise, the function :func:`pycyphal.dsdl.get_model` can find a generated type even if any of its name
     components are stropped; e.g., a DSDL type ``str.Type.1.0`` would be imported as ``str_.Type_1_0``.
     None of it, however, is relevant for an application that does not require genericity (vast majority of
     applications don't), so a much easier approach in that case is just to look at the generated code and see

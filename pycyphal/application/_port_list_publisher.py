@@ -10,7 +10,6 @@ from typing import Optional, Set, Any
 import pydsdl
 import pycyphal.application
 from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
-import pycyphal.dsdl
 
 # pylint: disable=wrong-import-order
 from uavcan.node.port import List_0 as List

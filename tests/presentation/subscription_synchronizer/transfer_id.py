@@ -11,7 +11,6 @@ from pycyphal.transport import TransferFrom
 from pycyphal.transport.loopback import LoopbackTransport, LoopbackInputSession
 from pycyphal.presentation import Presentation
 from pycyphal.presentation.subscription_synchronizer.transfer_id import TransferIDSynchronizer
-import nunavut_support
 
 
 async def _unittest_basic(compiled: list[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
@@ -144,6 +143,8 @@ async def _inject(
     source_node_id: int | None,
     transfer_id: int,
 ) -> None:
+    import nunavut_support
+
     tran = TransferFrom(
         timestamp=pycyphal.transport.Timestamp.now(),
         priority=pycyphal.transport.Priority.NOMINAL,
