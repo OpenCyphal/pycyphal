@@ -25,7 +25,7 @@ from ._compiler import GeneratedPackageInfo as GeneratedPackageInfo
 from ._import_hook import install_import_hook as install_import_hook
 import pydsdl
 
-_T = TypeVar("T")
+_T = TypeVar("_T")
 
 
 def serialize(obj: Any) -> Iterable[memoryview]:
