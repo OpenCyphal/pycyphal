@@ -25,7 +25,7 @@ from ._compiler import GeneratedPackageInfo as GeneratedPackageInfo
 from ._import_hook import install_import_hook as install_import_hook
 import pydsdl
 
-T = TypeVar("T")
+_T = TypeVar("T")
 
 
 def serialize(obj: Any) -> Iterable[memoryview]:
@@ -38,7 +38,7 @@ def serialize(obj: Any) -> Iterable[memoryview]:
     return nunavut_support.serialize(obj)
 
 
-def deserialize(dtype: Type[T], fragmented_serialized_representation: Sequence[memoryview]) -> Optional[T]:
+def deserialize(dtype: Type[_T], fragmented_serialized_representation: Sequence[memoryview]) -> Optional[_T]:
     """
     A wrapper over ``nunavut_support.deserialize``.
     The ``nunavut_support`` module will be generated automatically if it is not importable.
@@ -148,7 +148,7 @@ def to_builtin(obj: object) -> Dict[str, Any]:
     return nunavut_support.to_builtin(obj)
 
 
-def update_from_builtin(destination: T, source: Any) -> T:
+def update_from_builtin(destination: _T, source: Any) -> _T:
     """
     A wrapper over ``nunavut_support.update_from_builtin``.
     The ``nunavut_support`` module will be generated automatically if it is not importable.

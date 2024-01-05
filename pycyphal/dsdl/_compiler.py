@@ -96,7 +96,7 @@ def compile(  # pylint: disable=redefined-builtin
         The source DSDL root namespace directory path. The last component of the path
         is the name of the root namespace. For example, to generate package for the root namespace ``uavcan``,
         the path would be like ``foo/bar/uavcan``.
-        If set to None, only nunavut_support will be generated
+        If set to None, only the ``nunavut_support`` module will be generated.
 
     :param lookup_directories:
         An iterable of DSDL root namespace directory paths where to search for referred DSDL
