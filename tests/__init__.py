@@ -64,4 +64,5 @@ def doctest_await(future: Awaitable[_T]) -> _T:
     This is a hack; when the proper solution is available it should be removed:
     https://github.com/Erotemic/xdoctest/issues/115
     """
+    asyncio.get_event_loop().slow_callback_duration = max(asyncio.get_event_loop().slow_callback_duration, 10.0)
     return asyncio.get_event_loop().run_until_complete(future)

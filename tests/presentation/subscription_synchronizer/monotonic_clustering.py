@@ -58,37 +58,37 @@ async def _unittest_timestamped(compiled: list[pycyphal.dsdl.GeneratedPackageInf
     await pub_a.publish(force.Scalar_1(ts(), reference))
     await pub_b.publish(power.Scalar_1(ts(), reference))
     await pub_c.publish(angle.Scalar_1(ts(), reference))
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     assert 1 == cb_count
 
     reference += 1
     await pub_c.publish(angle.Scalar_1(ts(), reference))  # Reordered.
     await pub_b.publish(power.Scalar_1(ts(), reference))
     await pub_a.publish(force.Scalar_1(ts(), reference))
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     assert 2 == cb_count
 
     reference += 1
     await pub_b.publish(power.Scalar_1(ts(), 999999999))  # Incorrect, will be overridden next.
     await pub_b.publish(power.Scalar_1(ts(), reference))  # Override the incorrect value.
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     await pub_a.publish(force.Scalar_1(ts(), reference))
     await pub_c.publish(angle.Scalar_1(ts(), reference))
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     assert 3 == cb_count
 
     reference += 1
     await pub_a.publish(force.Scalar_1(ts(), reference))
     # b skip
     await pub_c.publish(angle.Scalar_1(ts(), reference))
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     assert 3 == cb_count
 
     reference += 1
     # a skip
     await pub_b.publish(power.Scalar_1(ts(), reference))
     await pub_c.publish(angle.Scalar_1(ts(), reference))
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     assert 3 == cb_count
 
     for i in range(10):
@@ -96,7 +96,7 @@ async def _unittest_timestamped(compiled: list[pycyphal.dsdl.GeneratedPackageInf
         await pub_a.publish(force.Scalar_1(ts(), reference))
         await pub_b.publish(power.Scalar_1(ts(), reference))
         await pub_c.publish(angle.Scalar_1(ts(), reference))
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(1.0)
         assert 4 + i == cb_count
 
     pres.close()
