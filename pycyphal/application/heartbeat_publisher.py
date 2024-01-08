@@ -17,6 +17,7 @@ import uavcan.node
 from uavcan.node import Heartbeat_1 as Heartbeat
 import pycyphal
 import pycyphal.application
+import nunavut_support
 
 
 class Health(enum.IntEnum):
@@ -44,7 +45,7 @@ class Mode(enum.IntEnum):
 
 
 VENDOR_SPECIFIC_STATUS_CODE_MASK = (
-    2 ** pycyphal.dsdl.get_model(Heartbeat)["vendor_specific_status_code"].data_type.bit_length_set.max - 1
+    2 ** nunavut_support.get_model(Heartbeat)["vendor_specific_status_code"].data_type.bit_length_set.max - 1
 )
 
 

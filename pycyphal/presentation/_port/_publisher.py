@@ -7,7 +7,6 @@ import typing
 import logging
 import asyncio
 import pycyphal.util
-import pycyphal.dsdl
 import pycyphal.transport
 from ._base import MessagePort, OutgoingTransferIDCounter, T, Closable
 from ._base import DEFAULT_PRIORITY, PortFinalizer
@@ -169,7 +168,9 @@ class PublisherImpl(Closable, typing.Generic[T]):
         transfer_id_counter: OutgoingTransferIDCounter,
         finalizer: PortFinalizer,
     ):
-        assert pycyphal.dsdl.is_message_type(dtype)
+        import nunavut_support
+
+        assert nunavut_support.is_message_type(dtype)
         self.dtype = dtype
         self.transport_session = transport_session
         self.transfer_id_counter = transfer_id_counter
@@ -179,6 +180,8 @@ class PublisherImpl(Closable, typing.Generic[T]):
         self._underlying_session_closed = False
 
     async def publish(self, message: T, priority: pycyphal.transport.Priority, monotonic_deadline: float) -> bool:
+        import nunavut_support
+
         if not isinstance(message, self.dtype):
             raise TypeError(f"Expected a message object of type {self.dtype}, found this: {message}")
 
@@ -186,7 +189,7 @@ class PublisherImpl(Closable, typing.Generic[T]):
             if not self.up:
                 raise PortClosedError(repr(self))
             timestamp = pycyphal.transport.Timestamp.now()
-            fragmented_payload = list(pycyphal.dsdl.serialize(message))
+            fragmented_payload = list(nunavut_support.serialize(message))
             transfer = pycyphal.transport.Transfer(
                 timestamp=timestamp,
                 priority=priority,
@@ -228,9 +231,11 @@ class PublisherImpl(Closable, typing.Generic[T]):
         return self._maybe_finalizer is not None and not self._underlying_session_closed
 
     def __repr__(self) -> str:
+        import nunavut_support
+
         return pycyphal.util.repr_attributes_noexcept(
             self,
-            dtype=str(pycyphal.dsdl.get_model(self.dtype)),
+            dtype=str(nunavut_support.get_model(self.dtype)),
             transport_session=self.transport_session,
             proxy_count=self._proxy_count,
         )

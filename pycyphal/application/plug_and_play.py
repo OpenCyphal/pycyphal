@@ -24,15 +24,16 @@ from uavcan.pnp import NodeIDAllocationData_1 as NodeIDAllocationData_1
 from uavcan.pnp import NodeIDAllocationData_2 as NodeIDAllocationData_2
 import pycyphal
 import pycyphal.application
+import nunavut_support
 
 # import X as Y is not an accepted form; see https://github.com/python/mypy/issues/11706
 ID = uavcan.node.ID_1
 
 _PSEUDO_UNIQUE_ID_MASK = (
-    2 ** pycyphal.dsdl.get_model(NodeIDAllocationData_1)["unique_id_hash"].data_type.bit_length_set.max - 1
+    2 ** nunavut_support.get_model(NodeIDAllocationData_1)["unique_id_hash"].data_type.bit_length_set.max - 1
 )
 
-_NODE_ID_MASK = 2 ** pycyphal.dsdl.get_model(ID)["value"].data_type.bit_length_set.max - 1
+_NODE_ID_MASK = 2 ** nunavut_support.get_model(ID)["value"].data_type.bit_length_set.max - 1
 
 _UNIQUE_ID_SIZE_BYTES = pycyphal.application.NodeInfo().unique_id.size
 
@@ -65,7 +66,7 @@ class Allocatee:
 
     DEFAULT_PRIORITY = pycyphal.transport.Priority.SLOW
 
-    _MTU_THRESHOLD = pycyphal.dsdl.get_model(NodeIDAllocationData_2).bit_length_set.max // 8
+    _MTU_THRESHOLD = nunavut_support.get_model(NodeIDAllocationData_2).bit_length_set.max // 8
 
     def __init__(
         self,

@@ -21,6 +21,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
     from uavcan.node import GetInfo_1_0
     from pycyphal.application import make_node, NodeInfo
     from pycyphal.application.node_tracker import NodeTracker, Entry
+    import nunavut_support
 
     assert compiled
     asyncio.get_running_loop().slow_callback_duration = 3.0
@@ -228,7 +229,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
         n_c.heartbeat_publisher.vendor_specific_status_code = 0xF0
         n_c.start()
         # To make it not respond to GetInfo, get under the hood and break the transport session for this RPC-service.
-        get_info_service_id = pycyphal.dsdl.get_fixed_port_id(GetInfo_1_0)
+        get_info_service_id = nunavut_support.get_fixed_port_id(GetInfo_1_0)
         assert get_info_service_id
         for ses in n_c.presentation.transport.input_sessions:
             ds = ses.specifier.data_specifier

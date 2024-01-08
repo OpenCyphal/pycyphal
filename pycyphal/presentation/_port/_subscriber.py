@@ -8,7 +8,6 @@ import logging
 import asyncio
 import dataclasses
 import pycyphal.util
-import pycyphal.dsdl
 import pycyphal.transport
 from ._base import MessagePort, T, PortFinalizer, Closable
 from ._error import PortClosedError
@@ -303,7 +302,9 @@ class SubscriberImpl(Closable, Generic[T]):
         transport_session: pycyphal.transport.InputSession,
         finalizer: PortFinalizer,
     ):
-        assert pycyphal.dsdl.is_message_type(dtype)
+        import nunavut_support
+
+        assert nunavut_support.is_message_type(dtype)
         self.dtype = dtype
         self.transport_session = transport_session
         self.deserialization_failure_count = 0
@@ -316,13 +317,15 @@ class SubscriberImpl(Closable, Generic[T]):
         return self._maybe_finalizer is None
 
     async def _task_function(self) -> None:
+        import nunavut_support
+
         exception: Optional[Exception] = None
         loop = asyncio.get_running_loop()
         try:  # pylint: disable=too-many-nested-blocks
             while not self.is_closed:
                 transfer = await self.transport_session.receive(loop.time() + _RECEIVE_TIMEOUT)
                 if transfer is not None:
-                    message = pycyphal.dsdl.deserialize(self.dtype, transfer.fragmented_payload)
+                    message = nunavut_support.deserialize(self.dtype, transfer.fragmented_payload)
                     _logger.debug("%r received message: %r", self, message)
                     if message is not None:
                         for rx in self._listeners:
@@ -369,9 +372,11 @@ class SubscriberImpl(Closable, Generic[T]):
             self.close()
 
     def __repr__(self) -> str:
+        import nunavut_support
+
         return pycyphal.util.repr_attributes_noexcept(
             self,
-            dtype=str(pycyphal.dsdl.get_model(self.dtype)),
+            dtype=str(nunavut_support.get_model(self.dtype)),
             transport_session=self.transport_session,
             deserialization_failure_count=self.deserialization_failure_count,
             listeners=self._listeners,

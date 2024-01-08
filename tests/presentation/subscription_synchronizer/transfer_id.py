@@ -48,21 +48,21 @@ async def _unittest_basic(compiled: list[pycyphal.dsdl.GeneratedPackageInfo]) ->
     await pub_a.publish(force.Scalar_1(reference))
     await pub_b.publish(power.Scalar_1(reference))
     await pub_c.publish(angle.Scalar_1(reference))
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     assert 1 == cb_count
 
     reference += 1
     await pub_c.publish(angle.Scalar_1(reference))  # Reordered.
     await pub_b.publish(power.Scalar_1(reference))
     await pub_a.publish(force.Scalar_1(reference))
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     assert 2 == cb_count
 
     reference += 1
     await pub_a.publish(force.Scalar_1(reference))
     # b skip
     await pub_c.publish(angle.Scalar_1(reference))
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(1.0)
     assert 2 == cb_count
 
     pres.close()
@@ -143,11 +143,13 @@ async def _inject(
     source_node_id: int | None,
     transfer_id: int,
 ) -> None:
+    import nunavut_support
+
     tran = TransferFrom(
         timestamp=pycyphal.transport.Timestamp.now(),
         priority=pycyphal.transport.Priority.NOMINAL,
         transfer_id=int(transfer_id),
-        fragmented_payload=list(pycyphal.dsdl.serialize(msg)),
+        fragmented_payload=list(nunavut_support.serialize(msg)),
         source_node_id=source_node_id,
     )
     in_ses = sub.transport_session

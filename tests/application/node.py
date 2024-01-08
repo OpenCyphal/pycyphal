@@ -18,6 +18,7 @@ async def _unittest_slow_node(compiled: typing.List[pycyphal.dsdl.GeneratedPacka
     from pycyphal.application import make_node, make_registry
     import uavcan.primitive
     from uavcan.node import Version_1, Heartbeat_1, GetInfo_1, Mode_1, Health_1
+    import nunavut_support
 
     asyncio.get_running_loop().slow_callback_duration = 3.0
 
@@ -50,7 +51,7 @@ async def _unittest_slow_node(compiled: typing.List[pycyphal.dsdl.GeneratedPacka
         # Same but for fixed port-ID types.
         assert "uavcan.pub.atypical_heartbeat.id" not in node.registry  # Nothing yet.
         pub_port = node.make_publisher(uavcan.node.Heartbeat_1, "atypical_heartbeat")
-        assert pub_port.port_id == pycyphal.dsdl.get_model(uavcan.node.Heartbeat_1).fixed_port_id
+        assert pub_port.port_id == nunavut_support.get_model(uavcan.node.Heartbeat_1).fixed_port_id
         pub_port.close()
         assert 0xFFFF == int(node.registry["uavcan.pub.atypical_heartbeat.id"])  # Created automatically!
         node.registry["uavcan.pub.atypical_heartbeat.id"] = 111  # Override the default.
