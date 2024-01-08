@@ -6,7 +6,6 @@ from __future__ import annotations
 import abc
 import typing
 import pycyphal.util
-import pycyphal.dsdl
 import pycyphal.transport
 
 

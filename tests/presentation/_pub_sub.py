@@ -121,8 +121,6 @@ async def _unittest_slow_presentation_pub_sub_anon(
 async def _unittest_slow_presentation_pub_sub(
     compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:
-    import nunavut_support
-
     assert compiled
     import uavcan.node
     from test_dsdl_namespace.numpy import Complex_254_255

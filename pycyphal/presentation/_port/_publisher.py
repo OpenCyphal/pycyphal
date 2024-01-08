@@ -7,7 +7,6 @@ import typing
 import logging
 import asyncio
 import pycyphal.util
-import pycyphal.dsdl
 import pycyphal.transport
 from ._base import MessagePort, OutgoingTransferIDCounter, T, Closable
 from ._base import DEFAULT_PRIORITY, PortFinalizer

@@ -7,7 +7,6 @@ from typing import Optional, Type, Callable, Generic
 import asyncio
 import logging
 import dataclasses
-import pycyphal.dsdl
 import pycyphal.transport
 from ._base import T, ServicePort, PortFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT

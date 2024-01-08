@@ -8,7 +8,6 @@ import logging
 import asyncio
 import dataclasses
 import pycyphal.util
-import pycyphal.dsdl
 import pycyphal.transport
 from ._base import MessagePort, T, PortFinalizer, Closable
 from ._error import PortClosedError

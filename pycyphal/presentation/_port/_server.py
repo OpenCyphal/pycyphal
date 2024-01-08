@@ -7,7 +7,6 @@ import typing
 import asyncio
 import logging
 import dataclasses
-import pycyphal.dsdl
 import pycyphal.transport
 import pycyphal.util
 from ._base import T, ServicePort, PortFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT

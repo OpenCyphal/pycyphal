@@ -7,9 +7,8 @@ from typing import Union, Optional, Iterator, Any
 from pathlib import Path
 import logging
 import sqlite3
-import pycyphal
-from . import Entry, BackendError, Backend, Value
 import nunavut_support
+from . import Entry, BackendError, Backend, Value
 
 
 __all__ = ["StaticBackend"]
