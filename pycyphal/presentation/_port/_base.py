@@ -6,7 +6,6 @@ from __future__ import annotations
 import abc
 import typing
 import pycyphal.util
-import pycyphal.dsdl
 import pycyphal.transport
 
 
@@ -130,8 +129,10 @@ class MessagePort(Port[T]):
         return ds.subject_id
 
     def __repr__(self) -> str:
+        import nunavut_support
+
         return pycyphal.util.repr_attributes(
-            self, dtype=str(pycyphal.dsdl.get_model(self.dtype)), transport_session=self.transport_session
+            self, dtype=str(nunavut_support.get_model(self.dtype)), transport_session=self.transport_session
         )
 
 
@@ -153,6 +154,8 @@ class ServicePort(Port[T]):
         return ds.service_id
 
     def __repr__(self) -> str:
+        import nunavut_support
+
         return pycyphal.util.repr_attributes(
-            self, dtype=str(pycyphal.dsdl.get_model(self.dtype)), input_transport_session=self.input_transport_session
+            self, dtype=str(nunavut_support.get_model(self.dtype)), input_transport_session=self.input_transport_session
         )

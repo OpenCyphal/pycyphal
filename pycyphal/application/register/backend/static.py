@@ -7,7 +7,7 @@ from typing import Union, Optional, Iterator, Any
 from pathlib import Path
 import logging
 import sqlite3
-import pycyphal
+import nunavut_support
 from . import Entry, BackendError, Backend, Value
 
 
@@ -107,7 +107,7 @@ class StaticBackend(Backend):
             raise KeyError(key)
         mutable, value = res
         assert isinstance(value, bytes)
-        obj = pycyphal.dsdl.deserialize(Value, [memoryview(value)])
+        obj = nunavut_support.deserialize(Value, [memoryview(value)])
         if obj is None:  # pragma: no cover
             _logger.warning("%r: Value of %r is not a valid serialization of %s: %r", self, key, Value, value)
             raise KeyError(key)
@@ -135,7 +135,7 @@ class StaticBackend(Backend):
         self._execute(
             r"insert or replace into register (name, value, mutable) values (?, ?, ?)",
             key,
-            b"".join(pycyphal.dsdl.serialize(e.value)),
+            b"".join(nunavut_support.serialize(e.value)),
             e.mutable,
             commit=True,
         )

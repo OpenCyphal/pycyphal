@@ -11,13 +11,16 @@ import keyword
 import re
 from importlib.abc import MetaPathFinder
 from importlib.util import spec_from_file_location
-from importlib.machinery import ModuleSpec
+from importlib.machinery import ModuleSpec, SourceFileLoader
 from . import compile  # pylint: disable=redefined-builtin
 
 
 _AnyPath = Union[str, pathlib.Path]
 
 _logger = logging.getLogger(__name__)
+
+
+_NUNAVUT_SUPPORT_MODULE_NAME = "nunavut_support"
 
 
 def root_namespace_from_module_name(module_name: str) -> str:
@@ -73,6 +76,14 @@ class DsdlMetaFinder(MetaPathFinder):
     def find_spec(
         self, fullname: str, path: Optional[Sequence[Union[bytes, str]]], target: Optional[ModuleType] = None
     ) -> Optional[ModuleSpec]:
+        if fullname == _NUNAVUT_SUPPORT_MODULE_NAME:
+            support_path = pathlib.Path(self.output_directory, f"{_NUNAVUT_SUPPORT_MODULE_NAME}.py")
+
+            if not support_path.exists():
+                compile(None, output_directory=self.output_directory)
+
+            return spec_from_file_location(fullname, support_path, loader=SourceFileLoader(fullname, str(support_path)))
+
         _logger.debug("Attempting to load module %s as DSDL", fullname)
 
         # Translate module name to DSDL root namespace

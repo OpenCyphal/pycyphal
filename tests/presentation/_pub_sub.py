@@ -17,6 +17,8 @@ pytestmark = pytest.mark.asyncio
 async def _unittest_slow_presentation_pub_sub_anon(
     compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo], transport_factory: TransportFactory
 ) -> None:
+    import nunavut_support
+
     assert compiled
     import uavcan.node
     from pycyphal.transport import Priority
@@ -71,7 +73,7 @@ async def _unittest_slow_presentation_pub_sub_anon(
 
     assert pub_heart.transport_session.destination_node_id is None
     assert sub_heart.transport_session.specifier.data_specifier == pub_heart.transport_session.specifier.data_specifier
-    assert pub_heart.port_id == pycyphal.dsdl.get_fixed_port_id(uavcan.node.Heartbeat_1_0)
+    assert pub_heart.port_id == nunavut_support.get_fixed_port_id(uavcan.node.Heartbeat_1_0)
     assert sub_heart.dtype is uavcan.node.Heartbeat_1_0
 
     heart = uavcan.node.Heartbeat_1_0(

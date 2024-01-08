@@ -3,6 +3,11 @@
 Changelog
 =========
 
+v1.17
+-----
+- Move to Nunavut Version 2
+  See (`#318 <https://github.com/OpenCyphal/pycyphal/pull/318>`_) for details on the internal changes.
+
 v1.16
 -----
 

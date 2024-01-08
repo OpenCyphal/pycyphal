@@ -9,6 +9,7 @@ import asyncio
 import logging
 import uavcan.node
 import pycyphal
+import nunavut_support
 from pycyphal.presentation import Presentation, ServiceRequestMetadata, Publisher, Subscriber, Server, Client
 from . import heartbeat_publisher
 from . import register
@@ -202,7 +203,7 @@ class Node(abc.ABC):
             return self._resolve_named_port(dtype, kind, name_or_id)
         if isinstance(name_or_id, str):
             assert not name_or_id
-            res = pycyphal.dsdl.get_fixed_port_id(dtype)
+            res = nunavut_support.get_fixed_port_id(dtype)
             if res is not None:
                 return res
             raise TypeError(f"Type {dtype} has no fixed port-ID, and no port name is given")
@@ -227,7 +228,7 @@ class Node(abc.ABC):
             )
         )
         # Expose the type information to other network participants as prescribed by the Specification.
-        model = pycyphal.dsdl.get_model(dtype)
+        model = nunavut_support.get_model(dtype)
         self.registry[self._get_port_type_register_name(kind, name)] = lambda: register.Value(
             string=register.String(str(model))
         )
@@ -236,7 +237,7 @@ class Node(abc.ABC):
 
         # Default to the fixed port-ID if the register value is invalid.
         _logger.debug("%r: %r = %r not in [0, %d], assume undefined", self, id_register_name, port_id, mask)
-        fpid = pycyphal.dsdl.get_fixed_port_id(dtype)
+        fpid = nunavut_support.get_fixed_port_id(dtype)
         if fpid is not None:
             return fpid
 
