@@ -54,15 +54,11 @@ def compile(  # pylint: disable=redefined-builtin
     allow_unregulated_fixed_port_id: bool = False,
 ) -> Optional[GeneratedPackageInfo]:
     """
-    This function runs the DSDL compiler, converting a specified DSDL root namespace into a Python package.
+    This function runs the Nunavut transpiler converting a specified DSDL root namespace into a Python package.
     In the generated package, nested DSDL namespaces are represented as Python subpackages,
     DSDL types as Python classes, type version numbers as class name suffixes separated via underscores
     (like ``Type_1_0``), constants as class attributes, fields as properties.
-    For a more detailed information on how to use generated types, just generate them and read the resulting
-    code -- it is made to be human-readable and contains docstrings.
-
-    Generated packages can be freely moved around the file system or even deployed on other systems as long as
-    their dependencies are satisfied, which are ``numpy`` and ``pydsdl``.
+    For a more detailed information on how to use generated types refer to the Nunavut documentation.
 
     Generated packages do not automatically import their nested subpackages. For example, if the application
     needs to use ``uavcan.node.Heartbeat.1.0``, it has to ``import uavcan.node`` explicitly; doing just
@@ -70,17 +66,13 @@ def compile(  # pylint: disable=redefined-builtin
 
     If the source definition contains identifiers, type names, namespace components, or other entities whose
     names are listed in ``nunavut.lang.py.PYTHON_RESERVED_IDENTIFIERS``,
-    the compiler applies stropping by suffixing such entities with an underscore ``_``.
+    the compiler applies substitution by suffixing such entities with an underscore ``_``.
     A small subset of applications may require access to a generated entity without knowing in advance whether
-    its name is a reserved identifier or not (i.e., whether it's stropped or not). To simplify usage,
-    ``pycyphal.dsdl`` provides wrapper functions for the Nunavut-generated module ``nunavut_support.py`` helper functions
-    :func:`pycyphal.dsdl.get_attribute` and :func:`pycyphal.dsdl.set_attribute` that provide access to generated
-    class/object attributes using their original names before stropping.
-    Likewise, the function :func:`pycyphal.dsdl.get_model` can find a generated type even if any of its name
-    components are stropped; e.g., a DSDL type ``str.Type.1.0`` would be imported as ``str_.Type_1_0``.
-    None of it, however, is relevant for an application that does not require genericity (vast majority of
-    applications don't), so a much easier approach in that case is just to look at the generated code and see
-    if there are any stropped identifiers in it, and then just use appropriate names statically.
+    its name is a reserved identifier or not (i.e., whether it's prefixed or not). To simplify usage, the generated
+    ``nunavut_support`` module provides functions ``get_attribute`` and ``set_attribute`` that provide access to
+    the generated class/object attributes using their original names before substitution.
+    Likewise, the ``get_model`` function can find a generated type even if any of its name
+    components are prefixed; e.g., a DSDL type ``str.Type.1.0`` would be imported as ``str_.Type_1_0``.
 
     ..  tip::
 
@@ -90,7 +82,7 @@ def compile(  # pylint: disable=redefined-builtin
     ..  tip::
 
         Configure your IDE to index the compilation output directory as a source directory to enable code completion.
-        For PyCharm: right click the directory --> "Mark Directory as" ->"Sources Root".
+        For PyCharm: right click the directory --> "Mark Directory as" --> "Sources Root".
 
     :param root_namespace_directory:
         The source DSDL root namespace directory path. The last component of the path
