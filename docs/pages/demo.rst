@@ -22,7 +22,8 @@ The document is arranged as follows:
 You are expected to be familiar with terms like *Cyphal node*, *DSDL*, *subject-ID*, *RPC-service*.
 If not, skim through the `Cyphal Guide <https://opencyphal.org/guide>`_ first.
 
-If you want to follow along, :ref:`install PyCyphal <installation>` and switch to a new directory before continuing.
+If you want to follow along, :ref:`install PyCyphal <installation>` and
+switch to a new directory (``~/pycyphal-demo``) before continuing.
 
 
 DSDL definitions
@@ -62,17 +63,19 @@ For the sake of clarity, move the custom DSDL root namespace directory ``sirius_
 that we created above into ``custom_data_types/``.
 You should end up with the following directory structure::
 
-    custom_data_types/
-        sirius_cyber_corp/                          # Created in the previous section
-            PerformLinearLeastSquaresFit.1.0.dsdl
-            PointXY.1.0.dsdl
-    public_regulated_data_types/                    # Clone from git
-        uavcan/                                     # The standard DSDL namespace
+    pycyphal-demo/
+        custom_data_types/
+            sirius_cyber_corp/                          # Created in the previous section
+                PerformLinearLeastSquaresFit.1.0.dsdl
+                PointXY.1.0.dsdl
+        public_regulated_data_types/                    # Clone from git
+            uavcan/                                     # The standard DSDL namespace
+                ...
             ...
-        ...
-    demo_app.py                                     # The thermostat node script
+        demo_app.py                                     # The thermostat node script
 
-``CYPHAL_PATH`` should contain a list to all the paths where the DSDL root namespace directories are to be found
+The ``CYPHAL_PATH`` environment variable should contain the list of paths where the
+DSDL root namespace directories are to be found
 (be sure to modify the values to match your environment):
 
 ..  code-block:: sh
@@ -225,15 +228,12 @@ You will need to open a couple of new terminal sessions now.
 
 If you don't have Yakut installed on your system yet, install it now by following its documentation.
 
-Yakut requires us to compile our DSDL namespaces beforehand using ``yakut compile``:
+Yakut also needs to know where the DSDL files are located, this is specified via the same ``CYPHAL_PATH``
+environment variable (this is a standard variable that many Cyphal tools rely on):
 
 .. code-block:: sh
 
-    yakut compile  custom_data_types/sirius_cyber_corp  public_regulated_data_types/uavcan
-
-The outputs will be stored in the current working directory.
-If you decided to change the working directory or move the compilation outputs,
-make sure to export the ``YAKUT_PATH`` environment variable pointing to the correct location.
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
 
 The commands shown later need to operate on the same network as the demo.
 Earlier we configured the demo to use Cyphal/UDP via the localhost interface.
@@ -248,6 +248,7 @@ launch the following in a new terminal and leave it running (``y`` is a convenie
 
 ..  code-block:: sh
 
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
     export UAVCAN__UDP__IFACE=127.0.0.1
     y sub --with-metadata uavcan.node.heartbeat uavcan.diagnostic.record    # You should see heartbeats
 
@@ -256,6 +257,7 @@ Launch another subscriber to see the published voltage command (it is not going 
 
 ..  code-block:: sh
 
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
     export UAVCAN__UDP__IFACE=127.0.0.1
     y sub 2347:uavcan.si.unit.voltage.scalar --redraw       # Prints nothing.
 
@@ -263,6 +265,7 @@ And publish the setpoint along with the measurement (process variable):
 
 ..  code-block:: sh
 
+    export CYPHAL_PATH="$HOME/pycyphal-demo/custom_data_types:$HOME/pycyphal-demo/public_regulated_data_types"
     export UAVCAN__UDP__IFACE=127.0.0.1
     export UAVCAN__NODE__ID=111         # We need a node-ID to publish messages properly
     y pub --count=10 2345:uavcan.si.unit.temperature.scalar   250 \
@@ -405,16 +408,10 @@ that allows one to define process groups and conveniently manage them as a singl
 The language comes with a user-friendly syntax for managing Cyphal registers.
 Those familiar with ROS may find it somewhat similar to *roslaunch*.
 
-The following orchestration file (orc-file) ``launch.orc.yaml`` does this:
-
-- Compiles two DSDL namespaces: the standard ``uavcan`` and the custom ``sirius_cyber_corp``.
-  If they are already compiled, this step is skipped.
-
-- When compilation is done, the two applications are launched.
-  Be sure to stop the first script if it is still running!
-
-- Aside from the applications, a couple of diagnostic processes are started as well.
-  A setpoint publisher will command the thermostat to drive the plant to the specified temperature.
+The following orchestration file (orc-file) ``launch.orc.yaml`` launches the two applications
+(be sure to stop the first script if it is still running!)
+along with a couple of diagnostic processes that monitor the network.
+A setpoint publisher that will command the thermostat to drive the plant to the specified temperature is also started.
 
 The orchestrator runs everything concurrently, but *join statements* are used to enforce sequential execution as needed.
 The first process to fail (that is, exit with a non-zero code) will bring down the entire *composition*.

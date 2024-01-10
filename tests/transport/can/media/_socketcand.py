@@ -1,5 +1,6 @@
 # Copyright (c) 2023 OpenCyphal
 # This software is distributed under the terms of the MIT License.
+# pylint: disable=protected-access,duplicate-code
 
 import sys
 import typing
@@ -9,7 +10,7 @@ import subprocess
 import pytest
 
 from pycyphal.transport import Timestamp
-from pycyphal.transport.can.media import Envelope, DataFrame, FrameFormat, FilterConfiguration
+from pycyphal.transport.can.media import Envelope, DataFrame, FrameFormat
 from pycyphal.transport.can.media.socketcand import SocketcandMedia
 
 if sys.platform != "linux":  # pragma: no cover
@@ -23,7 +24,7 @@ def _start_socketcand() -> typing.Generator[None, None, None]:
     # starting a socketcand daemon in background
     cmd = ["socketcand", "-i", "vcan0", "-l", "lo", "-p", "29536"]
 
-    socketcand = subprocess.Popen(
+    socketcand = subprocess.Popen(  # pylint: disable=consider-using-with
         cmd,
         encoding="utf8",
         stdout=subprocess.PIPE,

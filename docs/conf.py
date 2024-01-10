@@ -15,7 +15,6 @@ import sys
 import pathlib
 import inspect
 import datetime
-import importlib
 import subprocess
 
 
@@ -28,24 +27,13 @@ GIT_HASH = subprocess.check_output("git rev-parse HEAD", shell=True).decode().st
 APIDOC_GENERATED_ROOT = pathlib.Path("api")
 DOC_ROOT = pathlib.Path(__file__).absolute().parent
 REPOSITORY_ROOT = DOC_ROOT.parent
-
-# The generated files are not documented, but they must be importable to import the target package.
 DSDL_GENERATED_ROOT = REPOSITORY_ROOT / ".compiled"
-PUBLIC_REGULATED_DATA_TYPES_ROOT = REPOSITORY_ROOT / "demo" / "public_regulated_data_types"
-
 sys.path.insert(0, str(REPOSITORY_ROOT))
-sys.path.insert(0, str(DSDL_GENERATED_ROOT))
 
-import pycyphal  # pylint: disable=wrong-import-position
+import pycyphal
 
-try:
-    import pycyphal.application
-except (ImportError, AttributeError) as ex:
-    print("Generating DSDL packages because:", ex)
-    DSDL_GENERATED_ROOT.mkdir(parents=True, exist_ok=True)
-    pycyphal.dsdl.compile(PUBLIC_REGULATED_DATA_TYPES_ROOT / "uavcan", [], DSDL_GENERATED_ROOT)
-    importlib.invalidate_caches()
-    import pycyphal.application
+pycyphal.dsdl.install_import_hook([REPOSITORY_ROOT / "demo" / "public_regulated_data_types"], DSDL_GENERATED_ROOT)
+import pycyphal.application  # This may trigger DSDL compilation.
 
 assert "/site-packages/" not in pycyphal.__file__, "Wrong import source"
 
@@ -212,7 +200,7 @@ def linkcode_resolve(domain: str, info: dict):
     return f"https://github.com/{GITHUB_USER_REPO[0]}/{GITHUB_USER_REPO[1]}/blob/{GIT_HASH}/{path}"
 
 
-for p in map(str, [DSDL_GENERATED_ROOT, REPOSITORY_ROOT]):
+for p in map(str, [REPOSITORY_ROOT]):
     if os.environ.get("PYTHONPATH"):
         os.environ["PYTHONPATH"] += os.path.pathsep + p
     else:

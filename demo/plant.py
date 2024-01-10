@@ -7,9 +7,9 @@ runs a crude thermodynamics simulation, and publishes the temperature (i.e., one
 
 import time
 import asyncio
-import pycyphal
+import pycyphal  # Importing PyCyphal will automatically install the import hook for DSDL compilation.
 
-# Import DSDL's after pycyphal import hook is installed
+# Import DSDLs after pycyphal import hook is installed.
 import uavcan.si.unit.voltage
 import uavcan.si.sample.temperature
 import uavcan.time
