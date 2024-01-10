@@ -74,7 +74,8 @@ You should end up with the following directory structure::
             ...
         demo_app.py                                     # The thermostat node script
 
-``CYPHAL_PATH`` should contain a list to all the paths where the DSDL root namespace directories are to be found
+The ``CYPHAL_PATH`` environment variable should contain the list of paths where the
+DSDL root namespace directories are to be found
 (be sure to modify the values to match your environment):
 
 ..  code-block:: sh
@@ -228,7 +229,7 @@ You will need to open a couple of new terminal sessions now.
 If you don't have Yakut installed on your system yet, install it now by following its documentation.
 
 Yakut also needs to know where the DSDL files are located, this is specified via the same ``CYPHAL_PATH``
-environment variable:
+environment variable (this is a standard variable that many Cyphal tools rely on):
 
 .. code-block:: sh
 

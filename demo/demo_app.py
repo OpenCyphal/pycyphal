@@ -4,10 +4,9 @@
 
 import os
 import sys
-import pathlib
 import asyncio
 import logging
-import pycyphal
+import pycyphal  # Importing PyCyphal will automatically install the import hook for DSDL compilation.
 
 # DSDL files are automatically compiled by pycyphal import hook from sources pointed by CYPHAL_PATH env variable.
 import sirius_cyber_corp  # This is our vendor-specific root namespace. Custom data types.
