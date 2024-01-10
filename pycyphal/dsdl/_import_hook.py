@@ -5,7 +5,7 @@ import logging
 import sys
 import os
 from types import ModuleType
-from typing import Iterable, Optional, Sequence, Union
+from typing import Iterable, Optional, Sequence, Union, List
 import pathlib
 import keyword
 import re
@@ -48,7 +48,7 @@ class DsdlMetaFinder(MetaPathFinder):
         self.lookup_directories = list(map(str, lookup_directories))
         self.output_directory = output_directory
         self.allow_unregulated_fixed_port_id = allow_unregulated_fixed_port_id
-        self.root_namespace_directories: list[pathlib.Path] = []
+        self.root_namespace_directories: List[pathlib.Path] = []
 
         # Build a list of root namespace directories from lookup directories.
         # Any dir inside any of the lookup directories is considered a root namespace if it matches regex
