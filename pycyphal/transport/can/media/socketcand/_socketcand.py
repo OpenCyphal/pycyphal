@@ -157,7 +157,8 @@ class SocketcandMedia(Media):
                     tx.loop.call_soon_threadsafe(partial(tx.future.set_exception, ex))
         except Exception as ex:
             _logger.critical(
-                "Unhandled exception in transmit thread, transmission thread stopped and transmission is no longer possible: %s",
+                "Unhandled exception in transmit thread, "
+                "transmission thread stopped and transmission is no longer possible: %s",
                 ex,
                 exc_info=True,
             )

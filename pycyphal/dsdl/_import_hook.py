@@ -25,7 +25,7 @@ _NUNAVUT_SUPPORT_MODULE_NAME = "nunavut_support"
 
 def root_namespace_from_module_name(module_name: str) -> str:
     """
-    Tranlates python module name to DSDL root namespace.
+    Translates python module name to DSDL root namespace.
     This handles special case where root namespace is a python keyword by removing trailing underscore.
     """
     if module_name.endswith("_") and keyword.iskeyword(module_name[-1]):
