@@ -227,7 +227,8 @@ You will need to open a couple of new terminal sessions now.
 
 If you don't have Yakut installed on your system yet, install it now by following its documentation.
 
-Yakut (also) needs to know where the DSDL files are located, this is done via the ``CYPHAL_PATH`` environment variable:
+Yakut also needs to know where the DSDL files are located, this is specified via the same ``CYPHAL_PATH``
+environment variable:
 
 .. code-block:: sh
 
@@ -406,16 +407,10 @@ that allows one to define process groups and conveniently manage them as a singl
 The language comes with a user-friendly syntax for managing Cyphal registers.
 Those familiar with ROS may find it somewhat similar to *roslaunch*.
 
-The following orchestration file (orc-file) ``launch.orc.yaml`` does this:
-
-- Compiles two DSDL namespaces: the standard ``uavcan`` and the custom ``sirius_cyber_corp``.
-  If they are already compiled, this step is skipped.
-
-- When compilation is done, the two applications are launched.
-  Be sure to stop the first script if it is still running!
-
-- Aside from the applications, a couple of diagnostic processes are started as well.
-  A setpoint publisher will command the thermostat to drive the plant to the specified temperature.
+The following orchestration file (orc-file) ``launch.orc.yaml`` launches the two applications
+(be sure to stop the first script if it is still running!)
+along with a couple of diagnostic processes that monitor the network.
+A setpoint publisher that will command the thermostat to drive the plant to the specified temperature is also started.
 
 The orchestrator runs everything concurrently, but *join statements* are used to enforce sequential execution as needed.
 The first process to fail (that is, exit with a non-zero code) will bring down the entire *composition*.
