@@ -2,7 +2,6 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
-import time
 import asyncio
 import pytest
 import pycyphal
@@ -96,7 +95,7 @@ async def _unittest_redundant_input_cyclic() -> None:
     assert inf_b.transfer_id_timeout == pytest.approx(1.1)
 
     # Redundant reception - new transfers accepted because the iface switch timeout is exceeded.
-    time.sleep(ses.transfer_id_timeout)  # Just to make sure that it is REALLY exceeded.
+    await asyncio.sleep(ses.transfer_id_timeout)  # Just to make sure that it is REALLY exceeded.
     assert await tx_b.send(
         Transfer(
             timestamp=Timestamp.now(),
@@ -132,7 +131,7 @@ async def _unittest_redundant_input_cyclic() -> None:
     assert tr.fragmented_payload == [memoryview(b"ghi")]
     assert tr.inferior_session == inf_b
 
-    assert None is await ses.receive(asyncio.get_running_loop().time() + 1.0)  # Nothing left to read now.
+    assert None is await ses.receive(asyncio.get_running_loop().time() + 0.1)  # Nothing left to read now.
 
     # This one will be rejected because wrong iface and the switch timeout is not yet exceeded.
     assert await tx_a.send(
@@ -144,7 +143,7 @@ async def _unittest_redundant_input_cyclic() -> None:
         ),
         asyncio.get_running_loop().time() + 1.0,
     )
-    assert None is await ses.receive(asyncio.get_running_loop().time() + 1.0)
+    assert None is await ses.receive(asyncio.get_running_loop().time() + 0.1)
 
     # Transfer-ID timeout reconfiguration.
     ses.transfer_id_timeout = 3.0
