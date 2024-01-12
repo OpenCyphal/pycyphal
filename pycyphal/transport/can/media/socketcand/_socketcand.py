@@ -1,6 +1,7 @@
 # Copyright (c) 2019 OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Alex Kiselev <a.kiselev@volz-servos.com>, Pavel Kirienko <pavel@opencyphal.org>
+# pylint: disable=duplicate-code
 
 from __future__ import annotations
 import queue
