@@ -148,8 +148,8 @@ async def _unittest_slow_demo_app(
     print("DEMO APP STARTED WITH PID", demo_proc.pid, "FROM", Path.cwd())
 
     try:
-        local_node_info = uavcan.node.GetInfo_1_0.Response(
-            software_version=uavcan.node.Version_1_0(*pycyphal.__version_info__[:2]),
+        local_node_info = uavcan.node.GetInfo_1.Response(
+            software_version=uavcan.node.Version_1(*pycyphal.__version_info__[:2]),
             name="org.opencyphal.pycyphal.test.demo_app",
         )
         env = mirror(env)
@@ -163,16 +163,16 @@ async def _unittest_slow_demo_app(
         raise
 
     try:
-        sub_heartbeat = node.make_subscriber(uavcan.node.Heartbeat_1_0)
-        cln_get_info = node.make_client(uavcan.node.GetInfo_1_0, DEMO_APP_NODE_ID)
-        cln_command = node.make_client(uavcan.node.ExecuteCommand_1_1, DEMO_APP_NODE_ID)
-        cln_register = node.make_client(uavcan.register.Access_1_0, DEMO_APP_NODE_ID)
+        sub_heartbeat = node.make_subscriber(uavcan.node.Heartbeat_1)
+        cln_get_info = node.make_client(uavcan.node.GetInfo_1, DEMO_APP_NODE_ID)
+        cln_command = node.make_client(uavcan.node.ExecuteCommand_1, DEMO_APP_NODE_ID)
+        cln_register = node.make_client(uavcan.register.Access_1, DEMO_APP_NODE_ID)
 
-        pub_setpoint = node.make_publisher(uavcan.si.unit.temperature.Scalar_1_0, "temperature_setpoint")
-        pub_measurement = node.make_publisher(uavcan.si.sample.temperature.Scalar_1_0, "temperature_measurement")
-        sub_heater_voltage = node.make_subscriber(uavcan.si.unit.voltage.Scalar_1_0, "heater_voltage")
+        pub_setpoint = node.make_publisher(uavcan.si.unit.temperature.Scalar_1, "temperature_setpoint")
+        pub_measurement = node.make_publisher(uavcan.si.sample.temperature.Scalar_1, "temperature_measurement")
+        sub_heater_voltage = node.make_subscriber(uavcan.si.unit.voltage.Scalar_1, "heater_voltage")
         cln_least_squares = node.make_client(
-            sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0, DEMO_APP_NODE_ID, "least_squares"
+            sirius_cyber_corp.PerformLinearLeastSquaresFit_1, DEMO_APP_NODE_ID, "least_squares"
         )
 
         # At the first run, the usage demo might take a long time to start because it has to compile DSDL.
@@ -189,14 +189,14 @@ async def _unittest_slow_demo_app(
         # Validate GetInfo.
         cln_get_info.priority = pycyphal.transport.Priority.EXCEPTIONAL
         cln_get_info.transfer_id_counter.override(22)
-        info_transfer = await cln_get_info.call(uavcan.node.GetInfo_1_0.Request())
+        info_transfer = await cln_get_info.call(uavcan.node.GetInfo_1.Request())
         print("GET INFO RESPONSE:", info_transfer)
         assert info_transfer
         info, transfer = info_transfer
         assert transfer.source_node_id == DEMO_APP_NODE_ID
         assert transfer.transfer_id == 22
         assert transfer.priority == pycyphal.transport.Priority.EXCEPTIONAL
-        assert isinstance(info, uavcan.node.GetInfo_1_0.Response)
+        assert isinstance(info, uavcan.node.GetInfo_1.Response)
         assert info.name.tobytes().decode() == "org.opencyphal.pycyphal.demo.demo_app"
         assert info.protocol_version.major == pycyphal.CYPHAL_SPECIFICATION_VERSION[0]
         assert info.protocol_version.minor == pycyphal.CYPHAL_SPECIFICATION_VERSION[1]
@@ -206,10 +206,10 @@ async def _unittest_slow_demo_app(
 
         # Test the linear regression service.
         solution_transfer = await cln_least_squares.call(
-            sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request(
+            sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request(
                 points=[
-                    sirius_cyber_corp.PointXY_1_0(x=1, y=2),
-                    sirius_cyber_corp.PointXY_1_0(x=10, y=20),
+                    sirius_cyber_corp.PointXY_1(x=1, y=2),
+                    sirius_cyber_corp.PointXY_1(x=10, y=20),
                 ]
             )
         )
@@ -219,48 +219,48 @@ async def _unittest_slow_demo_app(
         assert transfer.source_node_id == DEMO_APP_NODE_ID
         assert transfer.transfer_id == 0
         assert transfer.priority == pycyphal.transport.Priority.NOMINAL
-        assert isinstance(solution, sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response)
+        assert isinstance(solution, sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response)
         assert solution.slope == pytest.approx(2.0)
         assert solution.y_intercept == pytest.approx(0.0)
 
-        solution_transfer = await cln_least_squares.call(sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Request())
+        solution_transfer = await cln_least_squares.call(sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Request())
         print("LINEAR REGRESSION RESPONSE:", solution_transfer)
         assert solution_transfer
         solution, _ = solution_transfer
-        assert isinstance(solution, sirius_cyber_corp.PerformLinearLeastSquaresFit_1_0.Response)
+        assert isinstance(solution, sirius_cyber_corp.PerformLinearLeastSquaresFit_1.Response)
         assert not math.isfinite(solution.slope)
         assert not math.isfinite(solution.y_intercept)
         del solution_transfer
 
         # Validate the thermostat.
         for _ in range(2):
-            assert await pub_setpoint.publish(uavcan.si.unit.temperature.Scalar_1_0(kelvin=315.0))
-            assert await pub_measurement.publish(uavcan.si.sample.temperature.Scalar_1_0(kelvin=300.0))
+            assert await pub_setpoint.publish(uavcan.si.unit.temperature.Scalar_1(kelvin=315.0))
+            assert await pub_measurement.publish(uavcan.si.sample.temperature.Scalar_1(kelvin=300.0))
             await asyncio.sleep(0.5)
         rx_voltage = await sub_heater_voltage.receive_for(timeout=3.0)
         assert rx_voltage
         msg_voltage, _ = rx_voltage
-        assert isinstance(msg_voltage, uavcan.si.unit.voltage.Scalar_1_0)
+        assert isinstance(msg_voltage, uavcan.si.unit.voltage.Scalar_1)
         assert msg_voltage.volt == pytest.approx(1.5)  # The error is 15 kelvin, P-gain is 0.1 (see env vars above)
 
         # Check the state registers.
         rx_access = await cln_register.call(
-            uavcan.register.Access_1_0.Request(uavcan.register.Name_1_0("thermostat.setpoint"))
+            uavcan.register.Access_1.Request(uavcan.register.Name_1("thermostat.setpoint"))
         )
         assert rx_access
         access_resp, _ = rx_access
-        assert isinstance(access_resp, uavcan.register.Access_1_0.Response)
+        assert isinstance(access_resp, uavcan.register.Access_1.Response)
         assert not access_resp.mutable
         assert not access_resp.persistent
         assert access_resp.value.real64
         assert access_resp.value.real64.value[0] == pytest.approx(315.0)
 
         rx_access = await cln_register.call(
-            uavcan.register.Access_1_0.Request(uavcan.register.Name_1_0("thermostat.error"))
+            uavcan.register.Access_1.Request(uavcan.register.Name_1("thermostat.error"))
         )
         assert rx_access
         access_resp, _ = rx_access
-        assert isinstance(access_resp, uavcan.register.Access_1_0.Response)
+        assert isinstance(access_resp, uavcan.register.Access_1.Response)
         assert not access_resp.mutable
         assert not access_resp.persistent
         assert access_resp.value.real64
@@ -269,8 +269,8 @@ async def _unittest_slow_demo_app(
         # Test the command execution service.
         # Bad command.
         result_transfer = await cln_command.call(
-            uavcan.node.ExecuteCommand_1_1.Request(
-                command=uavcan.node.ExecuteCommand_1_1.Request.COMMAND_STORE_PERSISTENT_STATES
+            uavcan.node.ExecuteCommand_1.Request(
+                command=uavcan.node.ExecuteCommand_1.Request.COMMAND_STORE_PERSISTENT_STATES
             )
         )
         print("BAD COMMAND RESPONSE:", result_transfer)
@@ -279,12 +279,12 @@ async def _unittest_slow_demo_app(
         assert transfer.source_node_id == DEMO_APP_NODE_ID
         assert transfer.transfer_id == 0
         assert transfer.priority == pycyphal.transport.Priority.NOMINAL
-        assert isinstance(result, uavcan.node.ExecuteCommand_1_1.Response)
+        assert isinstance(result, uavcan.node.ExecuteCommand_1.Response)
         assert result.status == result.STATUS_BAD_COMMAND
         # Factory reset -- remove the register file.
         assert demo_proc.alive
         result_transfer = await cln_command.call(
-            uavcan.node.ExecuteCommand_1_1.Request(command=uavcan.node.ExecuteCommand_1_1.Request.COMMAND_FACTORY_RESET)
+            uavcan.node.ExecuteCommand_1.Request(command=uavcan.node.ExecuteCommand_1.Request.COMMAND_FACTORY_RESET)
         )
         print("FACTORY RESET COMMAND RESPONSE:", result_transfer)
         assert result_transfer
@@ -292,7 +292,7 @@ async def _unittest_slow_demo_app(
         assert transfer.source_node_id == DEMO_APP_NODE_ID
         assert transfer.transfer_id == 1
         assert transfer.priority == pycyphal.transport.Priority.NOMINAL
-        assert isinstance(result, uavcan.node.ExecuteCommand_1_1.Response)
+        assert isinstance(result, uavcan.node.ExecuteCommand_1.Response)
         assert result.status == result.STATUS_SUCCESS
         del result_transfer
 
@@ -389,7 +389,7 @@ async def _unittest_slow_demo_app_with_plant(
         env["UAVCAN__SUB__TEMPERATURE_MEASUREMENT__ID"] = "2346"
         env["UAVCAN__PUB__TEMPERATURE_SETPOINT__ID"] = "2345"
         registry = pycyphal.application.make_registry(None, env)
-        node = pycyphal.application.make_node(uavcan.node.GetInfo_1_0.Response(), registry)
+        node = pycyphal.application.make_node(uavcan.node.GetInfo_1.Response(), registry)
         node.start()
         del node.registry["model*"]
     except Exception:
@@ -398,15 +398,15 @@ async def _unittest_slow_demo_app_with_plant(
         raise
 
     try:
-        sub_heartbeat = node.make_subscriber(uavcan.node.Heartbeat_1_0)
-        sub_measurement = node.make_subscriber(uavcan.si.sample.temperature.Scalar_1_0, "temperature_measurement")
-        pub_setpoint = node.make_publisher(uavcan.si.unit.temperature.Scalar_1_0, "temperature_setpoint")
+        sub_heartbeat = node.make_subscriber(uavcan.node.Heartbeat_1)
+        sub_measurement = node.make_subscriber(uavcan.si.sample.temperature.Scalar_1, "temperature_measurement")
+        pub_setpoint = node.make_publisher(uavcan.si.unit.temperature.Scalar_1, "temperature_setpoint")
 
-        last_hb_demo = uavcan.node.Heartbeat_1_0()
-        last_hb_plant = uavcan.node.Heartbeat_1_0()
-        last_meas = uavcan.si.sample.temperature.Scalar_1_0()
+        last_hb_demo = uavcan.node.Heartbeat_1()
+        last_hb_plant = uavcan.node.Heartbeat_1()
+        last_meas = uavcan.si.sample.temperature.Scalar_1()
 
-        async def on_heartbeat(msg: uavcan.node.Heartbeat_1_0, meta: pycyphal.transport.TransferFrom) -> None:
+        async def on_heartbeat(msg: uavcan.node.Heartbeat_1, meta: pycyphal.transport.TransferFrom) -> None:
             nonlocal last_hb_demo
             nonlocal last_hb_plant
             print(msg)
@@ -415,7 +415,7 @@ async def _unittest_slow_demo_app_with_plant(
             elif meta.source_node_id == DEMO_APP_NODE_ID + 1:
                 last_hb_plant = msg
 
-        async def on_meas(msg: uavcan.si.sample.temperature.Scalar_1_0, meta: pycyphal.transport.TransferFrom) -> None:
+        async def on_meas(msg: uavcan.si.sample.temperature.Scalar_1, meta: pycyphal.transport.TransferFrom) -> None:
             nonlocal last_meas
             print(msg)
             assert meta.source_node_id == DEMO_APP_NODE_ID + 1
@@ -425,37 +425,37 @@ async def _unittest_slow_demo_app_with_plant(
         sub_measurement.receive_in_background(on_meas)
 
         for _ in range(10):
-            assert await pub_setpoint.publish(uavcan.si.unit.temperature.Scalar_1_0(kelvin=300.0))
+            assert await pub_setpoint.publish(uavcan.si.unit.temperature.Scalar_1(kelvin=300.0))
             await asyncio.sleep(0.5)
 
         assert demo_proc.alive and plant_proc.alive
         assert 1 <= last_hb_demo.uptime <= 10
         assert 1 <= last_hb_plant.uptime <= 10
-        assert last_hb_plant.health.value == uavcan.node.Health_1_0.NOMINAL
+        assert last_hb_plant.health.value == uavcan.node.Health_1.NOMINAL
         assert int((time.time() - 3.0) * 1e6) <= last_meas.timestamp.microsecond <= int(time.time() * 1e6)
         assert last_meas.kelvin == pytest.approx(300.0)
 
         for _ in range(10):
-            assert await pub_setpoint.publish(uavcan.si.unit.temperature.Scalar_1_0(kelvin=900.0))
+            assert await pub_setpoint.publish(uavcan.si.unit.temperature.Scalar_1(kelvin=900.0))
             await asyncio.sleep(0.5)
 
         assert demo_proc.alive and plant_proc.alive
         assert 6 <= last_hb_demo.uptime <= 15
         assert 6 <= last_hb_plant.uptime <= 15
-        assert last_hb_plant.health.value == uavcan.node.Health_1_0.ADVISORY  # Because saturation
+        assert last_hb_plant.health.value == uavcan.node.Health_1.ADVISORY  # Because saturation
         assert int((time.time() - 3.0) * 1e6) <= last_meas.timestamp.microsecond <= int(time.time() * 1e6)
         assert 400.0 > last_meas.kelvin > 310.0
         peak_temp = last_meas.kelvin
         print("PEAK TEMPERATURE:", peak_temp, "K")
 
         for _ in range(10):
-            assert await pub_setpoint.publish(uavcan.si.unit.temperature.Scalar_1_0(kelvin=0.0))
+            assert await pub_setpoint.publish(uavcan.si.unit.temperature.Scalar_1(kelvin=0.0))
             await asyncio.sleep(0.5)
 
         assert demo_proc.alive and plant_proc.alive
         assert 9 <= last_hb_demo.uptime <= 20
         assert 9 <= last_hb_plant.uptime <= 20
-        assert last_hb_plant.health.value == uavcan.node.Health_1_0.ADVISORY  # Because saturation
+        assert last_hb_plant.health.value == uavcan.node.Health_1.ADVISORY  # Because saturation
         assert int((time.time() - 3.0) * 1e6) <= last_meas.timestamp.microsecond <= int(time.time() * 1e6)
         assert 300.0 < last_meas.kelvin < (peak_temp - 0.4), "Temperature did not decrease"
 

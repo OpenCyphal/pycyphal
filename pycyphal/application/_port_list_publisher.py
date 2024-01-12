@@ -12,9 +12,9 @@ import pycyphal.application
 from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
 
 # pylint: disable=wrong-import-order
-from uavcan.node.port import List_0 as List
-from uavcan.node.port import SubjectIDList_0 as SubjectIDList
-from uavcan.node.port import ServiceIDList_0 as ServiceIDList
+from uavcan.node.port import List_1 as List
+from uavcan.node.port import SubjectIDList_1 as SubjectIDList
+from uavcan.node.port import ServiceIDList_1 as ServiceIDList
 from uavcan.node.port import SubjectID_1 as SubjectID
 
 import nunavut_support
