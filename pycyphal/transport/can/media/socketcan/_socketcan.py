@@ -180,7 +180,7 @@ class SocketCANMedia(Media):
             except Exception as exc:
                 _logger.exception("%s: Unhandled exception in the receive handler: %s; lost frames: %s", self, exc, frs)
 
-        while not self._closed:
+        while not self._closed and not loop.is_closed():
             try:
                 (
                     read_ready,

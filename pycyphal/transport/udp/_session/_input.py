@@ -146,7 +146,7 @@ class UDPInputSession(pycyphal.transport.InputSession):
         self._frame_queue.put_nowait((ts, frame))
 
     def _reader_thread(self, loop: asyncio.AbstractEventLoop) -> None:
-        while not self._closed and self._socket.fileno() >= 0:
+        while not self._closed and self._socket.fileno() >= 0 and not loop.is_closed():
             try:
                 # TODO: add a dedicated socket for aborting the select call
                 # when self.close() is invoked to avoid blocking on
@@ -175,6 +175,9 @@ class UDPInputSession(pycyphal.transport.InputSession):
                     except asyncio.QueueFull:
                         # TODO: make the queue capacity configurable
                         _logger.error("%s: Frame queue is full", self)
+                    except RuntimeError as ex:  # Event loop is closed.
+                        _logger.critical("%s: Stopping because: %s", self, ex, exc_info=True)
+                        break
             except Exception as ex:
                 _logger.exception("%s: Exception while consuming UDP frames: %s", self, ex)
 

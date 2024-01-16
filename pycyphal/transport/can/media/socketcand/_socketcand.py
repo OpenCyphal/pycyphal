@@ -229,7 +229,7 @@ class SocketcandMedia(Media):
             _logger.exception("%s unhandled exception in the receive handler: %s; lost frames: %s", self, exc, frs)
 
     def _thread_function(self, loop: asyncio.AbstractEventLoop) -> None:
-        while not self._closed:
+        while not self._closed and not loop.is_closed():
             try:
                 batch = self._read_batch()
                 if batch:
