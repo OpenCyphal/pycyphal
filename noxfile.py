@@ -207,7 +207,7 @@ def check_style(session):
     session.run("black", "--check", ".")
 
 
-@nox.session()
+@nox.session(python=PYTHONS[-1])
 def docs(session):
     try:
         session.run("dot", "-V", silent=True, external=True)
