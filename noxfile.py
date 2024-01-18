@@ -209,9 +209,6 @@ def check_style(session):
 
 @nox.session()
 def docs(session):
-    if sys.platform.startswith("win"):
-        session.log("Docs cannot be built on Windows")
-        return 0
     try:
         session.run("dot", "-V", silent=True, external=True)
     except Exception:

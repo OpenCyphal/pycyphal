@@ -11,6 +11,7 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute.
 import os
+import re
 import sys
 import pathlib
 import inspect
@@ -222,3 +223,12 @@ subprocess.check_call(
 )
 # We don't need the top-level page, it's maintained manually.
 os.unlink(f"{APIDOC_GENERATED_ROOT}/{pycyphal.__name__}.rst")
+# Replace the toctree :maxdepth: specification from 4 to 1.
+for rst in APIDOC_GENERATED_ROOT.rglob("*.rst"):
+    text = rst.read_text()
+    text = re.sub(
+        r".. toctree::\n {3}:maxdepth: \d",
+        r".. toctree::\n   :maxdepth: 1",
+        text,
+    )
+    rst.write_text(text)
