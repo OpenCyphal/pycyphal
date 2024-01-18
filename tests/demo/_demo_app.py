@@ -310,7 +310,7 @@ async def _unittest_slow_demo_app(
             assert hb.health.value == hb.health.NOMINAL
             assert hb.mode.value == hb.mode.OPERATIONAL
             assert num_heartbeats <= hb.uptime <= 300
-            assert prev_hb_transfer[0].uptime <= hb.uptime <= prev_hb_transfer[0].uptime + 1
+            assert prev_hb_transfer[0].uptime <= hb.uptime <= prev_hb_transfer[0].uptime + 2  # +2 due to aliasing
             assert transfer.transfer_id == prev_hb_transfer[1].transfer_id + 1
             prev_hb_transfer = hb_transfer
             num_heartbeats += 1
