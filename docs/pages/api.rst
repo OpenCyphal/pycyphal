@@ -22,6 +22,7 @@ Submodules
 ----------
 
 .. toctree::
+   :maxdepth: 3
 
    /api/pycyphal.dsdl
    /api/pycyphal.application

@@ -11,6 +11,7 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute.
 import os
+import re
 import sys
 import pathlib
 import inspect
@@ -213,6 +214,7 @@ subprocess.check_call(
         "sphinx-apidoc",
         "-o",
         str(APIDOC_GENERATED_ROOT),
+        "-d1",  # Set :maxdepth:
         "--force",
         "--follow-links",
         "--separate",

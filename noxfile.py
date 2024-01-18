@@ -163,7 +163,7 @@ def demo(session):
         return 0
 
     session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
-    session.install("yakut ~= 0.11")
+    session.install("yakut ~= 0.13")
 
     demo_dir = ROOT_DIR / "demo"
     tmp_dir = Path(session.create_tmp()).resolve()
@@ -203,11 +203,11 @@ def pristine(session):
 
 @nox.session(reuse_venv=True)
 def check_style(session):
-    session.install("black == 23.*")
+    session.install("black ~= 23.12")
     session.run("black", "--check", ".")
 
 
-@nox.session()
+@nox.session(python=PYTHONS[-1])
 def docs(session):
     try:
         session.run("dot", "-V", silent=True, external=True)
@@ -233,7 +233,7 @@ def docs(session):
     session.log(f"DOCUMENTATION BUILD OUTPUT: file://{out_dir}/index.html")
 
     session.cd(ROOT_DIR)
-    session.install("doc8 ~= 0.11")
+    session.install("doc8 ~= 1.1")
     if is_latest_python(session):
         session.run("doc8", "docs", *map(str, ROOT_DIR.glob("*.rst")))
 
