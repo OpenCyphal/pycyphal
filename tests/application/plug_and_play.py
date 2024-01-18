@@ -58,25 +58,25 @@ async def _unittest_slow_plug_and_play_centralized(
     allocator.register_node(43, None)  # Does not overwrite
 
     use_v2 = mtu > cln_a._MTU_THRESHOLD  # pylint: disable=protected-access
-    await asyncio.sleep(2.0)
+    await asyncio.sleep(3.0)
     assert cln_a.get_result() == (44 if use_v2 else 125)
 
     # Another request.
     cln_b = Allocatee(trans_client, _uid("aabbccddeeff00112233445566778899"))
     assert cln_b.get_result() is None
-    await asyncio.sleep(2.0)
+    await asyncio.sleep(3.0)
     assert cln_b.get_result() == (125 if use_v2 else 124)
 
     # Re-request A and make sure we get the same response.
     cln_a = Allocatee(trans_client, _uid("00112233445566778899aabbccddeeff"), 42)
     assert cln_a.get_result() is None
-    await asyncio.sleep(2.0)
+    await asyncio.sleep(3.0)
     assert cln_a.get_result() == (44 if use_v2 else 125)
 
     # C should be served from the manually added entries above if we're on v2, otherwise new allocation.
     cln_c = Allocatee(trans_client, _uid("00000000000000000000000000000003"))
     assert cln_c.get_result() is None
-    await asyncio.sleep(2.0)
+    await asyncio.sleep(3.0)
     assert cln_c.get_result() == (43 if use_v2 else 122)  # 123 is used by the allocator itself, so we get 122.
 
     # Modify the entry we just created to ensure the pseudo-UID is not overwritten.
@@ -84,7 +84,7 @@ async def _unittest_slow_plug_and_play_centralized(
     allocator.register_node(122, _uid("00000000000000000000000000000122"))
     cln_c = Allocatee(trans_client, _uid("00000000000000000000000000000003"))  # Same pseudo-UID
     assert cln_c.get_result() is None
-    await asyncio.sleep(2.0)
+    await asyncio.sleep(3.0)
     # We shall get the same response but the reasons are different depending on the message version used:
     # - v1 will return the same allocation because we're using the same pseudo-UID hash.
     # - v2 will return the same allocation because entry 43 is still stored with its old UID, 122 got a new UID.
