@@ -323,9 +323,15 @@ class PythonCANMedia(Media):
         self._closed = True
         try:
             self._tx_queue.put(None)
-            self._tx_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
+            try:
+                self._tx_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
+            except RuntimeError:
+                pass
             if self._maybe_thread is not None:
-                self._maybe_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
+                try:
+                    self._maybe_thread.join(timeout=self._MAXIMAL_TIMEOUT_SEC * 10)
+                except RuntimeError:
+                    pass
                 self._maybe_thread = None
         finally:
             try:

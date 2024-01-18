@@ -146,7 +146,10 @@ class CandumpMedia(Media):
             self._f.close()
             self._thread, thd = None, self._thread
             assert thd is not None
-            thd.join(timeout=1)
+            try:
+                thd.join(timeout=1)
+            except RuntimeError:
+                pass
 
     @property
     def _is_closed(self) -> bool:

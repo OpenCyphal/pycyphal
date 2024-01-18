@@ -165,7 +165,10 @@ class SocketCANMedia(Media):
             if self._ctl_main.fileno() >= 0:  # Ignore if already closed.
                 self._ctl_main.send(b"stop")  # The actual data is irrelevant, we just need it to unblock the select().
             if self._maybe_thread:
-                self._maybe_thread.join(timeout=_SELECT_TIMEOUT)
+                try:
+                    self._maybe_thread.join(timeout=_SELECT_TIMEOUT)
+                except RuntimeError:
+                    pass
                 self._maybe_thread = None
         finally:
             self._sock.close()  # These are expected to be idempotent.
