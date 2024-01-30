@@ -3,6 +3,11 @@
 Changelog
 =========
 
+v1.18
+-----
+- Add FileClient2 which reports errors by raising exceptions.
+  See (`#327 <https://github.com/OpenCyphal/pycyphal/issues/327>`_) for rationale.
+
 v1.17
 -----
 - Move to Nunavut Version 2
