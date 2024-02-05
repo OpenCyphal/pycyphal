@@ -14,12 +14,11 @@ import shutil
 import typing
 import pathlib
 import logging
-import io
 import itertools
+import warnings
 import numpy as np
 import pycyphal
 import pycyphal.application
-import warnings
 
 # pylint: disable=wrong-import-order
 import uavcan.file
