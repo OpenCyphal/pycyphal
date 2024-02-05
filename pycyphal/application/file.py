@@ -2,6 +2,11 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
+"""
+.. inheritance-diagram:: pycyphal.application.file
+   :parts: 1
+"""
+
 from __future__ import annotations
 import os
 import errno
@@ -269,6 +274,9 @@ class FileServer:
 
 class FileClient:
     """
+    This class is deprecated and should not be used in new applications;
+    instead, consider using :class:`FileClient2`.
+
     A trivial proxy that provides a higher-level and more pythonic API on top of the standard RPC-services
     from ``uavcan.file``.
     Client instances are created lazily at first request and then kept alive until this instance is closed.
@@ -517,6 +525,9 @@ class FileClient2:
     In contrast to :class:`FileClient`, :class:`FileClient2` raises exceptions
     for errors reported over the network. The intent is to provide more pythonic
     error handling  in the API.
+    All possible exceptions are defined in this module; all of them are derived from :exc:`OSError`
+    and also from a tag type :class:`RemoteFileError` which can be used to easily distinguish file-related
+    exceptions in exception handlers.
     """
 
     def __init__(
