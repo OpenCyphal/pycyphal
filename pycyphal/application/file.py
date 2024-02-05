@@ -2,6 +2,11 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
+"""
+.. inheritance-diagram:: pycyphal.application.file
+   :parts: 1
+"""
+
 from __future__ import annotations
 import os
 import errno
@@ -10,6 +15,7 @@ import typing
 import pathlib
 import logging
 import itertools
+import warnings
 import numpy as np
 import pycyphal
 import pycyphal.application
@@ -267,6 +273,9 @@ class FileServer:
 
 class FileClient:
     """
+    This class is deprecated and should not be used in new applications;
+    instead, consider using :class:`FileClient2`.
+
     A trivial proxy that provides a higher-level and more pythonic API on top of the standard RPC-services
     from ``uavcan.file``.
     Client instances are created lazily at first request and then kept alive until this instance is closed.
@@ -286,6 +295,11 @@ class FileClient:
         :param response_timeout: Raise :class:`FileTimeoutError` if the server does not respond in this time.
         :param priority: Transfer priority for requests (and, therefore, responses).
         """
+        warnings.warn(
+            "The use of pycyphal.application.file.FileClient is deprecated. "
+            "Use pycyphal.application.file.FileClient2 instead.",
+            DeprecationWarning,
+        )
         self._node = local_node
         self._server_node_id = server_node_id
         self._response_timeout = float(response_timeout)
@@ -500,10 +514,436 @@ class FileClient:
         return pycyphal.util.repr_attributes(self, self._node, server_node_id=self._server_node_id)
 
 
-class FileTimeoutError(pycyphal.application.NetworkTimeoutError):
+class FileClient2:
     """
-    The specialization of the network error for file access.
+    A trivial proxy that provides a higher-level and more pythonic API on top of the standard RPC-services
+    from ``uavcan.file``.
+    Client instances are created lazily at first request and then kept alive until this instance is closed.
+    All remote operations raise :class:`FileTimeoutError` on timeout.
+
+    In contrast to :class:`FileClient`, :class:`FileClient2` raises exceptions
+    for errors reported over the network. The intent is to provide more pythonic
+    error handling  in the API.
+    All possible exceptions are defined in this module; all of them are derived from :exc:`OSError`
+    and also from a tag type :class:`RemoteFileError` which can be used to easily distinguish file-related
+    exceptions in exception handlers.
     """
+
+    def __init__(
+        self,
+        local_node: pycyphal.application.Node,
+        server_node_id: int,
+        response_timeout: float = 3.0,
+        priority: pycyphal.transport.Priority = pycyphal.transport.Priority.SLOW,
+    ) -> None:
+        """
+        :param local_node: RPC-service clients will be created on this node.
+        :param server_node_id: All requests will be sent to this node-ID.
+        :param response_timeout: Raise :class:`FileTimeoutError` if the server does not respond in this time.
+        :param priority: Transfer priority for requests (and, therefore, responses).
+        """
+        self._node = local_node
+        self._server_node_id = server_node_id
+        self._response_timeout = float(response_timeout)
+        # noinspection PyArgumentList
+        self._priority = pycyphal.transport.Priority(priority)
+
+        self._clients: typing.Dict[typing.Type[object], pycyphal.presentation.Client[object]] = {}
+
+        # noinspection PyUnresolvedReferences
+        self._data_transfer_capacity = int(nunavut_support.get_model(Unstructured)["value"].data_type.capacity)
+
+    @property
+    def data_transfer_capacity(self) -> int:
+        """
+        A convenience constant derived from DSDL: the maximum number of bytes per read/write transfer.
+        Larger reads/writes are non-atomic.
+        """
+        return self._data_transfer_capacity
+
+    @property
+    def server_node_id(self) -> int:
+        """
+        The node-ID of the remote file server.
+        """
+        return self._server_node_id
+
+    def close(self) -> None:
+        """
+        Close all RPC-service client instances created up to this point.
+        """
+        for c in self._clients.values():
+            c.close()
+        self._clients.clear()
+
+    async def list(self, path: str) -> typing.AsyncIterable[str]:
+        """
+        Proxy for ``uavcan.file.List``. Invokes requests in series until all elements are listed.
+        """
+        for index in itertools.count():
+            res = await self._call(List, List.Request(entry_index=index, directory_path=Path(path)))
+            assert isinstance(res, List.Response)
+            p = res.entry_base_name.path.tobytes().decode(errors="ignore")
+            if p:
+                yield str(p)
+            else:
+                break
+
+    async def get_info(self, path: str) -> GetInfo.Response:
+        """
+        Proxy for ``uavcan.file.GetInfo``.
+
+        :raises OSError: If the operation failed; see ``uavcan.file.Error``
+        """
+        res = await self._call(GetInfo, GetInfo.Request(Path(path)))
+        assert isinstance(res, GetInfo.Response)
+        _raise_on_error(res.error, path)
+        return res
+
+    async def remove(self, path: str) -> None:
+        """
+        Proxy for ``uavcan.file.Modify``.
+
+        :raises OSError: If the operation failed; see ``uavcan.file.Error``
+        """
+        res = await self._call(Modify, Modify.Request(source=Path(path)))
+        assert isinstance(res, Modify.Response)
+        _raise_on_error(res.error, path)
+
+    async def touch(self, path: str) -> None:
+        """
+        Proxy for ``uavcan.file.Modify``.
+
+        :raises OSError: If the operation failed; see ``uavcan.file.Error``
+        """
+        res = await self._call(Modify, Modify.Request(destination=Path(path)))
+        assert isinstance(res, Modify.Response)
+        _raise_on_error(res.error, path)
+
+    async def copy(self, src: str, dst: str, overwrite: bool = False) -> None:
+        """
+        Proxy for ``uavcan.file.Modify``.
+
+        :raises OSError: If the operation failed; see ``uavcan.file.Error``
+        """
+        res = await self._call(
+            Modify,
+            Modify.Request(
+                preserve_source=True,
+                overwrite_destination=overwrite,
+                source=Path(src),
+                destination=Path(dst),
+            ),
+        )
+        assert isinstance(res, Modify.Response)
+        _raise_on_error(res.error, f"{src}->{dst}")
+
+    async def move(self, src: str, dst: str, overwrite: bool = False) -> None:
+        """
+        Proxy for ``uavcan.file.Modify``.
+
+        :raises OSError: If the operation failed; see ``uavcan.file.Error``
+        """
+        res = await self._call(
+            Modify,
+            Modify.Request(
+                preserve_source=False,
+                overwrite_destination=overwrite,
+                source=Path(src),
+                destination=Path(dst),
+            ),
+        )
+        assert isinstance(res, Modify.Response)
+        _raise_on_error(res.error, f"{src}->{dst}")
+
+    async def read(self, path: str, offset: int = 0, size: typing.Optional[int] = None) -> bytes:
+        """
+        Proxy for ``uavcan.file.Read``.
+
+        :param path:
+            The file to read.
+
+        :param offset:
+            Read offset from the beginning of the file.
+            Currently, it must be positive; negative offsets from the end of the file may be supported later.
+
+        :param size:
+            Read requests will be stopped after the end of the file is reached or at least this many bytes are read.
+            If None (default), the entire file will be read (this may exhaust local memory).
+            If zero, this call is a no-op.
+
+        :raises OSError: If the read operation failed; see ``uavcan.file.Error``
+
+        :returns:
+            data on success (empty if the offset is out of bounds or the file is empty).
+        """
+
+        async def once() -> bytes:
+            res = await self._call(Read, Read.Request(offset=offset, path=Path(path)))
+            assert isinstance(res, Read.Response)
+            _raise_on_error(res.error, path)
+            return bytes(res.data.value.tobytes())
+
+        if size is None:
+            size = 2**64
+        data = b""
+        while len(data) < size:
+            out = await once()
+            assert isinstance(out, bytes)
+            if not out:
+                break
+            data += out
+            offset += len(out)
+        return data
+
+    async def write(
+        self, path: str, data: typing.Union[memoryview, bytes], offset: int = 0, *, truncate: bool = True
+    ) -> None:
+        """
+        Proxy for ``uavcan.file.Write``.
+
+        :param path:
+            The file to write.
+
+        :param data:
+            The data to write at the specified offset.
+            The number of write requests depends on the size of data.
+
+        :param offset:
+            Write offset from the beginning of the file.
+            Currently, it must be positive; negative offsets from the end of the file may be supported later.
+
+        :param truncate:
+            If True, the rest of the file after ``offset + len(data)`` will be truncated.
+            This is done by sending an empty write request, as prescribed by the Specification.
+
+        :raises OSError: If the write operation failed; see ``uavcan.file.Error``
+        """
+
+        async def once(d: typing.Union[memoryview, bytes]) -> None:
+            res = await self._call(
+                Write,
+                Write.Request(offset, path=Path(path), data=Unstructured(np.frombuffer(d, np.uint8))),
+            )
+            assert isinstance(res, Write.Response)
+            _raise_on_error(res.error, path)
+
+        limit = self.data_transfer_capacity
+        while len(data) > 0:
+            frag, data = data[:limit], data[limit:]
+            await once(frag)
+            offset += len(frag)
+        if truncate:
+            await once(b"")
+
+    async def _call(self, ty: typing.Type[object], request: object) -> object:
+        try:
+            cln = self._clients[ty]
+        except LookupError:
+            self._clients[ty] = self._node.make_client(ty, self._server_node_id)
+            cln = self._clients[ty]
+            cln.response_timeout = self._response_timeout
+            cln.priority = self._priority
+
+        result = await cln.call(request)
+        if result is None:
+            raise FileTimeoutError(f"File service call timed out on {cln}")
+        return result[0]
+
+    def __repr__(self) -> str:
+        return pycyphal.util.repr_attributes(self, self._node, server_node_id=self._server_node_id)
+
+
+class RemoteFileError:
+    """
+    This is a tag type used to differentiate Cyphal remote file errors.
+    """
+
+
+class FileTimeoutError(RemoteFileError, pycyphal.application.NetworkTimeoutError):
+    """
+    The specialization of the network error for file access. It inherits from :exc:`RemoteFileError` and
+    :exc:`pycyphal.application.NetworkTimeoutError`.
+    """
+
+
+class RemoteFileNotFoundError(RemoteFileError, FileNotFoundError):
+    """
+    Exception type raised when a file server reports ``uavcan.file.Error.NOT_FOUND``.  This exception type inherits from
+    :exc:`RemoteFileError` and :exc:`FileNotFoundError`.
+    """
+
+    def __init__(self, filename: str) -> None:
+        """
+        :param filename: File, which was not found on the remote end.
+        :type filename: str
+        """
+        super().__init__(errno.ENOENT, "NOT_FOUND", filename)
+
+
+class RemoteIOError(RemoteFileError, OSError):
+    """
+    Exception type raised when a file server reports ``uavcan.file.Error.IO_ERROR``.  This exception type inherits from
+    :exc:`RemoteFileError` and :exc:`OSError`.
+    """
+
+    def __init__(self, filename: str) -> None:
+        """
+        :param filename: File on which was operated on when the I/O error occured on the remote end.
+        :type filename: str
+        """
+        super().__init__(errno.EIO, "IO_ERROR", filename)
+
+
+class RemoteAccessDeniedError(RemoteFileError, PermissionError):
+    """
+    Exception type raised when a file server reports``uavcan.file.Error.ACCESS_DENIED``.  This exception type inherits
+    from :exc:`RemoteFileError` and exc:`PermissionError`.
+    """
+
+    def __init__(self, filename: str) -> None:
+        """
+        :param filename: File on which was operated on when the permission error occured on the remote end.
+        :type filename: str
+        """
+        super().__init__(errno.EACCES, "ACCESS_DENIED", filename)
+
+
+class RemoteIsDirectoryError(RemoteFileError, IsADirectoryError):
+    """
+    Exception type raised when a file server reports ``uavcan.file.Error.IS_DIRECTORY``.  This exception type inherits
+    from :exc:`RemoteFileError` and :exc:`IsADirectoryError` .
+    """
+
+    def __init__(self, filename: str) -> None:
+        """
+        :param filename: File on which the I/O error occured on the remote end.
+        :type filename: str
+        """
+        super().__init__(errno.EISDIR, "IS_DIRECTORY", filename)
+
+
+class RemoteInvalidValueError(RemoteFileError, OSError):
+    """
+    Exception type raised when a file server reports ``uavcan.file.Error.INVALID_VALUE``.  This exception type inherits
+    from :exc:`RemoteFileError` and :exc:`OSError`.
+    """
+
+    def __init__(self, filename: str) -> None:
+        """
+        :param filename: File on which the invalid value error occured on the remote end.
+        :type filename: str
+        """
+        super().__init__(errno.EINVAL, "INVALID_VALUE", filename)
+
+
+class RemoteFileTooLargeError(RemoteFileError, OSError):
+    """
+    Exception type raised when a file server reports ``uavcan.file.Error.FILE_TOO_LARGE``.  This exception type inherits
+    from :exc:`RemoteFileError` and :exc:`OSError`.
+    """
+
+    def __init__(self, filename: str) -> None:
+        """
+        :param filename: File for which the remote end reported it is too large.
+        :type filename: str
+        """
+        super().__init__(errno.E2BIG, "FILE_TOO_LARGE", filename)
+
+
+class RemoteOutOfSpaceError(RemoteFileError, OSError):
+    """
+    Exception type raised when a file server reports ``uavcan.file.Error.OUT_OF_SPACE``.  This exception type inherits
+    from :exc:`RemoteFileError` and :exc:`OSError`.
+    """
+
+    def __init__(self, filename: str) -> None:
+        """
+        :param filename: File on which was operated on when the remote end ran out of space.
+        :type filename: str
+        """
+        super().__init__(errno.ENOSPC, "OUT_OF_SPACE", filename)
+
+
+class RemoteNotSupportedError(RemoteFileError, OSError):
+    """
+    Exception type raised when a file server reports ``uavcan.file.Error.NOT_SUPPORTED``.  This exception type inherits
+    from :exc:`RemoteFileError` and :exc:`OSError`.
+    """
+
+    def __init__(self, filename: str) -> None:
+        """
+        :param filename: File on which an operation was requested which is not supported by the remote end
+        :type filename: str
+        """
+        super().__init__(errno.ENOTSUP, "NOT_SUPPORTED", filename)
+
+
+class RemoteUnknownError(RemoteFileError, OSError):
+    """
+    Exception type raised when a file server reports ``uavcan.file.Error.UNKNOWN_ERROR``.  This exception type inherits
+    from :exc:`RemoteFileError` and :exc:`OSError`.
+    """
+
+    def __init__(self, filename: str) -> None:
+        """
+        :param filename: File on which was operated on when the remote end experienced an unknown error.
+        :type filename: str
+        """
+        super().__init__(errno.EPROTO, "UNKNOWN_ERROR", filename)
+
+
+_ERROR_MAP: dict[int, typing.Callable[[str], OSError]] = {
+    Error.NOT_FOUND: RemoteFileNotFoundError,
+    Error.IO_ERROR: RemoteIOError,
+    Error.ACCESS_DENIED: RemoteAccessDeniedError,
+    Error.IS_DIRECTORY: RemoteIsDirectoryError,
+    Error.INVALID_VALUE: RemoteInvalidValueError,
+    Error.FILE_TOO_LARGE: RemoteFileTooLargeError,
+    Error.OUT_OF_SPACE: RemoteOutOfSpaceError,
+    Error.NOT_SUPPORTED: RemoteNotSupportedError,
+    Error.UNKNOWN_ERROR: RemoteUnknownError,
+}
+"""
+Maps error codes from ``uavcan.file.Error`` to exception types inherited from OSError and :class:`RemoteFileError`
+"""
+
+
+def _map(error: Error, filename: str) -> OSError:
+    """
+    Constructs an exception object which inherits from both :exc:`OSError` and :exc:`RemoteFileError`, which corresponds
+    to error codes in ``uavcan.file.Error``. The exception also takes a filename, which was operated on when the error
+    occured. The filename is used only to generate a human readable error message.
+
+    :param error: Error from the file server's response
+    :type error: Error
+    :param filename: File name of the file on which the operation failed.
+    :type filename: str
+    :raises OSError: With EPROTO, if the remote error code is unkown to the local :class:`FileClient2`
+    :return: Constructed exception object, which can be raised
+    :rtype: OSError
+    """
+    try:
+        return _ERROR_MAP[error.value](filename)
+    except KeyError as e:
+        raise OSError(errno.EPROTO, f"Unknown remote error {error}", filename) from e
+
+
+def _raise_on_error(error: Error, filename: str) -> None:
+    """
+    Raise an appropriate exception if the error contains a value which is not ``Error.OK``. The tag
+    :exc:`RemoteFileError` can be used to specifically catch exceptions resulting from remote file operations, All
+    raised exceptions, resulting from remote and local errors, also inherit from :exc:`OSError`.
+
+    :param error: Error from the file server's reponse.
+    :type error: Error
+    :param filename: File name of the file on which the operation failed.
+    :type filename: str
+    :raises RemoteFileError: For remote errors raised exception inherit from :exc:`RemoteFileError` and :exc:`OSError`
+    :raises OSError: For all errors, local and remote. All exception inherit from :exc:`OSError`
+    """
+    if error.value != Error.OK:
+        raise _map(error, filename)
 
 
 _logger = logging.getLogger(__name__)
