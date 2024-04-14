@@ -25,7 +25,7 @@ uavcan:
 $=:
 - $=:
   # Wait a bit to let the diagnostic subscriber get ready (it is launched below).
-  - sleep 5
+  - sleep 6
   - # An empty statement is a join statement -- wait for the previously launched processes to exit before continuing.
 
   # Launch the demo app that implements the thermostat.
