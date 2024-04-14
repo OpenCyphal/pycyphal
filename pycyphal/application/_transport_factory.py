@@ -26,7 +26,7 @@ def make_transport(
 
     The register schema is documented below per transport class
     (refer to the transport class documentation to find the defaults for optional registers).
-    All transports also accept the following standard regsiters:
+    All transports also accept the following standard registers:
 
     +-------------------+-------------------+-----------------------------------------------------------------------+
     | Register name     | Register type     | Semantics                                                             |
