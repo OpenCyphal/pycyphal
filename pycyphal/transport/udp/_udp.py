@@ -64,7 +64,7 @@ class UDPTransport(pycyphal.transport.Transport):
     def __init__(
         self,
         local_ip_address: IPAddress | str,
-        local_node_id: typing.Optional[int],
+        local_node_id: typing.Optional[int] = None,
         *,  # The following parameters are keyword-only.
         mtu: int = MTU_DEFAULT,
         service_transfer_multiplier: int = 1,
