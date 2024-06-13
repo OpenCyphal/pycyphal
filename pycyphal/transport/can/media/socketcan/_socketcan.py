@@ -123,12 +123,11 @@ class SocketCANMedia(Media):
     def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(repr(self))
-        _logger.info(
-            "%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! "
-            "Requested configuration: %s",
-            self,
-            ", ".join(map(str, configuration)),
-        )
+
+        try:
+            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FILTER, _pack_filters(configuration))  # type: ignore
+        except OSError as error:
+            _logger.error("Setting CAN filters failed: %s", error)
 
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         num_sent = 0
@@ -366,3 +365,28 @@ def _make_socket(iface_name: str, can_fd: bool, native_frame_size: int) -> socke
         raise
 
     return s
+
+
+def _pack_filters(configuration: typing.Sequence[FilterConfiguration]) -> bytes:
+    """Convert a list of filters into a packed structure suitable for setsockopt().
+    Inspired by python-can sources.
+    :param configuration: list of CAN filters
+    :type configuration: typing.Sequence[FilterConfiguration]
+    :return: packed structure suitable for setsockopt()
+    :rtype: bytes
+    """
+
+    can_filter_fmt = f"={2 * len(configuration)}I"
+    filter_data = []
+    for can_filter in configuration:
+        can_id = can_filter.identifier
+        can_mask = can_filter.mask
+        if can_filter.format is not None:
+            # Match on either 11-bit OR 29-bit messages instead of both
+            can_mask |= _CAN_EFF_FLAG  # Not using socket.CAN_EFF_FLAG because it is negative on 32 bit platforms
+            if can_filter.format == FrameFormat.EXTENDED:
+                can_id |= _CAN_EFF_FLAG
+        filter_data.append(can_id)
+        filter_data.append(can_mask)
+
+    return struct.pack(can_filter_fmt, *filter_data)
