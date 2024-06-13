@@ -125,7 +125,7 @@ class SocketCANMedia(Media):
             raise pycyphal.transport.ResourceClosedError(repr(self))
 
         try:
-            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FILTER, _pack_filters(configuration))
+            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FILTER, _pack_filters(configuration))  # type: ignore
         except OSError as error:
             _logger.error("Setting CAN filters failed: %s", error)
 
