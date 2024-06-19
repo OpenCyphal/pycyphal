@@ -7,6 +7,9 @@ v1.19
 -----
 - Implement configure_acceptance_filters for socketcan.
 
+- **v1.19.1:**
+  Fix socketcan timestamp on newer 32 bit kernel.
+
 v1.18
 -----
 - Add FileClient2 which reports errors by raising exceptions.
