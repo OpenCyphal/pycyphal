@@ -45,12 +45,9 @@ jobs:
         run: |
           git clone https://github.com/linux-can/socketcand.git
           cd socketcand
-      - name: Prepare Build
-        run: meson setup -Dlibconfig=true --buildtype=release build
-      - name: Run Build
-        run: meson compile -C build
-      - name: Run Test Suite
-        run: meson install -C build
+          meson setup -Dlibconfig=true --buildtype=release build
+          meson compile -C build
+          meson install -C build
           
       - name: Collect Linux diagnostic data
         if: ${{ runner.os == 'Linux' }}
