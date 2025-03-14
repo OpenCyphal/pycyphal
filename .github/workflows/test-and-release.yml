@@ -26,9 +26,12 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
-
+          
       - name: Log Python version
         run: python --version
+
+      - name: Install meson
+        uses: BSFishy/meson-build@v1.0.3
 
       - name: Install dependencies
         run: |
@@ -43,14 +46,12 @@ jobs:
       - name: Build and Install Socketcand
         if: ${{ runner.os == 'Linux' }}
         run: |
-          sudo apt-get install -y autoconf
           git clone https://github.com/linux-can/socketcand.git
           cd socketcand
-          ./autogen.sh
-          ./configure
-          make
-          sudo make install
-
+          meson setup -Dlibconfig=true --buildtype=release build
+          meson compile -C build
+          meson install -C build
+          
       - name: Collect Linux diagnostic data
         if: ${{ runner.os == 'Linux' }}
         run: ip link show
