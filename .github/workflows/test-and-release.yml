@@ -40,21 +40,17 @@ jobs:
           python -m pip install --upgrade pip setuptools nox meson
         shell: bash
 
+      - name: Build and Install Socketcand
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          git clone https://github.com/linux-can/socketcand.git
+          cd socketcand
       - name: Prepare Build
         run: meson setup -Dlibconfig=true --buildtype=release build
       - name: Run Build
         run: meson compile -C build
       - name: Run Test Suite
         run: meson install -C build
-      
-      - name: Build and Install Socketcand
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          git clone https://github.com/linux-can/socketcand.git
-          cd socketcand
-          meson setup -Dlibconfig=true --buildtype=release build
-          meson compile -C build
-          meson install -C build
           
       - name: Collect Linux diagnostic data
         if: ${{ runner.os == 'Linux' }}
