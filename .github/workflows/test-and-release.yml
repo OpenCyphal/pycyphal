@@ -34,7 +34,7 @@ jobs:
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
             sudo apt-get --ignore-missing update || true
-            sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
+            sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat pkg-config libconfig ninja-build
           fi
           git submodule update --init --recursive
           python -m pip install --upgrade pip setuptools nox meson
