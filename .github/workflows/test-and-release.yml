@@ -30,9 +30,6 @@ jobs:
       - name: Log Python version
         run: python --version
 
-      - name: Install meson
-        uses: BSFishy/meson-build@v1.0.3
-
       - name: Install dependencies
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
@@ -40,9 +37,16 @@ jobs:
             sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
           fi
           git submodule update --init --recursive
-          python -m pip install --upgrade pip setuptools nox
+          python -m pip install --upgrade pip setuptools nox meson
         shell: bash
 
+      - name: Prepare Build
+        run: meson setup -Dlibconfig=true --buildtype=release build
+      - name: Run Build
+        run: meson compile -C build
+      - name: Run Test Suite
+        run: meson install -C build
+      
       - name: Build and Install Socketcand
         if: ${{ runner.os == 'Linux' }}
         run: |
