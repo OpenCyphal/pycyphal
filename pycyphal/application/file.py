@@ -754,7 +754,7 @@ class FileClient2:
         return pycyphal.util.repr_attributes(self, self._node, server_node_id=self._server_node_id)
 
 
-class RemoteFileError:
+class RemoteFileError(RuntimeError):
     """
     This is a tag type used to differentiate Cyphal remote file errors.
     """

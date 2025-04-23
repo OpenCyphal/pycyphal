@@ -7,6 +7,10 @@ v1.20
 -----
 - Add the `py.typed` annotation (`#343 <https://github.com/OpenCyphal/pycyphal/pull/343>`_).
 
+- **v1.20.1:**
+
+  - Fix pycyphal.application.file.RemoteFileError
+
 v1.19
 -----
 - Implement configure_acceptance_filters for socketcan.
