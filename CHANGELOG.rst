@@ -10,15 +10,17 @@ v1.21
 - Add testing against Python 3.12 and 3.13. No changes to the library were needed to enable this.
 - Drop testing against Python 3.8 and 3.9.
 - Cyphal/UDP: The default node-ID is now None, not zero (`#323 <https://github.com/OpenCyphal/pycyphal/issues/323>`_).
+- **v1.21.1**:
+
+  - Fix ``pycyphal.application.file.RemoteFileError`` (`#347 <https://github.com/OpenCyphal/pycyphal/pull/347>`_).
 
 v1.20
 -----
-- Add the `py.typed` annotation (`#343 <https://github.com/OpenCyphal/pycyphal/pull/343>`_).
+- Add the ``py.typed`` annotation (`#343 <https://github.com/OpenCyphal/pycyphal/pull/343>`_).
 
 v1.19
 -----
 - Implement configure_acceptance_filters for socketcan.
-
 - **v1.19.1:**
 
   - Fix socketcan timestamp on newer 32 bit kernel.
