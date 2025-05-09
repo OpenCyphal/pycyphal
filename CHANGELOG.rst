@@ -3,6 +3,11 @@
 Changelog
 =========
 
+v1.21
+-----
+- Add support for the USBtingo CAN interface. This is only available when the
+  `python-can-usbtingo <https://github.com/EmbedME/python-can-usbtingo>`_ package is installed.
+
 v1.20
 -----
 - Add the `py.typed` annotation (`#343 <https://github.com/OpenCyphal/pycyphal/pull/343>`_).
