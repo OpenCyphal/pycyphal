@@ -3,6 +3,14 @@
 Changelog
 =========
 
+v1.22
+-----
+
+- Fix ``pycyphal.application.file.RemoteFileError`` (`#347 <https://github.com/OpenCyphal/pycyphal/pull/347>`_).
+- Add support for the USBtingo CAN interface. This is only available when the
+  `python-can-usbtingo <https://github.com/EmbedME/python-can-usbtingo>`_ package is installed
+  (`#348 <https://github.com/OpenCyphal/pycyphal/pull/348>`_).
+
 v1.21
 -----
 
@@ -10,9 +18,6 @@ v1.21
 - Add testing against Python 3.12 and 3.13. No changes to the library were needed to enable this.
 - Drop testing against Python 3.8 and 3.9.
 - Cyphal/UDP: The default node-ID is now None, not zero (`#323 <https://github.com/OpenCyphal/pycyphal/issues/323>`_).
-- **v1.21.1**:
-
-  - Fix ``pycyphal.application.file.RemoteFileError`` (`#347 <https://github.com/OpenCyphal/pycyphal/pull/347>`_).
 
 v1.20
 -----
