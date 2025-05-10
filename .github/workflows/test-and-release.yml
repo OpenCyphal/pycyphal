@@ -43,13 +43,12 @@ jobs:
       - name: Build and Install Socketcand
         if: ${{ runner.os == 'Linux' }}
         run: |
-          sudo apt-get install -y autoconf
+          sudo apt-get install -y meson libconfig-dev
           git clone https://github.com/linux-can/socketcand.git
           cd socketcand
-          ./autogen.sh
-          ./configure
-          make
-          sudo make install
+          meson setup -Dlibconfig=true --buildtype=release build
+          meson compile -C build
+          sudo meson install -C build
 
       - name: Collect Linux diagnostic data
         if: ${{ runner.os == 'Linux' }}
@@ -73,10 +72,11 @@ jobs:
         shell: bash
 
       - name: Save logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: PyCyphal-${{ matrix.os }}-python-${{ matrix.python }}
-          path: .nox/*/*/*.log
+          path: .nox/**/*.log
+          include-hidden-files: true
           retention-days: 7
 
   pycyphal-release:
