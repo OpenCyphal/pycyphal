@@ -75,7 +75,10 @@ def test(session):
         session.run("sudo", "setcap", "cap_net_raw+eip", str(Path(session.bin, "python").resolve()), external=True)
 
     # Launch the TCP broker for testing the Cyphal/serial transport.
-    broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"], env=session.env)
+    broker_process = subprocess.Popen(
+        ["ncat", "--broker", "--listen", "-p", "50905"],
+        env={k: (v or "") for k, v in session.env.items()},
+    )
     time.sleep(1.0)  # Ensure that it has started.
     if broker_process.poll() is not None:
         raise RuntimeError("Could not start the TCP broker")
@@ -125,9 +128,7 @@ def test(session):
         "mypy   ~= 1.2.0",
         "pylint == 2.14.*",
     )
-    relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
-    if not relaxed_static_analysis:
-        session.run("mypy", "--strict", *map(str, src_dirs), str(compiled_dir))
+    session.run("mypy", "--strict", *map(str, src_dirs), str(compiled_dir))
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.

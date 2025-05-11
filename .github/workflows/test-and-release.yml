@@ -1,7 +1,6 @@
 name: 'Test & Release'
 on: [ push, pull_request ]
 
-# Ensures that only one workflow is running at a time
 concurrency:
   group: ${{ github.workflow_sha }}
   cancel-in-progress: true
@@ -25,38 +24,36 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - run: python --version
-
-      - name: Install dependencies
-        run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt-get --ignore-missing update || true
-            sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
-          fi
-          git submodule update --init --recursive
-          python -m pip install --upgrade pip setuptools nox
-        shell: bash
-
-      - name: Configure socketcand
+      - name: Configure environment -- GNU/Linux
         if: ${{ runner.os == 'Linux' }}
         run: |
+          sudo apt-get --ignore-missing update || true
+          sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
+          
+          # Configure socketcand
           sudo apt-get install -y meson libconfig-dev libsocketcan-dev
           git clone https://github.com/linux-can/socketcand.git
           cd socketcand
           meson setup -Dlibconfig=true --buildtype=release build
           meson compile -C build
-          meson install -C build
+          sudo meson install -C build
+          
+          # Collect diagnostics
+          ip link show
 
-      - name: Collect Linux diagnostic data
-        if: ${{ runner.os == 'Linux' }}
-        run: ip link show
-
-      - name: Collect Windows diagnostic data
+      - name: Configure environment -- Windows
         if: ${{ runner.os == 'Windows' }}
         run: |
+          # Collect diagnostics
           systeminfo
           route print
           ipconfig /all
+
+      - name: Configure environment
+        run: |
+          git submodule update --init --recursive
+          python --version
+          python -m pip install --upgrade pip setuptools nox
 
       - name: Run Nox
         run: |
