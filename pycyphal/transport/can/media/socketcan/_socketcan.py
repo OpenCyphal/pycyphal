@@ -87,7 +87,8 @@ class SocketCANMedia(Media):
         self._maybe_thread: typing.Optional[threading.Thread] = None
         self._loopback_enabled = False
 
-        self._ancillary_data_buffer_size = socket.CMSG_SPACE(_TIMEVAL_STRUCT.size)  # type: ignore
+        # We could receive both old and new timestamps, so we need to allocate space for both.
+        self._ancillary_data_buffer_size = socket.CMSG_SPACE(_TIMEVAL_STRUCT_OLD.size) + socket.CMSG_SPACE(_TIMEVAL_STRUCT_NEW.size)  # type: ignore
 
         super().__init__()
 
@@ -123,12 +124,11 @@ class SocketCANMedia(Media):
     def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(repr(self))
-        _logger.info(
-            "%s FIXME: acceptance filter configuration is not yet implemented; please submit patches! "
-            "Requested configuration: %s",
-            self,
-            ", ".join(map(str, configuration)),
-        )
+
+        try:
+            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FILTER, _pack_filters(configuration))  # type: ignore
+        except OSError as error:
+            _logger.error("Setting CAN filters failed: %s", error)
 
     async def send(self, frames: typing.Iterable[Envelope], monotonic_deadline: float) -> int:
         num_sent = 0
@@ -233,9 +233,15 @@ class SocketCANMedia(Media):
             loopback = bool(msg_flags & socket.MSG_CONFIRM)  # type: ignore
             ts_system_ns = 0
             for cmsg_level, cmsg_type, cmsg_data in ancdata:
-                if cmsg_level == socket.SOL_SOCKET and cmsg_type == _SO_TIMESTAMP:
-                    sec, usec = _TIMEVAL_STRUCT.unpack(cmsg_data)
+                if cmsg_level == socket.SOL_SOCKET and cmsg_type == _SO_TIMESTAMP_OLD:
+                    # This structure provides time in platform native size
+                    sec, usec = _TIMEVAL_STRUCT_OLD.unpack(cmsg_data)
                     ts_system_ns = (sec * 1_000_000 + usec) * 1000
+                elif cmsg_level == socket.SOL_SOCKET and cmsg_type == _SO_TIMESTAMP_NEW:
+                    # This structure is present only when there is a 64 bit time on a 32 bit platform
+                    sec, usec = _TIMEVAL_STRUCT_NEW.unpack(cmsg_data)
+                    ts_system_ns = (sec * 1_000_000 + usec) * 1000
+                    break  # The new timestamp is preferred
                 else:
                     assert False, f"Unexpected ancillary data: {cmsg_level}, {cmsg_type}, {cmsg_data!r}"
 
@@ -310,10 +316,14 @@ _SELECT_TIMEOUT = 1.0
 #     __u8    data[CANFD_MAX_DLEN] __attribute__((aligned(8)));
 # };
 _FRAME_HEADER_STRUCT = struct.Struct("=IBB2x")  # Using standard size because the native definition relies on stdint.h
-_TIMEVAL_STRUCT = struct.Struct("@Ll")  # Using native size because the native definition uses plain integers
 
-# From the Linux kernel; not exposed via the Python's socket module
-_SO_TIMESTAMP = 29
+# structs __kernel_old_timeval and __kernel_sock_timeval in include/uapi/linux/time_types.h
+_TIMEVAL_STRUCT_OLD = struct.Struct("@ll")  # Using native size because the native definition uses plain integers
+_TIMEVAL_STRUCT_NEW = struct.Struct("@qq")  # New structure uses s64 for seconds and microseconds
+
+# From the Linux kernel (include/uapi/asm-generic/socket.h); not exposed via the Python's socket module
+_SO_TIMESTAMP_OLD = 29
+_SO_TIMESTAMP_NEW = 63
 _SO_SNDBUF = 7
 
 _CANFD_BRS = 1
@@ -343,7 +353,7 @@ def _make_socket(iface_name: str, can_fd: bool, native_frame_size: int) -> socke
     s = socket.socket(socket.PF_CAN, socket.SOCK_RAW, socket.CAN_RAW)  # type: ignore
     try:
         s.bind((iface_name,))
-        s.setsockopt(socket.SOL_SOCKET, _SO_TIMESTAMP, 1)  # timestamping
+        s.setsockopt(socket.SOL_SOCKET, _SO_TIMESTAMP_OLD, 1)  # timestamping
         default_sndbuf_size = s.getsockopt(socket.SOL_SOCKET, _SO_SNDBUF)
         blocking_sndbuf_size = (native_frame_size + _SKB_OVERHEAD) * _get_tx_queue_len(iface_name)
 
@@ -366,3 +376,28 @@ def _make_socket(iface_name: str, can_fd: bool, native_frame_size: int) -> socke
         raise
 
     return s
+
+
+def _pack_filters(configuration: typing.Sequence[FilterConfiguration]) -> bytes:
+    """Convert a list of filters into a packed structure suitable for setsockopt().
+    Inspired by python-can sources.
+    :param configuration: list of CAN filters
+    :type configuration: typing.Sequence[FilterConfiguration]
+    :return: packed structure suitable for setsockopt()
+    :rtype: bytes
+    """
+
+    can_filter_fmt = f"={2 * len(configuration)}I"
+    filter_data = []
+    for can_filter in configuration:
+        can_id = can_filter.identifier
+        can_mask = can_filter.mask
+        if can_filter.format is not None:
+            # Match on either 11-bit OR 29-bit messages instead of both
+            can_mask |= _CAN_EFF_FLAG  # Not using socket.CAN_EFF_FLAG because it is negative on 32 bit platforms
+            if can_filter.format == FrameFormat.EXTENDED:
+                can_id |= _CAN_EFF_FLAG
+        filter_data.append(can_id)
+        filter_data.append(can_mask)
+
+    return struct.pack(can_filter_fmt, *filter_data)

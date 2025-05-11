@@ -3,6 +3,23 @@
 Changelog
 =========
 
+v1.20
+-----
+- Add the `py.typed` annotation (`#343 <https://github.com/OpenCyphal/pycyphal/pull/343>`_).
+
+v1.19
+-----
+- Implement configure_acceptance_filters for socketcan.
+
+- **v1.19.1:**
+
+  - Fix socketcan timestamp on newer 32 bit kernel.
+
+v1.18
+-----
+- Add FileClient2 which reports errors by raising exceptions.
+  See (`#327 <https://github.com/OpenCyphal/pycyphal/issues/327>`_) for rationale.
+
 v1.17
 -----
 - Move to Nunavut Version 2
@@ -166,7 +183,6 @@ v1.2
   - Rework the demo accordingly.
 
 - In ``pyuavcan.dsdl``: rename ``generate_package`` into ``compile``, add ``compile_all``.
-
 
 v1.1
 ----

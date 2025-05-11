@@ -10,7 +10,8 @@ jobs:
   pycyphal-test:
     name: Test PyCyphal
     # Run on push OR on 3rd-party PR.
-    if: (github.event_name == 'push') || (github.event.pull_request.author_association == 'NONE')
+    # https://docs.github.com/en/webhooks/webhook-events-and-payloads?actionType=edited#pull_request
+    if: (github.event_name == 'push') || github.event.pull_request.head.repo.fork
     strategy:
       fail-fast: false
       matrix:
