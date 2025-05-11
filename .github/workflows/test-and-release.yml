@@ -19,6 +19,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-python@v5
         with:
@@ -51,7 +53,6 @@ jobs:
 
       - name: Configure environment
         run: |
-          git submodule update --init --recursive
           python --version
           python -m pip install --upgrade pip setuptools nox
 
@@ -63,7 +64,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           FORCE_COLOR: 1
-        shell: bash
 
       - name: Save logs
         uses: actions/upload-artifact@v4
