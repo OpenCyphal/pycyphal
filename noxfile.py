@@ -60,6 +60,8 @@ def test(session):
         "pytest-asyncio == 0.21",
         "coverage       ~= 6.4",
     )
+    print(f"{os.environ.get('SONAR_TOKEN')=}")
+    print(f"{session.env.get('SONAR_TOKEN')=}")
 
     # The test suite generates a lot of temporary files, so we change the working directory.
     # We have to symlink the original setup.cfg as well if we run tools from the new directory.
@@ -213,6 +215,9 @@ def check_style(session):
 
 @nox.session(python=PYTHONS[-1])
 def docs(session):
+    if sys.platform.startswith("win"):
+        session.log("Documentation build is currently not supported on Windows")
+        return 0
     try:
         session.run("dot", "-V", silent=True, external=True)
     except Exception:

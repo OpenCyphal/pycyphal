@@ -93,9 +93,9 @@ async def _unittest_file(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInf
         assert await cln.read("a/foo/x") == ref
 
         # Fill in the middle with truncation
-        assert await cln.write("a/foo/x", b"\xAA" * 50, offset=50) == 0
+        assert await cln.write("a/foo/x", b"\xaa" * 50, offset=50) == 0
         assert (await cln.get_info("a/foo/x")).size == 100
-        assert await cln.read("a/foo/x") == hundred[:50] + b"\xAA" * 50
+        assert await cln.read("a/foo/x") == hundred[:50] + b"\xaa" * 50
 
         # Directories
         info = await cln.get_info("a/foo")
@@ -171,10 +171,10 @@ def _unittest_errormap_file2() -> None:
     from pycyphal.application.file import Error, _map
 
     for attr in dir(Error):
-        if callable(attr) or not attr[0].isupper() and type(getattr(Error, attr)) is not int:
+        if callable(attr) or not attr[0].isupper() and not isinstance(getattr(Error, attr), int):
             # Skip methods and attributes not starting with an upper case letter
-            # - hopefully only error code contants are remaining. Having these
-            # contants in an enum would be better.
+            # - hopefully only error code constants are remaining. Having these
+            # constants in an enum would be better.
             continue
 
         code = getattr(Error, attr)
@@ -275,9 +275,9 @@ async def _unittest_file2(compiled: typing.List[pycyphal.dsdl.GeneratedPackageIn
         assert await cln.read("a/foo/x") == ref
 
         # Fill in the middle with truncation
-        await cln.write("a/foo/x", b"\xAA" * 50, offset=50)
+        await cln.write("a/foo/x", b"\xaa" * 50, offset=50)
         assert (await cln.get_info("a/foo/x")).size == 100
-        assert await cln.read("a/foo/x") == hundred[:50] + b"\xAA" * 50
+        assert await cln.read("a/foo/x") == hundred[:50] + b"\xaa" * 50
 
         # Directories
         info = await cln.get_info("a/foo")
@@ -355,7 +355,7 @@ async def _unittest_file2(compiled: typing.List[pycyphal.dsdl.GeneratedPackageIn
             # Umm, is this a good idea?! What if it succeeds :O
             with pytest.raises(OSError) as e:
                 await cln.write("bin/sh", b"123")
-            e.value.errno == errno.EPERM
+            assert e.value.errno == errno.EPERM
 
             file_server.roots.pop(-1)
     finally:
