@@ -5,8 +5,8 @@
 from __future__ import annotations
 from typing import Union, Iterable, List, Any, Optional, no_type_check
 from numpy.typing import NDArray
-import pycyphal
 from nunavut_support import get_attribute
+import pycyphal
 from .backend import Value as Value
 from . import String, Unstructured, Bit
 from . import Integer8, Integer16, Integer32, Integer64

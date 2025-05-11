@@ -124,7 +124,7 @@ def test(session):
     # If the interpreter is not CPython, this may need to be conditionally disabled.
     session.install(
         "mypy   ~= 1.15.0",
-        "pylint == 2.14.*",
+        "pylint == 3.3.7",
     )
     session.run("mypy", *map(str, src_dirs), str(compiled_dir))
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})

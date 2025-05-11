@@ -13,11 +13,11 @@ import time
 import typing
 import logging
 import asyncio
+import nunavut_support
 import uavcan.node
 from uavcan.node import Heartbeat_1 as Heartbeat
 import pycyphal
 import pycyphal.application
-import nunavut_support
 
 
 class Health(enum.IntEnum):
