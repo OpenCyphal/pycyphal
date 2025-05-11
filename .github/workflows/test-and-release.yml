@@ -40,7 +40,7 @@ jobs:
       - name: Configure socketcand
         if: ${{ runner.os == 'Linux' }}
         run: |
-          sudo apt-get install -y meson
+          sudo apt-get install -y meson libconfig-dev libsocketcan-dev
           git clone https://github.com/linux-can/socketcand.git
           cd socketcand
           meson setup -Dlibconfig=true --buildtype=release build
