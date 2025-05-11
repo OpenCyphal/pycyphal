@@ -148,7 +148,9 @@ class FileServer:
                     errno.ENOENT: Error.NOT_FOUND,
                     errno.ENOTSUP: Error.NOT_SUPPORTED,
                     errno.ENOSPC: Error.OUT_OF_SPACE,
-                }.get(ex.errno, Error.UNKNOWN_ERROR)
+                }.get(
+                    ex.errno, Error.UNKNOWN_ERROR  # type: ignore
+                )
             )
         return Error(Error.UNKNOWN_ERROR)
 

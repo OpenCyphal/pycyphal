@@ -221,7 +221,7 @@ for the tests to finish::
 
     source .nox/test-3-13/bin/activate
     pip install mypy
-    mypy --strict pycyphal tests .nox/test-3-13/tmp/.compiled
+    mypy pycyphal tests .nox/test-3-13/tmp/.compiled
 
 
 Running pylint

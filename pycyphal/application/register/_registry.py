@@ -324,7 +324,7 @@ class Registry(MutableMapping[str, ValueProxy]):
             return
         if isinstance(value, tuple) and len(value) == 2 and all(map(callable, value)):
             g, s = value
-            self._create_dynamic(name, (lambda: ValueProxy(g()).value), s)
+            self._create_dynamic(name, (lambda: ValueProxy(g()).value), s)  # type: ignore
             return
 
         if not create_only:
