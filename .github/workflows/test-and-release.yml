@@ -40,13 +40,12 @@ jobs:
       - name: Configure socketcand
         if: ${{ runner.os == 'Linux' }}
         run: |
-          sudo apt-get install -y autoconf
+          sudo apt-get install -y meson
           git clone https://github.com/linux-can/socketcand.git
           cd socketcand
-          ./autogen.sh
-          ./configure
-          make
-          sudo make install
+          meson setup -Dlibconfig=true --buildtype=release build
+          meson compile -C build
+          meson install -C build
 
       - name: Collect Linux diagnostic data
         if: ${{ runner.os == 'Linux' }}
