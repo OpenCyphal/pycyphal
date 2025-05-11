@@ -60,8 +60,6 @@ def test(session):
         "pytest-asyncio == 0.21",
         "coverage       ~= 6.4",
     )
-    print(f"{os.environ.get('SONAR_TOKEN')=}")
-    print(f"{session.env.get('SONAR_TOKEN')=}")
 
     # The test suite generates a lot of temporary files, so we change the working directory.
     # We have to symlink the original setup.cfg as well if we run tools from the new directory.
@@ -132,14 +130,14 @@ def test(session):
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
-    if sys.platform.startswith("linux") and is_latest_python(session) and session.env.get("GITHUB_TOKEN"):
+    if sys.platform.startswith("linux") and is_latest_python(session) and os.environ.get("GITHUB_TOKEN"):
         session.install("coveralls")
         session.run("coveralls")
     else:
         session.log("Coveralls skipped")
 
     # Submit analysis to SonarCloud. This also has to be run from the test session to access the coverage files.
-    sonarcloud_token = session.env.get("SONAR_TOKEN")
+    sonarcloud_token = os.environ.get("SONAR_TOKEN")
     if sys.platform.startswith("linux") and is_latest_python(session) and sonarcloud_token:
         session.run("coverage", "xml", "-i", "-o", str(ROOT_DIR / ".coverage.xml"))
 

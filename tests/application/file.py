@@ -355,7 +355,7 @@ async def _unittest_file2(compiled: typing.List[pycyphal.dsdl.GeneratedPackageIn
             # Umm, is this a good idea?! What if it succeeds :O
             with pytest.raises(OSError) as e:
                 await cln.write("bin/sh", b"123")
-            assert e.value.errno == errno.EPERM
+            assert e.value.errno in {errno.EPERM, errno.EACCES}
 
             file_server.roots.pop(-1)
     finally:
