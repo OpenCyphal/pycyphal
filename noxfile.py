@@ -76,10 +76,7 @@ def test(session):
 
     # Launch the TCP broker for testing the Cyphal/serial transport.
     os.system("ncat --version")
-    broker_process = subprocess.Popen(
-        ["ncat", "--broker", "--listen", "-p", "50905"],
-        env={k: (v or "") for k, v in session.env.items()},
-    )
+    broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"])
     time.sleep(1.0)  # Ensure that it has started.
     if broker_process.poll() is not None:
         raise RuntimeError("Could not start the TCP broker")
@@ -151,7 +148,12 @@ def test(session):
         session.cd(ROOT_DIR)
         session.run("sonar-scanner", f"-Dsonar.login={sonarcloud_token}", external=True)
     else:
-        session.log("SonarQube scan skipped")
+        session.log(
+            f"SonarQube scan skipped. "
+            f"SonarCloud token is set: {bool(sonarcloud_token)}. "
+            f"Is latest Python: {is_latest_python(session)}. "
+            f"Python version: {session.run('python', '-V', silent=True)}"
+        )
 
 
 @nox.session()
