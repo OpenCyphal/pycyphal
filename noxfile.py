@@ -1,4 +1,4 @@
-# Copyright (c) 2020 OpenCyphal
+# Copyright (c) OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 # type: ignore
@@ -24,7 +24,7 @@ CONFIG.read("setup.cfg")
 EXTRAS_REQUIRE = dict(CONFIG["options.extras_require"])
 assert EXTRAS_REQUIRE, "Config could not be read correctly"
 
-PYTHONS = ["3.8", "3.9", "3.10", "3.11"]
+PYTHONS = ["3.10", "3.11"]
 """The newest supported Python shall be listed last."""
 
 nox.options.error_on_external_run = True

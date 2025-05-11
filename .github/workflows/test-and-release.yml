@@ -1,4 +1,4 @@
-name: 'Test and Release PyCyphal'
+name: 'Test & Release'
 on: [ push, pull_request ]
 
 # Ensures that only one workflow is running at a time
@@ -7,7 +7,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pycyphal-test:
+  test:
     name: Test PyCyphal
     # Run on push OR on 3rd-party PR.
     # https://docs.github.com/en/webhooks/webhook-events-and-payloads?actionType=edited#pull_request
@@ -15,20 +15,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, windows-2019-npcap ]
-        python: [ '3.8', '3.9', '3.10', '3.11' ]
+        os: [ ubuntu-latest, win-pcap ]
+        python: [ '3.10', '3.11' ]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Check out
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Install Python3
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Log Python version
-        run: python --version
+      - run: python --version
 
       - name: Install dependencies
         run: |
@@ -40,7 +37,7 @@ jobs:
           python -m pip install --upgrade pip setuptools nox
         shell: bash
 
-      - name: Build and Install Socketcand
+      - name: Configure socketcand
         if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get install -y autoconf
@@ -62,7 +59,7 @@ jobs:
           route print
           ipconfig /all
 
-      - name: Run build and test
+      - name: Run Nox
         run: |
           nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
           nox --non-interactive --no-error-on-missing-interpreters --session demo check_style docs
@@ -73,22 +70,22 @@ jobs:
         shell: bash
 
       - name: Save logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: PyCyphal-${{ matrix.os }}-python-${{ matrix.python }}
           path: .nox/*/*/*.log
           retention-days: 7
 
-  pycyphal-release:
+  release:
     name: Release PyCyphal
     runs-on: ubuntu-latest
     if: >
       (github.event_name == 'push') &&
       (contains(github.event.head_commit.message, '#release') || contains(github.ref, '/master'))
-    needs: pycyphal-test
+    needs: test
     steps:
       - name: Check out
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Create distribution wheel
         run: |
