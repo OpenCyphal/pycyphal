@@ -15,7 +15,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest, win-pcap ]
-        python: [ '3.10', '3.11' ]
+        python: [ '3.10', '3.11', '3.12', '3.13' ]
+        exclude:  # Only test the newest and the oldest Python versions on Windows because we have few runners.
+          - { os: win-pcap, python: '3.11' }
+          - { os: win-pcap, python: '3.12' }
     runs-on: ${{ matrix.os }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -24,7 +24,7 @@ CONFIG.read("setup.cfg")
 EXTRAS_REQUIRE = dict(CONFIG["options.extras_require"])
 assert EXTRAS_REQUIRE, "Config could not be read correctly"
 
-PYTHONS = ["3.10", "3.11"]
+PYTHONS = ["3.10", "3.11", "3.12", "3.13"]
 """The newest supported Python shall be listed last."""
 
 nox.options.error_on_external_run = True
@@ -56,9 +56,9 @@ def test(session):
     session.log("Using the newest supported Python: %s", is_latest_python(session))
     session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
     session.install(
-        "pytest         ~= 7.3",
-        "pytest-asyncio == 0.21",
-        "coverage       ~= 6.4",
+        "pytest         ~= 8.3",
+        "pytest-asyncio ~= 0.26.0",
+        "coverage       ~= 7.8",
     )
 
     # The test suite generates a lot of temporary files, so we change the working directory.
