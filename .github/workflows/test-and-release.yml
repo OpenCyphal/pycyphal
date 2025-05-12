@@ -14,10 +14,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, win-pcap ]
-        python: [ '3.10', '3.11', '3.12', '3.13' ]
-        exclude:  # Only test the newest and the oldest Python versions on Windows because we have few runners.
-          - { os: win-pcap, python: '3.11' }
+        # We text the full matrix on GNU/Linux
+        os:      [ ubuntu-latest ]
+        python:  [ '3.10', '3.11', '3.12', '3.13' ]
+        # On Windows, we select the configurations we test manually because we only have a few runners,
+        # and because the infrastructure is hard to maintain using limited resources.
+        include:
+          - { os: win-pcap, python: '3.10' }
           - { os: win-pcap, python: '3.12' }
     runs-on: ${{ matrix.os }}
     env:
