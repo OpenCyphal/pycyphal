@@ -81,11 +81,12 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Create distribution wheel
         run: |
-          git submodule update --init --recursive
-          python -m pip install --upgrade pip setuptools wheel twine
+          python -m pip install --upgrade pip packaging setuptools wheel twine
           python setup.py sdist bdist_wheel
 
       - name: Get release version
