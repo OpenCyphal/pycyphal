@@ -97,19 +97,12 @@ def test(session):
         # Application-layer tests are run separately after the main test suite because they require DSDL for
         # "uavcan" to be transpiled first. That namespace is transpiled as a side-effect of running the main suite.
         pytest("--ignore", str(postponed), *map(str, src_dirs))
-        python_version = session.run("python", "-V", silent=True)
-        if "3.10." in python_version or "3.11." in python_version:
-            # FIXME HACK Python 3.10 & 3.11 segfault at exit. This is reproducible with at least 3.10.10.
-            # #0  0x00007fd9c0fa0702 in raise () from /usr/lib/libpthread.so.0
-            # #1  <signal handler called>
-            # #2  PyVectorcall_Function (callable=0x0) at ./Include/cpython/abstract.h:69
-            pytest(str(postponed), success_codes=[0, -11, 0xC0000005])
-        else:
-            pytest(str(postponed))
+        pytest(str(postponed))
     finally:
         broker_process.terminate()
 
     # Coverage analysis and report.
+    # noinspection PyUnreachableCode
     fail_under = 0 if session.posargs else 80
     session.run("coverage", "combine")
     session.run("coverage", "report", f"--fail-under={fail_under}")
