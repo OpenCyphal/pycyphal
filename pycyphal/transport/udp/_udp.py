@@ -25,9 +25,9 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pycyphal.transport.TransportStatistics):
-    received_datagrams: typing.Dict[
-        pycyphal.transport.InputSessionSpecifier, UDPInputSessionStatistics
-    ] = dataclasses.field(default_factory=dict)
+    received_datagrams: typing.Dict[pycyphal.transport.InputSessionSpecifier, UDPInputSessionStatistics] = (
+        dataclasses.field(default_factory=dict)
+    )
     """
     Basic input session statistics: instances of :class:`UDPInputSessionStatistics` keyed by their data specifier.
     """

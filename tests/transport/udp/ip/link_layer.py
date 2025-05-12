@@ -47,7 +47,7 @@ def _unittest_encode_decode_null() -> None:
             LinkLayerPacket(
                 protocol=AddressFamily.AF_INET6,
                 source=mv(b"\x11\x22"),
-                destination=mv(b"\xAA\xBB\xCC"),
+                destination=mv(b"\xaa\xbb\xcc"),
                 payload=mv(b"abcd"),
             )
         )
@@ -85,7 +85,7 @@ def _unittest_encode_decode_loop() -> None:
             LinkLayerPacket(
                 protocol=AddressFamily.AF_INET6,
                 source=mv(b"\x11\x22"),
-                destination=mv(b"\xAA\xBB\xCC"),
+                destination=mv(b"\xaa\xbb\xcc"),
                 payload=mv(b"abcd"),
             )
         )
@@ -101,21 +101,21 @@ def _unittest_encode_decode_ethernet() -> None:
     mv = memoryview
 
     enc, dec = _get_codecs()[pcap.DLT_EN10MB]
-    llp = dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xAA\xBB\xCC\xDD\xEE\xFF" + b"\x08\x00" + b"abcd"))
+    llp = dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xaa\xbb\xcc\xdd\xee\xff" + b"\x08\x00" + b"abcd"))
     assert isinstance(llp, LinkLayerPacket)
     assert llp.protocol == AddressFamily.AF_INET
     assert llp.source == b"\x11\x22\x33\x44\x55\x66"
-    assert llp.destination == b"\xAA\xBB\xCC\xDD\xEE\xFF"
+    assert llp.destination == b"\xaa\xbb\xcc\xdd\xee\xff"
     assert llp.payload == b"abcd"
     assert re.match(
         r"LinkLayerPacket\(protocol=[^,]+, source=112233445566, destination=aabbccddeeff, payload=61626364\)",
         str(llp),
     )
 
-    llp = dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xAA\xBB\xCC\xDD\xEE\xFF" + b"\x08\x00"))
+    llp = dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xaa\xbb\xcc\xdd\xee\xff" + b"\x08\x00"))
     assert isinstance(llp, LinkLayerPacket)
     assert llp.source == b"\x11\x22\x33\x44\x55\x66"
-    assert llp.destination == b"\xAA\xBB\xCC\xDD\xEE\xFF"
+    assert llp.destination == b"\xaa\xbb\xcc\xdd\xee\xff"
     assert llp.payload == b""
 
     assert (
@@ -123,11 +123,11 @@ def _unittest_encode_decode_ethernet() -> None:
             LinkLayerPacket(
                 protocol=AddressFamily.AF_INET6,
                 source=mv(b"\x11\x22"),
-                destination=mv(b"\xAA\xBB\xCC"),
+                destination=mv(b"\xaa\xbb\xcc"),
                 payload=mv(b"abcd"),
             )
         )
-        == b"\x00\x00\x00\x00\x11\x22" + b"\x00\x00\x00\xAA\xBB\xCC" + b"\x86\xDD" + b"abcd"
+        == b"\x00\x00\x00\x00\x11\x22" + b"\x00\x00\x00\xaa\xbb\xcc" + b"\x86\xdd" + b"abcd"
     )
 
     if sys.platform != "darwin":  # Darwin doesn't support AF_IRDA
@@ -136,7 +136,7 @@ def _unittest_encode_decode_ethernet() -> None:
                 LinkLayerPacket(
                     protocol=AddressFamily.AF_IRDA,  # Unsupported encapsulation
                     source=mv(b"\x11\x22"),
-                    destination=mv(b"\xAA\xBB\xCC"),
+                    destination=mv(b"\xaa\xbb\xcc"),
                     payload=mv(b"abcd"),
                 )
             )
@@ -144,9 +144,9 @@ def _unittest_encode_decode_ethernet() -> None:
         )
 
     assert dec(mv(b"")) is None
-    assert dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xAA\xBB\xCC\xDD\xEE\xFF" + b"\xAA\xAA" + b"abcdef")) is None
+    assert dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xaa\xbb\xcc\xdd\xee\xff" + b"\xaa\xaa" + b"abcdef")) is None
     # Bad ethertype/length
-    assert dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xAA\xBB\xCC\xDD\xEE\xFF" + b"\x00\xFF" + b"abcdef")) is None
+    assert dec(mv(b"\x11\x22\x33\x44\x55\x66" + b"\xaa\xbb\xcc\xdd\xee\xff" + b"\x00\xff" + b"abcdef")) is None
 
 
 def _unittest_find_devices() -> None:
@@ -221,9 +221,9 @@ def _unittest_sniff() -> None:
         assert sniffs == []  # Make sure we are not picking up any noise.
 
         # a.bind(("127.0.0.1", 0))
-        a.sendto(b"\xAA\xAA\xAA\xAA", ("239.0.1.199", CYPHAL_PORT))  # Accepted multicast
-        a.sendto(b"\xBB\xBB\xBB\xBB", ("239.0.1.200", CYPHAL_PORT))  # Accepted multicast
-        a.sendto(b"\xCC\xCC\xCC\xCC", ("239.0.1.201", CYPHAL_PORT))  # Accepted multicast
+        a.sendto(b"\xaa\xaa\xaa\xaa", ("239.0.1.199", CYPHAL_PORT))  # Accepted multicast
+        a.sendto(b"\xbb\xbb\xbb\xbb", ("239.0.1.200", CYPHAL_PORT))  # Accepted multicast
+        a.sendto(b"\xcc\xcc\xcc\xcc", ("239.0.1.201", CYPHAL_PORT))  # Accepted multicast
 
         time.sleep(3)
 
@@ -233,9 +233,9 @@ def _unittest_sniff() -> None:
         print(sniffs[2])
         assert len(sniffs) == 3
         # Assume the packets are not reordered (why would they be?)
-        assert b"\xAA\xAA\xAA\xAA" in bytes(sniffs[0].payload)
-        assert b"\xBB\xBB\xBB\xBB" in bytes(sniffs[1].payload)
-        assert b"\xCC\xCC\xCC\xCC" in bytes(sniffs[2].payload)
+        assert b"\xaa\xaa\xaa\xaa" in bytes(sniffs[0].payload)
+        assert b"\xbb\xbb\xbb\xbb" in bytes(sniffs[1].payload)
+        assert b"\xcc\xcc\xcc\xcc" in bytes(sniffs[2].payload)
 
         sniffs.clear()
         sn.close()

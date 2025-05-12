@@ -145,7 +145,7 @@ def _unittest_can_capture() -> None:
     from ._identifier import MessageCANID
 
     ts = Timestamp.now()
-    payload = bytearray(b"123\x0A")
+    payload = bytearray(b"123\x0a")
     cap = CANCapture(
         ts,
         DataFrame(
@@ -267,7 +267,7 @@ def _unittest_can_tracer() -> None:
         DataFrame(
             FrameFormat.EXTENDED,
             MessageCANID(Priority.FAST, 42, 3210).compile([]),
-            bytearray(b"123\xFF"),
+            bytearray(b"123\xff"),
         ),
         own=True,
     )
@@ -283,7 +283,7 @@ def _unittest_can_tracer() -> None:
         DataFrame(
             FrameFormat.EXTENDED,
             MessageCANID(Priority.SLOW, 42, 3210).compile([]),
-            bytearray(b"123\xE0"),
+            bytearray(b"123\xe0"),
         ),
         own=False,  # Direction is ignored.
     )
@@ -299,7 +299,7 @@ def _unittest_can_tracer() -> None:
         DataFrame(
             FrameFormat.EXTENDED,
             MessageCANID(Priority.SLOW, None, 3210).compile([]),
-            bytearray(b"123\xE0"),
+            bytearray(b"123\xe0"),
         ),
         own=False,  # Direction is ignored.
     )

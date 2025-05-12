@@ -20,9 +20,9 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class SerialInputSessionStatistics(pycyphal.transport.SessionStatistics):
-    reassembly_errors_per_source_node_id: typing.Dict[
-        int, typing.Dict[TransferReassembler.Error, int]
-    ] = dataclasses.field(default_factory=dict)
+    reassembly_errors_per_source_node_id: typing.Dict[int, typing.Dict[TransferReassembler.Error, int]] = (
+        dataclasses.field(default_factory=dict)
+    )
     """
     Keys are source node-IDs; values are dicts where keys are error enum members and values are counts.
     """

@@ -153,9 +153,11 @@ class UDPFrame(pycyphal.transport.commons.high_overhead_transport.Frame):
                 # create the data specifier
                 data_specifier = pycyphal.transport.ServiceDataSpecifier(
                     service_id=service_id,
-                    role=pycyphal.transport.ServiceDataSpecifier.Role.REQUEST
-                    if rnr
-                    else pycyphal.transport.ServiceDataSpecifier.Role.RESPONSE,
+                    role=(
+                        pycyphal.transport.ServiceDataSpecifier.Role.REQUEST
+                        if rnr
+                        else pycyphal.transport.ServiceDataSpecifier.Role.RESPONSE
+                    ),
                 )
             else:
                 # Message

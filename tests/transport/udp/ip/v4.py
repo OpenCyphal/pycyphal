@@ -185,9 +185,9 @@ def _unittest_sniffer() -> None:
     inside = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     inside.bind(("127.0.0.1", 0))
     inside.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
-    inside.sendto(b"\xAA\xAA\xAA\xAA", ("239.0.1.199", CYPHAL_PORT))  # Accepted multicast
-    inside.sendto(b"\xBB\xBB\xBB\xBB", ("239.0.1.200", CYPHAL_PORT))  # Accepted multicast
-    inside.sendto(b"\xCC\xCC\xCC\xCC", ("239.0.1.201", CYPHAL_PORT))  # Accepted multicast
+    inside.sendto(b"\xaa\xaa\xaa\xaa", ("239.0.1.199", CYPHAL_PORT))  # Accepted multicast
+    inside.sendto(b"\xbb\xbb\xbb\xbb", ("239.0.1.200", CYPHAL_PORT))  # Accepted multicast
+    inside.sendto(b"\xcc\xcc\xcc\xcc", ("239.0.1.201", CYPHAL_PORT))  # Accepted multicast
 
     outside.sendto(b"y", ("239.2.1.200", CYPHAL_PORT))  # Ignored multicast
 
@@ -212,9 +212,9 @@ def _unittest_sniffer() -> None:
     assert parse_udp(sniffs[1].packet).destination_port == CYPHAL_PORT
     assert parse_udp(sniffs[2].packet).destination_port == CYPHAL_PORT
 
-    assert bytes(parse_udp(sniffs[0].packet).payload) == b"\xAA\xAA\xAA\xAA"
-    assert bytes(parse_udp(sniffs[1].packet).payload) == b"\xBB\xBB\xBB\xBB"
-    assert bytes(parse_udp(sniffs[2].packet).payload) == b"\xCC\xCC\xCC\xCC"
+    assert bytes(parse_udp(sniffs[0].packet).payload) == b"\xaa\xaa\xaa\xaa"
+    assert bytes(parse_udp(sniffs[1].packet).payload) == b"\xbb\xbb\xbb\xbb"
+    assert bytes(parse_udp(sniffs[2].packet).payload) == b"\xcc\xcc\xcc\xcc"
 
     sniffs.clear()
 

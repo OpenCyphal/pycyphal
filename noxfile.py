@@ -200,7 +200,7 @@ def pristine(session):
 
 @nox.session(reuse_venv=True)
 def check_style(session):
-    session.install("black ~= 23.12")
+    session.install("black ~= 25.1")
     session.run("black", "--check", ".")
 
 
