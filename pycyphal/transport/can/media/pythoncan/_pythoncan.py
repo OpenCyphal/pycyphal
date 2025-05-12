@@ -127,6 +127,11 @@ class PythonCANMedia(Media):
               Example: ``gs_usb:0``
               Note: this interface currently requires unreleased `python-can` version from git.
 
+            - Interface ``usbtingo`` is implemented by :class:`usbtingobus:USBtingoBus` from the
+              `python-can-usbtingo <https://github.com/EmbedME/python-can-usbtingo>`_ package.
+              Example: ``usbtingo:17318E90`` for a specific device, or ``usbtingo:`` for the first available device.
+              Make sure the ``python-can-usbtingo`` package is installed.
+
         :param bitrate: Bit rate value in bauds; either a single integer or a tuple:
 
             - A single integer selects Classic CAN.
@@ -596,6 +601,29 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     assert False, "Internal error"
 
 
+def _construct_usbtingo(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
+    bus_arguments: dict[str, str | int | bool | None] = {
+        "interface": parameters.interface_name,
+        "channel": parameters.channel_name or None,  # to support "usbtingo:" default interface
+    }
+
+    if isinstance(parameters, _ClassicInterfaceParameters):
+        bus_arguments |= {
+            "bitrate": parameters.bitrate,
+            "fd": False,
+        }
+    elif isinstance(parameters, _FDInterfaceParameters):
+        bus_arguments |= {
+            "bitrate": parameters.bitrate[0],
+            "data_bitrate": parameters.bitrate[1],
+            "fd": True,
+        }
+    else:
+        assert False, "Internal error"
+
+    return PythonCANBusOptions(hardware_timestamp=True), can.ThreadSafeBus(**bus_arguments)
+
+
 def _construct_any(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     raise InvalidMediaConfigurationError(f"Interface not supported yet: {parameters.interface_name}")
 
@@ -614,5 +642,6 @@ _CONSTRUCTORS: typing.DefaultDict[
         "canalystii": _construct_canalystii,
         "seeedstudio": _construct_seeedstudio,
         "gs_usb": _construct_gs_usb,
+        "usbtingo": _construct_usbtingo,
     },
 )

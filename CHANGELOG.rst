@@ -3,6 +3,14 @@
 Changelog
 =========
 
+v1.22
+-----
+
+- Fix ``pycyphal.application.file.RemoteFileError`` (`#347 <https://github.com/OpenCyphal/pycyphal/pull/347>`_).
+- Add support for the USBtingo CAN interface. This is only available when the
+  `python-can-usbtingo <https://github.com/EmbedME/python-can-usbtingo>`_ package is installed
+  (`#348 <https://github.com/OpenCyphal/pycyphal/pull/348>`_).
+
 v1.21
 -----
 
@@ -13,12 +21,11 @@ v1.21
 
 v1.20
 -----
-- Add the `py.typed` annotation (`#343 <https://github.com/OpenCyphal/pycyphal/pull/343>`_).
+- Add the ``py.typed`` annotation (`#343 <https://github.com/OpenCyphal/pycyphal/pull/343>`_).
 
 v1.19
 -----
 - Implement configure_acceptance_filters for socketcan.
-
 - **v1.19.1:**
 
   - Fix socketcan timestamp on newer 32 bit kernel.

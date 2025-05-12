@@ -756,20 +756,20 @@ class FileClient2:
         return pycyphal.util.repr_attributes(self, self._node, server_node_id=self._server_node_id)
 
 
-class RemoteFileError:
+class RemoteFileError(Exception):
     """
     This is a tag type used to differentiate Cyphal remote file errors.
     """
 
 
-class FileTimeoutError(RemoteFileError, pycyphal.application.NetworkTimeoutError):
+class FileTimeoutError(pycyphal.application.NetworkTimeoutError, RemoteFileError):
     """
     The specialization of the network error for file access. It inherits from :exc:`RemoteFileError` and
     :exc:`pycyphal.application.NetworkTimeoutError`.
     """
 
 
-class RemoteFileNotFoundError(RemoteFileError, FileNotFoundError):
+class RemoteFileNotFoundError(FileNotFoundError, RemoteFileError):
     """
     Exception type raised when a file server reports ``uavcan.file.Error.NOT_FOUND``.  This exception type inherits from
     :exc:`RemoteFileError` and :exc:`FileNotFoundError`.
@@ -783,7 +783,7 @@ class RemoteFileNotFoundError(RemoteFileError, FileNotFoundError):
         super().__init__(errno.ENOENT, "NOT_FOUND", filename)
 
 
-class RemoteIOError(RemoteFileError, OSError):
+class RemoteIOError(OSError, RemoteFileError):
     """
     Exception type raised when a file server reports ``uavcan.file.Error.IO_ERROR``.  This exception type inherits from
     :exc:`RemoteFileError` and :exc:`OSError`.
@@ -797,7 +797,7 @@ class RemoteIOError(RemoteFileError, OSError):
         super().__init__(errno.EIO, "IO_ERROR", filename)
 
 
-class RemoteAccessDeniedError(RemoteFileError, PermissionError):
+class RemoteAccessDeniedError(PermissionError, RemoteFileError):
     """
     Exception type raised when a file server reports``uavcan.file.Error.ACCESS_DENIED``.  This exception type inherits
     from :exc:`RemoteFileError` and exc:`PermissionError`.
@@ -811,7 +811,7 @@ class RemoteAccessDeniedError(RemoteFileError, PermissionError):
         super().__init__(errno.EACCES, "ACCESS_DENIED", filename)
 
 
-class RemoteIsDirectoryError(RemoteFileError, IsADirectoryError):
+class RemoteIsDirectoryError(IsADirectoryError, RemoteFileError):
     """
     Exception type raised when a file server reports ``uavcan.file.Error.IS_DIRECTORY``.  This exception type inherits
     from :exc:`RemoteFileError` and :exc:`IsADirectoryError` .
@@ -825,7 +825,7 @@ class RemoteIsDirectoryError(RemoteFileError, IsADirectoryError):
         super().__init__(errno.EISDIR, "IS_DIRECTORY", filename)
 
 
-class RemoteInvalidValueError(RemoteFileError, OSError):
+class RemoteInvalidValueError(OSError, RemoteFileError):
     """
     Exception type raised when a file server reports ``uavcan.file.Error.INVALID_VALUE``.  This exception type inherits
     from :exc:`RemoteFileError` and :exc:`OSError`.
@@ -839,7 +839,7 @@ class RemoteInvalidValueError(RemoteFileError, OSError):
         super().__init__(errno.EINVAL, "INVALID_VALUE", filename)
 
 
-class RemoteFileTooLargeError(RemoteFileError, OSError):
+class RemoteFileTooLargeError(OSError, RemoteFileError):
     """
     Exception type raised when a file server reports ``uavcan.file.Error.FILE_TOO_LARGE``.  This exception type inherits
     from :exc:`RemoteFileError` and :exc:`OSError`.
@@ -853,7 +853,7 @@ class RemoteFileTooLargeError(RemoteFileError, OSError):
         super().__init__(errno.E2BIG, "FILE_TOO_LARGE", filename)
 
 
-class RemoteOutOfSpaceError(RemoteFileError, OSError):
+class RemoteOutOfSpaceError(OSError, RemoteFileError):
     """
     Exception type raised when a file server reports ``uavcan.file.Error.OUT_OF_SPACE``.  This exception type inherits
     from :exc:`RemoteFileError` and :exc:`OSError`.
@@ -867,7 +867,7 @@ class RemoteOutOfSpaceError(RemoteFileError, OSError):
         super().__init__(errno.ENOSPC, "OUT_OF_SPACE", filename)
 
 
-class RemoteNotSupportedError(RemoteFileError, OSError):
+class RemoteNotSupportedError(OSError, RemoteFileError):
     """
     Exception type raised when a file server reports ``uavcan.file.Error.NOT_SUPPORTED``.  This exception type inherits
     from :exc:`RemoteFileError` and :exc:`OSError`.
@@ -881,7 +881,7 @@ class RemoteNotSupportedError(RemoteFileError, OSError):
         super().__init__(errno.ENOTSUP, "NOT_SUPPORTED", filename)
 
 
-class RemoteUnknownError(RemoteFileError, OSError):
+class RemoteUnknownError(OSError, RemoteFileError):
     """
     Exception type raised when a file server reports ``uavcan.file.Error.UNKNOWN_ERROR``.  This exception type inherits
     from :exc:`RemoteFileError` and :exc:`OSError`.
