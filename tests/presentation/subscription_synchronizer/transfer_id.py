@@ -89,10 +89,10 @@ async def _unittest_different_sources(compiled: list[pycyphal.dsdl.GeneratedPack
     await _inject(sub_a, Scalar_1(94), 100, 11)
     await _inject(sub_b, Scalar_1(95), 100, 11)
     # These are not accepted because of the differences.
-    await _inject(sub_a, Scalar_1(), 101, 10)
-    await _inject(sub_b, Scalar_1(), 102, 10)
-    await _inject(sub_a, Scalar_1(), 101, 11)
-    await _inject(sub_b, Scalar_1(), 101, 12)
+    await _inject(sub_a, Scalar_1(), 103, 10)
+    await _inject(sub_b, Scalar_1(), 104, 10)
+    await _inject(sub_a, Scalar_1(), 105, 11)
+    await _inject(sub_b, Scalar_1(), 105, 12)
     # These are not accepted because anonymous.
     await _inject(sub_a, Scalar_1(), None, 13)
     await _inject(sub_b, Scalar_1(), None, 14)

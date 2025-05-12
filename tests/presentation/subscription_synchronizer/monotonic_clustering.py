@@ -122,6 +122,7 @@ async def _unittest_async_iter(compiled: list[pycyphal.dsdl.GeneratedPackageInfo
     for i in range(2):
         await pub_a.publish(Integer8_1(+i))
         await pub_b.publish(Integer8_1(-i))
+        await asyncio.sleep(3.0)
 
     asyncio.get_running_loop().call_later(3.0, synchronizer.close)  # This will break us out of the loop.
     count = 0
