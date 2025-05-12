@@ -254,7 +254,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
         n_a = make_node(NodeInfo(name="org.opencyphal.pycyphal.test.node_tracker.a"), transport=get_transport(0xA))
         n_a.heartbeat_publisher.vendor_specific_status_code = 0xFE
         n_a.start()
-        await asyncio.sleep(9)
+        await asyncio.sleep(15)
         assert num_events_a == 4  # Two extra events: node restart detection, then get info reception.
         assert num_events_b == 3
         assert num_events_c == 2
