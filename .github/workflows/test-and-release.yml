@@ -15,13 +15,13 @@ jobs:
       fail-fast: false
       matrix:
         # We text the full matrix on GNU/Linux
-        os:      [ ubuntu-latest ]
-        python:  [ '3.10', '3.11', '3.12', '3.13' ]
+        os: [ ubuntu-latest ]
+        py: [ '3.10', '3.11', '3.12', '3.13' ]
         # On Windows, we select the configurations we test manually because we only have a few runners,
         # and because the infrastructure is hard to maintain using limited resources.
         include:
-          - { os: win-pcap, python: '3.10' }
-          - { os: win-pcap, python: '3.12' }
+          - { os: win-pcap, py: '3.10' }
+          - { os: win-pcap, py: '3.12' }
     runs-on: ${{ matrix.os }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -34,7 +34,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
+          python-version: ${{ matrix.py }}
 
       - name: Configure environment -- GNU/Linux
         if: ${{ runner.os == 'Linux' }}
@@ -64,16 +64,12 @@ jobs:
           ipconfig /all
 
       # Only one statement per step to ensure the error codes are not ignored by PowerShell.
+      # The PyTest log is rewritten on every run, so we store artifacts for each run.
       - run: python -m pip install --upgrade pip setuptools nox
-      - run: nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
+      - run: nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.py }}
+      - {uses: actions/upload-artifact@v4, with:{name: "test_${{matrix.os}}_py${{matrix.py}}", path: ".nox/**/*.log"}}
       - run: nox --non-interactive --no-error-on-missing-interpreters --session demo check_style docs
-
-      - name: Save logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: PyCyphal-${{ matrix.os }}-python-${{ matrix.python }}
-          path: .nox/**/*.log
-          retention-days: 7
+      - {uses: actions/upload-artifact@v4, with:{name: "demo_${{matrix.os}}_py${{matrix.py}}", path: ".nox/**/*.log"}}
 
   release:
     name: Release PyCyphal
