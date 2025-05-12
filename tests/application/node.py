@@ -23,7 +23,7 @@ async def _unittest_slow_node(compiled: typing.List[pycyphal.dsdl.GeneratedPacka
     asyncio.get_running_loop().slow_callback_duration = 3.0
 
     assert compiled
-    remote_pres = Presentation(UDPTransport("127.1.1.1"))
+    remote_pres = Presentation(UDPTransport("127.1.1.1", local_node_id=0))
     remote_hb_sub = remote_pres.make_subscriber_with_fixed_subject_id(Heartbeat_1)
     remote_info_cln = remote_pres.make_client_with_fixed_service_id(GetInfo_1, 258)
 

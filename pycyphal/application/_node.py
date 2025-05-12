@@ -7,9 +7,9 @@ from typing import Callable, Type, TypeVar, Optional, List, Any
 import abc
 import asyncio
 import logging
+import nunavut_support
 import uavcan.node
 import pycyphal
-import nunavut_support
 from pycyphal.presentation import Presentation, ServiceRequestMetadata, Publisher, Subscriber, Server, Client
 from . import heartbeat_publisher
 from . import register

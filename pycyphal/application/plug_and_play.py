@@ -19,12 +19,12 @@ import asyncio
 import pathlib
 import logging
 import sqlite3
+import nunavut_support
 import uavcan.node
 from uavcan.pnp import NodeIDAllocationData_1 as NodeIDAllocationData_1
 from uavcan.pnp import NodeIDAllocationData_2 as NodeIDAllocationData_2
 import pycyphal
 import pycyphal.application
-import nunavut_support
 
 # import X as Y is not an accepted form; see https://github.com/python/mypy/issues/11706
 ID = uavcan.node.ID_1

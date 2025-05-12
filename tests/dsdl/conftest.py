@@ -42,8 +42,8 @@ def compile() -> typing.List[pycyphal.dsdl.GeneratedPackageInfo]:  # pylint: dis
             with open(cache_file, "rb") as f:
                 out = pickle.load(f)
             assert out and isinstance(out, list)
-            assert all(map(lambda x: isinstance(x, pycyphal.dsdl.GeneratedPackageInfo), out))
-            return out
+            assert all(map(lambda x: isinstance(x, pycyphal.dsdl.GeneratedPackageInfo), out))  # type: ignore
+            return out  # type: ignore
 
         shutil.rmtree(DESTINATION_DIR, ignore_errors=True)
     DESTINATION_DIR.mkdir(parents=True, exist_ok=True)
@@ -68,7 +68,7 @@ def compile() -> typing.List[pycyphal.dsdl.GeneratedPackageInfo]:  # pylint: dis
 
     assert out and isinstance(out, list)
     assert all(map(lambda x: isinstance(x, pycyphal.dsdl.GeneratedPackageInfo), out))
-    return out
+    return out  # type: ignore
 
 
 compiled = pytest.fixture(scope="session")(compile)

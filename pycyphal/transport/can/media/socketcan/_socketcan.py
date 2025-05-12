@@ -88,7 +88,11 @@ class SocketCANMedia(Media):
         self._loopback_enabled = False
 
         # We could receive both old and new timestamps, so we need to allocate space for both.
-        self._ancillary_data_buffer_size = socket.CMSG_SPACE(_TIMEVAL_STRUCT_OLD.size) + socket.CMSG_SPACE(_TIMEVAL_STRUCT_NEW.size)  # type: ignore
+        self._ancillary_data_buffer_size = socket.CMSG_SPACE(  # type: ignore
+            _TIMEVAL_STRUCT_OLD.size
+        ) + socket.CMSG_SPACE(  # type: ignore
+            _TIMEVAL_STRUCT_NEW.size
+        )
 
         super().__init__()
 
@@ -126,7 +130,11 @@ class SocketCANMedia(Media):
             raise pycyphal.transport.ResourceClosedError(repr(self))
 
         try:
-            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FILTER, _pack_filters(configuration))  # type: ignore
+            self._sock.setsockopt(
+                socket.SOL_CAN_RAW,  # type: ignore
+                socket.CAN_RAW_FILTER,  # type: ignore
+                _pack_filters(configuration),
+            )
         except OSError as error:
             _logger.error("Setting CAN filters failed: %s", error)
 

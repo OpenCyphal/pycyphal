@@ -25,9 +25,9 @@ _logger = logging.getLogger(__name__)
 
 @dataclasses.dataclass
 class UDPTransportStatistics(pycyphal.transport.TransportStatistics):
-    received_datagrams: typing.Dict[
-        pycyphal.transport.InputSessionSpecifier, UDPInputSessionStatistics
-    ] = dataclasses.field(default_factory=dict)
+    received_datagrams: typing.Dict[pycyphal.transport.InputSessionSpecifier, UDPInputSessionStatistics] = (
+        dataclasses.field(default_factory=dict)
+    )
     """
     Basic input session statistics: instances of :class:`UDPInputSessionStatistics` keyed by their data specifier.
     """
@@ -64,7 +64,7 @@ class UDPTransport(pycyphal.transport.Transport):
     def __init__(
         self,
         local_ip_address: IPAddress | str,
-        local_node_id: typing.Optional[int] = 0,
+        local_node_id: typing.Optional[int] = None,
         *,  # The following parameters are keyword-only.
         mtu: int = MTU_DEFAULT,
         service_transfer_multiplier: int = 1,
@@ -85,7 +85,7 @@ class UDPTransport(pycyphal.transport.Transport):
 
         :param local_node_id: As explained previously, the node-ID is part of the UDP Frame.
 
-            - If the value is None, an anonymous instance will be constructed.
+            - If the value is None (default), an anonymous instance will be constructed.
               Emitted UDP frames will then report its :attr:`source_node_id` as None.
 
             - If the value is a non-negative integer, then we can setup both input and output sessions.

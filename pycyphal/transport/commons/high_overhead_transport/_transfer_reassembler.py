@@ -342,7 +342,7 @@ def _unittest_transfer_reassembler() -> None:
             timestamp=timestamp,
             priority=prio,
             transfer_id=transfer_id,
-            fragmented_payload=list(map(memoryview, fragmented_payload)),
+            fragmented_payload=list(map(memoryview, fragmented_payload)),  # type: ignore
             source_node_id=src_nid,
         )
 
@@ -841,7 +841,7 @@ def _unittest_issue_290() -> None:
             timestamp=timestamp,
             priority=prio,
             transfer_id=transfer_id,
-            fragmented_payload=list(map(memoryview, fragmented_payload)),
+            fragmented_payload=list(map(memoryview, fragmented_payload)),  # type: ignore
             source_node_id=src_nid,
         )
 
@@ -1010,7 +1010,7 @@ def _unittest_validate_and_finalize_transfer() -> None:
             timestamp=ts,
             priority=prio,
             transfer_id=tid,
-            fragmented_payload=list(map(memoryview, fp)),
+            fragmented_payload=list(map(memoryview, fp)),  # type: ignore
             source_node_id=src_nid,
         )
 
@@ -1019,7 +1019,7 @@ def _unittest_validate_and_finalize_transfer() -> None:
             timestamp=ts,
             priority=prio,
             transfer_id=tid,
-            frame_payloads=list(map(memoryview, fp)),
+            frame_payloads=list(map(memoryview, fp)),  # type: ignore
             source_node_id=src_nid,
         )
 

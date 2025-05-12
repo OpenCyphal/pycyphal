@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 
 def broadcast(
-    functions: typing.Iterable[typing.Callable[..., R]]
+    functions: typing.Iterable[typing.Callable[..., R]],
 ) -> typing.Callable[..., typing.List[typing.Union[R, Exception]]]:
     """
     Returns a function that invokes each supplied function in series with the specified arguments

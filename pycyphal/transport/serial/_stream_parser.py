@@ -97,7 +97,7 @@ def _unittest_stream_parser() -> None:
     print("sp._max_frame_size_bytes:", sp._max_frame_size_bytes)  # pylint: disable=protected-access
 
     def proc(
-        b: typing.Union[bytes, memoryview]
+        b: typing.Union[bytes, memoryview],
     ) -> typing.Sequence[typing.Tuple[Timestamp, memoryview, typing.Optional[SerialFrame]]]:
         sp.process_next_chunk(b, ts)
         out = outputs[:]
@@ -120,7 +120,7 @@ def _unittest_stream_parser() -> None:
         transfer_id=1234567890123456789,
         index=1234567,
         end_of_transfer=True,
-        payload=memoryview(b"ab\x9E\x8E"),
+        payload=memoryview(b"ab\x9e\x8e"),
         source_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
         destination_node_id=SerialFrame.FRAME_DELIMITER_BYTE,
         data_specifier=MessageDataSpecifier(2345),

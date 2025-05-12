@@ -1,13 +1,12 @@
-name: 'Test and Release PyCyphal'
+name: 'Test & Release'
 on: [ push, pull_request ]
 
-# Ensures that only one workflow is running at a time
 concurrency:
   group: ${{ github.workflow_sha }}
   cancel-in-progress: true
 
 jobs:
-  pycyphal-test:
+  test:
     name: Test PyCyphal
     # Run on push OR on 3rd-party PR.
     # https://docs.github.com/en/webhooks/webhook-events-and-payloads?actionType=edited#pull_request
@@ -15,80 +14,73 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, windows-2019-npcap ]
-        python: [ '3.8', '3.9', '3.10', '3.11' ]
+        # We text the full matrix on GNU/Linux
+        os: [ ubuntu-latest ]
+        py: [ '3.10', '3.11', '3.12', '3.13' ]
+        # On Windows, we select the configurations we test manually because we only have a few runners,
+        # and because the infrastructure is hard to maintain using limited resources.
+        include:
+          - { os: win-pcap, py: '3.10' }
+          - { os: win-pcap, py: '3.12' }
     runs-on: ${{ matrix.os }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      FORCE_COLOR: 1
     steps:
-      - name: Check out
-        uses: actions/checkout@v3
-
-      - name: Install Python3
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
         with:
-          python-version: ${{ matrix.python }}
+          submodules: recursive
 
-      - name: Log Python version
-        run: python --version
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
 
-      - name: Install dependencies
-        run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt-get --ignore-missing update || true
-            sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
-          fi
-          git submodule update --init --recursive
-          python -m pip install --upgrade pip setuptools nox
-        shell: bash
-
-      - name: Build and Install Socketcand
+      - name: Configure environment -- GNU/Linux
         if: ${{ runner.os == 'Linux' }}
         run: |
-          sudo apt-get install -y autoconf
+          sudo apt-get --ignore-missing update || true
+          sudo apt-get install -y linux-*-extra-$(uname -r) graphviz ncat
+          
+          # Configure socketcand
+          sudo apt-get install -y meson libconfig-dev libsocketcan-dev
           git clone https://github.com/linux-can/socketcand.git
           cd socketcand
-          ./autogen.sh
-          ./configure
-          make
-          sudo make install
+          meson setup -Dlibconfig=true --buildtype=release build
+          meson compile -C build
+          sudo meson install -C build
+          
+          # Collect diagnostics
+          python --version
+          ip link show
 
-      - name: Collect Linux diagnostic data
-        if: ${{ runner.os == 'Linux' }}
-        run: ip link show
-
-      - name: Collect Windows diagnostic data
+      - name: Configure environment -- Windows
         if: ${{ runner.os == 'Windows' }}
         run: |
+          # Collect diagnostics
+          python --version
           systeminfo
           route print
           ipconfig /all
 
-      - name: Run build and test
-        run: |
-          nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.python }}
-          nox --non-interactive --no-error-on-missing-interpreters --session demo check_style docs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          FORCE_COLOR: 1
-        shell: bash
+      # Only one statement per step to ensure the error codes are not ignored by PowerShell.
+      # The PyTest log is rewritten on every run, so we store artifacts for each run.
+      - run: python -m pip install --upgrade pip setuptools nox
+      - run: nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.py }}
+      - { uses: actions/upload-artifact@v4, with: { name: "test_${{matrix.os}}_py${{matrix.py}}", path: ".nox/**/*.log" }}
+      - run: nox --non-interactive --no-error-on-missing-interpreters --session demo check_style docs
+      - { uses: actions/upload-artifact@v4, with: { name: "demo_${{matrix.os}}_py${{matrix.py}}", path: ".nox/**/*.log" }}
 
-      - name: Save logs
-        uses: actions/upload-artifact@v3
-        with:
-          name: PyCyphal-${{ matrix.os }}-python-${{ matrix.python }}
-          path: .nox/*/*/*.log
-          retention-days: 7
-
-  pycyphal-release:
+  release:
     name: Release PyCyphal
     runs-on: ubuntu-latest
     if: >
       (github.event_name == 'push') &&
       (contains(github.event.head_commit.message, '#release') || contains(github.ref, '/master'))
-    needs: pycyphal-test
+    needs: test
     steps:
       - name: Check out
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Create distribution wheel
         run: |
@@ -109,7 +101,7 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN_PYCYPHAL }}
 
       - name: Push version tag
-        uses: mathieudutour/github-tag-action@v6.1
+        uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           custom_tag: ${{ env.pycyphal_version }}

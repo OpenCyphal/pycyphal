@@ -1,4 +1,4 @@
-# Copyright (c) 2020 OpenCyphal
+# Copyright (c) OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 # type: ignore
@@ -24,7 +24,7 @@ CONFIG.read("setup.cfg")
 EXTRAS_REQUIRE = dict(CONFIG["options.extras_require"])
 assert EXTRAS_REQUIRE, "Config could not be read correctly"
 
-PYTHONS = ["3.8", "3.9", "3.10", "3.11"]
+PYTHONS = ["3.10", "3.11", "3.12", "3.13"]
 """The newest supported Python shall be listed last."""
 
 nox.options.error_on_external_run = True
@@ -56,9 +56,9 @@ def test(session):
     session.log("Using the newest supported Python: %s", is_latest_python(session))
     session.install("-e", f".[{','.join(EXTRAS_REQUIRE.keys())}]")
     session.install(
-        "pytest         ~= 7.3",
-        "pytest-asyncio == 0.21",
-        "coverage       ~= 6.4",
+        "pytest         ~= 8.3",
+        "pytest-asyncio ~= 0.26.0",
+        "coverage       ~= 7.8",
     )
 
     # The test suite generates a lot of temporary files, so we change the working directory.
@@ -75,7 +75,8 @@ def test(session):
         session.run("sudo", "setcap", "cap_net_raw+eip", str(Path(session.bin, "python").resolve()), external=True)
 
     # Launch the TCP broker for testing the Cyphal/serial transport.
-    broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"], env=session.env)
+    os.system("ncat --version")
+    broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"])
     time.sleep(1.0)  # Ensure that it has started.
     if broker_process.poll() is not None:
         raise RuntimeError("Could not start the TCP broker")
@@ -96,19 +97,14 @@ def test(session):
         # Application-layer tests are run separately after the main test suite because they require DSDL for
         # "uavcan" to be transpiled first. That namespace is transpiled as a side-effect of running the main suite.
         pytest("--ignore", str(postponed), *map(str, src_dirs))
-        python_version = session.run("python", "-V", silent=True)
-        if "3.10." in python_version or "3.11." in python_version:
-            # FIXME HACK Python 3.10 & 3.11 segfault at exit. This is reproducible with at least 3.10.10.
-            # #0  0x00007fd9c0fa0702 in raise () from /usr/lib/libpthread.so.0
-            # #1  <signal handler called>
-            # #2  PyVectorcall_Function (callable=0x0) at ./Include/cpython/abstract.h:69
-            pytest(str(postponed), success_codes=[0, -11, 0xC0000005])
-        else:
-            pytest(str(postponed))
+        # We accept -11 and 0xC0000005 as success because some CPython versions tend to segfault on exit.
+        # This will need to be removed at some point in the future.
+        pytest(str(postponed), success_codes=[0, -11, 0xC0000005])
     finally:
         broker_process.terminate()
 
     # Coverage analysis and report.
+    # noinspection PyUnreachableCode
     fail_under = 0 if session.posargs else 80
     session.run("coverage", "combine")
     session.run("coverage", "report", f"--fail-under={fail_under}")
@@ -122,23 +118,21 @@ def test(session):
     #   2. At least MyPy has to be run separately per Python version we support.
     # If the interpreter is not CPython, this may need to be conditionally disabled.
     session.install(
-        "mypy   ~= 1.2.0",
-        "pylint == 2.14.*",
+        "mypy   ~= 1.15.0",
+        "pylint == 3.3.7",
     )
-    relaxed_static_analysis = "3.7" in session.run("python", "-V", silent=True)  # Old Pythons require relaxed checks.
-    if not relaxed_static_analysis:
-        session.run("mypy", "--strict", *map(str, src_dirs), str(compiled_dir))
+    session.run("mypy", *map(str, src_dirs), str(compiled_dir))
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
-    if sys.platform.startswith("linux") and is_latest_python(session) and session.env.get("GITHUB_TOKEN"):
+    if sys.platform.startswith("linux") and is_latest_python(session) and os.environ.get("GITHUB_TOKEN"):
         session.install("coveralls")
         session.run("coveralls")
     else:
         session.log("Coveralls skipped")
 
     # Submit analysis to SonarCloud. This also has to be run from the test session to access the coverage files.
-    sonarcloud_token = session.env.get("SONAR_TOKEN")
+    sonarcloud_token = os.environ.get("SONAR_TOKEN")
     if sys.platform.startswith("linux") and is_latest_python(session) and sonarcloud_token:
         session.run("coverage", "xml", "-i", "-o", str(ROOT_DIR / ".coverage.xml"))
 
@@ -149,7 +143,12 @@ def test(session):
         session.cd(ROOT_DIR)
         session.run("sonar-scanner", f"-Dsonar.login={sonarcloud_token}", external=True)
     else:
-        session.log("SonarQube scan skipped")
+        session.log(
+            f"SonarQube scan skipped. "
+            f"SonarCloud token is set: {bool(sonarcloud_token)}. "
+            f"Is latest Python: {is_latest_python(session)}. "
+            f"Python version: {session.run('python', '-V', silent=True)}"
+        )
 
 
 @nox.session()
@@ -203,12 +202,15 @@ def pristine(session):
 
 @nox.session(reuse_venv=True)
 def check_style(session):
-    session.install("black ~= 23.12")
+    session.install("black ~= 25.1")
     session.run("black", "--check", ".")
 
 
 @nox.session(python=PYTHONS[-1])
 def docs(session):
+    if sys.platform.startswith("win"):
+        session.log("Documentation build is currently not supported on Windows")
+        return 0
     try:
         session.run("dot", "-V", silent=True, external=True)
     except Exception:

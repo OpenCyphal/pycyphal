@@ -135,7 +135,7 @@ def _unittest_can_cyphal_frame() -> None:
         toggle_bit=True,
         padded_payload=memoryview(b"Hello"),
     )
-    assert ref == CyphalFrame.parse(DataFrame(FrameFormat.EXTENDED, 123456, bytearray(b"Hello\xAC")))
+    assert ref == CyphalFrame.parse(DataFrame(FrameFormat.EXTENDED, 123456, bytearray(b"Hello\xac")))
 
     ref = CyphalFrame(
         identifier=1234567,
@@ -145,10 +145,10 @@ def _unittest_can_cyphal_frame() -> None:
         toggle_bit=True,
         padded_payload=memoryview(b"Hello"),
     )
-    assert ref == CyphalFrame.parse(DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b"Hello\x6C")))
+    assert ref == CyphalFrame.parse(DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b"Hello\x6c")))
 
-    assert CyphalFrame.parse(DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b"Hello\xCC"))) is None  # Bad toggle
+    assert CyphalFrame.parse(DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b"Hello\xcc"))) is None  # Bad toggle
 
     assert CyphalFrame.parse(DataFrame(FrameFormat.EXTENDED, 1234567, bytearray(b""))) is None  # No tail byte
 
-    assert CyphalFrame.parse(DataFrame(FrameFormat.BASE, 123, bytearray(b"Hello\x6C"))) is None  # Bad frame format
+    assert CyphalFrame.parse(DataFrame(FrameFormat.BASE, 123, bytearray(b"Hello\x6c"))) is None  # Bad frame format

@@ -122,10 +122,11 @@ async def _unittest_async_iter(compiled: list[pycyphal.dsdl.GeneratedPackageInfo
     for i in range(2):
         await pub_a.publish(Integer8_1(+i))
         await pub_b.publish(Integer8_1(-i))
+        await asyncio.sleep(3.0)
 
     asyncio.get_running_loop().call_later(3.0, synchronizer.close)  # This will break us out of the loop.
     count = 0
-    async for (((msg_a, meta_a), ref_sub_a), ((msg_b, meta_b), ref_sub_b)) in synchronizer:
+    async for ((msg_a, meta_a), ref_sub_a), ((msg_b, meta_b), ref_sub_b) in synchronizer:
         print(msg_a, msg_b)
         assert isinstance(msg_a, Integer8_1) and isinstance(meta_a, TransferFrom)
         assert isinstance(msg_b, Integer8_1) and isinstance(meta_b, TransferFrom)

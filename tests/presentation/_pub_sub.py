@@ -233,7 +233,7 @@ async def _unittest_slow_presentation_pub_sub(
             timestamp=pycyphal.transport.Timestamp.now(),
             priority=Priority.NOMINAL,
             transfer_id=12,
-            fragmented_payload=[memoryview(b"\xFF" * 15)],  # Invalid union tag.
+            fragmented_payload=[memoryview(b"\xff" * 15)],  # Invalid union tag.
         ),
         loop.time() + 1.0,
     )

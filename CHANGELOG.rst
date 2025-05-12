@@ -3,6 +3,14 @@
 Changelog
 =========
 
+v1.21
+-----
+
+- Upgrade to require NumPy v2.2. NumPy v1 is still supported but no longer tested against.
+- Add testing against Python 3.12 and 3.13. No changes to the library were needed to enable this.
+- Drop testing against Python 3.8 and 3.9.
+- Cyphal/UDP: The default node-ID is now None, not zero (`#323 <https://github.com/OpenCyphal/pycyphal/issues/323>`_).
+
 v1.20
 -----
 - Add the `py.typed` annotation (`#343 <https://github.com/OpenCyphal/pycyphal/pull/343>`_).

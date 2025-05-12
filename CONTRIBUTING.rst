@@ -13,22 +13,15 @@ Source directory layout
 Most of the package configuration can be gathered by reading ``setup.cfg``.
 When adding new tools and such, try storing all their configuration there to keep everything in one place.
 
-All shippable entities are located exclusively inside the directory ``pycyphal/``.
-The entirety of the directory is packaged for distribution.
-
 The submodule ``demo/public_regulated_data_types/`` is needed only for demo, testing, and documentation building.
 It should be kept reasonably up-to-date, but remember that it does not affect the final product in any way.
 We no longer ship DSDL namespaces with code for reasons explained in the user documentation.
 
 Please desist from adding any new VCS submodules or subtrees.
 
-The demos that are included in the user documentation are located under ``demo/``.
-Whenever the test suite is run, it tests the demo application as well in order to ensure that it is correct and
-compatible with the current version of the library -- keeping the docs up-to-date is vitally important.
-
 All development automation is managed by Nox.
 Please look into ``/noxfile.py`` to see how everything it set up; it is intended to be mostly self-documenting.
-The CI configuration files located nearby should be looked at as well to gather what manual steps need to be
+The CI configuration files should be looked at as well to gather what manual steps need to be
 taken to configure the environment for local testing.
 
 
@@ -49,20 +42,6 @@ There are two kinds of 3rd-party dependencies used by this library:
   have third-party dependencies of their own. Those are not included in the list of main dependencies;
   instead, they are registered as *package extras*. Please read the detailed documentation and the applicable
   conventions in the user documentation and in ``setup.cfg``.
-
-..  tip:: asyncio
-
-    The pycyphal code relies pretty heavily on asyncio. If you're not familiar with this library, it is recommended to take a look at the following links:
-
-    - `A general introduction <https://realpython.com/async-io-python/>`_
-
-    - Asyncio API documentation:
-
-        - `Coroutines and Tasks <https://docs.python.org/3/library/asyncio-task.html>`_
-
-        - `Queues <https://docs.python.org/3/library/asyncio-queue.html>`_
-
-        - `Event Loop <https://docs.python.org/3/library/asyncio-eventloop.html>`_
 
 
 Coding conventions
@@ -85,15 +64,6 @@ to signal static analysis tools that the name is intended to be re-exported
 (unless the aliased name starts with an underscore).
 This is enforced with MyPy (it is set up with ``implicit_reexport=False``).
 
-Excepting the above described case of package-level API re-export, it is best to avoid importing specific entities;
-instead, try importing only the module itself and then use verbose references, as shown below.
-This helps reduce scope contamination and avoid naming conflicts.
-
-::
-
-    from pycyphal.transport import Transport    # Avoid this if you can.
-    import pycyphal.transport                   # Prefer this.
-
 
 Semantic and behavioral conventions
 -----------------------------------
@@ -110,25 +80,6 @@ beware that if the object is accidentally resurrected in the process, the finali
 again later, which breaks the RAII logic.
 This may happen, for instance, if the object is passed to a logging call.
 
-API functions and methods that contain the following parameters should adhere to the semantic naming conventions:
-
-+--------------------------------------+-----------------------+-------------------------------------------------------+
-|Type                                  |Name                   |Purpose                                                |
-+======================================+=======================+=======================================================+
-|``pydsdl.*Type``                      |``model``              |PyDSDL type model (descriptor).                        |
-+--------------------------------------+-----------------------+-------------------------------------------------------+
-|``pycyphal.dsdl.*Object``             |``obj``                |Instance of a generated class implementing DSDL type.  |
-+--------------------------------------+-----------------------+-------------------------------------------------------+
-|``typing.Type[pycyphal.dsdl.*Object]``|``dtype``              |Generated class implementing a DSDL type.              |
-+--------------------------------------+-----------------------+-------------------------------------------------------+
-|``float``                             |``monotonic_deadline`` |Abort operation if not completed **by** this time.     |
-|                                      |                       |Time system is ``AbstractEventLoop.time()``.           |
-+--------------------------------------+-----------------------+-------------------------------------------------------+
-|``float``                             |``timeout``            |Abort operation if not completed **in** this time.     |
-+--------------------------------------+-----------------------+-------------------------------------------------------+
-|``int``                               |``node_id``            |A node identifier.                                     |
-+--------------------------------------+-----------------------+-------------------------------------------------------+
-
 
 Documentation
 -------------
@@ -142,17 +93,13 @@ testing and documentation.
 When documenting attributes and variables, use the standard docstring syntax instead of comments::
 
     THE_ANSWER = 42
-    """
-    What do you get when you multiply six by nine.
-    """
+    """What do you get when you multiply six by nine."""
 
 Avoid stating obvious things in the docs. It is best to write no doc at all than restating things that
 are evident from the code::
 
     def get_thing(self):                            # Bad, don't do this.
-        """
-        Gets the thing or returns None if the thing is gone.
-        """
+        """Gets the thing or returns None if the thing is gone."""
         return self._maybe_thing
 
     def get_thing(self) -> typing.Optional[Thing]:  # Good.
@@ -161,7 +108,6 @@ are evident from the code::
 
 Testing
 -------
-
 
 Setup
 .....
@@ -178,23 +124,6 @@ Do look at this file to see what actions are available and how the automation is
 If you need to test a specific module or part thereof, consider invoking PyTest directly to speed things up
 (see section below).
 
-If you want to run the full test suite locally, you'll need to install ``ncat`` and ``nox``:
-
-- ``ncat``::
-
-    sudo apt-get -y install ncat    # Debian and derivatives
-    sudo pacman -s nmap             # Arch and derivatives
-    brew install nmap               # macOS
-
-- ``nox``::
-
-    pip install nox
-
-Make sure that you have updated the included submodules::
-
-    cd ~/pycyphal
-    git submodule update --init --recursive
-
 ..  tip:: macOS
 
     In order to run certain tests you'll need to have special permissions to perform low-level network packet capture.
@@ -205,61 +134,31 @@ Make sure that you have updated the included submodules::
 Now you should be able to run the tests, you can use the following commands::
 
     nox --list                  # shows all the different sessions that are available
-    nox --sessions test-3.10    # run the tests using Python 3.10
+    nox --sessions test-3.13    # run the tests using Python 3.13
 
 To abort on first error::
 
     nox -x -- -x
 
-Running MyPy
-.........................
-
-Warning, this might be obsolete.
+Running MyPy and other tools manually
+.....................................
 
 Sometimes it is useful to run MyPy directly, for instance, to check the types without waiting for a very long time
-for the tests to finish.
-Here's how to do it on Windows::
+for the tests to finish::
 
-    .nox\test-3-10\Scripts\activate
+    source .nox/test-3-13/bin/activate
     pip install mypy
-    mypy --strict pycyphal tests .nox\test-3-10\tmp\.compiled
+    python -m mypy pycyphal tests .nox/test-3-13/tmp/.compiled
 
+Same approach can be used to run PyLint.
 
-Running pylint
-.........................
-
-Warning, this might be obsolete.
-
-Sometimes it is useful to run pylint directly, for instance, to check the code quality without waiting
-for a very long time for the tests to finish.
-
-Here's how to do it on Windows::
-
-    .nox\test-3-10\Scripts\activate
-    pip install pylint
-    pylint pycyphal tests .nox\test-3-10\tmp\.compiled
-
-
-Running black
-.........................
-
-Warning, this might be obsolete.
-
-Sometimes it is useful to run black directly, for instance, to check the code formatting
-without waiting for a very long time for the tests to finish.
-It is better, however, to configure the IDE to invoke Black automatically on save.
-
-Here's how to do it on Windows::
-
-    pip install black
-    black pycyphal tests .nox\test-3-10\tmp\.compiled
-
+The correct way to use Black is to enable the corresponding integration in your IDE.
 
 Running a subset of tests
 .........................
 
 Sometimes during development it might be necessary to only run a certain subset of unit tests related to the
-newly developed functionality.
+developed functionality.
 
 As we're invoking ``pytest`` directly outside of ``nox``, we should first set ``CYPHAL_PATH`` to contain
 a list of all the paths where the DSDL root namespace directories are to be found
@@ -270,7 +169,6 @@ a list of all the paths where the DSDL root namespace directories are to be foun
     export CYPHAL_PATH="$HOME/pycyphal/demo/custom_data_types:$HOME/pycyphal/demo/public_regulated_data_types"
 
 Next, open 2 terminal windows.
-
 In the first, run::
 
     ncat --broker --listen -p 50905
@@ -286,11 +184,6 @@ In the second one::
 
 Writing tests
 .............
-
-When writing tests, aim to cover at least 90% of branches.
-Ensure that your tests do not emit any errors or warnings into stderr output upon successful execution,
-because that may distract the developer from noticing true abnormalities
-(you may use ``caplog.at_level('CRITICAL')`` to suppress undesirable output).
 
 Write unit tests as functions without arguments prefixed with ``_unittest_``.
 Generally, simple test functions should be located as close as possible to the tested code,
@@ -327,11 +220,6 @@ Many tests rely on the DSDL-generated packages being available for importing.
 The DSDL package generation is implemented in ``tests/dsdl``.
 After the packages are generated, the output is cached on disk to permit fast re-testing during development.
 The cache can be invalidated manually by running ``nox -s clean``.
-
-On GNU/Linux, the amount of memory available for the test process is artificially limited to a few gibibytes
-to catch possible memory hogs (like https://github.com/OpenCyphal/pydsdl/issues/23 ).
-See ``conftest.py`` for details.
-
 
 Supporting newer versions of Python
 ...................................
