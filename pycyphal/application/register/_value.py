@@ -94,16 +94,16 @@ class ValueProxy:
         Passing native values is not recommended because the type deduction logic may be changed in the future.
         To ensure stability, pass only values of ``uavcan.primitive.*``, or :class:`Value`, or :class:`ValueProxy`.
 
-        >>> list(ValueProxy(Value(natural16=Natural16([123, 456]))).value.natural16.value)  # Explicit Value.
+        >>> list(map(int, ValueProxy(Value(natural16=Natural16([123, 456]))).value.natural16.value))  # Explicit Value.
         [123, 456]
-        >>> list(ValueProxy(Natural16([123, 456])).value.natural16.value)                   # Same as above.
+        >>> list(map(int, ValueProxy(Natural16([123, 456])).value.natural16.value))                   # Same as above.
         [123, 456]
-        >>> ValueProxy(-123).value.integer64.value[0]               # Integers default to 64-bit.
+        >>> int(ValueProxy(-123).value.integer64.value[0])                      # Integers default to 64-bit.
         -123
-        >>> list(ValueProxy([-1.23, False]).value.real64.value)     # Floats also default to 64-bit.
+        >>> list(map(float, ValueProxy([-1.23, False]).value.real64.value))     # Floats also default to 64-bit.
         [-1.23, 0.0]
         >>> list(ValueProxy([True, False]).value.bit.value)         # Booleans default to bits.
-        [True, False]
+        [np.True_, np.False_]
         >>> ValueProxy(b"Hello unstructured!").value.unstructured.value.tobytes()   # Bytes to unstructured.
         b'Hello unstructured!'
 

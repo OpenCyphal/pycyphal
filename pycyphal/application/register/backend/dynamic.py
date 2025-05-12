@@ -35,14 +35,14 @@ class DynamicBackend(Backend):
     >>> b["foo"].mutable
     True
     >>> list(b["foo"].value.bit.value)
-    [True, False, True]
+    [np.True_, np.False_, np.True_]
     >>> b["foo"] = Value(bit=Bit([False, True, True]))  # Set new value.
     >>> list(b["foo"].value.bit.value)
-    [False, True, True]
+    [np.False_, np.True_, np.True_]
     >>> b["foo"] = lambda: foo  # Replace register with a new one that is now immutable.
     >>> b["foo"] = Value(bit=Bit([False, False, False]))    # Value cannot be changed.
     >>> list(b["foo"].value.bit.value)
-    [False, True, True]
+    [np.False_, np.True_, np.True_]
     >>> list(b)
     ['foo']
     >>> del b["foo"]

@@ -141,7 +141,7 @@ To abort on first error::
     nox -x -- -x
 
 Running MyPy and other tools manually
-.........................
+.....................................
 
 Sometimes it is useful to run MyPy directly, for instance, to check the types without waiting for a very long time
 for the tests to finish::

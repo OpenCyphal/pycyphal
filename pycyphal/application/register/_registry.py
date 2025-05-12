@@ -72,11 +72,11 @@ class Registry(MutableMapping[str, ValueProxy]):
     Create dynamic registers (getter/setter invoked at every access; existing entries overwritten automatically):
 
     >>> registry["d.a"] = lambda: [1.0, 2.0, 3.0]           # Immutable (read-only), deduced type: real64[3].
-    >>> list(registry["d.a"].value.real64.value)            # Yup, deduced as expected, real64.
-    [1.0, 2.0, 3.0]
+    >>> list(map(round, registry["d.a"].value.real64.value))# Yup, deduced as expected, real64.
+    [1, 2, 3]
     >>> registry["d.a"] = lambda: Real32([1.0, 2.0, 3.0])   # Like above, but now it is "real32[3]".
-    >>> list(registry["d.a"].value.real32.value)
-    [1.0, 2.0, 3.0]
+    >>> list(map(round, registry["d.a"].value.real32.value))
+    [1, 2, 3]
     >>> d_b = [True, False, True]                   # Suppose we have some internal object.
     >>> def set_d_b(v: Value):                      # Define a setter for it.
     ...     global d_b

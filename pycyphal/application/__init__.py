@@ -86,8 +86,8 @@ Create a subscription and receive a message from it:
 >>> import uavcan.si.unit.length
 >>> sub_position = node.make_subscriber(uavcan.si.unit.length.Vector3_1, "position_setpoint")
 >>> msg = doctest_await(sub_position.get(timeout=0.5))              # None if timed out.
->>> msg.meter[0], msg.meter[1], msg.meter[2]                        # Some payload in the message we received.
-(42.0, 15.4, -8.7)
+>>> round(msg.meter[0]), round(msg.meter[1]), round(msg.meter[2])   # Some payload in the message we received.
+(42, 15, -9)
 
 
 RPC-service clients and servers
