@@ -35,7 +35,8 @@ Grab your copy from git::
 
     git clone https://github.com/OpenCyphal/public_regulated_data_types
 
-The demo relies on two vendor-specific data types located in the root namespace ``sirius_cyber_corp`` that you must create as described below.
+The demo relies on two vendor-specific data types located in the root namespace ``sirius_cyber_corp``
+that you must create as described below.
 The root namespace directory layout is as follows::
 
     sirius_cyber_corp/                              # root namespace directory
