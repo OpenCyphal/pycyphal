@@ -60,12 +60,15 @@ jobs:
           ipconfig /all
 
       # Only one statement per step to ensure the error codes are not ignored by PowerShell.
-      # The PyTest log is rewritten on every run, so we store artifacts for each run.
       - run: python -m pip install --upgrade pip setuptools nox
       - run: nox --non-interactive --error-on-missing-interpreters --session test pristine --python ${{ matrix.py }}
-      - { uses: actions/upload-artifact@v4, with: { name: "test_${{matrix.os}}_py${{matrix.py}}", path: ".nox/**/*.log" }}
       - run: nox --non-interactive --no-error-on-missing-interpreters --session demo check_style docs
-      - { uses: actions/upload-artifact@v4, with: { name: "demo_${{matrix.os}}_py${{matrix.py}}", path: ".nox/**/*.log" }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: "${{matrix.os}}_py${{matrix.py}}"
+          path: ".nox/**/*.log"
+          include-hidden-files: true
 
   release:
     name: Release PyCyphal
