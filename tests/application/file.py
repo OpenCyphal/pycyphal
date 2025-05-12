@@ -171,13 +171,14 @@ def _unittest_errormap_file2() -> None:
     from pycyphal.application.file import Error, _map
 
     for attr in dir(Error):
-        if callable(attr) or not attr[0].isupper() and not isinstance(getattr(Error, attr), int):
+        if callable(attr) or not attr[0].isupper() or not isinstance(getattr(Error, attr), int) or attr.startswith("_"):
             # Skip methods and attributes not starting with an upper case letter
             # - hopefully only error code constants are remaining. Having these
             # constants in an enum would be better.
             continue
 
         code = getattr(Error, attr)
+        print(attr, code)
         if code == Error.OK:
             # Error.OK is not in the map - use it to test for unknown error codes
             with pytest.raises(OSError) as e:
