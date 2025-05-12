@@ -602,7 +602,7 @@ def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
 
 
 def _construct_usbtingo(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
-    bus_arguments = {
+    bus_arguments: dict[str, str | int | bool | None] = {
         "interface": parameters.interface_name,
         "channel": parameters.channel_name or None,  # to support "usbtingo:" default interface
     }
