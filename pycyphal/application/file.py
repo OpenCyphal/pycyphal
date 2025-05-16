@@ -658,7 +658,13 @@ class FileClient2:
         assert isinstance(res, Modify.Response)
         _raise_on_error(res.error, f"{src}->{dst}")
 
-    async def read(self, path: str, offset: int = 0, size: typing.Optional[int] = None) -> bytes:
+    async def read(
+        self,
+        path: str,
+        offset: int = 0,
+        size: typing.Optional[int] = None,
+        progress: typing.Optional[typing.Callable[[int, int], None]] = None,
+    ) -> bytes:
         """
         Proxy for ``uavcan.file.Read``.
 
@@ -674,6 +680,10 @@ class FileClient2:
             If None (default), the entire file will be read (this may exhaust local memory).
             If zero, this call is a no-op.
 
+        :param progress:
+            Optional callback function that receives (bytes_read, total_size)
+            total_size will be None if size parameter is None
+
         :raises OSError: If the read operation failed; see ``uavcan.file.Error``
 
         :returns:
@@ -686,20 +696,26 @@ class FileClient2:
             _raise_on_error(res.error, path)
             return bytes(res.data.value.tobytes())
 
-        if size is None:
-            size = 2**64
         data = b""
-        while len(data) < size:
+        while len(data) < (size or 2**64):
             out = await once()
             assert isinstance(out, bytes)
             if not out:
                 break
             data += out
             offset += len(out)
+            if progress:
+                progress(len(data), size)
         return data
 
     async def write(
-        self, path: str, data: typing.Union[memoryview, bytes], offset: int = 0, *, truncate: bool = True
+        self,
+        path: str,
+        data: typing.Union[memoryview, bytes],
+        offset: int = 0,
+        *,
+        truncate: bool = True,
+        progress: typing.Optional[typing.Callable[[int, int], None]] = None,
     ) -> None:
         """
         Proxy for ``uavcan.file.Write``.
@@ -719,6 +735,9 @@ class FileClient2:
             If True, the rest of the file after ``offset + len(data)`` will be truncated.
             This is done by sending an empty write request, as prescribed by the Specification.
 
+        :param progress:
+            Optional callback function that receives (bytes_written, total_size)
+
         :raises OSError: If the write operation failed; see ``uavcan.file.Error``
         """
 
@@ -730,11 +749,16 @@ class FileClient2:
             assert isinstance(res, Write.Response)
             _raise_on_error(res.error, path)
 
+        total_size = len(data)
+        bytes_written = 0
         limit = self.data_transfer_capacity
         while len(data) > 0:
             frag, data = data[:limit], data[limit:]
             await once(frag)
             offset += len(frag)
+            bytes_written += len(frag)
+            if progress:
+                progress(bytes_written, total_size)
         if truncate:
             await once(b"")
 
