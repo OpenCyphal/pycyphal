@@ -44,7 +44,7 @@ class FileServer:
     """
 
     def __init__(
-        self, node: pycyphal.application.Node, roots: typing.Iterable[typing.Union[str, pathlib.Path]]
+        self, node: pycyphal.application.Node, roots: typing.Iterable[str | pathlib.Path]
     ) -> None:
         """
         :param node:
@@ -85,7 +85,7 @@ class FileServer:
         node.add_lifetime_hooks(start, close)
 
     @property
-    def roots(self) -> typing.List[pathlib.Path]:
+    def roots(self) -> list[pathlib.Path]:
         """
         File operations will be performed within these root directories.
         The first directory to match takes precedence.
@@ -94,7 +94,7 @@ class FileServer:
         """
         return self._roots
 
-    def locate(self, p: typing.Union[pathlib.Path, str, Path]) -> typing.Tuple[pathlib.Path, pathlib.Path]:
+    def locate(self, p: pathlib.Path | str | Path) -> tuple[pathlib.Path, pathlib.Path]:
         """
         Iterate through :attr:`roots` until a root r is found such that ``r/p`` exists and return ``(r, p)``.
         Otherwise, return nonexistent ``(roots[0], p)``.
@@ -413,7 +413,7 @@ class FileClient:
         assert isinstance(res, Modify.Response)
         return int(res.error.value)
 
-    async def read(self, path: str, offset: int = 0, size: typing.Optional[int] = None) -> typing.Union[int, bytes]:
+    async def read(self, path: str, offset: int = 0, size: int | None = None) -> int | bytes:
         """
         Proxy for ``uavcan.file.Read``.
 
@@ -434,7 +434,7 @@ class FileClient:
             data on success (empty if the offset is out of bounds or the file is empty).
         """
 
-        async def once() -> typing.Union[int, bytes]:
+        async def once() -> int | bytes:
             res = await self._call(Read, Read.Request(offset=offset, path=Path(path)))
             assert isinstance(res, Read.Response)
             if res.error.value != 0:
@@ -456,7 +456,7 @@ class FileClient:
         return data
 
     async def write(
-        self, path: str, data: typing.Union[memoryview, bytes], offset: int = 0, *, truncate: bool = True
+        self, path: str, data: memoryview | bytes, offset: int = 0, *, truncate: bool = True
     ) -> int:
         """
         Proxy for ``uavcan.file.Write``.
@@ -479,7 +479,7 @@ class FileClient:
         :returns: See ``uavcan.file.Error``
         """
 
-        async def once(d: typing.Union[memoryview, bytes]) -> int:
+        async def once(d: memoryview | bytes) -> int:
             res = await self._call(
                 Write,
                 Write.Request(offset, path=Path(path), data=Unstructured(np.frombuffer(d, np.uint8))),
@@ -662,8 +662,8 @@ class FileClient2:
         self,
         path: str,
         offset: int = 0,
-        size: typing.Optional[int] = None,
-        progress: typing.Optional[typing.Callable[[int, int], None]] = None,
+        size: int | None = None,
+        progress: typing.Callable[[int, int | None], None] | None = None,
     ) -> bytes:
         """
         Proxy for ``uavcan.file.Read``.
@@ -711,11 +711,11 @@ class FileClient2:
     async def write(
         self,
         path: str,
-        data: typing.Union[memoryview, bytes],
+        data: memoryview | bytes,
         offset: int = 0,
         *,
         truncate: bool = True,
-        progress: typing.Optional[typing.Callable[[int, int], None]] = None,
+        progress: typing.Callable[[int, int], None] | None = None,
     ) -> None:
         """
         Proxy for ``uavcan.file.Write``.
@@ -741,7 +741,7 @@ class FileClient2:
         :raises OSError: If the write operation failed; see ``uavcan.file.Error``
         """
 
-        async def once(d: typing.Union[memoryview, bytes]) -> None:
+        async def once(d: memoryview | bytes) -> None:
             res = await self._call(
                 Write,
                 Write.Request(offset, path=Path(path), data=Unstructured(np.frombuffer(d, np.uint8))),

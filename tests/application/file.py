@@ -15,12 +15,12 @@ import pycyphal
 
 
 class ProgressTracker:
-    def __init__(self):
+    def __init__(self) -> None:
         self.counter = 0
 
 
 @pytest.mark.asyncio
-async def _unittest_file(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
+async def _unittest_file(compiled: list[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     from pycyphal.application import make_node, NodeInfo
     from pycyphal.transport.udp import UDPTransport
     from pycyphal.application.file import FileClient, FileServer, Error
@@ -264,7 +264,7 @@ async def _unittest_file2(compiled: typing.List[pycyphal.dsdl.GeneratedPackageIn
         data_chunks = math.ceil(len(data) / cln.data_transfer_capacity)
         write_tracker = ProgressTracker()
 
-        def write_progress_cb(bytes_written, bytes_total):
+        def write_progress_cb(bytes_written: int, bytes_total: int) -> None:
             write_tracker.counter += 1
             assert bytes_total == len(data)
             assert bytes_written == min(write_tracker.counter * cln.data_transfer_capacity, len(data))
@@ -274,9 +274,9 @@ async def _unittest_file2(compiled: typing.List[pycyphal.dsdl.GeneratedPackageIn
 
         read_tracker = ProgressTracker()
 
-        def read_progress_cb(bytes_read, bytes_total):
+        def read_progress_cb(bytes_read: int, bytes_total: int | None) -> None:
             read_tracker.counter += 1
-            assert bytes_total == None
+            assert bytes_total is None
             assert bytes_read == min(read_tracker.counter * cln.data_transfer_capacity, len(data))
 
         assert await cln.read("a/foo/x", progress=read_progress_cb) == data
