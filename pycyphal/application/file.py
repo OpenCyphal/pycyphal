@@ -43,9 +43,7 @@ class FileServer:
     The lifetime of this instance matches the lifetime of its node.
     """
 
-    def __init__(
-        self, node: pycyphal.application.Node, roots: typing.Iterable[str | pathlib.Path]
-    ) -> None:
+    def __init__(self, node: pycyphal.application.Node, roots: typing.Iterable[str | pathlib.Path]) -> None:
         """
         :param node:
             The node instance to initialize the file server on.
@@ -455,9 +453,7 @@ class FileClient:
             offset += len(out)
         return data
 
-    async def write(
-        self, path: str, data: memoryview | bytes, offset: int = 0, *, truncate: bool = True
-    ) -> int:
+    async def write(self, path: str, data: memoryview | bytes, offset: int = 0, *, truncate: bool = True) -> int:
         """
         Proxy for ``uavcan.file.Write``.
 
