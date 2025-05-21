@@ -2,6 +2,7 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
+import math
 import sys
 import shutil
 import typing
@@ -13,8 +14,13 @@ import pytest
 import pycyphal
 
 
+class ProgressTracker:
+    def __init__(self) -> None:
+        self.counter = 0
+
+
 @pytest.mark.asyncio
-async def _unittest_file(compiled: typing.List[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
+async def _unittest_file(compiled: list[pycyphal.dsdl.GeneratedPackageInfo]) -> None:
     from pycyphal.application import make_node, NodeInfo
     from pycyphal.transport.udp import UDPTransport
     from pycyphal.application.file import FileClient, FileServer, Error
@@ -254,8 +260,28 @@ async def _unittest_file2(compiled: typing.List[pycyphal.dsdl.GeneratedPackageIn
         assert e.value.errno == errno.ENOENT
 
         # Write into empty file
-        await cln.write("a/foo/x", bytes(range(200)) * 3)
-        assert await cln.read("a/foo/x") == bytes(range(200)) * 3
+        data = bytes(range(200)) * 3
+        data_chunks = math.ceil(len(data) / cln.data_transfer_capacity)
+        write_tracker = ProgressTracker()
+
+        def write_progress_cb(bytes_written: int, bytes_total: int) -> None:
+            write_tracker.counter += 1
+            assert bytes_total == len(data)
+            assert bytes_written == min(write_tracker.counter * cln.data_transfer_capacity, len(data))
+
+        await cln.write("a/foo/x", data, progress=write_progress_cb)
+        assert write_tracker.counter == data_chunks
+
+        read_tracker = ProgressTracker()
+
+        def read_progress_cb(bytes_read: int, bytes_total: int | None) -> None:
+            read_tracker.counter += 1
+            assert bytes_total is None
+            assert bytes_read == min(read_tracker.counter * cln.data_transfer_capacity, len(data))
+
+        assert await cln.read("a/foo/x", progress=read_progress_cb) == data
+        assert read_tracker.counter == data_chunks
+
         assert (await cln.get_info("a/foo/x")).size == 600
 
         # Truncation -- this write is shorter

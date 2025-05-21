@@ -3,6 +3,12 @@
 Changelog
 =========
 
+v1.23
+-----
+
+- Add progress reporting to `pycyphal.application.file.FileClient2`
+  (`#353 <https://github.com/OpenCyphal/pycyphal/pull/353>`_).
+
 v1.22
 -----
 
