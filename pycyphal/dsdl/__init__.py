@@ -21,7 +21,7 @@ from ._compiler import compile as compile  # pylint: disable=redefined-builtin
 from ._compiler import compile_all as compile_all
 from ._compiler import GeneratedPackageInfo as GeneratedPackageInfo
 
-from ._import_hook import install_import_hook as install_import_hook
+from ._import_hook import add_import_hook as add_import_hook
 from ._import_hook import remove_import_hooks as remove_import_hooks
 
 from ._support_wrappers import serialize as serialize

@@ -33,7 +33,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 
 import pycyphal
 
-pycyphal.dsdl.install_import_hook([REPOSITORY_ROOT / "demo" / "public_regulated_data_types"], DSDL_GENERATED_ROOT)
+pycyphal.dsdl.add_import_hook([REPOSITORY_ROOT / "demo" / "public_regulated_data_types"], DSDL_GENERATED_ROOT)
 import pycyphal.application  # This may trigger DSDL compilation.
 
 assert "/site-packages/" not in pycyphal.__file__, "Wrong import source"
