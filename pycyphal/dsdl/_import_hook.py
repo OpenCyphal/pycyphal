@@ -161,6 +161,14 @@ def install_import_hook(
     # Install finder at the end of the list so it is the last to attempt to load a missing package
     sys.meta_path.append(DsdlMetaFinder(lookup_directories, output_directory, allow_unregulated_fixed_port_id))
 
+def remove_import_hooks() -> None:
+    """
+    Removes all import hooks.
+    """
+    for meta_path in sys.meta_path.copy():
+        if isinstance(meta_path, DsdlMetaFinder):
+            sys.meta_path.remove(meta_path)
+
 
 # Install default import hook unless explicitly requested not to
 if os.environ.get("PYCYPHAL_NO_IMPORT_HOOK", "False").lower() not in ("true", "1", "t"):
