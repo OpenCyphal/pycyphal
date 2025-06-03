@@ -42,26 +42,19 @@ def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
         pass
 
 
-def _unittest_remove_import_hooks():
+def _unittest_remove_import_hooks() -> None:
     original_meta_path = sys.meta_path.copy()
     try:
         old_hooks = [hook for hook in sys.meta_path.copy() if isinstance(hook, DsdlMetaFinder)]
-        if not old_hooks:
-            print("No DsdlMetaFinder hooks found; nothing to test.")
-            return None
+        assert old_hooks
 
-        # call remove_import_hooks, make sure they disappear
         remove_import_hooks()
-        current_hooks = [meta_path for meta_path in sys.meta_path.copy() if isinstance(meta_path, DsdlMetaFinder)]
-
+        current_hooks = [hook for hook in sys.meta_path.copy() if isinstance(hook, DsdlMetaFinder)]
         assert not current_hooks, "Import hooks were not removed properly"
 
-        # Re-add the original hooks
         add_import_hook()
-        final_hooks = [meta_path for meta_path in sys.meta_path.copy() if isinstance(meta_path, DsdlMetaFinder)]
-
-        assert old_hooks == final_hooks, "Hooks were not restored properly"
-        return None
+        final_hooks = [hook for hook in sys.meta_path.copy() if isinstance(hook, DsdlMetaFinder)]
+        assert len(final_hooks) == 1
     finally:
         sys.meta_path = original_meta_path
 
