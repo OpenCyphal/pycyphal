@@ -163,9 +163,6 @@ def add_import_hook(
 
 
 def remove_import_hooks() -> None:
-    """
-    Removes all import hooks.
-    """
     for meta_path in sys.meta_path.copy():
         if isinstance(meta_path, DsdlMetaFinder):
             sys.meta_path.remove(meta_path)

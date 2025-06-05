@@ -48,3 +48,14 @@ def generate_package(*args, **kwargs):  # type: ignore  # pragma: no cover
         DeprecationWarning,
     )
     return compile(*args, **kwargs)
+
+
+def install_import_hook(*args, **kwargs):  # type: ignore  # pragma: no cover
+    """Deprecated alias of :func:`add_import_hook`."""
+    import warnings
+
+    warnings.warn(
+        "pycyphal.dsdl.install_import_hook() is deprecated; use pycyphal.dsdl.add_import_hook() instead.",
+        DeprecationWarning,
+    )
+    return add_import_hook(*args, **kwargs)

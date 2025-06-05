@@ -1,6 +1,7 @@
 # Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
+
 import sys
 import typing
 import logging
@@ -8,7 +9,6 @@ import pathlib
 import tempfile
 import pytest
 import pycyphal.dsdl
-from pycyphal.dsdl._import_hook import DsdlMetaFinder
 from pycyphal.dsdl import remove_import_hooks, add_import_hook
 
 from .conftest import DEMO_DIR
@@ -43,6 +43,8 @@ def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
 
 
 def _unittest_remove_import_hooks() -> None:
+    from pycyphal.dsdl._import_hook import DsdlMetaFinder
+
     original_meta_path = sys.meta_path.copy()
     try:
         old_hooks = [hook for hook in sys.meta_path.copy() if isinstance(hook, DsdlMetaFinder)]
