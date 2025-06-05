@@ -2,12 +2,15 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 
+import sys
 import typing
 import logging
 import pathlib
 import tempfile
 import pytest
 import pycyphal.dsdl
+from pycyphal.dsdl import remove_import_hooks, add_import_hook
+
 from .conftest import DEMO_DIR
 
 
@@ -37,6 +40,25 @@ def _unittest_module_import_path_usage_suggestion(caplog: typing.Any) -> None:
         output_directory.cleanup()  # This may fail on Windows with Python 3.7, we don't care.
     except PermissionError:  # pragma: no cover
         pass
+
+
+def _unittest_remove_import_hooks() -> None:
+    from pycyphal.dsdl._import_hook import DsdlMetaFinder
+
+    original_meta_path = sys.meta_path.copy()
+    try:
+        old_hooks = [hook for hook in sys.meta_path.copy() if isinstance(hook, DsdlMetaFinder)]
+        assert old_hooks
+
+        remove_import_hooks()
+        current_hooks = [hook for hook in sys.meta_path.copy() if isinstance(hook, DsdlMetaFinder)]
+        assert not current_hooks, "Import hooks were not removed properly"
+
+        add_import_hook()
+        final_hooks = [hook for hook in sys.meta_path.copy() if isinstance(hook, DsdlMetaFinder)]
+        assert len(final_hooks) == 1
+    finally:
+        sys.meta_path = original_meta_path
 
 
 def _unittest_issue_133() -> None:
