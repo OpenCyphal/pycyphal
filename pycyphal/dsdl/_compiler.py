@@ -143,27 +143,11 @@ def compile(  # pylint: disable=redefined-builtin
         # https://forum.opencyphal.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
         raise TypeError(f"Lookup directories shall be an iterable of paths, not {type(lookup_directories).__name__}")
 
-    root_namespace = os.path.split(root_namespace_directory)[-1]
-    lockfile = f"{root_namespace}.lock"
-    lockfile_path = f"{output_directory}/{lockfile}"
-    while True:
-        if not os.path.isfile(lockfile_path):
-            try:
-                pathlib.Path(lockfile_path).touch()
-                break
-            except PermissionError:
-                _logger.warning("Unable to create lockfile at %s", lockfile_path)
-        else:
-            time.sleep(1)
-            if pathlib.Path.exists(output_directory / pathlib.Path(root_namespace)):
-                return
-
-    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
-
     language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
 
     root_namespace_name: str = ""
     composite_types: list[pydsdl.CompositeType] = []
+    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
 
     if root_namespace_directory is not None:
         root_namespace_directory = pathlib.Path(root_namespace_directory).resolve()
@@ -213,6 +197,28 @@ def compile(  # pylint: disable=redefined-builtin
             output_dir=str(output_directory),
             language_context=language_context,
         )
+
+    lockfile = f"{root_namespace_name}.lock"
+    if not root_namespace_name:
+        lockfile = "support.lock"
+    lockfile_path = f"{output_directory}/{lockfile}"
+
+    while True:
+        if not os.path.exists(lockfile_path):
+            try:
+                pathlib.Path(output_directory).mkdir(parents=True, exist_ok=True)
+                pathlib.Path(lockfile_path).touch()
+                break
+            except PermissionError:
+                _logger.warning("Unable to create lockfile at %s", lockfile_path)
+        else:
+            time.sleep(1)
+            if pathlib.Path.exists(output_directory / pathlib.Path(root_namespace_name)):
+                return GeneratedPackageInfo(
+                    path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),
+                    models=composite_types,
+                    name=root_namespace_name,
+                )
 
     support_generator = nunavut.jinja.SupportGenerator(
         namespace=root_ns,
