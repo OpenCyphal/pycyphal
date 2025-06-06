@@ -143,6 +143,21 @@ def compile(  # pylint: disable=redefined-builtin
         # https://forum.opencyphal.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
         raise TypeError(f"Lookup directories shall be an iterable of paths, not {type(lookup_directories).__name__}")
 
+    root_namespace = os.path.split(root_namespace_directory)[-1]
+    lockfile = f"{root_namespace}.lock"
+    lockfile_path = f"{output_directory}/{lockfile}"
+    while True:
+        if not os.path.isfile(lockfile_path):
+            try:
+                pathlib.Path(lockfile_path).touch()
+                break
+            except PermissionError:
+                _logger.warning("Unable to create lockfile at %s", lockfile_path)
+        else:
+            time.sleep(1)
+            if pathlib.Path.exists(output_directory / pathlib.Path(root_namespace)):
+                return
+
     output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
 
     language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
@@ -221,6 +236,8 @@ def compile(  # pylint: disable=redefined-builtin
             str(output_directory),
             quick_fix,
         )
+
+    pathlib.Path(lockfile_path).unlink()
 
     return GeneratedPackageInfo(
         path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),
