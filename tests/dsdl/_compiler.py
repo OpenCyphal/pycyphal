@@ -1,7 +1,6 @@
 # Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
-
 import sys
 import typing
 import logging
@@ -10,7 +9,7 @@ import tempfile
 import pytest
 import pycyphal.dsdl
 from pycyphal.dsdl import remove_import_hooks, add_import_hook
-
+from pycyphal.dsdl._lockfile import Locker
 from .conftest import DEMO_DIR
 
 
@@ -64,3 +63,23 @@ def _unittest_remove_import_hooks() -> None:
 def _unittest_issue_133() -> None:
     with pytest.raises(ValueError, match=".*output directory.*"):
         pycyphal.dsdl.compile(pathlib.Path.cwd() / "irrelevant")
+
+
+def _unittest_lockfile_cant_be_recreated() -> None:
+    output_directory = pathlib.Path(tempfile.gettempdir())
+
+    lockfile1 = Locker(output_directory, "test_lockfile")
+    lockfile2 = Locker(output_directory, "test_lockfile")
+
+    assert lockfile1.create() is True
+    assert lockfile2.create() is False
+
+    lockfile1.remove()
+
+
+def _unittest_lockfile_is_removed() -> None:
+    output_directory = pathlib.Path(tempfile.gettempdir())
+
+    pycyphal.dsdl.compile(DEMO_DIR / "public_regulated_data_types" / "uavcan", output_directory=output_directory.name)
+
+    assert pathlib.Path.exists(output_directory / "uavcan.lock") is False
