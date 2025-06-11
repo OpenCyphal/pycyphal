@@ -38,7 +38,7 @@ from ._support_wrappers import is_service_type as is_service_type
 from ._support_wrappers import to_builtin as to_builtin
 from ._support_wrappers import update_from_builtin as update_from_builtin
 
-from ._lockfile import Locker
+from pycyphal.dsdl._lockfile import Locker
 
 
 def generate_package(*args, **kwargs):  # type: ignore  # pragma: no cover
