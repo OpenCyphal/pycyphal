@@ -1,7 +1,11 @@
 # Copyright (c) 2020 OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
+
+import random
 import sys
+import threading
+import time
 import typing
 import logging
 import pathlib
@@ -67,14 +71,19 @@ def _unittest_issue_133() -> None:
 
 def _unittest_lockfile_cant_be_recreated() -> None:
     output_directory = pathlib.Path(tempfile.gettempdir())
+    root_namespace_name = str(random.getrandbits(64))
 
-    lockfile1 = Locker(output_directory, "test_lockfile")
-    lockfile2 = Locker(output_directory, "test_lockfile")
+    lockfile1 = Locker(output_directory, root_namespace_name)
+    lockfile2 = Locker(output_directory, root_namespace_name)
 
     assert lockfile1.create() is True
-    assert lockfile2.create() is False
 
-    lockfile1.remove()
+    def remove_lockfile1() -> None:
+        time.sleep(5)
+        lockfile1.remove()
+
+    threading.Thread(target=remove_lockfile1).start()
+    assert lockfile2.create() is False
 
 
 def _unittest_lockfile_is_removed() -> None:
