@@ -143,11 +143,12 @@ def compile(  # pylint: disable=redefined-builtin
         # https://forum.opencyphal.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
         raise TypeError(f"Lookup directories shall be an iterable of paths, not {type(lookup_directories).__name__}")
 
+    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
+
     language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
 
     root_namespace_name: str = ""
     composite_types: list[pydsdl.CompositeType] = []
-    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
 
     if root_namespace_directory is not None:
         root_namespace_directory = pathlib.Path(root_namespace_directory).resolve()
@@ -185,11 +186,10 @@ def compile(  # pylint: disable=redefined-builtin
         )
 
     lockfile = Locker(
-        root_namespace_name=root_namespace_name if root_namespace_name else "support",
+        root_namespace_name=root_namespace_name if root_namespace_name else "_support_",
         output_directory=output_directory,
     )
-    lockfile_created = lockfile.create()
-    if lockfile_created:
+    if lockfile.create():
         # Generate code
         assert isinstance(output_directory, pathlib.Path)
         code_generator = nunavut.jinja.DSDLCodeGenerator(
