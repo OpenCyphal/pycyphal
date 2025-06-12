@@ -15,7 +15,7 @@ import pydsdl
 import nunavut
 import nunavut.lang
 import nunavut.jinja
-
+from pycyphal.dsdl._lockfile import Locker
 
 _AnyPath = Union[str, pathlib.Path]
 
@@ -143,12 +143,11 @@ def compile(  # pylint: disable=redefined-builtin
         # https://forum.opencyphal.org/t/nestedrootnamespaceerror-in-basic-usage-demo/794
         raise TypeError(f"Lookup directories shall be an iterable of paths, not {type(lookup_directories).__name__}")
 
-    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
-
     language_context = nunavut.lang.LanguageContextBuilder().set_target_language("py").create()
 
     root_namespace_name: str = ""
     composite_types: list[pydsdl.CompositeType] = []
+    output_directory = pathlib.Path(pathlib.Path.cwd() if output_directory is None else output_directory).resolve()
 
     if root_namespace_directory is not None:
         root_namespace_directory = pathlib.Path(root_namespace_directory).resolve()
@@ -171,14 +170,28 @@ def compile(  # pylint: disable=redefined-builtin
         (root_namespace_name,) = set(map(lambda x: x.root_namespace, composite_types))  # type: ignore
         _logger.info("Read %d definitions from root namespace %r", len(composite_types), root_namespace_name)
 
-        # Generate code
-        assert isinstance(output_directory, pathlib.Path)
         root_ns = nunavut.build_namespace_tree(
             types=composite_types,
             root_namespace_dir=str(root_namespace_directory),
             output_dir=str(output_directory),
             language_context=language_context,
         )
+    else:
+        root_ns = nunavut.build_namespace_tree(
+            types=[],
+            root_namespace_dir=str(""),
+            output_dir=str(output_directory),
+            language_context=language_context,
+        )
+
+    lockfile = Locker(
+        root_namespace_name=root_namespace_name if root_namespace_name else "support",
+        output_directory=output_directory,
+    )
+    lockfile_created = lockfile.create()
+    if lockfile_created:
+        # Generate code
+        assert isinstance(output_directory, pathlib.Path)
         code_generator = nunavut.jinja.DSDLCodeGenerator(
             namespace=root_ns,
             generate_namespace_types=nunavut.YesNoDefault.YES,
@@ -191,36 +204,31 @@ def compile(  # pylint: disable=redefined-builtin
             root_namespace_name,
             time.monotonic() - started_at,
         )
-    else:
-        root_ns = nunavut.build_namespace_tree(
-            types=[],
-            root_namespace_dir=str(""),
-            output_dir=str(output_directory),
-            language_context=language_context,
+
+        support_generator = nunavut.jinja.SupportGenerator(
+            namespace=root_ns,
         )
+        support_generator.generate_all()
 
-    support_generator = nunavut.jinja.SupportGenerator(
-        namespace=root_ns,
-    )
-    support_generator.generate_all()
-
-    # A minor UX improvement; see https://github.com/OpenCyphal/pycyphal/issues/115
-    for p in sys.path:
-        if pathlib.Path(p).resolve() == pathlib.Path(output_directory):
-            break
-    else:
-        if os.name == "nt":
-            quick_fix = f'Quick fix: `$env:PYTHONPATH += ";{output_directory.resolve()}"`'
-        elif os.name == "posix":
-            quick_fix = f'Quick fix: `export PYTHONPATH="{output_directory.resolve()}"`'
+        # A minor UX improvement; see https://github.com/OpenCyphal/pycyphal/issues/115
+        for p in sys.path:
+            if pathlib.Path(p).resolve() == pathlib.Path(output_directory):
+                break
         else:
-            quick_fix = "Quick fix is not available for this OS."
-        _logger.info(
-            "Generated package is stored in %r, which is not in Python module search path list. "
-            "The package will fail to import unless you add the destination directory to sys.path or PYTHONPATH. %s",
-            str(output_directory),
-            quick_fix,
-        )
+            if os.name == "nt":
+                quick_fix = f'Quick fix: `$env:PYTHONPATH += ";{output_directory.resolve()}"`'
+            elif os.name == "posix":
+                quick_fix = f'Quick fix: `export PYTHONPATH="{output_directory.resolve()}"`'
+            else:
+                quick_fix = "Quick fix is not available for this OS."
+            _logger.info(
+                "Generated package is stored in %r, which is not in Python module search path list. "
+                "The package will fail to import unless you add the destination directory to sys.path or PYTHONPATH. %s",
+                str(output_directory),
+                quick_fix,
+            )
+
+        lockfile.remove()
 
     return GeneratedPackageInfo(
         path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),

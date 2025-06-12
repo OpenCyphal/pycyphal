@@ -127,7 +127,7 @@ def get_default_output_dir() -> str:
         raise RuntimeError("Please set PYCYPHAL_PATH env variable or setup a proper OS user home directory.") from e
 
 
-def install_import_hook(
+def add_import_hook(
     lookup_directories: Optional[Iterable[_AnyPath]] = None,
     output_directory: Optional[_AnyPath] = None,
     allow_unregulated_fixed_port_id: Optional[bool] = None,
@@ -162,9 +162,15 @@ def install_import_hook(
     sys.meta_path.append(DsdlMetaFinder(lookup_directories, output_directory, allow_unregulated_fixed_port_id))
 
 
+def remove_import_hooks() -> None:
+    for meta_path in sys.meta_path.copy():
+        if isinstance(meta_path, DsdlMetaFinder):
+            sys.meta_path.remove(meta_path)
+
+
 # Install default import hook unless explicitly requested not to
 if os.environ.get("PYCYPHAL_NO_IMPORT_HOOK", "False").lower() not in ("true", "1", "t"):
     _logger.debug("Installing default import hook.")
-    install_import_hook()
+    add_import_hook()
 else:
     _logger.debug("Default import hook installation skipped.")
