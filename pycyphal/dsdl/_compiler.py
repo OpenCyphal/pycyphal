@@ -185,50 +185,48 @@ def compile(  # pylint: disable=redefined-builtin
             language_context=language_context,
         )
 
-    lockfile = Locker(
+    with Locker(
         root_namespace_name=root_namespace_name if root_namespace_name else "_support_",
         output_directory=output_directory,
-    )
-    if lockfile.create():
-        # Generate code
-        assert isinstance(output_directory, pathlib.Path)
-        code_generator = nunavut.jinja.DSDLCodeGenerator(
-            namespace=root_ns,
-            generate_namespace_types=nunavut.YesNoDefault.YES,
-            followlinks=True,
-        )
-        code_generator.generate_all()
-        _logger.info(
-            "Generated %d types from the root namespace %r in %.1f seconds",
-            len(composite_types),
-            root_namespace_name,
-            time.monotonic() - started_at,
-        )
-
-        support_generator = nunavut.jinja.SupportGenerator(
-            namespace=root_ns,
-        )
-        support_generator.generate_all()
-
-        # A minor UX improvement; see https://github.com/OpenCyphal/pycyphal/issues/115
-        for p in sys.path:
-            if pathlib.Path(p).resolve() == pathlib.Path(output_directory):
-                break
-        else:
-            if os.name == "nt":
-                quick_fix = f'Quick fix: `$env:PYTHONPATH += ";{output_directory.resolve()}"`'
-            elif os.name == "posix":
-                quick_fix = f'Quick fix: `export PYTHONPATH="{output_directory.resolve()}"`'
-            else:
-                quick_fix = "Quick fix is not available for this OS."
+    ) as lockfile:
+        if lockfile:
+            # Generate code
+            assert isinstance(output_directory, pathlib.Path)
+            code_generator = nunavut.jinja.DSDLCodeGenerator(
+                namespace=root_ns,
+                generate_namespace_types=nunavut.YesNoDefault.YES,
+                followlinks=True,
+            )
+            code_generator.generate_all()
             _logger.info(
-                "Generated package is stored in %r, which is not in Python module search path list. "
-                "The package will fail to import unless you add the destination directory to sys.path or PYTHONPATH. %s",
-                str(output_directory),
-                quick_fix,
+                "Generated %d types from the root namespace %r in %.1f seconds",
+                len(composite_types),
+                root_namespace_name,
+                time.monotonic() - started_at,
             )
 
-        lockfile.remove()
+            support_generator = nunavut.jinja.SupportGenerator(
+                namespace=root_ns,
+            )
+            support_generator.generate_all()
+
+            # A minor UX improvement; see https://github.com/OpenCyphal/pycyphal/issues/115
+            for p in sys.path:
+                if pathlib.Path(p).resolve() == pathlib.Path(output_directory):
+                    break
+            else:
+                if os.name == "nt":
+                    quick_fix = f'Quick fix: `$env:PYTHONPATH += ";{output_directory.resolve()}"`'
+                elif os.name == "posix":
+                    quick_fix = f'Quick fix: `export PYTHONPATH="{output_directory.resolve()}"`'
+                else:
+                    quick_fix = "Quick fix is not available for this OS."
+                _logger.info(
+                    "Generated package is stored in %r, which is not in Python module search path list. "
+                    "The package will fail to import unless you add the destination directory to sys.path or PYTHONPATH. %s",
+                    str(output_directory),
+                    quick_fix,
+                )
 
     return GeneratedPackageInfo(
         path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),

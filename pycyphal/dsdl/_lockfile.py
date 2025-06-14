@@ -3,6 +3,7 @@ import pathlib
 import time
 from io import TextIOWrapper
 from pathlib import Path
+from types import TracebackType
 
 _logger = logging.getLogger(__name__)
 
@@ -18,12 +19,19 @@ class Locker:
     def _lockfile_path(self) -> Path:
         return self._output_directory / f"{self._root_namespace_name}.lock"
 
+    def __enter__(self) -> bool:
+        return self.create()
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> None:
+        return self.remove()
+
     def create(self) -> bool:
         """
         True means compilation needs to proceed.
         False means another process already compiled the namespace so we just waited for the lockfile to disappear before returning.
         """
-        # TODO Read about context manager
         try:
             pathlib.Path(self._output_directory).mkdir(parents=True, exist_ok=True)
             self._lockfile = open(self._lockfile_path, "x")
