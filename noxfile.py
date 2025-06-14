@@ -121,7 +121,7 @@ def test(session):
         "mypy   ~= 1.15.0",
         "pylint == 3.3.7",
     )
-    session.run("mypy", *map(str, src_dirs), str(compiled_dir))
+    session.run("mypy", *map(str, src_dirs))
     session.run("pylint", *map(str, src_dirs), env={"PYTHONPATH": str(compiled_dir)})
 
     # Publish coverage statistics. This also has to be run from the test session to access the coverage files.
