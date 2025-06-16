@@ -210,24 +210,6 @@ def compile(  # pylint: disable=redefined-builtin
             )
             support_generator.generate_all()
 
-            # A minor UX improvement; see https://github.com/OpenCyphal/pycyphal/issues/115
-            for p in sys.path:
-                if pathlib.Path(p).resolve() == pathlib.Path(output_directory):
-                    break
-            else:
-                if os.name == "nt":
-                    quick_fix = f'Quick fix: `$env:PYTHONPATH += ";{output_directory.resolve()}"`'
-                elif os.name == "posix":
-                    quick_fix = f'Quick fix: `export PYTHONPATH="{output_directory.resolve()}"`'
-                else:
-                    quick_fix = "Quick fix is not available for this OS."
-                _logger.info(
-                    "Generated package is stored in %r, which is not in Python module search path list. "
-                    "The package will fail to import unless you add the destination directory to sys.path or PYTHONPATH. %s",
-                    str(output_directory),
-                    quick_fix,
-                )
-
     return GeneratedPackageInfo(
         path=pathlib.Path(output_directory) / pathlib.Path(root_namespace_name),
         models=composite_types,

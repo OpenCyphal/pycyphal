@@ -2,7 +2,6 @@
 # This software is distributed under the terms of the MIT License.
 # Author: Huong Pham <huong.pham@zubax.com>
 
-
 import logging
 import pathlib
 import time
