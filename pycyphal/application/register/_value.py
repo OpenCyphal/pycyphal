@@ -358,7 +358,7 @@ def _strictify(s: RelaxedValue) -> Value:
             return _strictify(Natural16(s)) if all(x >= 0 for x in s) else _strictify(Integer16(s))
         elif len(s) <= 256:
             return _strictify(Natural8(s)) if all(x >= 0 for x in s) else _strictify(Integer8(s))
-    if all(isinstance(x, (float, int, bool)) for x in s):
+    elif all(isinstance(x, (float, int, bool)) for x in s):
         if len(s) <= 32:
             return _strictify(Real64(s))
         elif len(s) <= 64:
