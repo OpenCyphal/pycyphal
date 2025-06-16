@@ -1,3 +1,8 @@
+# Copyright (c) 2025 OpenCyphal
+# This software is distributed under the terms of the MIT License.
+# Author: Huong Pham <huong.pham@zubax.com>
+
+
 import logging
 import pathlib
 import time
@@ -25,7 +30,9 @@ class Locker:
     def __exit__(
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
-        return self.remove()
+        if self._lockfile is not None:
+            return self.remove()
+        return None
 
     def create(self) -> bool:
         """
