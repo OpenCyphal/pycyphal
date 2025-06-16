@@ -185,26 +185,32 @@ def compile(  # pylint: disable=redefined-builtin
             language_context=language_context,
         )
 
-    with Locker(
-        root_namespace_name=root_namespace_name if root_namespace_name else "_support_",
-        output_directory=output_directory,
-    ) as lockfile:
-        if lockfile:
-            # Generate code
-            assert isinstance(output_directory, pathlib.Path)
-            code_generator = nunavut.jinja.DSDLCodeGenerator(
-                namespace=root_ns,
-                generate_namespace_types=nunavut.YesNoDefault.YES,
-                followlinks=True,
-            )
-            code_generator.generate_all()
-            _logger.info(
-                "Generated %d types from the root namespace %r in %.1f seconds",
-                len(composite_types),
-                root_namespace_name,
-                time.monotonic() - started_at,
-            )
+    if root_namespace_name is not None:
+        with Locker(
+            root_namespace_name=root_namespace_name,
+            output_directory=output_directory,
+        ) as lockfile:
+            if lockfile:
+                # Generate code
+                assert isinstance(output_directory, pathlib.Path)
+                code_generator = nunavut.jinja.DSDLCodeGenerator(
+                    namespace=root_ns,
+                    generate_namespace_types=nunavut.YesNoDefault.YES,
+                    followlinks=True,
+                )
+                code_generator.generate_all()
+                _logger.info(
+                    "Generated %d types from the root namespace %r in %.1f seconds",
+                    len(composite_types),
+                    root_namespace_name,
+                    time.monotonic() - started_at,
+                )
 
+    with Locker(
+        root_namespace_name="_support_",
+        output_directory=output_directory,
+    ) as support_lockfile:
+        if support_lockfile:
             support_generator = nunavut.jinja.SupportGenerator(
                 namespace=root_ns,
             )
