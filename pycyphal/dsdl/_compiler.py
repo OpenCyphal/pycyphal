@@ -191,7 +191,6 @@ def compile(  # pylint: disable=redefined-builtin
             output_directory=output_directory,
         ) as lockfile:
             if lockfile:
-                # Generate code
                 assert isinstance(output_directory, pathlib.Path)
                 code_generator = nunavut.jinja.DSDLCodeGenerator(
                     namespace=root_ns,

@@ -30,8 +30,7 @@ class Locker:
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         if self._lockfile is not None:
-            return self.remove()
-        return None
+            self.remove()
 
     def create(self) -> bool:
         """
