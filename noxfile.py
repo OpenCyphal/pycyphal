@@ -75,8 +75,8 @@ def test(session):
         session.run("sudo", "setcap", "cap_net_raw+eip", str(Path(session.bin, "python").resolve()), external=True)
 
     # Launch the TCP broker for testing the Cyphal/serial transport.
-    os.system("ncat --version")
-    broker_process = subprocess.Popen(["ncat", "--broker", "--listen", "-p", "50905"])
+    broker_path = shutil.which("cyphal-broker", path=os.pathsep.join(session.bin_paths))
+    broker_process = subprocess.Popen([broker_path, "--port", "50905"])
     time.sleep(1.0)  # Ensure that it has started.
     if broker_process.poll() is not None:
         raise RuntimeError("Could not start the TCP broker")
