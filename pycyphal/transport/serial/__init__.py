@@ -82,16 +82,19 @@ This option can be accessed by specifying the URI of the form ``socket://<addres
 instead of a real serial port name when establishing the connection.
 
 The location specified in the URL must point to the TCP server port that will forward the data
-to and from the other end of the link.
-While such a server can be trivially coded manually by the developer,
-it is possible to avoid the effort by relying on the TCP connection brokering mode available in
-Ncat (which is a part of the `Nmap <https://nmap.org>`_ project, thanks Fyodor).
+to and from the other end of the link. For this purpose PyCyphal includes cyphal-broker.
+Alternatively, ncat (which is a part of the `Nmap <https://nmap.org>`_ project, thanks Fyodor),
+provides a brokering mode:
 
 For example, one could set up the TCP broker as follows
 (add ``-v`` to see what's happening; more info at https://nmap.org/ncat/guide/ncat-broker.html)
 (the port number is chosen at random here)::
 
     ncat --broker --listen -p 50905
+
+Or, equivilently using cyphal-broker::
+
+    cyphal-broker -p 50906
 
 And then use a serial transport with ``socket://127.0.0.1:50905``
 (N.B.: using ``localhost`` may significantly increase initialization latency on Windows due to slow DNS lookup).
