@@ -4,8 +4,9 @@ Cyphal/Serial-over-TCP broker.
 Cyphal/Serial uses COBS-encoded frames with a zero byte as frame delimiter. When
 brokering a byte-stream ncat --broker does know about the frame delimiter and
 might interleave frames from different clients.
-This broker is similar in functionality to :code:`ncat --broker`, but observes
-reads the whole frame before passing it on to other clients.
+This broker is similar in functionality to :code:`ncat --broker`, but reads the
+whole frame before passing it on to other clients, avoiding interleaved frames
+and potential frame/data loss.
 """
 
 import argparse
