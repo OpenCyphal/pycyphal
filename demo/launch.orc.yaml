@@ -11,8 +11,9 @@ uavcan:
   # Use Cyphal/UDP via localhost:
   udp.iface: 127.0.0.1
   # You can use Cyphal/serial tunneled over TCP (in a heterogeneous redundant configuration with
-  # UDP or standalone). pycyphal includes cyphal-broker for this purpose; you can also use ncat:
-  #   cyphal-broker --port 50905
+  # UDP or standalone). pycyphal includes cyphal-serial-broker for this purpose; you can also use
+  # ncat:
+  #   cyphal-serial-broker --port 50905
   #   ncat --broker --listen --source-port 50905
   serial.iface: "" # socket://127.0.0.1:50905
   # It is recommended to explicitly assign unused transports to ensure that previously stored transport
