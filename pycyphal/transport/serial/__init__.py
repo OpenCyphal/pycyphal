@@ -82,12 +82,11 @@ This option can be accessed by specifying the URI of the form ``socket://<addres
 instead of a real serial port name when establishing the connection.
 
 The location specified in the URL must point to the TCP server port that will forward the data
-to and from the other end of the link. For this purpose PyCyphal includes cyphal-serial-broker.
-Alternatively, ncat (which is a part of the `Nmap <https://nmap.org>`_ project, thanks Fyodor),
-provides a brokering mode:
+to and from the other end of the link. For this purpose PyCyphal includes ``cyphal-serial-broker``.
+Alternatively, ncat (which is a part of the `Nmap <https://nmap.org>`_ project, thanks Fyodor)
+has the broker mode.
 
-For example, one could set up the TCP broker as follows using `` cyphal-serial-broker`` (the port
-number is chosen at random here)::
+For example, one could use ``cyphal-serial-broker`` as follows (the port number is chosen at random here)::
 
     cyphal-serial-broker -p 50906
 
@@ -95,8 +94,6 @@ And then use a serial transport with ``socket://127.0.0.1:50905``
 (N.B.: using ``localhost`` may significantly increase initialization latency on Windows due to slow DNS lookup).
 All nodes whose transports are configured like that will be able to communicate with each other,
 as if they were connected to the same bus.
-Essentially, this can be seen as a virtualized RS-485 bus,
-where same concerns regarding medium access coordination apply.
 
 The location of the URI doesn't have to be local, of course --
 one can use this approach to link Cyphal nodes via conventional IP networks.
