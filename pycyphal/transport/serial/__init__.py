@@ -86,13 +86,8 @@ to and from the other end of the link. For this purpose PyCyphal includes cyphal
 Alternatively, ncat (which is a part of the `Nmap <https://nmap.org>`_ project, thanks Fyodor),
 provides a brokering mode:
 
-For example, one could set up the TCP broker as follows
-(add ``-v`` to see what's happening; more info at https://nmap.org/ncat/guide/ncat-broker.html)
-(the port number is chosen at random here)::
-
-    ncat --broker --listen -p 50905
-
-Or, equivilently using cyphal-serial-broker::
+For example, one could set up the TCP broker as follows using `` cyphal-serial-broker`` (the port
+number is chosen at random here)::
 
     cyphal-serial-broker -p 50906
 
