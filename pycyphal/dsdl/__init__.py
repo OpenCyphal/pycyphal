@@ -23,16 +23,12 @@ from ._compiler import GeneratedPackageInfo as GeneratedPackageInfo
 
 from ._support_wrappers import serialize as serialize
 from ._support_wrappers import deserialize as deserialize
-from ._support_wrappers import get_class as get_class
 from ._support_wrappers import get_extent_bytes as get_extent_bytes
 from ._support_wrappers import get_fixed_port_id as get_fixed_port_id
 from ._support_wrappers import get_attribute as get_attribute
-from ._support_wrappers import set_attribute as set_attribute
 from ._support_wrappers import is_serializable as is_serializable
 from ._support_wrappers import is_message_type as is_message_type
 from ._support_wrappers import is_service_type as is_service_type
-from ._support_wrappers import to_builtin as to_builtin
-from ._support_wrappers import update_from_builtin as update_from_builtin
 
 
 def generate_package(*args, **kwargs):  # type: ignore  # pragma: no cover
