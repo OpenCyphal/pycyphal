@@ -183,7 +183,7 @@ def make_node(
 
     # Populate certain fields of the node info structure automatically and create standard registers.
     info.protocol_version.major, info.protocol_version.minor = pycyphal.CYPHAL_SPECIFICATION_VERSION
-    if info.unique_id.sum() == 0:
+    if sum(info.unique_id) == 0:
         info.unique_id = bytes(  # type: ignore
             registry.setdefault(
                 "uavcan.node.unique_id",

@@ -16,6 +16,7 @@ from uavcan.node.port import List_1 as List
 from uavcan.node.port import SubjectIDList_1 as SubjectIDList
 from uavcan.node.port import ServiceIDList_1 as ServiceIDList
 from uavcan.node.port import SubjectID_1 as SubjectID
+from uavcan.primitive import Empty_1_0 as Empty
 
 import nunavut_support
 
@@ -138,7 +139,7 @@ def _make_subject_id_list(ports: Set[int]) -> SubjectIDList:
     if len(ports) <= sparse_list_type.capacity:
         return SubjectIDList(sparse_list=[SubjectID(x) for x in sorted(ports)])
 
-    out = SubjectIDList()
+    out = SubjectIDList(total=Empty())
     assert out.mask is not None
     _populate_mask(ports, out.mask)
     return out
@@ -170,16 +171,16 @@ def _unittest_make_port_list() -> None:
     assert pubs == [0, 1, 8191]  # Sorted!
 
     assert msg.subscribers.mask is not None
-    assert msg.subscribers.mask.sum() == 257
+    assert sum(msg.subscribers.mask) == 257
     for idx in range(SubjectIDList.CAPACITY):
         assert msg.subscribers.mask[idx] == (idx < 257)
 
-    assert msg.clients.mask.sum() == 0
-    assert msg.servers.mask.sum() == 512
+    assert sum(msg.clients.mask) == 0
+    assert sum(msg.servers.mask) == 512
 
 
 def _unittest_populate_mask() -> None:
-    srv = SubjectIDList()
+    srv = SubjectIDList(total=Empty())
     mask = srv.mask
     assert mask is not None
     _populate_mask({1, 2, 8191}, mask)

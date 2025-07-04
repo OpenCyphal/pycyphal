@@ -16,7 +16,6 @@ import pathlib
 import logging
 import itertools
 import warnings
-import numpy as np
 import pycyphal
 import pycyphal.application
 
@@ -453,7 +452,7 @@ class FileClient:
             offset += len(out)
         return data
 
-    async def write(self, path: str, data: memoryview | bytes, offset: int = 0, *, truncate: bool = True) -> int:
+    async def write(self, path: str, data: bytes, offset: int = 0, *, truncate: bool = True) -> int:
         """
         Proxy for ``uavcan.file.Write``.
 
@@ -475,7 +474,7 @@ class FileClient:
         :returns: See ``uavcan.file.Error``
         """
 
-        async def once(d: memoryview | bytes) -> int:
+        async def once(d: bytes) -> int:
             res = await self._call(
                 Write,
                 Write.Request(offset, path=Path(path), data=Unstructured(d)),
@@ -738,6 +737,8 @@ class FileClient2:
         """
 
         async def once(d: memoryview | bytes) -> None:
+            if (isinstance(d, memoryview)):
+                d = d.tobytes()  # Convert memoryview to bytes
             res = await self._call(
                 Write,
                 Write.Request(offset, path=Path(path), data=Unstructured(d)),
