@@ -54,7 +54,7 @@ class DiagnosticSubscriber:
 
     async def _on_message(self, msg: Record, meta: pycyphal.transport.TransferFrom) -> None:
         node_id = meta.source_node_id if meta.source_node_id is not None else "anonymous"
-        diag_text = msg.text.tobytes().decode("utf8", errors="replace")
+        diag_text = msg.text.decode("utf8", errors="replace")
         log_text = (
             f"uavcan.diagnostic.Record: node={node_id} severity={msg.severity.value} "
             + f"ts_sync={msg.timestamp.microsecond * 1e-6:0.6f} ts_local={meta.timestamp}:\n"

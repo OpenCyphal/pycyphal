@@ -182,13 +182,13 @@ def _unittest_dyn() -> None:
     assert e
     assert not e.mutable
     assert e.value.string
-    assert e.value.string.value.tobytes().decode() == "Hello"
+    assert e.value.string.value.decode() == "Hello"
 
     e = b.get("bar")
     assert e
     assert e.mutable
     assert e.value.string
-    assert e.value.string.value.tobytes().decode() == ""
+    assert e.value.string.value.decode() == ""
 
     b["foo"] = Value(string=String("world"))
     b["bar"] = Entry(Value(string=String("world")), mutable=False)  # Flag ignored
@@ -197,13 +197,13 @@ def _unittest_dyn() -> None:
     assert e
     assert not e.mutable
     assert e.value.string
-    assert e.value.string.value.tobytes().decode() == "Hello"
+    assert e.value.string.value.decode() == "Hello"
 
     e = b.get("bar")
     assert e
     assert e.mutable
     assert e.value.string
-    assert e.value.string.value.tobytes().decode() == "world"
+    assert e.value.string.value.decode() == "world"
 
     del b["foo"]
     assert len(b) == 1

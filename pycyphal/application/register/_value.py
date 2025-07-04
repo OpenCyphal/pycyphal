@@ -216,9 +216,9 @@ class ValueProxy:
         if v.empty:
             return ""
         if v.string:
-            return str(v.string.value.tobytes().decode("utf8"))
+            return str(v.string.value.decode("utf8"))
         if v.unstructured:
-            return str(v.unstructured.value.tobytes().decode("utf8", "ignore"))
+            return str(v.unstructured.value.decode("utf8", "ignore"))
         raise ValueConversionError(f"{v!r} cannot be converted to string")
 
     def __bytes__(self) -> bytes:
@@ -226,9 +226,9 @@ class ValueProxy:
         if v.empty:
             return b""
         if v.string:
-            return bytes(v.string.value.tobytes())
+            return bytes(v.string.value)
         if v.unstructured:
-            return bytes(v.unstructured.value.tobytes())
+            return bytes(v.unstructured.value)
         raise ValueConversionError(f"{v!r} cannot be converted to bytes")
 
     def __repr__(self) -> str:

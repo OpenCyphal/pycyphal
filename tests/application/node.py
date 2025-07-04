@@ -106,7 +106,7 @@ async def _unittest_slow_node(compiled: typing.List[pycyphal.dsdl.GeneratedPacka
         resp, transfer = info_transfer
         assert transfer.source_node_id == 258
         assert isinstance(resp, GetInfo_1.Response)
-        assert resp.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node"
+        assert resp.name.decode() == "org.opencyphal.pycyphal.test.node"
         assert resp.protocol_version.major == pycyphal.CYPHAL_SPECIFICATION_VERSION[0]
         assert resp.software_version.major == pycyphal.__version_info__[0]
 

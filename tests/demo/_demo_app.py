@@ -197,7 +197,7 @@ async def _unittest_slow_demo_app(
         assert transfer.transfer_id == 22
         assert transfer.priority == pycyphal.transport.Priority.EXCEPTIONAL
         assert isinstance(info, uavcan.node.GetInfo_1.Response)
-        assert info.name.tobytes().decode() == "org.opencyphal.pycyphal.demo.demo_app"
+        assert info.name.decode() == "org.opencyphal.pycyphal.demo.demo_app"
         assert info.protocol_version.major == pycyphal.CYPHAL_SPECIFICATION_VERSION[0]
         assert info.protocol_version.minor == pycyphal.CYPHAL_SPECIFICATION_VERSION[1]
         assert info.software_version.major == 1

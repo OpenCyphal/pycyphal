@@ -35,7 +35,7 @@ _PSEUDO_UNIQUE_ID_MASK = (
 
 _NODE_ID_MASK = 2 ** nunavut_support.get_model(ID)["value"].data_type.bit_length_set.max - 1
 
-_UNIQUE_ID_SIZE_BYTES = pycyphal.application.NodeInfo().unique_id.size
+_UNIQUE_ID_SIZE_BYTES = len(pycyphal.application.NodeInfo().unique_id)
 
 _NUM_RESERVED_TOP_NODE_IDS = 2
 
@@ -193,7 +193,7 @@ class Allocatee:
             if msg.unique_id_hash == self._local_pseudo_uid and len(msg.allocated_node_id) > 0:
                 allocated = msg.allocated_node_id[0].value
         elif isinstance(msg, NodeIDAllocationData_2):
-            if msg.unique_id.tobytes() == self._local_unique_id:
+            if msg.unique_id == self._local_unique_id:
                 allocated = msg.node_id.value
         else:
             assert False, "Internal logic error"
@@ -276,7 +276,7 @@ class CentralizedAllocator(Allocator):
         self._alloc = _AllocationTable(
             sqlite3.connect(str(database_file or _DB_DEFAULT_LOCATION), timeout=_DB_TIMEOUT, check_same_thread=False)
         )
-        self._alloc.register(local_node_id, self.node.info.unique_id.tobytes())
+        self._alloc.register(local_node_id, self.node.info.unique_id)
         self._sub1 = self.node.make_subscriber(NodeIDAllocationData_1)
         self._sub2 = self.node.make_subscriber(NodeIDAllocationData_2)
         self._pub1 = self.node.make_publisher(NodeIDAllocationData_1)
@@ -326,7 +326,7 @@ class CentralizedAllocator(Allocator):
                 self._respond_v1(meta.priority, msg.unique_id_hash, allocated)
                 return
         elif isinstance(msg, NodeIDAllocationData_2):
-            uid = msg.unique_id.tobytes()
+            uid = msg.unique_id
             allocated = self._alloc.allocate(msg.node_id.value, max_node_id, uid=uid)
             if allocated is not None:
                 self._respond_v2(meta.priority, uid, allocated)

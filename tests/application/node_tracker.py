@@ -125,7 +125,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
                     assert new.heartbeat.vendor_specific_status_code == 0xDE
                     assert old.info is None
                     assert new.info is not None
-                    assert new.info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
+                    assert new.info.name.decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
                 elif num_events_a == 2:  # Restart detected
                     assert old is not None
                     assert new is not None
@@ -140,7 +140,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
                     assert new.heartbeat.vendor_specific_status_code == 0xFE
                     assert old.info is None
                     assert new.info is not None
-                    assert new.info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
+                    assert new.info.name.decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
                 elif num_events_a == 4:  # Offline
                     assert old is not None
                     assert new is None
@@ -162,7 +162,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
                     assert new.heartbeat.vendor_specific_status_code == 0xBE
                     assert old.info is None
                     assert new.info is not None
-                    assert new.info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.b"
+                    assert new.info.name.decode() == "org.opencyphal.pycyphal.test.node_tracker.b"
                 elif num_events_b == 2:
                     assert old is not None
                     assert new is None
@@ -207,11 +207,11 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
         assert 60 >= trk.registry[0xA].heartbeat.uptime >= 8
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xDE
         assert trk.registry[0xA].info is not None
-        assert trk.registry[0xA].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
+        assert trk.registry[0xA].info.name.decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
         assert 60 >= trk.registry[0xB].heartbeat.uptime >= 6
         assert trk.registry[0xB].heartbeat.vendor_specific_status_code == 0xBE
         assert trk.registry[0xB].info is not None
-        assert trk.registry[0xB].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.b"
+        assert trk.registry[0xB].info.name.decode() == "org.opencyphal.pycyphal.test.node_tracker.b"
 
         # Node B goes offline.
         n_b.close()
@@ -223,7 +223,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
         assert 90 >= trk.registry[0xA].heartbeat.uptime >= 12
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xDE
         assert trk.registry[0xA].info is not None
-        assert trk.registry[0xA].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
+        assert trk.registry[0xA].info.name.decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
 
         # Node C appears online. It does not respond to GetInfo.
         n_c.heartbeat_publisher.vendor_specific_status_code = 0xF0
@@ -243,7 +243,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
         assert 180 >= trk.registry[0xA].heartbeat.uptime >= 17
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xDE
         assert trk.registry[0xA].info is not None
-        assert trk.registry[0xA].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
+        assert trk.registry[0xA].info.name.decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
         assert 30 >= trk.registry[0xC].heartbeat.uptime >= 5
         assert trk.registry[0xC].heartbeat.vendor_specific_status_code == 0xF0
         assert trk.registry[0xC].info is None
@@ -262,7 +262,7 @@ async def _unittest_slow_node_tracker(compiled: typing.List[pycyphal.dsdl.Genera
         assert 30 >= trk.registry[0xA].heartbeat.uptime >= 5
         assert trk.registry[0xA].heartbeat.vendor_specific_status_code == 0xFE
         assert trk.registry[0xA].info is not None
-        assert trk.registry[0xA].info.name.tobytes().decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
+        assert trk.registry[0xA].info.name.decode() == "org.opencyphal.pycyphal.test.node_tracker.a"
 
         # Node A goes offline. No online nodes are left standing.
         n_a.close()

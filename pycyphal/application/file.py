@@ -101,7 +101,7 @@ class FileServer:
         :raises: :class:`FileNotFoundError` if :attr:`roots` is empty.
         """
         if isinstance(p, Path):
-            p = p.path.tobytes().decode(errors="ignore").replace(chr(Path.SEPARATOR), os.sep)
+            p = p.path.decode(errors="ignore").replace(chr(Path.SEPARATOR), os.sep)
         assert not isinstance(p, Path)
         p = pathlib.Path(str(pathlib.Path(p)).strip(os.sep))  # Make relative, canonicalize the trailing separator
         # See if there are existing entries under this name:
@@ -246,7 +246,7 @@ class FileServer:
                 if request.offset != 0:  # Do not seek unless necessary to support non-seekable files.
                     f.seek(request.offset)
                 data = f.read(self._data_transfer_capacity)
-            return Read.Response(data=Unstructured(np.frombuffer(data, np.uint8)))
+            return Read.Response(data=Unstructured(data))
         except Exception as ex:
             _logger.info("%r: Error: %r", self, ex, exc_info=True)
             return Read.Response(self.convert_error(ex))
@@ -256,7 +256,7 @@ class FileServer:
     ) -> Write.Response:
         _logger.info("%r: Request from %r: %r", self, meta.client_node_id, request)
         try:
-            data = request.data.value.tobytes()
+            data = request.data.value
             with open(pathlib.Path(*self.locate(request.path)), "rb+") as f:
                 f.seek(request.offset)
                 f.write(data)
@@ -341,7 +341,7 @@ class FileClient:
         for index in itertools.count():
             res = await self._call(List, List.Request(entry_index=index, directory_path=Path(path)))
             assert isinstance(res, List.Response)
-            p = res.entry_base_name.path.tobytes().decode(errors="ignore")
+            p = res.entry_base_name.path.decode(errors="ignore")
             if p:
                 yield str(p)
             else:
@@ -437,7 +437,7 @@ class FileClient:
             assert isinstance(res, Read.Response)
             if res.error.value != 0:
                 return int(res.error.value)
-            return bytes(res.data.value.tobytes())
+            return bytes(res.data.value)
 
         if size is None:
             size = 2**64
@@ -478,7 +478,7 @@ class FileClient:
         async def once(d: memoryview | bytes) -> int:
             res = await self._call(
                 Write,
-                Write.Request(offset, path=Path(path), data=Unstructured(np.frombuffer(d, np.uint8))),
+                Write.Request(offset, path=Path(path), data=Unstructured(d)),
             )
             assert isinstance(res, Write.Response)
             return res.error.value
@@ -581,7 +581,7 @@ class FileClient2:
         for index in itertools.count():
             res = await self._call(List, List.Request(entry_index=index, directory_path=Path(path)))
             assert isinstance(res, List.Response)
-            p = res.entry_base_name.path.tobytes().decode(errors="ignore")
+            p = res.entry_base_name.path.decode(errors="ignore")
             if p:
                 yield str(p)
             else:
@@ -690,7 +690,7 @@ class FileClient2:
             res = await self._call(Read, Read.Request(offset=offset, path=Path(path)))
             assert isinstance(res, Read.Response)
             _raise_on_error(res.error, path)
-            return bytes(res.data.value.tobytes())
+            return bytes(res.data.value)
 
         data = b""
         while len(data) < (size or 2**64):
@@ -740,7 +740,7 @@ class FileClient2:
         async def once(d: memoryview | bytes) -> None:
             res = await self._call(
                 Write,
-                Write.Request(offset, path=Path(path), data=Unstructured(np.frombuffer(d, np.uint8))),
+                Write.Request(offset, path=Path(path), data=Unstructured(d)),
             )
             assert isinstance(res, Write.Response)
             _raise_on_error(res.error, path)

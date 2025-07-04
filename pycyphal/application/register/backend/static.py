@@ -178,7 +178,7 @@ def _unittest_memory() -> None:
     e = st.get("foo")
     assert e
     assert e.value.string
-    assert e.value.string.value.tobytes().decode() == "Hello world!"
+    assert e.value.string.value.decode() == "Hello world!"
     assert e.mutable
     assert len(st) == 1
 
@@ -187,7 +187,7 @@ def _unittest_memory() -> None:
     e = st.get("foo")
     assert e
     assert e.value.unstructured
-    assert e.value.unstructured.value.tobytes() == b"\x01\x02\x03"
+    assert e.value.unstructured.value == b"\x01\x02\x03"
     assert e.mutable
     assert len(st) == 1
 
@@ -223,12 +223,12 @@ def _unittest_file() -> None:
     e = st.get("a")
     assert e
     assert e.value.unstructured
-    assert e.value.unstructured.value.tobytes() == b"\x01\x02\x03"
+    assert e.value.unstructured.value == b"\x01\x02\x03"
     assert e.mutable
 
     e = st.get("b")
     assert e
     assert e.value.unstructured
-    assert e.value.unstructured.value.tobytes() == b"\x04\x05\x06"
+    assert e.value.unstructured.value == b"\x04\x05\x06"
     assert e.mutable
     st.close()

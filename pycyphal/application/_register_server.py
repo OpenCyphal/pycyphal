@@ -124,7 +124,7 @@ class RegisterServer:
         return List.Response()
 
     async def _handle_access(self, request: Access.Request, metadata: ServiceRequestMetadata) -> Access.Response:
-        name = request.name.name.tobytes().decode("utf8", "ignore")
+        name = request.name.name.decode("utf8", "ignore")
         try:
             v: Optional[ValueProxyWithFlags] = self.node.registry[name]
         except KeyError:
