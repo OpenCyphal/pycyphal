@@ -235,7 +235,7 @@ class PublisherImpl(Closable, typing.Generic[T]):
 
         return pycyphal.util.repr_attributes_noexcept(
             self,
-            dtype=str(nunavut_support.get_model(self.dtype)),
+            dtype=str(nunavut_support.get_dsdl_name(self.dtype)),
             transport_session=self.transport_session,
             proxy_count=self._proxy_count,
         )

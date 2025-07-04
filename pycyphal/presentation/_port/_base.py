@@ -132,7 +132,7 @@ class MessagePort(Port[T]):
         import nunavut_support
 
         return pycyphal.util.repr_attributes(
-            self, dtype=str(nunavut_support.get_model(self.dtype)), transport_session=self.transport_session
+            self, dtype=nunavut_support.get_dsdl_name(self.dtype), transport_session=self.transport_session
         )
 
 
@@ -157,5 +157,5 @@ class ServicePort(Port[T]):
         import nunavut_support
 
         return pycyphal.util.repr_attributes(
-            self, dtype=str(nunavut_support.get_model(self.dtype)), input_transport_session=self.input_transport_session
+            self, dtype=str(nunavut_support.get_dsdl_name(self.dtype)), input_transport_session=self.input_transport_session
         )

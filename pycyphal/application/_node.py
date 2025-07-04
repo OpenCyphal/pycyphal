@@ -228,7 +228,7 @@ class Node(abc.ABC):
             )
         )
         # Expose the type information to other network participants as prescribed by the Specification.
-        model = nunavut_support.get_model(dtype)
+        model = nunavut_support.get_dsdl_name(dtype)
         self.registry[self._get_port_type_register_name(kind, name)] = lambda: register.Value(
             string=register.String(str(model))
         )

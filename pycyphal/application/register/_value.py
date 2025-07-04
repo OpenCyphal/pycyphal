@@ -4,11 +4,10 @@
 
 from __future__ import annotations
 from typing import Union, Iterable, List, Any, Optional, no_type_check
-from numpy.typing import NDArray
 from nunavut_support import get_attribute
 import pycyphal
 from .backend import Value as Value
-from . import String, Unstructured, Bit
+from . import String, Unstructured, Bit, Empty
 from . import Integer8, Integer16, Integer32, Integer64
 from . import Natural8, Natural16, Natural32, Natural64
 from . import Real16, Real32, Real64
@@ -346,7 +345,7 @@ def _strictify(s: RelaxedValue) -> Value:
 
     s = list(s)
     if not s:
-        return Value()  # Empty list generalized into Value.empty.
+        return Value(empty=Empty())  # Empty list generalized into Value.empty.
     if all(isinstance(x, bool) for x in s):
         return _strictify(Bit(s))
     if all(isinstance(x, (int, bool)) for x in s):

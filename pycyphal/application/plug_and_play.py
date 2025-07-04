@@ -30,10 +30,10 @@ import pycyphal.application
 ID = uavcan.node.ID_1
 
 _PSEUDO_UNIQUE_ID_MASK = (
-    2 ** nunavut_support.get_model(NodeIDAllocationData_1)["unique_id_hash"].data_type.bit_length_set.max - 1
+    2 ** nunavut_support.get_num_bits(NodeIDAllocationData_1,"unique_id_hash") - 1
 )
 
-_NODE_ID_MASK = 2 ** nunavut_support.get_model(ID)["value"].data_type.bit_length_set.max - 1
+_NODE_ID_MASK = 2 ** nunavut_support.get_num_bits(ID,"value") - 1
 
 _UNIQUE_ID_SIZE_BYTES = len(pycyphal.application.NodeInfo().unique_id)
 
@@ -66,7 +66,7 @@ class Allocatee:
 
     DEFAULT_PRIORITY = pycyphal.transport.Priority.SLOW
 
-    _MTU_THRESHOLD = nunavut_support.get_model(NodeIDAllocationData_2).bit_length_set.max // 8
+    _MTU_THRESHOLD = nunavut_support.get_extent_bytes(NodeIDAllocationData_2)
 
     def __init__(
         self,

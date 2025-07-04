@@ -45,7 +45,7 @@ class Mode(enum.IntEnum):
 
 
 VENDOR_SPECIFIC_STATUS_CODE_MASK = (
-    2 ** nunavut_support.get_model(Heartbeat)["vendor_specific_status_code"].data_type.bit_length_set.max - 1
+    2 ** nunavut_support.get_num_bits(Heartbeat,"vendor_specific_status_code") - 1
 )
 
 

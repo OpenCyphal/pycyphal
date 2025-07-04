@@ -57,7 +57,7 @@ class FileServer:
         self._roots = [pathlib.Path(x).resolve() for x in roots]
 
         # noinspection PyUnresolvedReferences
-        self._data_transfer_capacity = int(nunavut_support.get_model(Unstructured)["value"].data_type.capacity)
+        self._data_transfer_capacity = nunavut_support.get_array_capacity(Unstructured,"value")
 
         s_ls = node.get_server(List)
         s_if = node.get_server(GetInfo)
@@ -308,7 +308,7 @@ class FileClient:
         self._clients: typing.Dict[typing.Type[object], pycyphal.presentation.Client[object]] = {}
 
         # noinspection PyUnresolvedReferences
-        self._data_transfer_capacity = int(nunavut_support.get_model(Unstructured)["value"].data_type.capacity)
+        self._data_transfer_capacity = nunavut_support.get_array_capacity(Unstructured,"value")
 
     @property
     def data_transfer_capacity(self) -> int:
@@ -548,7 +548,7 @@ class FileClient2:
         self._clients: typing.Dict[typing.Type[object], pycyphal.presentation.Client[object]] = {}
 
         # noinspection PyUnresolvedReferences
-        self._data_transfer_capacity = int(nunavut_support.get_model(Unstructured)["value"].data_type.capacity)
+        self._data_transfer_capacity = nunavut_support.get_array_capacity(Unstructured,"value")
 
     @property
     def data_transfer_capacity(self) -> int:

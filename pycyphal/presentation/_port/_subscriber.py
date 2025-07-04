@@ -376,7 +376,7 @@ class SubscriberImpl(Closable, Generic[T]):
 
         return pycyphal.util.repr_attributes_noexcept(
             self,
-            dtype=str(nunavut_support.get_model(self.dtype)),
+            dtype=str(nunavut_support.get_dsdl_name(self.dtype)),
             transport_session=self.transport_session,
             deserialization_failure_count=self.deserialization_failure_count,
             listeners=self._listeners,

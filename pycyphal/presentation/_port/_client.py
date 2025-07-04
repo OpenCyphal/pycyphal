@@ -396,7 +396,7 @@ class ClientImpl(Closable, Generic[T]):
 
         return pycyphal.util.repr_attributes_noexcept(
             self,
-            dtype=str(nunavut_support.get_model(self.dtype)),
+            dtype=str(nunavut_support.get_dsdl_name(self.dtype)),
             input_transport_session=self.input_transport_session,
             output_transport_session=self.output_transport_session,
             proxy_count=self._proxy_count,

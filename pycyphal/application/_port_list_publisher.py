@@ -133,10 +133,8 @@ def _make_port_list(state: _State, packet_capture_mode: bool) -> List:
 
 
 def _make_subject_id_list(ports: Set[int]) -> SubjectIDList:
-    sparse_list_type = nunavut_support.get_model(SubjectIDList)["sparse_list"].data_type
-    assert isinstance(sparse_list_type, pydsdl.ArrayType)
-
-    if len(ports) <= sparse_list_type.capacity:
+    
+    if len(ports) <= nunavut_support.get_array_capacity(SubjectIDList, "sparse_list"):
         return SubjectIDList(sparse_list=[SubjectID(x) for x in sorted(ports)])
 
     out = SubjectIDList(total=Empty())
