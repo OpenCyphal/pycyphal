@@ -171,7 +171,7 @@ a list of all the paths where the DSDL root namespace directories are to be foun
 Next, open 2 terminal windows.
 In the first, run::
 
-    ncat --broker --listen -p 50905
+    cyphal-serial-broker -p 50905
 
 In the second one::
 

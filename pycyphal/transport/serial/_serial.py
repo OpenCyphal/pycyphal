@@ -339,7 +339,7 @@ class SerialTransport(pycyphal.transport.Transport):
             printable = printable.decode("utf8")
         except ValueError:
             pass
-        _logger.warning("%s: Out-of-band received at %s: %r", self._serial_port.name, timestamp, printable)
+        _logger.info("%s: Out-of-band received at %s: %r", self._serial_port.name, timestamp, printable)
 
     def _handle_received_item_and_update_stats(
         self, timestamp: Timestamp, item: typing.Union[SerialFrame, memoryview], in_bytes_count: int
