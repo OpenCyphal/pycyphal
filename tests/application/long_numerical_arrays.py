@@ -1,6 +1,7 @@
 # Copyright (c) 2025 OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Huong Pham <huong.pham@zubax.com>
+from typing import List
 
 
 def _unittest_strictify_bool() -> None:
@@ -8,8 +9,10 @@ def _unittest_strictify_bool() -> None:
     from pycyphal.application.register._value import _strictify
 
     s = [True, False]
-    v = _strictify(s).bit.value
-    assert (s == v).all()
+    n = _strictify(s).bit
+    assert n is not None
+    v = n.value
+    assert (s == v).all()  # type: ignore[attr-defined]
 
 
 def _unittest_strictify_u64() -> None:
@@ -17,8 +20,10 @@ def _unittest_strictify_u64() -> None:
     from pycyphal.application.register._value import _strictify
 
     s = [x * 1000000 for x in range(30)]
-    v = _strictify(s).natural64.value
-    assert (s == v).all()
+    n = _strictify(s).natural64
+    assert n is not None
+    v = n.value
+    assert (s == v).all()  # type: ignore[attr-defined]
 
 
 def _unittest_strictify_u32() -> None:
@@ -26,8 +31,10 @@ def _unittest_strictify_u32() -> None:
     from pycyphal.application.register._value import _strictify
 
     s = [x * 1000000 for x in range(60)]
-    v = _strictify(s).natural32.value
-    assert (s == v).all()
+    n = _strictify(s).natural32
+    assert n is not None
+    v = n.value
+    assert (s == v).all()  # type: ignore[attr-defined]
 
 
 def _unittest_strictify_u16() -> None:
@@ -35,8 +42,10 @@ def _unittest_strictify_u16() -> None:
     from pycyphal.application.register._value import _strictify
 
     s = [x * 100 for x in range(80)]
-    v = _strictify(s).natural16.value
-    assert (s == v).all()
+    n = _strictify(s).natural16
+    assert n is not None
+    v = n.value
+    assert (s == v).all()  # type: ignore[attr-defined]
 
 
 def _unittest_strictify_i64() -> None:
@@ -44,8 +53,10 @@ def _unittest_strictify_i64() -> None:
     from pycyphal.application.register._value import _strictify
 
     s = [-x * 1000000 for x in range(30)]
-    v = _strictify(s).integer64.value
-    assert (s == v).all()
+    n = _strictify(s).integer64
+    assert n is not None
+    v = n.value
+    assert (s == v).all()  # type: ignore[attr-defined]
 
 
 def _unittest_strictify_i32() -> None:
@@ -53,8 +64,10 @@ def _unittest_strictify_i32() -> None:
     from pycyphal.application.register._value import _strictify
 
     s = [-x * 1000000 for x in range(60)]
-    v = _strictify(s).integer32.value
-    assert (s == v).all()
+    n = _strictify(s).integer32
+    assert n is not None
+    v = n.value
+    assert (s == v).all()  # type: ignore[attr-defined]
 
 
 def _unittest_strictify_i16() -> None:
@@ -62,5 +75,7 @@ def _unittest_strictify_i16() -> None:
     from pycyphal.application.register._value import _strictify
 
     s = [-x * 100 for x in range(80)]
-    v = _strictify(s).integer16.value
-    assert (s == v).all()
+    n = _strictify(s).integer16
+    assert n is not None
+    v = n.value
+    assert (s == v).all()  # type: ignore[attr-defined]
