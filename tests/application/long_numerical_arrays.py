@@ -1,4 +1,5 @@
 import pycyphal
+import pytest
 
 # noinspection PyProtectedMember
 from pycyphal.application.register._value import _strictify
@@ -39,7 +40,7 @@ def _unittest_strictify_int64() -> None:
     v = _strictify(s).integer32.value
     assert (s == v).all()
 
-l
+
 def _unittest_strictify_int128() -> None:
     s = [-x * 100 for x in range(80)]
     v = _strictify(s).integer16.value
