@@ -13,6 +13,9 @@ _logger = logging.getLogger(__name__)
 
 
 class Locker:
+    """
+    This class locks the namespace to prevent multiple processes from compiling the same namespace at the same time.
+    """
 
     def __init__(self, output_directory: pathlib.Path, root_namespace_name: str) -> None:
         self._output_directory = output_directory

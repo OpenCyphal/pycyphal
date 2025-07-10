@@ -1,7 +1,6 @@
 # Copyright (c) 2025 OpenCyphal
 # This software is distributed under the terms of the MIT License.
 # Author: Huong Pham <huong.pham@zubax.com>
-from typing import List
 
 
 def _unittest_strictify_bool() -> None:

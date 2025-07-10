@@ -15,7 +15,7 @@ import pydsdl
 import nunavut
 import nunavut.lang
 import nunavut.jinja
-from pycyphal.dsdl._lockfile import Locker
+from ._lockfile import Locker
 
 _AnyPath = Union[str, pathlib.Path]
 
