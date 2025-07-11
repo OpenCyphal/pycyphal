@@ -350,9 +350,21 @@ def _strictify(s: RelaxedValue) -> Value:
     if all(isinstance(x, bool) for x in s):
         return _strictify(Bit(s))
     if all(isinstance(x, (int, bool)) for x in s):
-        return _strictify(Natural64(s)) if all(x >= 0 for x in s) else _strictify(Integer64(s))
-    if all(isinstance(x, (float, int, bool)) for x in s):
-        return _strictify(Real64(s))
+        if len(s) <= 32:
+            return _strictify(Natural64(s)) if all(x >= 0 for x in s) else _strictify(Integer64(s))
+        if len(s) <= 64:
+            return _strictify(Natural32(s)) if all(x >= 0 for x in s) else _strictify(Integer32(s))
+        if len(s) <= 128:
+            return _strictify(Natural16(s)) if all(x >= 0 for x in s) else _strictify(Integer16(s))
+        if len(s) <= 256:
+            return _strictify(Natural8(s)) if all(x >= 0 for x in s) else _strictify(Integer8(s))
+    elif all(isinstance(x, (float, int, bool)) for x in s):
+        if len(s) <= 32:
+            return _strictify(Real64(s))
+        if len(s) <= 64:
+            return _strictify(Real32(s))
+        if len(s) <= 128:
+            return _strictify(Real16(s))
 
     raise ValueConversionError(f"Don't know how to convert {s!r} into {Value}")  # pragma: no cover
 

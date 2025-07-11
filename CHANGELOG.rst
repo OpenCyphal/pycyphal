@@ -3,6 +3,13 @@
 Changelog
 =========
 
+v1.24
+-----
+
+- Add ``Lockerfile`` to prevent race condition when compiling namespaces (`#357 <https://github.com/OpenCyphal/pycyphal/pull/357>`_)
+- Add ``remove_import_hook``, rename ``install_import_hook`` to ``add_import_hook`` (`#356 <https://github.com/OpenCyphal/pycyphal/pull/356>`_)
+- Choose the type width based on elements in the source array (`#358 <https://github.com/OpenCyphal/pycyphal/pull/358>`_)
+
 v1.23
 -----
 
