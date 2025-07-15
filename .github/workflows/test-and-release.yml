@@ -1,4 +1,3 @@
-
 name: 'Test & Release'
 on: [ push, pull_request ]
 
@@ -51,16 +50,13 @@ jobs:
           python --version
           ip link show
 
-          # Build Graphviz 13.x
-          sudo apt-get update
-          sudo apt-get install -y wget build-essential libgd-dev libpango1.0-dev libsodium-dev libargon2-dev
-          wget https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/13.1.0/graphviz-13.1.0.tar.gz
-          tar xzf graphviz-13.1.0.tar.gz
-          cd graphviz-13.1.0
-          ./configure --disable-perl --disable-python --disable-go --disable-java --disable-lua --disable-tcl
-          make -j$(nproc)
-          sudo make install
-          cd ../ && sudo rm -rf graphviz-13.1.0
+          # Install Graphviz 13.x
+          wget https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/13.1.0/ubuntu_24.04_graphviz-13.1.0-cmake.deb
+          sudo sudo dpkg -i ./ubuntu_24.04_graphviz-13.1.0-cmake.deb
+          
+          # Check Graphviz version
+          dot -V
+          which dot
 
       - name: Configure environment -- Windows
         if: ${{ runner.os == 'Windows' }}
@@ -100,17 +96,14 @@ jobs:
           python -m pip install --upgrade pip packaging setuptools wheel twine
           python setup.py sdist bdist_wheel
 
-      - name: Build Graphviz 13.x
+      - name: Install Graphviz 13.x
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget build-essential libgd-dev libpango1.0-dev libsodium-dev libargon2-dev
-          wget https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/13.1.0/graphviz-13.1.0.tar.gz
-          tar xzf graphviz-13.1.0.tar.gz
-          cd graphviz-13.1.0
-          ./configure --disable-perl --disable-python --disable-go --disable-java --disable-lua --disable-tcl
-          make -j$(nproc)
-          sudo make install
-          cd ../ && sudo rm -rf graphviz-13.1.0
+          wget https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/13.1.0/ubuntu_24.04_graphviz-13.1.0-cmake.deb
+          sudo sudo dpkg -i ./ubuntu_24.04_graphviz-13.1.0-cmake.deb
+
+          # Check Graphviz version
+          dot -V
+          which dot
 
       - name: Get release version
         run: |
