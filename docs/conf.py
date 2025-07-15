@@ -107,6 +107,7 @@ autodoc_default_options = {
 todo_include_todos = True
 
 graphviz_output_format = "svg"
+graphviz_dot_args = ["-Gfontname=Helvetica"]
 
 inheritance_graph_attrs = {
     "rankdir": "LR",
