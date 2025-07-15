@@ -5,9 +5,17 @@ version: 2
 build:
   os: ubuntu-lts-latest
   tools:
-    python: "3.10"
+    python: "3.13"
   apt_packages:
-    - graphviz
+    - build-essential
+    - libsodium-dev
+    - libargon2-dev
+  jobs:
+    pre_create_environment:
+      - wget https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/13.1.0/graphviz-13.1.0.tar.gz
+      - tar xzf graphviz-13.1.0.tar.gz
+      - cd ./graphviz-13.1.0 && ./configure -prefix=$HOME/.graphviz --disable-perl --disable-python --disable-go --disable-java --disable-lua --disable-tcl && make install
+      - echo "export PATH=$HOME/.graphviz/bin:\$PATH" >> $READTHEDOCS_ENV_PATH
 sphinx:
   configuration: docs/conf.py
   fail_on_warning: true
