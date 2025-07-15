@@ -10,6 +10,12 @@ v1.24
 - Add ``remove_import_hook``, rename ``install_import_hook`` to ``add_import_hook`` (`#356 <https://github.com/OpenCyphal/pycyphal/pull/356>`_)
 - Choose the type width based on elements in the source array (`#358 <https://github.com/OpenCyphal/pycyphal/pull/358>`_)
 
+- **v1.24.1:**
+
+  - Install Graphviz 13.x.
+    See (`#363 <https://github.com/OpenCyphal/pycyphal/pull/363>`_)
+
+
 v1.23
 -----
 
