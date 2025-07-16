@@ -1,12 +1,3 @@
-/* See https://github.com/OpenCyphal/pycyphal/issues/321 */
-object.inheritance, img.inheritance {
-    max-width: 25%;
-    width: 25%;
-    height: auto;
-    display: block;
-    margin: auto;
-}
-
 /* Gray text is ugly. Text should be black. */
 body {
     color: #000;
