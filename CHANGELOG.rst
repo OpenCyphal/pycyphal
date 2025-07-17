@@ -15,6 +15,11 @@ v1.24
   - Install Graphviz 13.x.
     See (`#363 <https://github.com/OpenCyphal/pycyphal/pull/363>`_)
 
+- **v1.24.2:**
+
+  - Revert changes from 1.24.1. See Issue (`#321 <https://github.com/OpenCyphal/pycyphal/issues/321>`_)
+  - Build Graphviz 13.x.
+    See (`#363 <https://github.com/OpenCyphal/pycyphal/pull/365>`_)
 
 v1.23
 -----
