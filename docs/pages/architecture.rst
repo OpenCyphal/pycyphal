@@ -54,7 +54,7 @@ The dependency relations of the submodules are as follows:
 
     digraph submodule_interdependency {
         graph   [bgcolor=transparent];
-        node    [shape=box, style=filled, fontname="monospace"];
+        node    [shape=box, style=filled];
 
         dsdl            [fillcolor="#FF88FF", label="pycyphal.dsdl"];
         transport       [fillcolor="#FFF2CC", label="pycyphal.transport"];
