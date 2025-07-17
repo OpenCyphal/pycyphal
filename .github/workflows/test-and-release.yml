@@ -50,14 +50,6 @@ jobs:
           python --version
           ip link show
 
-          # Install Graphviz 13.x
-          wget https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/13.1.0/ubuntu_24.04_graphviz-13.1.0-cmake.deb
-          sudo sudo dpkg -i ./ubuntu_24.04_graphviz-13.1.0-cmake.deb
-          
-          # Check Graphviz version
-          dot -V
-          which dot
-
       - name: Configure environment -- Windows
         if: ${{ runner.os == 'Windows' }}
         run: |
@@ -95,15 +87,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip packaging setuptools wheel twine
           python setup.py sdist bdist_wheel
-
-      - name: Install Graphviz 13.x
-        run: |
-          wget https://gitlab.com/api/v4/projects/4207231/packages/generic/graphviz-releases/13.1.0/ubuntu_24.04_graphviz-13.1.0-cmake.deb
-          sudo sudo dpkg -i ./ubuntu_24.04_graphviz-13.1.0-cmake.deb
-
-          # Check Graphviz version
-          dot -V
-          which dot
 
       - name: Get release version
         run: |

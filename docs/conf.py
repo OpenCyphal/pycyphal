@@ -107,6 +107,8 @@ autodoc_default_options = {
 todo_include_todos = True
 
 graphviz_output_format = "svg"
+if os.environ.get("READTHEDOCS_VIRTUALENV_PATH"):
+    graphviz_dot = os.path.expanduser("~/.graphviz/bin/dot")
 
 inheritance_graph_attrs = {
     "rankdir": "LR",
