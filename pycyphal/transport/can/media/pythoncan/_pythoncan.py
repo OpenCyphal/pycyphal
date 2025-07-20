@@ -489,6 +489,8 @@ def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
             ),
         )
     if isinstance(parameters, _FDInterfaceParameters):
+        if parameters.bitrate[0] == 0 or parameters.bitrate[1] == 0:
+            raise InvalidMediaConfigurationError("Bitrate must be non-zero")
         # These magic numbers come from the settings of PCAN adapter.
         # They don't allow any direct baudrate settings, you have to set all lengths and value of the main frequency.
         # Bit lengths below are very universal and can be applied for almost every popular baudrate.
