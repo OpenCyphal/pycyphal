@@ -491,32 +491,21 @@ def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     if isinstance(parameters, _FDInterfaceParameters):
         if parameters.bitrate[0] == 0 or parameters.bitrate[1] == 0:
             raise InvalidMediaConfigurationError("Bitrate must be non-zero")
-        # These magic numbers come from the settings of PCAN adapter.
-        # They don't allow any direct baudrate settings, you have to set all lengths and value of the main frequency.
-        # Bit lengths below are very universal and can be applied for almost every popular baudrate.
-        # There is probably a better solution here, but it needs significantly more time to implement it.
-        f_clock = 40000000
-        nom_tseg1, nom_tseg2, nom_sjw = 3, 1, 1
-        data_tseg1, data_tseg2, data_sjw = 3, 1, 1
 
-        nom_br = int(f_clock / parameters.bitrate[0] / (nom_tseg1 + nom_tseg2 + nom_sjw))
-        data_br = int(f_clock / parameters.bitrate[1] / (data_tseg1 + data_tseg2 + data_sjw))
-        # TODO: validate the result and see if it is within an acceptable range
-
+        timing = can.BitTimingFd.from_sample_point(
+            f_clock=80_000_000,  # TODO: 80 MHz is a good choice for high data rates, what about lower ones?
+            nom_bitrate=parameters.bitrate[0],
+            nom_sample_point=87.5,
+            data_bitrate=parameters.bitrate[1],
+            data_sample_point=87.5,
+        )
+        _logger.debug("PCAN timing solution: %s", timing)
         return (
             PythonCANBusOptions(),
             can.ThreadSafeBus(
                 interface=parameters.interface_name,
                 channel=parameters.channel_name,
-                f_clock=f_clock,
-                nom_brp=nom_br,
-                data_brp=data_br,
-                nom_tseg1=nom_tseg1,
-                nom_tseg2=nom_tseg2,
-                nom_sjw=nom_sjw,
-                data_tseg1=data_tseg1,
-                data_tseg2=data_tseg2,
-                data_sjw=data_sjw,
+                timing=timing,
                 fd=True,
             ),
         )
