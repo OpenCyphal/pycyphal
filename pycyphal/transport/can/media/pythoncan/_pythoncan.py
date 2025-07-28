@@ -300,6 +300,7 @@ class PythonCANMedia(Media):
                 is_extended_id=(f.frame.format == FrameFormat.EXTENDED),
                 data=f.frame.data,
                 is_fd=self._is_fd,
+                bitrate_switch=self._is_fd,
             )
             try:
                 desired_timeout = monotonic_deadline - loop.time()
