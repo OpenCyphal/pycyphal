@@ -35,7 +35,7 @@ _PSEUDO_UNIQUE_ID_MASK = (
 
 _NODE_ID_MASK = 2 ** nunavut_support.get_num_bits(ID,"value") - 1
 
-_UNIQUE_ID_SIZE_BYTES = len(pycyphal.application.NativeNodeInfo().unique_id)
+_UNIQUE_ID_SIZE_BYTES = nunavut_support.get_array_capacity(pycyphal.application.NativeNodeInfo, "unique_id")
 
 _NUM_RESERVED_TOP_NODE_IDS = 2
 
