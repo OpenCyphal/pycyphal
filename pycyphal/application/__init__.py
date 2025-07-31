@@ -272,7 +272,7 @@ More complex capabilities are to be set up by the user as needed; some of them a
     would circumvent the introspection services.
 """
 
-from ._node import Node as Node, NodeInfo as NodeInfo, PortNotConfiguredError as PortNotConfiguredError
+from ._node import Node as Node, NativeNodeInfo, NodeInfo as NodeInfo, PortNotConfiguredError as PortNotConfiguredError
 
 from ._node_factory import make_node as make_node
 

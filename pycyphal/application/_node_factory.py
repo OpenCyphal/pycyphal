@@ -13,6 +13,7 @@ from ._node import Node, NodeInfo
 from . import register
 from ._transport_factory import make_transport
 from ._registry_factory import make_registry
+import uavcan.node
 
 
 class MissingTransportConfigurationError(register.MissingRegisterError):
@@ -182,7 +183,7 @@ def make_node(
         return transport
 
     # Populate certain fields of the node info structure automatically and create standard registers.
-    info.protocol_version.major, info.protocol_version.minor = pycyphal.CYPHAL_SPECIFICATION_VERSION
+    info.protocol_version = uavcan.node.Version_1(major = pycyphal.CYPHAL_SPECIFICATION_VERSION[0], minor = pycyphal.CYPHAL_SPECIFICATION_VERSION[1])
     if sum(info.unique_id) == 0:
         info.unique_id = bytes(  # type: ignore
             registry.setdefault(

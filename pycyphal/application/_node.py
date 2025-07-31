@@ -13,9 +13,41 @@ import pycyphal
 from pycyphal.presentation import Presentation, ServiceRequestMetadata, Publisher, Subscriber, Server, Client
 from . import heartbeat_publisher
 from . import register
+from dataclasses import dataclass, field
 
 
-NodeInfo = uavcan.node.GetInfo_1.Response
+# This is native DSDL type that is used to send node info over network
+NativeNodeInfo = uavcan.node.GetInfo_1.Response
+
+# This is mutable version of NativeNodeInfo
+@dataclass
+class MutableNodeInfo:
+    protocol_version: uavcan.node.Version_1_0 = uavcan.node.Version_1_0(major=0, minor=0)
+    hardware_version: uavcan.node.Version_1_0 = uavcan.node.Version_1_0(major=0, minor=0)
+    software_version: uavcan.node.Version_1_0 = uavcan.node.Version_1_0(major=0, minor=0)
+    software_vcs_revision_id: int = 0
+    unique_id: bytes = bytes(16)
+    name: bytes | str | None = b""
+    software_image_crc:  list[int] = field(default_factory= lambda: [])
+    certificate_of_authenticity: bytes = b""
+
+    def to_native(self) -> NativeNodeInfo:
+        """
+        Converts this mutable node info to native DSDL type.
+        """
+        return uavcan.node.GetInfo_1.Response(
+            protocol_version=self.protocol_version,
+            hardware_version=self.hardware_version,
+            software_version=self.software_version,
+            software_vcs_revision_id=self.software_vcs_revision_id,
+            unique_id=self.unique_id,
+            name=self.name,
+            software_image_crc=self.software_image_crc,
+            certificate_of_authenticity=self.certificate_of_authenticity
+        )
+
+# By default use MutableNodeInfo
+NodeInfo = MutableNodeInfo
 
 T = TypeVar("T")
 
@@ -70,8 +102,8 @@ class Node(abc.ABC):
 
         PortListPublisher(self)
 
-        async def handle_get_info(_req: uavcan.node.GetInfo_1.Request, _meta: ServiceRequestMetadata) -> NodeInfo:
-            return self.info
+        async def handle_get_info(_req: uavcan.node.GetInfo_1.Request, _meta: ServiceRequestMetadata) -> NativeNodeInfo:
+            return self.info.to_native()
 
         try:
             RegisterServer(self)
