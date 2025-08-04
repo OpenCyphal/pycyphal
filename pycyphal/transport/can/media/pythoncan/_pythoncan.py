@@ -496,9 +496,9 @@ def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
         timing = can.BitTimingFd.from_sample_point(
             f_clock=80_000_000,  # TODO: 80 MHz is a good choice for high data rates, what about lower ones?
             nom_bitrate=parameters.bitrate[0],
-            nom_sample_point=87.5,
+            nom_sample_point=80,
             data_bitrate=parameters.bitrate[1],
-            data_sample_point=87.5,
+            data_sample_point=80,
         )
         _logger.debug("PCAN timing solution: %s", timing)
         return (
