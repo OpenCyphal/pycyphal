@@ -425,7 +425,7 @@ class _FDInterfaceParameters(_InterfaceParameters):
     bitrate: typing.Tuple[int, int]
 
 
-def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+def _construct_socketcan(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return (
             PythonCANBusOptions(),
@@ -439,7 +439,7 @@ def _construct_socketcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     assert False, "Internal error"
 
 
-def _construct_kvaser(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+def _construct_kvaser(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return (
             PythonCANBusOptions(),
@@ -464,7 +464,7 @@ def _construct_kvaser(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     assert False, "Internal error"
 
 
-def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+def _construct_slcan(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return (
             PythonCANBusOptions(),
@@ -479,7 +479,7 @@ def _construct_slcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     assert False, "Internal error"
 
 
-def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+def _construct_pcan(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return (
             PythonCANBusOptions(),
@@ -521,7 +521,7 @@ def _construct_virtual(parameters: _InterfaceParameters) -> typing.Tuple[PythonC
     )
 
 
-def _construct_usb2can(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+def _construct_usb2can(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return (
             PythonCANBusOptions(),
@@ -536,7 +536,7 @@ def _construct_usb2can(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     assert False, "Internal error"
 
 
-def _construct_canalystii(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+def _construct_canalystii(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return (
             PythonCANBusOptions(),
@@ -549,7 +549,7 @@ def _construct_canalystii(parameters: _InterfaceParameters) -> can.ThreadSafeBus
     assert False, "Internal error"
 
 
-def _construct_seeedstudio(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+def _construct_seeedstudio(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
     if isinstance(parameters, _ClassicInterfaceParameters):
         return (
             PythonCANBusOptions(),
@@ -564,7 +564,7 @@ def _construct_seeedstudio(parameters: _InterfaceParameters) -> can.ThreadSafeBu
     assert False, "Internal error"
 
 
-def _construct_gs_usb(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
+def _construct_gs_usb(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
     if isinstance(parameters, _ClassicInterfaceParameters):
         try:
             index = int(parameters.channel_name)
