@@ -105,8 +105,8 @@ class PythonCANMedia(Media):
               Example: ``pcan:PCAN_USBBUS1``
 
             - Interface ``virtual`` is described in https://python-can.readthedocs.io/en/master/interfaces/virtual.html.
-              The channel name should be empty.
-              Example: ``virtual:``
+              The channel name may be empty.
+              Example: ``virtual:``, ``virtual:foo-can``
 
             - Interface ``usb2can`` is described in https://python-can.readthedocs.io/en/stable/interfaces/usb2can.html.
               Example: ``usb2can:ED000100``
@@ -514,15 +514,11 @@ def _construct_pcan(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
     assert False, "Internal error"
 
 
-def _construct_virtual(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
-    if isinstance(parameters, _ClassicInterfaceParameters):
-        return (
-            PythonCANBusOptions(),
-            can.ThreadSafeBus(interface=parameters.interface_name, bitrate=parameters.bitrate),
-        )
-    if isinstance(parameters, _FDInterfaceParameters):
-        return (PythonCANBusOptions(), can.ThreadSafeBus(interface=parameters.interface_name))
-    assert False, "Internal error"
+def _construct_virtual(parameters: _InterfaceParameters) -> typing.Tuple[PythonCANBusOptions, can.ThreadSafeBus]:
+    return (
+        PythonCANBusOptions(),
+        can.ThreadSafeBus(interface=parameters.interface_name, channel=parameters.channel_name),
+    )
 
 
 def _construct_usb2can(parameters: _InterfaceParameters) -> can.ThreadSafeBus:
