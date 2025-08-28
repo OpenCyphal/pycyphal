@@ -167,6 +167,15 @@ def _unittest_can_pythoncan_iface_name() -> None:
     media.close()
 
 
+def _unittest_can_pythoncan_list_iface_names() -> None:
+    available_iface_names = list(PythonCANMedia.list_available_interface_names())
+    assert len(available_iface_names) > 0
+    # https://python-can.readthedocs.io/en/stable/interfaces/virtual.html#can.interfaces.virtual.VirtualBus._detect_available_configs
+    assert any(
+        name.startswith("virtual:") for name in available_iface_names
+    ), "At least one virtual interface should be available"
+
+
 def _unittest_can_pythoncan_errors() -> None:
     with pytest.raises(InvalidMediaConfigurationError, match=r".*interface:channel.*"):
         PythonCANMedia("malformed_name", 1_000_000)

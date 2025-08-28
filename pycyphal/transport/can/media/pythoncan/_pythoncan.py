@@ -348,9 +348,17 @@ class PythonCANMedia(Media):
     @staticmethod
     def list_available_interface_names() -> typing.Iterable[str]:
         """
-        Returns an empty list. TODO: provide minimally functional implementation.
+        Returns a list of available interfaces.
         """
-        return []
+        available_configs: typing.List[can.typechecking.AutoDetectedConfig] = []
+        for interface in _CONSTRUCTORS.keys():
+            # try each interface on its own to catch errors if the interface library is not available
+            try:
+                available_configs.extend(can.detect_available_configs(interfaces=[interface]))
+            except NotImplementedError:
+                _logger.debug("%s: Interface not supported", interface)
+                continue
+        return [f"{config['interface']}:{config['channel']}" for config in available_configs]
 
     def _invoke_rx_handler(self, frs: typing.List[typing.Tuple[Timestamp, Envelope]]) -> None:
         try:
