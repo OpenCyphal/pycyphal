@@ -41,7 +41,13 @@ class SocketCANMedia(Media):
     SocketCAN documentation: https://www.kernel.org/doc/Documentation/networking/can.txt
     """
 
-    def __init__(self, iface_name: str, mtu: int, loop: typing.Optional[asyncio.AbstractEventLoop] = None) -> None:
+    def __init__(
+        self,
+        iface_name: str,
+        mtu: int,
+        disable_brs: bool = False,
+        loop: typing.Optional[asyncio.AbstractEventLoop] = None,
+    ) -> None:
         """
         CAN Classic/FD is selected automatically based on the MTU. It is not possible to use CAN FD with MTU of 8 bytes.
 
@@ -49,6 +55,9 @@ class SocketCANMedia(Media):
 
         :param mtu: The maximum data field size in bytes. CAN FD is used if this value > 8, Classic CAN otherwise.
             This value must belong to Media.VALID_MTU_SET.
+
+        :param disable_brs: When true, will disable bitrate switching for CAN FD frames. Meaning that the data bitrate
+            will be the same as the nominal bitrate.
 
         :param loop: Deprecated.
         """
@@ -68,6 +77,8 @@ class SocketCANMedia(Media):
         self._mtu = int(mtu)
         if self._mtu not in self.VALID_MTU_SET:
             raise ValueError(f"Invalid MTU: {self._mtu} not in {self.VALID_MTU_SET}")
+        self._disable_brs: bool = disable_brs
+
         if loop:
             warnings.warn("The loop argument is deprecated", DeprecationWarning)
 
@@ -260,7 +271,7 @@ class SocketCANMedia(Media):
                 return timestamp, Envelope(out, loopback=loopback)
 
     def _compile_native_frame(self, source: DataFrame) -> bytes:
-        flags = _CANFD_BRS if self._is_fd else 0
+        flags = _CANFD_BRS if (self._is_fd and not self._disable_brs) else 0
         ident = source.identifier | (_CAN_EFF_FLAG if source.format == FrameFormat.EXTENDED else 0)
         header = _FRAME_HEADER_STRUCT.pack(ident, len(source.data), flags)
         out = header + source.data.ljust(self._native_frame_data_capacity, b"\x00")

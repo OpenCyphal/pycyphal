@@ -283,6 +283,7 @@ def _make_can(
     iface_list = str(init("iface", "")).split()
     mtu = int(init("mtu", Natural16([64])))
     br_arb, br_data = init("bitrate", Natural32([1_000_000, 4_000_000])).ints
+    disable_brs = bool(init("disable_brs", br_arb == br_data))
 
     if iface_list:
         from pycyphal.transport.can import CANTransport
@@ -292,7 +293,7 @@ def _make_can(
             if iface.lower().startswith("socketcan:"):
                 from pycyphal.transport.can.media.socketcan import SocketCANMedia
 
-                media = SocketCANMedia(iface.split(":", 1)[-1], mtu=mtu)
+                media = SocketCANMedia(iface.split(":", 1)[-1], mtu=mtu, disable_brs=disable_brs)
             elif iface.lower().startswith("candump:"):
                 from pycyphal.transport.can.media.candump import CandumpMedia
 
