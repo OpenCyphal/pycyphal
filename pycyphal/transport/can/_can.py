@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 import copy
+import enum
 import typing
 import asyncio
 import logging
@@ -15,6 +16,7 @@ from .media import Media, Envelope, optimize_filter_configurations, FilterConfig
 from ._session import CANInputSession, CANOutputSession, SendTransaction
 from ._session import BroadcastCANOutputSession, UnicastCANOutputSession
 from ._frame import CyphalFrame, TRANSFER_ID_MODULO
+from .media import Media
 from ._identifier import CANID, generate_filter_configurations
 from ._input_dispatch_table import InputDispatchTable
 from ._tracer import CANTracer, CANCapture
@@ -84,6 +86,14 @@ class CANTransport(pycyphal.transport.Transport):
 
     TRANSFER_ID_MODULO = TRANSFER_ID_MODULO
 
+    class Error(enum.Enum):
+        """Transport-specific error codes."""
+
+        SEND_TIMEOUT = enum.auto()  # Did not send within the specified deadline
+
+    ErrorHandler = typing.Callable[[Timestamp, Error | Media.Error], None]
+    """The error handler is non-blocking and non-yielding; returns immediately."""
+
     def __init__(
         self,
         media: Media,
@@ -115,6 +125,8 @@ class CANTransport(pycyphal.transport.Transport):
 
         self._frame_stats = CANTransportStatistics()
 
+        self._error_hooks: typing.List[CANTransport.ErrorHandler] = []
+
         if self._local_node_id is not None and not 0 <= self._local_node_id <= CANID.NODE_ID_MASK:
             raise ValueError(f"Invalid node ID for CAN: {self._local_node_id}")
 
@@ -130,7 +142,20 @@ class CANTransport(pycyphal.transport.Transport):
                 f"The number of acceptance filters is too low: {media.number_of_acceptance_filters}"
             )
 
-        media.start(self._on_frames_received, no_automatic_retransmission=self._local_node_id is None)
+        media.start(
+            self._on_frames_received,
+            no_automatic_retransmission=self._local_node_id is None,
+            error_handler=self._on_error,
+        )
+
+    def add_error_hook(self, hook: CANTransport.ErrorHandler) -> None:
+        """Register an error hook. Called on transport or media error."""
+        self._error_hooks.append(hook)
+
+    def _on_error(self, timestamp: Timestamp, error: CANTransport.Error | Media.Error) -> None:
+        """Call all registered hooks on error in media or transport layer."""
+        for hook in self._error_hooks:
+            hook(timestamp, error)
 
     @property
     def protocol_parameters(self) -> pycyphal.transport.ProtocolParameters:
@@ -157,6 +182,8 @@ class CANTransport(pycyphal.transport.Transport):
         return list(self._output_registry.values())
 
     def close(self) -> None:
+        self._error_hooks.clear()
+
         for s in (*self.input_sessions, *self.output_sessions):
             try:
                 s.close()
@@ -373,6 +400,7 @@ class CANTransport(pycyphal.transport.Transport):
                 len(t.frames),
                 can_id_int,
             )
+            self._on_error(Timestamp.now(), CANTransport.Error.SEND_TIMEOUT)
 
         return not unsent_frames
 

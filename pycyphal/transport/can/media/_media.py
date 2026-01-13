@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 import abc
+import enum
 import typing
 import asyncio
 import warnings
@@ -27,6 +28,21 @@ class Media(abc.ABC):
     The frames handler is non-blocking and non-yielding; returns immediately.
     The timestamp is provided individually per frame.
     """
+
+    class Error(enum.Enum):
+        """Media-specific error codes."""
+
+        CAN_TX_TIMEOUT = enum.auto()  # A transmission request timed out
+        CAN_BUS_OFF = enum.auto()  # The CAN controller entered the bus-off state
+        CAN_RX_OVERFLOW = enum.auto()  # Overflow in the CAN controller
+        CAN_TX_OVERFLOW = enum.auto()  # Overflow in the CAN controller
+        CAN_RX_WARNING = enum.auto()  # The CAN controller issued a warning
+        CAN_TX_WARNING = enum.auto()  # The CAN controller issued a warning
+        CAN_TX_PASSIVE = enum.auto()  # The CAN controller entered the error passive state
+        CAN_RX_PASSIVE = enum.auto()  # The CAN controller entered the error passive state
+
+    ErrorHandler = typing.Callable[[Timestamp, Error], None]
+    """The error handler is non-blocking and non-yielding; returns immediately."""
 
     VALID_MTU_SET = {8, 12, 16, 20, 24, 32, 48, 64}
     """Valid MTU values for Classic CAN and CAN FD."""
@@ -73,7 +89,12 @@ class Media(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def start(self, handler: ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
+    def start(
+        self,
+        handler: ReceivedFramesHandler,
+        no_automatic_retransmission: bool,
+        error_handler: ErrorHandler | None = None,
+    ) -> None:
         """
         Every received frame shall be timestamped. Both monotonic and system timestamps are required.
         There are no timestamping accuracy requirements. An empty set of frames should never be reported.
@@ -102,6 +123,9 @@ class Media(abc.ABC):
             This mode is used by Cyphal to facilitate the PnP node-ID allocation process on the client side.
             Its support is not mandatory but highly recommended to avoid excessive disturbance of the bus
             while PnP allocations are in progress.
+
+        :param error_handler: Informs about media errors. This feature is optional in both directions.
+            Ignore if not implemented. Set to None if error reporting is not needed by the transport.
         """
         raise NotImplementedError
 
