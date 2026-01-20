@@ -155,7 +155,7 @@ class SocketCANMedia(Media):
 
         if error_handler is not None:
             err_mask = _CAN_ERR_TX_TIMEOUT | _CAN_ERR_CRTL | _CAN_ERR_BUSOFF
-            self._sock.setsockopt(socket.SOL_CAN_RAW, _CAN_RAW_ERR_FILTER, err_mask)
+            self._sock.setsockopt(_SOL_CAN_RAW, _CAN_RAW_ERR_FILTER, err_mask)
 
     def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         if self._closed:
@@ -163,7 +163,7 @@ class SocketCANMedia(Media):
 
         try:
             self._sock.setsockopt(
-                socket.SOL_CAN_RAW,  # type: ignore
+                _SOL_CAN_RAW,  # type: ignore
                 socket.CAN_RAW_FILTER,  # type: ignore
                 _pack_filters(configuration),
             )
@@ -380,7 +380,7 @@ class SocketCANMedia(Media):
 
     def _set_loopback_enabled(self, enable: bool) -> None:
         if enable != self._loopback_enabled:
-            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_RECV_OWN_MSGS, int(enable))  # type: ignore
+            self._sock.setsockopt(_SOL_CAN_RAW, socket.CAN_RAW_RECV_OWN_MSGS, int(enable))  # type: ignore
             self._loopback_enabled = enable
 
     @staticmethod
@@ -478,6 +478,7 @@ _CAN_ERR_CRTL_ACTIVE = 0x40
 """ recovered to error active state"""
 
 # From the Linux kernel (linux/include/uapi/linux/can/raw.h); not exposed via the Python's socket module
+_SOL_CAN_RAW = 100 + 1
 _CAN_RAW_ERR_FILTER = 2
 
 _CAN_EFF_MASK = 0x1FFFFFFF
@@ -512,7 +513,7 @@ def _make_socket(iface_name: str, can_fd: bool, native_frame_size: int) -> socke
         #   - "SocketCAN and queueing disciplines: Final Report", Sojka et al, 2012
         s.setsockopt(socket.SOL_SOCKET, _SO_SNDBUF, min(blocking_sndbuf_size, default_sndbuf_size) // 2)
         if can_fd:
-            s.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)  # type: ignore
+            s.setsockopt(_SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)  # type: ignore
 
         s.setblocking(False)
 
