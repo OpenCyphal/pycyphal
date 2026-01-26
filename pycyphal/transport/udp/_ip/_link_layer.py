@@ -484,7 +484,8 @@ def _capture_single_device(device: str, filter_expression: str, data_link_hints:
             return None
 
         # https://www.tcpdump.org/manpages/pcap_compile.3pcap.html
-        code = pcap.bpf_program()  # This memory needs to be freed when closed. Fix it later.
+        # This memory needs to be freed when closed. Fix it later.
+        code = pcap.bpf_program()  # type: ignore[attr-defined]
         err = pcap.compile(pd, ctypes.byref(code), filter_expression.encode(), 1, pcap.PCAP_NETMASK_UNKNOWN)
         if err != 0:
             raise LinkLayerCaptureError(
