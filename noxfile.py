@@ -59,6 +59,7 @@ def test(session):
         "pytest         ~= 8.3",
         "pytest-asyncio ~= 0.26.0",
         "coverage       ~= 7.8",
+        "setuptools     ~= 80.10",
     )
 
     # The test suite generates a lot of temporary files, so we change the working directory.

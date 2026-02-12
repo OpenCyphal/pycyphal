@@ -48,7 +48,12 @@ class MockMedia(Media):
     def number_of_acceptance_filters(self) -> int:
         return len(self._acceptance_filters)
 
-    def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
+    def start(
+        self,
+        handler: Media.ReceivedFramesHandler,
+        no_automatic_retransmission: bool,
+        error_handler: Media.ErrorHandler | None = None,
+    ) -> None:
         if self._closed:
             raise pycyphal.transport.ResourceClosedError
 

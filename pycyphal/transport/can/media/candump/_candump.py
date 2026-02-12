@@ -117,7 +117,12 @@ class CandumpMedia(Media):
     def number_of_acceptance_filters(self) -> int:
         return 1
 
-    def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
+    def start(
+        self,
+        handler: Media.ReceivedFramesHandler,
+        no_automatic_retransmission: bool,
+        error_handler: Media.ErrorHandler | None = None,
+    ) -> None:
         _ = no_automatic_retransmission
         if self._thread is not None:
             raise RuntimeError(f"{self!r}: Already started")

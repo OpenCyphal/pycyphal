@@ -3,6 +3,7 @@
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 # pylint: disable=duplicate-code
 
+from dataclasses import dataclass
 import enum
 import time
 import errno
@@ -27,6 +28,14 @@ from pycyphal.transport.can.media import DataFrame
 
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _TimestampedErrorList:
+    """Collection of media errors with a single timestamp. Used as a helper for typing."""
+
+    timestamp: Timestamp
+    errors: typing.List[Media.Error]
 
 
 class SocketCANMedia(Media):
@@ -125,10 +134,18 @@ class SocketCANMedia(Media):
         """
         return 512
 
-    def start(self, handler: Media.ReceivedFramesHandler, no_automatic_retransmission: bool) -> None:
+    def start(
+        self,
+        handler: Media.ReceivedFramesHandler,
+        no_automatic_retransmission: bool,
+        error_handler: Media.ErrorHandler | None = None,
+    ) -> None:
         if self._maybe_thread is None:
             self._maybe_thread = threading.Thread(
-                target=self._thread_function, name=str(self), args=(handler, asyncio.get_event_loop()), daemon=True
+                target=self._thread_function,
+                name=str(self),
+                args=(handler, error_handler, asyncio.get_event_loop()),
+                daemon=True,
             )
             self._maybe_thread.start()
             if no_automatic_retransmission:
@@ -136,13 +153,17 @@ class SocketCANMedia(Media):
         else:
             raise RuntimeError("The RX frame handler is already set up")
 
+        if error_handler is not None:
+            err_mask = _CAN_ERR_TX_TIMEOUT | _CAN_ERR_CRTL | _CAN_ERR_BUSOFF
+            self._sock.setsockopt(_SOL_CAN_RAW, _CAN_RAW_ERR_FILTER, err_mask)
+
     def configure_acceptance_filters(self, configuration: typing.Sequence[FilterConfiguration]) -> None:
         if self._closed:
             raise pycyphal.transport.ResourceClosedError(repr(self))
 
         try:
             self._sock.setsockopt(
-                socket.SOL_CAN_RAW,  # type: ignore
+                _SOL_CAN_RAW,  # type: ignore
                 socket.CAN_RAW_FILTER,  # type: ignore
                 _pack_filters(configuration),
             )
@@ -194,13 +215,29 @@ class SocketCANMedia(Media):
             self._ctl_worker.close()
             self._ctl_main.close()
 
-    def _thread_function(self, handler: Media.ReceivedFramesHandler, loop: asyncio.AbstractEventLoop) -> None:
+    def _thread_function(
+        self,
+        handler: Media.ReceivedFramesHandler,
+        error_handler: Media.ErrorHandler | None,
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
         def handler_wrapper(frs: typing.Sequence[typing.Tuple[Timestamp, Envelope]]) -> None:
             try:
                 if not self._closed:  # Don't call after closure to prevent race conditions and use-after-close.
                     handler(frs)
             except Exception as exc:
                 _logger.exception("%s: Unhandled exception in the receive handler: %s; lost frames: %s", self, exc, frs)
+
+        def error_handler_wrapper(errors: _TimestampedErrorList) -> None:
+            try:
+                # Check if we are not closed and the handler exists
+                if not self._closed and error_handler is not None:
+                    for error in errors.errors:
+                        error_handler(errors.timestamp, error)
+            except Exception as exc:
+                _logger.exception(
+                    "%s: Unhandled exception in the receive error handler: %s; lost error: %s", self, exc, errors
+                )
 
         while not self._closed and not loop.is_closed():
             try:
@@ -213,14 +250,22 @@ class SocketCANMedia(Media):
 
                 if self._sock in read_ready:
                     frames: typing.List[typing.Tuple[Timestamp, Envelope]] = []
+                    errors: typing.Optional[_TimestampedErrorList] = None
                     try:
                         while True:
-                            frames.append(self._read_frame(ts_mono_ns))
+                            out = self._read_frame(ts_mono_ns)
+                            if isinstance(out, _TimestampedErrorList):
+                                errors = out
+                                break  # Report previously received frames first
+                            else:
+                                frames.append(out)
                     except OSError as ex:
                         if ex.errno != errno.EAGAIN:
                             raise
                     try:
                         loop.call_soon_threadsafe(handler_wrapper, frames)
+                        if errors:
+                            loop.call_soon_threadsafe(error_handler_wrapper, errors)
                     except RuntimeError as ex:
                         _logger.debug("%s: Event loop is closed, exiting: %r", self, ex)
                         break
@@ -241,7 +286,7 @@ class SocketCANMedia(Media):
         self._closed = True
         _logger.debug("%s thread is about to exit", self)
 
-    def _read_frame(self, ts_mono_ns: int) -> typing.Tuple[Timestamp, Envelope]:
+    def _read_frame(self, ts_mono_ns: int) -> typing.Tuple[Timestamp, Envelope] | _TimestampedErrorList:
         while True:
             data, ancdata, msg_flags, _addr = self._sock.recvmsg(  # type: ignore
                 self._native_frame_size, self._ancillary_data_buffer_size
@@ -266,9 +311,13 @@ class SocketCANMedia(Media):
 
             assert ts_system_ns > 0, "Missing the timestamp; does the driver support timestamping?"
             timestamp = Timestamp(system_ns=ts_system_ns, monotonic_ns=ts_mono_ns)
-            out = SocketCANMedia._parse_native_frame(data)
-            if out is not None:
+            out = self._parse_native_frame(data)
+            if isinstance(out, DataFrame):
                 return timestamp, Envelope(out, loopback=loopback)
+            elif isinstance(out, list):
+                return _TimestampedErrorList(timestamp, out)
+            else:
+                assert False, "Unreachable"
 
     def _compile_native_frame(self, source: DataFrame) -> bytes:
         flags = _CANFD_BRS if (self._is_fd and not self._disable_brs) else 0
@@ -278,13 +327,51 @@ class SocketCANMedia(Media):
         assert len(out) == self._native_frame_size
         return out
 
-    @staticmethod
-    def _parse_native_frame(source: bytes) -> typing.Optional[DataFrame]:
+    def _parse_native_frame(self, source: bytes) -> None | DataFrame | typing.List[Media.Error]:
         header_size = _FRAME_HEADER_STRUCT.size
         ident_raw, data_length, _flags = _FRAME_HEADER_STRUCT.unpack(source[:header_size])
-        if (ident_raw & _CAN_RTR_FLAG) or (ident_raw & _CAN_ERR_FLAG):  # Unsupported format, ignore silently
+        if ident_raw & _CAN_RTR_FLAG:  # Unsupported format, ignore silently
             _logger.debug("Unsupported CAN frame dropped; raw SocketCAN ID is %08x", ident_raw)
             return None
+
+        if ident_raw & _CAN_ERR_FLAG:
+            out_error = []
+            if ident_raw & _CAN_ERR_TX_TIMEOUT:
+                _logger.error("Error Tx Timeout on %s", self._iface_name)
+                out_error.append(Media.Error.CAN_TX_TIMEOUT)
+            if ident_raw & _CAN_ERR_CRTL:  # Controller problem, details are in data[1]
+                error_byte = source[header_size + 1]
+                if error_byte & _CAN_ERR_CRTL_RX_OVERFLOW:
+                    _logger.error("Error Rx Overflow State on %s", self._iface_name)
+                    out_error.append(Media.Error.CAN_RX_OVERFLOW)
+                if error_byte & _CAN_ERR_CRTL_TX_OVERFLOW:
+                    _logger.error("Error Tx Overflow State on %s", self._iface_name)
+                    out_error.append(Media.Error.CAN_TX_OVERFLOW)
+                if error_byte & _CAN_ERR_CRTL_RX_WARNING:
+                    _logger.warning("Error Rx Warning State on %s", self._iface_name)
+                    out_error.append(Media.Error.CAN_RX_WARNING)
+                if error_byte & _CAN_ERR_CRTL_TX_WARNING:
+                    _logger.warning("Error Tx Warning State on %s", self._iface_name)
+                    out_error.append(Media.Error.CAN_TX_WARNING)
+                if error_byte & _CAN_ERR_CRTL_TX_PASSIVE:
+                    _logger.error("Error Tx Passive State on %s", self._iface_name)
+                    out_error.append(Media.Error.CAN_TX_PASSIVE)
+                if error_byte & _CAN_ERR_CRTL_RX_PASSIVE:
+                    _logger.error("Error Rx Passive State on %s", self._iface_name)
+                    out_error.append(Media.Error.CAN_RX_PASSIVE)
+            if ident_raw & _CAN_ERR_BUSOFF:
+                _logger.error("CAN Bus Off on %s", self._iface_name)
+                out_error.append(Media.Error.CAN_BUS_OFF)
+
+            if len(out_error) > 0:
+                return out_error
+            else:
+                _logger.debug(
+                    "Unsupported CAN error frame dropped; raw SocketCAN ID is %08x",
+                    ident_raw,
+                )
+                return None
+
         frame_format = FrameFormat.EXTENDED if ident_raw & _CAN_EFF_FLAG else FrameFormat.BASE
         data = source[header_size : header_size + data_length]
         assert len(data) == data_length
@@ -293,7 +380,7 @@ class SocketCANMedia(Media):
 
     def _set_loopback_enabled(self, enable: bool) -> None:
         if enable != self._loopback_enabled:
-            self._sock.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_RECV_OWN_MSGS, int(enable))  # type: ignore
+            self._sock.setsockopt(_SOL_CAN_RAW, socket.CAN_RAW_RECV_OWN_MSGS, int(enable))  # type: ignore
             self._loopback_enabled = enable
 
     @staticmethod
@@ -351,6 +438,49 @@ _CAN_EFF_FLAG = 0x80000000
 _CAN_RTR_FLAG = 0x40000000
 _CAN_ERR_FLAG = 0x20000000
 
+# From the Linux kernel (linux/include/uapi/linux/can/error.h); not exposed via the Python's socket module
+_CAN_ERR_TX_TIMEOUT = 0x00000001
+"""TX timeout (by netdevice driver)"""
+_CAN_ERR_LOSTARB = 0x00000002
+"""lost arbitration    / data[0]"""
+_CAN_ERR_CRTL = 0x00000004
+"""controller problems / data[1]"""
+_CAN_ERR_PROT = 0x00000008
+"""protocol violations / data[2..3]"""
+_CAN_ERR_TRX = 0x00000010
+"""transceiver status  / data[4]"""
+_CAN_ERR_ACK = 0x00000020
+"""received no ACK on transmission"""
+_CAN_ERR_BUSOFF = 0x00000040
+"""bus off"""
+_CAN_ERR_BUSERROR = 0x00000080
+"""bus error (may flood!)"""
+_CAN_ERR_RESTARTED = 0x00000100
+"""controller restarted"""
+_CAN_ERR_CNT = 0x00000200
+"""TX error counter / data[6], RX error counter / data[7]"""
+
+_CAN_ERR_CRTL_UNSPEC = 0x00
+""" unspecified"""
+_CAN_ERR_CRTL_RX_OVERFLOW = 0x01
+""" RX buffer overflow"""
+_CAN_ERR_CRTL_TX_OVERFLOW = 0x02
+""" TX buffer overflow"""
+_CAN_ERR_CRTL_RX_WARNING = 0x04
+""" reached warning level for RX errors"""
+_CAN_ERR_CRTL_TX_WARNING = 0x08
+""" reached warning level for TX errors"""
+_CAN_ERR_CRTL_RX_PASSIVE = 0x10
+""" reached error passive status RX"""
+_CAN_ERR_CRTL_TX_PASSIVE = 0x20
+""" reached error passive status TX (at least one error counter exceeds the protocol-defined level of 127)"""
+_CAN_ERR_CRTL_ACTIVE = 0x40
+""" recovered to error active state"""
+
+# From the Linux kernel (linux/include/uapi/linux/can/raw.h); not exposed via the Python's socket module
+_SOL_CAN_RAW = 100 + 1
+_CAN_RAW_ERR_FILTER = 2
+
 _CAN_EFF_MASK = 0x1FFFFFFF
 
 # approximate sk_buffer kernel struct overhead.
@@ -383,7 +513,7 @@ def _make_socket(iface_name: str, can_fd: bool, native_frame_size: int) -> socke
         #   - "SocketCAN and queueing disciplines: Final Report", Sojka et al, 2012
         s.setsockopt(socket.SOL_SOCKET, _SO_SNDBUF, min(blocking_sndbuf_size, default_sndbuf_size) // 2)
         if can_fd:
-            s.setsockopt(socket.SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)  # type: ignore
+            s.setsockopt(_SOL_CAN_RAW, socket.CAN_RAW_FD_FRAMES, 1)  # type: ignore
 
         s.setblocking(False)
 
