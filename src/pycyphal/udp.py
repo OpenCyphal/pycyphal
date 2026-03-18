@@ -625,7 +625,7 @@ class UDPTransport(Transport):
     # -- Internal async RX loops --
 
     async def _mcast_rx_loop(self, sock: socket.socket, subject_id: int, iface_idx: int) -> None:
-        """Async loop that reads from a multicast socket and processes datagrams."""
+        """Async receive loop for a multicast socket. Runs until cancelled or transport is closed."""
         try:
             while not self._closed:
                 try:
@@ -634,6 +634,7 @@ class UDPTransport(Transport):
                     if self._closed:
                         break
                     _logger.debug("Multicast recv error on subject %d iface %d", subject_id, iface_idx)
+                    await asyncio.sleep(0.1)
                     continue
                 src_ip, src_port = addr[0], addr[1]
                 if (src_ip, src_port) in self._self_endpoints:
@@ -643,7 +644,7 @@ class UDPTransport(Transport):
             pass
 
     async def _unicast_rx_loop(self, sock: socket.socket, iface_idx: int) -> None:
-        """Async loop that reads from a unicast socket and processes datagrams."""
+        """Async receive loop for a unicast socket. Runs until cancelled or transport is closed."""
         try:
             while not self._closed:
                 try:
@@ -652,6 +653,7 @@ class UDPTransport(Transport):
                     if self._closed:
                         break
                     _logger.debug("Unicast recv error on iface %d", iface_idx)
+                    await asyncio.sleep(0.1)
                     continue
                 src_ip, src_port = addr[0], addr[1]
                 if len(data) < HEADER_SIZE:
