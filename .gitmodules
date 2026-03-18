@@ -1,0 +1,6 @@
+[submodule "reference/cy"]
+	path = reference/cy
+	url = https://github.com/OpenCyphal-Garage/cy
+[submodule "reference/libudpard"]
+	path = reference/libudpard
+	url = https://github.com/OpenCyphal/libudpard
