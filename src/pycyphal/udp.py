@@ -395,17 +395,16 @@ class _UDPSubjectListener(Closable):
         if self._handler in handlers:
             handlers.remove(self._handler)
         if not handlers:
-            # No more listeners for this subject -- clean up sockets
+            # No more listeners for this subject -- clean up sockets and tasks
             self._transport._subject_handlers.pop(self._subject_id, None)
             self._transport._reassemblers.pop(self._subject_id, None)
             for i in range(len(self._transport._interfaces)):
                 key = (self._subject_id, i)
+                task = self._transport._mcast_rx_tasks.pop(key, None)
+                if task is not None:
+                    task.cancel()
                 sock = self._transport._mcast_socks.pop(key, None)
                 if sock is not None:
-                    try:
-                        self._transport._loop.remove_reader(sock.fileno())
-                    except Exception:
-                        pass
                     sock.close()
 
 
@@ -491,9 +490,14 @@ class UDPTransport(Transport):
         self._remote_endpoints: dict[tuple[int, int], tuple[str, int]] = {}
         self._next_unicast_transfer_id = int.from_bytes(os.urandom(6), "little")
 
-        # Register unicast RX readers on TX sockets
+        # Async RX tasks (platform-agnostic, replaces add_reader)
+        self._unicast_rx_tasks: list[asyncio.Task[None]] = []
+        self._mcast_rx_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
+
+        # Start unicast RX tasks on TX sockets
         for i, sock in enumerate(self._tx_socks):
-            self._loop.add_reader(sock.fileno(), self._on_unicast_data, i)
+            task = self._loop.create_task(self._unicast_rx_loop(sock, i))
+            self._unicast_rx_tasks.append(task)
 
         _logger.info(
             "UDPTransport initialized: uid=0x%016x, interfaces=%s, modulus=%d",
@@ -535,30 +539,13 @@ class UDPTransport(Transport):
 
     async def _async_sendto(self, sock: socket.socket, data: bytes, addr: tuple[str, int], deadline: Instant) -> None:
         """Send a UDP datagram, suspending until writable or deadline exceeded."""
-        loop = self._loop
-        while True:
-            remaining_ns = deadline.ns - Instant.now().ns
-            if remaining_ns <= 0:
-                raise SendError("Deadline exceeded")
-            try:
-                sock.sendto(data, addr)
-                return
-            except BlockingIOError:
-                # Socket buffer full -- wait for writability or deadline
-                fut: asyncio.Future[None] = loop.create_future()
-                fd = sock.fileno()
-
-                def _ready() -> None:
-                    loop.remove_writer(fd)
-                    if not fut.done():
-                        fut.set_result(None)
-
-                loop.add_writer(fd, _ready)
-                try:
-                    await asyncio.wait_for(fut, timeout=remaining_ns * 1e-9)
-                except asyncio.TimeoutError:
-                    loop.remove_writer(fd)
-                    raise SendError("Deadline exceeded waiting for socket writability")
+        remaining_ns = deadline.ns - Instant.now().ns
+        if remaining_ns <= 0:
+            raise SendError("Deadline exceeded")
+        try:
+            await asyncio.wait_for(self._loop.sock_sendto(sock, data, addr), timeout=remaining_ns * 1e-9)
+        except asyncio.TimeoutError:
+            raise SendError("Deadline exceeded waiting for socket writability")
 
     # -- Transport ABC --
 
@@ -574,7 +561,8 @@ class UDPTransport(Transport):
                 key = (subject_id, i)
                 sock = self._create_mcast_socket(subject_id, iface)
                 self._mcast_socks[key] = sock
-                self._loop.add_reader(sock.fileno(), self._on_mcast_data, subject_id, i)
+                task = self._loop.create_task(self._mcast_rx_loop(sock, subject_id, i))
+                self._mcast_rx_tasks[key] = task
         self._subject_handlers[subject_id].append(handler)
         return _UDPSubjectListener(self, subject_id, handler)
 
@@ -619,65 +607,76 @@ class UDPTransport(Transport):
             return
         self._closed = True
         _logger.info("Closing UDPTransport uid=0x%016x", self._uid)
+        for task in self._unicast_rx_tasks:
+            task.cancel()
+        self._unicast_rx_tasks.clear()
+        for task in self._mcast_rx_tasks.values():
+            task.cancel()
+        self._mcast_rx_tasks.clear()
         for sock in self._tx_socks:
-            try:
-                self._loop.remove_reader(sock.fileno())
-            except Exception:
-                pass
             sock.close()
         for sock in self._mcast_socks.values():
-            try:
-                self._loop.remove_reader(sock.fileno())
-            except Exception:
-                pass
             sock.close()
         self._mcast_socks.clear()
         self._tx_socks.clear()
         self._subject_handlers.clear()
         self._reassemblers.clear()
 
-    # -- Internal RX callbacks --
+    # -- Internal async RX loops --
 
-    def _on_mcast_data(self, subject_id: int, iface_idx: int) -> None:
-        sock = self._mcast_socks.get((subject_id, iface_idx))
-        if sock is None:
-            return
+    async def _mcast_rx_loop(self, sock: socket.socket, subject_id: int, iface_idx: int) -> None:
+        """Async loop that reads from a multicast socket and processes datagrams."""
         try:
-            data, addr = sock.recvfrom(65536)
-        except OSError as e:
-            _logger.debug("Multicast recv error on subject %d iface %d: %s", subject_id, iface_idx, e)
-            return
-        src_ip, src_port = addr[0], addr[1]
-        if (src_ip, src_port) in self._self_endpoints:
-            return  # Self-send filter
-        self._process_subject_datagram(data, src_ip, src_port, subject_id, iface_idx)
+            while not self._closed:
+                try:
+                    data, addr = await self._loop.sock_recvfrom(sock, 65536)
+                except OSError:
+                    if self._closed:
+                        break
+                    _logger.debug("Multicast recv error on subject %d iface %d", subject_id, iface_idx)
+                    continue
+                src_ip, src_port = addr[0], addr[1]
+                if (src_ip, src_port) in self._self_endpoints:
+                    continue  # Self-send filter
+                self._process_subject_datagram(data, src_ip, src_port, subject_id, iface_idx)
+        except asyncio.CancelledError:
+            pass
 
-    def _on_unicast_data(self, iface_idx: int) -> None:
-        sock = self._tx_socks[iface_idx]
+    async def _unicast_rx_loop(self, sock: socket.socket, iface_idx: int) -> None:
+        """Async loop that reads from a unicast socket and processes datagrams."""
         try:
-            data, addr = sock.recvfrom(65536)
-        except OSError as e:
-            _logger.debug("Unicast recv error on iface %d: %s", iface_idx, e)
-            return
-        src_ip, src_port = addr[0], addr[1]
-        if len(data) < HEADER_SIZE:
-            return
-        header = _header_deserialize(data[:HEADER_SIZE])
-        if header is None:
-            return
-        # Record remote endpoint for unicast discovery
-        self._remote_endpoints[(header.sender_uid, iface_idx)] = (src_ip, src_port)
-        payload_chunk = data[HEADER_SIZE:]
-        result = self._unicast_reassembler.accept(header, payload_chunk)
-        if result is not None:
-            sender_uid, priority, message = result
-            _logger.debug("Unicast transfer complete from sender_uid=0x%016x", sender_uid)
-            if self._unicast_handler is not None:
-                self._unicast_handler(
-                    TransportArrival(
-                        timestamp=Instant.now(), priority=Priority(priority), remote_id=sender_uid, message=message
-                    )
-                )
+            while not self._closed:
+                try:
+                    data, addr = await self._loop.sock_recvfrom(sock, 65536)
+                except OSError:
+                    if self._closed:
+                        break
+                    _logger.debug("Unicast recv error on iface %d", iface_idx)
+                    continue
+                src_ip, src_port = addr[0], addr[1]
+                if len(data) < HEADER_SIZE:
+                    continue
+                header = _header_deserialize(data[:HEADER_SIZE])
+                if header is None:
+                    continue
+                # Record remote endpoint for unicast discovery
+                self._remote_endpoints[(header.sender_uid, iface_idx)] = (src_ip, src_port)
+                payload_chunk = data[HEADER_SIZE:]
+                result = self._unicast_reassembler.accept(header, payload_chunk)
+                if result is not None:
+                    sender_uid, priority, message = result
+                    _logger.debug("Unicast transfer complete from sender_uid=0x%016x", sender_uid)
+                    if self._unicast_handler is not None:
+                        self._unicast_handler(
+                            TransportArrival(
+                                timestamp=Instant.now(),
+                                priority=Priority(priority),
+                                remote_id=sender_uid,
+                                message=message,
+                            )
+                        )
+        except asyncio.CancelledError:
+            pass
 
     def _process_subject_datagram(
         self, data: bytes, src_ip: str, src_port: int, subject_id: int, iface_idx: int
