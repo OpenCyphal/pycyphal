@@ -895,7 +895,7 @@ class Node:
         if t.sub_listener is None:
             sid = t.subject_id()
             t.sub_listener = self._transport.subject_listen(
-                sid, lambda arrival, _t=t: self._on_subject_arrival(_t, arrival)
+                sid, lambda arrival, _t=t: self._on_subject_arrival(_t, arrival)  # type: ignore[misc]
             )
 
     def _ensure_gossip_shard(self, t: _Topic) -> None:
@@ -905,7 +905,7 @@ class Node:
         if shard_sid not in self._shard_writers:
             self._shard_writers[shard_sid] = self._transport.subject_advertise(shard_sid)
             self._shard_listeners[shard_sid] = self._transport.subject_listen(
-                shard_sid, lambda arr, _sid=shard_sid: self._on_shard_arrival(_sid, arr)
+                shard_sid, lambda arr, _sid=shard_sid: self._on_shard_arrival(_sid, arr)  # type: ignore[misc]
             )
 
     async def _send_on_topic(self, t: _Topic, deadline: Instant, priority: Priority, payload: bytes) -> None:

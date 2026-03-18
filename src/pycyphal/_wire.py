@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import struct
 from enum import IntEnum
+from typing import Any
 
 from ._hash import rapidhash
 
@@ -191,7 +192,7 @@ def pack_rsp_ack_header(ack_type: HeaderType, tag: int, seqno: int, topic_hash_v
     return pack_rsp_header(ack_type, tag, seqno, topic_hash_val, message_tag)
 
 
-def unpack_header(data: bytes | bytearray | memoryview) -> dict:
+def unpack_header(data: bytes | bytearray | memoryview) -> dict[str, Any]:
     """
     Unpack a 24-byte header, dispatching on the type byte.
     Returns a dict with at least 'type' key.
@@ -200,7 +201,7 @@ def unpack_header(data: bytes | bytearray | memoryview) -> dict:
         raise ValueError(f"Header too short: {len(data)} < {HEADER_SIZE}")
 
     msg_type = HeaderType(data[0])
-    result: dict = {"type": msg_type}
+    result: dict[str, Any] = {"type": msg_type}
 
     if msg_type in (HeaderType.MSG_BE, HeaderType.MSG_REL):
         result["incompatibility"] = data[2]

@@ -281,7 +281,7 @@ def _get_iface_mtu(ifname: str) -> int:
             try:
                 ifreq = struct.pack("256s", ifname.encode()[:15])
                 result = fcntl.ioctl(s.fileno(), _SIOCGIFMTU, ifreq)
-                return struct.unpack_from("i", result, 16)[0]
+                return int(struct.unpack_from("i", result, 16)[0])
             finally:
                 s.close()
         except OSError:

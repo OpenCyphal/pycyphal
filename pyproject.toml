@@ -51,9 +51,36 @@ version = { attr = "pycyphal._version.__version__" }
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-asyncio"]
+dev = ["nox", "mypy", "black", "coverage", "pytest", "pytest-asyncio"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+pycyphal = ["py.typed"]
+
+[tool.mypy]
+strict = true
+mypy_path = "src"
+warn_unused_ignores = false
+implicit_reexport = false
+
+[tool.coverage.run]
+branch = true
+source = ["pycyphal"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

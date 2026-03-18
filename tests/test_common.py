@@ -548,7 +548,7 @@ class TestNameConstants:
         assert NAME_ANY == ">"
 
     def test_topic_name_max(self) -> None:
-        assert TOPIC_NAME_MAX == 255
+        assert TOPIC_NAME_MAX == 200
 
 
 # =====================================================================================================================
@@ -671,11 +671,11 @@ class TestNameIsValid:
         assert name_is_valid("") is False
 
     def test_too_long_invalid(self) -> None:
-        name = "a" * 256
+        name = "a" * (TOPIC_NAME_MAX + 1)
         assert name_is_valid(name) is False
 
     def test_exactly_max_length_valid(self) -> None:
-        name = "a" * 255
+        name = "a" * TOPIC_NAME_MAX
         assert name_is_valid(name) is True
 
     def test_space_invalid(self) -> None:
