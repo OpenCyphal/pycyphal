@@ -51,7 +51,6 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 from conftest import DEFAULT_MODULUS, MockNetwork, MockTransport
 
-
 # =====================================================================================================================
 # Helpers
 # =====================================================================================================================
@@ -409,9 +408,7 @@ class TestBestEffortPubSub:
     @pytest.mark.asyncio
     async def test_publish_home_name(self):
         """Home-relative topic names (starting with ~) should resolve with home."""
-        node_pub, node_sub, net = _make_node_pair(
-            home_pub="myhome", home_sub="myhome", ns_pub="ns", ns_sub="ns"
-        )
+        node_pub, node_sub, net = _make_node_pair(home_pub="myhome", home_sub="myhome", ns_pub="ns", ns_sub="ns")
         try:
             pub = node_pub.advertise("~/local_topic")
             sub = node_sub.subscribe("~/local_topic")

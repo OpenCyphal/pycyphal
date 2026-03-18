@@ -1060,8 +1060,8 @@ class TestTopicIsolation:
         node_c = _make_node(3, net, home="c", namespace="ns1")
 
         pub_a = node_a.advertise("sensor")  # -> ns1/sensor
-        sub_b = node_b.subscribe("sensor")   # -> ns2/sensor  (different!)
-        sub_c = node_c.subscribe("sensor")   # -> ns1/sensor  (matches)
+        sub_b = node_b.subscribe("sensor")  # -> ns2/sensor  (different!)
+        sub_c = node_c.subscribe("sensor")  # -> ns1/sensor  (matches)
         await asyncio.sleep(0.05)
 
         await _publish_bytes(pub_a, b"ns1-data")
@@ -1550,7 +1550,7 @@ class TestLargeMessages:
         sub_c = node_c.subscribe("/large/fan")
         await asyncio.sleep(0.05)
 
-        payload = b"\xAB" * 65536
+        payload = b"\xab" * 65536
         await _publish_bytes(pub, payload)
         await asyncio.sleep(0.01)
 
@@ -1577,7 +1577,7 @@ class TestLargeMessages:
         await asyncio.sleep(0.05)
 
         small = b"tiny"
-        large = b"\xFF" * 65536
+        large = b"\xff" * 65536
 
         await _publish_bytes(pub, small)
         await _publish_bytes(pub, large)

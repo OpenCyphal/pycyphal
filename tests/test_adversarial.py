@@ -30,7 +30,6 @@ from pycyphal._common import name_normalize, name_match, name_is_valid, TOPIC_NA
 from pycyphal._transport import TransportArrival
 from tests.conftest import MockTransport, MockNetwork
 
-
 # =====================================================================================================================
 # Helpers
 # =====================================================================================================================

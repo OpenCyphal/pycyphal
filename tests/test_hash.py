@@ -1,4 +1,5 @@
 """Tests for pycyphal._hash -- CRC-32C and rapidhash."""
+
 from __future__ import annotations
 
 import os
@@ -11,7 +12,6 @@ from pycyphal._hash import (
     crc32c,
     rapidhash,
 )
-
 
 # =====================================================================================================================
 # CRC-32C Tests
@@ -28,7 +28,7 @@ class TestCRC32C:
 
     def test_single_byte(self):
         assert crc32c(b"\x00") != 0
-        assert isinstance(crc32c(b"\xFF"), int)
+        assert isinstance(crc32c(b"\xff"), int)
 
     def test_residue_property(self):
         """CRC of (data + CRC in LE) equals the residue constant."""

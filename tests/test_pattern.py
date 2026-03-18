@@ -6,7 +6,6 @@ import pytest
 
 from pycyphal._common import name_match
 
-
 # =====================================================================================================================
 # Exact (verbatim) match -- no wildcards
 # =====================================================================================================================
@@ -579,11 +578,11 @@ class TestSubstitutionIndices:
     def test_mixed_indices(self) -> None:
         result = name_match("*/b/*/d/>", "a/b/c/d/e/f/g")
         assert result is not None
-        assert result[0] == ("a", 0)   # first *
-        assert result[1] == ("c", 2)   # second *
-        assert result[2] == ("e", 4)   # > start
-        assert result[3] == ("f", 4)   # > continues
-        assert result[4] == ("g", 4)   # > continues
+        assert result[0] == ("a", 0)  # first *
+        assert result[1] == ("c", 2)  # second *
+        assert result[2] == ("e", 4)  # > start
+        assert result[3] == ("f", 4)  # > continues
+        assert result[4] == ("g", 4)  # > continues
 
     def test_adjacent_stars_indices(self) -> None:
         result = name_match("*/*/*", "x/y/z")

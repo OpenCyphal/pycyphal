@@ -519,9 +519,7 @@ class Subscriber(Closable):
         rs.last_ejected_lin_tag = slot.lin_tag
         t = self._node._topics_by_hash.get(rs.topic_hash)
         if t is not None:
-            bc = Breadcrumb(
-                self._node, slot.remote_id, rs.topic_hash, slot.lin_tag + rs.tag_baseline, slot.priority
-            )
+            bc = Breadcrumb(self._node, slot.remote_id, rs.topic_hash, slot.lin_tag + rs.tag_baseline, slot.priority)
             self._queue.put_nowait(Arrival(timestamp=slot.timestamp, breadcrumb=bc, message=slot.message))
 
     def _reordering_scan(self, rs: _ReorderingState) -> None:
@@ -898,7 +896,9 @@ class Node:
     def _ensure_topic_listener(self, t: _Topic) -> None:
         if t.sub_listener is None:
             sid = t.subject_id()
-            t.sub_listener = self._transport.subject_listen(sid, lambda arrival, _t=t: self._on_subject_arrival(_t, arrival))
+            t.sub_listener = self._transport.subject_listen(
+                sid, lambda arrival, _t=t: self._on_subject_arrival(_t, arrival)
+            )
 
     def _ensure_gossip_shard(self, t: _Topic) -> None:
         if is_pinned(t.hash):
@@ -1009,10 +1009,7 @@ class Node:
 
                 await asyncio.sleep(delay)
 
-                broadcast = (
-                    t.gossip_counter < self._broadcast_ratio
-                    or (t.gossip_counter % self._broadcast_ratio) == 0
-                )
+                broadcast = t.gossip_counter < self._broadcast_ratio or (t.gossip_counter % self._broadcast_ratio) == 0
                 t.gossip_counter += 1
 
                 if broadcast:
@@ -1279,9 +1276,7 @@ class Node:
     ) -> None:
         ack_type = HeaderType.MSG_ACK if positive else HeaderType.MSG_NACK
         header = pack_ack_header(ack_type, h, tag)
-        asyncio.ensure_future(
-            self._transport.unicast(ts + _ACK_TX_TIMEOUT, priority, remote_id, header)
-        )
+        asyncio.ensure_future(self._transport.unicast(ts + _ACK_TX_TIMEOUT, priority, remote_id, header))
 
     def _send_response_ack(
         self,
@@ -1295,9 +1290,7 @@ class Node:
     ) -> None:
         ack_type = HeaderType.RSP_ACK if positive else HeaderType.RSP_NACK
         header = pack_rsp_ack_header(ack_type, rsp_tag, seqno, h, message_tag)
-        asyncio.ensure_future(
-            self._transport.unicast(Instant.now() + _ACK_TX_TIMEOUT, priority, remote_id, header)
-        )
+        asyncio.ensure_future(self._transport.unicast(Instant.now() + _ACK_TX_TIMEOUT, priority, remote_id, header))
 
     # -----------------------------------------------------------------------------------------------------------------
     # Gossip handling
@@ -1321,9 +1314,7 @@ class Node:
         else:
             self._on_gossip_unknown_topic(ts, h, evictions, lage)
 
-    def _on_gossip_known_topic(
-        self, mine: _Topic, ts: Instant, evictions: int, lage: int, scope: str
-    ) -> None:
+    def _on_gossip_known_topic(self, mine: _Topic, ts: Instant, evictions: int, lage: int, scope: str) -> None:
         mine.animate()
         mine_lage = mine.lage()
         now_s = time.monotonic()
@@ -1355,9 +1346,7 @@ class Node:
         else:
             self._topic_allocate(mine, mine.evictions + 1)
 
-    def _topic_subscribe_if_matching(
-        self, name: str, h: int, evictions: int, lage: int
-    ) -> _Topic | None:
+    def _topic_subscribe_if_matching(self, name: str, h: int, evictions: int, lage: int) -> _Topic | None:
         if not name or compute_topic_hash(name) != h:
             return None
         # Check if any pattern matches

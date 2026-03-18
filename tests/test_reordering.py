@@ -35,13 +35,12 @@ from pycyphal._wire import topic_hash as compute_topic_hash
 
 from tests.conftest import MockNetwork, MockTransport
 
-
 # =====================================================================================================================
 # Helpers
 # =====================================================================================================================
 
 
-_HALF_CAP = _REORDERING_CAPACITY // 2   # 8 by default
+_HALF_CAP = _REORDERING_CAPACITY // 2  # 8 by default
 
 
 def _make_node(transport: MockTransport) -> Node:
@@ -242,8 +241,8 @@ class TestOutOfOrderPair:
         sub._deliver(_make_arrival(node, "/test/ooo", base + 1, payload=b"first"))
         delivered = _drain_queue(sub)
         assert len(delivered) == 2
-        assert delivered[0].message == b"first"   # tag base+1
-        assert delivered[1].message == b"second"   # tag base+2
+        assert delivered[0].message == b"first"  # tag base+1
+        assert delivered[1].message == b"second"  # tag base+2
 
     def test_reverse_three(self, node_and_sub: tuple[Node, Subscriber]) -> None:
         """Tags arriving in reverse: +3, +2, +1.  All delivered when +1 arrives."""

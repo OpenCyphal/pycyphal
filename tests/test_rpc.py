@@ -51,7 +51,6 @@ from pycyphal._common import name_resolve
 
 from tests.conftest import MockNetwork, MockTransport
 
-
 # =====================================================================================================================
 # Helpers
 # =====================================================================================================================
@@ -964,17 +963,13 @@ class TestResponseStreamClose:
 
             # Before close, the stream should be registered
             th = _resolved_hash(TOPIC_NAME)
-            matching = [
-                k for k in node_a._request_streams if k[0] == th
-            ]
+            matching = [k for k in node_a._request_streams if k[0] == th]
             assert len(matching) > 0
 
             stream.close()
 
             # After close, it should be removed
-            matching_after = [
-                k for k in node_a._request_streams if k[0] == th
-            ]
+            matching_after = [k for k in node_a._request_streams if k[0] == th]
             assert len(matching_after) == 0
 
             pub.close()
@@ -1563,10 +1558,7 @@ class TestBestEffortResponse:
             assert len(responses) == 3
 
             # Check all response unicasts use RSP_BE
-            rsp_unicasts = [
-                (tid, p) for tid, p in transport_b.unicast_log
-                if tid == 10 and len(p) >= HEADER_SIZE
-            ]
+            rsp_unicasts = [(tid, p) for tid, p in transport_b.unicast_log if tid == 10 and len(p) >= HEADER_SIZE]
             for _, payload in rsp_unicasts:
                 hdr = unpack_header(payload[:HEADER_SIZE])
                 if hdr["type"] in (HeaderType.RSP_BE, HeaderType.RSP_REL):
@@ -1620,10 +1612,7 @@ class TestBestEffortResponse:
             await bc(_make_deadline(), b"with-hash")
 
             expected_hash = _resolved_hash(TOPIC_NAME, "node_b")
-            rsp_unicasts = [
-                (tid, p) for tid, p in transport_b.unicast_log
-                if tid == 10 and len(p) >= HEADER_SIZE
-            ]
+            rsp_unicasts = [(tid, p) for tid, p in transport_b.unicast_log if tid == 10 and len(p) >= HEADER_SIZE]
             found_hash = False
             for _, payload in rsp_unicasts:
                 hdr = unpack_header(payload[:HEADER_SIZE])
@@ -1657,10 +1646,7 @@ class TestBestEffortResponse:
 
             await bc(_make_deadline(), b"with-tag")
 
-            rsp_unicasts = [
-                (tid, p) for tid, p in transport_b.unicast_log
-                if tid == 10 and len(p) >= HEADER_SIZE
-            ]
+            rsp_unicasts = [(tid, p) for tid, p in transport_b.unicast_log if tid == 10 and len(p) >= HEADER_SIZE]
             found_tag = False
             for _, payload in rsp_unicasts:
                 hdr = unpack_header(payload[:HEADER_SIZE])

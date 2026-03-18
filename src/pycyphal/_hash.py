@@ -1,14 +1,15 @@
 """Hash and CRC utilities: CRC-32C (Castagnoli) and rapidhash V3."""
+
 from __future__ import annotations
 
 # =====================================================================================================================
-# CRC-32C
+# CRC-32C (Castagnoli)
 # =====================================================================================================================
 
 CRC32C_INITIAL = 0xFFFFFFFF
 CRC32C_OUTPUT_XOR = 0xFFFFFFFF
 CRC32C_RESIDUE = 0x48674BC7
-
+# fmt: off
 _CRC32C_TABLE = [
     0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4, 0xC79A971F, 0x35F1141C, 0x26A1E7E8, 0xD4CA64EB,
     0x8AD958CF, 0x78B2DBCC, 0x6BE22838, 0x9989AB3B, 0x4D43CFD0, 0xBF284CD3, 0xAC78BF27, 0x5E133C24,
@@ -43,6 +44,7 @@ _CRC32C_TABLE = [
     0xF36E6F75, 0x0105EC76, 0x12551F82, 0xE03E9C81, 0x34F4F86A, 0xC69F7B69, 0xD5CF889D, 0x27A40B9E,
     0x79B737BA, 0x8BDCB4B9, 0x988C474D, 0x6AE7C44E, 0xBE2DA0A5, 0x4C4623A6, 0x5F16D052, 0xAD7D5351,
 ]
+# fmt: on
 
 
 def crc32c_add(crc: int, data: bytes | memoryview) -> int:
@@ -55,7 +57,6 @@ def crc32c_add(crc: int, data: bytes | memoryview) -> int:
 def crc32c_full(data: bytes | memoryview) -> int:
     """CRC-32C (Castagnoli) with the output XOR."""
     return crc32c_add(CRC32C_INITIAL, data) ^ CRC32C_OUTPUT_XOR
-
 
 
 # =====================================================================================================================

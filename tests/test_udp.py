@@ -1,4 +1,5 @@
 """Comprehensive tests for pycyphal.udp -- Cyphal/UDP transport."""
+
 from __future__ import annotations
 
 import asyncio
@@ -45,7 +46,6 @@ from pycyphal.udp import (
     make_subject_endpoint,
 )
 
-
 # =====================================================================================================================
 # CRC-32C Tests
 # =====================================================================================================================
@@ -61,7 +61,7 @@ class TestCRC32C:
 
     def test_single_byte(self):
         assert crc32c(b"\x00") != 0
-        assert isinstance(crc32c(b"\xFF"), int)
+        assert isinstance(crc32c(b"\xff"), int)
 
     def test_residue_property(self):
         """CRC of (data + CRC in LE) equals the residue constant."""
@@ -124,7 +124,9 @@ class TestHeader:
             for bit in range(8):
                 corrupted = bytearray(hdr)
                 corrupted[byte_idx] ^= 1 << bit
-                assert _header_deserialize(bytes(corrupted)) is None, f"Bit flip at byte {byte_idx} bit {bit} not caught"
+                assert (
+                    _header_deserialize(bytes(corrupted)) is None
+                ), f"Bit flip at byte {byte_idx} bit {bit} not caught"
 
     def test_wrong_version(self):
         hdr = bytearray(_header_serialize(4, 42, 12345, 0, 100, 0))
@@ -254,8 +256,9 @@ class TestTXSegmentation:
 
 
 class TestRXReassembly:
-    def _make_frames(self, payload: bytes, mtu: int, sender_uid: int = 1000, transfer_id: int = 42,
-                     priority: int = 4) -> list[tuple[_FrameHeader, bytes]]:
+    def _make_frames(
+        self, payload: bytes, mtu: int, sender_uid: int = 1000, transfer_id: int = 42, priority: int = 4
+    ) -> list[tuple[_FrameHeader, bytes]]:
         """Generate (header, chunk) pairs from _segment_transfer output."""
         frames = _segment_transfer(priority, transfer_id, sender_uid, payload, mtu)
         result = []
@@ -427,8 +430,9 @@ class TestRXReassembly:
         """Frame where offset + chunk_size > transfer_payload_size should be rejected."""
         reasm = _RxReassembler()
         # Manually create a bad header
-        hdr = _FrameHeader(priority=4, transfer_id=1, sender_uid=1,
-                           frame_payload_offset=5, transfer_payload_size=6, prefix_crc=0)
+        hdr = _FrameHeader(
+            priority=4, transfer_id=1, sender_uid=1, frame_payload_offset=5, transfer_payload_size=6, prefix_crc=0
+        )
         # 5 + 3 = 8 > 6
         result = reasm.accept(hdr, b"abc")
         assert result is None
@@ -441,9 +445,14 @@ class TestRXReassembly:
         # First frame establishes transfer_payload_size=200
         reasm.accept(frames[0][0], frames[0][1])
         # Create a frame with different size for same transfer
-        bad_hdr = _FrameHeader(priority=4, transfer_id=42, sender_uid=1000,
-                               frame_payload_offset=100, transfer_payload_size=300,
-                               prefix_crc=0)
+        bad_hdr = _FrameHeader(
+            priority=4,
+            transfer_id=42,
+            sender_uid=1000,
+            frame_payload_offset=100,
+            transfer_payload_size=300,
+            prefix_crc=0,
+        )
         result = reasm.accept(bad_hdr, os.urandom(100))
         assert result is None
 
@@ -586,6 +595,7 @@ class TestModulusConstants:
 
     def test_exportable(self):
         import pycyphal
+
         assert pycyphal.SUBJECT_ID_MODULUS_17bit == 122743
         assert pycyphal.SUBJECT_ID_MODULUS_23bit == 8378431
         assert pycyphal.SUBJECT_ID_MODULUS_32bit == 4294954663

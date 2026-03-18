@@ -15,7 +15,6 @@ from pycyphal._wire import HeaderType, pack_msg_header, topic_hash, topic_subjec
 
 from tests.conftest import MockTransport, DEFAULT_MODULUS
 
-
 # =====================================================================================================================
 # Helpers
 # =====================================================================================================================
@@ -40,6 +39,7 @@ def _make_msg_header(topic_name: str, tag: int, reliable: bool = True) -> bytes:
 def _make_transport_arrival(msg: bytes, remote_id: int = 99) -> object:
     """Create a TransportArrival for injection."""
     from pycyphal import TransportArrival
+
     return TransportArrival(
         timestamp=Instant.now(),
         priority=Priority.NOMINAL,
@@ -150,6 +150,7 @@ class TestDifferentTags:
 
     def test_random_unique_tags(self) -> None:
         import random
+
         rng = random.Random(12345)
         dd = _make_dedup()
         tags = rng.sample(range(10_000_000), 200)
@@ -288,7 +289,7 @@ class TestCheckWithoutUpdate:
         assert dd.check(42) is False
         assert dd.update(42, _now()) is False  # first real add
         assert dd.check(42) is True
-        assert dd.update(42, _now()) is True   # now a duplicate
+        assert dd.update(42, _now()) is True  # now a duplicate
 
 
 # =====================================================================================================================
@@ -390,11 +391,11 @@ class TestActiveTimestamp:
         dd = _make_dedup()
         dd.update(1, 10.0)
         dd.update(2, 20.0)
-        dd.update(1, 30.0)   # dup
+        dd.update(1, 30.0)  # dup
         assert dd.last_active == 30.0
-        dd.update(3, 40.0)   # new
+        dd.update(3, 40.0)  # new
         assert dd.last_active == 40.0
-        dd.update(3, 50.0)   # dup
+        dd.update(3, 50.0)  # dup
         assert dd.last_active == 50.0
 
     def test_check_does_not_update_timestamp(self) -> None:
@@ -428,9 +429,7 @@ class TestNodeDedup:
         header = _make_msg_header(topic_name, tag, reliable)
         return header + b"test-payload"
 
-    def _inject_subject(
-        self, transport: MockTransport, subject_id: int, msg: bytes, remote_id: int = 99
-    ) -> None:
+    def _inject_subject(self, transport: MockTransport, subject_id: int, msg: bytes, remote_id: int = 99) -> None:
         arrival = _make_transport_arrival(msg, remote_id)
         for handler in transport._subject_handlers.get(subject_id, []):
             handler(arrival)

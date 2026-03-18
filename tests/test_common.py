@@ -32,7 +32,6 @@ from pycyphal._common import (
     name_resolve,
 )
 
-
 # =====================================================================================================================
 # Exception hierarchy
 # =====================================================================================================================
@@ -1120,9 +1119,9 @@ class TestNameMatchMixed:
         result = name_match("foo/*/bar/>", "foo/x/bar/a/b")
         assert result is not None
         assert len(result) == 3
-        assert result[0] == ("x", 1)    # matched by '*'
-        assert result[1] == ("a", 3)    # matched by '>'
-        assert result[2] == ("b", 3)    # matched by '>'
+        assert result[0] == ("x", 1)  # matched by '*'
+        assert result[1] == ("a", 3)  # matched by '>'
+        assert result[2] == ("b", 3)  # matched by '>'
 
     def test_star_literal_star(self) -> None:
         result = name_match("*/mid/*", "a/mid/b")

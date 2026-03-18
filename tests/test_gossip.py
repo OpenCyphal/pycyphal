@@ -52,7 +52,6 @@ from pycyphal._wire import (
 
 from conftest import DEFAULT_MODULUS, MockNetwork, MockTransport  # noqa: E402
 
-
 # =====================================================================================================================
 # Helpers
 # =====================================================================================================================
@@ -60,9 +59,7 @@ from conftest import DEFAULT_MODULUS, MockNetwork, MockTransport  # noqa: E402
 MODULUS = DEFAULT_MODULUS
 
 
-def _make_nodes(
-    network: MockNetwork, count: int, *, gossip_period: float = 0.05
-) -> list[Node]:
+def _make_nodes(network: MockNetwork, count: int, *, gossip_period: float = 0.05) -> list[Node]:
     """Create N nodes on a shared network with fast gossip for testing."""
     nodes = []
     for i in range(count):
@@ -511,9 +508,9 @@ async def test_crdt_convergence_evictions_older_wins():
         topic_b = node_b._topics_by_hash[h]
 
         # After gossip exchange, evictions should converge
-        assert topic_a.evictions == topic_b.evictions, (
-            f"Evictions should converge: A={topic_a.evictions}, B={topic_b.evictions}"
-        )
+        assert (
+            topic_a.evictions == topic_b.evictions
+        ), f"Evictions should converge: A={topic_a.evictions}, B={topic_b.evictions}"
 
         pub_a.close()
         pub_b.close()
@@ -612,9 +609,9 @@ async def test_crdt_convergence_three_nodes():
         tb = node_b._topics_by_hash[h]
         tc = node_c._topics_by_hash[h]
 
-        assert ta.evictions == tb.evictions == tc.evictions, (
-            f"All three nodes should converge: A={ta.evictions}, B={tb.evictions}, C={tc.evictions}"
-        )
+        assert (
+            ta.evictions == tb.evictions == tc.evictions
+        ), f"All three nodes should converge: A={ta.evictions}, B={tb.evictions}, C={tc.evictions}"
 
         pub_a.close()
         pub_b.close()

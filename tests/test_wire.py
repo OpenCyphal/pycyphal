@@ -33,7 +33,6 @@ from pycyphal._wire import (
     unpack_header,
 )
 
-
 # =====================================================================================================================
 # Constants
 # =====================================================================================================================
@@ -546,7 +545,9 @@ class TestRspHeaders:
     @pytest.mark.parametrize("rsp_type", [HeaderType.RSP_BE, HeaderType.RSP_REL])
     def test_max_seqno_48bit(self, rsp_type: HeaderType) -> None:
         max_seqno = SEQNO48_MASK
-        hdr = pack_rsp_header(rsp_type, tag=0xFF, seqno=max_seqno, topic_hash_val=0xFFFFFFFFFFFFFFFF, message_tag=0xFFFFFFFFFFFFFFFF)
+        hdr = pack_rsp_header(
+            rsp_type, tag=0xFF, seqno=max_seqno, topic_hash_val=0xFFFFFFFFFFFFFFFF, message_tag=0xFFFFFFFFFFFFFFFF
+        )
         d = unpack_header(hdr)
         assert d["tag"] == 0xFF
         assert d["seqno"] == max_seqno
@@ -720,7 +721,7 @@ class TestUnpackHeader:
 
     def test_longer_than_24_ok(self) -> None:
         """Extra trailing bytes are ignored."""
-        hdr = pack_msg_header(HeaderType.MSG_BE, 0, 0, 0, 0) + b"\xFF" * 10
+        hdr = pack_msg_header(HeaderType.MSG_BE, 0, 0, 0, 0) + b"\xff" * 10
         d = unpack_header(hdr)
         assert d["type"] == HeaderType.MSG_BE
 
@@ -773,7 +774,9 @@ class TestUnpackHeader:
 class TestHeaderBinaryLayout:
     def test_msg_header_layout(self) -> None:
         """Verify MSG_BE byte layout: type(1) void(1) incompat(1) lage(1) evict(4) hash(8) tag(8)."""
-        hdr = pack_msg_header(HeaderType.MSG_BE, lage=7, evictions=0x0A0B0C0D, topic_hash_val=0x0102030405060708, tag=0x1112131415161718)
+        hdr = pack_msg_header(
+            HeaderType.MSG_BE, lage=7, evictions=0x0A0B0C0D, topic_hash_val=0x0102030405060708, tag=0x1112131415161718
+        )
         assert hdr[0] == 0  # type = MSG_BE
         assert hdr[1] == 0  # void
         assert hdr[2] == 0  # incompatibility (not set by pack)
@@ -979,9 +982,7 @@ class TestHeaderGolden:
         assert hdr == bytes(expected)
 
     def test_msg_rel_golden(self) -> None:
-        hdr = pack_msg_header(
-            HeaderType.MSG_REL, lage=-1, evictions=0, topic_hash_val=0, tag=0xFFFFFFFFFFFFFFFF
-        )
+        hdr = pack_msg_header(HeaderType.MSG_REL, lage=-1, evictions=0, topic_hash_val=0, tag=0xFFFFFFFFFFFFFFFF)
         expected = bytearray(24)
         expected[0] = 1  # MSG_REL
         expected[3] = 0xFF  # -1 as unsigned byte
@@ -1060,7 +1061,9 @@ class TestHeaderGolden:
         assert hdr == bytes(expected)
 
     def test_roundtrip_msg_be(self) -> None:
-        hdr = pack_msg_header(HeaderType.MSG_BE, lage=5, evictions=42, topic_hash_val=0xDEADBEEFCAFEBABE, tag=0x0123456789ABCDEF)
+        hdr = pack_msg_header(
+            HeaderType.MSG_BE, lage=5, evictions=42, topic_hash_val=0xDEADBEEFCAFEBABE, tag=0x0123456789ABCDEF
+        )
         d = unpack_header(hdr)
         assert d["type"] == HeaderType.MSG_BE
         assert d["lage"] == 5
@@ -1078,7 +1081,9 @@ class TestHeaderGolden:
         assert d["name_len"] == 200
 
     def test_roundtrip_rsp(self) -> None:
-        hdr = pack_rsp_header(HeaderType.RSP_BE, tag=0xFF, seqno=SEQNO48_MASK, topic_hash_val=0xCAFEBABE, message_tag=0xDEADBEEF)
+        hdr = pack_rsp_header(
+            HeaderType.RSP_BE, tag=0xFF, seqno=SEQNO48_MASK, topic_hash_val=0xCAFEBABE, message_tag=0xDEADBEEF
+        )
         d = unpack_header(hdr)
         assert d["type"] == HeaderType.RSP_BE
         assert d["tag"] == 0xFF

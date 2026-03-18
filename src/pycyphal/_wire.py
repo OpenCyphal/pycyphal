@@ -10,6 +10,7 @@ SUBJECT_ID_PINNED_MAX = 0x1FFF  # 8191
 HEADER_SIZE = 24
 SEQNO48_MASK = (1 << 48) - 1
 
+
 class HeaderType(IntEnum):
     MSG_BE = 0
     MSG_REL = 1
@@ -26,6 +27,7 @@ class HeaderType(IntEnum):
 # =====================================================================================================================
 # Hashing
 # =====================================================================================================================
+
 
 def _parse_hash_override(name: str) -> int | None:
     """Parse 'name#hexdigits' syntax. Returns hash value or None."""
@@ -184,9 +186,7 @@ def pack_rsp_header(rsp_type: HeaderType, tag: int, seqno: int, topic_hash_val: 
     return bytes(buf)
 
 
-def pack_rsp_ack_header(
-    ack_type: HeaderType, tag: int, seqno: int, topic_hash_val: int, message_tag: int
-) -> bytes:
+def pack_rsp_ack_header(ack_type: HeaderType, tag: int, seqno: int, topic_hash_val: int, message_tag: int) -> bytes:
     """Same layout as RSP header for RSP_ACK/RSP_NACK (no payload)."""
     return pack_rsp_header(ack_type, tag, seqno, topic_hash_val, message_tag)
 

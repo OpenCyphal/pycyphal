@@ -1,4 +1,5 @@
 """Cyphal/UDP transport implementation."""
+
 from __future__ import annotations
 
 import asyncio
@@ -358,12 +359,20 @@ class _UDPSubjectWriter(SubjectWriter):
             if success_count == 0:
                 _logger.error("Send failed on all interfaces for subject %d", self._subject_id)
                 raise SendError("send failed on all interfaces") from eg
-            _logger.warning("Send failed on %d/%d interfaces for subject %d",
-                            len(errors), len(errors) + success_count, self._subject_id)
+            _logger.warning(
+                "Send failed on %d/%d interfaces for subject %d",
+                len(errors),
+                len(errors) + success_count,
+                self._subject_id,
+            )
             raise eg
 
-        _logger.debug("Sent %d frames on subject %d, transfer_id=%d",
-                       len(frames) if self._transport._interfaces else 0, self._subject_id, transfer_id)
+        _logger.debug(
+            "Sent %d frames on subject %d, transfer_id=%d",
+            len(frames) if self._transport._interfaces else 0,
+            self._subject_id,
+            transfer_id,
+        )
 
     def close(self) -> None:
         self._closed = True
@@ -371,9 +380,7 @@ class _UDPSubjectWriter(SubjectWriter):
 
 
 class _UDPSubjectListener(Closable):
-    def __init__(
-        self, transport: UDPTransport, subject_id: int, handler: Callable[[TransportArrival], None]
-    ) -> None:
+    def __init__(self, transport: UDPTransport, subject_id: int, handler: Callable[[TransportArrival], None]) -> None:
         self._transport = transport
         self._subject_id = subject_id
         self._handler = handler
@@ -488,8 +495,12 @@ class UDPTransport(Transport):
         for i, sock in enumerate(self._tx_socks):
             self._loop.add_reader(sock.fileno(), self._on_unicast_data, i)
 
-        _logger.info("UDPTransport initialized: uid=0x%016x, interfaces=%s, modulus=%d",
-                      self._uid, [str(i.address) for i in self._interfaces], self._subject_id_modulus_val)
+        _logger.info(
+            "UDPTransport initialized: uid=0x%016x, interfaces=%s, modulus=%d",
+            self._uid,
+            [str(i.address) for i in self._interfaces],
+            self._subject_id_modulus_val,
+        )
 
     @staticmethod
     def _create_tx_socket(iface: Interface) -> socket.socket:
@@ -574,9 +585,7 @@ class UDPTransport(Transport):
     def unicast_listen(self, handler: Callable[[TransportArrival], None]) -> None:
         self._unicast_handler = handler
 
-    async def unicast(
-        self, deadline: Instant, priority: Priority, remote_id: int, message: bytes | memoryview
-    ) -> None:
+    async def unicast(self, deadline: Instant, priority: Priority, remote_id: int, message: bytes | memoryview) -> None:
         if self._closed:
             raise SendError("Transport closed")
         transfer_id = self._next_unicast_transfer_id & TRANSFER_ID_MASK

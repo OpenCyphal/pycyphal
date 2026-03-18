@@ -54,7 +54,6 @@ from pycyphal._node import Node, _Topic
 
 from tests.conftest import DEFAULT_MODULUS, MockNetwork, MockTransport
 
-
 # =====================================================================================================================
 # Helpers
 # =====================================================================================================================
@@ -166,8 +165,7 @@ class TestTopicCreation:
         assert h1 == h2 == h3
 
     async def test_different_names_yield_different_hashes(self) -> None:
-        names = ["alpha", "beta", "gamma", "delta", "epsilon",
-                 "zeta", "eta", "theta", "iota", "kappa"]
+        names = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta", "iota", "kappa"]
         hashes = {topic_hash(n) for n in names}
         assert len(hashes) == len(names)
 
@@ -569,11 +567,13 @@ class TestHashOverride:
     async def test_hash_override_empty_after_hash(self) -> None:
         val = topic_hash("name#")
         from pycyphal._hash import rapidhash as rh
+
         assert val == rh(b"name#")
 
     async def test_hash_override_no_hash_sign(self) -> None:
         val = topic_hash("normal/topic")
         from pycyphal._hash import rapidhash as rh
+
         assert val == rh(b"normal/topic")
 
     async def test_hash_override_multiple_hashes(self) -> None:
@@ -583,11 +583,13 @@ class TestHashOverride:
     async def test_hash_override_with_non_hex_chars(self) -> None:
         val = topic_hash("x#zz")
         from pycyphal._hash import rapidhash as rh
+
         assert val == rh(b"x#zz")
 
     async def test_hash_override_mixed_valid_invalid(self) -> None:
         val = topic_hash("x#1g")
         from pycyphal._hash import rapidhash as rh
+
         assert val == rh(b"x#1g")
 
     async def test_hash_override_pinned_boundary(self) -> None:
@@ -598,9 +600,14 @@ class TestHashOverride:
 
     async def test_hash_override_various_lengths(self) -> None:
         cases = [
-            ("a#0", 0x0), ("a#1", 0x1), ("a#ff", 0xFF), ("a#100", 0x100),
-            ("a#dead", 0xDEAD), ("a#deadbeef", 0xDEADBEEF),
-            ("a#cafebabe", 0xCAFEBABE), ("a#0123456789abcdef", 0x0123456789ABCDEF),
+            ("a#0", 0x0),
+            ("a#1", 0x1),
+            ("a#ff", 0xFF),
+            ("a#100", 0x100),
+            ("a#dead", 0xDEAD),
+            ("a#deadbeef", 0xDEADBEEF),
+            ("a#cafebabe", 0xCAFEBABE),
+            ("a#0123456789abcdef", 0x0123456789ABCDEF),
         ]
         for name, expected in cases:
             assert topic_hash(name) == expected
@@ -768,8 +775,10 @@ class TestSubjectIDRanges:
         modulus = DEFAULT_MODULUS
         upper = _sid_range_upper(modulus)
         extreme_hashes = [
-            SUBJECT_ID_PINNED_MAX + 1, 0x7FFFFFFFFFFFFFFF,
-            0xFFFFFFFFFFFFFFFF, 0x8000000000000000,
+            SUBJECT_ID_PINNED_MAX + 1,
+            0x7FFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0x8000000000000000,
         ]
         for h in extreme_hashes:
             for ev in [0, 1, 10, 100]:
@@ -1049,6 +1058,7 @@ class TestTopicLifecycle:
         pub = node.advertise("/lifecycle/closed_send")
         pub.close()
         from pycyphal import SendError
+
         with pytest.raises(SendError):
             await pub(Instant.now() + 1.0, b"hello")
         node.close()
@@ -1098,7 +1108,7 @@ class TestLogAge:
     async def test_log_age_powers_of_two(self) -> None:
         now = time.monotonic()
         for exp in range(20):
-            diff = 2.0 ** exp
+            diff = 2.0**exp
             result = log_age(now - diff, now)
             assert result == exp
 
@@ -1433,6 +1443,7 @@ class TestTopicWireFormat:
 
     async def test_topic_subject_id_matches_wire_module(self) -> None:
         from pycyphal._wire import topic_subject_id as wire_sid
+
         h = topic_hash("wire/test")
         for ev in range(10):
             assert wire_sid(h, ev, DEFAULT_MODULUS) == topic_subject_id(h, ev, DEFAULT_MODULUS)
@@ -1488,6 +1499,7 @@ class TestTopicOriginAndAge:
 
     async def test_lage_clamped_to_range(self) -> None:
         from pycyphal._wire import LAGE_MIN, LAGE_MAX
+
         node, tr = _make_node()
         pub = node.advertise("/age/clamp")
         t = node._topics_by_hash[pub.topic.hash]
