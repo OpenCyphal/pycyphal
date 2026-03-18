@@ -6,6 +6,7 @@ import asyncio
 import os
 import socket
 import struct
+import sys
 from ipaddress import IPv4Address
 from unittest.mock import patch
 
@@ -691,6 +692,10 @@ def loopback_iface():
     return _get_loopback_iface()
 
 
+_SKIP_WINDOWS = pytest.mark.skipif(sys.platform == "win32", reason="add_reader not supported on ProactorEventLoop")
+
+
+@_SKIP_WINDOWS
 class TestIntegrationPubSub:
     @pytest.mark.asyncio
     async def test_single_frame_pubsub(self, loopback_iface):
@@ -784,6 +789,7 @@ class TestIntegrationPubSub:
             sub.close()
 
 
+@_SKIP_WINDOWS
 class TestIntegrationUnicast:
     @pytest.mark.asyncio
     async def test_unicast_roundtrip(self, loopback_iface):
@@ -820,6 +826,7 @@ class TestIntegrationUnicast:
             b.close()
 
 
+@_SKIP_WINDOWS
 class TestIntegrationListenerLifecycle:
     @pytest.mark.asyncio
     async def test_listener_close_stops_delivery(self, loopback_iface):
@@ -895,6 +902,7 @@ class TestIntegrationListenerLifecycle:
             sub.close()
 
 
+@_SKIP_WINDOWS
 class TestIntegrationTransportClose:
     @pytest.mark.asyncio
     async def test_close_cleans_up(self, loopback_iface):
@@ -936,6 +944,7 @@ class TestIntegrationTransportClose:
         t2.close()
 
 
+@_SKIP_WINDOWS
 class TestIntegrationSelfSendFilter:
     @pytest.mark.asyncio
     async def test_self_send_filtered(self, loopback_iface):
@@ -952,6 +961,7 @@ class TestIntegrationSelfSendFilter:
             t.close()
 
 
+@_SKIP_WINDOWS
 class TestIntegrationDifferentSubjects:
     @pytest.mark.asyncio
     async def test_messages_isolated_by_subject(self, loopback_iface):
@@ -997,6 +1007,7 @@ class TestEmptyInterfaces:
 # =====================================================================================================================
 
 
+@_SKIP_WINDOWS
 class TestAsyncSendto:
     @pytest.mark.asyncio
     async def test_deadline_already_expired(self, loopback_iface):
