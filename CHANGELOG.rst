@@ -1,7 +1,17 @@
 .. _changelog:
 
-Changelog
-=========
+Changelog v2
+============
+
+v2.0
+----
+
+Work in progress.
+
+Changelog v1
+============
+
+The v1 generation is being replaced with v2. The new version supports Cyphal v1.1 and offers a completely different API but the versions are wire-compatible on Cyphal/CAN.
 
 v1.25
 -----

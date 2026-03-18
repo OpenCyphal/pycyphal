@@ -1,8 +1,64 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycyphal"
+dynamic = ["version"]
+requires-python = ">=3.11"
+dependencies = ["ifaddr"]
+authors = [
+    { name = "Pavel Kirienko and OpenCyphal team", email = "pavel@opencyphal.org" },
+]
+description = "Pure-Python implementation of Cyphal -- a simple and robust real-time publish/subscribe stack that runs anywhere."
+readme = { file = "README.md", content-type = "text/markdown" }
+license = { text = "MIT" }
+keywords = [
+    "cyphal",
+    "opencyphal",
+    "uavcan",
+    "pub-sub",
+    "publish-subscribe",
+    "data-bus",
+    "ethernet",
+    "can-bus",
+    "vehicular",
+    "onboard-networking",
+    "avionics",
+    "communication-protocol",
+    "broker",
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Object Brokering",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: System :: Networking",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
+urls = {
+    Homepage = "https://opencyphal.org",
+    Repository = "https://github.com/OpenCyphal/pycyphal",
+}
+
+[tool.setuptools.dynamic]
+version = { attr = "pycyphal._version.__version__" }
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-asyncio"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 [tool.black]
 line-length = 120
-target-version = ['py311']
-include = '''
-((pycyphal|tests)/.*\.pyi?$)
-|
-(demo/[a-z0-9_]+\.py$)
-'''
+target-version = ['py312']
