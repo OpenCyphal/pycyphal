@@ -568,12 +568,12 @@ class TestHashOverride:
 
     async def test_hash_override_empty_after_hash(self) -> None:
         val = topic_hash("name#")
-        from pycyphal._common import rapidhash as rh
+        from pycyphal._hash import rapidhash as rh
         assert val == rh(b"name#")
 
     async def test_hash_override_no_hash_sign(self) -> None:
         val = topic_hash("normal/topic")
-        from pycyphal._common import rapidhash as rh
+        from pycyphal._hash import rapidhash as rh
         assert val == rh(b"normal/topic")
 
     async def test_hash_override_multiple_hashes(self) -> None:
@@ -582,12 +582,12 @@ class TestHashOverride:
 
     async def test_hash_override_with_non_hex_chars(self) -> None:
         val = topic_hash("x#zz")
-        from pycyphal._common import rapidhash as rh
+        from pycyphal._hash import rapidhash as rh
         assert val == rh(b"x#zz")
 
     async def test_hash_override_mixed_valid_invalid(self) -> None:
         val = topic_hash("x#1g")
-        from pycyphal._common import rapidhash as rh
+        from pycyphal._hash import rapidhash as rh
         assert val == rh(b"x#1g")
 
     async def test_hash_override_pinned_boundary(self) -> None:

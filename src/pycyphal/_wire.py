@@ -4,17 +4,11 @@ import math
 import struct
 from enum import IntEnum
 
-from ._common import rapidhash
-
-
-# =====================================================================================================================
-# Constants
-# =====================================================================================================================
+from ._hash import rapidhash
 
 SUBJECT_ID_PINNED_MAX = 0x1FFF  # 8191
 HEADER_SIZE = 24
 SEQNO48_MASK = (1 << 48) - 1
-
 
 class HeaderType(IntEnum):
     MSG_BE = 0
@@ -32,7 +26,6 @@ class HeaderType(IntEnum):
 # =====================================================================================================================
 # Hashing
 # =====================================================================================================================
-
 
 def _parse_hash_override(name: str) -> int | None:
     """Parse 'name#hexdigits' syntax. Returns hash value or None."""

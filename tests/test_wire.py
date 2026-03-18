@@ -6,7 +6,7 @@ import math
 import struct
 
 import pytest
-from pycyphal._common import rapidhash
+from pycyphal._hash import rapidhash
 
 from pycyphal._wire import (
     HEADER_SIZE,

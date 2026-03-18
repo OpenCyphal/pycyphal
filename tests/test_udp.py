@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import socket
 import struct
 from ipaddress import IPv4Address
+from unittest.mock import patch
 
 import pytest
 
@@ -17,10 +19,14 @@ from pycyphal import (
     SUBJECT_ID_MODULUS_23bit,
     SUBJECT_ID_MODULUS_32bit,
 )
-from pycyphal.udp import (
+from pycyphal._hash import (
     CRC_INITIAL,
     CRC_OUTPUT_XOR,
     CRC_RESIDUE,
+    _crc_add,
+    crc32c,
+)
+from pycyphal.udp import (
     HEADER_SIZE,
     HEADER_VERSION,
     IPv4_MCAST_PREFIX,
@@ -32,11 +38,9 @@ from pycyphal.udp import (
     _FrameHeader,
     _RxReassembler,
     _TransferSlot,
-    _crc_add,
     _header_deserialize,
     _header_serialize,
     _segment_transfer,
-    crc32c,
     generate_uid,
     make_subject_endpoint,
 )
@@ -964,3 +968,105 @@ class TestIntegrationDifferentSubjects:
         finally:
             pub.close()
             sub.close()
+
+
+# =====================================================================================================================
+# Empty Interfaces Tests
+# =====================================================================================================================
+
+
+class TestEmptyInterfaces:
+    @pytest.mark.asyncio
+    async def test_empty_list_raises(self):
+        with pytest.raises(ValueError, match="At least one network interface"):
+            UDPTransport(interfaces=[])
+
+
+# =====================================================================================================================
+# Async Sendto Tests
+# =====================================================================================================================
+
+
+class TestAsyncSendto:
+    @pytest.mark.asyncio
+    async def test_deadline_already_expired(self, loopback_iface):
+        t = UDPTransport(interfaces=[loopback_iface])
+        try:
+            sock = t._tx_socks[0]
+            expired = Instant(ns=0)
+            with pytest.raises(SendError, match="Deadline exceeded"):
+                await t._async_sendto(sock, b"data", ("127.0.0.1", 9999), expired)
+        finally:
+            t.close()
+
+    @pytest.mark.asyncio
+    async def test_sendto_immediate_success(self, loopback_iface):
+        t = UDPTransport(interfaces=[loopback_iface])
+        try:
+            sock = t._tx_socks[0]
+            deadline = Instant.now() + 2.0
+            await t._async_sendto(sock, b"hello", ("127.0.0.1", sock.getsockname()[1]), deadline)
+        finally:
+            t.close()
+
+    @pytest.mark.asyncio
+    async def test_sendto_retries_on_blocking(self, loopback_iface):
+        """Mock sendto to raise BlockingIOError first, succeed second."""
+        t = UDPTransport(interfaces=[loopback_iface])
+        try:
+            sock = t._tx_socks[0]
+            original_sendto = socket.socket.sendto
+            call_count = 0
+
+            def mock_sendto(self_sock, data, *args):
+                nonlocal call_count
+                if self_sock is sock:
+                    call_count += 1
+                    if call_count == 1:
+                        raise BlockingIOError()
+                return original_sendto(self_sock, data, *args)
+
+            deadline = Instant.now() + 2.0
+            with patch.object(socket.socket, "sendto", mock_sendto):
+                await t._async_sendto(sock, b"retry", ("127.0.0.1", sock.getsockname()[1]), deadline)
+            assert call_count == 2
+        finally:
+            t.close()
+
+    @pytest.mark.asyncio
+    async def test_deadline_exceeded_during_wait(self, loopback_iface):
+        """Mock socket always blocks, short deadline -> SendError."""
+        t = UDPTransport(interfaces=[loopback_iface])
+        try:
+            sock = t._tx_socks[0]
+
+            def mock_sendto(self_sock, data, *args):
+                if self_sock is sock:
+                    raise BlockingIOError()
+                return socket.socket.sendto(self_sock, data, *args)
+
+            deadline = Instant.now() + 0.05  # 50ms
+            with patch.object(socket.socket, "sendto", mock_sendto):
+                with pytest.raises(SendError):
+                    await t._async_sendto(sock, b"block", ("127.0.0.1", 9999), deadline)
+        finally:
+            t.close()
+
+    @pytest.mark.asyncio
+    async def test_sendto_os_error_propagates(self, loopback_iface):
+        """Non-BlockingIOError OSError propagated correctly."""
+        t = UDPTransport(interfaces=[loopback_iface])
+        try:
+            sock = t._tx_socks[0]
+
+            def mock_sendto(self_sock, data, *args):
+                if self_sock is sock:
+                    raise OSError("Network unreachable")
+                return socket.socket.sendto(self_sock, data, *args)
+
+            deadline = Instant.now() + 2.0
+            with patch.object(socket.socket, "sendto", mock_sendto):
+                with pytest.raises(OSError, match="Network unreachable"):
+                    await t._async_sendto(sock, b"fail", ("127.0.0.1", 9999), deadline)
+        finally:
+            t.close()

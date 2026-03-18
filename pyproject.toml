@@ -42,10 +42,9 @@ classifiers = [
     "Operating System :: OS Independent",
     "Typing :: Typed",
 ]
-urls = {
-    Homepage = "https://opencyphal.org",
-    Repository = "https://github.com/OpenCyphal/pycyphal",
-}
+[project.urls]
+Homepage = "https://opencyphal.org"
+Repository = "https://github.com/OpenCyphal/pycyphal"
 
 [tool.setuptools.dynamic]
 version = { attr = "pycyphal._version.__version__" }

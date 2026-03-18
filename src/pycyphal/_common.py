@@ -7,11 +7,6 @@ from enum import IntEnum
 from typing import Any
 
 
-# =====================================================================================================================
-# Exceptions
-# =====================================================================================================================
-
-
 class Error(Exception):
     pass
 
@@ -32,14 +27,9 @@ class NackError(Error):
     pass
 
 
-# =====================================================================================================================
-# Instant
-# =====================================================================================================================
-
-
 @dataclass(frozen=True)
 class Instant:
-    """Monotonic time elapsed from an unspecified origin instant. Durations use float seconds."""
+    """Monotonic time elapsed from an unspecified origin instant. Durations use plain float seconds."""
 
     ns: int
 
@@ -91,11 +81,6 @@ class Instant:
         return NotImplemented
 
 
-# =====================================================================================================================
-# Priority
-# =====================================================================================================================
-
-
 class Priority(IntEnum):
     EXCEPTIONAL = 0
     IMMEDIATE = 1
@@ -105,11 +90,6 @@ class Priority(IntEnum):
     LOW = 5
     SLOW = 6
     OPTIONAL = 7
-
-
-# =====================================================================================================================
-# Closable
-# =====================================================================================================================
 
 
 class Closable(ABC):
@@ -127,7 +107,7 @@ NAME_HOME = "~"
 NAME_ONE = "*"
 NAME_ANY = ">"
 
-TOPIC_NAME_MAX = 255
+TOPIC_NAME_MAX = 200
 
 
 def _is_valid_char(c: str) -> bool:
@@ -197,11 +177,6 @@ def name_resolve(name: str, namespace: str, home: str) -> str:
     return name_join(namespace, name)
 
 
-# =====================================================================================================================
-# Pattern matching
-# =====================================================================================================================
-
-
 def name_match(pattern: str, name: str) -> list[tuple[str, int]] | None:
     """
     Match a pattern against a name. Returns substitutions list on match, None on no match.
@@ -242,99 +217,3 @@ def name_match(pattern: str, name: str) -> list[tuple[str, int]] | None:
     if ni != len(name_parts):
         return None
     return subs
-
-
-# =====================================================================================================================
-# rapidhash V3 — pure-Python port of rapidhash_internal() from rapidhash.h (COMPACT, FAST mode, seed=0)
-# =====================================================================================================================
-
-_U64 = (1 << 64) - 1
-
-_RAPID_SECRET = (
-    0x2D358DCCAA6C78A5,
-    0x8BB84B93962EACC9,
-    0x4B33A62ED433D4A3,
-    0x4D5A2DA51DE1AA47,
-    0xA0761D6478BD642F,
-    0xE7037ED1A0B428DB,
-    0x90ED1765281C388C,
-    0xAAAAAAAAAAAAAAAA,
-)
-
-
-def _rapid_mum(a: int, b: int) -> tuple[int, int]:
-    r = a * b
-    return r & _U64, (r >> 64) & _U64
-
-
-def _rapid_mix(a: int, b: int) -> int:
-    lo, hi = _rapid_mum(a, b)
-    return lo ^ hi
-
-
-def _r64(d: bytes, o: int) -> int:
-    return int.from_bytes(d[o : o + 8], "little")
-
-
-def _r32(d: bytes, o: int) -> int:
-    return int.from_bytes(d[o : o + 4], "little")
-
-
-def rapidhash(data: bytes) -> int:
-    s = _RAPID_SECRET
-    n = len(data)
-    seed = _rapid_mix(s[2], s[1])
-    a = b = 0
-    i = n
-    p = 0
-    if n <= 16:
-        if n >= 4:
-            seed = (seed ^ n) & _U64
-            if n >= 8:
-                a = _r64(data, 0)
-                b = _r64(data, n - 8)
-            else:
-                a = _r32(data, 0)
-                b = _r32(data, n - 4)
-        elif n > 0:
-            a = (data[0] << 45) | data[n - 1]
-            b = data[n >> 1]
-    else:
-        if n > 112:
-            see1 = see2 = see3 = see4 = see5 = see6 = seed
-            while True:
-                seed = _rapid_mix(_r64(data, p) ^ s[0], _r64(data, p + 8) ^ seed)
-                see1 = _rapid_mix(_r64(data, p + 16) ^ s[1], _r64(data, p + 24) ^ see1)
-                see2 = _rapid_mix(_r64(data, p + 32) ^ s[2], _r64(data, p + 40) ^ see2)
-                see3 = _rapid_mix(_r64(data, p + 48) ^ s[3], _r64(data, p + 56) ^ see3)
-                see4 = _rapid_mix(_r64(data, p + 64) ^ s[4], _r64(data, p + 72) ^ see4)
-                see5 = _rapid_mix(_r64(data, p + 80) ^ s[5], _r64(data, p + 88) ^ see5)
-                see6 = _rapid_mix(_r64(data, p + 96) ^ s[6], _r64(data, p + 104) ^ see6)
-                p += 112
-                i -= 112
-                if i <= 112:
-                    break
-            seed ^= see1
-            see2 ^= see3
-            see4 ^= see5
-            seed ^= see6
-            see2 ^= see4
-            seed ^= see2
-        if i > 16:
-            seed = _rapid_mix(_r64(data, p) ^ s[2], _r64(data, p + 8) ^ seed)
-            if i > 32:
-                seed = _rapid_mix(_r64(data, p + 16) ^ s[2], _r64(data, p + 24) ^ seed)
-                if i > 48:
-                    seed = _rapid_mix(_r64(data, p + 32) ^ s[1], _r64(data, p + 40) ^ seed)
-                    if i > 64:
-                        seed = _rapid_mix(_r64(data, p + 48) ^ s[1], _r64(data, p + 56) ^ seed)
-                        if i > 80:
-                            seed = _rapid_mix(_r64(data, p + 64) ^ s[2], _r64(data, p + 72) ^ seed)
-                            if i > 96:
-                                seed = _rapid_mix(_r64(data, p + 80) ^ s[1], _r64(data, p + 88) ^ seed)
-        a = _r64(data, p + i - 16) ^ i
-        b = _r64(data, p + i - 8)
-    a ^= s[1]
-    b ^= seed
-    a, b = _rapid_mum(a, b)
-    return _rapid_mix(a ^ s[7], b ^ s[1] ^ i)
