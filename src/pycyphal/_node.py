@@ -26,8 +26,6 @@ from ._wire import (
     HEADER_SIZE,
     LAGE_MAX,
     LAGE_MIN,
-    SEQNO48_MASK,
-    SUBJECT_ID_PINNED_MAX,
     HeaderType,
     broadcast_subject_id,
     gossip_shard_count as _gossip_shard_count,

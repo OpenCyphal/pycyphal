@@ -21,11 +21,11 @@ from pycyphal import (
     SUBJECT_ID_MODULUS_32bit,
 )
 from pycyphal._hash import (
-    CRC_INITIAL,
-    CRC_OUTPUT_XOR,
-    CRC_RESIDUE,
-    _crc_add,
-    crc32c,
+    CRC32C_INITIAL,
+    CRC32C_OUTPUT_XOR,
+    CRC32C_RESIDUE,
+    crc32c_add,
+    crc32c_full,
 )
 from pycyphal.udp import (
     HEADER_SIZE,
@@ -54,34 +54,34 @@ from pycyphal.udp import (
 class TestCRC32C:
     def test_known_vector(self):
         """Standard CRC-32C test vector."""
-        assert crc32c(b"123456789") == 0xE3069283
+        assert crc32c_full(b"123456789") == 0xE3069283
 
     def test_empty(self):
-        assert crc32c(b"") == 0x00000000
+        assert crc32c_full(b"") == 0x00000000
 
     def test_single_byte(self):
-        assert crc32c(b"\x00") != 0
-        assert isinstance(crc32c(b"\xff"), int)
+        assert crc32c_full(b"\x00") != 0
+        assert isinstance(crc32c_full(b"\xff"), int)
 
     def test_residue_property(self):
         """CRC of (data + CRC in LE) equals the residue constant."""
         for data in [b"hello", b"", b"123456789", os.urandom(256)]:
-            c = crc32c(data)
+            c = crc32c_full(data)
             combined = data + c.to_bytes(4, "little")
-            assert crc32c(combined) == CRC_RESIDUE, f"Residue check failed for data of len {len(data)}"
+            assert crc32c_full(combined) == CRC32C_RESIDUE, f"Residue check failed for data of len {len(data)}"
 
     def test_incremental(self):
         """_crc_add composes correctly: crc(a+b) == crc_add(crc_add(init, a), b) ^ xor."""
         data = os.urandom(100)
-        full_crc = crc32c(data)
+        full_crc = crc32c_full(data)
         split = 37
-        state = _crc_add(CRC_INITIAL, data[:split])
-        state = _crc_add(state, data[split:])
-        assert (state ^ CRC_OUTPUT_XOR) == full_crc
+        state = crc32c_add(CRC32C_INITIAL, data[:split])
+        state = crc32c_add(state, data[split:])
+        assert (state ^ CRC32C_OUTPUT_XOR) == full_crc
 
     def test_memoryview(self):
         data = b"test data"
-        assert crc32c(memoryview(data)) == crc32c(data)
+        assert crc32c_full(memoryview(data)) == crc32c_full(data)
 
 
 # =====================================================================================================================
@@ -99,7 +99,7 @@ class TestHeader:
             (2, 42, 12345, 100, 500),
         ]
         for priority, tid, uid, offset, size in cases:
-            prefix_crc = crc32c(b"test")
+            prefix_crc = crc32c_full(b"test")
             hdr = _header_serialize(priority, tid, uid, offset, size, prefix_crc)
             assert len(hdr) == HEADER_SIZE
             parsed = _header_deserialize(hdr)
@@ -119,7 +119,7 @@ class TestHeader:
 
     def test_bitflip_rejected(self):
         """A single bit flip in any byte invalidates the header CRC."""
-        hdr = _header_serialize(4, 42, 12345, 0, 100, crc32c(b"x"))
+        hdr = _header_serialize(4, 42, 12345, 0, 100, crc32c_full(b"x"))
         for byte_idx in range(HEADER_SIZE):
             for bit in range(8):
                 corrupted = bytearray(hdr)
@@ -133,13 +133,13 @@ class TestHeader:
         # Set version to 3 (clear bit 1, keep bit 0 set, set bit 1 to make version=3)
         hdr[0] = (hdr[0] & 0xE0) | 3  # version=3, keep priority
         # Re-compute header CRC
-        struct.pack_into("<I", hdr, 28, crc32c(bytes(hdr[:28])))
+        struct.pack_into("<I", hdr, 28, crc32c_full(bytes(hdr[:28])))
         assert _header_deserialize(bytes(hdr)) is None
 
     def test_incompatibility_rejected(self):
         hdr = bytearray(_header_serialize(4, 42, 12345, 0, 100, 0))
         hdr[1] = 0xE0  # Set all 3 incompatibility bits
-        struct.pack_into("<I", hdr, 28, crc32c(bytes(hdr[:28])))
+        struct.pack_into("<I", hdr, 28, crc32c_full(bytes(hdr[:28])))
         assert _header_deserialize(bytes(hdr)) is None
 
     def test_too_short(self):
@@ -149,7 +149,7 @@ class TestHeader:
     def test_transfer_id_48bit_wrap(self):
         """transfer_id > 48 bits gets truncated to 48 bits."""
         big_tid = (1 << 48) + 42
-        hdr = _header_serialize(0, big_tid, 0, 0, 0, crc32c(b""))
+        hdr = _header_serialize(0, big_tid, 0, 0, 0, crc32c_full(b""))
         parsed = _header_deserialize(hdr)
         assert parsed is not None
         assert parsed.transfer_id == 42  # Only low 48 bits
@@ -173,7 +173,7 @@ class TestTXSegmentation:
         assert hdr.sender_uid == 100
         assert hdr.frame_payload_offset == 0
         assert hdr.transfer_payload_size == 5
-        assert hdr.prefix_crc == crc32c(payload)
+        assert hdr.prefix_crc == crc32c_full(payload)
         assert frames[0][HEADER_SIZE:] == payload
 
     def test_multi_frame(self):
@@ -183,7 +183,7 @@ class TestTXSegmentation:
         assert len(frames) == 4  # ceil(350/100) = 4
 
         offset = 0
-        running_crc = CRC_INITIAL
+        running_crc = CRC32C_INITIAL
         for i, frame in enumerate(frames):
             hdr = _header_deserialize(frame[:HEADER_SIZE])
             assert hdr is not None
@@ -196,8 +196,8 @@ class TestTXSegmentation:
             expected_chunk_size = min(100, 350 - offset)
             assert len(chunk) == expected_chunk_size
             assert chunk == payload[offset : offset + expected_chunk_size]
-            running_crc = _crc_add(running_crc, chunk)
-            assert hdr.prefix_crc == (running_crc ^ CRC_OUTPUT_XOR)
+            running_crc = crc32c_add(running_crc, chunk)
+            assert hdr.prefix_crc == (running_crc ^ CRC32C_OUTPUT_XOR)
             offset += expected_chunk_size
 
         assert offset == 350
@@ -210,7 +210,7 @@ class TestTXSegmentation:
         assert hdr is not None
         assert hdr.frame_payload_offset == 0
         assert hdr.transfer_payload_size == 0
-        assert hdr.prefix_crc == crc32c(b"")
+        assert hdr.prefix_crc == crc32c_full(b"")
 
     def test_exact_mtu_boundary(self):
         """Payload exactly equal to MTU -> single frame."""
@@ -614,7 +614,7 @@ class TestWireCompatibility:
         sender_uid = 0x0200001234567890
         offset = 0
         size = 5
-        prefix_crc = crc32c(b"hello")
+        prefix_crc = crc32c_full(b"hello")
 
         hdr = _header_serialize(priority, transfer_id, sender_uid, offset, size, prefix_crc)
 
@@ -639,7 +639,7 @@ class TestWireCompatibility:
         # Bytes 24-27: prefix_crc LE
         assert struct.unpack_from("<I", hdr, 24)[0] == prefix_crc
         # Bytes 28-31: header_crc LE
-        assert struct.unpack_from("<I", hdr, 28)[0] == crc32c(hdr[:28])
+        assert struct.unpack_from("<I", hdr, 28)[0] == crc32c_full(hdr[:28])
 
     def test_frame_roundtrip_with_payload(self):
         """Complete frame (header + payload) serialized and deserialized."""
@@ -654,7 +654,7 @@ class TestWireCompatibility:
     def test_known_crc_value(self):
         """Verify CRC-32C against a known value to ensure table correctness."""
         # CRC-32C("123456789") = 0xE3069283 is the standard test vector
-        assert crc32c(b"123456789") == 0xE3069283
+        assert crc32c_full(b"123456789") == 0xE3069283
 
     def test_multiframe_reassembly_matches_segmentation(self):
         """Segment then reassemble via the RX path; verify byte-identical output."""

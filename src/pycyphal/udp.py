@@ -15,8 +15,8 @@ from ipaddress import IPv4Address
 
 import ifaddr
 
-from pycyphal._common import Closable, Instant, Priority, SendError
-from pycyphal._hash import (
+from ._common import Closable, Instant, Priority, SendError
+from ._hash import (
     CRC32C_INITIAL,
     CRC32C_OUTPUT_XOR,
     CRC32C_RESIDUE,
@@ -24,7 +24,7 @@ from pycyphal._hash import (
     crc32c_full,
     rapidhash,
 )
-from pycyphal._transport import (
+from ._transport import (
     SUBJECT_ID_MODULUS_23bit,
     SubjectWriter,
     Transport,
