@@ -1,18 +1,22 @@
 # Instructions for AI agents
 
+This is a Python implementation of the Cyphal decentralized real-time publish-subscribe protocol. The key design goals are **simplicity** and **robustness**.
+
+All features of the library MUST work on GNU/Linux, Windows, and macOS; the CI system must ensure that. Supported Python versions are starting from the oldest version specified in `pyproject.toml` up to the current latest stable Python.
+
 To get a better feel of the problem domain, peruse `reference/cy`, especially the formal models and the reference implementation in C.
 
 ## Code Layout
 
 Source is in `src/pycyphal/`, tests in `tests/`. The package is extremely compact by design and has very few modules:
 
-- **`_common.py`** — Exception hierarchy, utilities, etc.
-- **`_transport.py`** — Abstract `Transport` interface defining subject broadcast and unicast operations. `SubjectWriter` interface. `TransportArrival` dataclass.
-- **`_node.py`** — Core `Node` implementation. Manages CRDT, gossip protocol, message routing, etc — all main functions of the protocol.
-- **`_wire.py`** — Wire protocol: message headers, subject ID computation, CRDT timestamp reconciliation.
-- **`__init__.py`** — Public API re-exports from the above modules.
+- `_common.py` — Exception hierarchy, utilities, etc.
+- `_transport.py` — Abstract `Transport` interface defining subject broadcast and unicast operations. `SubjectWriter` interface. `TransportArrival` dataclass.
+- `_node.py` — Core `Node` implementation. Manages CRDT, gossip protocol, message routing, etc — all main functions of the protocol.
+- `_wire.py` — Wire protocol: message headers, subject ID computation, CRDT timestamp reconciliation.
+- `__init__.py` — Public API re-exports from the above modules.
 - Concrete transports:
-    - **`udp.py`** — Cyphal/UDP transport implementation.
+    - `udp.py` — Cyphal/UDP transport implementation.
 
 Internal implementation modules use leading underscores. Keep public symbols explicit through `__init__.py`; keep private helpers in underscore-prefixed modules.
 
