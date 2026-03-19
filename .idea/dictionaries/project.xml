@@ -2,7 +2,12 @@
   <dictionary name="project">
     <words>
       <w>Castagnoli</w>
+      <w>fcntl</w>
+      <w>homeful</w>
+      <w>ifname</w>
+      <w>mreq</w>
       <w>seqno</w>
+      <w>siocgifmtu</w>
       <w>usbtingo</w>
     </words>
   </dictionary>
