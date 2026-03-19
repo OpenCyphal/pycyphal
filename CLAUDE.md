@@ -38,4 +38,10 @@ Key mechanisms in `Node`:
 - **Types**: Fully type-annotated; frozen dataclasses for data; `__slots__` for performance.
 - **Dependencies**: Intentionally kept to the bare minimum.
 - **Testing**: Mock transport/network in `tests/conftest.py`; tests are ~10x the size of source code.
+- **Logging**: Rich and extensive logging is required throughout the codebase:
+  - DEBUG for super detailed traces;
+  - INFO for anything not on the hot data path;
+  - WARNING for anything unusual;
+  - ERROR for errors or anything unexpected;
+  - CRITICAL for fatal or high-severity errors.
 - For agent-authored commits, set `GIT_AUTHOR_NAME="Agent"` and `GIT_COMMITTER_NAME="Agent"`.
