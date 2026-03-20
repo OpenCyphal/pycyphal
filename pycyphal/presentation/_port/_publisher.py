@@ -8,6 +8,7 @@ import logging
 import asyncio
 import pycyphal.util
 import pycyphal.transport
+from pycyphal.util.error_reporting import handle_internal_error
 from ._base import MessagePort, OutgoingTransferIDCounter, T, Closable
 from ._base import DEFAULT_PRIORITY, PortFinalizer
 from ._error import PortClosedError
@@ -126,7 +127,7 @@ class Publisher(MessagePort[T]):
                     _logger.info("%s send timeout", self)
             except Exception as ex:
                 if self._maybe_impl is not None:
-                    _logger.exception("%s deferred publication has failed: %s", self, ex)
+                    handle_internal_error(_logger, ex, "%s deferred publication has failed", self)
                 else:
                     _logger.debug(
                         "%s deferred publication has failed but the publisher is already closed", self, exc_info=True

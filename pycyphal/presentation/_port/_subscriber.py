@@ -9,6 +9,7 @@ import asyncio
 import dataclasses
 import pycyphal.util
 import pycyphal.transport
+from pycyphal.util.error_reporting import handle_internal_error
 from ._base import MessagePort, T, PortFinalizer, Closable
 from ._error import PortClosedError
 
@@ -111,12 +112,14 @@ class Subscriber(MessagePort[T]):
                         except Exception as ex:
                             if isinstance(ex, asyncio.CancelledError):
                                 raise
-                            _logger.exception("%s got an unhandled exception in the message handler: %s", self, ex)
+                            handle_internal_error(
+                                _logger, ex, "%s got an unhandled exception in the message handler", self
+                            )
                 except (asyncio.CancelledError, pycyphal.transport.ResourceClosedError) as ex:
                     _logger.debug("%s receive task is stopping because: %r", self, ex)
                     break
                 except Exception as ex:
-                    _logger.exception("%s receive task failure: %s", self, ex)
+                    handle_internal_error(_logger, ex, "%s receive task failure", self)
                     await asyncio.sleep(1)  # TODO is this an adequate failure management strategy?
 
         if self._maybe_task is not None:
@@ -336,8 +339,7 @@ class SubscriberImpl(Closable, Generic[T]):
             _logger.debug("Cancelling the subscriber task of %s because: %r", self, ex)
         except Exception as ex:
             exception = ex
-            # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
-            _logger.exception("Fatal error in the subscriber task of %s: %s", self, ex)
+            handle_internal_error(_logger, ex, "Fatal error in the subscriber task of %s", self)
         finally:
             self._finalize(exception)
 

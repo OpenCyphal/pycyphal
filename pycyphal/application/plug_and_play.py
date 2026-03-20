@@ -25,6 +25,7 @@ from uavcan.pnp import NodeIDAllocationData_1 as NodeIDAllocationData_1
 from uavcan.pnp import NodeIDAllocationData_2 as NodeIDAllocationData_2
 import pycyphal
 import pycyphal.application
+from pycyphal.util.error_reporting import handle_internal_error
 
 # import X as Y is not an accepted form; see https://github.com/python/mypy/issues/11706
 ID = uavcan.node.ID_1
@@ -173,7 +174,7 @@ class Allocatee:
             _logger.debug("Publishing allocation request %s", msg)
             self._pub.publish_soon(msg)
         except Exception as ex:
-            _logger.exception("Could not send allocation request %s: %s", msg, ex)
+            handle_internal_error(_logger, ex, "Could not send allocation request %s", msg)
 
     def _restart_timer(self) -> None:
         t_request = random.random()

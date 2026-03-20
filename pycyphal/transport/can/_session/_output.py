@@ -7,7 +7,9 @@ import copy
 import typing
 import logging
 import dataclasses
+import pycyphal.util
 import pycyphal.transport
+from pycyphal.util.error_reporting import handle_internal_error
 from pycyphal.transport import Timestamp
 from .._frame import CyphalFrame, TRANSFER_ID_MODULO
 from .._identifier import CANID, MessageCANID, ServiceCANID
@@ -93,11 +95,12 @@ class CANOutputSession(CANSession, pycyphal.transport.OutputSession):  # pylint:
                     try:
                         self._feedback_handler(feedback)
                     except Exception as ex:  # pragma: no cover
-                        _logger.exception(
-                            "%s: Unhandled exception in the output session feedback handler %s: %s",
+                        handle_internal_error(
+                            _logger,
+                            ex,
+                            "%s: Unhandled exception in the output session feedback handler %s",
                             self,
                             self._feedback_handler,
-                            ex,
                         )
 
     @property

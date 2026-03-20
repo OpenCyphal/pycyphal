@@ -7,7 +7,9 @@ from typing import Optional, Type, Callable, Generic
 import asyncio
 import logging
 import dataclasses
+import pycyphal.util
 import pycyphal.transport
+from pycyphal.util.error_reporting import handle_internal_error
 from ._base import T, ServicePort, PortFinalizer, OutgoingTransferIDCounter, Closable
 from ._base import DEFAULT_PRIORITY, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError, RequestTransferIDVariabilityExhaustedError
@@ -365,8 +367,7 @@ class ClientImpl(Closable, Generic[T]):
             _logger.debug("Cancelling the task of %s because the underlying resource is closed: %s", self, ex)
         except Exception as ex:
             exception = ex
-            # Do not use f-string because it can throw, unlike the built-in formatting facility of the logger
-            _logger.exception("Fatal error in the task of %s: %s", self, ex)
+            handle_internal_error(_logger, ex, "Fatal error in the task of %s", self)
         finally:
             self._finalize(exception)
             assert self.is_closed

@@ -15,6 +15,7 @@ from uavcan.node import Heartbeat_1 as Heartbeat
 from uavcan.node import GetInfo_1 as GetInfo
 import pycyphal
 import pycyphal.application
+from pycyphal.util.error_reporting import handle_internal_error
 
 
 __all__ = ["Entry", "UpdateHandler", "NodeTracker"]
@@ -246,7 +247,7 @@ class NodeTracker:
             self._cancel_task(node_id)
             del self._offline_timers[node_id]
         except Exception as ex:
-            _logger.exception("Offline timeout handler error for node %s: %s", node_id, ex)
+            handle_internal_error(_logger, ex, "Offline timeout handler error for node %s", node_id)
 
     def _cancel_task(self, node_id: int) -> None:
         try:
@@ -305,7 +306,7 @@ class NodeTracker:
             except pycyphal.transport.ResourceClosedError:
                 _logger.debug("GetInfo task for node %s is stopping because the transport is closed.", node_id)
             except Exception as ex:
-                _logger.exception("GetInfo task for node %s has crashed: %s", node_id, ex)
+                handle_internal_error(_logger, ex, "GetInfo task for node %s has crashed", node_id)
             del self._info_tasks[node_id]
 
         self._cancel_task(node_id)

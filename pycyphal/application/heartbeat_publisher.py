@@ -18,6 +18,7 @@ import uavcan.node
 from uavcan.node import Heartbeat_1 as Heartbeat
 import pycyphal
 import pycyphal.application
+from pycyphal.util.error_reporting import handle_internal_error
 
 
 class Health(enum.IntEnum):
@@ -210,7 +211,7 @@ class HeartbeatPublisher:
                     ):
                         _logger.debug("%s publisher task will exit: %s", self, ex)
                         break
-                    _logger.exception("%s publisher task exception: %s", self, ex)
+                    handle_internal_error(_logger, ex, "%s publisher task exception", self)
 
                 next_heartbeat_at += self._period
                 await asyncio.sleep(next_heartbeat_at - time.monotonic())

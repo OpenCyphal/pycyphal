@@ -4,6 +4,7 @@
 
 import typing
 import logging
+from pycyphal.util.error_reporting import handle_internal_error
 
 R = typing.TypeVar("R")
 
@@ -46,7 +47,7 @@ def broadcast(
                 r: typing.Union[R, Exception] = fn(*args, **kwargs)
             except Exception as ex:
                 r = ex
-                _logger.exception("Unhandled exception in %s: %s", fn, ex)
+                handle_internal_error(_logger, ex, "Unhandled exception in %s", fn)
             out.append(r)
         return out
 

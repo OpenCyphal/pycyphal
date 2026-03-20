@@ -14,6 +14,8 @@ from functools import partial
 import dataclasses
 
 import can
+import pycyphal.util
+from pycyphal.util.error_reporting import handle_internal_error
 from pycyphal.transport import Timestamp, ResourceClosedError, InvalidMediaConfigurationError
 from pycyphal.transport.can.media import Media, FilterConfiguration, Envelope, FrameFormat, DataFrame
 
@@ -237,7 +239,9 @@ class SocketcandMedia(Media):
             if not self._closed and self._rx_handler is not None:
                 self._rx_handler(frs)
         except Exception as exc:
-            _logger.exception("%s unhandled exception in the receive handler: %s; lost frames: %s", self, exc, frs)
+            handle_internal_error(
+                _logger, exc, "%s unhandled exception in the receive handler; lost frames: %s", self, frs
+            )
 
     def _thread_function(self, loop: asyncio.AbstractEventLoop) -> None:
         while not self._closed and not loop.is_closed():
@@ -251,10 +255,10 @@ class SocketcandMedia(Media):
                         break
             except OSError as ex:
                 if not self._closed:
-                    _logger.exception("%s thread input/output error; stopping: %s", self, ex)
+                    handle_internal_error(_logger, ex, "%s thread input/output error; stopping", self)
                 break
             except Exception as ex:
-                _logger.exception("%s thread failure: %s", self, ex)
+                handle_internal_error(_logger, ex, "%s thread failure", self)
                 if not self._closed:
                     time.sleep(1)  # Is this an adequate failure management strategy?
 

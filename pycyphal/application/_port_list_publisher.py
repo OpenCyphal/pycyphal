@@ -8,7 +8,9 @@ import logging
 import dataclasses
 from typing import Optional, Set, Any
 import pydsdl
+import pycyphal.util
 import pycyphal.application
+from pycyphal.util.error_reporting import handle_internal_error
 from pycyphal.transport import MessageDataSpecifier, ServiceDataSpecifier
 
 # pylint: disable=wrong-import-order
@@ -70,7 +72,7 @@ class PortListPublisher:
                 self._pub = self.node.make_publisher(List)
                 self._pub.priority = pycyphal.transport.Priority.OPTIONAL
             except Exception as ex:  # pragma: no cover
-                _logger.exception("%r: Could not initialize the publisher: %s", self, ex)
+                handle_internal_error(_logger, ex, "%r: Could not initialize the publisher", self)
             else:
                 _logger.debug("%r: Publisher initialized: %r", self, self._pub)
         return self._pub

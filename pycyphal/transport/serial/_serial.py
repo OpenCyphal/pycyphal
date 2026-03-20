@@ -11,7 +11,9 @@ import threading
 import dataclasses
 import concurrent.futures
 import serial
+import pycyphal.util
 import pycyphal.transport
+from pycyphal.util.error_reporting import handle_internal_error
 from pycyphal.transport import Timestamp
 from ._frame import SerialFrame
 from ._stream_parser import StreamParser
@@ -442,11 +444,12 @@ class SerialTransport(pycyphal.transport.Transport):
             if self._closed or not self._serial_port.is_open:
                 _logger.debug("%s: The serial port is closed, exception ignored: %r", self, ex)
             else:
-                _logger.exception(
-                    "%s: Reader thread has failed, the instance with port %s will be terminated: %s",
+                handle_internal_error(
+                    _logger,
+                    ex,
+                    "%s: Reader thread has failed, the instance with port %s will be terminated",
                     self,
                     self._serial_port,
-                    ex,
                 )
             self._closed = True
             self._serial_port.close()

@@ -15,6 +15,7 @@ import logging
 import threading
 import dataclasses
 import pycyphal
+from pycyphal.util.error_reporting import handle_internal_error
 from pycyphal.transport import Timestamp
 
 
@@ -235,7 +236,7 @@ class LinkLayerSniffer:
                         )
                     break
         except Exception as ex:
-            _logger.exception("%r: Unhandled exception in worker thread for %r; stopping: %r", self, name, ex)
+            handle_internal_error(_logger, ex, "%r: Unhandled exception in worker thread for %r; stopping", self, name)
         finally:
             # BEWARE: pcap_close() is not idempotent! Second close causes a heap corruption. *sigh*
             pcap.close(pd)

@@ -9,6 +9,7 @@ import logging
 import dataclasses
 import pycyphal.transport
 import pycyphal.util
+from pycyphal.util.error_reporting import handle_internal_error
 from ._base import RedundantSession, RedundantSessionStatistics
 from .._deduplicator import Deduplicator
 
@@ -277,6 +278,8 @@ class RedundantInputSession(RedundantSession, pycyphal.transport.InputSession):
         except (asyncio.CancelledError, pycyphal.transport.ResourceClosedError):
             pass
         except Exception as ex:
-            _logger.exception("%s: Task for %016x has encountered an unhandled exception: %s", self, iface_id, ex)
+            handle_internal_error(
+                _logger, ex, "%s: Task for %016x has encountered an unhandled exception", self, iface_id
+            )
         finally:
             _logger.debug("%s: Task for %016x is stopping", self, iface_id)

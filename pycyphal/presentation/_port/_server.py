@@ -9,6 +9,7 @@ import logging
 import dataclasses
 import pycyphal.transport
 import pycyphal.util
+from pycyphal.util.error_reporting import handle_internal_error
 from ._base import T, ServicePort, PortFinalizer, DEFAULT_SERVICE_REQUEST_TIMEOUT
 from ._error import PortClosedError
 
@@ -161,7 +162,7 @@ class Server(ServicePort[T]):
             except Exception as ex:
                 if isinstance(ex, asyncio.CancelledError):
                     raise
-                _logger.exception("%s unhandled exception in the handler: %s", self, ex)
+                handle_internal_error(_logger, ex, "%s unhandled exception in the handler", self)
 
             response_transport_session = self._get_output_transport_session(meta.client_node_id)
 
@@ -207,7 +208,7 @@ class Server(ServicePort[T]):
                     _logger.debug("%s task got a resource closed error and will exit: %s", self, ex)
                     break
                 except Exception as ex:
-                    _logger.exception("%s task failure: %s", self, ex)
+                    handle_internal_error(_logger, ex, "%s task failure", self)
                     await asyncio.sleep(1)  # TODO is this an adequate failure management strategy?
 
         if self._maybe_task is not None:

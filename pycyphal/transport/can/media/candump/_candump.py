@@ -16,6 +16,7 @@ from decimal import Decimal
 import threading
 import dataclasses
 import pycyphal.util
+from pycyphal.util.error_reporting import handle_internal_error
 from pycyphal.transport import Timestamp
 from pycyphal.transport.can.media import Media, Envelope, FilterConfiguration, DataFrame, FrameFormat
 
@@ -223,7 +224,7 @@ class CandumpMedia(Media):
             loop.call_soon_threadsafe(forward, batch)
         except BaseException as ex:  # pylint: disable=broad-except
             if not self._is_closed:
-                _logger.exception("%r: Log file reader failed: %s", self, ex)
+                handle_internal_error(_logger, ex, "%r: Log file reader failed", self)
         _logger.debug("%r: Reader thread exiting, bye bye", self)
         self._f.close()
         # FIXME: this should be addressed properly as part of https://github.com/OpenCyphal/pycyphal/issues/227

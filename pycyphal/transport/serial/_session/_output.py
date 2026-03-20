@@ -7,6 +7,7 @@ import copy
 import typing
 import logging
 import pycyphal
+from pycyphal.util.error_reporting import handle_internal_error
 from pycyphal.transport import ServiceDataSpecifier
 from .._frame import SerialFrame
 from ._base import SerialSession
@@ -111,8 +112,11 @@ class SerialOutputSession(SerialSession, pycyphal.transport.OutputSession):
                 try:
                     self._feedback_handler(SerialFeedback(transfer.timestamp, tx_timestamp))
                 except Exception as ex:  # pragma: no cover
-                    _logger.exception(
-                        "Unhandled exception in the output session feedback handler %s: %s", self._feedback_handler, ex
+                    handle_internal_error(
+                        _logger,
+                        ex,
+                        "Unhandled exception in the output session feedback handler %s",
+                        self._feedback_handler,
                     )
             return True
         self._statistics.drops += len(frames)

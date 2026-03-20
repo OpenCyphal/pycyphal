@@ -7,7 +7,9 @@ from typing import Callable, Optional, Sequence
 import logging
 import asyncio
 import dataclasses
+import pycyphal.util
 import pycyphal.transport
+from pycyphal.util.error_reporting import handle_internal_error
 from ._base import RedundantSession, RedundantSessionStatistics
 
 
@@ -349,7 +351,7 @@ class RedundantOutputSession(RedundantSession, pycyphal.transport.OutputSession)
         except (asyncio.CancelledError, pycyphal.transport.ResourceClosedError):
             pass
         except Exception as ex:
-            _logger.exception("%s: Task for %r has encountered an unhandled exception: %s", self, ses, ex)
+            handle_internal_error(_logger, ex, "%s: Task for %r has encountered an unhandled exception", self, ses)
         finally:
             _logger.debug("%s: Task for %r is stopping", self, ses)
 
@@ -377,7 +379,9 @@ class RedundantOutputSession(RedundantSession, pycyphal.transport.OutputSession)
                 try:
                     handler(new_fb)
                 except Exception as ex:
-                    _logger.exception("%s: Unhandled exception in the feedback handler %s: %s", self, handler, ex)
+                    handle_internal_error(
+                        _logger, ex, "%s: Unhandled exception in the feedback handler %s", self, handler
+                    )
             else:
                 _logger.debug("%s ignoring unattended feedback %r from %r", self, fb, inferior_session)
 
