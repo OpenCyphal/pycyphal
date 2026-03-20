@@ -6,6 +6,8 @@
 The util package contains various entities that are commonly useful in PyCyphal-based applications.
 """
 
+from .error_reporting import set_internal_error_handler as set_internal_error_handler
+
 from ._broadcast import broadcast as broadcast
 
 from ._introspect import import_submodules as import_submodules
