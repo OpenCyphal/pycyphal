@@ -132,26 +132,6 @@ def test(session):
     else:
         session.log("Coveralls skipped")
 
-    # Submit analysis to SonarCloud. This also has to be run from the test session to access the coverage files.
-    sonarcloud_token = os.environ.get("SONAR_TOKEN")
-    if sys.platform.startswith("linux") and is_latest_python(session) and sonarcloud_token:
-        session.run("coverage", "xml", "-i", "-o", str(ROOT_DIR / ".coverage.xml"))
-
-        session.run("unzip", str(list(DEPS_DIR.glob("sonar-scanner*.zip"))[0]), silent=True, external=True)
-        (sonar_scanner_bin,) = list(Path().cwd().resolve().glob("sonar-scanner*/bin"))
-        os.environ["PATH"] = os.pathsep.join([str(sonar_scanner_bin), os.environ["PATH"]])
-
-        session.cd(ROOT_DIR)
-        session.run("sonar-scanner", f"-Dsonar.login={sonarcloud_token}", external=True)
-    else:
-        session.log(
-            f"SonarQube scan skipped. "
-            f"SonarCloud token is set: {bool(sonarcloud_token)}. "
-            f"Is latest Python: {is_latest_python(session)}. "
-            f"Python version: {session.run('python', '-V', silent=True)}"
-        )
-
-
 @nox.session()
 def demo(session):
     """

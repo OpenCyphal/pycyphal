@@ -14,8 +14,3 @@ Please keep this document in sync with the contents of this directory.
 Npcap is needed for testing the network sniffer of the Cyphal/UDP transport implementation on Windows.
 
 Npcap is distributed under the terms of Nmap Public Source License: https://nmap.org/npsl/.
-
-
-## SonarQube scanner
-
-New versions can be obtained from https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/.

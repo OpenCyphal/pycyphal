@@ -21,7 +21,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       FORCE_COLOR: 1
     steps:
       - uses: actions/checkout@v4
