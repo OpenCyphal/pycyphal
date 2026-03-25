@@ -41,7 +41,7 @@ def handle_internal_error(
         try:
             msg = msg % args
         except Exception:
-            # if formatting fails (due to a bad __str__/__repr__), supress the exception and use a fallback message
+            # if formatting fails (due to a bad __str__/__repr__), suppress the exception and use a fallback message
             msg = f"Failed to format message '{msg}'"
     else:
         msg = "Unhandled internal error"
@@ -51,4 +51,7 @@ def handle_internal_error(
     if _error_handler is not None:
         if sys.version_info >= (3, 11):
             e.add_note(msg)
-        _error_handler(e)
+        try:
+            _error_handler(e)
+        except Exception:
+            logger.exception("Error in the registered internal error handler")
