@@ -3,6 +3,11 @@
 Changelog
 =========
 
+v1.27
+-----
+
+- Add set_internal_error_handler - registers a hook, that is called when something goes wrong in pycyphal internals.
+
 v1.25
 -----
 
