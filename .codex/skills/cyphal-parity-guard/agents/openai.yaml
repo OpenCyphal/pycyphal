@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cyphal parity guard"
+  short_description: "Keep pycyphal aligned with reference behavior"
+  default_prompt: "Use $cyphal-parity-guard to review parity against the reference and either report divergences or fix them with regression tests."

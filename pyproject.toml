@@ -1,8 +1,119 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pycyphal"
+dynamic = ["version"]
+requires-python = ">=3.11"
+dependencies = []  # The core must be dependency-free by design. Transports may add dependencies.
+authors = [
+    { name = "Pavel Kirienko and OpenCyphal team", email = "pavel@opencyphal.org" },
+]
+description = "Pure-Python implementation of Cyphal -- a simple and robust real-time publish/subscribe stack that runs anywhere."
+readme = { file = "README.md", content-type = "text/markdown" }
+license = { text = "MIT" }
+keywords = [
+    "cyphal",
+    "opencyphal",
+    "uavcan",
+    "pub-sub",
+    "publish-subscribe",
+    "data-bus",
+    "ethernet",
+    "can-bus",
+    "vehicular",
+    "onboard-networking",
+    "avionics",
+    "communication-protocol",
+    "broker",
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Object Brokering",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: System :: Networking",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
+[project.urls]
+Homepage = "https://opencyphal.org"
+Repository = "https://github.com/OpenCyphal/pycyphal"
+
+[tool.setuptools.dynamic]
+version = { attr = "pycyphal.__version__" }
+
+[project.optional-dependencies]
+udp = ["ifaddr~=0.2.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pycyphal = ["py.typed"]
+
+[tool.mypy]
+strict = true
+mypy_path = "src"
+warn_unused_ignores = false
+implicit_reexport = false
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+check_untyped_defs = true
+
+[tool.coverage.run]
+branch = true
+source = ["pycyphal"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+preview = true
+
+[tool.ruff.lint]
+# Only the checks the project needs right now; others disabled to avoid false positives.
+select = [
+    "F401",    # unused imports
+    "F811",    # redefinition of unused name
+    "F841",    # local variable assigned but never used
+    "ARG001",  # unused function argument
+    "ARG002",  # unused method argument
+    "ARG005",  # unused lambda argument
+    "PLR6301", # method could be a function or static method
+    "SLF001",  # private member accessed from outside its class/module
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may access internals for white-box testing; allow SLF001 there.
+"tests/*" = ["SLF001", "ARG", "PLR6301"]
+
 [tool.black]
 line-length = 120
-target-version = ['py311']
+target-version = ['py312']
 include = '''
-((pycyphal|tests)/.*\.pyi?$)
-|
-(demo/[a-z0-9_]+\.py$)
+((src|tests|examples)/.*\.pyi?$)
 '''

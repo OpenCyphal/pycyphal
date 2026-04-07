@@ -48,8 +48,10 @@ coverage.xml
 .*compiled
 *.cache
 *.db
+*.*-swp
 nunavut_support.py
 
+.sisyphus/
 .scannerwork
 
 # MS stuff

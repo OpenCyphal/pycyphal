@@ -1,7 +1,22 @@
 .. _changelog:
 
-Changelog
-=========
+Changelog v2
+============
+
+v2.0
+----
+
+**Work in progress.**
+
+This is a full rewrite from scratch that changes the API entirely, to the point that there are no commonalities with v1.
+The new version offers a significantly simplified API (the total surface is about one-tenth of the previous version)
+and supports Cyphal v1.1, which adds decentralized named topics, tunable reliability, and service discovery
+on top of Cyphal v1.0.
+
+Changelog v1
+============
+
+The v1 generation is being replaced with v2. The new version supports Cyphal v1.1 and offers a completely different API but the versions are wire-compatible on Cyphal/CAN.
 
 v1.27
 -----

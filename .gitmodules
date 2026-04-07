@@ -1,3 +1,9 @@
-[submodule "public_regulated_data_types_for_testing"]
-	path = demo/public_regulated_data_types
-	url = https://github.com/OpenCyphal/public_regulated_data_types
+[submodule "reference/cy"]
+	path = reference/cy
+	url = https://github.com/OpenCyphal-Garage/cy
+[submodule "reference/libudpard"]
+	path = reference/libudpard
+	url = https://github.com/OpenCyphal/libudpard
+[submodule "reference/libcanard"]
+	path = reference/libcanard
+	url = https://github.com/OpenCyphal/libcanard

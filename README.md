@@ -1,26 +1,20 @@
-<img src="docs/static/opencyphal-favicon.svg" width="50px" align="right" style="text-align:right">
-<h1 align="center" style="text-align:center">Cyphal in Python</h1>
 <div align="center">
 
-[![Test and Release PyCyphal](https://github.com/OpenCyphal/pycyphal/actions/workflows/test-and-release.yml/badge.svg)](https://github.com/OpenCyphal/pycyphal/actions/workflows/test-and-release.yml) [![RTFD](https://readthedocs.org/projects/pycyphal/badge/)](https://pycyphal.readthedocs.io/) [![Coverage Status](https://coveralls.io/repos/github/OpenCyphal/pycyphal/badge.svg)](https://coveralls.io/github/OpenCyphal/pycyphal) [![PyPI - Version](https://img.shields.io/pypi/v/pycyphal.svg)](https://pypi.org/project/pycyphal/) [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black) [![Forum](https://img.shields.io/discourse/https/forum.opencyphal.org/users.svg)](https://forum.opencyphal.org)
+<img src="https://opencyphal.org/favicon-192.png" width="60px">
+
+<h1>Cyphal in Python</h1>
+
+_pub/sub without steroids_
+
+[![Website](https://img.shields.io/badge/website-opencyphal.org-black?color=1700b3)](https://opencyphal.org/)
+[![Forum](https://img.shields.io/discourse/https/forum.opencyphal.org/users.svg?logo=discourse&color=1700b3)](https://forum.opencyphal.org)
 
 </div>
-<hr/>
 
-PyCyphal is a full-featured implementation of the Cyphal protocol stack intended for non-embedded, user-facing applications such as GUI software, diagnostic tools, automation scripts, prototypes, and various R&D cases.
+-----
 
-PyCyphal aims to support all features and transport layers of Cyphal, be portable across all major platforms supporting Python, and be extensible to permit low-effort experimentation and testing of new protocol capabilities.
+Python implementation of the [Cyphal](https://opencyphal.org) stack that runs on GNU/Linux, Windows, and macOS.
+See `examples/` for usage examples.
 
-It is designed to support **GNU/Linux**, **MS Windows**, and **macOS** as first-class target platforms. However, the library does not rely on any platform-specific capabilities, so it should be usable with other systems as well.
-
-[Cyphal](https://opencyphal.org) is an open technology for real-time intravehicular distributed computing and communication based on modern networking standards (Ethernet, CAN FD, etc.).
-
-<p align="center">
-  <a href="https://pycyphal.readthedocs.io/"><img src="docs/figures/arch-non-redundant.svg" width="400px"></a>
-</p>
-
-**READ THE DOCS: [pycyphal.readthedocs.io](https://pycyphal.readthedocs.io/)**
-
-**Ask questions: [forum.opencyphal.org](https://forum.opencyphal.org/)**
-
-*See also: [**Yakut**](https://github.com/OpenCyphal/yakut) -- a CLI tool for diagnostics and management of Cyphal networks built on top of PyCyphal.*
+**WORK IN PROGRESS**: The work on v2 is still ongoing and the new version is not yet ready for production use.
+Users seeking stability should continue using PyCyphal v1. The two versions are wire-compatible on Cyphal/CAN.
