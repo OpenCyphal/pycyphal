@@ -71,7 +71,7 @@ check_untyped_defs = true
 
 [tool.coverage.run]
 branch = true
-source = ["pycyphal"]
+source_pkgs = ["pycyphal"]
 
 [tool.coverage.report]
 show_missing = true
